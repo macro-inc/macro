@@ -7,10 +7,14 @@ mod test;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, CreateAgentSessionParams,
-    ExternalSession, Message, SandboxSize, SessionBot, SessionStatus, StoredAgentSessionLog,
+    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
+    CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress, ReplicaId,
+    SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
 };
-use crate::domain::ports::{AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo};
+use crate::domain::ports::{
+    AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
+    SessionOwnership,
+};
 use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
@@ -767,6 +771,81 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         })
     }
 
+    async fn create_fenced(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
+    ) -> Result<StoredAgentSessionLog> {
+        let event_status = match &log.content {
+            Message::ToServer(ToServerMessage::Event { event }) => {
+                Some(SessionStatus::Event(event.clone()))
+            }
+            _ => None,
+        };
+        let (direction, content) = message_columns(&log.content)?;
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin fenced agent session log create")?;
+        // The fencing contract: the guard and the append are one statement,
+        // so there is no instant between "checked we still hold the lease"
+        // and "wrote" for a takeover to slip into.
+        let created_at = sqlx::query_scalar!(
+            r#"
+            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
+            SELECT $1, $2, $3, $4, $5
+            WHERE EXISTS (
+                SELECT 1 FROM agent_session
+                WHERE id = $2 AND manager_replica_id = $6 AND manager_fence = $7
+            )
+            RETURNING created_at
+            "#,
+            macro_uuid::generate_uuid_v7(),
+            log.agent_session_id.as_uuid(),
+            log.user_id.as_ref().map(|user_id| user_id.as_ref()),
+            direction,
+            content,
+            claim.replica.as_uuid(),
+            claim.fence.0,
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("failed to create fenced agent session log entry")?;
+        let Some(created_at) = created_at else {
+            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+        };
+
+        if let Some(status) = event_status {
+            let (status, status_event_name) = status_columns(&status);
+            sqlx::query!(
+                r#"
+                UPDATE agent_session
+                SET status = $2,
+                    status_event_name = $3,
+                    modified_at = now()
+                WHERE id = $1
+                "#,
+                log.agent_session_id.as_uuid(),
+                status,
+                status_event_name,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to update agent session status from fenced log entry")?;
+        }
+
+        transaction
+            .commit()
+            .await
+            .context("commit fenced agent session log create")?;
+
+        Ok(StoredAgentSessionLog {
+            created_at,
+            entry: log,
+        })
+    }
+
     async fn list_by_session(
         &self,
         agent_session_id: AgentSessionId,
@@ -794,6 +873,144 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .into_iter()
             .map(TryInto::try_into)
             .collect::<anyhow::Result<Vec<_>>>()?)
+    }
+}
+
+impl SessionOwnership for PgAgentSessionRepo {
+    async fn claim(&self, session: AgentSessionId, replica: ReplicaId) -> Result<ClaimOutcome> {
+        // One statement: the replica's heartbeat row is upserted in the CTE
+        // (a claim can never reference a replica the store has not seen),
+        // then the lease itself is a compare-and-swap - taken only from
+        // nobody, ourselves, or a stale holder, and every take bumps the
+        // fence so a superseded holder's fenced writes stop matching.
+        let fence = sqlx::query_scalar!(
+            r#"
+            WITH replica AS (
+                INSERT INTO harness_replica (id, last_heartbeat_at)
+                VALUES ($2, now())
+                ON CONFLICT (id) DO UPDATE SET last_heartbeat_at = now()
+            )
+            UPDATE agent_session
+            SET manager_replica_id = $2,
+                manager_fence = manager_fence + 1,
+                modified_at = now()
+            WHERE id = $1
+              AND (
+                manager_replica_id IS NULL
+                OR manager_replica_id = $2
+                OR NOT EXISTS (
+                    SELECT 1 FROM harness_replica live
+                    WHERE live.id = agent_session.manager_replica_id
+                      AND live.last_heartbeat_at > now() - make_interval(secs => $3)
+                )
+              )
+            RETURNING manager_fence
+            "#,
+            session.as_uuid(),
+            replica.as_uuid(),
+            REPLICA_STALE_AFTER.as_secs_f64(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to claim agent session management")?;
+
+        if let Some(fence) = fence {
+            return Ok(ClaimOutcome::Claimed(SessionClaim {
+                session,
+                replica,
+                fence: ManagerFence(fence),
+            }));
+        }
+
+        // The swap matched nothing: either a live replica holds the lease, or
+        // the session row is gone. A deleted session reads as Unknown so the
+        // caller does not forward commands toward a row that no longer exists.
+        let holder = sqlx::query_scalar!(
+            r#"SELECT manager_replica_id FROM agent_session WHERE id = $1"#,
+            session.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session manager")?;
+        match holder {
+            Some(Some(holder)) => Ok(ClaimOutcome::ManagedElsewhere(ReplicaId::from_uuid(holder))),
+            Some(None) | None => Err(AgentSessionError::Unknown(anyhow::anyhow!(
+                "agent session {session} claim matched nothing yet no live replica holds it"
+            ))),
+        }
+    }
+
+    async fn release(&self, claim: &SessionClaim) -> Result<()> {
+        // Conditional on both holder and fence: a release arriving after a
+        // successor claimed must not free the successor's lease, and a
+        // deleted session matches nothing, which is the asked-for state.
+        sqlx::query!(
+            r#"
+            UPDATE agent_session
+            SET manager_replica_id = NULL,
+                modified_at = now()
+            WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3
+            "#,
+            claim.session.as_uuid(),
+            claim.replica.as_uuid(),
+            claim.fence.0,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to release agent session management")?;
+        Ok(())
+    }
+
+    async fn heartbeat(&self, replica: ReplicaId, address: Option<&ReplicaAddress>) -> Result<()> {
+        // COALESCE keeps a previously published address when a beat carries
+        // none, so a claim-created row filled in by one heartbeat is not
+        // blanked by the next.
+        sqlx::query!(
+            r#"
+            INSERT INTO harness_replica (id, last_heartbeat_at, address)
+            VALUES ($1, now(), $2)
+            ON CONFLICT (id) DO UPDATE
+            SET last_heartbeat_at = now(),
+                address = COALESCE(EXCLUDED.address, harness_replica.address)
+            "#,
+            replica.as_uuid(),
+            address.map(ReplicaAddress::as_str),
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to heartbeat harness replica")?;
+        // Housekeeping on the writer that is already here: rows a week past
+        // their last heartbeat are boots nothing can still reference usefully
+        // (their claims were stealable within seconds); the FK sets any
+        // stragglers' claims to NULL.
+        sqlx::query!(
+            r#"DELETE FROM harness_replica WHERE last_heartbeat_at < now() - interval '7 days'"#,
+        )
+        .execute(&self.pool)
+        .await
+        .context("failed to prune stale harness replicas")?;
+        Ok(())
+    }
+
+    async fn manager_of(&self, session: AgentSessionId) -> Result<Option<SessionManager>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT live.id AS replica_id, live.address
+            FROM agent_session
+            JOIN harness_replica live ON live.id = agent_session.manager_replica_id
+            WHERE agent_session.id = $1
+              AND live.last_heartbeat_at > now() - make_interval(secs => $2)
+            "#,
+            session.as_uuid(),
+            REPLICA_STALE_AFTER.as_secs_f64(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read the agent session's live manager")?;
+        Ok(row.map(|row| SessionManager {
+            replica: ReplicaId::from_uuid(row.replica_id),
+            address: row.address.map(ReplicaAddress::new),
+        }))
     }
 }
 

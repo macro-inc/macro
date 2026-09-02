@@ -208,6 +208,7 @@ export async function executeGraphqlSaveEmailDraft(
     variables,
     optimisticData,
     {
+      uuid: crypto.randomUUID(),
       // Splice the optimistic entity into the thread page's message list so
       // draftMap sees it. Idempotent; reapplied at commit; a non-resolving
       // path is skipped and recovered by the revalidation below.
@@ -317,6 +318,7 @@ export async function executeGraphqlDeleteEmailDraft(
     variables,
     optimisticData,
     {
+      uuid: crypto.randomUUID(),
       // Drop the draft from the thread page's message list so draftMap
       // stops seeing it. Idempotent; reapplied at commit; a non-resolving
       // path is skipped and recovered by the revalidation below.

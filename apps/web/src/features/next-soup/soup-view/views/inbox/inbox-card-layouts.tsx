@@ -1,9 +1,10 @@
 import { ListPropertyValue } from '@app/features/next-soup/soup-view/views/tasks/list-property-value';
+import { describeReminderWhen } from '@app/features/reminders/reminder-schedule';
 import { formatCallDuration } from '@block-call/utils';
 import { BotIcon } from '@channel/Message/BotIcon';
 import { MACRO_AI_BOT_ID, MACRO_AI_NAME } from '@channel/macroAi';
 import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
-import { ItemPreview, useItemPreviewData } from '@core/component/ItemPreview';
+import { ItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   createTheme,
@@ -65,9 +66,13 @@ import {
 export interface InboxCardLayoutProps {
   /** The already-derived item to render. */
   item: InboxCardDisplayItem;
+  /** Optional root-card styling for alternate list compositions. */
+  class?: string;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
+  /** Set false when a parent list owns keyboard focus and activation. */
+  focusable?: boolean;
 }
 
 /** Glyph size inside the card's avatar bubble — grows with the circle on
@@ -136,11 +141,10 @@ const getNotificationSenderFallbackName = (
 };
 
 const getTimestamp = (entity: EntityData, notification?: Notification) => {
-  // Reminders sort on when they fire, so the row has to show that field too.
-  // The notification's time drifts from it for anything recurring, retried, or
-  // dispatched late, and the list then reads as unsorted.
+  // The reminder's body already says when it fires, so the timestamp says when
+  // it was set instead — the way other rows show when they arrived.
   if (entity.type === 'reminder') {
-    return entity.nextRunAt != null ? String(entity.nextRunAt) : undefined;
+    return entity.createdAt != null ? String(entity.createdAt) : undefined;
   }
 
   const messageTime =
@@ -507,9 +511,11 @@ const githubAction = (notification?: Notification): string => {
  */
 function BaseCard(props: {
   item: InboxCardDisplayItem;
+  class?: string;
   selected?: boolean;
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
+  focusable?: boolean;
   /** Contents of the avatar bubble (glyph or avatar); the circle is ours. */
   icon: JSX.Element;
   /**
@@ -524,6 +530,8 @@ function BaseCard(props: {
 }) {
   return (
     <InboxCard.Root
+      class={props.class}
+      focusable={props.focusable}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -690,10 +698,7 @@ export function ChannelCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={!isDM()}
@@ -751,10 +756,7 @@ export function ChannelMessageCardLayout(props: InboxCardLayoutProps) {
   // its three-line neighbors.
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<ActionBubble tag={getNotificationTag(props.item.notification)} />}
       title={text().title}
     >
@@ -870,6 +872,8 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
   // the quoted-original block stacked beneath.
   return (
     <InboxCard.Root
+      class={props.class}
+      focusable={props.focusable}
       dimmed={!props.item.unread}
       selected={props.selected}
       highlighted={props.highlighted}
@@ -1005,10 +1009,7 @@ export function DocumentCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1072,10 +1073,7 @@ export function TaskCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1120,10 +1118,7 @@ export function AiCardLayout(props: InboxCardLayoutProps) {
   // two-line clamp of the response summary with its height reserved.
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={props.item.notification}
@@ -1178,10 +1173,7 @@ export function EmailCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<ActionBubble tag="new_email" />}
       titleLeading={
         <Show when={text().isDraft}>
@@ -1264,10 +1256,7 @@ export function GithubCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <Show
           when={
@@ -1363,10 +1352,7 @@ export function CallCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <EntityIcon
           class={AVATAR_GLYPH_CLASS}
@@ -1435,10 +1421,7 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={<CalendarBlankIcon class={AVATAR_GLYPH_CLASS} />}
       title={props.item.entity.name || '(No title)'}
     >
@@ -1458,13 +1441,9 @@ export function CalendarEventCardLayout(props: InboxCardLayoutProps) {
 }
 
 /**
- * A reminder is self-set, so there is no sender and no action to describe.
- *
- * With something to point at, the description leads and the chip below says
- * what it is about. Standalone, there is nothing to link to, so the generic
- * title leads — matching `ReminderMetadata::format_title` on the backend, so
- * the row and the push notification read the same — and the description
- * becomes the body.
+ * A reminder is self-set, so there is no sender and no action to describe. Its
+ * own description is the title; below it sit what it is about — a clickable chip
+ * when it points at something — and when it next fires.
  */
 export function ReminderCardLayout(props: InboxCardLayoutProps) {
   // The current description, not the notification's copy of it, so editing a
@@ -1476,70 +1455,50 @@ export function ReminderCardLayout(props: InboxCardLayoutProps) {
       ? props.item.entity.referencedEntity
       : undefined;
 
+  // When it next comes due — a one-shot's firing time, or a recurring one's
+  // cadence — so the row says when as well as what.
+  const when = () =>
+    props.item.entity.type === 'reminder'
+      ? describeReminderWhen(props.item.entity)
+      : undefined;
+
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       // Always the bell, never the referenced entity's icon: the row is a
       // reminder first, and the thing it points at is named right below.
       icon={<BellSimpleIcon class={AVATAR_GLYPH_CLASS} />}
-      title={
-        <Show when={referenced()} fallback="Reminder">
+      // The reminder's own text, not a generic "Reminder" — its name is the
+      // title, with a fallback only for the rare empty description.
+      title={description() || 'Reminder'}
+    >
+      {/* A reminder fills the two body lines its three-line neighbors use, so
+          the list rhythm stays even: what it is about (a chip, when there's
+          something to point at) and when it fires. */}
+      <div class="min-h-[2lh] min-w-0">
+        <Show when={referenced()}>
           {(reference) => (
-            <ReminderTitle
-              description={description()}
-              id={reference().id}
-              type={reference().type}
-            />
+            <InboxCard.Content class="truncate">
+              {/* Its own click target: the chip opens what the reminder is
+                  about, while a click anywhere else on the row opens the editor.
+                  `ItemPreview` navigates but does not stop propagation itself. */}
+              <span onClick={(event) => event.stopPropagation()}>
+                <ReminderReferenceChip
+                  id={reference().id}
+                  type={reference().type}
+                />
+              </span>
+            </InboxCard.Content>
           )}
         </Show>
-      }
-    >
-      {/* A reminder only says one thing, so the body reserves the two lines
-          its three-line neighbors use to keep the list rhythm even. The chip
-          replaces the description when there's something to point at. */}
-      <div class="min-h-[2lh] min-w-0">
-        <InboxCard.Content class="truncate">
-          <Show when={referenced()} fallback={description()}>
-            {(reference) => (
-              <ReminderReferenceChip
-                id={reference().id}
-                type={reference().type}
-              />
-            )}
-          </Show>
-        </InboxCard.Content>
+        <Show when={when()}>
+          {(text) => (
+            <InboxCard.Content class="truncate">{text()}</InboxCard.Content>
+          )}
+        </Show>
       </div>
     </BaseCard>
   );
-}
-
-/**
- * The reminder's description, unless it says nothing the chip below doesn't.
- *
- * The composer derives the description from the entity, so today it usually
- * *is* the referenced entity's name — printing it as the title would just
- * repeat the chip. Falling back to the generic title keeps the row readable
- * until descriptions become editable, and gets out of the way once they are.
- */
-function ReminderTitle(props: ItemEntity & { description: string }) {
-  const { item, name } = useItemPreviewData(() => ({
-    id: props.id,
-    type: props.type,
-  }));
-
-  const ownText = () => {
-    const description = props.description.trim();
-    // While the reference is resolving, `name()` is a placeholder, so the two
-    // cannot be compared yet — hold the generic title rather than flash text
-    // that is about to collapse into it.
-    if (!description || item().loading) return undefined;
-    return description === name().trim() ? undefined : description;
-  };
-
-  return <>{ownText() ?? 'Reminder'}</>;
 }
 
 /**
@@ -1569,10 +1528,7 @@ export function GenericCardLayout(props: InboxCardLayoutProps) {
 
   return (
     <BaseCard
-      item={props.item}
-      selected={props.selected}
-      highlighted={props.highlighted}
-      onClick={props.onClick}
+      {...props}
       icon={
         <EntityIcon
           class={AVATAR_GLYPH_CLASS}

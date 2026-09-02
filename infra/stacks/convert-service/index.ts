@@ -1,6 +1,6 @@
 import * as pulumi from '@pulumi/pulumi';
 import { Queue } from '../../packages/resources';
-import { stack } from '../../packages/shared';
+import { BASE_DOMAIN, stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { ConvertService } from './service';
 
@@ -83,4 +83,6 @@ const convertService = new ConvertService('convert-service', {
 });
 
 export const convertServiceRoleArn = pulumi.interpolate`${convertService.role.arn}`;
-export const convertServiceUrl = pulumi.interpolate`${convertService.domain}`;
+export const convertServiceUrl = `https://${
+  stack === 'prod' ? '' : `${stack}-`
+}gateway.${BASE_DOMAIN}/convert`;

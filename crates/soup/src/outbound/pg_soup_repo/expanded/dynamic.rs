@@ -138,7 +138,7 @@ static GROUPED_CALENDAR_EVENT_TOP_CLAUSE: &str = r#"
                     CASE $2
                         WHEN 'created_at' THEN event.created_at
                         WHEN 'viewed_at' THEN '1970-01-01 00:00:00+00'::timestamptz
-                        ELSE event.updated_at
+                        ELSE GREATEST(event.updated_at, event.last_reminder_fired_at)
                     END::timestamptz as sort_ts,
                     NULL::text as project_id,
                     'CALENDAR_EVENT'::property_entity_type as property_entity_type
@@ -178,6 +178,29 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
                 FROM document_email de
                 WHERE de.document_id = d.id
             ) as "is_email_attachment",
+            (
+                dt.sub_type IS DISTINCT FROM 'task'
+                OR EXISTS (
+                    SELECT 1
+                    FROM entity_properties ep_assignees_projection
+                    WHERE ep_assignees_projection.entity_id = d.id
+                        AND ep_assignees_projection.entity_type = 'TASK'
+                        AND ep_assignees_projection.property_definition_id = $8
+                        AND ep_assignees_projection.values->'value' @> jsonb_build_array(
+                            jsonb_build_object('entity_id', $1)
+                        )
+                )
+            ) as "is_important",
+            ARRAY(
+                SELECT status_option_id::uuid
+                FROM jsonb_array_elements_text(
+                    CASE
+                        WHEN jsonb_typeof(ep_status.values->'value') = 'array'
+                        THEN ep_status.values->'value'
+                        ELSE '[]'::jsonb
+                    END
+                ) AS status_option_id
+            ) as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             CASE
@@ -234,6 +257,8 @@ static CHAT_DETAIL_CLAUSE: &str = r#"
             NULL as "sha",
             NULL as "sub_type",
             false as "is_email_attachment",
+            true as "is_important",
+            ARRAY[]::uuid[] as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
@@ -263,6 +288,8 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL as "sha",
             NULL as "sub_type",
             false as "is_email_attachment",
+            true as "is_important",
+            ARRAY[]::uuid[] as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
@@ -461,6 +488,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
                 'isReadOnly', event.is_read_only,
                 'createdAt', event.created_at,
                 'updatedAt', event.updated_at,
+                'lastReminderFiredAt', event.last_reminder_fired_at,
                 'extra', NULL
             ) as "calendar_event",
             gi.group_key as "group_key",
@@ -1572,6 +1600,8 @@ fn build_query(
                 NULL::text as "sha",
                 NULL::document_sub_type_value as "sub_type",
                 false as "is_email_attachment",
+                false as "is_important",
+                ARRAY[]::uuid[] as "status_option_ids",
                 NULL::timestamptz as "viewed_at",
                 NULL::timestamptz as "sort_ts",
                 NULL::boolean as "is_completed",
@@ -1602,6 +1632,10 @@ struct DocumentRow {
     sub_type: Option<DocumentSubType>,
     #[sqlx(default)]
     is_email_attachment: bool,
+    #[sqlx(default)]
+    is_important: bool,
+    #[sqlx(default)]
+    status_option_ids: Vec<Uuid>,
     is_completed: Option<bool>,
     deleted_at: Option<DateTime<Utc>>,
 }
@@ -1665,6 +1699,8 @@ impl SoupRow {
         match self {
             Self::Document(row) => Some(SoupDocumentServerFacts {
                 is_email_attachment: row.is_email_attachment,
+                is_important: row.is_important,
+                status_option_ids: row.status_option_ids.clone(),
             }),
             Self::Chat(_) | Self::Project(_) | Self::CalendarEvent(_) => None,
         }
@@ -1698,6 +1734,8 @@ impl SoupRow {
                 viewed_at,
                 sub_type,
                 is_email_attachment: _,
+                is_important: _,
+                status_option_ids: _,
                 is_completed,
                 deleted_at,
             }) => SoupItem::Document(SoupDocument {

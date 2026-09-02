@@ -1599,6 +1599,25 @@ impl CalendarRepository for PgCalendarRepository {
         }))
     }
 
+    #[tracing::instrument(skip(self), err)]
+    async fn get_event_attendees(&self, event_id: Uuid) -> Result<Vec<CalendarAttendee>, Report> {
+        Ok(fetch_attendees(&self.pool, &[event_id])
+            .await?
+            .remove(&event_id)
+            .unwrap_or_default())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn get_occurrence_override_attendees(
+        &self,
+        event_id: Uuid,
+        recurrence_id: &str,
+    ) -> Result<Option<Vec<CalendarAttendee>>, Report> {
+        Ok(fetch_override_attendees(&self.pool, &[event_id])
+            .await?
+            .remove(&(event_id, recurrence_id.to_string())))
+    }
+
     #[tracing::instrument(skip(self, requester_id), err)]
     async fn get_creation_target(
         &self,
@@ -3708,6 +3727,29 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
             &firing.occurrence_key,
             firing.minutes_before,
             firing.fire_at,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(report)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn record_reminder_fired(
+        &self,
+        event_id: Uuid,
+        fired_at: DateTime<Utc>,
+    ) -> Result<(), Report> {
+        // GREATEST also covers the first delivery: it ignores the NULL.
+        sqlx::query!(
+            r#"
+            UPDATE calendar_events
+            SET last_reminder_fired_at = GREATEST(last_reminder_fired_at, $2)
+            WHERE id = $1
+            "#,
+            event_id,
+            fired_at,
         )
         .execute(&self.pool)
         .await

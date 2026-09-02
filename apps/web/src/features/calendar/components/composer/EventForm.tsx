@@ -1,6 +1,11 @@
+import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Layer } from '@ui';
 import { createEffect, createUniqueId, Show } from 'solid-js';
+import {
+  calendarDescriptionToEditorHtml,
+  exportCalendarDescription,
+} from '../../utils/calendar-description';
 import type { CalendarEventFormController } from './create-calendar-event-form-controller';
 import { EventDateTimeRangeFields } from './EventDateTimeRangeFields';
 import {
@@ -56,6 +61,13 @@ export function EventForm(props: EventFormProps) {
     props.disabledFields?.[field] === true;
   const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
     formIsDisabled() || fieldIsReadOnly(field);
+
+  // The editor cannot hand the provider's string back: Lexical re-serializes
+  // whatever it loads. Only content that exports differently from what was
+  // loaded counts as an edit, so an untouched description stays byte-for-byte
+  // what the event was opened with.
+  const initialDescription = state().description;
+  let loadedDescription: string | undefined;
 
   createEffect(() => {
     const option = controller.selectedCalendarOption();
@@ -134,24 +146,30 @@ export function EventForm(props: EventFormProps) {
               class="h-9 w-full bg-transparent px-2 text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
             />
 
-            <div class="h-12">
-              <textarea
-                value={state().description}
-                onInput={(event) =>
+            <div class="h-12 overflow-y-auto">
+              <MarkdownTextarea
+                type="calendar"
+                initialHtml={calendarDescriptionToEditorHtml(
+                  initialDescription
+                )}
+                editable={() => !fieldIsDisabled('description')}
+                onInitialized={(editor) => {
+                  loadedDescription = exportCalendarDescription(editor);
+                }}
+                onChange={(_markdown, editor) => {
+                  if (!editor) return;
+                  const next = exportCalendarDescription(editor);
                   controller.setField(
                     'description',
-                    event.currentTarget.value.replaceAll(/[\r\n]+/g, ' ')
-                  )
-                }
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') event.preventDefault();
+                    next === loadedDescription ? initialDescription : next
+                  );
                 }}
                 placeholder="Add description..."
-                aria-label="Description"
-                rows={1}
-                wrap="off"
-                disabled={fieldIsDisabled('description')}
-                class="h-full w-full resize-none overflow-x-auto bg-transparent px-2 text-sm text-ink outline-none placeholder:text-ink-placeholder"
+                portalScope="local"
+                domRef={(element) =>
+                  element.setAttribute('aria-label', 'Description')
+                }
+                class="h-full w-full bg-transparent px-2 text-sm text-ink outline-none"
               />
             </div>
           </div>

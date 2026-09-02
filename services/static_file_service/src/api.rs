@@ -53,6 +53,7 @@ pub async fn setup_and_serve(
             default_user_id: Some(MACRO_INTERNAL_USER_ID.to_string()),
         },
         macro_authorization::NoBotAuthorizer,
+        macro_authorization::NoUserApiKeyAuthorizer,
     )));
 
     let state = AppState {

@@ -281,16 +281,28 @@
 	pointer-events: none;
 }
 
+.calendar-view
+	.fc
+	.fc-timegrid-col-events
+	.calendar-multi-day-selection-preview-event,
+.calendar-view
+	.fc
+	.fc-timegrid-bg
+	.calendar-multi-day-selection-preview-event,
+.calendar-view
+	.fc
+	.fc-timegrid-col-bg
+	.calendar-multi-day-selection-preview-event {
+	display: none;
+}
+
 .calendar-view .fc .fc-highlight {
 	inset: 2px;
 }
 
-.calendar-view .fc .fc-dayGridMonth-view .fc-highlight {
-	top: 1.5rem;
-	right: 0.375rem;
-	bottom: auto;
-	left: 0.375rem;
-	height: 1rem;
+/* All-day and month selections render as a stacked preview chip. */
+.calendar-view .fc .fc-daygrid-body .fc-highlight {
+	display: none;
 }
 
 /* Timed selections already render an event mirror; hide its backing fill. */
@@ -527,12 +539,77 @@
 	background: transparent;
 }
 
-.calendar-view .fc .fc-event:hover .calendar-event-content {
-	background-color: var(--color-hover);
-}
-
 .calendar-view .fc .fc-event:focus-visible .calendar-event-content {
 	background-color: var(--color-active);
+}
+
+@media (hover: hover) {
+	.calendar-view
+		.fc
+		.fc-event:hover:not(.fc-event-mirror):not(
+			.calendar-multi-day-selection-preview-event
+		):not(:has(.calendar-event-content-selected)) {
+		--fc-event-bg-color: color-mix(
+			in oklch,
+			var(--event-calendar-color, var(--color-calendar)) 18%,
+			var(--color-surface)
+		);
+		--fc-event-text-color: var(--color-ink);
+		box-shadow:
+			0 0 0 1px
+			color-mix(
+				in oklch,
+				var(--event-calendar-color, var(--color-calendar)) 55%,
+				transparent
+			);
+	}
+
+	.calendar-view
+		.fc
+		.fc-event:hover:not(.fc-event-mirror):not(
+			.calendar-multi-day-selection-preview-event
+		):not(:has(.calendar-event-content-selected))
+		.calendar-event-content {
+		background-color: color-mix(
+			in oklch,
+			var(--event-calendar-color, var(--color-calendar)) 20%,
+			transparent
+		);
+	}
+
+	.calendar-view
+		.fc
+		.fc-event:hover:not(.fc-event-mirror):not(
+			.calendar-multi-day-selection-preview-event
+		):not(:has(.calendar-event-content-selected)):has(
+			[data-response-status="accepted"]
+		) {
+		background-image: linear-gradient(
+			color-mix(
+				in oklch,
+				var(--event-calendar-color, var(--color-calendar)) 42%,
+				transparent
+			),
+			color-mix(
+				in oklch,
+				var(--event-calendar-color, var(--color-calendar)) 42%,
+				transparent
+			)
+		);
+	}
+
+	.calendar-view
+		.fc
+		.fc-dayGridMonth-view
+		.fc-daygrid-dot-event:hover:not(:has(.calendar-event-content-selected)) {
+		--fc-event-bg-color: color-mix(
+			in oklch,
+			var(--event-calendar-color, var(--color-calendar)) 16%,
+			var(--color-surface)
+		);
+		background-color: var(--fc-event-bg-color);
+		background-image: none;
+	}
 }
 
 .calendar-view .fc .fc-event:has(.calendar-event-content-selected) {
@@ -569,11 +646,79 @@
 
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-frame,
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-events {
-	min-height: 1.5rem;
+	min-height: 3rem;
 }
 
 .calendar-view .fc .fc-timegrid .fc-daygrid-day-events {
 	margin-bottom: 0;
+}
+
+/* Empty create strip after the chip stack, including when events already exist. */
+.calendar-view .fc .fc-timegrid .fc-daygrid-day-bottom {
+	min-height: 1.5rem;
+}
+
+/*
+ * Keep a fixed all-day slot in the scrollgrid so extra chips grow over the
+ * time grid instead of shrinking it and shifting the hour rows.
+ */
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	> td {
+	position: relative;
+	z-index: 4;
+	height: 3rem;
+	max-height: 3rem;
+	overflow: visible;
+	vertical-align: top;
+	border-bottom-width: 0;
+}
+
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	.fc-scroller-harness {
+	position: absolute;
+	top: 0;
+	right: 0;
+	left: 0;
+	z-index: 4;
+	height: auto;
+	min-height: 100%;
+	overflow: visible;
+}
+
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	.fc-daygrid-body,
+.calendar-view
+	.fc
+	.fc-timegrid
+	.fc-scrollgrid-section-body:not(.fc-scrollgrid-section-liquid):has(
+		.fc-daygrid-body
+	)
+	.fc-daygrid-body
+	> table {
+	height: auto;
+}
+
+.calendar-view .fc .fc-timegrid .fc-daygrid-body {
+	border-bottom: var(--app-border-width) solid var(--fc-border-color);
+}
+
+.calendar-view .fc .fc-timegrid .fc-scrollgrid-section-liquid > td {
+	border-top-width: 0;
 }
 
 .calendar-view .fc .fc-timegrid-divider {

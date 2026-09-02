@@ -2,14 +2,17 @@ use async_lock::Mutex;
 use cache_core::codec::cache_database_name;
 use cache_core::deps::OpId;
 use cache_core::engine::{
-    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, NetworkWrite,
-    QueryRegistration, ReadResult, WriteResult,
+    BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
+    EngineError, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
+    RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
 use cache_core::link_patch::{OptimisticLinkPatch, QueryRevalidation};
 use cache_core::predicate::PredicateQueryResult;
 use cache_core::query_inspection::QueryInspection;
-use cache_core::queue::{ClaimedMutation, MutationClaimRequest, MutationClaimToken};
+use cache_core::queue::{
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationUpsertKind,
+};
 use cache_core::record_selection::RecordSelection;
 use cache_core::search::SearchRequest;
 use cache_core::store::QueueDiagnosticsAvailability;
@@ -141,6 +144,7 @@ struct JsQueryRegistration {
 #[serde(rename_all = "camelCase")]
 struct JsWriteResult {
     revision: String,
+    revision_advanced: bool,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
@@ -151,6 +155,7 @@ struct JsWriteResult {
 #[serde(rename_all = "camelCase")]
 struct JsHydrationWriteResult {
     revision: String,
+    revision_advanced: bool,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
@@ -167,12 +172,40 @@ struct JsInspectionPathSegment {
 #[serde(rename_all = "camelCase")]
 struct JsEnqueueOptimisticMutationResult {
     transaction_id: String,
+    upsert_kind: JsMutationUpsertKind,
     revision: String,
+    revision_advanced: bool,
     changed: Vec<String>,
     affected_ops: Vec<String>,
     reset: bool,
     revalidations: Vec<QueryRevalidation>,
     initial_claim: JsInitialMutationClaim,
+}
+
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+enum JsMutationUpsertKind {
+    Inserted,
+    ReplacedPending { removed_transaction_id: String },
+    AppendedAfterActive { active_transaction_id: String },
+}
+
+impl From<MutationUpsertKind> for JsMutationUpsertKind {
+    fn from(kind: MutationUpsertKind) -> Self {
+        match kind {
+            MutationUpsertKind::Inserted => Self::Inserted,
+            MutationUpsertKind::ReplacedPending { removed_id } => Self::ReplacedPending {
+                removed_transaction_id: removed_id.to_string(),
+            },
+            MutationUpsertKind::AppendedAfterActive { active_id } => Self::AppendedAfterActive {
+                active_transaction_id: active_id.to_string(),
+            },
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -187,6 +220,8 @@ enum JsInitialMutationClaim {
 #[serde(rename_all = "camelCase")]
 struct JsClaimedMutation {
     transaction_id: String,
+    uuid: String,
+    superseded: bool,
     lease_generation: String,
     query: String,
     operation_name: Option<String>,
@@ -202,6 +237,8 @@ impl TryFrom<ClaimedMutation> for JsClaimedMutation {
         let request = claimed.queued.mutation.request;
         Ok(Self {
             transaction_id: claimed.queued.id.to_string(),
+            uuid: claimed.queued.uuid.to_string(),
+            superseded: claimed.queued.superseded,
             lease_generation: claimed.lease_generation.to_string(),
             query: request.query,
             operation_name: request.operation_name,
@@ -301,9 +338,61 @@ struct JsRevisionResult {
     revision: String,
 }
 
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+enum JsDeferOptimisticWriteResult {
+    Deferred,
+    DiscardedSuperseded {
+        replacement_transaction_id: String,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+enum JsCommitOptimisticWriteResult {
+    Committed {
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+    CommittedSuperseded {
+        replacement_transaction_id: String,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+}
+
+#[derive(Serialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+enum JsRollbackOptimisticWriteResult {
+    RolledBack {
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+    DiscardedSuperseded {
+        replacement_transaction_id: String,
+        #[serde(flatten)]
+        result: JsWriteResult,
+    },
+}
+
 fn js_write_result(result: WriteResult, ops: &OpInterner) -> JsWriteResult {
     JsWriteResult {
         revision: result.revision.to_string(),
+        revision_advanced: result.revision_advanced,
         changed: result
             .changed
             .into_iter()
@@ -884,7 +973,7 @@ impl CacheEngine {
         })
     }
 
-    /// Evaluates one exact `soup-flat-v2` GraphQL filter request.
+    /// Evaluates one exact current-profile GraphQL Soup filter request.
     #[wasm_bindgen(js_name = entityFilter)]
     pub fn entity_filter(&self, request: JsValue) -> js_sys::Promise {
         let state = self.state.clone();
@@ -1028,6 +1117,7 @@ impl CacheEngine {
             let result = state.engine_result(result)?;
             to_js(&JsHydrationWriteResult {
                 revision: result.write_result.revision.to_string(),
+                revision_advanced: result.write_result.revision_advanced,
                 changed: result
                     .write_result
                     .changed
@@ -1050,6 +1140,7 @@ impl CacheEngine {
     pub fn enqueue_optimistic_mutation(
         &self,
         origin_op_id: Option<String>,
+        uuid: String,
         query: String,
         operation_name: Option<String>,
         variables: JsValue,
@@ -1086,6 +1177,7 @@ impl CacheEngine {
                 .enqueue_optimistic_mutation_with_projections(
                     origin,
                     BeginOptimisticWrite {
+                        uuid: &uuid,
                         query: &query,
                         operation_name: operation_name.as_deref(),
                         variables: &vars,
@@ -1113,7 +1205,9 @@ impl CacheEngine {
             };
             to_js(&JsEnqueueOptimisticMutationResult {
                 transaction_id: result.transaction_id.to_string(),
+                upsert_kind: result.upsert_kind.into(),
                 revision: result.write_result.revision.to_string(),
+                revision_advanced: result.write_result.revision_advanced,
                 changed: result
                     .write_result
                     .changed
@@ -1208,6 +1302,7 @@ impl CacheEngine {
         error: String,
     ) -> js_sys::Promise {
         let state = self.state.clone();
+        let ops = self.ops.clone();
         future_to_promise(async move {
             let mut state = state.lock().await;
             state.ensure_callable()?;
@@ -1221,8 +1316,17 @@ impl CacheEngine {
                 .engine_mut()?
                 .defer_optimistic_write(transaction, claim, next_attempt_at_ms, error)
                 .await;
-            state.engine_result(result)?;
-            Ok(JsValue::UNDEFINED)
+            let result = state.engine_result(result)?;
+            let result = match result {
+                DeferOptimisticWriteResult::Deferred => JsDeferOptimisticWriteResult::Deferred,
+                DeferOptimisticWriteResult::DiscardedSuperseded(result) => {
+                    JsDeferOptimisticWriteResult::DiscardedSuperseded {
+                        replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
+            };
+            to_js(&result)
         })
     }
 
@@ -1257,7 +1361,7 @@ impl CacheEngine {
                     .map_err(err_js)?;
             let result = state
                 .engine_mut()?
-                .commit_optimistic_write_with_projections(
+                .commit_optimistic_write_with_projections_outcome(
                     transaction,
                     claim,
                     &query,
@@ -1267,8 +1371,20 @@ impl CacheEngine {
                     projections,
                 )
                 .await;
-            let result = state.engine_result(result)?;
-            to_js(&js_write_result(result, &ops.borrow()))
+            let result = match state.engine_result(result)? {
+                CommitOptimisticWriteResult::Committed(result) => {
+                    JsCommitOptimisticWriteResult::Committed {
+                        result: js_write_result(result, &ops.borrow()),
+                    }
+                }
+                CommitOptimisticWriteResult::CommittedSuperseded(result) => {
+                    JsCommitOptimisticWriteResult::CommittedSuperseded {
+                        replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
+            };
+            to_js(&result)
         })
     }
 
@@ -1293,10 +1409,22 @@ impl CacheEngine {
             };
             let result = state
                 .engine_mut()?
-                .rollback_optimistic_write(transaction, claim)
+                .rollback_optimistic_write_with_outcome(transaction, claim)
                 .await;
-            let result = state.engine_result(result)?;
-            to_js(&js_write_result(result, &ops.borrow()))
+            let result = match state.engine_result(result)? {
+                RollbackOptimisticWriteResult::RolledBack(result) => {
+                    JsRollbackOptimisticWriteResult::RolledBack {
+                        result: js_write_result(result, &ops.borrow()),
+                    }
+                }
+                RollbackOptimisticWriteResult::DiscardedSuperseded(result) => {
+                    JsRollbackOptimisticWriteResult::DiscardedSuperseded {
+                        replacement_transaction_id: result.replacement_transaction_id.to_string(),
+                        result: js_write_result(result.write_result, &ops.borrow()),
+                    }
+                }
+            };
+            to_js(&result)
         })
     }
 

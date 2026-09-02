@@ -3,6 +3,7 @@ import {
   ENABLE_GRAPHQL_SOUP,
 } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
+import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
   useMuteItemMutation,
@@ -409,18 +410,17 @@ export function createNotificationSource(
     await bulkMarkAsRead([notification]);
   };
 
+  // Canonicalize the type where we know how to; otherwise pass it through so
+  // legacy callers keep working unchanged.
+  const toMuteItem = (entity: Entity): UserUnsubscribe =>
+    muteItemForRef(entity) ?? { item_id: entity.id, item_type: entity.type };
+
   const muteEntity = async (entity: Entity) => {
-    await muteItem.mutateAsync({
-      item_id: entity.id,
-      item_type: entity.type,
-    });
+    await muteItem.mutateAsync(toMuteItem(entity));
   };
 
   const unmuteEntity = async (entity: Entity) => {
-    await unmuteItem.mutateAsync({
-      item_id: entity.id,
-      item_type: entity.type,
-    });
+    await unmuteItem.mutateAsync(toMuteItem(entity));
   };
 
   const subscribe = (subscribeFn: SubscribeFn) => {

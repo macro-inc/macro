@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use soup_filter_projection::{
     SoupCacheProjectionSupplement, decode_cache_projection_supplement,
-    encode_cache_projection_supplement, validate_soup_flat_v2,
+    encode_cache_projection_supplement, validate_soup_flat_v3,
 };
 use std::collections::BTreeMap;
 
@@ -30,7 +30,7 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
     else {
         panic!("partial optimistic Soup entity should compile to a patch");
     };
-    assert_eq!(profile, &vocabulary::profile_v2());
+    assert_eq!(profile, &vocabulary::profile_v3());
     assert!(
         exact
             .iter()
@@ -61,9 +61,9 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
     );
     let [OptimisticProjectionMutation::Patch { profile, exact, .. }] = document_create.as_slice()
     else {
-        panic!("a document create without an attachment fact must patch, not claim completeness");
+        panic!("a document create without server facts must patch, not claim completeness");
     };
-    assert_eq!(profile, &vocabulary::profile_v2());
+    assert_eq!(profile, &vocabulary::profile_v3());
     assert!(
         exact
             .iter()
@@ -88,9 +88,9 @@ fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
         456,
     );
     let [OptimisticProjectionMutation::Replace(complete)] = complete.as_slice() else {
-        panic!("a project optimistic create has every required v2 fact");
+        panic!("a project optimistic create has every required v3 fact");
     };
-    assert_eq!(complete.profile, vocabulary::profile_v2());
+    assert_eq!(complete.profile, vocabulary::profile_v3());
 
     let deletion = optimistic_projection_mutations(
         &serde_json::json!({
@@ -161,7 +161,7 @@ fn optimistic_mutations_keep_first_seen_order_and_deletion_precedence() {
 }
 
 #[test]
-fn authoritative_direct_fields_do_not_require_a_projection_schema_field() {
+fn authoritative_direct_fields_without_projection_schema_field_become_v3_patch() {
     let query = r#"query LegacySoup {
         user {
             soup(input: { limit: 1 }) {
@@ -201,8 +201,177 @@ fn authoritative_direct_fields_do_not_require_a_projection_schema_field() {
     .expect("legacy query parses");
     assert!(matches!(
         mutations.as_slice(),
-        [ProjectionMutation::Replace(_)]
+        [ProjectionMutation::Patch { profile, .. }]
+            if profile == &vocabulary::profile_v3()
     ));
+}
+
+#[test]
+fn partial_queries_preserve_v3_authority_and_mark_missing_v3() {
+    let id = "00000000-0000-0000-0000-000000000001";
+    let base_mutations = authoritative_projection_mutations(
+        SUPPLEMENT_SUBSCRIPTION,
+        Some("Supplement"),
+        &supplement_subscription_data(selected_document(
+            id,
+            serde_json::Value::String(document_supplement(id, false)),
+            serde_json::Value::Null,
+        )),
+    )
+    .unwrap();
+    let [ProjectionMutation::Replace(base)] = base_mutations.as_slice() else {
+        panic!("complete Soup data must hydrate v3 authority");
+    };
+    let base = base.clone();
+    let key = base.record_key.clone();
+
+    let query = r#"query SoupNotifications {
+        user {
+            soup(input: { limit: 500 }) {
+                items {
+                    __typename
+                    id
+                    notifications { id }
+                }
+            }
+        }
+    }"#;
+    let mutations = authoritative_projection_mutations(
+        query,
+        Some("SoupNotifications"),
+        &serde_json::json!({
+            "user": {
+                "soup": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": id,
+                        "notifications": []
+                    }]
+                }
+            }
+        }),
+    )
+    .unwrap();
+    let [
+        ProjectionMutation::Patch {
+            profile,
+            exact,
+            integers,
+            sorts,
+            ..
+        },
+    ] = mutations.as_slice()
+    else {
+        panic!("a projection-less partial query must produce a bounded v3 patch");
+    };
+    assert_eq!(profile, &vocabulary::profile_v3());
+    assert!(exact.is_empty());
+    assert!(integers.is_empty());
+    assert!(sorts.is_empty());
+
+    let mut existing = std::collections::HashMap::from([(
+        key.clone(),
+        cache_core::predicate::ProjectionState::Complete(base.clone()),
+    )]);
+    cache_core::predicate::apply_authoritative_projection_mutations(&mut existing, &mutations);
+    assert_eq!(
+        existing.get(&key),
+        Some(&cache_core::predicate::ProjectionState::Complete(base))
+    );
+
+    let mut missing = std::collections::HashMap::new();
+    cache_core::predicate::apply_authoritative_projection_mutations(&mut missing, &mutations);
+    assert!(matches!(
+        missing.get(&key),
+        Some(cache_core::predicate::ProjectionState::Incomplete {
+            profile,
+            kind: ProjectionIncompleteKind::Missing,
+            ..
+        }) if profile == &vocabulary::profile_v3()
+    ));
+}
+
+#[test]
+fn empty_query_patch_does_not_overwrite_an_earlier_field_patch() {
+    let id = "00000000-0000-0000-0000-000000000001";
+    let query = r#"query RepeatedSoupEntity {
+        user {
+            rich: soup(input: { limit: 1 }) {
+                items {
+                    __typename
+                    id
+                    ... on GraphqlSoupDocument {
+                        ownerId
+                        projectId
+                        fileType
+                        createdAt
+                        updatedAt
+                        subType { __typename }
+                    }
+                }
+            }
+            partial: soup(input: { limit: 1 }) {
+                items {
+                    __typename
+                    id
+                    notifications { id }
+                }
+            }
+        }
+    }"#;
+    let mutations = authoritative_projection_mutations(
+        query,
+        Some("RepeatedSoupEntity"),
+        &serde_json::json!({
+            "user": {
+                "rich": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": id,
+                        "ownerId": "macro|owner@example.com",
+                        "projectId": null,
+                        "fileType": "md",
+                        "createdAt": "2025-01-01T00:00:00.000001Z",
+                        "updatedAt": "2025-01-02T00:00:00.000001Z",
+                        "subType": null
+                    }]
+                },
+                "partial": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": id,
+                        "notifications": []
+                    }]
+                }
+            }
+        }),
+    )
+    .unwrap();
+    let [
+        ProjectionMutation::Patch {
+            exact,
+            integers,
+            sorts,
+            ..
+        },
+    ] = mutations.as_slice()
+    else {
+        panic!("the richer appearance must retain its field patch");
+    };
+    assert!(exact.iter().any(|patch| {
+        patch.attribute == vocabulary::owner()
+            && patch.values == vec![ExactValue::utf8("macro|owner@example.com").unwrap()]
+    }));
+    assert!(
+        integers
+            .iter()
+            .any(|patch| patch.attribute == vocabulary::updated_at())
+    );
+    assert!(
+        sorts
+            .iter()
+            .any(|fact| fact.attribute == vocabulary::updated_at())
+    );
 }
 
 const SUPPLEMENT_SUBSCRIPTION: &str = r#"subscription Supplement {
@@ -247,9 +416,20 @@ const SUPPLEMENT_BACKFILL: &str = r#"query SoupBackfill {
 }"#;
 
 fn document_supplement(id: &str, is_email_attachment: bool) -> String {
+    document_supplement_with_task_facts(id, is_email_attachment, true, Vec::new())
+}
+
+fn document_supplement_with_task_facts(
+    id: &str,
+    is_email_attachment: bool,
+    is_important: bool,
+    status_option_ids: Vec<uuid::Uuid>,
+) -> String {
     encode_cache_projection_supplement(&SoupCacheProjectionSupplement::document(
         RecordKey::new(format!("GraphqlSoupDocument:{id}")).unwrap(),
         is_email_attachment,
+        is_important,
+        status_option_ids,
     ))
     .unwrap()
 }
@@ -282,7 +462,7 @@ fn supplement_subscription_data(item: serde_json::Value) -> serde_json::Value {
 }
 
 #[test]
-fn selected_document_supplement_composes_direct_fields_and_only_adds_attachment_state() {
+fn selected_document_supplement_composes_direct_and_server_owned_facts() {
     let id = "00000000-0000-0000-0000-000000000001";
     let encoded = document_supplement(id, false);
     let mutations = authoritative_projection_mutations(
@@ -298,7 +478,7 @@ fn selected_document_supplement_composes_direct_fields_and_only_adds_attachment_
     let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
         panic!("a valid selected supplement and direct fields must replace authority");
     };
-    assert_eq!(document.profile, vocabulary::profile_v2());
+    assert_eq!(document.profile, vocabulary::profile_v3());
     assert_eq!(document.partition, vocabulary::document_partition());
     assert!(document.exact_facts.iter().any(|fact| {
         fact.attribute == vocabulary::owner()
@@ -341,6 +521,41 @@ fn selected_document_supplement_composes_direct_fields_and_only_adds_attachment_
 }
 
 #[test]
+fn selected_document_supplement_composes_importance_and_status_facts() {
+    let id = "00000000-0000-0000-0000-000000000001";
+    let status_a = uuid::Uuid::from_u128(11);
+    let status_b = uuid::Uuid::from_u128(12);
+    let mutations = authoritative_projection_mutations(
+        SUPPLEMENT_SUBSCRIPTION,
+        Some("Supplement"),
+        &supplement_subscription_data(selected_document(
+            id,
+            serde_json::Value::String(document_supplement_with_task_facts(
+                id,
+                false,
+                false,
+                vec![status_b, status_a],
+            )),
+            serde_json::json!({ "__typename": "GraphqlTaskSubType" }),
+        )),
+    )
+    .unwrap();
+    let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
+        panic!("viewer-relative facts must compose into one complete projection");
+    };
+    assert!(document.exact_facts.iter().any(|fact| {
+        fact.attribute == vocabulary::importance() && fact.value == ExactValue::new([0]).unwrap()
+    }));
+    let statuses = document
+        .exact_facts
+        .iter()
+        .filter(|fact| fact.attribute == vocabulary::task_status_option())
+        .map(|fact| fact.value.as_bytes())
+        .collect::<Vec<_>>();
+    assert_eq!(statuses, vec![status_a.as_bytes(), status_b.as_bytes()]);
+}
+
+#[test]
 fn document_subtype_postings_are_composed_from_graphql_typenames() {
     for (suffix, typename, expected) in [
         (2, "GraphqlTaskSubType", "task"),
@@ -369,7 +584,7 @@ fn document_subtype_postings_are_composed_from_graphql_typenames() {
 }
 
 #[test]
-fn selected_project_and_chat_null_supplements_are_valid_direct_only_v2_hydration() {
+fn selected_project_and_chat_null_supplements_are_valid_direct_only_v3_hydration() {
     let query = r#"query SoupBackfill {
         user { soup(input: { initial: { limit: 2 } }) { items {
             __typename
@@ -411,7 +626,7 @@ fn selected_project_and_chat_null_supplements_are_valid_direct_only_v2_hydration
         let ProjectionMutation::Replace(document) = mutation else {
             panic!("direct-only entity must produce a complete replacement");
         };
-        validate_soup_flat_v2(document).unwrap();
+        validate_soup_flat_v3(document).unwrap();
         assert_ne!(document.partition, vocabulary::document_partition());
     }
 }
@@ -457,7 +672,7 @@ fn missing_malformed_or_mismatched_document_supplements_remain_incomplete() {
             matches!(
                 mutations.as_slice(),
                 [ProjectionMutation::MarkIncomplete { profile, kind, .. }]
-                    if profile == &vocabulary::profile_v2() && *kind == expected_kind
+                    if profile == &vocabulary::profile_v3() && *kind == expected_kind
             ),
             "{name}: {mutations:?}"
         );
@@ -514,7 +729,7 @@ fn backfill_rejects_invalid_supplements_and_missing_direct_document_fields() {
 }
 
 #[test]
-fn partial_mutation_payloads_patch_v2_without_fabricating_relation_facts() {
+fn partial_mutation_payloads_patch_v3_without_fabricating_server_facts() {
     let query = r#"mutation PartialRename($inputs: [RenameEntityInput!]!) {
         renameEntities(inputs: $inputs) {
             results {
@@ -573,9 +788,9 @@ fn partial_mutation_payloads_patch_v2_without_fabricating_relation_facts() {
         },
     ] = mutations.as_slice()
     else {
-        panic!("partial authoritative entity must produce one v2 patch");
+        panic!("partial authoritative entity must produce one v3 patch");
     };
-    assert_eq!(profile, &vocabulary::profile_v2());
+    assert_eq!(profile, &vocabulary::profile_v3());
     assert!(
         exact
             .iter()
@@ -718,15 +933,75 @@ fn production_documents_presets_compile_for_created_and_updated_sorts() {
                 )
                 .unwrap_or_else(|error| panic!("{name} should materialize: {error}"));
                 let SoupFilterCompileOutcome::Supported(query) = outcome else {
-                    panic!("{name} must be soup-flat-v2 eligible");
+                    panic!("{name} must be soup-flat-v3 eligible");
                 };
-                assert_eq!(query.as_query().profile, vocabulary::profile_v2(), "{name}");
+                assert_eq!(query.as_query().profile, vocabulary::profile_v3(), "{name}");
                 assert_eq!(query.as_query().sort_attribute, sort_attribute, "{name}");
                 assert_eq!(query.as_query().sort_direction, direction, "{name}");
                 assert_eq!(query.as_query().tie_break_direction, direction, "{name}");
             }
         }
     }
+}
+
+#[test]
+fn production_my_tasks_importance_and_status_filter_compiles_locally() {
+    let mut filters = production_documents_filters(serde_json::json!({
+        "and": {
+            "left": { "literal": { "subType": "TASK" } },
+            "right": {
+                "or": {
+                    "left": { "literal": { "owner": "macro|viewer@example.com" } },
+                    "right": { "literal": { "importance": true } }
+                }
+            }
+        }
+    }));
+    filters.as_object_mut().unwrap().insert(
+        "propertiesFilter".to_owned(),
+        serde_json::json!({
+            "or": {
+                "left": {
+                    "literal": {
+                        "propertyDefinitionId": "00000001-0000-0000-0000-000000000002",
+                        "value": {
+                            "selectOption": "00000001-0000-0000-0002-000000000001"
+                        }
+                    }
+                },
+                "right": {
+                    "or": {
+                        "left": {
+                            "literal": {
+                                "propertyDefinitionId": "00000001-0000-0000-0000-000000000002",
+                                "value": {
+                                    "selectOption": "00000001-0000-0000-0002-000000000002"
+                                }
+                            }
+                        },
+                        "right": {
+                            "literal": {
+                                "propertyDefinitionId": "00000001-0000-0000-0000-000000000002",
+                                "value": {
+                                    "selectOption": "00000001-0000-0000-0002-000000000003"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }),
+    );
+
+    let SoupFilterCompileOutcome::Supported(query) =
+        compile_filter_request(filters, "UPDATED_AT", "DESC", 100).unwrap()
+    else {
+        panic!("production My Tasks filter must use the local v3 profile");
+    };
+    assert_eq!(query.as_query().profile, vocabulary::profile_v3());
+    let document = &query.as_query().partitions[0].predicate;
+    assert!(format!("{document:?}").contains("importance"));
+    assert!(format!("{document:?}").contains("task-status-option"));
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -751,6 +1026,10 @@ fn differential_document(
             attribute: vocabulary::email_attachment(),
             value: ExactValue::new([u8::from(is_email_attachment)]).unwrap(),
         },
+        predicate_index::ExactFact {
+            attribute: vocabulary::importance(),
+            value: ExactValue::new([1]).unwrap(),
+        },
     ];
     if let Some(sub_type) = sub_type {
         exact_facts.push(predicate_index::ExactFact {
@@ -760,7 +1039,7 @@ fn differential_document(
     }
     IndexDocument {
         record_key: RecordKey::new(format!("GraphqlSoupDocument:{id}")).unwrap(),
-        profile: vocabulary::profile_v2(),
+        profile: vocabulary::profile_v3(),
         partition: vocabulary::document_partition(),
         exact_facts,
         integer_facts: vec![
@@ -833,7 +1112,7 @@ fn production_documents_membership_matches_postgres_fixture_reference_and_real_t
             ),
         ];
         let mut storage =
-            cache_turso::TursoStorage::open_in_memory("soup-v2-production-shape-differential")
+            cache_turso::TursoStorage::open_in_memory("soup-v3-production-shape-differential")
                 .unwrap();
         storage
             .put_batch_with_projections(
@@ -942,23 +1221,23 @@ fn production_documents_membership_matches_postgres_fixture_reference_and_real_t
 }
 
 #[test]
-fn production_documents_presets_keep_unsupported_siblings_all_or_network() {
+fn production_documents_presets_support_importance_in_v3() {
     let with_unsupported_sibling = serde_json::json!({
         "and": {
             "left": { "literal": { "isEmailAttachment": false } },
             "right": { "literal": { "importance": true } }
         }
     });
-    assert!(matches!(
-        compile_filter_request(
-            production_documents_filters(with_unsupported_sibling),
-            "UPDATED_AT",
-            "DESC",
-            100,
-        )
-        .unwrap(),
-        SoupFilterCompileOutcome::Unsupported
-    ));
+    let SoupFilterCompileOutcome::Supported(query) = compile_filter_request(
+        production_documents_filters(with_unsupported_sibling),
+        "UPDATED_AT",
+        "DESC",
+        100,
+    )
+    .unwrap() else {
+        panic!("importance must compile in soup-flat-v3");
+    };
+    assert_eq!(query.as_query().profile, vocabulary::profile_v3());
 }
 
 #[derive(Debug, Deserialize)]
@@ -989,6 +1268,30 @@ struct SemanticCapsuleV1 {
     record_key: String,
     partition: String,
     is_email_attachment: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapsuleFixtureFileV2 {
+    fixture_format: String,
+    transport: CapsuleFixtureTransport,
+    capsules: Vec<CapsuleFixtureCaseV2>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CapsuleFixtureCaseV2 {
+    name: String,
+    capsule: SemanticCapsuleV2,
+    expected_base64: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SemanticCapsuleV2 {
+    target_profile: String,
+    record_key: String,
+    partition: String,
+    is_email_attachment: bool,
+    is_important: bool,
+    status_option_ids: Vec<uuid::Uuid>,
 }
 
 #[test]
@@ -1031,6 +1334,49 @@ fn soup_flat_v2_supplement_goldens_lock_typed_server_fact_wire() {
         assert_eq!(
             encode_cache_projection_supplement(&decoded)
                 .expect("decoded fixture supplement re-encodes"),
+            case.expected_base64,
+            "{} scalar bytes",
+            case.name
+        );
+    }
+}
+
+#[test]
+fn soup_flat_v3_supplement_goldens_lock_viewer_relative_wire() {
+    let fixtures: CapsuleFixtureFileV2 = serde_json::from_str(include_str!(
+        "../../soup_filter_projection/testdata/soup-flat-v3-capsules.json"
+    ))
+    .expect("valid capsule fixture JSON");
+
+    assert_eq!(fixtures.fixture_format, "server-fact-supplement-capsule-v2");
+    assert_eq!(fixtures.transport.base64_variant, "RFC4648_STANDARD_NO_PAD");
+    assert_eq!(fixtures.transport.frame, "wire-version-byte-plus-postcard");
+    assert_eq!(fixtures.transport.wire_version, 2);
+    assert_eq!(
+        fixtures.transport.max_decoded_bytes,
+        soup_filter_projection::MAX_SOUP_CACHE_PROJECTION_BYTES
+    );
+
+    for case in fixtures.capsules {
+        let decoded = decode_cache_projection_supplement(&case.expected_base64)
+            .unwrap_or_else(|error| panic!("{} must decode: {error}", case.name));
+        assert_eq!(
+            decoded.target_profile().token().as_str(),
+            case.capsule.target_profile
+        );
+        assert_eq!(decoded.record_key().as_str(), case.capsule.record_key);
+        assert_eq!(decoded.partition().as_str(), case.capsule.partition);
+        assert_eq!(
+            decoded.is_email_attachment(),
+            case.capsule.is_email_attachment
+        );
+        assert_eq!(decoded.is_important(), Some(case.capsule.is_important));
+        assert_eq!(
+            decoded.status_option_ids(),
+            Some(case.capsule.status_option_ids.as_slice())
+        );
+        assert_eq!(
+            encode_cache_projection_supplement(&decoded).unwrap(),
             case.expected_base64,
             "{} scalar bytes",
             case.name

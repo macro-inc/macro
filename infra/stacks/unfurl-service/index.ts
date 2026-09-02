@@ -1,5 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '../../packages/shared';
+import { getServiceUrl, ServiceUrl, stack } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { UnfurlService } from './unfurl-service';
 
@@ -54,4 +54,4 @@ const unfurlService = new UnfurlService(`unfurl-service-${stack}`, {
 
 export const unfurlServiceSgId = unfurlService.serviceSg.id;
 export const unfurlServiceAlbSgId = unfurlService.serviceAlbSg.id;
-export const unfurlServiceUrl = pulumi.interpolate`${unfurlService.domain}`;
+export const unfurlServiceUrl = getServiceUrl(ServiceUrl.UNFURL_SERVICE_URL);

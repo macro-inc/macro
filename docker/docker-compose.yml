@@ -594,6 +594,89 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # lgtm (Grafana UI 3001, OTLP 4317/4318) — profile: lgtm
+  # Grafana + Tempo (traces) + Loki (logs) + Prometheus (metrics) in one
+  # container: the default `--traces` backend. Fully local, no account needed.
+  # UI at http://localhost:3001 (anonymous admin). The backing stores are also
+  # published for direct API queries (agents/scripts): Tempo 3200, Loki 3100,
+  # Prometheus 9090. Binds the same OTLP ports as jaeger/datadog-agent — run
+  # exactly one collector at a time.
+  # Start: docker compose --project-directory . -f docker/docker-compose.yml up -d lgtm
+  # ============================================================================
+  lgtm:
+    profiles:
+      - lgtm
+    # Pinned: docker/lgtm/tempo-config.yaml is a copy of this image's internal
+    # Tempo config plus one key — an unpinned bump could silently diverge.
+    image: grafana/otel-lgtm:0.32.0
+    # The all-in-one occasionally loses a component on first boot (observed:
+    # Pyroscope readiness flake) and exits; it's the default collector, so let
+    # Docker bring it back rather than leaving telemetry dark.
+    restart: unless-stopped
+    environment:
+      # No login wall: agents and humans hit the UI/API without credentials —
+      # anonymous requests get Admin, the login form and sign-out menu are
+      # gone entirely. Local-only telemetry, nothing to protect.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_BASIC_ENABLED: "false"
+      GF_AUTH_DISABLE_SIGNOUT_MENU: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports:
+      - "3001:3000"
+      - "4317:4317"
+      - "4318:4318"
+      - "3100:3100"
+      - "3200:3200"
+      - "9090:9090"
+    volumes:
+      # Keep telemetry across container restarts — traces/logs are the local
+      # debugging record; losing them on a collector bounce defeats the point.
+      - lgtm_data:/data
+      # The image's Tempo config plus `query_frontend.mcp_server.enabled` —
+      # Tempo's MCP server (TraceQL query tools), which mcp-grafana proxies
+      # to agents via its proxied-tools discovery.
+      - ./docker/lgtm/tempo-config.yaml:/otel-lgtm/tempo-config.yaml:ro
+    networks:
+      services:
+        aliases:
+          - otel-collector
+
+  # ============================================================================
+  # headless-chrome (CDP port 9222, noVNC 6080) — profile: chrome
+  # Remote Chrome for agents: connect over the Chrome DevTools Protocol at
+  # http://localhost:9222 (chrome-devtools-mcp, Playwright connectOverCDP,
+  # raw CDP), and WATCH what the agent does at http://localhost:6080/vnc.html
+  # (Chromium renders to an Xvfb display streamed over noVNC — see
+  # docker/headless-chrome/). Runs on the host network so pages can load the
+  # host-run frontend dev server and proxy with plain localhost URLs — bridge
+  # networking can't reach host ports on firewalled hosts (NixOS default).
+  # Global and shared (one per machine), started by
+  # `just run_local --with-chrome` / `just stack up --with-chrome`.
+  # Start: docker compose --project-directory . -f docker/docker-compose.yml up -d headless-chrome
+  # ============================================================================
+  headless-chrome:
+    profiles:
+      - chrome
+    build:
+      context: .
+      dockerfile: docker/headless-chrome/Dockerfile
+    image: macro-local-headless-chrome:dev
+    restart: unless-stopped
+    # Reap orphans from the display stack (x11vnc/websockify) — Chromium is
+    # PID 1's exec target and doesn't reap.
+    init: true
+    network_mode: host
+    # Chromium runs sandboxed as a non-root user (no --no-sandbox); the
+    # sandbox creates PID/network namespaces, which Docker's default seccomp
+    # profile denies to unprivileged processes. SYS_ADMIN lets the setuid
+    # sandbox helper do that setup while the default seccomp filter stays on
+    # — verified narrower than the seccomp=unconfined alternative.
+    cap_add:
+      - SYS_ADMIN
+
+  # ============================================================================
   # jaeger (UI port 16686, OTLP 4317/4318) — profile: jaeger
   # Fully local trace viewer, no account needed. UI at http://localhost:16686.
   # Start: docker compose --project-directory . -f docker/docker-compose.yml up -d jaeger
@@ -651,6 +734,10 @@ services:
       services:
         aliases:
           - otel-collector
+
+volumes:
+  # Backing store for the `lgtm` collector (profile-gated, global project).
+  lgtm_data:
 
 networks:
   services:

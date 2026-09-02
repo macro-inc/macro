@@ -1,4 +1,7 @@
 use super::*;
+use notification::domain::models::apple::{
+    APNSPushNotification, Alert, AlertDictionary, PushNotificationData,
+};
 
 fn uid(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str(value).unwrap().into_owned()
@@ -762,28 +765,82 @@ fn new_email_metadata() -> NewEmailMetadata {
     }
 }
 
-#[test]
-fn new_email_apns_uses_subject_and_snippet() {
-    let metadata = new_email_metadata();
+fn new_email_apns(metadata: &NewEmailMetadata) -> APNSPushNotification<PushNotificationData> {
     let entity = EntityType::EmailThread.with_entity_str(&metadata.thread_id);
     let notification_id = Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap();
-
-    let apns = metadata
+    metadata
         .as_apns(None, &entity, notification_id)
-        .expect("new_email should build an APNS alert");
+        .expect("new_email should build an APNS alert")
+}
 
-    match apns.aps.alert {
-        Some(notification::domain::models::apple::Alert::Dictionary(alert)) => {
-            assert_eq!(alert.title.as_deref(), Some("Quarterly plan"));
-            assert_eq!(alert.body.as_deref(), Some("Here is the draft"));
-        }
+fn new_email_alert(metadata: &NewEmailMetadata) -> AlertDictionary {
+    match new_email_apns(metadata).aps.alert {
+        Some(Alert::Dictionary(alert)) => alert,
         other => panic!("expected dictionary alert, got {other:?}"),
     }
+}
+
+#[test]
+fn new_email_title_prefers_sender() {
+    assert_eq!(
+        new_email_metadata().format_title(None).unwrap(),
+        "Ada Lovelace"
+    );
+}
+
+#[test]
+fn new_email_apns_matches_gmail_layout() {
+    let metadata = new_email_metadata();
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Ada Lovelace"));
+    assert_eq!(alert.subtitle.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.body.as_deref(), Some("Here is the draft"));
+
+    let apns = new_email_apns(&metadata);
     assert_eq!(
         apns.aps.thread_id.as_deref(),
         Some(metadata.thread_id.as_str())
     );
-    assert_eq!(apns.push_notification_data.notification_id, notification_id);
+    assert_eq!(
+        apns.push_notification_data.notification_id,
+        Uuid::parse_str("55555555-5555-4555-8555-555555555555").unwrap()
+    );
+
+    let json = serde_json::to_value(&apns).unwrap();
+    assert_eq!(json["aps"]["alert"]["title"], "Ada Lovelace");
+    assert_eq!(json["aps"]["alert"]["subtitle"], "Quarterly plan");
+    assert_eq!(json["aps"]["alert"]["body"], "Here is the draft");
+}
+
+#[test]
+fn new_email_apns_falls_back_to_subject_without_sender() {
+    let mut metadata = new_email_metadata();
+    metadata.sender = None;
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.subtitle, None);
+    assert_eq!(alert.body.as_deref(), Some("Here is the draft"));
+}
+
+#[test]
+fn new_email_apns_treats_blank_sender_as_missing() {
+    let mut metadata = new_email_metadata();
+    metadata.sender = Some("   ".to_string());
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Quarterly plan"));
+    assert_eq!(alert.subtitle, None);
+}
+
+#[test]
+fn new_email_apns_omits_blank_subject_subtitle() {
+    let mut metadata = new_email_metadata();
+    metadata.subject = "  ".to_string();
+
+    let alert = new_email_alert(&metadata);
+    assert_eq!(alert.title.as_deref(), Some("Ada Lovelace"));
+    assert_eq!(alert.subtitle, None);
 }
 
 #[test]
@@ -861,4 +918,63 @@ fn reminder_metadata_reads_back_without_a_firing() {
         serde_json::from_value(stored).expect("legacy metadata should deserialize");
 
     assert!(metadata.scheduled_for.is_none());
+}
+
+#[test]
+fn notification_status_patch_decodes_notif_event_metadata() {
+    use std::borrow::Cow;
+
+    use notification::domain::models::{
+        PatchDelete, UserNotificationRow, websocket_notification_event::NotificationTopicEvent,
+    };
+
+    let user = uid("macro|recipient@example.com");
+    let assigned_by = uid("macro|assigner@example.com");
+    let row = UserNotificationRow {
+        owner_id: user.clone(),
+        notification_id: Uuid::nil(),
+        notification_event_type: "task_assigned".to_string(),
+        entity: EntityType::Document.with_entity_string("document-id".to_string()),
+        sent: true,
+        done: false,
+        created_at: Utc::now(),
+        viewed_at: None,
+        updated_at: Utc::now(),
+        deleted_at: None,
+        notification_metadata: serde_json::json!({
+            "taskId": "task-1",
+            "taskName": "Test task",
+            "assignedBy": assigned_by.as_ref(),
+        }),
+        sender_id: None,
+    };
+    let event = NotificationTopicEvent::NotificationStatusesUpdatedForUser {
+        user,
+        updates: vec![PatchDelete::Patch {
+            diff: Cow::Owned(row),
+        }],
+    };
+
+    let NotificationTopicEvent::NotificationStatusesUpdatedForUser { updates, .. } = event
+        .deserialize_metadata::<crate::NotifEvent>()
+        .expect("tagged status patch metadata decodes")
+    else {
+        panic!("expected user notification statuses event");
+    };
+    let PatchDelete::Patch { diff } = &updates[0] else {
+        panic!("expected status patch");
+    };
+    let crate::NotifEvent::TaskAssigned(TaskAssignedMetadata {
+        task_id,
+        task_name,
+        assigned_by: decoded_assigned_by,
+        ..
+    }) = &diff.notification_metadata
+    else {
+        panic!("expected task assigned metadata");
+    };
+
+    assert_eq!(task_id, "task-1");
+    assert_eq!(task_name.as_deref(), Some("Test task"));
+    assert_eq!(decoded_assigned_by, &assigned_by);
 }

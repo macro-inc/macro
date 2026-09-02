@@ -220,20 +220,18 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         clientFilters: { and: ['explicit-noise'] },
         groupBy: 'date',
       }),
-      // Pending reminders only: scheduled but not yet fired. A fired reminder
-      // has already hit the inbox — Signal surfaces it through its not-done
-      // notification — so this tab is the forward-looking complement: what is
-      // coming, not what is due. Soonest first, since "newest first" on future
-      // dates would put December above tomorrow.
+      // Every reminder still on the hook: the ones coming up and the ones that
+      // have fired and are waiting to be dealt with (fired ones also surface in
+      // Signal as their notification). Only marking one done drops it. Ascending
+      // by fire time, so overdue leads and upcoming follows soonest-first.
       reminders: () => ({
         filters: defineQueryFilters({
           include: {
             includeReminders: true,
             reminderCompleted: false,
-            reminderFired: false,
           },
         }),
-        clientFilters: { and: ['reminders-scheduled'] },
+        clientFilters: { and: ['reminders-not-done'] },
         sortDirection: 'asc',
       }),
     },

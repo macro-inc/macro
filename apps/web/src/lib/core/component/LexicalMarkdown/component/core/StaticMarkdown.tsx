@@ -27,6 +27,7 @@ import {
   type MagicChipNode,
   normalizedLanguage,
   type PasteNode,
+  type ReplyTargetNode,
   type SnapshotNode,
   SupportedNodeTypes,
   type TagMentionNode,
@@ -88,6 +89,7 @@ import { MagicChip as MagicChipDecorator } from '../decorator/MagicChip';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { PasteNode as PasteNodeDecorator } from '../decorator/PasteNode';
+import { ReplyTarget as ReplyTargetDecorator } from '../decorator/ReplyTarget';
 import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
 import { TagMention as TagMentionDecorator } from '../decorator/TagMention';
 import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
@@ -508,6 +510,25 @@ const AgentContext: TypedRenderableEntity<AgentContextNode> = {
   ),
 };
 
+const ReplyTarget: TypedRenderableEntity<ReplyTargetNode> = {
+  guard: (node: LexicalNode): node is ReplyTargetNode =>
+    node.__type === 'reply-target',
+  render: (props) => (
+    // `data-reply-target-node` mirrors the editor block wrapper so the shared
+    // spacing rule applies in static markdown too.
+    <div
+      class="max-w-full"
+      data-reply-target-node={props.node.__targetMessageId}
+    >
+      <ReplyTargetDecorator
+        {...props.node.exportComponentProps()}
+        key={props.node.getKey()}
+        theme={props.theme}
+      />
+    </div>
+  ),
+};
+
 const MagicChip: TypedRenderableEntity<MagicChipNode> = {
   guard: (node: LexicalNode): node is MagicChipNode =>
     node.__type === 'magic-chip',
@@ -873,6 +894,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(GroupMention),
   eraseRenderableEntity(Await),
   eraseRenderableEntity(AgentContext),
+  eraseRenderableEntity(ReplyTarget),
   eraseRenderableEntity(MagicChip),
   eraseRenderableEntity(Snapshot),
   eraseRenderableEntity(Image),

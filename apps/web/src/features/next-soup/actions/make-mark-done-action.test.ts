@@ -77,6 +77,7 @@ const nextEntity = {
   type: 'email',
   id: 'next',
 } as EntityData;
+const notificationSource = {} as NotificationSource;
 
 function createSoup() {
   const focusSet = vi.fn();
@@ -107,7 +108,7 @@ function createSoup() {
 function createAction() {
   return createRoot((dispose) => ({
     action: makeMarkDoneAction({
-      notificationSource: () => ({}) as NotificationSource,
+      notificationSource: () => notificationSource,
     }),
     dispose,
   }));
@@ -145,6 +146,7 @@ describe('makeMarkDoneAction', () => {
       {
         splitHandle: mocks.controller as unknown as SplitHandle,
         mergeHistory: true,
+        notificationSource,
       }
     );
     dispose();

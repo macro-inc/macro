@@ -32,6 +32,7 @@ import type { AccessLevel } from './generated/schemas/accessLevel';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
+import type { Agent } from './generated/schemas/agent';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
@@ -53,6 +54,7 @@ import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
+import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
@@ -63,6 +65,7 @@ import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompa
 import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
+import type { CreatedUserApiKey } from './generated/schemas/createdUserApiKey';
 import type { CreateEntityMentionRequest } from './generated/schemas/createEntityMentionRequest';
 import type { CreateEntityMentionResponse } from './generated/schemas/createEntityMentionResponse';
 import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
@@ -153,9 +156,11 @@ import type { SoupPage } from './generated/schemas/soupPage';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { ThreadResponse } from './generated/schemas/threadResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
+import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
 import type { UpdateReminderRequest } from './generated/schemas/updateReminderRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
+import type { UserApiKeysList } from './generated/schemas/userApiKeysList';
 import type { UserPinsResponse } from './generated/schemas/userPinsResponse';
 import type { UserViewsResponse } from './generated/schemas/userViewsResponse';
 import type { View } from './generated/schemas/view';
@@ -279,7 +284,48 @@ export type TaskSimilaritySearchResponse = {
 };
 
 type WithBotId = { bot_id: string };
+type WithAgentId = { agent_id: string };
 type WithChannelId = { channel_id: string };
+
+/** Who owns a registered harness: the registering user or their team. */
+export type HarnessOwner =
+  | { type: 'user'; user_id: string }
+  | { type: 'team'; team_id: string };
+
+/** A macrod harness registered with the workspace. */
+export type Harness = {
+  id: string;
+  kind: 'macrod';
+  name: string;
+  owner: HarnessOwner;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  connected: boolean;
+  last_connected_at: string | null;
+};
+
+/** A pending macrod pairing request, looked up by its printed code. */
+export type HarnessPairing = {
+  code: string;
+  requested_name: string;
+  host: string | null;
+  /** The scope the daemon's config asked for; preselects the dialog. */
+  requested_scope: 'private' | 'team' | null;
+  created_at: string;
+  expires_at: string;
+};
+
+type ApproveHarnessPairingRequest = {
+  name?: string;
+  team_id?: string;
+};
+
+/**
+ * The optional macrod harness binding on agent requests/responses. The backend
+ * field is not yet in the generated schemas, so it is layered on here.
+ */
+type WithHarnessId = { harness_id?: string | null };
 
 type CreateBotRequest = {
   team_id?: string;
@@ -529,6 +575,73 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async getAgents() {
+    return (
+      await dssFetch<(Agent & WithHarnessId)[]>(`/agents`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async createAgent(args: CreateAgentRequest & WithHarnessId) {
+    return (
+      await dssFetch<Agent & WithHarnessId>(`/agents`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      })
+    ).map((result) => result);
+  },
+
+  async updateAgent(args: WithAgentId & UpdateAgentRequest & WithHarnessId) {
+    const { agent_id, ...request } = args;
+    return (
+      await dssFetch<Agent & WithHarnessId>(`/agents/${agent_id}`, {
+        method: 'PUT',
+        body: JSON.stringify(request),
+      })
+    ).map((result) => result);
+  },
+
+  async getHarnesses() {
+    return (
+      await dssFetch<Harness[]>(`/harnesses`, {
+        method: 'GET',
+      })
+    ).map((result) => result);
+  },
+
+  async getHarnessPairing(args: { code: string }) {
+    return (
+      await dssFetch<HarnessPairing>(
+        `/harness-pairings/${encodeURIComponent(args.code)}`,
+        {
+          method: 'GET',
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async approveHarnessPairing(
+    args: { code: string } & ApproveHarnessPairingRequest
+  ) {
+    const { code, ...request } = args;
+    return (
+      await dssFetch<Harness>(
+        `/harness-pairings/${encodeURIComponent(code)}/approve`,
+        {
+          method: 'POST',
+          body: JSON.stringify(request),
+        }
+      )
+    ).map((result) => result);
+  },
+
+  async deleteHarness(args: { harness_id: string }) {
+    return await dssFetch(`/harnesses/${args.harness_id}`, {
+      method: 'DELETE',
+    });
+  },
+
   async createBot(args: CreateBotRequest) {
     return (
       await dssFetch<Bot>(`/bots`, {
@@ -582,6 +695,29 @@ export const storageServiceClient = {
 
   async revokeBotToken(args: WithBotId & { token_id: string }) {
     return await dssFetch(`/bots/${args.bot_id}/tokens/${args.token_id}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async listUserApiKeys() {
+    return (
+      await dssFetch<UserApiKeysList>(`/user-api-keys`, {
+        method: 'GET',
+      })
+    ).map((result) => result.keys);
+  },
+
+  async createUserApiKey(args: { name: string }) {
+    return (
+      await dssFetch<CreatedUserApiKey>(`/user-api-keys`, {
+        method: 'POST',
+        body: JSON.stringify({ name: args.name }),
+      })
+    ).map((result) => result);
+  },
+
+  async deleteUserApiKey(args: { id: string }) {
+    return await dssFetch(`/user-api-keys/${encodeURIComponent(args.id)}`, {
       method: 'DELETE',
     });
   },
@@ -1064,7 +1200,6 @@ export const storageServiceClient = {
       });
     },
   },
-
   async getUsersHistory() {
     return (await dssFetch<{ data: Item[] }>(`/history`)).map((result) => ({
       data: result.data,
@@ -1706,7 +1841,6 @@ export const storageServiceClient = {
         ]);
     }
   },
-
   async getJobProcessingResult<T extends ProcessingResultType>(params: {
     jobId: string;
     documentId: string;
@@ -2292,7 +2426,6 @@ export const storageServiceClient = {
       ).map((result) => result.data);
     },
   },
-
   async getDeletedItems() {
     return (
       await dssFetch<TypedSuccessResponse>('/recents/deleted', {
@@ -2375,7 +2508,6 @@ export const storageServiceClient = {
       });
     },
   },
-
   reminders: {
     async createReminder(params: CreateReminderRequest) {
       return await dssFetch<Reminder>('/reminders', {
@@ -2410,7 +2542,6 @@ export const storageServiceClient = {
       return await dssFetch(`/reminders/${id}`, { method: 'DELETE' });
     },
   },
-
   async editThread(params) {
     const { threadId, ...body } = params;
 
@@ -2421,27 +2552,23 @@ export const storageServiceClient = {
       })
     ).map((result) => result.data);
   },
-
   async createCompany(body: CreateCrmCompanyRequest) {
     return await dssFetch<CrmCompanyResponse>('/crm/companies', {
       method: 'POST',
       body: JSON.stringify(body),
     });
   },
-
   async getCompany({ companyId }: { companyId: string }) {
     return await dssFetch<CrmCompanyResponse>(`/crm/companies/${companyId}`, {
       method: 'GET',
     });
   },
-
   async getCompanyContacts({ companyId }: { companyId: string }) {
     return await dssFetch<CrmContactResponse[]>(
       `/crm/companies/${companyId}/contacts`,
       { method: 'GET' }
     );
   },
-
   async createContact({
     companyId,
     ...body
@@ -2454,13 +2581,11 @@ export const storageServiceClient = {
       }
     );
   },
-
   async getContact({ contactId }: { contactId: string }) {
     return await dssFetch<CrmContactResponse>(`/crm/contacts/${contactId}`, {
       method: 'GET',
     });
   },
-
   async getContactByEmail({
     email,
     signal,
@@ -2471,7 +2596,6 @@ export const storageServiceClient = {
       { method: 'GET', signal }
     );
   },
-
   async setContactName({
     contactId,
     ...body
@@ -2481,7 +2605,6 @@ export const storageServiceClient = {
       body: JSON.stringify(body),
     });
   },
-
   async setContactHidden({
     contactId,
     hidden,
@@ -2494,7 +2617,6 @@ export const storageServiceClient = {
       body: JSON.stringify({ hidden }),
     });
   },
-
   async setCompanyName({
     companyId,
     ...body
@@ -2504,7 +2626,6 @@ export const storageServiceClient = {
       body: JSON.stringify(body),
     });
   },
-
   async setCompanyHidden({
     companyId,
     hidden,
@@ -2517,7 +2638,6 @@ export const storageServiceClient = {
       body: JSON.stringify({ hidden }),
     });
   },
-
   async setEmailSync({
     companyId,
     emailSync,
@@ -2530,20 +2650,17 @@ export const storageServiceClient = {
       body: JSON.stringify({ email_sync: emailSync }),
     });
   },
-
   async getCrmTeamSettings() {
     return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
       method: 'GET',
     });
   },
-
   async updateCrmTeamSettings(body: UpdateCrmTeamSettingsRequest) {
     return await dssFetch<CrmTeamSettingsResponse>('/crm/settings', {
       method: 'PUT',
       body: JSON.stringify(body),
     });
   },
-
   crmComments: {
     async list({
       entityType,

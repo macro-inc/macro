@@ -452,6 +452,8 @@ macro_rules! map_soup_projection_hydration {
             let document_server_facts = match r.item_type.as_ref() {
                 "document" => Some($crate::domain::models::SoupDocumentServerFacts {
                     is_email_attachment: r.is_email_attachment,
+                    is_important: r.is_important,
+                    status_option_ids: r.status_option_ids.clone(),
                 }),
                 _ => None,
             };

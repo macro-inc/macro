@@ -28,7 +28,7 @@ export const DEFAULT_PASTE_ORIGIN: PasteOrigin = 'pasted';
 export type PasteNodeData = {
   content: string;
   /**
-   * Why this chip exists: a large clipboard paste, or a quote-reply from
+   * Why this chip exists: a large clipboard paste, or a reply-target from
    * selected conversation text. Defaults to `pasted` so existing documents
    * keep their original label.
    */

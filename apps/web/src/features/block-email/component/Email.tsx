@@ -30,20 +30,44 @@ import {
   createMemo,
   createSignal,
   Match,
+  on,
+  onCleanup,
   onMount,
   Show,
   Switch,
   untrack,
 } from 'solid-js';
+import { match } from 'ts-pattern';
 import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { isPersonalMessage } from '../util/isPersonalMessage';
 import type { ReplyType } from '../util/replyType';
-import { scrollToMessage } from '../util/scrollToMessage';
+import {
+  hiddenMessagesControl,
+  isTruncatedMiddleMessage,
+  isUnreadMessage,
+  keyboardRevealDelta,
+  leadingThrottle,
+  listScrollBehavior,
+  messageElement,
+  nearestDelta,
+  pageThenAdvanceDelta,
+  revealMessageAfterLayout,
+  type ScrollAlign,
+  scrollToListEndDelta,
+  scrollToListStartDelta,
+  scrollToMessage,
+  threadMessageIsExpanded,
+} from '../util/scrollToMessage';
+import {
+  adjacentStop,
+  nextThreadStop,
+  shownStops,
+  type ThreadStop,
+  threadStopFromHover,
+} from '../util/threadStops';
 import { BottomReplyButtons } from './BottomReplyButtons';
 import { EmailFormContextProvider } from './EmailFormContext';
-import { EmailParticipants } from './EmailParticipants';
-import { EmailThreadTitle } from './EmailThreadTitle';
 import { openEmailReplyComposerForMessage } from './emailReplyActions';
 import { MessageList } from './MessageList';
 import { MobileEmailComposeDrawer } from './MobileEmailComposeDrawer';
@@ -52,10 +76,9 @@ import { EmailSidePanelSections } from './sidepanel/EmailSidePanelSections';
 import { TopBar } from './TopBar';
 
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
-const SCROLL_ANIMATION_MS = 1000;
-const SCROLL_AFTER_SEND_DELAY_MS = 100;
-const SCROLL_SETTLE_STABLE_FRAMES = 15;
-const SCROLL_SETTLE_MAX_MS = 2000;
+/** List navigation — keep within the 300ms UI motion budget (improve-animations). */
+const SCROLL_ANIMATION_MS = 250;
+const KEYBOARD_SCROLL_MS = 250;
 
 type EmailViewProps = {
   title: string;
@@ -88,12 +111,6 @@ function EmailContent(props: EmailViewProps) {
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { isLoading: isUserLoading } = useUserContext();
   const userEmail = useEmail();
-
-  const [isScrolled, setIsScrolled] = createSignal(false);
-
-  const handleScrollPositionChange = (scrollFromTop: number) => {
-    setIsScrolled(scrollFromTop > 1);
-  };
 
   const openTaskCompose = () => {
     const threadId = context.thread()?.db_id;
@@ -154,13 +171,50 @@ function EmailContent(props: EmailViewProps) {
     }
   };
 
-  /**
-   * Loads the next page only when there is more data to load and
-   * it's not already fetching
-   */
-  const fetchNextPage = () => {
+  const fetchNextPage = async () => {
     if (context.query.hasMore() && !context.query.isFetching()) {
       context.query.fetchNextPage();
+      await waitForQueryLoad();
+    }
+  };
+
+  const canRunInitialEmailScroll = () =>
+    !isTouchDevice() || splitPanel?.isPanelActive() !== false;
+
+  const [keyboardSelecting, setKeyboardSelecting] = createSignal(false);
+  const [listAnchor, setListAnchor] = createSignal<'title' | 'composer'>();
+  let lastPointer = { x: Number.NaN, y: Number.NaN };
+  let armedPointer: { x: number; y: number } | undefined;
+
+  // Hand list navigation back to the pointer: arrow keys resume from whatever
+  // the mouse is over. The selection itself survives, so a message reached with
+  // the keyboard stays selected once the mouse moves.
+  const releaseKeyboardPointer = () => {
+    armedPointer = undefined;
+    setKeyboardSelecting(false);
+    setListAnchor(undefined);
+    leaveHiddenChip();
+  };
+
+  /** Escape drops the selection too, not just the keyboard's claim on it. */
+  const clearSelection = () => {
+    releaseKeyboardPointer();
+    context.messages.setFocused(undefined);
+  };
+
+  const armKeyboardPointer = () => {
+    if (isTouchDevice()) return;
+    setKeyboardSelecting(true);
+    armedPointer = { x: lastPointer.x, y: lastPointer.y };
+  };
+
+  const leaveHiddenChip = () => {
+    context.messages.setHiddenChipFocused(false);
+    const list = untrack(context.messagesListRef);
+    const button = list ? hiddenMessagesControl(list) : undefined;
+    if (button && document.activeElement === button) {
+      button.blur();
+      blockElement()?.focus({ preventScroll: true });
     }
   };
 
@@ -169,31 +223,36 @@ function EmailContent(props: EmailViewProps) {
    */
   const performScrollToMessage = (
     messageId: string,
-    opts: { behavior?: ScrollBehavior; focus?: boolean } = {
+    opts: {
+      behavior?: ScrollBehavior;
+      focus?: boolean;
+      align?: ScrollAlign;
+    } = {
       behavior: 'smooth',
       focus: true,
     }
   ) => {
-    opts = { focus: true, behavior: 'smooth', ...opts };
+    opts = { focus: true, behavior: 'smooth', align: 'nearest', ...opts };
     const messages = untrack(context.messages.list);
     const container = untrack(context.messagesListRef);
 
     if (!messages || !container) return false;
 
-    if (opts.focus) {
-      context.messages.setFocused(messageId);
-    }
-
     setIsScrollingToMessage(true);
 
     const success = scrollToMessage(messageId, messages, container, {
       behavior: opts.behavior,
-      reversed: true,
+      align: opts.align,
     });
 
     if (!success) {
       setIsScrollingToMessage(false);
       return false;
+    }
+
+    if (opts.focus) {
+      leaveHiddenChip();
+      context.messages.setFocused(messageId);
     }
 
     if (context.messages.targetMessageID() === messageId) {
@@ -202,248 +261,229 @@ function EmailContent(props: EmailViewProps) {
       }, TARGET_MESSAGE_HIGHLIGHT_MS);
     }
 
-    // Clear scrolling flag after animation
     setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
 
     return true;
   };
 
-  // Message bodies keep resizing briefly after render (images load, inline
-  // cid: images fail and collapse), so a scroll computed against that
-  // transient layout gets displaced — browser scroll anchoring can clamp it
-  // to the very top of the thread. Re-assert the initial scroll whenever the
-  // content height changes until layout settles or the user scrolls.
-  let cancelActiveScrollPin: (() => void) | undefined;
-  const pinInitialScroll = (messageId: string) => {
-    cancelActiveScrollPin?.();
-    const list = untrack(context.messagesListRef);
-    if (!list) return;
-
-    let cancelled = false;
-    let stableFrames = 0;
-    let lastHeight = list.scrollHeight;
-    const startedAt = performance.now();
-
-    const cancel = () => {
-      cancelled = true;
-      list.removeEventListener('wheel', cancel);
-      list.removeEventListener('touchstart', cancel);
-      list.removeEventListener('pointerdown', cancel);
-    };
-    cancelActiveScrollPin = cancel;
-    list.addEventListener('wheel', cancel, { passive: true });
-    list.addEventListener('touchstart', cancel, { passive: true });
-    list.addEventListener('pointerdown', cancel, { passive: true });
-
-    const tick = () => {
-      if (cancelled || !list.isConnected) return cancel();
-      if (list.scrollHeight !== lastHeight) {
-        lastHeight = list.scrollHeight;
-        stableFrames = 0;
-        performScrollToMessage(messageId, {
-          behavior: 'instant',
-          focus: false,
-        });
-      } else {
-        stableFrames++;
-      }
-      if (
-        stableFrames >= SCROLL_SETTLE_STABLE_FRAMES ||
-        performance.now() - startedAt > SCROLL_SETTLE_MAX_MS
-      ) {
-        return cancel();
-      }
-      requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  };
-
-  const scrollToLastMessage = (
-    behavior: ScrollBehavior = 'instant',
-    focus = false
-  ) => {
-    const messages = context.messages.list();
-    if (!messages?.length) return;
-
-    const lastMessage = messages[messages.length - 1];
-
-    if (!lastMessage.db_id) return;
-
-    performScrollToMessage(lastMessage.db_id, { behavior, focus });
-  };
-
-  const firstUnreadMessageId = createMemo(() => {
-    const messages = context.messages.list().toSorted((a, b) => {
-      if (a.internal_date_ts && b.internal_date_ts) {
-        return (
-          new Date(a.internal_date_ts).getTime() -
-          new Date(b.internal_date_ts).getTime()
-        );
-      } else if (a.sent_at && b.sent_at) {
-        return new Date(a.sent_at).getTime() - new Date(b.sent_at).getTime();
-      }
-      return 0;
-    });
-    return messages?.find((m) =>
-      m.labels.some((l) => l.provider_label_id === 'UNREAD')
-    )?.db_id;
-  });
-
-  const canRunInitialEmailScroll = () =>
-    !isTouchDevice() || splitPanel?.isPanelActive() !== false;
-
-  // ============================================
-  // PHASE 2: HANDLE TARGET MESSAGE SCROLLING
-  // ============================================
-  // This effect handles scrolling to a specific message (if provided via URL) or scrolling to the last message by default
-  // This effect should only run once.
   context.onInitialDataLoad(() => {
-    // Initial scroll positioning visibly shifts the email panel if it runs
-    // while the split is swiping in on touch devices.
     if (!canRunInitialEmailScroll()) return false;
+    if (!untrack(context.messagesListRef)) return false;
 
-    // Check for target message
     const targetMessageId_ = context.messages.targetMessageID();
-
     if (targetMessageId_ && typeof targetMessageId_ !== 'string') return true;
-
-    if (targetMessageId_) {
-      handleTargetMessage(targetMessageId_);
-    } else {
-      const lastUnreadMessageId_ = untrack(firstUnreadMessageId);
-      // Check if there is an unread message
-      if (lastUnreadMessageId_) {
-        setTimeout(() => {
-          performScrollToMessage(lastUnreadMessageId_!, {
-            behavior: 'instant',
-          });
-          pinInitialScroll(lastUnreadMessageId_!);
-        });
-        context.messages.setFocused(lastUnreadMessageId_!);
-      } else {
-        scrollToLastMessage('instant', false);
-        const lastMessageId = untrack(context.messages.list).at(-1)?.db_id;
-        if (lastMessageId) pinInitialScroll(lastMessageId);
-      }
+    if (typeof targetMessageId_ === 'string') {
+      void revealTargetMessage(targetMessageId_);
     }
 
     return true;
   });
 
-  /**
-   * Handles scrolling to a specific message ID from URL
-   */
-  async function handleTargetMessage(messageId: string) {
+  async function revealTargetMessage(messageId: string) {
+    context.messages.setExpandedBodyId(messageId, true);
     const messages = untrack(context.messages.list);
     if (!messages) return;
-    // Expand the target so the navigated-to hit isn't a collapsed row
-    context.messages.setExpandedBodyId(messageId, true);
-    const targetIndex = messages.findIndex((m) => m.db_id === messageId);
 
-    // Case 1: Message not in current loaded batch - need to load more
-    if (targetIndex < 0) {
+    const initialIndex = messages.findIndex(
+      (message) => message.db_id === messageId
+    );
+
+    if (initialIndex < 0) {
       try {
         const found = await loadMessagesUntilFound(messageId);
-        if (found) {
-          // Load one more batch for scroll context
-          fetchNextPage();
-          await waitForQueryLoad();
-          // Scroll to the message after DOM updates
-          setTimeout(() => {
-            performScrollToMessage(messageId, { behavior: 'instant' });
-            pinInitialScroll(messageId);
-          });
-        } else {
-          // Message not found, fallback to last message
-          setTimeout(() => scrollToLastMessage('instant', true));
-        }
+        if (!found) return;
+        await fetchNextPage();
       } catch (error) {
         console.error('Error loading target message:', error);
-        setTimeout(() => scrollToLastMessage('instant', true));
+        return;
       }
+    } else if (initialIndex === 0) {
+      await fetchNextPage();
     }
-    // Case 2: Message is first in current batch - load more for context
-    else if (targetIndex === 0) {
-      fetchNextPage();
-      await waitForQueryLoad();
-      setTimeout(() => {
-        performScrollToMessage(messageId, { behavior: 'instant' });
-        pinInitialScroll(messageId);
+
+    requestAnimationFrame(() => {
+      performScrollToMessage(messageId, {
+        behavior: 'instant',
+        focus: true,
+        align: 'start',
       });
-    }
-    // Case 3: Message is in current batch with sufficient context
-    else {
-      setTimeout(() => {
-        performScrollToMessage(messageId, { behavior: 'instant' });
-        pinInitialScroll(messageId);
-      });
-    }
+    });
   }
 
-  // If there is a focused message id, but it does not currently exist in the message list, it is because the user has just sent a message. When it does come into existence, we want to scroll to the bottom.
-  createEffect((prev: boolean | undefined) => {
-    const currentFocusedId = context.messages.focusedID();
+  const [userOpenedMiddle, setUserOpenedMiddle] = createSignal(false);
+  createEffect(
+    on(
+      () => context.thread()?.db_id,
+      () => {
+        setUserOpenedMiddle(false);
+        leaveHiddenChip();
+      }
+    )
+  );
+
+  const showMiddleMessages = createMemo(() => {
+    if (userOpenedMiddle()) return true;
     const messages = context.messages.list();
-
-    if (!currentFocusedId || !messages) return true;
-
-    const currentIndex = messages.findIndex(
-      (m) => m.db_id === currentFocusedId
-    );
-    if (currentIndex < 0) return false;
-
-    if (prev === false) {
-      setTimeout(() => {
-        scrollToLastMessage('smooth');
-      }, SCROLL_AFTER_SEND_DELAY_MS);
+    const focus = context.messages.focusedID();
+    const target = context.messages.targetMessageID();
+    for (let i = 0; i < messages.length; i++) {
+      if (!isTruncatedMiddleMessage(i, messages.length)) continue;
+      const id = messages[i]?.db_id;
+      if (id && (id === focus || id === target)) return true;
+      if (isUnreadMessage(messages[i])) return true;
+      if (!isTouchDevice() && id && context.drafts.getDraftForMessage(id))
+        return true;
     }
-    return true;
+    return false;
   });
+
+  let markdownDomRef!: HTMLDivElement;
+  const tryKeyboardListScroll = leadingThrottle(KEYBOARD_SCROLL_MS);
+
+  const scrollListBy = (
+    list: HTMLElement,
+    top: number,
+    animationMs = SCROLL_ANIMATION_MS
+  ) => {
+    if (top === 0) return false;
+    setIsScrollingToMessage(true);
+    setTimeout(() => setIsScrollingToMessage(false), animationMs);
+    list.scrollBy({ top, behavior: listScrollBehavior() });
+    return true;
+  };
+
+  const keyboardScrollListBy = (list: HTMLElement, top: number) => {
+    if (top === 0) return false;
+    if (!tryKeyboardListScroll()) return true;
+    setIsScrollingToMessage(true);
+    setTimeout(() => setIsScrollingToMessage(false), KEYBOARD_SCROLL_MS);
+    list.scrollBy({ top, behavior: listScrollBehavior() });
+    return true;
+  };
+
+  const focusHiddenMessages = () => {
+    const list = untrack(context.messagesListRef);
+    if (!list) return false;
+    const button = hiddenMessagesControl(list);
+    if (!button) return false;
+    context.messages.setFocused(undefined);
+    context.messages.setHiddenChipFocused(true);
+    scrollListBy(list, nearestDelta(list, button));
+    return true;
+  };
+
+  const applyStop = (
+    stop: ThreadStop | undefined,
+    messages: ApiMessage[],
+    list: HTMLElement
+  ) => {
+    if (!stop) return true;
+    return match(stop)
+      .with({ kind: 'title' }, () => {
+        armKeyboardPointer();
+        setListAnchor('title');
+        context.messages.setFocused(undefined);
+        const startDelta = scrollToListStartDelta(list);
+        if (startDelta !== 0) return scrollListBy(list, startDelta);
+        return true;
+      })
+      .with({ kind: 'hidden-chip' }, () => {
+        armKeyboardPointer();
+        setListAnchor(undefined);
+        return focusHiddenMessages();
+      })
+      .with({ kind: 'message' }, ({ index }) => {
+        const id = messages[index]?.db_id;
+        if (!id) return false;
+        armKeyboardPointer();
+        setListAnchor(undefined);
+        return performScrollToMessage(id, {
+          behavior: 'smooth',
+          focus: true,
+        });
+      })
+      .with({ kind: 'composer' }, () => {
+        armKeyboardPointer();
+        setListAnchor('composer');
+        leaveHiddenChip();
+        context.messages.setFocused(undefined);
+        markdownDomRef.focus();
+        return true;
+      })
+      .exhaustive();
+  };
 
   const navigateMessage = createCallback((dir: 'prev' | 'next') => {
     const messages = context.messages.list();
     const list = context.messagesListRef();
     if (!messages?.length || !list) return false;
 
-    const currentFocusedId = context.messages.focusedID();
-
-    if (!currentFocusedId) {
-      const target =
-        dir === 'prev' ? messages[messages.length - 1] : messages[0];
-      if (!target?.db_id) return false;
-      performScrollToMessage(target.db_id, {
-        behavior: 'smooth',
-        focus: true,
-      });
-      return true;
-    }
-
-    const currentIndex = messages.findIndex(
-      (m) => m.db_id === currentFocusedId
-    );
-    if (currentIndex < 0) return false;
-
-    const delta = dir === 'prev' ? -1 : 1;
-    const targetIndex = currentIndex + delta;
-
-    if (targetIndex < 0 || targetIndex >= messages.length) {
-      if (dir === 'next' && markdownDomRef) {
-        context.messages.setFocused(undefined);
-        markdownDomRef.focus();
-        return true;
-      }
-      return false;
-    }
-
-    const targetMsg = messages[targetIndex];
-    if (!targetMsg?.db_id) return false;
-
-    performScrollToMessage(targetMsg.db_id, {
-      behavior: 'smooth',
-      focus: true,
+    const stops = shownStops({
+      length: messages.length,
+      showMiddle: showMiddleMessages(),
+      hasComposer: Boolean(markdownDomRef),
     });
 
-    return true;
+    const keyboard = (() => {
+      if (!keyboardSelecting()) return undefined;
+      if (context.messages.hiddenChipFocused())
+        return { kind: 'hidden-chip' } as const;
+      const anchor = listAnchor();
+      if (anchor === 'title' || anchor === 'composer') {
+        return { kind: anchor } as const;
+      }
+      const focusedId = context.messages.focusedID();
+      if (!focusedId) return undefined;
+      const index = messages.findIndex(
+        (message) => message.db_id === focusedId
+      );
+      return index >= 0 ? ({ kind: 'message', index } as const) : undefined;
+    })();
+
+    if (keyboard?.kind === 'message') {
+      const focusedId = messages[keyboard.index]?.db_id;
+      const focusedEl = focusedId
+        ? messageElement(list, messages, focusedId)
+        : undefined;
+      if (focusedEl) {
+        const revealDelta = keyboardRevealDelta(list, focusedEl, dir);
+        if (revealDelta !== 0) return keyboardScrollListBy(list, revealDelta);
+
+        const pageDelta = pageThenAdvanceDelta(list, focusedEl, dir);
+        if (pageDelta !== 0) return keyboardScrollListBy(list, pageDelta);
+      }
+
+      if (
+        dir === 'next' &&
+        keyboard.index === messages.length - 1 &&
+        keyboardSelecting()
+      ) {
+        const nextStop = adjacentStop(stops, keyboard, 'next');
+        if (!nextStop || nextStop.kind === 'composer') {
+          const endDelta = scrollToListEndDelta(list);
+          if (endDelta !== 0) return keyboardScrollListBy(list, endDelta);
+          return true;
+        }
+      }
+    }
+
+    const messageIds = messages.map((message) => message.db_id);
+    const hover = threadStopFromHover(context.messages.hovered(), messageIds);
+    // The pointer leads while it is over the list. With the pointer elsewhere,
+    // arrows step off the selected card rather than re-entering at the end.
+    const selectedId = context.messages.focusedID();
+    const selectedIndex = selectedId ? messageIds.indexOf(selectedId) : -1;
+    const cursor =
+      hover ??
+      (selectedIndex >= 0
+        ? ({ kind: 'message', index: selectedIndex } as const)
+        : undefined);
+
+    return applyStop(
+      nextThreadStop({ stops, keyboard, hover: cursor, dir }),
+      messages,
+      list
+    );
   });
 
   const navigateToPreviousMessage = () => navigateMessage('prev');
@@ -460,8 +500,6 @@ function EmailContent(props: EmailViewProps) {
     blockElement()?.focus({ preventScroll: true });
     hasRun = true;
   });
-
-  let markdownDomRef!: HTMLDivElement;
 
   const getHotkeyTarget = () => {
     const messages = context.messages.list();
@@ -486,15 +524,20 @@ function EmailContent(props: EmailViewProps) {
     const messageId = target.message.db_id;
     if (!messageId) return false;
 
-    const isNewMessage = target.message.labels.some(
-      (label) => label.provider_label_id === 'UNREAD'
+    const list = context.messages.list();
+    const chronologicalIndex = list.findIndex(
+      (message) => message.db_id === messageId
     );
+    if (chronologicalIndex < 0) return false;
 
-    return (
-      context.messages.isBodyExpanded(messageId) ||
-      target.isLastMessage ||
-      isNewMessage
-    );
+    return threadMessageIsExpanded({
+      chronologicalIndex,
+      listLength: list.length,
+      expansionOverride: context.messages.expandedBodyIds[messageId],
+      isUnread: isUnreadMessage(target.message),
+      hasDraft:
+        !isTouchDevice() && !!context.drafts.getDraftForMessage(messageId),
+    });
   };
 
   const openHotkeyTarget = (replyType: ReplyType) => {
@@ -510,6 +553,18 @@ function EmailContent(props: EmailViewProps) {
   };
 
   onMount(() => {
+    if (!isTouchDevice()) {
+      const onMove = (event: PointerEvent) => {
+        lastPointer = { x: event.clientX, y: event.clientY };
+        const armed = armedPointer;
+        if (!armed) return;
+        if (event.clientX === armed.x && event.clientY === armed.y) return;
+        releaseKeyboardPointer();
+      };
+      window.addEventListener('pointermove', onMove);
+      onCleanup(() => window.removeEventListener('pointermove', onMove));
+    }
+
     registerEmailHotkeys(scopeId(), {
       replyToFocusedMessage: () => openHotkeyTarget('reply-all'),
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
@@ -532,12 +587,40 @@ function EmailContent(props: EmailViewProps) {
     hotkey: 'enter',
     description: 'Reply to message',
     keyDownHandler: () => {
+      if (context.messages.hiddenChipFocused()) {
+        const messages = untrack(context.messages.list);
+        const next = adjacentStop(
+          shownStops({ length: messages.length, showMiddle: true }),
+          { kind: 'message', index: 0 },
+          'next'
+        );
+        const nextId =
+          next?.kind === 'message' ? messages[next.index]?.db_id : undefined;
+        setUserOpenedMiddle(true);
+        if (!nextId) {
+          leaveHiddenChip();
+          return true;
+        }
+        context.messages.setFocused(nextId);
+        revealMessageAfterLayout(
+          nextId,
+          messages,
+          untrack(context.messagesListRef)
+        );
+        return true;
+      }
+
       const focusedId = context.messages.focusedID();
       const target = getHotkeyTarget();
 
       if (focusedId && target?.message.db_id === focusedId) {
         if (!isMessageRenderedExpanded(target)) {
           context.messages.setExpandedBodyId(focusedId, true);
+          revealMessageAfterLayout(
+            focusedId,
+            untrack(context.messages.list),
+            untrack(context.messagesListRef)
+          );
           return true;
         }
 
@@ -558,7 +641,7 @@ function EmailContent(props: EmailViewProps) {
 
   registerScopeSignalHotkey(scopeId, {
     hotkey: 'escape',
-    description: 'Collapse message',
+    description: 'Collapse or unselect message',
     keyDownHandler: () => {
       // Skip if focus is in an editable area (compose input handles its own Escape)
       const activeEl = document.activeElement;
@@ -570,8 +653,24 @@ function EmailContent(props: EmailViewProps) {
         return false;
       }
 
+      if (context.messages.hiddenChipFocused()) {
+        clearSelection();
+        return true;
+      }
+
+      if (keyboardSelecting() && listAnchor()) {
+        clearSelection();
+        return true;
+      }
+
       const focusedId = context.messages.focusedID();
-      if (!focusedId) return false;
+      if (!focusedId) {
+        if (keyboardSelecting()) {
+          clearSelection();
+          return true;
+        }
+        return false;
+      }
 
       // If there's an active reply, just clear it (don't collapse the message)
       if (context.messages.replyingToMessageId() === focusedId) {
@@ -579,16 +678,20 @@ function EmailContent(props: EmailViewProps) {
         return true;
       }
 
-      // If message is expanded and not the last message, collapse it
-      if (context.messages.isBodyExpanded(focusedId)) {
-        const messages = context.messages.list();
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage?.db_id !== focusedId) {
-          context.messages.setExpandedBodyId(focusedId, false);
-          return true;
-        }
+      const target = getHotkeyTarget();
+      if (target && isMessageRenderedExpanded(target)) {
+        context.messages.setExpandedBodyId(focusedId, false);
+        return true;
       }
-      return false;
+
+      clearSelection();
+      if (
+        activeEl instanceof HTMLElement &&
+        activeEl.closest(`[data-message-body-id="${CSS.escape(focusedId)}"]`)
+      ) {
+        activeEl.blur();
+      }
+      return true;
     },
     hotkeyToken: TOKENS.email.cancelReply,
     hide: true,
@@ -743,40 +846,27 @@ function EmailContent(props: EmailViewProps) {
                   class="w-full flex-1 flex flex-col items-center overflow-hidden"
                   ref={context.registerMessagesContainer}
                 >
-                  <Show when={!isTouchDevice()}>
-                    <div class="shrink-0 w-full flex justify-center">
-                      <div
-                        class="macro-message-width macro-message-padding w-full border-b"
-                        classList={{
-                          'border-edge-muted/50': isScrolled(),
-                          'border-transparent': !isScrolled(),
-                        }}
-                      >
-                        <div class="h-12" />
-                        <EmailThreadTitle
-                          title={props.title}
-                          copyReveal="hover"
-                          class="text-2xl pb-1.5"
-                        />
-                        <div class="pb-2.5">
-                          <EmailParticipants />
-                        </div>
-                      </div>
-                    </div>
-                  </Show>
                   <MessageList
                     initialLoadComplete={context.initialLoadComplete()}
                     markdownDomRef={(el) => {
                       markdownDomRef = el;
                     }}
-                    onScrollPositionChange={handleScrollPositionChange}
                     title={props.title}
                     underScrollsBottom={!replyInputInFlow()}
+                    showMiddleMessages={showMiddleMessages()}
+                    hiddenChipFocused={context.messages.hiddenChipFocused()}
+                    allowRowHover={!keyboardSelecting()}
+                    onHiddenChipFocus={() => {
+                      armKeyboardPointer();
+                      context.messages.setFocused(undefined);
+                      context.messages.setHiddenChipFocused(true);
+                    }}
+                    onOpenMiddle={() => {
+                      leaveHiddenChip();
+                      setUserOpenedMiddle(true);
+                    }}
                   />
-                  <CustomScrollbar
-                    reverse
-                    scrollContainer={context.messagesListRef}
-                  />
+                  <CustomScrollbar scrollContainer={context.messagesListRef} />
                 </div>
                 <Show when={isTouchDevice() && mobileBottomReplyMessage()}>
                   {(lastMessage) => (

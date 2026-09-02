@@ -131,7 +131,7 @@ describe('deriveMagicChipPresentation', () => {
     expect(presentation).toEqual({
       kind: 'answering',
       markdown: 'Looking at t',
-      activity: { label: 'Writing response', busy: true },
+      activity: { label: 'Writing response', busy: false },
     });
   });
 

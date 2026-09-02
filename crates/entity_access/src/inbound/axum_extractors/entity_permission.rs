@@ -91,6 +91,7 @@ where
         let (is_internal_access, acting_user) = match authorization.authorization.as_ref() {
             Some(MacroAuthorization::User(user)) => (false, Some(user)),
             Some(MacroAuthorization::Internal(user)) => (true, user.as_ref()),
+            Some(MacroAuthorization::Harness(_)) => return Err(ExtractorError::Unauthorized),
             Some(MacroAuthorization::Bot(_)) => unreachable!("bot authorization returned above"),
             None => (false, None),
         };

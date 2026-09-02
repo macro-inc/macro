@@ -798,6 +798,12 @@ export function BaseInput(props: {
     };
   }
 
+  // Content uploads still in flight, including ones started by earlier saves.
+  // attachmentID only proves the draft record exists, and the send path treats
+  // a resolved save as "attachments ready", so a save must not resolve while
+  // any of these are pending.
+  const inFlightAttachmentUploads = new Set<Promise<void>>();
+
   async function executeSaveDraft(skipSoupRefetch = false) {
     if (
       sendMutation.isPending ||
@@ -914,7 +920,7 @@ export function BaseInput(props: {
     // v7 (best effort, never trusted) to keep the mapping index friendly.
     const draftId = savedDraftId() ?? uuidv7();
     setSavedDraftId(draftId);
-    
+
     const outcome = await executeGraphqlSaveEmailDraft(getGraphqlSoupClient(), {
       draftId,
       threadDbId,
@@ -1031,21 +1037,32 @@ export function BaseInput(props: {
       { type: 'local' }
     >[];
 
+    let uploadRun: Promise<void> | undefined;
     if (attachments.length) {
-      const uploaded = await uploadAttachmentMutation.mutateAsync({
+      uploadRun = uploadAttachmentMutation.mutateAsync({
         draftID: draftId,
         attachments: attachments.map((a) => a.file),
         linkId: headerLinkId(),
+        onAttachmentAdded: (file, attachmentID) =>
+          form().attachments.assignAttachmentID(file, attachmentID),
+        onAttachmentUploadFailed: (file) =>
+          form().attachments.clearAttachmentID(file),
       });
-
-      // Assign the attachment ids to attachments for later use
-      for (const attachment of uploaded.attachments) {
-        form().attachments.assignAttachmentID(
-          attachment.file,
-          attachment.attachmentID
-        );
-      }
+      const tracked = uploadRun.then(
+        () => undefined,
+        () => undefined
+      );
+      inFlightAttachmentUploads.add(tracked);
+      tracked.then(() => inFlightAttachmentUploads.delete(tracked));
     }
+
+    // The send path treats a resolved save as "attachments ready", so drain
+    // every in-flight upload — including ones started by earlier saves.
+    while (inFlightAttachmentUploads.size) {
+      await Promise.all([...inFlightAttachmentUploads]);
+    }
+    // Settled by the drain above, this only rethrows this save's own failure
+    if (uploadRun) await uploadRun;
 
     // Sync forwarded attachments
     const forwardedAttachments = form()

@@ -126,7 +126,7 @@
     "nanoid": "^3.3.7",
     "neverthrow": "^8.2.0",
     "pdfjs-dist": "github:macro-inc/pdf.js#v2.16.52-web",
-    "posthog-js": "^1.387.0",
+    "posthog-js": "^1.424.0",
     "quill": "^2.0.3",
     "short-uuid": "^5.2.0",
     "signature_pad": "^5.0.10",

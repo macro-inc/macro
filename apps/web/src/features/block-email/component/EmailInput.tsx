@@ -1,4 +1,5 @@
 import { useEmailContext } from '@block-email/component/EmailContext';
+import { revealMessageAfterLayout } from '@block-email/util/scrollToMessage';
 import type {
   ApiDraftOutputDbId,
   ApiMessage,
@@ -57,15 +58,19 @@ export function EmailInput(props: EmailInputProps) {
     return decodedHtml;
   });
 
-  function afterSend(newMessageId: ApiDraftOutputDbId | null) {
-    // Refresh to get the new message
-    ctx.query.refetch();
-
-    // Set focus to new message if provided
-    if (newMessageId) ctx.messages.setFocused(newMessageId);
-
+  async function afterSend(newMessageId: ApiDraftOutputDbId | null) {
     // Collapse the input after sending (Gmail-style).
     props.setShowReply?.(false);
+
+    if (!newMessageId) return;
+
+    ctx.messages.setFocused(newMessageId);
+    await ctx.query.refetch();
+    revealMessageAfterLayout(
+      newMessageId,
+      ctx.messages.list(),
+      ctx.messagesListRef()
+    );
   }
 
   return (

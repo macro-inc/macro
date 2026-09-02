@@ -1,3 +1,4 @@
+import { makeMuteAction } from '@app/features/next-soup/actions';
 import {
   compileToAst,
   defineQueryFilters,
@@ -35,6 +36,7 @@ import {
 import { getChannelNotificationParams } from '@notifications/notification-navigation';
 import type { UnifiedNotification } from '@notifications/types';
 import { useSoupAstItemsQuery } from '@queries/soup/items';
+import { Key } from '@solid-primitives/keyed';
 import { makePersisted } from '@solid-primitives/storage';
 import { cn, NavRow, Surface, ToggleSwitch, Tooltip } from '@ui';
 import {
@@ -197,6 +199,9 @@ function ChannelRow(props: {
   onFloatingOpenChange?: (open: boolean) => void;
 }) {
   const notificationSource = useGlobalNotificationSource();
+  const muteAction = makeMuteAction({
+    notificationSource: () => notificationSource,
+  });
   const openChannel = useOpenChannel();
 
   const entity = () => props.channel.entity;
@@ -299,6 +304,19 @@ function ChannelRow(props: {
             <MenuSeparator />
             <MenuGroup>
               <MenuItem text="Mark as read" onClick={markAllAsRead} />
+            </MenuGroup>
+          </Show>
+          <Show when={muteAction.canExecute(entity())}>
+            <MenuSeparator />
+            <MenuGroup>
+              <MenuItem
+                text={
+                  muteAction.isMuted(entity())
+                    ? 'Unmute notifications'
+                    : 'Mute notifications'
+                }
+                onClick={() => void muteAction.execute([entity()])}
+              />
             </MenuGroup>
           </Show>
         </ContextMenuContent>
@@ -511,14 +529,14 @@ export const ChannelsRecentWidget = (props: {
               lastUserScrollAt = Date.now();
             }}
           >
-            <For each={visibleChannels()}>
+            <Key each={visibleChannels()} by={(channel) => channel.entity.id}>
               {(channel) => (
                 <ChannelRow
-                  channel={channel}
+                  channel={channel()}
                   onFloatingOpenChange={props.onDropdownOpenChange}
                 />
               )}
-            </For>
+            </Key>
             <Show when={showAllCaughtUp()}>
               <div class="flex h-7 w-full items-center gap-2 px-2 py-1 text-sm font-medium text-ink-extra-muted/60">
                 <span class="truncate">All caught up</span>
@@ -549,9 +567,9 @@ export const ChannelsRecentWidget = (props: {
       fallback={
         <Show when={slimVisible().length > 0}>
           <section class="w-full py-1.5 flex flex-col items-start gap-0.5">
-            <For each={slimVisible()}>
-              {(channel) => <ChannelRow channel={channel} isSlim />}
-            </For>
+            <Key each={slimVisible()} by={(channel) => channel.entity.id}>
+              {(channel) => <ChannelRow channel={channel()} isSlim />}
+            </Key>
             <Show when={slimOverflow() > 0}>
               <span class="w-full text-center text-xxs text-ink-muted mt-1">
                 +{slimOverflow()}
