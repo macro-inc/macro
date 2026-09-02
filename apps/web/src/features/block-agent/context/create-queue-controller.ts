@@ -56,39 +56,33 @@ export function createQueueController(options: {
   // the current socket session. Once true the socket is the only writer:
   // baseline responses are discarded and no further GETs go out. Reset when
   // the socket reopens (events may have been missed) or the session changes.
+  //
+  // The one latch is the whole reconciliation. An event is always the full
+  // queue, so events need no ordering among themselves, and a baseline
+  // response identifies itself by the session it was fetched for.
   let socketAuthoritative = false;
 
-  // A baseline that lost the race — to a newer baseline, a session switch,
-  // or the first socket event — must not overwrite what beat it.
-  let generation = 0;
-
-  const baseline = () => {
+  const baseline = async () => {
     const sessionId = untrack(options.sessionId);
-    if (!sessionId) {
-      setQueued([]);
-      return;
-    }
-    const run = ++generation;
-    void agentHarnessServiceClient
+    if (!sessionId) return;
+    const result = await agentHarnessServiceClient
       .queue(sessionId)
-      .then((result) => {
-        if (run !== generation || socketAuthoritative) return;
-        // A failed baseline keeps the last known entries; the next socket
-        // event or reconnect supersedes it anyway.
-        if (result.isErr()) return;
-        setQueued(result.value.entries);
-      })
-      .catch(() => {});
+      .catch(() => undefined);
+    // Discarded when an event beat it here, or when it answers for a session
+    // this block no longer shows. A failed baseline keeps the last known
+    // entries; the next socket event or reconnect supersedes it anyway.
+    if (socketAuthoritative || sessionId !== untrack(options.sessionId)) return;
+    if (result === undefined || result.isErr()) return;
+    setQueued(result.value.entries);
   };
 
   // A session switch drops the old session's entries immediately — they were
   // never this session's — then baselines the new one.
   createEffect(
     on(options.sessionId, () => {
-      generation++;
       socketAuthoritative = false;
       setQueued([]);
-      baseline();
+      void baseline();
     })
   );
 
@@ -97,7 +91,6 @@ export function createQueueController(options: {
   onCleanup(
     subscribeAgentSessionQueue((event) => {
       if (event.agentSessionId !== untrack(options.sessionId)) return;
-      generation++;
       socketAuthoritative = true;
       setQueued(event.entries);
     })
