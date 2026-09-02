@@ -168,12 +168,6 @@ export function SplitPanel(props: SplitPanelProps) {
   // floating filter-pill strip (see MobileSoupViewTabs).
   const shouldHideSplitHeader = createMemo(() => isSoloSettings());
 
-  const splitFocusStyling = () =>
-    !isTouchDevice() &&
-    props.active &&
-    multipleSplits() &&
-    !props.handle.isSpotLight();
-
   const splitUnfocusedStyling = () =>
     !isTouchDevice() && !props.active && multipleSplits();
 
@@ -194,21 +188,8 @@ export function SplitPanel(props: SplitPanelProps) {
   });
 
   /**
-   * This split is a preview controller with its viewer tucked flush against
-   * its right edge: paint above the viewer so the controller's card and
-   * shadow read as being in front.
-   */
-  const hasTuckedViewer = createMemo(() => {
-    return (
-      !isTouchDevice() &&
-      !props.handle.isSpotLight() &&
-      props.handle.isControllerSplit()
-    );
-  });
-
-  /**
-   * When either member of a tucked Preview Pair is active, the active member
-   * stays solid and its partner is dashed. Both retain the standard edge color.
+   * Either member of a tucked Preview Pair is active: the seam between the
+   * two is drawn dashed so they read as one unit.
    */
   const previewPairFocusStyling = createMemo(() => {
     const manager = globalSplitManager();
@@ -343,24 +324,21 @@ export function SplitPanel(props: SplitPanelProps) {
           >
             <Panel
               class={cn(
-                'rounded-xl touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
+                'rounded-none bg-panel',
                 splitUnfocusedStyling() && 'split-panel-inactive',
-                {
-                  'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
-                  'shadow-2xl shadow-drop-shadow': splitFocusStyling(),
-                  'border-solid!': previewPairFocusStyling() && props.active,
-                  'border-dashed!': previewPairFocusStyling() && !props.active,
-                  // Drawer look: both members square their seam corners. The
-                  // seam border always belongs to the Controller — the
-                  // Viewer's seam edge stays borderless so the line never
-                  // doubles, and keeping it on one fixed member regardless
-                  // of focus means switching focus can't shift layout by the
-                  // border width (the ! beats Surface's inline border
-                  // shorthand).
-                  'rounded-l-none border-l-0!': tuckedBehindController(),
-                  'rounded-r-none': hasTuckedViewer(),
-                }
+                // Splits sit flush; the only chrome between them is a hairline
+                // on the left edge of every split after the first. The line
+                // lives on the split rather than the (zero-width) gutter so a
+                // tucked Viewer carries the seam with it when it slides across.
+                props.index > 0 &&
+                  'border-l border-edge-muted touch:border-l-0',
+                // An engaged Preview Pair dashes its seam so the two members
+                // read as one unit.
+                previewPairFocusStyling() &&
+                  tuckedBehindController() &&
+                  'border-dashed'
               )}
+              hideBorder
               depth={isTouchDevice() ? 0 : 1}
             >
               <Show
@@ -369,7 +347,7 @@ export function SplitPanel(props: SplitPanelProps) {
                   <>
                     <Panel.Header
                       class={cn(
-                        'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                        'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible',
                         'z-split-panel-chrome',
                         // On mobile/tablet the header collapses to a zero-height grid row;
                         // SplitHeader overlays the body as floating islands.

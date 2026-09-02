@@ -69,16 +69,16 @@ export function SplitDrawer(
     let positionClasses = '';
     switch (props.side) {
       case 'top':
-        positionClasses = 'left-px right-px border-b';
+        positionClasses = 'left-0 right-0 border-b';
         break;
       case 'bottom':
-        positionClasses = 'top-unset left-px right-px bottom-px border-t';
+        positionClasses = 'top-unset left-0 right-0 bottom-0 border-t';
         break;
       case 'left':
-        positionClasses = 'bottom-px left-px border-r border-t';
+        positionClasses = 'bottom-0 left-0 border-r border-t';
         break;
       case 'right':
-        positionClasses = 'bottom-px right-px border-l border-t';
+        positionClasses = 'bottom-0 right-0 border-l border-t';
         break;
       default:
         break;
@@ -124,7 +124,7 @@ export function SplitDrawer(
       <ScopedPortal scope="split">
         <Layer depth={2}>
           <div
-            class="inset-px bg-modal-overlay absolute"
+            class="inset-0 bg-modal-overlay absolute"
             style={{ top: `${contentOffsetTop()}px` }}
             onClick={drawerControl.close}
           />

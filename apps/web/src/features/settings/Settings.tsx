@@ -310,7 +310,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
         <Show when={!isTouchDevice() && !compact()}>
           <SideNav
             class={cn(
-              'w-[clamp(208px,20%,248px)] gap-3',
+              'w-[clamp(208px,20%,248px)] gap-3 border-r border-edge-muted',
               narrow() ? 'pr-1' : 'pr-2'
             )}
           >
@@ -353,19 +353,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
           </SideNav>
         </Show>
 
-        {/* Content sits in its own subtly-raised, rounded card. The gutter
-            around it tightens as the panel narrows, and goes uniform once the
-            sidebar collapses. Full-bleed on mobile. */}
-        <div
-          class="flex-1 min-w-0 overflow-hidden touch:p-0"
-          classList={{
-            'py-2 pr-2 pl-0': !compact() && !narrow(),
-            'py-1 pr-1 pl-0': !compact() && narrow(),
-            'p-1': compact(),
-          }}
-        >
+        {/* Content sits flush against the sidebar's hairline, matching the
+            split chrome. Full-bleed on mobile. */}
+        <div class="flex-1 min-w-0 overflow-hidden">
           <Layer depth={1}>
-            <div class="relative flex size-full flex-col overflow-hidden rounded-xl border border-ink/[0.06] bg-surface shadow-menu touch:rounded-none touch:border-0 touch:bg-transparent">
+            <div class="relative flex size-full flex-col overflow-hidden bg-surface touch:bg-transparent">
               {/* Compact full-screen chrome: no split header to host the tabs,
                   so the sidebar collapses into a top bar here — back / tab
                   dropdown / move-to-split. (Split mode puts the tabs in its
