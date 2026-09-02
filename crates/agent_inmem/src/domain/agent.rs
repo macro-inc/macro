@@ -304,6 +304,7 @@ async fn run_turn(
 
     let mut accumulator = StreamAccumulator::new();
     let mut failure = None;
+    let mut was_cancelled = false;
     loop {
         match tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()).await {
             Ok(Some(Ok(part))) => {
@@ -318,7 +319,11 @@ async fn run_turn(
                 accumulator.push(part);
             }
             Ok(Some(Err(error))) => {
-                failure = Some(error.to_string());
+                if error.was_cancelled() {
+                    was_cancelled = true;
+                } else {
+                    failure = Some(error.to_string());
+                }
                 break;
             }
             Ok(None) => break,
@@ -353,7 +358,7 @@ async fn run_turn(
     }
     state.push_turn(prompt, turn_parts);
 
-    if cancel.is_cancelled() {
+    if was_cancelled || cancel.is_cancelled() {
         StopReason::Cancelled
     } else {
         StopReason::EndTurn

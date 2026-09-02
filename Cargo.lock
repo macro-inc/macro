@@ -361,6 +361,7 @@ dependencies = [
  "macro_uuid",
  "memory",
  "prompt",
+ "rig-agent",
  "serde",
  "serde_json",
  "sqlx",

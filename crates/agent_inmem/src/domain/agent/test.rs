@@ -7,6 +7,8 @@ use agent_client_protocol::schema::v1::{
     TextContent,
 };
 use agent_client_protocol::{Client, ConnectionTo};
+use rig_agent::agent::StreamingError;
+use rig_agent::completion::PromptError;
 
 use super::*;
 use crate::domain::engine::TurnEngine;
@@ -14,6 +16,27 @@ use crate::testing::{HangingEngine, ScriptedEngine};
 
 struct Harness {
     notifications: std::sync::Mutex<Vec<SessionNotification>>,
+}
+
+struct CancelledEngine;
+
+impl TurnEngine for CancelledEngine {
+    fn run_turn(
+        &self,
+        _request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let cancellation = PromptError::PromptCancelled {
+                chat_history: Vec::new(),
+                reason: "user cancelled".to_owned(),
+            };
+            let error =
+                agent::AgentError::Streaming(StreamingError::Prompt(Box::new(cancellation)));
+            let _ = parts.send(Err(error)).await;
+        });
+        receiver
+    }
 }
 
 /// Drive the served agent as a scripted ACP client: initialize, open a
@@ -229,6 +252,22 @@ async fn cancel_stops_the_turn_with_the_cancelled_stop_reason() {
     .await;
 
     assert_eq!(response.stop_reason, StopReason::Cancelled);
+}
+
+#[tokio::test]
+async fn engine_cancellation_is_not_rendered_as_an_error_message() {
+    let (notifications, response) =
+        with_agent(Arc::new(CancelledEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "cancel me"))
+                .block_task()
+                .await
+                .expect("a cancelled prompt still completes")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+    assert!(notifications.is_empty());
 }
 
 #[tokio::test]
