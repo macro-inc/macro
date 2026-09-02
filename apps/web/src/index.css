@@ -476,8 +476,6 @@ body.tauri-ios {
 
 @custom-variant light-mode (&:where(html[data-theme-light="true"] *));
 @custom-variant dark-mode (&:where(html[data-theme-light="false"] *));
-@custom-variant channels-slim
-  (&:where([data-channels-rail="slim"] *));
 
 /* Dark surfaces need a larger ink step for the thread path to remain visible.
    Both inputs stay opaque, so overlapping rail segments still render evenly. */
