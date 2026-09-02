@@ -84,6 +84,13 @@ pub(super) struct FoldState {
     pub(super) session: Option<AgentSessionId>,
     /// The turn currently being built, if any.
     pub(super) turn: Option<Turn>,
+    /// Where every tool call so far sits, so a patch can find it.
+    ///
+    /// Session-wide, not per turn: a user tool is patched *after* its turn
+    /// ended, when the user edits or sends the draft, and a subagent's calls
+    /// nest inside their parent. ACP tool call ids are unique within a
+    /// session, which is what makes one map sound.
+    pub(super) tool_positions: HashMap<ToolUseId, ToolPath>,
     /// How many turns have been opened, which is also the next [`TurnId`].
     pub(super) turns_opened: u32,
     /// Outstanding permission requests, by the id of the request that asked.
@@ -100,6 +107,17 @@ pub(super) struct FoldState {
     /// Controls awaiting a response, by request id: where the control part
     /// sits (message, part), so the response can resolve its outcome.
     pub(super) pending_controls: HashMap<RequestId, (usize, usize)>,
+}
+
+/// Where a tool call's part sits: which message, and the path of part
+/// indices to it - one index for a top-level part, more for one nested
+/// inside another part's children.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ToolPath {
+    /// Index into [`FoldState::messages`].
+    pub(super) message: usize,
+    /// Part indices from the message's parts down to the tool's part.
+    pub(super) path: Vec<usize>,
 }
 
 /// A turn under construction.
@@ -123,9 +141,6 @@ pub(super) struct Turn {
     /// [`FoldedMessage`] cannot hold an empty part list - which is also what
     /// makes a turn the agent never answered derive no agent message at all.
     pub(super) agent: Option<usize>,
-    /// Where each tool call sits in the agent message's parts, so patches can
-    /// find it.
-    pub(super) tool_positions: HashMap<ToolUseId, usize>,
     /// Where each permission sits in the agent message's parts, so outcomes
     /// can find it.
     pub(super) permission_positions: HashMap<ToolUseId, usize>,

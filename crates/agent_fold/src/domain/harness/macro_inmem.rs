@@ -31,4 +31,25 @@ impl HarnessReader for MacroInmem {
             .as_str()
             .map(ToolName::native)
     }
+
+    /// Every native tool this agent calls is a Macro tool; the ones it
+    /// reaches over MCP belong to whichever server it named.
+    fn macro_tool<'name>(&self, name: &'name ToolName) -> Option<&'name str> {
+        match name {
+            ToolName::Native { name } => Some(name),
+            ToolName::Mcp { .. } => name.macro_mcp_tool(),
+        }
+    }
+
+    /// Tool output arrives bare. A failed call reports
+    /// `{ "error": <description> }` and nothing else.
+    fn unwrap_tool_output(&self, raw: &serde_json::Value) -> (serde_json::Value, Option<String>) {
+        if let Some(map) = raw.as_object()
+            && map.len() == 1
+            && let Some(error) = map.get("error").and_then(serde_json::Value::as_str)
+        {
+            return (serde_json::Value::Null, Some(error.to_owned()));
+        }
+        (raw.clone(), None)
+    }
 }

@@ -18,8 +18,6 @@ NonEmpty {
                     "/repo/dead.rs",
                 ],
             },
-            raw_input: None,
-            raw_output: None,
         },
         ToolUse {
             id: ToolUseId(
@@ -35,8 +33,6 @@ NonEmpty {
                     "/repo/to.rs",
                 ],
             },
-            raw_input: None,
-            raw_output: None,
         },
         ToolUse {
             id: ToolUseId(
@@ -54,8 +50,6 @@ NonEmpty {
                     "1 match",
                 ),
             },
-            raw_input: None,
-            raw_output: None,
         },
         ToolUse {
             id: ToolUseId(
@@ -70,8 +64,6 @@ NonEmpty {
                     "page body",
                 ),
             },
-            raw_input: None,
-            raw_output: None,
         },
         ToolUse {
             id: ToolUseId(
@@ -86,8 +78,6 @@ NonEmpty {
                     "reasoning aloud",
                 ),
             },
-            raw_input: None,
-            raw_output: None,
         },
         ToolUse {
             id: ToolUseId(
@@ -108,12 +98,6 @@ NonEmpty {
                     },
                 ),
             },
-            raw_input: Some(
-                Object {
-                    "foo": String("bar"),
-                },
-            ),
-            raw_output: None,
         },
     ],
 }

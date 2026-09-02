@@ -3,9 +3,20 @@
 use crate::domain::model::{Author, FoldedMessage, MessagePart};
 use non_empty::NonEmpty;
 
-use super::state::{Changed, FoldState};
+use super::state::{Changed, FoldState, ToolPath};
 
 impl FoldState {
+    /// The part at `at`, wherever in the transcript it sits. `None` if the
+    /// path no longer resolves, which a well-formed log never produces.
+    pub(super) fn part_at_mut(&mut self, at: &ToolPath) -> Option<&mut MessagePart> {
+        let (first, rest) = at.path.split_first()?;
+        let mut part = self.messages.get_mut(at.message)?.parts.get_mut(*first)?;
+        for &index in rest {
+            part = part.children_mut()?.get_mut(index)?;
+        }
+        Some(part)
+    }
+
     /// Append agent prose, extending the trailing text part when there is one.
     pub(super) fn append_text(&mut self, text: String) -> Option<Changed> {
         if let Some((message, parts)) = self.agent_parts_mut()

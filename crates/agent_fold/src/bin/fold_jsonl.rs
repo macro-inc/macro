@@ -331,13 +331,33 @@ fn render_tool(label: &str, status: ToolStatus, detail: &ToolDetail) -> String {
                 let _ = writeln!(out, "{}", indent(output.trim_end()));
             }
             if let Some(input) = input {
-                let json =
-                    serde_json::to_string_pretty(input).unwrap_or_else(|_| input.to_string());
-                let _ = writeln!(out, "{}", indent(&json));
+                let _ = writeln!(out, "{}", indent(&pretty(input)));
             }
+        }
+        ToolDetail::Macro {
+            input,
+            output,
+            error,
+        } => {
+            let _ = writeln!(out, "{}", indent(&format!("input: {}", pretty(input))));
+            if let Some(output) = output {
+                let _ = writeln!(out, "{}", indent(&format!("output: {}", pretty(output))));
+            }
+            if let Some(error) = error {
+                let _ = writeln!(out, "{}", indent(&format!("error: {error}")));
+            }
+        }
+        ToolDetail::UserTool { input, outcome } => {
+            let _ = writeln!(out, "{}", indent(&format!("draft: {}", pretty(input))));
+            let _ = writeln!(out, "{}", indent(&format!("outcome: {outcome:?}")));
         }
     }
     out
+}
+
+/// JSON, pretty-printed, or its compact form if that somehow fails.
+fn pretty(value: &serde_json::Value) -> String {
+    serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
 }
 
 /// A permission request: what was asked, what was offered, what was chosen.

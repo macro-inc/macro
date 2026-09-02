@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::model::{
-    Author, PermissionOutcome, ToolDetail, ToolName, ToolStatus, ToolUseId, TurnId,
+    Author, PermissionOutcome, ToolDetail, ToolName, ToolStatus, ToolUseId, TurnId, UserToolOutcome,
 };
 use non_empty::NonEmpty;
 use serde_json::json;
@@ -20,8 +20,6 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
                 output: None,
                 exit_code: None,
             },
-            raw_input: Some(Box::new(json!({ "command": "ls" }))),
-            raw_output: None,
         }),
         stop: None,
     };
@@ -44,11 +42,39 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
                     "command": "ls",
                     "output": null,
                     "exitCode": null
-                },
-                "rawInput": { "command": "ls" },
-                "rawOutput": null
+                }
             }],
             "stop": null
+        })
+    );
+
+    assert_eq!(
+        serde_json::to_value(ToolDetail::UserTool {
+            input: json!({ "subject": "Hi" }),
+            outcome: UserToolOutcome::Draft {
+                draft_id: "d1".to_owned(),
+                thread_id: None,
+            },
+        })
+        .unwrap(),
+        json!({
+            "kind": "user_tool",
+            "input": { "subject": "Hi" },
+            "outcome": { "kind": "draft", "draftId": "d1", "threadId": null }
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(ToolDetail::Macro {
+            input: json!({ "documentId": "x" }),
+            output: None,
+            error: None,
+        })
+        .unwrap(),
+        json!({
+            "kind": "macro",
+            "input": { "documentId": "x" },
+            "output": null,
+            "error": null
         })
     );
 

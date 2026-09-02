@@ -3,6 +3,11 @@
 /// A hand-shaped complete turn with prose, tools, permission, and a clean stop.
 pub const TURN: &str = include_str!("../../fixtures/turn.jsonl");
 
+/// A hand-shaped Claude Code turn calling Macro tools over MCP - a read, a
+/// user tool (`SendEmail`) the user later edits and sends, and a failed call -
+/// with the MCP `CallToolResult` envelope around every output.
+pub const MACRO_MCP: &str = include_str!("../../fixtures/macro_mcp.jsonl");
+
 /// A sanitized real resumed session followed by fresh prompts.
 pub const RESUMED_AND_CONTINUED: &str =
     include_str!("../../fixtures/real/resumed_and_continued.jsonl");

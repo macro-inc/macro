@@ -30,6 +30,8 @@ pub mod claude_code;
 pub mod generic;
 /// Macro's own in-process agent (`agent_inmem`).
 pub mod macro_inmem;
+/// MCP's result and user-tool response shapes.
+pub mod mcp;
 
 use crate::domain::model::{Harness, ToolName};
 use agent_client_protocol::schema::v1::Meta;
@@ -66,6 +68,21 @@ pub trait HarnessReader: Sync {
     /// The exit code a terminal-backed call finished with, from `_meta`.
     fn terminal_exit_code(&self, meta: Option<&Meta>) -> Option<i32> {
         generic::terminal_exit_code(meta)
+    }
+
+    /// The Macro tool `name` refers to, if it is one of Macro's.
+    ///
+    /// For most harnesses that means a tool reached over Macro's own MCP
+    /// server; Macro's in-process agent calls the same tools natively and
+    /// says so by being the harness it is.
+    fn macro_tool<'name>(&self, name: &'name ToolName) -> Option<&'name str> {
+        name.macro_mcp_tool()
+    }
+
+    /// A Macro tool's own result, out of whatever `rawOutput` wrapped it in,
+    /// plus the error text when the wrapper reported failure.
+    fn unwrap_tool_output(&self, raw: &serde_json::Value) -> (serde_json::Value, Option<String>) {
+        mcp::unwrap_call_result(raw)
     }
 }
 

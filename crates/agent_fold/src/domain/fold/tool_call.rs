@@ -4,15 +4,17 @@ use std::path::PathBuf;
 
 use crate::domain::error::FoldError;
 use crate::domain::harness::{
-    self, HarnessReader, command_from_raw_input, file_edit_from_raw_input,
+    self, HarnessReader, command_from_raw_input, file_edit_from_raw_input, mcp,
 };
-use crate::domain::model::{AnsiText, FileDiff, MessagePart, ToolDetail, ToolUseId};
+use crate::domain::model::{
+    AnsiText, FileDiff, MessagePart, ToolDetail, ToolName, ToolUseId, UserToolOutcome,
+};
 use agent_client_protocol::schema::v1::{
     Content, Meta, ToolCall, ToolCallContent, ToolCallLocation, ToolCallUpdate, ToolKind,
 };
 
 use super::convert::{content_block_text, tool_kind_name, tool_status};
-use super::state::{Changed, FoldState};
+use super::state::{Changed, FoldState, ToolPath};
 
 impl FoldState {
     /// Handle a `tool_call`: add a new tool part.
@@ -21,11 +23,17 @@ impl FoldState {
         let reader = self.reader();
         let name = harness::tool_name(reader, call.meta.as_ref(), &call.title);
 
-        let tool = MessagePart::ToolUse {
-            id: id.clone(),
-            name,
-            status: tool_status(call.status),
-            detail: tool_detail(
+        // Macro's tools are chosen by name and never recategorized: the kind
+        // ACP gives them is `other`, and what a reader wants is the tool's own
+        // JSON, which only the name tells us how to read.
+        let detail = match reader.macro_tool(&name) {
+            Some(tool) => macro_detail(
+                reader,
+                tool,
+                call.raw_input.as_ref(),
+                call.raw_output.as_ref(),
+            ),
+            None => tool_detail(
                 reader,
                 call.kind,
                 call.raw_input.as_ref(),
@@ -33,28 +41,32 @@ impl FoldState {
                 &call.locations,
                 call.meta.as_ref(),
             ),
-            raw_input: call.raw_input.clone().map(Box::new),
-            raw_output: call.raw_output.clone().map(Box::new),
+        };
+        let tool = MessagePart::ToolUse {
+            id: id.clone(),
+            name,
+            status: tool_status(call.status),
+            detail,
         };
 
         // A repeated open for the same id patches in place rather than
-        // duplicating the row. Looked up without `?` so that a call arriving
-        // with no turn open falls through to `push_agent_part`, which opens
-        // one, rather than being dropped.
-        let opened = self
-            .turn
-            .as_ref()
-            .and_then(|turn| turn.tool_positions.get(&id).copied());
-        if let Some(position) = opened {
-            let (message, parts) = self.agent_parts_mut()?;
-            if let Some(existing @ MessagePart::ToolUse { .. }) = parts.get_mut(position) {
+        // duplicating the row.
+        if let Some(at) = self.tool_positions.get(&id).cloned() {
+            let message = at.message;
+            if let Some(existing @ MessagePart::ToolUse { .. }) = self.part_at_mut(&at) {
                 *existing = tool;
             }
             return Some(Changed::updated(message));
         }
 
         let (changed, position) = self.push_agent_part(tool)?;
-        self.open_turn().tool_positions.insert(id, position);
+        self.tool_positions.insert(
+            id,
+            ToolPath {
+                message: changed.message,
+                path: vec![position],
+            },
+        );
         Some(changed)
     }
 
@@ -68,19 +80,17 @@ impl FoldState {
         let id = ToolUseId(update.tool_call_id.0.to_string());
         let reader = self.reader();
 
-        let Some(&position) = self.turn.as_ref()?.tool_positions.get(&id) else {
+        let Some(at) = self.tool_positions.get(&id).cloned() else {
             self.warn(FoldError::PatchBeforeOpen { tool_call: id });
             return None;
         };
-        let (message, parts) = self.agent_parts_mut()?;
+        let message = at.message;
         let Some(MessagePart::ToolUse {
             name,
             status,
             detail,
-            raw_input,
-            raw_output,
             ..
-        }) = parts.get_mut(position)
+        }) = self.part_at_mut(&at)
         else {
             return None;
         };
@@ -100,20 +110,22 @@ impl FoldState {
             *name = title.parse().unwrap_or_else(|never| match never {});
         }
 
-        patch_detail(
-            reader,
-            detail,
-            fields.raw_input.as_ref(),
-            fields.content.as_deref(),
-            fields.locations.as_deref(),
-            update.meta.as_ref(),
-        );
-
-        if let Some(found) = fields.raw_input {
-            *raw_input = Some(Box::new(found));
-        }
-        if let Some(found) = fields.raw_output {
-            *raw_output = Some(Box::new(found));
+        match detail {
+            ToolDetail::Macro { .. } | ToolDetail::UserTool { .. } => patch_macro_detail(
+                reader,
+                name,
+                detail,
+                fields.raw_input.as_ref(),
+                fields.raw_output.as_ref(),
+            ),
+            _ => patch_detail(
+                reader,
+                detail,
+                fields.raw_input.as_ref(),
+                fields.content.as_deref(),
+                fields.locations.as_deref(),
+                update.meta.as_ref(),
+            ),
         }
 
         Some(Changed::updated(message))
@@ -162,6 +174,83 @@ pub(super) fn tool_detail(
             output: generic_output(content),
             input: raw_input.cloned(),
         },
+    }
+}
+
+/// Build the detail for a Macro tool from its opening frame.
+///
+/// A user tool starts [`UserToolOutcome::Pending`] whether or not the frame
+/// carried output: the backend's `"PendingUserExecution"` reads as pending
+/// too, and a frame with nothing yet is a call still being made.
+pub(super) fn macro_detail(
+    reader: &dyn HarnessReader,
+    tool: &str,
+    raw_input: Option<&serde_json::Value>,
+    raw_output: Option<&serde_json::Value>,
+) -> ToolDetail {
+    let input = raw_input.cloned().unwrap_or(serde_json::Value::Null);
+    let unwrapped = raw_output.map(|raw| reader.unwrap_tool_output(raw));
+    if mcp::is_user_tool(tool) {
+        return ToolDetail::UserTool {
+            input,
+            outcome: match unwrapped {
+                None => UserToolOutcome::Pending,
+                Some((_, Some(error))) => UserToolOutcome::Failed { message: error },
+                Some((value, None)) => mcp::user_tool_outcome(tool, &value),
+            },
+        };
+    }
+    let (output, error) = match unwrapped {
+        None => (None, None),
+        Some((value, error)) => (Some(value), error),
+    };
+    ToolDetail::Macro {
+        input,
+        output,
+        error,
+    }
+}
+
+/// Write an update's raw input and output into a Macro tool's detail.
+///
+/// Both replace rather than merge: a harness sends the arguments whole each
+/// time, and so does the session API that later records what the user did
+/// with a user tool.
+pub(super) fn patch_macro_detail(
+    reader: &dyn HarnessReader,
+    name: &ToolName,
+    detail: &mut ToolDetail,
+    raw_input: Option<&serde_json::Value>,
+    raw_output: Option<&serde_json::Value>,
+) {
+    let tool = reader.macro_tool(name).unwrap_or_else(|| name.display());
+    match detail {
+        ToolDetail::Macro {
+            input,
+            output,
+            error,
+        } => {
+            if let Some(found) = raw_input {
+                *input = found.clone();
+            }
+            if let Some(raw) = raw_output {
+                let (value, failure) = reader.unwrap_tool_output(raw);
+                *output = Some(value);
+                *error = failure;
+            }
+        }
+        ToolDetail::UserTool { input, outcome } => {
+            if let Some(found) = raw_input {
+                *input = found.clone();
+            }
+            if let Some(raw) = raw_output {
+                *outcome = match reader.unwrap_tool_output(raw) {
+                    (_, Some(error)) => UserToolOutcome::Failed { message: error },
+                    (value, None) => mcp::user_tool_outcome(tool, &value),
+                };
+            }
+        }
+        _ => {}
     }
 }
 
@@ -237,6 +326,8 @@ pub(super) fn patch_detail(
                 *output = Some(found);
             }
         }
+        // Patched by `patch_macro_detail`, which has the name to hand.
+        ToolDetail::Macro { .. } | ToolDetail::UserTool { .. } => {}
     }
 }
 

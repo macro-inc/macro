@@ -30,6 +30,8 @@ mod permission;
 mod plan;
 /// Tool calls.
 mod tool;
+/// Macro user tools.
+mod user_tool;
 
 pub use event::{FoldEvent, OwnedFoldEvent};
 pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata};
@@ -37,6 +39,7 @@ pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};
 pub use tool::{AnsiText, FileDiff, ToolDetail, ToolName, ToolStatus};
+pub use user_tool::UserToolOutcome;
 
 /// One prompt-to-stop cycle within a session.
 ///

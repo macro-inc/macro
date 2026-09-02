@@ -8,6 +8,8 @@ use lazy_regex::regex_captures;
 use serde::Serialize;
 use specta::Type;
 
+use super::user_tool::UserToolOutcome;
+
 /// What a harness called a tool.
 ///
 /// ACP has no tool-name field - a call carries a human-readable `title` and a
@@ -143,6 +145,11 @@ pub enum ToolStatus {
 /// has a variant here, so the fold never falls back to [`Self::Other`] for a
 /// kind ACP defines - only for `switch_mode` (nothing a reader would want
 /// rendered) and a kind this fold does not yet know about.
+///
+/// Two variants are chosen by *name* rather than kind: Macro's own tools
+/// ([`Self::Macro`], [`Self::UserTool`]) arrive as ACP `other`, and what a
+/// reader wants for them is the tool's own JSON, not a generic card. The
+/// harness reader decides which names are Macro's.
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ToolDetail {
@@ -212,6 +219,31 @@ pub enum ToolDetail {
         /// The tool's input, when reported.
         #[specta(type = specta_typescript::Unknown)]
         input: Option<serde_json::Value>,
+    },
+    /// A Macro tool the fold knows by name - reached over Macro's MCP
+    /// server, or called in-process by Macro's own agent. Input and output
+    /// are the tool's own JSON, any MCP envelope already removed, so a
+    /// reader that knows the tool renders it without parsing the wire.
+    Macro {
+        /// The tool's arguments, as it defines them.
+        #[specta(type = specta_typescript::Unknown)]
+        input: serde_json::Value,
+        /// The tool's result, as it defines it; absent until the call
+        /// completes.
+        #[specta(type = specta_typescript::Unknown)]
+        output: Option<serde_json::Value>,
+        /// The error text, when the call failed.
+        error: Option<String>,
+    },
+    /// A Macro user tool: the agent drafted it, the user finishes it after
+    /// the turn. See [`UserToolOutcome`].
+    UserTool {
+        /// The draft, as the tool defines its arguments; patched as the
+        /// user edits.
+        #[specta(type = specta_typescript::Unknown)]
+        input: serde_json::Value,
+        /// Where the user got to with it.
+        outcome: UserToolOutcome,
     },
 }
 
