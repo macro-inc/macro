@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
-import { type ActivityEvent, toPropertyEntityType } from '../domain/event';
-import { ActivityTimelineRow as ActivityTimelineRowView } from '../ui/activity-timeline-row';
+import { ActivityTimelineRow as ActivityTimelineRowView } from '../components/activity-timeline-row';
+import { type ActivityEvent, toPropertyEntityType } from '../core/event';
 import { OpenEntity } from './open-entity';
 
 /** Feed and tool row: presentational chrome plus click-to-open. */

@@ -9,7 +9,7 @@ import type {
   ActivityEntityType,
   ActivityEvent,
   ActivityOverview,
-} from '../domain/event';
+} from '../core/event';
 
 export function decodeActivityEvent(
   fragment: ActivityEventFieldsFragment

@@ -1,8 +1,8 @@
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Component, For, type JSX, Show } from 'solid-js';
-import type { ActivityTopEntity } from '../domain/event';
-import { toPropertyEntityType } from '../domain/event';
+import type { ActivityTopEntity } from '../core/event';
+import { toPropertyEntityType } from '../core/event';
 import type { EntityDisplay } from './entity-mention';
 import { EntityMention } from './entity-mention';
 

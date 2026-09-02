@@ -5,14 +5,14 @@ language: typescript
 severity: warning
 message: Activity UI leaves must not import adapters or shared query factories. Views compose those.
 note: |-
-  Rule FE-31 in docs/STYLE_GUIDE.md. `features/activity/ui` takes domain
+  Rule FE-31 in docs/STYLE_GUIDE.md. `features/activity/components` takes domain
   values (and resolved display) and returns JSX. Query factories, decode,
   and click-to-open (`openDocument`, `useSplitNavigationHandler`) live
   in `adapters/` / `views/`. The one sanctioned adapter import is
   `property-value`, which parses untyped wire JSON for property-changed
   rows. Do not add adapter or navigation imports to leave components.
 files:
-  - apps/web/src/features/activity/ui/**
+  - apps/web/src/features/activity/components/**
 rule:
   any:
     - kind: string
@@ -48,7 +48,7 @@ rule:
                 field: function
                 kind: import
     - kind: string
-      regex: ^['"]((\.\./)+adapters/|@app/features/activity/adapters/)
+      regex: ^['"]((\.\./)+queries/|@app/features/activity/queries/)
       not:
         regex: property-value
       any:

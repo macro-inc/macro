@@ -11,11 +11,11 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { createMyActivityQuery } from '../adapters/feed-query';
-import { createMyActivityOverviewQuery } from '../adapters/overview-query';
-import type { ActivityEvent } from '../domain/event';
-import { type FeedGroup, groupEventsByDay } from '../domain/group-events';
-import { ActionGraph } from '../ui/action-graph';
+import { ActionGraph } from '../components/action-graph';
+import type { ActivityEvent } from '../core/event';
+import { type FeedGroup, groupEventsByDay } from '../core/group-events';
+import { createMyActivityQuery } from '../queries/feed-query';
+import { createMyActivityOverviewQuery } from '../queries/overview-query';
 import { ActivityTimelineRow } from './activity-timeline-row';
 import { useActorDisplayName } from './resolve-actor-name';
 import { TopEntities } from './top-entities';

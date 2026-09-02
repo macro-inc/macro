@@ -6,7 +6,7 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Accessor } from 'solid-js';
-import type { ActivityOverview } from '../domain/event';
+import type { ActivityOverview } from '../core/event';
 import { decodeActivityOverview } from './decode';
 
 function browserTimeZone(): string {

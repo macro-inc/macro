@@ -2,21 +2,21 @@ import { cn, Layer, Tooltip } from '@ui';
 import { format } from 'date-fns';
 import { createMemo, For, type JSX } from 'solid-js';
 import { match } from 'ts-pattern';
-import { OVERVIEW_TZ, parseOverviewDate } from '../domain/activity-dates';
+import { OVERVIEW_TZ, parseOverviewDate } from '../core/activity-dates';
 import {
   type ActivityStats,
   formatDayLabel,
   formatMonthName,
   formatStreak,
   summarizeActivity,
-} from '../domain/activity-stats';
+} from '../core/activity-stats';
 import {
   buildContributionGrid,
   type ContributionDay,
   type ContributionWeek,
-} from '../domain/contribution-grid';
-import type { ActivityOverview } from '../domain/event';
-import type { ActivityIntensity } from '../domain/intensity';
+} from '../core/contribution-grid';
+import type { ActivityOverview } from '../core/event';
+import type { ActivityIntensity } from '../core/intensity';
 
 const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
 

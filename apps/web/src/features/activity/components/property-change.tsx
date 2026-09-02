@@ -3,11 +3,11 @@ import { useAllProperties } from '@property/editor/hooks/useAllProperties';
 import { TagDot } from '@property/tags/TagDot';
 import type { PropertyDefinitionDomain } from '@property/types';
 import { For, Show } from 'solid-js';
+import type { ActivityAction } from '../core/event';
 import {
   propertyValueLabel,
   selectOptionEntries,
-} from '../adapters/property-value';
-import type { ActivityAction } from '../domain/event';
+} from '../queries/property-value';
 
 type PropertyChangedAction = Extract<
   ActivityAction,

@@ -3,7 +3,7 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import { usePropertyEntityDisplay } from '@property/hooks';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { JSX } from 'solid-js';
-import type { EntityDisplay } from '../ui/entity-mention';
+import type { EntityDisplay } from '../components/entity-mention';
 
 /**
  * Resolves one entity's display and the split-aware click handlers that

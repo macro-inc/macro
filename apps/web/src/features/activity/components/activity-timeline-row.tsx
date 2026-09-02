@@ -1,7 +1,7 @@
 import { formatRelativeTimestamp } from '@entity/utils/timestamp';
 import { type JSX, Show } from 'solid-js';
-import { describeActionForEntity } from '../domain/describe-action';
-import type { ActivityEvent } from '../domain/event';
+import { describeActionForEntity } from '../core/describe-action';
+import type { ActivityEvent } from '../core/event';
 import { ActionGlyph } from './action-glyph';
 import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';

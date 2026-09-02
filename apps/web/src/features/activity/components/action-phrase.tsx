@@ -1,6 +1,6 @@
 import { Show } from 'solid-js';
-import { describeAction } from '../domain/describe-action';
-import type { ActivityEvent } from '../domain/event';
+import { describeAction } from '../core/describe-action';
+import type { ActivityEvent } from '../core/event';
 import { PropertyChangeText } from './property-change';
 
 function capitalize(value: string): string {

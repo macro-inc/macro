@@ -1,9 +1,9 @@
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { ActivityTopEntity } from '../domain/event';
 import {
   TopEntities as TopEntitiesView,
   TopEntityBody,
-} from '../ui/top-entities';
+} from '../components/top-entities';
+import type { ActivityTopEntity } from '../core/event';
 import { OpenEntity } from './open-entity';
 
 function MappedTopEntityRow(props: {

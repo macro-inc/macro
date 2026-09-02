@@ -12,10 +12,10 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { createEntityActivityQuery } from '../adapters/entity-query';
-import type { ActivityEvent } from '../domain/event';
-import { ActionPhrase } from '../ui/action-phrase';
-import { ActorName } from '../ui/actor-name';
+import { ActionPhrase } from '../components/action-phrase';
+import { ActorName } from '../components/actor-name';
+import type { ActivityEvent } from '../core/event';
+import { createEntityActivityQuery } from '../queries/entity-query';
 import { useEntityActivityFlag } from '../use-entity-activity-flag';
 import { useActorDisplayName } from './resolve-actor-name';
 

@@ -9,7 +9,7 @@ import Trash from '@phosphor/trash.svg';
 import UserMinus from '@phosphor/user-minus.svg';
 import UserPlus from '@phosphor/user-plus.svg';
 import { Dynamic } from 'solid-js/web';
-import type { ActivityAction } from '../domain/event';
+import type { ActivityAction } from '../core/event';
 
 const GLYPHS = {
   created: Plus,

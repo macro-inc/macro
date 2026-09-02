@@ -6,7 +6,7 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Accessor } from 'solid-js';
-import type { ActivityEvent } from '../domain/event';
+import type { ActivityEvent } from '../core/event';
 import { decodeActivityEvent } from './decode';
 
 /** Rows fetched per feed page. */

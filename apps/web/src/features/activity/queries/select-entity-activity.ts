@@ -1,5 +1,5 @@
 import type { EntityActivityQuery } from '@service-storage/graphql/generated/graphql';
-import type { ActivityEvent } from '../domain/event';
+import type { ActivityEvent } from '../core/event';
 import { decodeActivityEvent } from './decode';
 
 export type EntityActivityResult =
