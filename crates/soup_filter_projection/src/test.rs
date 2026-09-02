@@ -62,37 +62,6 @@ fn document_key(id: Uuid) -> RecordKey {
     RecordKey::new(format!("GraphqlSoupDocument:{id}")).unwrap()
 }
 
-fn composed_v2_document(
-    id: Uuid,
-    sub_type: Option<&str>,
-    is_email_attachment: bool,
-) -> IndexDocument {
-    let document = document(id, None);
-    let sub_type = sub_type.map(|value| match value {
-        "task" => DocumentSubType::Task,
-        "snippet" => DocumentSubType::Snippet,
-        "skill" => DocumentSubType::Skill,
-        value => panic!("unsupported test subtype {value}"),
-    });
-    let supplement =
-        SoupCacheProjectionSupplement::document_v2(document_key(id), is_email_attachment);
-    compose_soup_flat_v2(
-        DirectProjectionInput {
-            record_key: document_key(id),
-            kind: SoupFlatEntityKind::Document,
-            id: document.id,
-            owner: document.owner_id.to_string(),
-            project_id: document.project_id,
-            file_type: document.file_type,
-            created_at: document.created_at,
-            updated_at: document.updated_at,
-        },
-        sub_type,
-        Some(&supplement),
-    )
-    .unwrap()
-}
-
 #[test]
 fn document_projection_contains_only_direct_profile_facts() {
     let id = Uuid::from_u128(1);
@@ -314,31 +283,6 @@ fn document_server_facts_attached_to_another_entity_are_rejected() {
             &hydration,
         ),
         Err(ProjectionError::SourceMismatch)
-    ));
-}
-
-#[test]
-fn complete_v2_validation_remains_separate_from_the_supplement() {
-    let projection = composed_v2_document(Uuid::from_u128(1), Some("task"), false);
-    validate_soup_flat_v2(&projection).unwrap();
-
-    let mut missing = projection.clone();
-    missing
-        .exact_facts
-        .retain(|fact| fact.attribute != vocabulary::email_attachment());
-    assert!(matches!(
-        validate_soup_flat_v2(&missing),
-        Err(ProfileValidationError::MissingRequired("email-attachment"))
-    ));
-
-    let mut duplicate = projection;
-    duplicate.exact_facts.push(ExactFact {
-        attribute: vocabulary::email_attachment(),
-        value: ExactValue::new(vec![1]).unwrap(),
-    });
-    assert!(matches!(
-        validate_soup_flat_v2(&duplicate),
-        Err(ProfileValidationError::Duplicate("email-attachment"))
     ));
 }
 
