@@ -737,9 +737,6 @@ async fn send_notifications(
     let notification_entity =
         EntityType::EmailThread.with_entity_string(message.thread_db_id.to_string());
 
-    // Staff get a lock-screen alert only for Signal-tab mail; customers stay
-    // websocket-only. Split the send so a mixed owner/delegate set still
-    // creates one inbox row per recipient.
     if !staff_recipients.is_empty() {
         let request = SendNotificationRequestBuilder {
             notification_entity: notification_entity.clone(),
@@ -797,17 +794,14 @@ fn partition_email_push_recipients(
         .partition(|id| id.is_macro_staff())
 }
 
-/// Where a synced inbox thread lands for `new_email` fan-out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum NewEmailTier {
-    /// Signal tab: inbox, important sender, not shared. Everyone gets the
-    /// in-app row; staff also get a lock-screen alert.
+    /// Everyone gets the in-app row; staff also get APNS.
     Signal,
-    /// Inbox but not Signal. Staff dogfood only: in-app row, no alert.
+    /// Staff dogfood: in-app row only.
     StaffInbox,
 }
 
-/// The Signal-tab predicate, scoped to one thread.
 fn signal_filter(thread_id: Uuid) -> Expr<EmailLiteral> {
     Expr::and(
         Expr::Literal(EmailLiteral::ThreadId(thread_id)),
@@ -818,8 +812,6 @@ fn signal_filter(thread_id: Uuid) -> Expr<EmailLiteral> {
     )
 }
 
-/// True when the Inbox view (no spam, trash, or archive) has a thread matching
-/// `filter` for this link.
 async fn thread_in_inbox(
     ctx: &PubSubContext,
     link: &link::Link,
@@ -862,7 +854,6 @@ async fn new_email_tier(
     Ok(staff_inbox.then_some(NewEmailTier::StaffInbox))
 }
 
-// filter out messages we don't want to send notifications for
 #[tracing::instrument(skip(ctx, link))]
 async fn filter_notifiable_message(
     ctx: &PubSubContext,
