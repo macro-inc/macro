@@ -75,6 +75,14 @@ where
                         .is_some(),
                     "the agent must declare resume support or reattachment dies"
                 );
+                assert_eq!(
+                    initialized
+                        .agent_info
+                        .as_ref()
+                        .map(|info| info.name.as_str()),
+                    Some(AGENT_NAME),
+                    "the fold recognizes this harness by its announced name"
+                );
                 let session = connection
                     .send_request(NewSessionRequest::new("/"))
                     .block_task()
@@ -148,6 +156,64 @@ async fn a_prompt_streams_updates_and_ends_the_turn() {
             "tool_call",
             "tool_call_update",
             "message"
+        ]
+    );
+}
+
+/// Every tool call is stamped with the tool's name under `_meta.macro`, the
+/// way Claude Code stamps `_meta.claudeCode.toolName`: an MCP tool as
+/// `mcp__<server>__<tool>`, a delegation flagged `subagent`.
+#[tokio::test]
+async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-1".into(),
+            name: "ReadContent".into(),
+            json: serde_json::json!({"documentId": "d"}),
+            mcp: None,
+        }),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-2".into(),
+            name: "Subagent".into(),
+            json: serde_json::json!({"task": "count the beans"}),
+            mcp: None,
+        }),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-3".into(),
+            name: "slack__search".into(),
+            json: serde_json::json!({"query": "standup"}),
+            mcp: Some(agent::McpInfo {
+                service: "slack".into(),
+                tool_name: "search".into(),
+                display_name: Some("Search Slack".into()),
+            }),
+        }),
+    ]));
+
+    let (notifications, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "go"))
+            .block_task()
+            .await
+            .expect("the prompt should complete")
+    })
+    .await;
+
+    let metas: Vec<serde_json::Value> = notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(serde_json::Value::Object(
+                call.meta.clone().expect("meta is stamped"),
+            )),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        metas,
+        vec![
+            serde_json::json!({"macro": {"toolName": "ReadContent"}}),
+            serde_json::json!({"macro": {"toolName": "Subagent", "subagent": true}}),
+            serde_json::json!({"macro": {"toolName": "mcp__slack__search"}}),
         ]
     );
 }
