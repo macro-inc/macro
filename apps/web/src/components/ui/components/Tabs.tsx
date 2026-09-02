@@ -49,7 +49,7 @@ export const Tabs = (props: TabsProps) => {
         local.class
       )}
     >
-      <KSegmentedControl.Indicator class="pointer-events-none absolute top-0 left-0 z-0 rounded-xl bg-ink/6 outline outline-ink/10 transition-[transform,width,height] duration-50" />
+      <KSegmentedControl.Indicator class="pointer-events-none absolute top-0 left-0 z-0 rounded-xl border border-edge-muted bg-active transition-[transform,width,height] duration-50" />
       <For each={local.list}>
         {(item) => (
           <KSegmentedControl.Item
