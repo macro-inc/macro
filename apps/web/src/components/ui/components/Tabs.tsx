@@ -1,4 +1,3 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
@@ -56,7 +55,7 @@ export const Tabs = (props: TabsProps) => {
             value={item.value}
             disabled={local.disabled}
             class={cn(
-              'relative z-1',
+              'relative z-1 rounded-full has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
               local.fullWidth && 'flex-1',
               local.itemClass
             )}
@@ -66,14 +65,9 @@ export const Tabs = (props: TabsProps) => {
               class={cn(
                 'flex h-8 items-center px-4 text-xs font-medium rounded-full select-none',
                 'text-ink-extra-muted hover:text-ink data-checked:text-ink',
-                'has-focus-visible:ring-2 has-focus-visible:ring-accent/20',
                 local.fullWidth && 'w-full justify-center',
                 local.labelClass
               )}
-              onPointerDown={(e) => {
-                if (isTouchDevice()) e.preventDefault();
-              }}
-              onClick={() => rootProps.onChange?.(item.value)}
             >
               {item.label}
             </KSegmentedControl.ItemLabel>
