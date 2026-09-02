@@ -1,6 +1,8 @@
 use super::*;
 use std::collections::BTreeSet;
 
+use crate::local::instance::Instance;
+
 /// Every mode whose spec we assert invariants over.
 const MODES: &[Mode] = &[Mode::Local, Mode::Dev];
 
@@ -66,5 +68,69 @@ fn durable_bake_covers_every_repository_built_local_image() {
     assert_eq!(
         LOCAL_PULL_SERVICE_IMAGES,
         ["proxy", "mailpit", "static_file_cdn"]
+    );
+}
+
+/// Dev never writes a kickstart and does not own the snapshot volumes. Calling
+/// `Plan::compute` on a clean machine aborts `run_dev`; hashing a leftover
+/// local kickstart would then send `save` into starting Postgres/FusionAuth.
+#[test]
+fn snapshot_plan_is_local_only() {
+    let instance = Instance::derive(Some("snapshot-plan-mode"), None).unwrap();
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+
+    assert!(
+        compute_snapshot_plan(Mode::Dev, false, false, &instance)
+            .unwrap()
+            .is_none(),
+        "dev must not compute a snapshot"
+    );
+
+    fusionauth::write_kickstart(&instance, None, None).unwrap();
+    assert!(
+        compute_snapshot_plan(Mode::Local, false, false, &instance)
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        compute_snapshot_plan(Mode::Local, true, false, &instance)
+            .unwrap()
+            .is_none(),
+        "--no-snapshot skips the cache"
+    );
+    assert!(
+        compute_snapshot_plan(Mode::Local, false, true, &instance)
+            .unwrap()
+            .is_none(),
+        "dry-run skips the cache"
+    );
+
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+}
+
+#[test]
+fn wait_http_script_uses_a_wall_clock_deadline() {
+    let script = wait_http_script("http://example.invalid/health", 120, "0.2");
+    assert!(script.contains("SECONDS + 120"));
+    assert!(script.contains("sleep 0.2"));
+    assert!(
+        !script.contains("seq 1"),
+        "attempt-counted loops overshoot when curl --max-time hangs"
+    );
+}
+
+#[test]
+fn wait_http_script_stops_near_the_deadline() {
+    let start = std::time::Instant::now();
+    let status = std::process::Command::new("bash")
+        .arg("-lc")
+        .arg(wait_http_script("http://127.0.0.1:1/health", 1, "0.2"))
+        .status()
+        .unwrap();
+    assert!(!status.success());
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed < std::time::Duration::from_secs(6),
+        "deadline poll hung for {elapsed:?}"
     );
 }

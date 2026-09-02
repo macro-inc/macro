@@ -196,9 +196,8 @@ pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     // after `prepare` wrote the kickstart) and check for a stored snapshot.
     // Restores skip migrate/kickstart/index-init; a cold init saves one for
     // next time — that's how the cache seeds itself.
-    let snapshot_plan = (!args.run.no_snapshot && !stage.is_dry_run())
-        .then(|| snapshot::Plan::compute(&instance))
-        .transpose()?;
+    let snapshot_plan =
+        super::compute_snapshot_plan(mode, args.run.no_snapshot, stage.is_dry_run(), &instance)?;
 
     if let Some(handle) = teardown {
         stage.run_step("Tearing down previous stack", move || {

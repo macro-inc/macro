@@ -68,16 +68,37 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
             &mut cmd,
         )?;
         // The stack mounts one directory at `/app/out`, so land the binary
-        // beside the unified ones.
+        // beside the unified ones. Skip the copy when dest is already current:
+        // `std::fs::copy` always rewrites dest and the `r` hotkey keys off
+        // dest mtime, so an unconditional copy would restart the isolated
+        // service on every no-op rebuild.
         let built = target_dir
             .join(target.triple)
             .join("debug")
             .join(svc.cargo_bin);
         let dest = ws.join(target.debug_dir()).join(svc.cargo_bin);
-        std::fs::copy(&built, &dest)
-            .with_context(|| format!("copying {} to {}", built.display(), dest.display()))?;
+        install_isolated_binary(&built, &dest)?;
     }
 
+    Ok(())
+}
+
+/// Copy `src` onto `dest` only when dest is missing or older/different-sized.
+/// After a no-op isolated build the dest from the previous copy is newer, so
+/// this leaves its mtime alone and the `r` hotkey does not restart the bin.
+fn install_isolated_binary(src: &Path, dest: &Path) -> Result<()> {
+    if let (Ok(src_meta), Ok(dest_meta)) = (std::fs::metadata(src), std::fs::metadata(dest))
+        && src_meta.len() == dest_meta.len()
+        && src_meta.modified().ok() <= dest_meta.modified().ok()
+    {
+        return Ok(());
+    }
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)
+            .with_context(|| format!("creating {}", parent.display()))?;
+    }
+    std::fs::copy(src, dest)
+        .with_context(|| format!("copying {} to {}", src.display(), dest.display()))?;
     Ok(())
 }
 

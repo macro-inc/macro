@@ -322,9 +322,11 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
     // creation; a miss runs the real init and saves one, which is how the cache
     // seeds itself. The full-delete/full-create idempotency is unchanged: the
     // key *is* the definition of clean, so any input change is a structural miss.
-    let snapshot_plan = (!args.no_snapshot && !stage.is_dry_run())
-        .then(|| snapshot::Plan::compute(&instance))
-        .transpose()?;
+    // Dev never writes a kickstart and does not own those volumes, so it must
+    // not hash or save a snapshot (a leftover local kickstart would also send
+    // `save` into starting Postgres/FusionAuth).
+    let snapshot_plan =
+        compute_snapshot_plan(mode, args.no_snapshot, stage.is_dry_run(), &instance)?;
 
     // Join the background teardown before we (re)create volumes + bring infra up,
     // surfaced as a live spinner so it's clear what we're blocked on. It
@@ -1183,12 +1185,40 @@ fn ensure_external_resources(stage: &Stage, instance: &Instance) -> Result<()> {
     })
 }
 
-fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
-    let script = format!(
-        "for i in $(seq 1 600); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'not ready: {url}'; exit 1"
-    );
+/// Whether this bring-up should restore/save an init snapshot.
+///
+/// Only modes that own the local FusionAuth/Postgres/OpenSearch/Kafka volumes
+/// can participate: `Plan::compute` hashes the generated kickstart, and `save`
+/// starts those services. Dev has neither.
+fn compute_snapshot_plan(
+    mode: Mode,
+    no_snapshot: bool,
+    dry_run: bool,
+    instance: &Instance,
+) -> Result<Option<snapshot::Plan>> {
+    if !mode.spec().runs_local_infra || no_snapshot || dry_run {
+        return Ok(None);
+    }
+    snapshot::Plan::compute(instance).map(Some)
+}
+
+/// Poll `url` until curl succeeds or `timeout_secs` of wall time elapse.
+/// Per-attempt `curl --max-time 3` cannot stretch the loop past ~timeout+3s
+/// the way a fixed attempt count can.
+fn wait_http_script(url: &str, timeout_secs: u32, sleep_secs: &str) -> String {
+    format!(
+        "deadline=$((SECONDS + {timeout_secs})); \
+         while [ \"$SECONDS\" -lt \"$deadline\" ]; do \
+           curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; \
+           sleep {sleep_secs}; \
+         done; \
+         echo 'not ready: {url}'; exit 1"
+    )
+}
+
+pub(super) fn wait_http(stage: &Stage, label: &str, url: &str) -> Result<()> {
     let mut cmd = Command::new("bash");
-    cmd.arg("-lc").arg(script);
+    cmd.arg("-lc").arg(wait_http_script(url, 120, "0.2"));
     stage.run(label, &mut cmd)
 }
 

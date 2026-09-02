@@ -28,6 +28,21 @@ fn key_is_deterministic_and_kickstart_sensitive() {
     let _ = std::fs::remove_dir_all(other.artifact_dir());
 }
 
+#[test]
+fn compute_requires_a_generated_kickstart() {
+    let instance = Instance::derive(Some("no-kickstart-compute"), None).unwrap();
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+    let err = match Plan::compute(&instance) {
+        Ok(_) => panic!("compute must fail closed without a kickstart"),
+        Err(e) => e.to_string(),
+    };
+    assert!(
+        err.contains("kickstart.json"),
+        "compute must fail closed without a kickstart, got {err}"
+    );
+    let _ = std::fs::remove_dir_all(instance.artifact_dir());
+}
+
 /// `exists()` trusts only a manifest that matches the key and format — a
 /// half-written or foreign directory is a cache miss, not a restore.
 #[test]

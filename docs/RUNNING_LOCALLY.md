@@ -339,7 +339,7 @@ Run local binaries against shared dev resources instead of a full local stack:
 just run_dev
 ```
 
-`run_dev` uses shared dev resources. It needs Doppler and real cloud access. It is for contributors with team access.
+`run_dev` uses shared dev resources. It needs Doppler and real cloud access. It is for contributors with team access. It does not restore or save an init snapshot — those volumes are local-only.
 
 See what a running or stopped instance looks like. The output shows endpoints with live reachability probes, plus the state and host ports of every container. It does not start or rebuild anything:
 

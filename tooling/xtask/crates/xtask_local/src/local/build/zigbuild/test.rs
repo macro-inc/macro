@@ -62,6 +62,32 @@ fn isolated_args_use_their_own_target_dir() {
 }
 
 #[test]
+fn install_isolated_binary_skips_when_dest_is_current() {
+    let dir = std::env::temp_dir().join("macro-isolated-install");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let src = dir.join("src-bin");
+    let dest = dir.join("out").join("src-bin");
+    std::fs::write(&src, b"binary").unwrap();
+
+    install_isolated_binary(&src, &dest).unwrap();
+    let first = std::fs::metadata(&dest).unwrap().modified().unwrap();
+    std::thread::sleep(std::time::Duration::from_millis(10));
+    install_isolated_binary(&src, &dest).unwrap();
+    let second = std::fs::metadata(&dest).unwrap().modified().unwrap();
+    assert_eq!(
+        first, second,
+        "a no-op copy must not bump dest mtime or the r hotkey restarts the bin"
+    );
+
+    std::fs::write(&src, b"binary!").unwrap();
+    install_isolated_binary(&src, &dest).unwrap();
+    assert_eq!(std::fs::read(&dest).unwrap(), b"binary!");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn isolated_target_dirs_do_not_collide() {
     let dirs: std::collections::BTreeSet<PathBuf> = isolated_services()
         .map(|svc| isolated_target_dir(Path::new("/ws"), svc))

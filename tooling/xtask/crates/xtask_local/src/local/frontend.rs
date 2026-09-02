@@ -153,12 +153,7 @@ fn dev_env(
 /// Poll the backend (auth health, through the proxy) until ready.
 pub fn wait_backend_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     let url = format!("{}/auth/health", proxy::url(instance));
-    let script = format!(
-        "for i in $(seq 1 600); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'backend not ready'; exit 1"
-    );
-    let mut cmd = Command::new("bash");
-    cmd.arg("-lc").arg(script);
-    stage.run("Waiting for backend (proxy /auth/health)", &mut cmd)
+    super::wait_http(stage, "Waiting for backend (proxy /auth/health)", &url)
 }
 
 /// A running frontend dev server plus its captured output, so an unexpected
