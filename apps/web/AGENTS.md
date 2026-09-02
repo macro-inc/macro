@@ -51,27 +51,7 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - All API/network calls live in service-clients.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
-
-### Feature flags
-When a feature flag is requested or suggested, define it with `defineFlag` in
-`src/lib/core/constant/featureFlags.ts`. Do not add `ENABLE_*_FLAG` /
-`_OVERRIDE` / `ENABLE_*()` triples or raw PostHog string keys at call sites.
-A thin `useXFlag` wrapper around `useFeatureFlag(flag)` is fine.
-
-- Name the PostHog `key` after the question you ask (`enable-foo`,
-  `disable-browser-turso-cache`). Do not invert on the flag object.
-- Remote (PostHog): pass `key`. Read with `useFeatureFlag(flag)` in components
-  or `isFeatureEnabled(flag)` outside the tree. JSX: `<ShowFeatureFlag flag={flag}>`.
-- Env-only: pass `default`, no `key`. Read with `isFeatureEnabled(flag)` only.
-  `useFeatureFlag` will not accept it.
-- `env` is the name after `VITE_`, e.g. `'ENABLE_REMINDERS'`.
-- `default` is the value when env is unset. For remote flags, omit it to defer
-  to PostHog. The caller decides when it applies (`DEV_MODE_ENV || undefined`,
-  `LOCAL_ONLY || undefined`, `true`).
-- Do not create the PostHog flag yourself. Ask the user where it should live
-  (which PostHog project / environment) and wait for them.
-- Leave existing FLAG / OVERRIDE / string `useFeatureFlag` call sites alone
-  unless you are already changing that flag or were asked to migrate it.
+- When adding or changing a feature flag, follow the `define-feature-flag` skill.
 
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.
