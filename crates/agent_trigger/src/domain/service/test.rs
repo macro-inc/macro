@@ -602,9 +602,13 @@ fn reply_to_bot(bot_id: BotId) -> ExtractedExplicitReply {
 }
 
 fn reply_to_user() -> ExtractedExplicitReply {
+    reply_to_user_message(Uuid::from_u128(10))
+}
+
+fn reply_to_user_message(target_message_id: Uuid) -> ExtractedExplicitReply {
     ExtractedExplicitReply {
         channel_id: Uuid::from_u128(1).to_string(),
-        target_message_id: Uuid::from_u128(10).to_string(),
+        target_message_id: target_message_id.to_string(),
         target_thread_id: Uuid::from_u128(3).to_string(),
         display_text: "please fix this".to_owned(),
         sender_id: user().as_ref().to_owned(),
@@ -910,6 +914,24 @@ async fn an_unreadable_thread_still_judges_the_message_alone() {
 }
 
 #[tokio::test]
+async fn an_explicit_reply_to_the_originating_message_triggers_without_a_mention() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let service = service(
+        sessions,
+        agent_bots(),
+        extractor(Ok(Some(reply_to_user_message(Uuid::from_u128(3))))),
+        MockImplicitTriggerJudge::new(),
+    );
+
+    let events = service.evaluate(&posted).await.expect("evaluate message");
+    let metadata = existing_channel_metadata(&events);
+    assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
+    assert_eq!(metadata.bot_id, BotId::TEST_A);
+    assert_eq!(metadata.kind, ChannelKind::ExplicitReply);
+}
+
+#[tokio::test]
 async fn an_explicit_reply_to_another_user_falls_through_to_the_judge() {
     let posted = message(vec![]);
     let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
@@ -959,6 +981,29 @@ async fn an_explicit_reply_to_neither_of_two_live_agents_yields_nothing() {
         sessions,
         agent_bots(),
         extractor(Ok(Some(reply_to_user()))),
+        MockImplicitTriggerJudge::new(),
+    );
+
+    assert!(
+        service
+            .evaluate(&posted)
+            .await
+            .expect("evaluate message")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn an_explicit_reply_to_a_shared_originating_message_yields_nothing() {
+    let posted = message(vec![]);
+    let sessions = implicit_sessions(vec![
+        thread_session(AgentSessionId::TEST_A, BotId::TEST_A),
+        thread_session(AgentSessionId::TEST_B, BotId::TEST_B),
+    ]);
+    let service = service(
+        sessions,
+        agent_bots(),
+        extractor(Ok(Some(reply_to_user_message(Uuid::from_u128(3))))),
         MockImplicitTriggerJudge::new(),
     );
 

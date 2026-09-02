@@ -326,14 +326,14 @@ where
     }
 
     /// Evaluates an unmentioned message against the sessions rooted at its
-    /// thread: an explicit reply that targets a live session's bot is
-    /// forwarded outright, anything else only when the judge reads it as
-    /// addressed to the agent.
+    /// thread: an explicit reply that targets a live session's bot, or that
+    /// session's originating message, is forwarded outright. Anything else
+    /// only when the judge reads it as addressed to the agent.
     ///
-    /// An extracted reply names who it answers, so it can pick among several
-    /// live agents. The inferred path still only fires when exactly one agent
-    /// is live; picking among several by recency would route on nothing the
-    /// author meant.
+    /// An extracted reply names who and which message it answers, so it can
+    /// pick among several live agents. The inferred path still only fires when
+    /// exactly one agent is live; picking among several by recency would route
+    /// on nothing the author meant.
     ///
     /// Extractor and judge failures are treated as "no" rather than propagated:
     /// implicit triggering is best-effort, and an outage must not wedge the
@@ -401,7 +401,8 @@ where
         Ok(None)
     }
 
-    /// The live session whose bot the extracted reply-target names, if any.
+    /// The live session the extracted reply-target names: either its bot, or
+    /// uniquely its originating message.
     async fn explicit_reply_session(
         &self,
         posted: &ChannelMessagePostedMetadata,
@@ -513,12 +514,35 @@ fn channel_event(
     })
 }
 
-/// The live session whose bot the reply-target names as the addressee.
+/// The live session the reply-target names: its bot as addressee, or uniquely
+/// the message that opened the session.
 fn session_targeted_by_reply<'a>(
+    candidates: &'a [AgentSession],
+    reply: &ExtractedExplicitReply,
+) -> Option<&'a AgentSession> {
+    if let Some(session) = session_named_by_bot(candidates, reply) {
+        return Some(session);
+    }
+    session_named_by_originating_message(candidates, reply)
+}
+
+fn session_named_by_bot<'a>(
     candidates: &'a [AgentSession],
     reply: &ExtractedExplicitReply,
 ) -> Option<&'a AgentSession> {
     let sender = ChannelSender::parse_from_str(&reply.sender_id).ok()?;
     let bot_id = sender.as_bot()?.bot_id();
     candidates.iter().find(|session| session.bot_id == bot_id)
+}
+
+fn session_named_by_originating_message<'a>(
+    candidates: &'a [AgentSession],
+    reply: &ExtractedExplicitReply,
+) -> Option<&'a AgentSession> {
+    let target = Uuid::parse_str(&reply.target_message_id).ok()?;
+    let mut matches = candidates
+        .iter()
+        .filter(|session| session.originating_message_id == Some(target));
+    let session = matches.next()?;
+    matches.next().is_none().then_some(session)
 }
