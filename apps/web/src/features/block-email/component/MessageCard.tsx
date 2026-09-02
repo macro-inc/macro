@@ -60,7 +60,7 @@ export function MessageCard(props: MessageCardProps) {
           class={cn(
             'relative p-4 rounded-lg bg-message border border-edge-muted outline-none',
             props.isSelected
-              ? 'z-1 light-mode:shadow-lg light-mode:shadow-drop-shadow dark-mode:border-accent/40'
+              ? 'z-1 light-mode:shadow-lg light-mode:shadow-drop-shadow dark-mode:ring-1 dark-mode:ring-accent/40'
               : props.allowHover && 'hover:overlay-hover'
           )}
           style={{ '--user-icon-width': '1rem' }}
