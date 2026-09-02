@@ -1,15 +1,12 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
-import {
-  entityIsMuted,
-  type MuteItem,
-  muteItemForEntity,
-} from '@entity/utils/notification';
+import { entityIsMuted, muteItemForEntity } from '@entity/utils/notification';
 import type { NotificationSource } from '@notifications';
 import {
   useMuteItemMutation,
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
+import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import type { EntityActionListState } from './entity-action-context';
 
 type MakeMuteActionOptions = {
@@ -34,40 +31,34 @@ export const makeMuteAction = (options: MakeMuteActionOptions) => {
     entityIsMuted(options.notificationSource().mutedEntities(), entity);
 
   const execute = async (entities: EntityData[]) => {
-    const muteable = entities.filter(canExecute);
-    if (muteable.length === 0) return;
     // Ignore re-triggers while a toggle is still settling so a rapid
     // double-press can't fire a mute and its own unmute against each other.
     if (muteMutation.isPending || unmuteMutation.isPending) return;
 
-    const shouldUnmute = muteable.every((entity) => isMuted(entity));
-    const verb = shouldUnmute ? 'Unmuted' : 'Muted';
-
+    const muteable = entities.filter(canExecute);
+    const shouldUnmute = muteable.length > 0 && muteable.every(isMuted);
+    // On mute, skip entities already muted so counts reflect real work.
     const targets = shouldUnmute
       ? muteable
       : muteable.filter((entity) => !isMuted(entity));
-    if (targets.length === 0) return;
 
     // Several rows (threads in one channel) can share a mute target.
-    const unique = new Map<string, MuteItem>();
+    const items = new Map<string, UserUnsubscribe>();
     for (const entity of targets) {
       const item = muteItemForEntity(entity);
-      if (!item) continue;
-      unique.set(`${item.item_type}:${item.item_id}`, item);
+      if (item) items.set(`${item.item_type}:${item.item_id}`, item);
     }
-    if (unique.size === 0) return;
+    if (items.size === 0) return;
 
+    const mutation = shouldUnmute ? unmuteMutation : muteMutation;
     const results = await Promise.allSettled(
-      [...unique.values()].map((item) =>
-        shouldUnmute
-          ? unmuteMutation.mutateAsync(item)
-          : muteMutation.mutateAsync(item)
-      )
+      [...items.values()].map((item) => mutation.mutateAsync(item))
     );
 
-    const failed = results.filter(
-      (result) => result.status === 'rejected'
-    ).length;
+    // Each mutation rolls its own optimistic change back on failure, so report
+    // what actually happened rather than an all-or-nothing result.
+    const verb = shouldUnmute ? 'Unmuted' : 'Muted';
+    const failed = results.filter((r) => r.status === 'rejected').length;
     const succeeded = results.length - failed;
     if (failed === 0) {
       toast.success(

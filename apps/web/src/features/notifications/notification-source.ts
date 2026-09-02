@@ -410,20 +410,17 @@ export function createNotificationSource(
     await bulkMarkAsRead([notification]);
   };
 
+  // Canonicalize the type where we know how to; otherwise pass it through so
+  // legacy callers keep working unchanged.
+  const toMuteItem = (entity: Entity): UserUnsubscribe =>
+    muteItemForRef(entity) ?? { item_id: entity.id, item_type: entity.type };
+
   const muteEntity = async (entity: Entity) => {
-    const item = muteItemForRef(entity) ?? {
-      item_id: entity.id,
-      item_type: entity.type,
-    };
-    await muteItem.mutateAsync(item);
+    await muteItem.mutateAsync(toMuteItem(entity));
   };
 
   const unmuteEntity = async (entity: Entity) => {
-    const item = muteItemForRef(entity) ?? {
-      item_id: entity.id,
-      item_type: entity.type,
-    };
-    await unmuteItem.mutateAsync(item);
+    await unmuteItem.mutateAsync(toMuteItem(entity));
   };
 
   const subscribe = (subscribeFn: SubscribeFn) => {

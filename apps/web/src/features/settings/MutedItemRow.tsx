@@ -12,7 +12,11 @@ import {
   normalizeMuteItemType,
 } from '@entity/utils/notification';
 import { mutedEntityTypeLabel } from '@notifications/notification-event-catalog';
-import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
+import {
+  type ItemEntity,
+  isAccessiblePreviewItem,
+  useItemPreview,
+} from '@queries/preview';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { createMemo, Show } from 'solid-js';
@@ -50,7 +54,7 @@ export function MutedItemRow(props: {
 
 function MutedItemPreviewRow(props: {
   item: UserUnsubscribe;
-  entity: NonNullable<ReturnType<typeof muteItemPreviewEntity>>;
+  entity: ItemEntity;
   onUnmute: () => void;
 }) {
   const [preview] = useItemPreview(() => props.entity);

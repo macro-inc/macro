@@ -2,6 +2,8 @@ import { ENABLE_DOCUMENT_MENTION_NOTIFICATIONS } from '@core/constant/featureFla
 import type { Entity, NotificationType } from '@core/types';
 import type { NotificationStack } from '@notifications/notification-stacking';
 import type { UnifiedNotification } from '@notifications/types';
+import type { ItemEntity } from '@queries/preview';
+import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { match, P } from 'ts-pattern';
 import type { EntityData } from '../types/entity';
 import type { Notification } from '../types/notification';
@@ -73,11 +75,6 @@ const MUTEABLE_ITEM_TYPES = new Set([
   'reminder',
 ]);
 
-export type MuteItem = {
-  item_id: string;
-  item_type: string;
-};
-
 /**
  * Canonical unsubscribe `item_type`. Frontend rows use `email` / `foreign`;
  * notifications and the mute API store `email_thread` / `foreign_entity`.
@@ -97,7 +94,9 @@ export function normalizeMuteItemType(type: string): string {
  * that entity's `item_id`. Channel threads therefore mute the parent
  * channel, which is also how their notifications are attached.
  */
-export function muteItemForEntity(entity: EntityData): MuteItem | undefined {
+export function muteItemForEntity(
+  entity: EntityData
+): UserUnsubscribe | undefined {
   return muteItemForRef(toNotificationEntity(entity));
 }
 
@@ -105,7 +104,7 @@ export function muteItemForEntity(entity: EntityData): MuteItem | undefined {
 export function muteItemForRef(entity: {
   id: string;
   type: string;
-}): MuteItem | undefined {
+}): UserUnsubscribe | undefined {
   const item_type = normalizeMuteItemType(entity.type);
   if (!MUTEABLE_ITEM_TYPES.has(item_type)) return undefined;
   return { item_id: entity.id, item_type };
@@ -115,21 +114,13 @@ export function muteItemForRef(entity: {
  * Preview fetch key for a muted item. Only types the preview pipeline
  * actually serves — reminder and GitHub have no batch preview fetcher.
  */
-export function muteItemPreviewEntity(item: MuteItem):
-  | {
-      id: string;
-      type:
-        | 'calendar_event'
-        | 'call'
-        | 'channel'
-        | 'chat'
-        | 'document'
-        | 'email'
-        | 'project';
-    }
-  | undefined {
-  return match(normalizeMuteItemType(item.item_type))
-    .with('email_thread', () => ({ id: item.item_id, type: 'email' as const }))
+export function muteItemPreviewEntity(
+  item: UserUnsubscribe
+): ItemEntity | undefined {
+  return match<string, ItemEntity | undefined>(
+    normalizeMuteItemType(item.item_type)
+  )
+    .with('email_thread', () => ({ id: item.item_id, type: 'email' }))
     .with(
       'channel',
       'calendar_event',
@@ -168,8 +159,8 @@ export function muteItemFallbackIconType(
 }
 
 export function isMutedItem(
-  muted: readonly MuteItem[],
-  item: MuteItem
+  muted: readonly UserUnsubscribe[],
+  item: UserUnsubscribe
 ): boolean {
   const type = normalizeMuteItemType(item.item_type);
   return muted.some(
@@ -180,7 +171,7 @@ export function isMutedItem(
 }
 
 export function entityIsMuted(
-  muted: readonly MuteItem[],
+  muted: readonly UserUnsubscribe[],
   entity: EntityData
 ): boolean {
   const item = muteItemForEntity(entity);

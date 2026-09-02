@@ -343,12 +343,11 @@ const FavoriteRow = (props: {
     notificationSource: () => notificationSource,
   });
   const removeMutation = useRemoveFavoriteMutation();
+  // Favorites already store the canonical notification type (`email_thread`),
+  // which the mute mapping accepts as-is.
   const favoriteAsEntity = () =>
     ({
-      type:
-        props.favorite.entityType === 'email_thread'
-          ? 'email'
-          : props.favorite.entityType,
+      type: props.favorite.entityType,
       id: props.favorite.entityId,
     }) as EntityData;
   const [dndState] = useDragDropContext() ?? [];
