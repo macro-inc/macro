@@ -41,6 +41,15 @@ export const DOCUMENT_STORAGE_GATEWAY_URL = `https://${
   stack === 'prod' ? '' : `${stack}-`
 }gateway.${BASE_DOMAIN}/dss`;
 
+/**
+ * Public base URL for unfurl-service behind the shared gateway ALB, which
+ * routes the `/unfurl` path prefix to the service. Callers append paths by
+ * concatenation, so this must not end with a trailing slash.
+ */
+export const UNFURL_SERVICE_GATEWAY_URL = `https://${
+  stack === 'prod' ? '' : `${stack}-`
+}gateway.${BASE_DOMAIN}/unfurl`;
+
 export const MACRO_SUBDOMAIN_CERT =
   'arn:aws:acm:us-east-1:569036502058:certificate/a75b1b07-534c-44e1-b59b-fa5f74fd8069';
 

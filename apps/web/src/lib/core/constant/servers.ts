@@ -18,9 +18,9 @@ const serverHostLocal: Servers = {
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
 
-// The shared gateway ALB fronts DSS under a `/dss` path prefix. Unlike the
-// other services it is named with a `dev-` prefix rather than a `-dev` suffix,
-// so it cannot reuse `devServerSuffix`.
+// The shared gateway ALB fronts DSS (`/dss`) and unfurl (`/unfurl`). Unlike
+// the other services it is named with a `dev-` prefix rather than a `-dev`
+// suffix, so it cannot reuse `devServerSuffix`.
 const gatewayHost =
   import.meta.env.MODE === 'development'
     ? 'https://dev-gateway.macro.com'
@@ -41,7 +41,7 @@ const serverHostRemote = {
   'connection-gateway': `wss://connection-gateway${devServerSuffix}.macro.com`,
   'notification-service': `https://notifications${devServerSuffix}.macro.com`,
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,
-  'unfurl-service': `https://unfurl-service${devServerSuffix}.macro.com`,
+  'unfurl-service': `${gatewayHost}/unfurl`,
   contacts: `https://contacts${devServerSuffix}.macro.com`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
   'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,

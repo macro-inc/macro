@@ -319,7 +319,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.unfurl_service_url.as_ref(),
-        "https://unfurl-service-dev.macro.com",
+        "https://dev-gateway.macro.com/unfurl",
     );
     assert_eq!(
         service_urls.contacts_service_url.as_ref(),
@@ -374,7 +374,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.unfurl_service_url.as_ref(),
-        "https://unfurl-service.macro.com",
+        "https://gateway.macro.com/unfurl",
     );
     assert_eq!(
         service_urls.contacts_service_url.as_ref(),

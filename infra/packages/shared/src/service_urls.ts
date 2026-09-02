@@ -13,6 +13,7 @@ export enum ServiceUrl {
   CONNECTION_GATEWAY_URL = 'CONNECTION_GATEWAY_URL',
   DOCUMENT_COGNITION_SERVICE_URL = 'DOCUMENT_COGNITION_SERVICE_URL',
   LEXICAL_SERVICE_URL = 'LEXICAL_SERVICE_URL',
+  UNFURL_SERVICE_URL = 'UNFURL_SERVICE_URL',
 }
 
 /**
@@ -41,6 +42,7 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
     'https://document-cognition-dev.macro.com',
   [ServiceUrl.LEXICAL_SERVICE_URL]:
     'https://lexical-service-dev.macroverse.workers.dev',
+  [ServiceUrl.UNFURL_SERVICE_URL]: 'https://dev-gateway.macro.com/unfurl',
 };
 
 /**
@@ -59,6 +61,7 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
     'https://document-cognition.macro.com',
   [ServiceUrl.LEXICAL_SERVICE_URL]:
     'https://lexical-service-prod.macroverse.workers.dev',
+  [ServiceUrl.UNFURL_SERVICE_URL]: 'https://gateway.macro.com/unfurl',
 };
 
 /**

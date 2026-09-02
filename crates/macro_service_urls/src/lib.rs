@@ -546,8 +546,8 @@ service_url! {
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
             local: "http://localhost:8095",
-            dev: "https://unfurl-service-dev.macro.com",
-            prod: "https://unfurl-service.macro.com",
+            dev: "https://dev-gateway.macro.com/unfurl",
+            prod: "https://gateway.macro.com/unfurl",
         },
         /// Contacts service API URL.
         pub ContactsServiceUrl {

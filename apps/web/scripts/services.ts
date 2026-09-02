@@ -82,8 +82,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "unfurl-service",
-		dev: "https://unfurl-service-dev.macro.com/api-doc/openapi.json",
-		prod: "https://unfurl-service.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/unfurl/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/unfurl/api-doc/openapi.json",
 		local: "http://localhost:8095/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-unfurl/",
 		orvalKey: "unfurlService",

@@ -37,7 +37,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     'static-files': 'https://static-file-service-dev.macro.com',
     connection: 'https://connection-gateway-dev.macro.com',
     contacts: 'https://contacts-dev.macro.com',
-    unfurl: 'https://unfurl-service-dev.macro.com',
+    unfurl: 'https://dev-gateway.macro.com/unfurl',
   },
   prod: {
     'agent-harness': 'https://agent-harness.macro.com',
@@ -52,7 +52,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     'static-files': 'https://static-file-service.macro.com',
     connection: 'https://connection-gateway.macro.com',
     contacts: 'https://contacts.macro.com',
-    unfurl: 'https://unfurl-service.macro.com',
+    unfurl: 'https://gateway.macro.com/unfurl',
   },
   local: {
     'agent-harness': 'http://localhost:8101',
