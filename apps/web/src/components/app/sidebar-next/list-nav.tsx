@@ -16,6 +16,11 @@ import { SidebarItemNext } from './sidebar-item-next';
 
 export type ListNavProps = {
   item: SidebarNextNavItem;
+  /**
+   * `'rail'` drops the label and the hotkey hint — there is no room for either
+   * in a 36px square — and moves the label into a tooltip.
+   */
+  variant?: 'nav' | 'rail';
   /** Suppresses the hover hotkey hint while the `g` leader overlay is up. */
   hotkeyVisible?: boolean;
   onContextMenuOpenChange?: (open: boolean) => void;
@@ -82,17 +87,21 @@ export const ListNav = (props: ListNavProps) => {
     globalSplitManager()?.returnFocus();
   };
 
-  const showHotkeyHint = () => hovering() && !props.hotkeyVisible;
+  const isRail = () => props.variant === 'rail';
+  const showHotkeyHint = () => !isRail() && hovering() && !props.hotkeyVisible;
 
   return (
     <SidebarOpenInSplitMenu
       content={content}
       onOpenChange={props.onContextMenuOpenChange}
-      // The trigger defaults to `h-7`, which would clip the taller nav row.
-      triggerClass="h-9"
+      // The trigger defaults to `w-full h-7`, which clips both shapes.
+      triggerClass={isRail() ? 'size-9' : 'h-9'}
     >
       <SidebarItemNext
-        variant="nav"
+        variant={isRail() ? 'rail' : 'nav'}
+        tooltip={isRail() ? `Go to ${props.item.label}` : undefined}
+        tooltipPlacement="right"
+        hotkey={[TOKENS.sidebar.goToLeader, props.item.hotkeyToken]}
         label={props.item.label}
         icon={props.item.icon}
         iconActive={props.item.iconActive}
@@ -101,7 +110,7 @@ export const ListNav = (props: ListNavProps) => {
         onMouseDown={navigate}
         onHoverChange={setHovering}
         trailing={
-          showHotkeyHint() || props.hotkeyVisible ? (
+          !isRail() && (showHotkeyHint() || props.hotkeyVisible) ? (
             <ListNavHotkeyHint
               item={props.item}
               highlighted={props.hotkeyVisible === true}

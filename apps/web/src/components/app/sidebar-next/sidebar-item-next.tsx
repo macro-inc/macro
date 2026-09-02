@@ -23,7 +23,12 @@ import { Dynamic } from 'solid-js/web';
  * This renders a plain `<button>` (or `<a>`) and wraps in `Tooltip` only when
  * a tooltip is asked for.
  */
-const sidebarItemVariants = createVariants(
+/**
+ * Exported so a surface that has to own its element — a Kobalte
+ * `Dropdown.Trigger`, say — can paint the exact same chrome instead of
+ * duplicating it.
+ */
+export const sidebarItemVariants = createVariants(
   cn(
     'group/item relative flex cursor-default select-none items-center',
     'text-ink-extra-muted outline-none',
@@ -40,6 +45,14 @@ const sidebarItemVariants = createVariants(
         'w-full gap-2 rounded-xl ring ring-edge-muted p-2 text-sm text-ink-placeholder bg-ink/2 hover:bg-ink/5',
       /** More Apps grid cell: icon stacked over a dark label. */
       tile: 'aspect-square flex-col justify-center gap-2 rounded-xl text-[12px] text-ink hover:bg-hover',
+      /** Narrow-rail nav button: 36px square, 20px glyph, no label. */
+      rail: 'size-9 shrink-0 justify-center rounded-xl text-ink-muted hover:bg-hover data-active:text-accent',
+      /**
+       * Narrow-rail button carrying the `search` variant's chrome — the ring
+       * and tinted ground — for the create `+` and the search button.
+       */
+      railBoxed:
+        'size-9 shrink-0 justify-center rounded-full ring ring-edge bg-surface-1 shadow-md shadow-drop-shadow hover:bg-ink/5',
     },
     /**
      * Reserved for the nested lists these rows grow later. Keys are prefixed
@@ -67,6 +80,8 @@ const ICON_BOX: Record<SidebarItemVariant, string> = {
   nav: 'size-5 [&_svg]:size-5',
   search: 'size-5 [&_svg]:size-4',
   tile: 'size-6 [&_svg]:size-6',
+  rail: 'size-5.5 [&_svg]:size-5.5',
+  railBoxed: 'size-5 [&_svg]:size-5',
 };
 
 /**
@@ -135,7 +150,11 @@ export type SidebarItemNextProps = {
    */
   onHoverChange?: (hovering: boolean) => void;
 
-  /** Escape hatch for e2e/test hooks, e.g. `data-sidebar-item`. */
+  /**
+   * Escape hatch for e2e/test hooks (`data-sidebar-item`) and for the
+   * ref / aria / pointer props Kobalte injects when an item is used as a
+   * `Dropdown.Trigger` via `as` — see the rail's create button.
+   */
   [key: `data-${string}`]: string | undefined;
 };
 
@@ -169,6 +188,14 @@ export const SidebarItemNext = (props: SidebarItemNextProps) => {
     local.iconSwapOn === 'hover' ? hovering() : !!local.active;
 
   const variant = () => local.variant ?? 'nav';
+  /**
+   * Only the nav "tabs" carry the active bar — not the search bar, the create
+   * button or the More Apps tiles, none of which have an active state.
+   */
+  const showsActiveBar = () => variant() === 'nav' || variant() === 'rail';
+
+  /** The rail is icon-only; its label lives in the tooltip instead. */
+  const showsLabel = () => variant() !== 'rail' && variant() !== 'railBoxed';
   const isTile = () => variant() === 'tile';
 
   const item = () => (
@@ -197,6 +224,23 @@ export const SidebarItemNext = (props: SidebarItemNextProps) => {
       onMouseLeave={() => setHover(false)}
       {...rest}
     >
+      <Show when={showsActiveBar()}>
+        {/* Flush to the screen edge: the item sits inside the sidebar's own
+            `px-3`, so -12px lands the bar's outer edge at x=0. Absolutely
+            positioned, so activating a row never shifts its icon, and grown
+            on the Y axis only — scaling X too would pull the bar off the edge
+            mid-transition. Faded rather than mounted so it arrives on the same
+            curve as the icon's outline-to-fill swap. */}
+        <span
+          aria-hidden="true"
+          class={cn(
+            'absolute -left-3 top-1/2 h-3/4 w-1 -translate-y-1/2 rounded-r-full bg-accent',
+            'transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
+            local.active ? 'scale-y-100 opacity-100' : 'scale-y-90 opacity-0'
+          )}
+        />
+      </Show>
+
       <Show when={local.icon}>
         {(icon) => (
           <div
@@ -236,11 +280,13 @@ export const SidebarItemNext = (props: SidebarItemNextProps) => {
         )}
       </Show>
 
-      <Show
-        when={local.children !== undefined}
-        fallback={<span class="max-w-full truncate">{local.label}</span>}
-      >
-        {local.children}
+      <Show when={showsLabel()}>
+        <Show
+          when={local.children !== undefined}
+          fallback={<span class="max-w-full truncate">{local.label}</span>}
+        >
+          {local.children}
+        </Show>
       </Show>
 
       <Show when={local.trailing}>

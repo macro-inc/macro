@@ -818,7 +818,8 @@ const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
   );
 };
 
-type SidebarSettingsWidgetProps = {
+// TODO(sidebar-next): move to app-sidebar/navigation.tsx once SidebarNext ships.
+export type SidebarSettingsWidgetProps = {
   isSlim: () => boolean;
   onSelect: (tab: SettingsTab) => void;
   onMenuOpenChange?: (open: boolean) => void;
@@ -828,9 +829,15 @@ type SidebarSettingsWidgetProps = {
    * menu once the user removes its dedicated row.
    */
   gettingStartedLink?: SidebarItem;
+  /**
+   * Icon-only: drops the trigger's leading padding and start alignment so the
+   * avatar centres in its square, and grows the avatar to nearly fill it. For
+   * SidebarNext's narrow rail, where the name and caret are hidden anyway.
+   */
+  compact?: boolean;
 };
 
-const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
+export const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
   const userId = useUserId();
   const email = useEmail();
   const logout = useLogout();
@@ -871,7 +878,9 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         variant="ghost"
         class={cn(
           'flex items-center rounded-md cursor-default text-ink-extra-muted not-disabled:hover:bg-ink/3 h-9',
-          'justify-start gap-3 px-1.5 py-1'
+          props.compact
+            ? 'justify-center gap-0 p-0'
+            : 'justify-start gap-3 px-1.5 py-1'
         )}
         label={displayName()}
         fullWidth
@@ -884,10 +893,17 @@ const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
       >
         <Show
           when={userId()}
-          fallback={<div class="size-5 shrink-0 rounded-full bg-ink/10" />}
+          fallback={
+            <div
+              class={cn(
+                'shrink-0 rounded-full bg-ink/10',
+                props.compact ? 'size-8' : 'size-5'
+              )}
+            />
+          }
         >
           {(id) => (
-            <div class="size-5 shrink-0">
+            <div class={cn('shrink-0', props.compact ? 'size-8' : 'size-5')}>
               <UserIcon
                 id={id()}
                 size="fill"

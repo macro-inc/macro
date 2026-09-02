@@ -41,7 +41,9 @@ import {
   type SidebarState,
 } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
+import { SIDEBAR_NEXT_LAYOUT } from '@components/app/sidebar-next/layout-mode';
 import { SidebarNext } from '@components/app/sidebar-next/sidebar-next';
+import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
 import { useSidebarNextFlag } from '@components/app/sidebar-next/use-sidebar-next-flag';
 import {
   isSidebarVisible,
@@ -515,13 +517,25 @@ function LayoutInner(props: RouteSectionProps) {
                 />
               }
             >
-              <SidebarNext
-                sidebarState={sidebarState()}
-                onOpenChange={(open) =>
-                  // No slim rail here, so `cmd+.` hides the sidebar outright.
-                  setSidebarState(open ? 'expanded' : 'hidden')
+              <Show
+                when={SIDEBAR_NEXT_LAYOUT === 'rail'}
+                fallback={
+                  <SidebarNext
+                    sidebarState={sidebarState()}
+                    onOpenChange={(open) =>
+                      // No slim rail here, so `cmd+.` hides it outright.
+                      setSidebarState(open ? 'expanded' : 'hidden')
+                    }
+                  />
                 }
-              />
+              >
+                <SidebarRail
+                  sidebarState={sidebarState()}
+                  onOpenChange={(open) =>
+                    setSidebarState(open ? 'expanded' : 'hidden')
+                  }
+                />
+              </Show>
             </Show>
           </Show>
           <Show when={sidebarCollapsed()}>

@@ -245,7 +245,17 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
           </Show>
         }
       >
-        {(trigger) => <Dropdown.Trigger as={trigger()} />}
+        {(trigger) => (
+          <Dropdown.Trigger
+            as={trigger()}
+            // `Dropdown.Trigger` hardcodes `variant`/`size` for its default
+            // `as={Button}` and spreads props after them, so both leak into a
+            // custom trigger — and `variant` collides with the one
+            // `SidebarItemNext` defines. Blank them for callers' own elements.
+            variant={undefined}
+            size={undefined}
+          />
+        )}
       </Show>
 
       <CreateMenuContent controller={controller} />

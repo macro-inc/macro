@@ -7,7 +7,7 @@ import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import LogoIcon from '@icon/macro-logo.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { For } from 'solid-js';
-import { SidebarNextCreateButton } from './create-button';
+import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
 import { ListNav } from './list-nav';
 import { visibleNavItems } from './nav-items';
@@ -52,12 +52,12 @@ export const SidebarNext = (props: SidebarNextProps) => {
         <div class="flex size-6 shrink-0 items-center justify-center text-accent">
           <LogoIcon class="size-6" />
         </div>
-        <SidebarNextCreateButton />
+        <SidebarRailCreateButton />
       </div>
 
       <SearchBarButton />
 
-      <nav class="shrink-0 pt-2">
+      <nav class="shrink-0 pt-16">
         <ul class="flex flex-col gap-2">
           <For each={visibleNavItems(gates())}>
             {(item) => (

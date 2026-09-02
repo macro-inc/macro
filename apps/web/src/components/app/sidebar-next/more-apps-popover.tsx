@@ -28,7 +28,8 @@ export const MoreAppsPopover = (props: {
       <Dropdown.Trigger
         as={Button}
         size="icon-md"
-        class="border-edge bg-ink/3 text-ink/70"
+        variant="ghost"
+        class="text-ink-subtle hover:text-ink rounded-xl"
         label="More apps"
       >
         <SquaresFourIcon />
