@@ -4,7 +4,7 @@ import type { ApiMessage } from '@service-email/generated/schemas';
 import { cn, Tooltip } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { getSenderDisplayName, getSenderMacroId } from '../util/emailUser';
-import { formatFullDate, formatShortDate } from './EmailMessageTopBar';
+import { formatFullDate, formatShortDate } from '../util/formatEmailDate';
 import { EmailUserTooltip } from './EmailUserTooltip';
 
 interface CollapsedMessageProps {
@@ -56,7 +56,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
 
   const handleRowClick = (e: MouseEvent) => {
     const target = e.target;
-    if (target instanceof Element && target.closest('[data-button], a[href]')) {
+    if (target instanceof Element && target.closest('[data-button]')) {
       return;
     }
     props.onClick();

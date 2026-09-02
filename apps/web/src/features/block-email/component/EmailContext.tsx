@@ -274,6 +274,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   const [targetMessageId, setTargetMessageId] = createSignal<
     string | undefined
   >(searchParamsMessageId());
+  // Deep links (`?messageId=`) scroll to and expand a specific message after load.
 
   const [hasHandledTarget, setHasHandledTarget] = createSignal(false);
 
@@ -834,6 +835,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
       return false;
     }
 
+    // Older-page prefetch when the first batch does not overflow moved to
+    // MessageList (`listNeedsOlderPage` + `fetchOlderMessages`).
     return true;
   };
 

@@ -220,7 +220,6 @@ body.tauri-ios {
   --color-content-4: var(--c4);
   --color-edge: var(--color-surface-4);
   --color-edge-muted: var(--color-surface-3);
-  --color-edge-active: color-mix(in oklch, var(--color-ink) 30%, transparent);
   --color-accent: var(--a0);
   --color-accent-contrast: oklch(var(--accent-contrast-l) var(--c0c) var(--c0h));
   --color-accent-contrast-muted: oklch(var(--accent-contrast-l) var(--c0c) var(--c0h) / 0.7);

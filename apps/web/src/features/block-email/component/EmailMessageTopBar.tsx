@@ -1,5 +1,4 @@
 import { useEmail } from '@core/context/user';
-import type { DateValue } from '@core/util/date';
 import CaretRight from '@phosphor/caret-right.svg';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import { Button, cn, Tooltip } from '@ui';
@@ -16,6 +15,8 @@ import {
   getRecipientDisplayName,
   getSenderDisplayName,
 } from '../util/emailUser';
+import { formatFullDate, formatShortDate } from '../util/formatEmailDate';
+
 import { EmailUserTooltip } from './EmailUserTooltip';
 import { type EmailMessageAction, MessageActions } from './MessageActions';
 
@@ -36,35 +37,6 @@ interface EmailMessageTopBarProps {
 interface Recipient {
   name?: string | null;
   email?: string | null;
-}
-
-export function formatFullDate(date: DateValue): string {
-  return new Date(date)
-    .toLocaleString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit',
-      timeZoneName: 'short',
-    })
-    .replace(',', '');
-}
-
-export function formatShortDate(date: DateValue): string {
-  const d = new Date(date);
-  if (d.getFullYear() !== new Date().getFullYear()) {
-    return d.toLocaleDateString('en-US', {
-      month: 'numeric',
-      day: 'numeric',
-      year: '2-digit',
-    });
-  }
-  return d.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-  });
 }
 
 function RecipientChip(props: { recipient: Recipient }): JSX.Element {
@@ -251,7 +223,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
     const id = props.message.db_id;
     if (id) props.setFocusedMessageId(id);
     const target = e.target;
-    if (target instanceof Element && target.closest('[data-button], a[href]')) {
+    if (target instanceof Element && target.closest('[data-button]')) {
       return;
     }
     if (id) props.setExpandedBodyId(id, false);

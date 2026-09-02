@@ -3,7 +3,7 @@ import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Key } from '@solid-primitives/keyed';
-import { Button, cn } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -100,8 +100,10 @@ export function MessageList(props: MessageListProps) {
 
         if (getIsScrollingToMessage() || !props.initialLoadComplete) return;
 
+        const isNearBeginning = scrollFromTop <= 300;
+
         if (
-          scrollFromTop <= 300 &&
+          isNearBeginning &&
           !context.query.isFetching() &&
           context.query.hasMore()
         ) {
@@ -128,132 +130,138 @@ export function MessageList(props: MessageListProps) {
           </div>
         </div>
       </Show>
-      <StaticMarkdownContext>
-        {/* Key by db_id so prepends and refetches keep per-row state. */}
-        <Key each={context.messages.list()} by="db_id">
-          {(message) => {
-            const chronologicalIndex = createMemo(() =>
-              context.messages
-                .list()
-                .findIndex((item) => item.db_id === message().db_id)
-            );
-            const normalizedIndex = createMemo(() => {
-              // The element at the 0th index isn't actually the first message
-              // if there is more data to load so we return -1 so that `isFirstMessage`
-              // evaluates to false. This fixes an issue with the "first" message' full
-              // html to show in `EmailMessageBody`
-              if (chronologicalIndex() === 0 && context.query.hasMore()) {
-                return -1;
-              }
-
-              return chronologicalIndex();
-            });
-
-            const isLastMessage = createMemo(() => {
-              return (
-                chronologicalIndex() ===
-                (context.messages.list().length ?? 0) - 1
+      <Layer depth={1}>
+        <StaticMarkdownContext>
+          {/* Key by db_id so prepends and refetches keep per-row state. */}
+          <Key each={context.messages.list()} by="db_id">
+            {(message) => {
+              const chronologicalIndex = createMemo(() =>
+                context.messages
+                  .list()
+                  .findIndex((item) => item.db_id === message().db_id)
               );
-            });
-            const hideMiddle = createMemo(() => {
-              return (
-                !props.showMiddleMessages &&
-                isTruncatedMiddleMessage(
-                  chronologicalIndex(),
-                  context.messages.list().length
-                )
-              );
-            });
+              const normalizedIndex = createMemo(() => {
+                // The element at the 0th index isn't actually the first message
+                // if there is more data to load so we return -1 so that `isFirstMessage`
+                // evaluates to false. This fixes an issue with the "first" message' full
+                // html to show in `EmailMessageBody`
+                if (chronologicalIndex() === 0 && context.query.hasMore()) {
+                  return -1;
+                }
 
-            // A message with an in-progress draft reply stays expanded so the
-            // draft remains visible even after newer messages arrive (matches
-            // Gmail/Superhuman). Desktop only: mobile edits drafts in a drawer.
-            const hasDraft = createMemo(() => {
-              const messageID = message().db_id;
-              if (!messageID || isTouchDevice()) return false;
-              return !!context.drafts.getDraftForMessage(messageID);
-            });
-
-            const isExpanded = createMemo(() => {
-              const messageID = message().db_id;
-              if (!messageID) return false;
-              return threadMessageIsExpanded({
-                chronologicalIndex: chronologicalIndex(),
-                listLength: context.messages.list().length,
-                expansionOverride: context.messages.expandedBodyIds[messageID],
-                isUnread: isUnreadMessage(message()),
-                hasDraft: hasDraft(),
+                return chronologicalIndex();
               });
-            });
 
-            return (
-              <>
-                <Show when={!hideMiddle()}>
-                  <MessageContainer
-                    isFirstMessage={normalizedIndex() === 0}
-                    isLastMessage={isLastMessage()}
-                    isFocused={
-                      props.keyboardSelecting &&
-                      isFocusedSelector(message().db_id ?? undefined)
+              const isLastMessage = createMemo(() => {
+                return (
+                  chronologicalIndex() ===
+                  (context.messages.list().length ?? 0) - 1
+                );
+              });
+              const hideMiddle = createMemo(() => {
+                return (
+                  !props.showMiddleMessages &&
+                  isTruncatedMiddleMessage(
+                    chronologicalIndex(),
+                    context.messages.list().length
+                  )
+                );
+              });
+
+              // A message with an in-progress draft reply stays expanded so the
+              // draft remains visible even after newer messages arrive (matches
+              // Gmail/Superhuman). Desktop only: mobile edits drafts in a drawer.
+              const hasDraft = createMemo(() => {
+                const messageID = message().db_id;
+                if (!messageID || isTouchDevice()) return false;
+                return !!context.drafts.getDraftForMessage(messageID);
+              });
+
+              const isExpanded = createMemo(() => {
+                const messageID = message().db_id;
+                if (!messageID) return false;
+                return threadMessageIsExpanded({
+                  chronologicalIndex: chronologicalIndex(),
+                  listLength: context.messages.list().length,
+                  expansionOverride:
+                    context.messages.expandedBodyIds[messageID],
+                  isUnread: isUnreadMessage(message()),
+                  hasDraft: hasDraft(),
+                });
+              });
+
+              return (
+                <>
+                  <Show when={!hideMiddle()}>
+                    <MessageContainer
+                      isFirstMessage={normalizedIndex() === 0}
+                      isLastMessage={isLastMessage()}
+                      isFocused={
+                        props.keyboardSelecting &&
+                        isFocusedSelector(message().db_id ?? undefined)
+                      }
+                      allowHover={props.allowRowHover}
+                      message={message()}
+                      isExpanded={isExpanded()}
+                      markdownDomRef={
+                        isLastMessage() ? props.markdownDomRef : undefined
+                      }
+                    />
+                  </Show>
+                  <Show
+                    when={
+                      chronologicalIndex() === 0 &&
+                      !props.showMiddleMessages &&
+                      hiddenCount() > 0
                     }
-                    allowHover={props.allowRowHover}
-                    message={message()}
-                    isExpanded={isExpanded()}
-                    markdownDomRef={
-                      isLastMessage() ? props.markdownDomRef : undefined
-                    }
-                  />
-                </Show>
-                <Show
-                  when={
-                    chronologicalIndex() === 0 &&
-                    !props.showMiddleMessages &&
-                    hiddenCount() > 0
-                  }
-                >
-                  <div class="shrink-0 w-full flex justify-center">
-                    <div class="macro-message-width macro-message-padding w-full">
-                      <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-                        <span
-                          aria-hidden="true"
-                          class="border-t border-edge-muted"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          class={cn(
-                            props.hiddenChipFocused && 'bg-active text-ink'
-                          )}
-                          data-hidden-messages
-                          onPointerEnter={() =>
-                            context.messages.setHovered({ kind: 'hidden-chip' })
-                          }
-                          onPointerLeave={() => {
-                            if (
-                              context.messages.hovered()?.kind === 'hidden-chip'
-                            ) {
-                              context.messages.setHovered(undefined);
+                  >
+                    <div class="shrink-0 w-full flex justify-center">
+                      <div class="macro-message-width macro-message-padding w-full">
+                        <div class="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+                          <span
+                            aria-hidden="true"
+                            class="border-t border-edge-muted"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            class={cn(
+                              props.hiddenChipFocused && 'bg-active text-ink'
+                            )}
+                            data-hidden-messages
+                            onPointerEnter={() =>
+                              context.messages.setHovered({
+                                kind: 'hidden-chip',
+                              })
                             }
-                          }}
-                          onFocus={() => props.onHiddenChipFocus()}
-                          onClick={() => props.onOpenMiddle()}
-                        >
-                          Show {hiddenCount()} hidden{' '}
-                          {hiddenCount() === 1 ? 'message' : 'messages'}
-                        </Button>
-                        <span
-                          aria-hidden="true"
-                          class="border-t border-edge-muted"
-                        />
+                            onPointerLeave={() => {
+                              if (
+                                context.messages.hovered()?.kind ===
+                                'hidden-chip'
+                              ) {
+                                context.messages.setHovered(undefined);
+                              }
+                            }}
+                            onFocus={() => props.onHiddenChipFocus()}
+                            onClick={() => props.onOpenMiddle()}
+                          >
+                            Show {hiddenCount()} hidden{' '}
+                            {hiddenCount() === 1 ? 'message' : 'messages'}
+                          </Button>
+                          <span
+                            aria-hidden="true"
+                            class="border-t border-edge-muted"
+                          />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Show>
-              </>
-            );
-          }}
-        </Key>
-      </StaticMarkdownContext>
+                  </Show>
+                </>
+              );
+            }}
+          </Key>
+        </StaticMarkdownContext>
+      </Layer>
     </div>
   );
 }
