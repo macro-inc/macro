@@ -26,6 +26,7 @@ dashmap = { workspace = true }
 eventsource-stream = { workspace = true }
 futures = { workspace = true }
 macro_event_broker = { path = "../macro_event_broker", default-features = false }
+macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 ratatui = { workspace = true }
@@ -45,8 +46,9 @@ tokio-tungstenite = { workspace = true }
 toml = { workspace = true }
 toml_edit = { workspace = true }
 tracing = { workspace = true }
-uuid = { workspace = true }
 tracing-subscriber = { workspace = true }
+uuid = { workspace = true }
+webbrowser = { workspace = true }
 webhook = { path = "../webhook", default-features = false }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
@@ -56,4 +58,5 @@ channel_sender = { path = "../channel_sender" }
 channels = { path = "../channels", default-features = false }
 chrono = { workspace = true }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "net"] }

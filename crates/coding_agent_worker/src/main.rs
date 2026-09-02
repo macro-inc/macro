@@ -38,8 +38,11 @@ use crate::daemon::absolute_config_path;
 #[command(name = "macrod", version)]
 struct Args {
     /// Path to the daemon's TOML config.
-    #[arg(long, default_value = "macro.toml")]
+    #[arg(long, default_value = "macrod.toml")]
     config: PathBuf,
+    /// Internal browser helper, isolated so terminal browsers cannot claim the TUI's stdin.
+    #[arg(long, hide = true)]
+    open_url: Option<String>,
 }
 
 #[tokio::main]
@@ -50,6 +53,15 @@ async fn main() -> ExitCode {
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let args = Args::parse();
+    if let Some(url) = args.open_url {
+        return match webbrowser::open(&url) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("could not open browser: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     // The daemon chdirs into the workspace, so the config path must stop
     // being relative before anything re-reads or rewrites it.
     let config_path = absolute_config_path(&args.config);

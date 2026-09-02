@@ -3,9 +3,9 @@
 #   just run
 #   RUST_LOG=coding_agent_worker=trace just run   # tap the ACP wire (Logs tab)
 #
-# Reads the repo-root macro.toml by default; override with CONFIG=/path/to.toml.
+# Reads the repo-root macrod.toml by default; override with CONFIG=/path/to.toml.
 
-CONFIG := env("CONFIG", justfile_directory() + "/../../macro.toml")
+CONFIG := env("CONFIG", justfile_directory() + "/../../macrod.toml")
 
 ROOT := justfile_directory() + "/../.."
 SCRIPTS := ROOT + "/tooling/xtask/crates/xtask_workflows/src/workflows/scripts"

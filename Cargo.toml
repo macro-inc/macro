@@ -333,6 +333,7 @@ wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
 web-sys = "0.3"
 web-time = "1.1.0"
+webbrowser = { version = "=1.1.0", features = ["hardened"] }
 worker = "0.8.1"
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [

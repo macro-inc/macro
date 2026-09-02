@@ -3,7 +3,7 @@
 # Deliberately credential-free: `macrod` starts unpaired and the control
 # panel offers pairing (press p). Pairing shows a code, you approve it in the
 # web app (choosing private or team), and the minted credential is kept in
-# `macro.credentials.json` next to this file.
+# `macrod.credentials.json` next to this file.
 
 [macro]
 # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
@@ -24,7 +24,7 @@ name = "erics-macbook"
 scope = "private"
 
 [harness]
-command = "opencode"
+command = "hermes"
 args = ["acp"]
 
 [workspace]

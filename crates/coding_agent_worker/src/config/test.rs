@@ -5,7 +5,7 @@ const EXAMPLE: &str = include_str!("../../config.example.toml");
 #[test]
 fn the_example_config_parses() {
     let config: Config = toml::from_str(EXAMPLE).expect("example config parses");
-    assert_eq!(config.harness.command, "opencode");
+    assert_eq!(config.harness.command, "hermes");
     assert_eq!(config.harness.args, vec!["acp"]);
     assert_eq!(config.identity.name.as_deref(), Some("erics-macbook"));
     assert_eq!(config.identity.scope, IdentityScope::Private);

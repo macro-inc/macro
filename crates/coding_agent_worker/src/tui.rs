@@ -3,12 +3,15 @@
 //! `macrod` runs the serving core (SSE listener, harness bridge) inside a
 //! terminal UI that shows what the server knows about this harness - its
 //! registration, the agents bound to it, their sessions, and the daemon's
-//! own logs - and drives its lifecycle: edit `macro.toml`, pair (or re-pair,
+//! own logs - and drives its lifecycle: edit `macrod.toml`, pair (or re-pair,
 //! restarting the core on the new credential), and retire the harness.
 
+mod agent_catalog;
 mod api;
 mod config_form;
 mod process;
+#[cfg(test)]
+mod test;
 mod ui;
 
 use std::path::{Path, PathBuf};
@@ -23,8 +26,9 @@ use crate::daemon::Daemon;
 use crate::outbound::credentials::{CredentialStore as _, FileCredentialStore, HarnessCredentials};
 use crate::outbound::pairing::{ClaimStatus, PairingClient};
 
+use agent_catalog::{DetectedAgent, PathCommands};
 use api::{HarnessSelfApi, Snapshot};
-use config_form::{ConfigForm, FIELDS, FieldKind};
+use config_form::{ConfigForm, SETTINGS, Setting};
 
 /// How often the dashboard re-reads the server.
 const REFRESH_EVERY: Duration = Duration::from_secs(3);
@@ -114,18 +118,32 @@ impl Tab {
             Tab::Logs => Tab::Overview,
         }
     }
+
+    fn previous(self) -> Tab {
+        match self {
+            Tab::Overview => Tab::Logs,
+            Tab::Sessions => Tab::Overview,
+            Tab::Config => Tab::Sessions,
+            Tab::Logs => Tab::Config,
+        }
+    }
 }
 
 /// A modal claiming the keyboard, when one is up.
 pub(crate) enum Mode {
     /// Browsing; keys act on the current tab.
     Normal,
-    /// Editing one config field's value.
-    EditField {
-        /// Index into [`FIELDS`].
+    /// Editing one config setting's value.
+    EditSetting {
+        /// Index into [`SETTINGS`].
         index: usize,
         /// The text being typed.
         buffer: String,
+    },
+    /// Choosing from the ACP agents installed on this machine.
+    AgentPicker {
+        /// Selected agent index.
+        selected: usize,
     },
     /// Confirming harness removal.
     ConfirmDelete,
@@ -136,6 +154,159 @@ pub(crate) enum Mode {
         /// When the claim was last polled.
         last_poll: Instant,
     },
+}
+
+/// Editable state shown before the first `macrod.toml` exists.
+pub(crate) struct Quickstart {
+    pub(crate) agents: Vec<DetectedAgent>,
+    pub(crate) selected_agent: usize,
+    pub(crate) selected_row: usize,
+    pub(crate) workspace: String,
+    pub(crate) scope_team: bool,
+    pub(crate) mode: QuickstartMode,
+    pub(crate) status: Option<(String, bool)>,
+}
+
+/// Keyboard focus inside Quickstart.
+pub(crate) enum QuickstartMode {
+    Normal,
+    AgentPicker { selected: usize },
+    EditWorkspace { buffer: String },
+}
+
+impl Quickstart {
+    fn new() -> rootcause::Result<Self> {
+        let workspace = std::env::current_dir()
+            .context("failed to find the current directory for Quickstart")?
+            .display()
+            .to_string();
+        Ok(Self {
+            agents: agent_catalog::discover(&PathCommands::discover()),
+            selected_agent: 0,
+            selected_row: 0,
+            workspace,
+            scope_team: false,
+            mode: QuickstartMode::Normal,
+            status: None,
+        })
+    }
+
+    fn on_key(&mut self, key: KeyEvent) -> QuickstartAction {
+        if key.kind != KeyEventKind::Press {
+            return QuickstartAction::Continue;
+        }
+        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+            return QuickstartAction::Quit;
+        }
+        match &mut self.mode {
+            QuickstartMode::Normal => match key.code {
+                KeyCode::Char('q') => QuickstartAction::Quit,
+                KeyCode::Char('r') => {
+                    self.agents = agent_catalog::discover(&PathCommands::discover());
+                    self.selected_agent =
+                        self.selected_agent.min(self.agents.len().saturating_sub(1));
+                    self.status = Some((
+                        format!("Found {} supported agent(s)", self.agents.len()),
+                        false,
+                    ));
+                    QuickstartAction::Continue
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.selected_row = self.selected_row.saturating_sub(1);
+                    QuickstartAction::Continue
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    self.selected_row = (self.selected_row + 1).min(3);
+                    QuickstartAction::Continue
+                }
+                KeyCode::Enter => match self.selected_row {
+                    0 if self.agents.is_empty() => {
+                        self.status = Some((
+                            "No supported ACP agents were found on PATH".to_owned(),
+                            true,
+                        ));
+                        QuickstartAction::Continue
+                    }
+                    0 => {
+                        self.mode = QuickstartMode::AgentPicker {
+                            selected: self.selected_agent,
+                        };
+                        QuickstartAction::Continue
+                    }
+                    1 => {
+                        self.mode = QuickstartMode::EditWorkspace {
+                            buffer: self.workspace.clone(),
+                        };
+                        QuickstartAction::Continue
+                    }
+                    2 => {
+                        self.scope_team = !self.scope_team;
+                        QuickstartAction::Continue
+                    }
+                    3 if self.agents.is_empty() => {
+                        self.status = Some((
+                            "Install a supported ACP agent before continuing".to_owned(),
+                            true,
+                        ));
+                        QuickstartAction::Continue
+                    }
+                    3 => QuickstartAction::Create,
+                    _ => QuickstartAction::Continue,
+                },
+                _ => QuickstartAction::Continue,
+            },
+            QuickstartMode::AgentPicker { selected } => match key.code {
+                KeyCode::Esc => {
+                    self.mode = QuickstartMode::Normal;
+                    QuickstartAction::Continue
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    *selected = selected.saturating_sub(1);
+                    QuickstartAction::Continue
+                }
+                KeyCode::Down | KeyCode::Char('j') => {
+                    *selected = (*selected + 1).min(self.agents.len().saturating_sub(1));
+                    QuickstartAction::Continue
+                }
+                KeyCode::Enter => {
+                    self.selected_agent = *selected;
+                    self.mode = QuickstartMode::Normal;
+                    QuickstartAction::Continue
+                }
+                _ => QuickstartAction::Continue,
+            },
+            QuickstartMode::EditWorkspace { buffer } => match key.code {
+                KeyCode::Esc => {
+                    self.mode = QuickstartMode::Normal;
+                    QuickstartAction::Continue
+                }
+                KeyCode::Backspace => {
+                    buffer.pop();
+                    QuickstartAction::Continue
+                }
+                KeyCode::Char(ch) => {
+                    buffer.push(ch);
+                    QuickstartAction::Continue
+                }
+                KeyCode::Enter if buffer.trim().is_empty() => {
+                    self.status = Some(("Workspace must not be empty".to_owned(), true));
+                    QuickstartAction::Continue
+                }
+                KeyCode::Enter => {
+                    self.workspace = buffer.trim().to_owned();
+                    self.mode = QuickstartMode::Normal;
+                    QuickstartAction::Continue
+                }
+                _ => QuickstartAction::Continue,
+            },
+        }
+    }
+}
+
+enum QuickstartAction {
+    Continue,
+    Create,
+    Quit,
 }
 
 /// Everything the UI renders from.
@@ -150,12 +321,14 @@ pub(crate) struct App {
     pub(crate) harness_process: Option<process::Child>,
     pub(crate) tab: Tab,
     pub(crate) mode: Mode,
-    pub(crate) selected_field: usize,
+    pub(crate) selected_setting: usize,
     pub(crate) form: ConfigForm,
+    pub(crate) agents: Vec<DetectedAgent>,
     pub(crate) status: Option<(String, bool)>,
     pub(crate) spinner: usize,
     pub(crate) logs: LogBuffer,
     pub(crate) daemon: Option<Daemon>,
+    pending_browser: Option<String>,
     last_refresh: Option<Instant>,
     quit: bool,
 }
@@ -165,6 +338,7 @@ impl App {
         let config = Config::load(config_path)?;
         let credentials = FileCredentialStore::for_config(config_path).load()?;
         let form = ConfigForm::load(config_path)?;
+        let agents = agent_catalog::discover(&PathCommands::discover());
         Ok(Self {
             config_path: config_path.to_owned(),
             config,
@@ -174,12 +348,14 @@ impl App {
             harness_process: None,
             tab: Tab::Overview,
             mode: Mode::Normal,
-            selected_field: 0,
+            selected_setting: 0,
             form,
+            agents,
             status: None,
             spinner: 0,
             logs,
             daemon: None,
+            pending_browser: None,
             last_refresh: None,
             quit: false,
         })
@@ -191,16 +367,22 @@ impl App {
     }
 
     /// (Re)start the serving core on the current config and credential.
-    async fn restart_daemon(&mut self) {
+    async fn restart_daemon(&mut self) -> bool {
         if let Some(daemon) = self.daemon.take() {
             daemon.stop().await;
         }
         let Some(credentials) = self.credentials.clone() else {
-            return;
+            return false;
         };
         match Daemon::start(self.config.clone(), credentials, &self.config_path).await {
-            Ok(daemon) => self.daemon = Some(daemon),
-            Err(error) => self.fail(format!("daemon failed to start: {error}")),
+            Ok(daemon) => {
+                self.daemon = Some(daemon);
+                true
+            }
+            Err(error) => {
+                self.fail(format!("daemon failed to start: {error}"));
+                false
+            }
         }
     }
 
@@ -281,7 +463,7 @@ impl App {
                 // The approval page pre-fills the code, so opening the
                 // browser is usually the whole remaining gesture.
                 let url = self.config.macro_api.pairing_approval_url(&created.code);
-                open_in_browser(&url);
+                self.pending_browser = Some(url);
                 self.mode = Mode::Pairing {
                     created,
                     last_poll: Instant::now(),
@@ -383,11 +565,7 @@ impl App {
                 KeyCode::Char('o') => {
                     let url = self.pairing_url();
                     if let Some(url) = url {
-                        if open_in_browser(&url) {
-                            self.ok("opened the approval page");
-                        } else {
-                            self.fail("could not open a browser; use the printed link");
-                        }
+                        self.pending_browser = Some(url);
                     }
                 }
                 KeyCode::Char('c') => {
@@ -405,12 +583,13 @@ impl App {
                 }
                 _ => {}
             },
-            Mode::EditField { .. } => self.on_edit_key(key).await,
+            Mode::EditSetting { .. } => self.on_edit_key(key).await,
+            Mode::AgentPicker { .. } => self.on_agent_picker_key(key).await,
         }
     }
 
     async fn on_edit_key(&mut self, key: KeyEvent) {
-        let Mode::EditField { index, buffer } = &mut self.mode else {
+        let Mode::EditSetting { index, buffer } = &mut self.mode else {
             return;
         };
         match key.code {
@@ -430,19 +609,48 @@ impl App {
     }
 
     async fn commit_edit(&mut self, index: usize, input: String) {
-        let field = &FIELDS[index];
-        if let Err(message) = self.form.apply(field, &input) {
+        let setting = SETTINGS[index];
+        if let Err(message) = self.form.apply_text(setting, &input) {
             return self.fail(message);
         }
+        self.save_config(setting == Setting::Workspace).await;
+    }
+
+    async fn on_agent_picker_key(&mut self, key: KeyEvent) {
+        let Mode::AgentPicker { selected } = &mut self.mode else {
+            return;
+        };
+        match key.code {
+            KeyCode::Esc => self.mode = Mode::Normal,
+            KeyCode::Up | KeyCode::Char('k') => *selected = selected.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => {
+                *selected = (*selected + 1).min(self.agents.len().saturating_sub(1));
+            }
+            KeyCode::Enter => {
+                let agent = self.agents.get(*selected).cloned();
+                self.mode = Mode::Normal;
+                if let Some(agent) = agent {
+                    self.form.apply_agent(&agent);
+                    self.save_config(true).await;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    async fn save_config(&mut self, apply_now: bool) {
         match self.form.save() {
             Ok(()) => match Config::load(&self.config_path) {
                 Ok(config) => {
                     self.config = config;
                     // The core reads config at start, so a save while serving
                     // means a restart to apply it.
-                    if self.serving() {
-                        self.restart_daemon().await;
-                        self.ok("saved and applied");
+                    if apply_now && self.paired() {
+                        if self.restart_daemon().await {
+                            self.ok("saved and applied");
+                        }
+                    } else if !apply_now && self.paired() {
+                        self.ok("saved; applies at next pairing");
                     } else {
                         self.ok("saved");
                     }
@@ -464,44 +672,52 @@ impl App {
         match key.code {
             KeyCode::Char('q') => self.quit = true,
             KeyCode::Tab => self.tab = self.tab.next(),
+            KeyCode::Right | KeyCode::Char('l') => self.tab = self.tab.next(),
+            KeyCode::Left | KeyCode::Char('h') => self.tab = self.tab.previous(),
             KeyCode::Char('1') => self.tab = Tab::Overview,
             KeyCode::Char('2') => self.tab = Tab::Sessions,
             KeyCode::Char('3') => self.tab = Tab::Config,
             KeyCode::Char('4') => self.tab = Tab::Logs,
             KeyCode::Char('r') => {
+                self.agents = agent_catalog::discover(&PathCommands::discover());
                 self.last_refresh = None;
                 self.maybe_refresh().await;
             }
             KeyCode::Char('p') => self.start_pairing().await,
             KeyCode::Char('d') if self.paired() => self.mode = Mode::ConfirmDelete,
             KeyCode::Up | KeyCode::Char('k') if self.tab == Tab::Config => {
-                self.selected_field = self.selected_field.saturating_sub(1);
+                self.selected_setting = self.selected_setting.saturating_sub(1);
             }
             KeyCode::Down | KeyCode::Char('j') if self.tab == Tab::Config => {
-                self.selected_field = (self.selected_field + 1).min(FIELDS.len() - 1);
+                self.selected_setting = (self.selected_setting + 1).min(SETTINGS.len() - 1);
             }
-            KeyCode::Enter if self.tab == Tab::Config => {
-                let field = &FIELDS[self.selected_field];
-                if field.kind == FieldKind::Scope {
-                    // Toggle rather than type: the only values are the two.
-                    let next = if self.form.display(field) == "team" {
-                        "private"
+            KeyCode::Enter if self.tab == Tab::Config => match SETTINGS[self.selected_setting] {
+                Setting::Agent => {
+                    if self.agents.is_empty() {
+                        self.fail("No supported ACP agents were found on PATH");
                     } else {
-                        "team"
-                    };
-                    if self.form.apply(field, next).is_ok() {
-                        match self.form.save() {
-                            Ok(()) => self.ok(format!("scope: {next} (applies at next pairing)")),
-                            Err(error) => self.fail(format!("{error}")),
-                        }
+                        let selected = self
+                            .agents
+                            .iter()
+                            .position(|agent| {
+                                agent.launch.command == self.config.harness.command
+                                    && agent.launch.args == self.config.harness.args
+                            })
+                            .unwrap_or(0);
+                        self.mode = Mode::AgentPicker { selected };
                     }
-                } else {
-                    self.mode = Mode::EditField {
-                        index: self.selected_field,
-                        buffer: self.form.display(field),
+                }
+                Setting::Scope => {
+                    self.form.toggle_scope(&self.config);
+                    self.save_config(false).await;
+                }
+                setting @ (Setting::Workspace | Setting::Name) => {
+                    self.mode = Mode::EditSetting {
+                        index: self.selected_setting,
+                        buffer: self.form.edit_value(setting),
                     };
                 }
-            }
+            },
             _ => {}
         }
     }
@@ -509,8 +725,6 @@ impl App {
 
 /// Run the control panel - and the daemon inside it - until the user quits.
 pub async fn run(config_path: &Path, logs: LogBuffer) -> rootcause::Result<()> {
-    let mut app = App::load(config_path, logs)?;
-
     let (input_tx, mut input_rx) = tokio::sync::mpsc::unbounded_channel();
     // A dedicated thread owns the blocking crossterm read; the loop below
     // stays async and free to poll the network.
@@ -523,23 +737,90 @@ pub async fn run(config_path: &Path, logs: LogBuffer) -> rootcause::Result<()> {
     });
 
     let mut terminal = ratatui::init();
-    let outcome = run_loop(&mut terminal, &mut app, &mut input_rx).await;
+    let quickstarted = if config_path.exists() {
+        false
+    } else {
+        match run_quickstart(&mut terminal, config_path, &mut input_rx).await {
+            Ok(created) => created,
+            Err(error) => {
+                ratatui::restore();
+                return Err(error);
+            }
+        }
+    };
+    if !config_path.exists() {
+        ratatui::restore();
+        return Ok(());
+    }
+    let mut app = match App::load(config_path, logs) {
+        Ok(app) => app,
+        Err(error) => {
+            ratatui::restore();
+            return Err(error);
+        }
+    };
+    let outcome = run_loop(&mut terminal, &mut app, &mut input_rx, quickstarted).await;
     ratatui::restore();
     outcome
 }
 
-/// Open a URL in the default browser, reporting whether the spawn worked.
-fn open_in_browser(url: &str) -> bool {
-    #[cfg(target_os = "macos")]
-    let launcher = "open";
-    #[cfg(not(target_os = "macos"))]
-    let launcher = "xdg-open";
-    std::process::Command::new(launcher)
-        .arg(url)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .is_ok()
+async fn run_quickstart(
+    terminal: &mut ratatui::DefaultTerminal,
+    config_path: &Path,
+    input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
+) -> rootcause::Result<bool> {
+    let mut quickstart = Quickstart::new()?;
+    loop {
+        terminal
+            .draw(|frame| ui::render_quickstart(frame, &quickstart, config_path))
+            .context("failed to draw Quickstart")?;
+        let Some(event) = input.recv().await else {
+            return Ok(false);
+        };
+        let TermEvent::Key(key) = event else {
+            continue;
+        };
+        match quickstart.on_key(key) {
+            QuickstartAction::Continue => {}
+            QuickstartAction::Quit => return Ok(false),
+            QuickstartAction::Create => {
+                let Some(agent) = quickstart.agents.get(quickstart.selected_agent) else {
+                    quickstart.status = Some((
+                        "Install a supported ACP agent before continuing".to_owned(),
+                        true,
+                    ));
+                    continue;
+                };
+                let workspace = match std::path::absolute(&quickstart.workspace) {
+                    Ok(workspace) => workspace,
+                    Err(error) => {
+                        quickstart.status =
+                            Some((format!("Could not resolve the workspace: {error}"), true));
+                        continue;
+                    }
+                };
+                if !workspace.is_dir() {
+                    quickstart.status = Some((
+                        format!("Workspace does not exist: {}", workspace.display()),
+                        true,
+                    ));
+                    continue;
+                }
+                match ConfigForm::create(config_path, agent, &workspace) {
+                    Ok(()) => {
+                        if quickstart.scope_team {
+                            let config = Config::load(config_path)?;
+                            let mut form = ConfigForm::load(config_path)?;
+                            form.toggle_scope(&config);
+                            form.save()?;
+                        }
+                        return Ok(true);
+                    }
+                    Err(error) => quickstart.status = Some((format!("{error}"), true)),
+                }
+            }
+        }
+    }
 }
 
 /// Put text on the system clipboard, reporting whether a tool was found.
@@ -574,6 +855,7 @@ async fn run_loop(
     terminal: &mut ratatui::DefaultTerminal,
     app: &mut App,
     input: &mut tokio::sync::mpsc::UnboundedReceiver<TermEvent>,
+    pair_on_start: bool,
 ) -> rootcause::Result<()> {
     let mut tick = tokio::time::interval(TICK);
     // Paired already? Start serving before the first frame.
@@ -581,6 +863,10 @@ async fn run_loop(
         app.restart_daemon().await;
     }
     app.refresh().await;
+    if pair_on_start {
+        app.start_pairing().await;
+        open_pending_browser(app);
+    }
 
     loop {
         terminal
@@ -594,6 +880,7 @@ async fn run_loop(
                     Some(_) => {}
                     None => return Ok(()),
                 }
+                open_pending_browser(app);
             }
             _ = tick.tick() => {
                 app.spinner = app.spinner.wrapping_add(1);
@@ -608,5 +895,26 @@ async fn run_loop(
             app.stop_daemon().await;
             return Ok(());
         }
+    }
+}
+
+fn open_pending_browser(app: &mut App) {
+    let Some(url) = app.pending_browser.take() else {
+        return;
+    };
+    let helper = std::env::current_exe().and_then(|executable| {
+        std::process::Command::new(executable)
+            .args(["--open-url", &url])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map(|_| ())
+    });
+    match helper {
+        Ok(()) => app.ok("sent the approval page to your browser"),
+        Err(error) => app.fail(format!(
+            "could not launch a browser ({error}); use the link"
+        )),
     }
 }

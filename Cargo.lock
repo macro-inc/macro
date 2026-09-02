@@ -3566,6 +3566,7 @@ dependencies = [
  "futures",
  "harness_id",
  "harnesses",
+ "macro_env_var",
  "macro_event_broker",
  "macro_user_id",
  "macro_uuid",
@@ -3576,6 +3577,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.2",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -3586,6 +3588,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "webbrowser",
  "webhook",
  "workspace-hack",
 ]
@@ -17761,6 +17764,22 @@ dependencies = [
  "phf_codegen 0.13.1",
  "string_cache 0.9.0",
  "string_cache_codegen 0.6.1",
+]
+
+[[package]]
+name = "webbrowser"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f00bb839c1cf1e3036066614cbdcd035ecf215206691ea646aa3c60a24f68f2"
+dependencies = [
+ "core-foundation 0.10.1",
+ "jni 0.21.1",
+ "log",
+ "ndk-context",
+ "objc2",
+ "objc2-foundation",
+ "url",
+ "web-sys",
 ]
 
 [[package]]

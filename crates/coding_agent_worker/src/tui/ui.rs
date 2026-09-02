@@ -11,8 +11,9 @@ use ratatui::widgets::{
     Wrap,
 };
 
-use super::config_form::FIELDS;
-use super::{App, Mode, Tab};
+use super::agent_catalog::DetectedAgent;
+use super::config_form::SETTINGS;
+use super::{App, Mode, Quickstart, QuickstartMode, Tab};
 
 const ACCENT: Color = Color::Cyan;
 const OK: Color = Color::Green;
@@ -45,8 +46,99 @@ pub(crate) fn render(frame: &mut Frame, app: &App) {
     match &app.mode {
         Mode::ConfirmDelete => render_confirm_delete(frame, app),
         Mode::Pairing { created, .. } => render_pairing(frame, app, created),
-        Mode::Normal | Mode::EditField { .. } => {}
+        Mode::AgentPicker { selected } => render_agent_picker(frame, &app.agents, *selected),
+        Mode::Normal | Mode::EditSetting { .. } => {}
     }
+}
+
+pub(crate) fn render_quickstart(
+    frame: &mut Frame,
+    setup: &Quickstart,
+    config_path: &std::path::Path,
+) {
+    let area = centered(70, 18, frame.area());
+    frame.render_widget(Clear, area);
+    let editing = match &setup.mode {
+        QuickstartMode::EditWorkspace { buffer } => Some(buffer.as_str()),
+        _ => None,
+    };
+    let agent = setup
+        .agents
+        .get(setup.selected_agent)
+        .map(|agent| agent.name)
+        .unwrap_or("No supported agent found");
+    let rows = [
+        ("Agent", agent.to_owned()),
+        (
+            "Workspace",
+            editing.unwrap_or(setup.workspace.as_str()).to_owned(),
+        ),
+        (
+            "Access",
+            if setup.scope_team { "Team" } else { "Private" }.to_owned(),
+        ),
+        ("", "Create and pair".to_owned()),
+    ];
+    let mut lines = vec![
+        Line::raw(""),
+        Line::styled(
+            "Connect an installed coding agent to Macro.",
+            Style::new().fg(DIM),
+        ),
+        Line::raw(""),
+    ];
+    for (index, (label, value)) in rows.into_iter().enumerate() {
+        let selected = index == setup.selected_row;
+        let marker = if selected { "▸ " } else { "  " };
+        let style = if selected {
+            Style::new().fg(ACCENT).bold()
+        } else {
+            Style::new()
+        };
+        if index == 3 {
+            lines.push(Line::styled(format!("{marker}{value}"), style));
+        } else {
+            lines.push(Line::from(vec![
+                Span::styled(format!("{marker}{label:<14}"), Style::new().fg(DIM)),
+                Span::styled(value, style),
+            ]));
+        }
+        lines.push(Line::raw(""));
+    }
+    lines.push(Line::styled(
+        format!("  Config  {}", config_path.display()),
+        Style::new().fg(DIM),
+    ));
+    if let Some((message, is_error)) = &setup.status {
+        lines.push(Line::styled(
+            format!("  {message}"),
+            Style::new().fg(if *is_error { ERR } else { OK }),
+        ));
+    }
+    frame.render_widget(
+        Paragraph::new(lines).block(modal("Welcome to macrod", ACCENT)),
+        area,
+    );
+
+    if let QuickstartMode::AgentPicker { selected } = setup.mode {
+        render_agent_picker(frame, &setup.agents, selected);
+    }
+
+    let hint = match setup.mode {
+        QuickstartMode::EditWorkspace { .. } => " Enter save   Esc cancel ",
+        QuickstartMode::AgentPicker { .. } => " ↑↓/jk select   Enter choose   Esc cancel ",
+        QuickstartMode::Normal => " ↑↓/jk select   Enter change   r rescan   q quit ",
+    };
+    let footer = Rect {
+        x: area.x,
+        y: area.bottom(),
+        width: area.width,
+        height: 1,
+    };
+    frame.render_widget(
+        Paragraph::new(Line::styled(hint, Style::new().fg(DIM))).alignment(Alignment::Center),
+        footer,
+    );
 }
 
 fn render_header(frame: &mut Frame, app: &App, area: Rect) {
@@ -271,15 +363,15 @@ fn render_sessions(frame: &mut Frame, app: &App, area: Rect) {
 
 fn render_config(frame: &mut Frame, app: &App, area: Rect) {
     let editing = match &app.mode {
-        Mode::EditField { index, buffer } => Some((*index, buffer.as_str())),
+        Mode::EditSetting { index, buffer } => Some((*index, buffer.as_str())),
         _ => None,
     };
 
-    let items: Vec<ListItem> = FIELDS
+    let items: Vec<ListItem> = SETTINGS
         .iter()
         .enumerate()
-        .map(|(index, definition)| {
-            let selected = index == app.selected_field;
+        .map(|(index, setting)| {
+            let selected = index == app.selected_setting;
             let marker = if selected { "▸ " } else { "  " };
             let label_style = if selected {
                 Style::new().fg(ACCENT).bold()
@@ -292,7 +384,7 @@ fn render_config(frame: &mut Frame, app: &App, area: Rect) {
                     Style::new().fg(Color::Black).bg(ACCENT),
                 ),
                 _ => {
-                    let shown = app.form.display(definition);
+                    let shown = app.form.display(*setting, &app.config);
                     if shown.is_empty() {
                         Span::styled("(unset)", Style::new().fg(DIM).italic())
                     } else {
@@ -301,7 +393,7 @@ fn render_config(frame: &mut Frame, app: &App, area: Rect) {
                 }
             };
             ListItem::new(Line::from(vec![
-                Span::styled(format!("{marker}{:<22}", definition.label), label_style),
+                Span::styled(format!("{marker}{:<16}", setting.label()), label_style),
                 value,
             ]))
         })
@@ -309,9 +401,46 @@ fn render_config(frame: &mut Frame, app: &App, area: Rect) {
 
     frame.render_widget(
         List::new(items).block(card(format!(
-            "macro.toml  ·  {}",
+            "macrod.toml  ·  {}",
             app.config_path.display()
         ))),
+        area,
+    );
+}
+
+fn render_agent_picker(frame: &mut Frame, agents: &[DetectedAgent], selected: usize) {
+    let height = (agents.len() as u16 + 6).clamp(8, 18);
+    let area = centered(62, height, frame.area());
+    frame.render_widget(Clear, area);
+    let mut lines = vec![
+        Line::styled(
+            "Only agents whose complete launch requirements were found are shown.",
+            Style::new().fg(DIM),
+        ),
+        Line::raw(""),
+    ];
+    if agents.is_empty() {
+        lines.push(Line::styled(
+            "No supported ACP agents found on PATH.",
+            Style::new().fg(WARN),
+        ));
+    } else {
+        lines.extend(agents.iter().enumerate().map(|(index, agent)| {
+            let marker = if index == selected { "▸ " } else { "  " };
+            let style = if index == selected {
+                Style::new().fg(ACCENT).bold()
+            } else {
+                Style::new()
+            };
+            let detail = agent.note.unwrap_or("");
+            Line::from(vec![
+                Span::styled(format!("{marker}{:<20}", agent.name), style),
+                Span::styled(detail, Style::new().fg(DIM)),
+            ])
+        }));
+    }
+    frame.render_widget(
+        Paragraph::new(lines).block(modal("Choose an installed agent", ACCENT)),
         area,
     );
 }
@@ -352,7 +481,10 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
         )
     } else {
         let hints: &[(&str, &str)] = match (&app.mode, app.tab) {
-            (Mode::EditField { .. }, _) => &[("enter", "save"), ("esc", "cancel")],
+            (Mode::EditSetting { .. }, _) => &[("enter", "save"), ("esc", "cancel")],
+            (Mode::AgentPicker { .. }, _) => {
+                &[("↑↓/jk", "select"), ("enter", "choose"), ("esc", "cancel")]
+            }
             (Mode::ConfirmDelete, _) => &[("y", "remove"), ("esc", "keep")],
             (Mode::Pairing { .. }, _) => {
                 &[("o", "open link"), ("c", "copy code"), ("esc", "abandon")]
@@ -360,14 +492,14 @@ fn render_footer(frame: &mut Frame, app: &App, area: Rect) {
             (_, Tab::Config) => &[
                 ("↑↓", "select"),
                 ("enter", "edit/toggle"),
-                ("tab", "next tab"),
+                ("←→/hl", "tabs"),
                 ("q", "quit"),
             ],
             _ => &[
                 ("p", "pair"),
                 ("d", "remove harness"),
                 ("r", "refresh"),
-                ("tab", "next tab"),
+                ("←→/hl", "tabs"),
                 ("q", "quit"),
             ],
         };
@@ -451,13 +583,10 @@ fn render_pairing(
         ]),
         Line::raw(""),
         Line::styled(
-            "  The browser opened to the approval page with the code",
+            "  Open the approval page and confirm the code matches,",
             Style::new().fg(DIM),
         ),
-        Line::styled(
-            "  pre-filled - confirm it matches, then approve.",
-            Style::new().fg(DIM),
-        ),
+        Line::styled("  then approve this daemon.", Style::new().fg(DIM)),
         Line::raw(""),
         Line::from(vec![
             Span::raw("  "),
