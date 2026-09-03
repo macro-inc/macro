@@ -109,14 +109,17 @@ export function useTasksDataSource(
     return selected;
   };
 
-  const baseTasks = createMemo(() => {
-    if (query.isPlaceholderData) return [];
+  const baseTasks = createMemo<TaskEntityWithProperties[]>((previous) => {
+    if (query.isLoading) return previous;
+    if (query.isPlaceholderData && previous.length > 0) return previous;
+
     return sortItems(
       transformEntities(query.data?.entities ?? []),
       state.sort,
       TASK_SORT_DEFINITIONS
     );
-  });
+  }, []);
+
   const { entityPool } = useSearchContext();
   const localPool = createMemo(() => {
     if (!state.search.trim()) return [];
@@ -146,7 +149,14 @@ export function useTasksDataSource(
 
   const groupedQueries = createGroupedSoupQueries({
     initialPage: createMemo(() => {
-      if (search.isSearching() || query.isPlaceholderData) return;
+      if (
+        search.isSearching() ||
+        query.isLoading ||
+        query.isPlaceholderData
+      ) {
+        return;
+      }
+
       const groups = query.data?.groups;
       const items = query.data?.itemsById;
       if (!groups || !items) return;
@@ -191,7 +201,14 @@ export function useTasksDataSource(
     return results;
   }, []);
 
-  const rows = createMemo(() => {
+  const rows = createMemo<SoupRow<TaskEntityWithProperties>[]>((previous) => {
+    if (
+      !search.isSearching() &&
+      (query.isLoading || (query.isPlaceholderData && previous.length > 0))
+    ) {
+      return previous;
+    }
+
     const groups = search.isSearching() ? undefined : query.data?.groups;
     const currentTasks = tasks();
     if (!groups || state.groupBy === 'none') {
@@ -232,7 +249,7 @@ export function useTasksDataSource(
     }
 
     return buildGroupedSoupRows(taskGroups);
-  });
+  }, []);
 
   const items = createMemo(() =>
     rows().filter((row) => isSoupRowVisible(row, options.isGroupExpanded))
@@ -242,11 +259,11 @@ export function useTasksDataSource(
 
   const isLoading = () => {
     if (!search.isSearching()) {
-      return query.isLoading || query.isPlaceholderData;
+      return query.isLoading && rows().length === 0;
     }
     if (tasks().length > 0) return false;
     if (usesServiceSearch()) return search.isLoading();
-    return query.isLoading || query.isPlaceholderData;
+    return query.isLoading;
   };
 
   const isFetching = () => {
