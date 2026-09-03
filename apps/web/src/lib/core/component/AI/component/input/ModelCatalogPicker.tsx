@@ -132,6 +132,11 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
                     {(option) => (
                       <ModelRow
                         option={option}
+                        hint={
+                          option.group !== option.label
+                            ? option.group
+                            : undefined
+                        }
                         selected={option.id === props.value}
                         onSelect={() => props.onSelect(option.id)}
                       />
@@ -191,7 +196,9 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
               {(option) => (
                 <ModelRow
                   option={option}
-                  hint={option.group}
+                  hint={
+                    option.group !== option.label ? option.group : undefined
+                  }
                   selected={option.id === props.value}
                   onSelect={() => props.onSelect(option.id)}
                 />
