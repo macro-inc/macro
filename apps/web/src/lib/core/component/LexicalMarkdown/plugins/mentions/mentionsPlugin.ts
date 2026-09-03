@@ -349,22 +349,6 @@ function registerMentionsPlugin(
   }
 
   const { menu, onCreateMention, onRemoveMention, sourceDocumentId } = props;
-  // #region agent log
-  void fetch('/__agent-debug-log', {
-    method: 'POST',
-    body: JSON.stringify({
-      hypothesisId: 'E,F',
-      location: 'mentionsPlugin.ts:registerMentionsPlugin',
-      message: 'mentions plugin registered',
-      data: {
-        namespace: editor._config.namespace,
-        hasCreateCallback: Boolean(onCreateMention),
-        hasRemoveCallback: Boolean(onRemoveMention),
-      },
-      timestamp: Date.now(),
-    }),
-  });
-  // #endregion
 
   /**
    * There is a Lexical bug(?) where keyboard deleting a node selection does not prevent the delete
@@ -815,23 +799,6 @@ function registerMentionsPlugin(
     editor.registerMutationListener(
       UserMentionNode,
       (mutatedNodes, { prevEditorState }) => {
-        // #region agent log
-        void fetch('/__agent-debug-log', {
-          method: 'POST',
-          body: JSON.stringify({
-            hypothesisId: 'E,F,G,H',
-            location: 'mentionsPlugin.ts:UserMentionNode listener',
-            message: 'user mention mutations',
-            data: {
-              namespace: editor._config.namespace,
-              mutations: Array.from(mutatedNodes.values()),
-              hasCreateCallback: Boolean(onCreateMention),
-              hasRemoveCallback: Boolean(onRemoveMention),
-            },
-            timestamp: Date.now(),
-          }),
-        });
-        // #endregion
         for (const [nodeKey, mutation] of mutatedNodes) {
           if (mutation === 'created') {
             const node = nodeByKey(
@@ -839,21 +806,6 @@ function registerMentionsPlugin(
               nodeKey
             ) as UserMentionNode;
             if (node && onCreateMention) {
-              // #region agent log
-              void fetch('/__agent-debug-log', {
-                method: 'POST',
-                body: JSON.stringify({
-                  hypothesisId: 'E,F,H',
-                  location: 'mentionsPlugin.ts:UserMentionNode created',
-                  message: 'created node resolved',
-                  data: {
-                    namespace: editor._config.namespace,
-                    botPrincipal: node.getUserId().startsWith('bot|'),
-                  },
-                  timestamp: Date.now(),
-                }),
-              });
-              // #endregion
               onCreateMention({
                 itemType: 'user',
                 itemId: node.getUserId(),
