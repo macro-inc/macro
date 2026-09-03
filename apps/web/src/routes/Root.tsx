@@ -198,17 +198,6 @@ const rootPreload: RoutePreloadFunc = async (args) => {
       });
       // #endregion
     });
-    void import('./WorkspaceProviders').then(() => {
-      // #region agent log
-      devPerfLog('D', 'Root.tsx:199', 'workspace providers chunk prefetched', {
-        pathname: window.location.pathname,
-        elapsedMs:
-          (typeof performance !== 'undefined'
-            ? performance.now()
-            : Date.now()) - prefetchStarted,
-      });
-      // #endregion
-    });
   }
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
