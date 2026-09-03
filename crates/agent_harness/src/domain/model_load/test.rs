@@ -82,6 +82,17 @@ fn unsupported() -> Result<RawModelProbe, ModelProbeError> {
     Ok(RawModelProbe::Unsupported)
 }
 
+struct HangingCursor;
+
+impl CursorModelProbe for HangingCursor {
+    async fn probe(
+        &self,
+        _caller: &MacroUserIdStr<'static>,
+    ) -> Result<RawModelProbe, ModelProbeError> {
+        std::future::pending().await
+    }
+}
+
 #[tokio::test]
 async fn macrod_authorizes_before_dispatch_and_projects_the_catalog() {
     let in_memory = Probe::new(unsupported);
@@ -162,4 +173,27 @@ async fn unsupported_provider_returns_the_supported_response_shape() {
     assert_eq!(result, AgentModels::unsupported());
     assert_eq!(service.in_memory.calls(), 1);
     assert_eq!(service.cursor.calls(), 0);
+}
+
+#[tokio::test]
+async fn cursor_probe_obeys_the_service_timeout() {
+    let service = AgentModelsServiceImpl::new(
+        Access(true),
+        Probe::new(unsupported),
+        HangingCursor,
+        Probe::new(unsupported),
+        Duration::from_millis(1),
+    );
+
+    let result = service
+        .load(
+            caller(),
+            LoadAgentModels {
+                harness: ModelHarness::Cursor,
+                harness_id: None,
+            },
+        )
+        .await;
+
+    assert!(matches!(result, Err(LoadAgentModelsError::Timeout)));
 }
