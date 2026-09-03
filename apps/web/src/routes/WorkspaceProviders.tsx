@@ -22,6 +22,7 @@ import { IpadUnsupportedDialog } from '@core/mobile/IpadUnsupportedDialog';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
+import { devPerfLog } from '@core/util/devPerf';
 import {
   BrowserNotificationModal,
   createNotificationSource,
@@ -40,6 +41,7 @@ import {
   createEffect,
   createSignal,
   lazy,
+  onMount,
   type ParentProps,
   Show,
   Suspense,
@@ -117,6 +119,7 @@ function InitialInteractiveOnboardingModal() {
   const onboardingV4 = useOnboardingV4Flag();
   const [open, setOpen] = createSignal(true);
   const [onboardingStarted, setOnboardingStarted] = createSignal(false);
+  let lastOnboardingState: string | undefined;
 
   const modalOpen = () =>
     open() &&
@@ -130,6 +133,27 @@ function InitialInteractiveOnboardingModal() {
     if (modalOpen()) {
       setOnboardingStarted(true);
     }
+  });
+
+  createEffect(() => {
+    const nextState = modalOpen() ? 'open' : 'skipped';
+    if (lastOnboardingState === nextState) return;
+    lastOnboardingState = nextState;
+    // #region agent log
+    devPerfLog(
+      'F',
+      'WorkspaceProviders.tsx:139',
+      'interactive onboarding state',
+      {
+        pathname: window.location.pathname,
+        state: nextState,
+        authenticated: userInfoQuery.data?.authenticated,
+        tutorialComplete: userInfoQuery.data?.tutorialComplete,
+        onboardingLoading: onboardingV4().loading,
+        onboardingEnabled: onboardingV4().enabled,
+      }
+    );
+    // #endregion
   });
 
   let emailInitForUserId: string | undefined;
@@ -166,6 +190,19 @@ function InitialInteractiveOnboardingModal() {
 }
 
 export default function WorkspaceProviders(props: ParentProps) {
+  onMount(() => {
+    // #region agent log
+    devPerfLog(
+      'E',
+      'WorkspaceProviders.tsx:183',
+      'workspace providers mounted',
+      {
+        pathname: window.location.pathname,
+      }
+    );
+    // #endregion
+  });
+
   return (
     <TeamContextProvider>
       <BrowserNotificationModal />

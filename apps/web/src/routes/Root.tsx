@@ -25,9 +25,11 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import {
   getLoginCookieOptions,
+  hasLoginCookie,
   syncLoginStorage,
   updateCookie,
 } from '@core/util/cookies';
+import { devPerfLog } from '@core/util/devPerf';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
@@ -114,7 +116,26 @@ const TeamInviteAcceptance = lazy(() =>
 const TaskRoute = lazy(() =>
   import('./TaskRoute').then((module) => ({ default: module.TaskRoute }))
 );
-const WorkspaceProviders = lazy(() => import('./WorkspaceProviders'));
+const WorkspaceProviders = lazy(() => {
+  const started =
+    typeof performance !== 'undefined' ? performance.now() : Date.now();
+  // #region agent log
+  devPerfLog('D', 'Root.tsx:117', 'workspace providers import start', {
+    pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+  });
+  // #endregion
+  return import('./WorkspaceProviders').then((module) => {
+    // #region agent log
+    devPerfLog('D', 'Root.tsx:123', 'workspace providers import resolved', {
+      pathname: typeof window !== 'undefined' ? window.location.pathname : '',
+      elapsedMs:
+        (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+        started,
+    });
+    // #endregion
+    return module;
+  });
+});
 
 const EMAIL_CALLBACK_PATH = '/email-signup-callback';
 const EMAIL_LINK_CALLBACK_PATH = '/inbox-link-callback';
@@ -154,6 +175,15 @@ function useSyncLoginCookie() {
 }
 
 const rootPreload: RoutePreloadFunc = async (args) => {
+  const started =
+    typeof performance !== 'undefined' ? performance.now() : Date.now();
+  // #region agent log
+  devPerfLog('A', 'Root.tsx:176', 'root preload start', {
+    pathname: window.location.pathname,
+    nextPathname: args.location.pathname,
+    hasLoginCookie: hasLoginCookie(),
+  });
+  // #endregion
   await prefetchUserInfo();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
@@ -191,6 +221,15 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     url.pathname = transformedPathname;
     window.history.replaceState(args.location.state, '', url);
   }
+  // #region agent log
+  devPerfLog('A', 'Root.tsx:214', 'root preload end', {
+    pathname: window.location.pathname,
+    elapsedMs:
+      (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
+      started,
+    hasLoginCookie: hasLoginCookie(),
+  });
+  // #endregion
 };
 
 function NotFound() {
@@ -450,6 +489,32 @@ const clearBodyInlineStyleColor = () => {
 
 function MaybeWorkspaceShell(props: ParentProps) {
   const isAuthenticated = useIsAuthenticated();
+
+  let lastAuthState: boolean | undefined;
+  createEffect(() => {
+    const authState = isAuthenticated();
+    if (authState === lastAuthState) return;
+    lastAuthState = authState;
+    // #region agent log
+    devPerfLog('C', 'Root.tsx:495', 'workspace shell auth state', {
+      pathname: window.location.pathname,
+      authenticated: authState,
+    });
+    // #endregion
+  });
+
+  let loggedAuthenticatedShell = false;
+  createEffect(() => {
+    if (isAuthenticated() !== true || loggedAuthenticatedShell) return;
+    loggedAuthenticatedShell = true;
+    // #region agent log
+    devPerfLog('C', 'Root.tsx:497', 'authenticated workspace shell path', {
+      pathname: window.location.pathname,
+      authenticated: isAuthenticated(),
+    });
+    // #endregion
+  });
+
   return (
     <Show when={isAuthenticated() === true} fallback={props.children}>
       <Suspense fallback={<LoadingBlock />}>

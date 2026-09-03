@@ -1,5 +1,5 @@
 import { exec, execSync } from 'node:child_process';
-import { unwatchFile, watchFile } from 'node:fs';
+import { appendFileSync, unwatchFile, watchFile } from 'node:fs';
 import { resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
 import { Features } from 'lightningcss';
@@ -41,6 +41,29 @@ function readGitBranchAsync(): Promise<string> {
 }
 
 const BOOT_GRAPH_READY = '[vite] boot graph ready';
+const DEBUG_LOG_PATH = '/opt/cursor/logs/debug.log';
+
+function appendDebugLog(
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown> = {}
+) {
+  try {
+    appendFileSync(
+      DEBUG_LOG_PATH,
+      `${JSON.stringify({
+        hypothesisId,
+        location,
+        message,
+        data,
+        timestamp: Date.now(),
+      })}\n`
+    );
+  } catch {
+    // best-effort dev-only instrumentation
+  }
+}
 
 function bootGraphWarmupPlugin(): Plugin {
   return {
@@ -48,11 +71,63 @@ function bootGraphWarmupPlugin(): Plugin {
     apply: 'serve',
     configureServer(server) {
       const urls = ['/src/index.css', '/src/index.tsx', '/src/routes/Root.tsx'];
+      let warmStartedAt = 0;
+      let warmFinishedAt = 0;
+      let firstAppRequestLogged = false;
+
+      server.middlewares.use((req, res, next) => {
+        if (
+          !firstAppRequestLogged &&
+          req.method === 'GET' &&
+          (req.url === '/app' || req.url?.startsWith('/app?'))
+        ) {
+          firstAppRequestLogged = true;
+          // #region agent log
+          appendDebugLog('W', 'vite.base.ts:62', 'first app html request', {
+            url: req.url,
+            warmStartedAt,
+            warmFinishedAt,
+            bootGraphWarm: warmFinishedAt > 0,
+          });
+          // #endregion
+        }
+        if (req.method === 'POST' && req.url === '/__macro_perf') {
+          let body = '';
+          req.on('data', (chunk) => {
+            body += chunk;
+          });
+          req.on('end', () => {
+            try {
+              const payload = JSON.parse(body) as Record<string, unknown>;
+              appendFileSync(DEBUG_LOG_PATH, `${JSON.stringify(payload)}\n`);
+              res.statusCode = 204;
+            } catch {
+              res.statusCode = 400;
+            }
+            res.end();
+          });
+          return;
+        }
+        next();
+      });
       server.httpServer?.once('listening', () => {
         const started = performance.now();
+        warmStartedAt = Date.now();
         Promise.all(urls.map((url) => server.warmupRequest(url)))
           .then(() => {
             const ms = Math.round(performance.now() - started);
+            warmFinishedAt = Date.now();
+            // #region agent log
+            appendDebugLog(
+              'W',
+              'vite.base.ts:90',
+              'boot graph warmup complete',
+              {
+                urls,
+                elapsedMs: ms,
+              }
+            );
+            // #endregion
             server.config.logger.info(`boot graph warmed in ${ms}ms`);
             // run_local / frontend.sh wait for this exact line before
             // telling the user the app is ready, so the first /app load

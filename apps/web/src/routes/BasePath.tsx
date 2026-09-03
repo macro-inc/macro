@@ -3,6 +3,7 @@ import { useCheckoutCompletionListener } from '@app/features/paywall/use-checkou
 import { clearLocalAuthSession } from '@core/auth/logout';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { hasLoginCookie } from '@core/util/cookies';
+import { devPerfLog } from '@core/util/devPerf';
 import { confirmSessionExpired } from '@core/util/fetchWithToken';
 import { consumePostLoginRedirect } from '@core/util/postLoginRedirect';
 import { thrownResultErrorHasCode } from '@core/util/result';
@@ -15,6 +16,7 @@ import { queryClient } from '@queries/client';
 import { Navigate, useSearchParams } from '@solidjs/router';
 import { Button } from '@ui';
 import {
+  createEffect,
   createResource,
   createSignal,
   Match,
@@ -101,10 +103,45 @@ export function BasePathComponent() {
   const userInfoQuery = useUserInfoQuery();
   const checkoutRefreshPending = useCheckoutCompletionListener();
 
+  const branch = () => {
+    if (userInfoQuery.isLoading || checkoutRefreshPending()) return 'loading';
+    if (
+      hasLoginCookie() &&
+      thrownResultErrorHasCode(userInfoQuery.error, 'UNAUTHORIZED')
+    ) {
+      return 'session-expired';
+    }
+    if (userInfoQuery.data?.authenticated) return 'authenticated';
+    if (shouldShowNativeSessionVerificationFallback(userInfoQuery)) {
+      return 'native-session-verification-fallback';
+    }
+    if (userInfoQuery.fetchStatus === 'paused') return 'paused';
+    if (hasLoginCookie() && userInfoQuery.isError) return 'cookie-backed-error';
+    return 'welcome';
+  };
+
   onMount(() => {
     if (searchParams.upgrade === 'true') {
       sessionStorage.setItem('showUpgradeModal', 'true');
     }
+  });
+
+  let lastBranch: string | undefined;
+  createEffect(() => {
+    const nextBranch = branch();
+    if (nextBranch === lastBranch) return;
+    lastBranch = nextBranch;
+    // #region agent log
+    devPerfLog('B', 'BasePath.tsx:129', 'base path branch selected', {
+      pathname: window.location.pathname,
+      branch: nextBranch,
+      hasLoginCookie: hasLoginCookie(),
+      isLoading: userInfoQuery.isLoading,
+      isError: userInfoQuery.isError,
+      fetchStatus: userInfoQuery.fetchStatus,
+      authenticated: userInfoQuery.data?.authenticated,
+    });
+    // #endregion
   });
 
   // check session storage for redirect url
