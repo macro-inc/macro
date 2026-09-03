@@ -1,5 +1,6 @@
 use super::*;
 use chrono::TimeZone;
+use models_properties::DataType;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::{EntityReference, EntityType, PropertyOwner};
 use models_soup::SoupProperty;
@@ -60,8 +61,7 @@ fn query() -> TaskListQuery {
     TaskListQuery {
         statuses: vec![],
         priorities: vec![],
-        assignee_user_id: None,
-        mine_user_id: None,
+        assignee: TaskAssigneeScope::Any,
         project_id: None,
         due_after: None,
         due_before: None,
@@ -168,6 +168,66 @@ fn sort_tasks_priority_urgent_first() {
 }
 
 #[test]
+fn sort_tasks_recency_and_due_put_missing_values_last() {
+    let base = TaskRecord {
+        id: Uuid::from_u128(1),
+        name: "a".into(),
+        status: None,
+        priority: None,
+        assignees: vec![],
+        due_date: None,
+        project_id: None,
+        tags: vec![],
+        created_at: ts(1),
+        updated_at: ts(1),
+        viewed_at: None,
+    };
+    let mut tasks = vec![
+        TaskRecord {
+            name: "never viewed".into(),
+            ..base.clone()
+        },
+        TaskRecord {
+            name: "viewed early".into(),
+            viewed_at: Some(ts(2)),
+            ..base.clone()
+        },
+        TaskRecord {
+            name: "viewed late".into(),
+            viewed_at: Some(ts(9)),
+            ..base.clone()
+        },
+    ];
+    sort_tasks(&mut tasks, TaskSort::RecentlyViewed);
+    assert_eq!(
+        tasks.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+        ["viewed late", "viewed early", "never viewed"]
+    );
+
+    let mut tasks = vec![
+        TaskRecord {
+            name: "no due".into(),
+            ..base.clone()
+        },
+        TaskRecord {
+            name: "due late".into(),
+            due_date: Some(ts(9)),
+            ..base.clone()
+        },
+        TaskRecord {
+            name: "due soon".into(),
+            due_date: Some(ts(2)),
+            ..base
+        },
+    ];
+    sort_tasks(&mut tasks, TaskSort::DueDate);
+    assert_eq!(
+        tasks.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
+        ["due soon", "due late", "no due"]
+    );
+}
+
+#[test]
 fn due_date_filter_requires_a_due_date_in_range() {
     let mut q = query();
     q.due_after = Some(ts(5));
@@ -228,7 +288,7 @@ fn search_matches_name_case_insensitively() {
 fn my_tasks_ast_filters_status_and_owner_or_assignee() {
     let q = TaskListQuery {
         statuses: OPEN_STATUSES.to_vec(),
-        mine_user_id: Some("macro|me@example.com".into()),
+        assignee: TaskAssigneeScope::Mine("macro|me@example.com".into()),
         ..query()
     };
     let ast = q.entity_filter_ast(None).expect("ast");
@@ -260,7 +320,7 @@ fn my_tasks_ast_filters_status_and_owner_or_assignee() {
 #[test]
 fn explicit_assignee_uses_property_filter_not_mine() {
     let q = TaskListQuery {
-        assignee_user_id: Some("macro|other@example.com".into()),
+        assignee: TaskAssigneeScope::Assignee("macro|other@example.com".into()),
         ..query()
     };
     let ast = q.entity_filter_ast(None).expect("ast");
@@ -276,7 +336,7 @@ fn explicit_assignee_uses_property_filter_not_mine() {
 #[test]
 fn none_priority_is_a_negated_priority_match() {
     let q = TaskListQuery {
-        priorities: vec![TaskPriorityFilter::Unset],
+        priorities: vec![None],
         ..query()
     };
     let ast = q.entity_filter_ast(None).expect("ast");

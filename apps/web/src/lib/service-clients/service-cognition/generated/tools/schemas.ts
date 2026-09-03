@@ -2555,30 +2555,13 @@ export const ListTasks = z.object({
   status: z
     .union([
       z.array(
-        z.any().superRefine((x, ctx) => {
-          const schemas = [
-            z.literal('not_started'),
-            z.literal('in_progress'),
-            z.literal('in_review'),
-            z.literal('completed'),
-            z.literal('canceled'),
-          ];
-          const errors = schemas.reduce<z.ZodError[]>(
-            (errors, schema) =>
-              ((result) => (result.error ? [...errors, result.error] : errors))(
-                schema.safeParse(x)
-              ),
-            []
-          );
-          if (schemas.length - errors.length !== 1) {
-            ctx.addIssue({
-              path: ctx.path,
-              code: 'invalid_union',
-              unionErrors: errors,
-              message: 'Invalid input: Should pass single schema',
-            });
-          }
-        })
+        z.enum([
+          'not_started',
+          'in_progress',
+          'in_review',
+          'completed',
+          'canceled',
+        ])
       ),
       z.null(),
     ])

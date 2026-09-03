@@ -12,22 +12,8 @@ import { createToolRenderer } from './ToolRenderer';
 type ListTasksResponse = NamedTool<'ListTasks', 'response'>['data'];
 type TaskListItem = ListTasksResponse['tasks'][number];
 
-const STATUS_LABEL: Record<string, string> = {
-  not_started: 'not started',
-  in_progress: 'in progress',
-  in_review: 'in review',
-  completed: 'completed',
-  canceled: 'canceled',
-};
-
-const SORT_LABEL: Record<string, string> = {
-  priority: 'priority',
-  status: 'status',
-  due_date: 'due date',
-  recently_updated: 'recently updated',
-  recently_viewed: 'recently viewed',
-  recently_created: 'recently created',
-};
+/** `in_progress` → `in progress`; the wire enums are already readable words. */
+const humanize = (value: string) => value.replaceAll('_', ' ');
 
 const formatDueDate = (iso: string) => {
   const date = new Date(iso);
@@ -38,9 +24,7 @@ const formatDueDate = (iso: string) => {
 const formatTaskFilters = (data: ListTasksCall) => {
   const parts: string[] = [data.scope === 'all' ? 'all tasks' : 'my tasks'];
   if (data.status?.length) {
-    parts.push(
-      data.status.map((status) => STATUS_LABEL[status] ?? status).join(', ')
-    );
+    parts.push(data.status.map(humanize).join(', '));
   }
   if (data.priority?.length) {
     parts.push(data.priority.join(', '));
@@ -52,7 +36,7 @@ const formatTaskFilters = (data: ListTasksCall) => {
     parts.push(`matching "${data.search}"`);
   }
   if (data.sortBy) {
-    parts.push(`by ${SORT_LABEL[data.sortBy] ?? data.sortBy}`);
+    parts.push(`by ${humanize(data.sortBy)}`);
   }
   return parts.join(' · ');
 };

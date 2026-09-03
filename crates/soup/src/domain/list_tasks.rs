@@ -11,28 +11,22 @@ use crate::domain::models::SoupPropertiesField;
 use chrono::{DateTime, Utc};
 use document_sub_type::DocumentSubType;
 use filter_ast::Expr;
-use item_filters::ast::{EmailFilterAst, properties::EntityRefId};
 use item_filters::ast::{
     EntityFilterAst,
-    calendar_event::CalendarEventLiteral,
-    call::CallLiteral,
-    channel::{ChannelLiteral, ChannelThreadLiteral},
-    chat::ChatLiteral,
-    crm_company::CrmCompanyLiteral,
     date::DateLiteral,
     document::DocumentLiteral,
-    email::EmailLiteral,
-    foreign_entity::ForeignEntityLiteral,
-    project::ProjectLiteral,
-    properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
+    properties::{EntityRefId, PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::SimpleSortMethod;
-use models_properties::DataType;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::service::tag_sets::AppliedTag;
 use models_soup::SoupProperty;
 use models_soup::document::{SoupDocument, SoupDocumentSubType};
+use schemars::JsonSchema;
+use serde::Deserialize;
+use std::cmp::Reverse;
+use std::collections::HashMap;
 use std::sync::Arc;
 use system_properties::{PriorityOption, StatusOption, SystemPropertyKey};
 use uuid::Uuid;
@@ -53,17 +47,17 @@ pub const OPEN_STATUSES: [StatusOption; 3] = [
     StatusOption::InReview,
 ];
 
-/// Priority filter, including the explicit "no priority" bucket.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TaskPriorityFilter {
-    /// A set priority option.
-    Option(PriorityOption),
-    /// Task has no Priority value.
-    Unset,
-}
+/// Every priority option, used to express "no priority" as a negation.
+const ALL_PRIORITIES: [PriorityOption; 4] = [
+    PriorityOption::Low,
+    PriorityOption::Medium,
+    PriorityOption::High,
+    PriorityOption::Urgent,
+];
 
 /// Sort modes that match the tasks view, plus recency.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
 pub enum TaskSort {
     /// Most recently updated first.
     RecentlyUpdated,
@@ -71,7 +65,7 @@ pub enum TaskSort {
     RecentlyViewed,
     /// Most recently created first.
     RecentlyCreated,
-    /// Urgent first, then High / Medium / Low / unset.
+    /// Urgent first, then High / Medium / Low / no priority.
     Priority,
     /// Not Started first, then In Progress / In Review / Completed / Canceled.
     Status,
@@ -79,19 +73,27 @@ pub enum TaskSort {
     DueDate,
 }
 
+/// Whose tasks to match.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TaskAssigneeScope {
+    /// Any owner or assignee.
+    Any,
+    /// The My tasks tab: owned by **or** assigned to this user.
+    Mine(String),
+    /// Assigned to this Macro user id (`macro|email`).
+    Assignee(String),
+}
+
 /// Resolved task-list query after the inbound adapter applies defaults.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TaskListQuery {
     /// Status options to match. Empty means any status.
     pub statuses: Vec<StatusOption>,
-    /// Priority buckets to match. Empty means any priority.
-    pub priorities: Vec<TaskPriorityFilter>,
-    /// Assignee Macro user id (`macro|email`). `None` means any assignee.
-    /// Set only when the caller passed an explicit `assignee` filter.
-    pub assignee_user_id: Option<String>,
-    /// When set, match the My tasks tab: owner **or** assignee of this user.
-    /// Unused when `assignee_user_id` is set.
-    pub mine_user_id: Option<String>,
+    /// Priority buckets to match; `None` is the "no priority" bucket.
+    /// Empty means any priority.
+    pub priorities: Vec<Option<PriorityOption>>,
+    /// Whose tasks to match.
+    pub assignee: TaskAssigneeScope,
     /// Restrict to tasks in this project.
     pub project_id: Option<Uuid>,
     /// Inclusive due-date lower bound.
@@ -156,7 +158,7 @@ impl TaskListQuery {
             TaskSort::Priority | TaskSort::Status | TaskSort::DueDate
         ) || self.due_after.is_some()
             || self.due_before.is_some()
-            || self.search.as_deref().is_some_and(|s| !s.trim().is_empty())
+            || self.search_needle().is_some()
     }
 
     /// Soup page size for this query.
@@ -174,20 +176,19 @@ impl TaskListQuery {
         &self,
         tag_filter: Option<Expr<PropertiesLiteral>>,
     ) -> Result<EntityFilterAst, String> {
-        let document_filter = self.document_filter()?;
-        let properties_filter = match (self.properties_filter()?, tag_filter) {
-            (Some(existing), Some(tags)) => Some(Expr::and(existing, tags)),
-            (None, Some(tags)) => Some(tags),
-            (existing, None) => existing,
-        };
-
-        Ok(task_only_ast(document_filter, properties_filter))
+        let properties_filter = and_all(self.properties_filter()?.into_iter().chain(tag_filter));
+        Ok(EntityFilterAst {
+            document_filter: Some(Arc::new(self.document_filter()?)),
+            properties_filter: properties_filter.map(Arc::new),
+            ..EntityFilterAst::match_nothing()
+        })
     }
 
     fn document_filter(&self) -> Result<Expr<DocumentLiteral>, String> {
         let mut parts = vec![Expr::val(DocumentLiteral::SubType(DocumentSubType::Task))];
-        if let Some(user_id) = self.mine_user_id.as_deref() {
-            let owner = MacroUserIdStr::try_from(user_id.to_string()).map_err(|e| e.to_string())?;
+        if let TaskAssigneeScope::Mine(user_id) = &self.assignee {
+            let owner = MacroUserIdStr::try_from(user_id.clone()).map_err(|e| e.to_string())?;
+            // `Importance(true)` is soup's "assigned to the requesting user".
             parts.push(Expr::or(
                 Expr::val(DocumentLiteral::Owner(owner)),
                 Expr::val(DocumentLiteral::Importance(true)),
@@ -210,102 +211,76 @@ impl TaskListQuery {
     }
 
     fn properties_filter(&self) -> Result<Option<Expr<PropertiesLiteral>>, String> {
-        let mut parts = Vec::new();
-        if let Some(status) = or_status(&self.statuses) {
-            parts.push(status);
-        }
-        if let Some(priority) = or_priority(&self.priorities) {
-            parts.push(priority);
-        }
-        if let Some(assignee) = self.assignee_user_id.as_deref() {
-            parts.push(assignee_literal(assignee)?);
-        }
-        Ok(and_all(parts))
+        let status = or_all(
+            self.statuses
+                .iter()
+                .map(|s| select_literal(SystemPropertyKey::STATUS_UUID, s.uuid())),
+        );
+        let priority = or_priority(&self.priorities);
+        let assignee = match &self.assignee {
+            TaskAssigneeScope::Assignee(user_id) => Some(assignee_literal(user_id)?),
+            TaskAssigneeScope::Any | TaskAssigneeScope::Mine(_) => None,
+        };
+        Ok(and_all([status, priority, assignee].into_iter().flatten()))
+    }
+
+    fn search_needle(&self) -> Option<&str> {
+        self.search
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
     }
 
     /// True when `task` satisfies the filters that soup cannot express
     /// (due date and name search). Status / priority / assignee are already
-    /// applied in the AST when possible.
+    /// applied in the AST.
     pub fn matches_in_memory(&self, task: &TaskRecord) -> bool {
-        if let Some(due_after) = self.due_after {
-            match task.due_date {
-                Some(due) if due >= due_after => {}
-                _ => return false,
-            }
-        }
-        if let Some(due_before) = self.due_before {
-            match task.due_date {
-                Some(due) if due <= due_before => {}
-                _ => return false,
-            }
-        }
-        if let Some(needle) = self
-            .search
-            .as_deref()
-            .map(str::trim)
-            .filter(|s| !s.is_empty())
-            && !task.name.to_lowercase().contains(&needle.to_lowercase())
-        {
-            return false;
-        }
-        true
+        let due_in_range = match (self.due_after, self.due_before) {
+            (None, None) => true,
+            (after, before) => task.due_date.is_some_and(|due| {
+                after.is_none_or(|a| due >= a) && before.is_none_or(|b| due <= b)
+            }),
+        };
+        let name_matches = self
+            .search_needle()
+            .is_none_or(|needle| task.name.to_lowercase().contains(&needle.to_lowercase()));
+        due_in_range && name_matches
     }
 }
 
 /// Extract a task record from a soup document. Non-tasks return `None`.
 pub fn extract_task(
     doc: &SoupDocument<SoupPropertiesField>,
-    tag_map: &std::collections::HashMap<Uuid, AppliedTag>,
+    tag_map: &HashMap<Uuid, AppliedTag>,
 ) -> Option<TaskRecord> {
-    match &doc.sub_type {
-        Some(SoupDocumentSubType::Task { .. }) => {}
-        Some(SoupDocumentSubType::Snippet {} | SoupDocumentSubType::Skill {}) | None => {
-            return None;
-        }
+    if !matches!(doc.sub_type, Some(SoupDocumentSubType::Task { .. })) {
+        return None;
     }
 
-    let mut status = None;
-    let mut priority = None;
-    let mut assignees = Vec::new();
-    let mut due_date = None;
-    let mut tags = Vec::new();
-
-    for property in &doc.extra.properties {
-        let definition_id = property.definition.id;
-        if definition_id == SystemPropertyKey::STATUS_UUID {
-            status = first_select_option(property).and_then(StatusOption::from_uuid);
-        } else if definition_id == SystemPropertyKey::PRIORITY_UUID {
-            priority = first_select_option(property).and_then(PriorityOption::from_uuid);
-        } else if definition_id == SystemPropertyKey::ASSIGNEES_UUID {
-            if let Some(PropertyValue::EntityRef(refs)) = &property.value {
-                assignees = refs.iter().map(|r| r.entity_id.clone()).collect();
-            }
-        } else if definition_id == SystemPropertyKey::DUE_DATE_UUID {
-            if let Some(PropertyValue::Date(date)) = property.value {
-                due_date = Some(date);
-            }
-        } else if property.definition.data_type == DataType::Tag
-            && let Some(PropertyValue::SelectOption(option_ids)) = &property.value
-        {
-            for option_id in option_ids {
-                if let Some(tag) = tag_map.get(option_id)
-                    && !tags.contains(tag)
-                {
-                    tags.push(tag.clone());
-                }
-            }
-        }
-    }
+    let property = |key: Uuid| doc.extra.properties.iter().find(|p| p.definition.id == key);
 
     Some(TaskRecord {
         id: doc.id,
         name: doc.name.clone(),
-        status,
-        priority,
-        assignees,
-        due_date,
+        status: property(SystemPropertyKey::STATUS_UUID)
+            .and_then(first_select_option)
+            .and_then(StatusOption::from_uuid),
+        priority: property(SystemPropertyKey::PRIORITY_UUID)
+            .and_then(first_select_option)
+            .and_then(PriorityOption::from_uuid),
+        assignees: match property(SystemPropertyKey::ASSIGNEES_UUID).and_then(|p| p.value.as_ref())
+        {
+            Some(PropertyValue::EntityRef(refs)) => {
+                refs.iter().map(|r| r.entity_id.clone()).collect()
+            }
+            _ => Vec::new(),
+        },
+        due_date: match property(SystemPropertyKey::DUE_DATE_UUID).and_then(|p| p.value.as_ref()) {
+            Some(PropertyValue::Date(date)) => Some(*date),
+            _ => None,
+        },
         project_id: doc.project_id,
-        tags,
+        tags: doc.extra.applied_tags(tag_map),
         created_at: doc.created_at,
         updated_at: doc.updated_at,
         viewed_at: doc.viewed_at,
@@ -315,24 +290,22 @@ pub fn extract_task(
 /// Sort `tasks` in place according to `sort`. Ties fall back to `updated_at`
 /// descending, matching the tasks-view client sort.
 pub fn sort_tasks(tasks: &mut [TaskRecord], sort: TaskSort) {
-    tasks.sort_by(|a, b| match sort {
-        TaskSort::RecentlyUpdated => b.updated_at.cmp(&a.updated_at),
-        TaskSort::RecentlyViewed => cmp_optional_desc(a.viewed_at, b.viewed_at)
-            .then_with(|| b.updated_at.cmp(&a.updated_at)),
-        TaskSort::RecentlyCreated => b.created_at.cmp(&a.created_at),
-        TaskSort::Priority => priority_order(a.priority)
-            .cmp(&priority_order(b.priority))
-            .then_with(|| b.updated_at.cmp(&a.updated_at)),
-        TaskSort::Status => status_order(a.status)
-            .cmp(&status_order(b.status))
-            .then_with(|| b.updated_at.cmp(&a.updated_at)),
-        TaskSort::DueDate => {
-            cmp_optional_asc(a.due_date, b.due_date).then_with(|| b.updated_at.cmp(&a.updated_at))
-        }
+    tasks.sort_by(|a, b| {
+        let primary = match sort {
+            TaskSort::RecentlyUpdated => std::cmp::Ordering::Equal,
+            TaskSort::RecentlyViewed => {
+                some_first(a.viewed_at.map(Reverse), b.viewed_at.map(Reverse))
+            }
+            TaskSort::RecentlyCreated => b.created_at.cmp(&a.created_at),
+            TaskSort::Priority => priority_rank(a.priority).cmp(&priority_rank(b.priority)),
+            TaskSort::Status => status_rank(a.status).cmp(&status_rank(b.status)),
+            TaskSort::DueDate => some_first(a.due_date, b.due_date),
+        };
+        primary.then_with(|| b.updated_at.cmp(&a.updated_at))
     });
 }
 
-fn priority_order(priority: Option<PriorityOption>) -> u8 {
+fn priority_rank(priority: Option<PriorityOption>) -> u8 {
     match priority {
         Some(PriorityOption::Urgent) => 0,
         Some(PriorityOption::High) => 1,
@@ -342,7 +315,7 @@ fn priority_order(priority: Option<PriorityOption>) -> u8 {
     }
 }
 
-fn status_order(status: Option<StatusOption>) -> u8 {
+fn status_rank(status: Option<StatusOption>) -> u8 {
     match status {
         Some(StatusOption::NotStarted) => 0,
         Some(StatusOption::InProgress) => 1,
@@ -353,16 +326,8 @@ fn status_order(status: Option<StatusOption>) -> u8 {
     }
 }
 
-fn cmp_optional_desc<T: Ord>(a: Option<T>, b: Option<T>) -> std::cmp::Ordering {
-    match (a, b) {
-        (Some(a), Some(b)) => b.cmp(&a),
-        (Some(_), None) => std::cmp::Ordering::Less,
-        (None, Some(_)) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
-    }
-}
-
-fn cmp_optional_asc<T: Ord>(a: Option<T>, b: Option<T>) -> std::cmp::Ordering {
+/// `a.cmp(b)` where `None` always sorts after `Some`.
+fn some_first<T: Ord>(a: Option<T>, b: Option<T>) -> std::cmp::Ordering {
     match (a, b) {
         (Some(a), Some(b)) => a.cmp(&b),
         (Some(_), None) => std::cmp::Ordering::Less,
@@ -378,68 +343,33 @@ fn first_select_option(property: &SoupProperty) -> Option<Uuid> {
     }
 }
 
-fn or_status(statuses: &[StatusOption]) -> Option<Expr<PropertiesLiteral>> {
-    or_all(statuses.iter().copied().map(|status| {
-        Expr::val(PropertiesLiteral {
-            property_definition_id: SystemPropertyKey::STATUS_UUID,
-            entity_type: Some(PropertyEntityType::Task),
-            value: PropertyMatchValue::SelectOption(status.uuid()),
-        })
-    }))
+fn select_literal(definition_id: Uuid, option_id: Uuid) -> Expr<PropertiesLiteral> {
+    Expr::val(PropertiesLiteral {
+        property_definition_id: definition_id,
+        entity_type: Some(PropertyEntityType::Task),
+        value: PropertyMatchValue::SelectOption(option_id),
+    })
 }
 
-fn or_priority(priorities: &[TaskPriorityFilter]) -> Option<Expr<PropertiesLiteral>> {
-    if priorities.is_empty() {
-        return None;
-    }
-
-    let set: Vec<PriorityOption> = priorities
-        .iter()
-        .filter_map(|p| match p {
-            TaskPriorityFilter::Option(option) => Some(*option),
-            TaskPriorityFilter::Unset => None,
-        })
-        .collect();
-    let include_unset = priorities
-        .iter()
-        .any(|p| matches!(p, TaskPriorityFilter::Unset));
-
-    let set_expr = or_all(set.into_iter().map(|option| {
-        Expr::val(PropertiesLiteral {
-            property_definition_id: SystemPropertyKey::PRIORITY_UUID,
-            entity_type: Some(PropertyEntityType::Task),
-            value: PropertyMatchValue::SelectOption(option.uuid()),
-        })
-    }));
-    let unset_expr = include_unset.then(no_priority_expr);
-
-    match (set_expr, unset_expr) {
-        (Some(set), Some(unset)) => Some(Expr::or(set, unset)),
-        (Some(set), None) => Some(set),
-        (None, Some(unset)) => Some(unset),
-        (None, None) => None,
-    }
-}
-
-fn no_priority_expr() -> Expr<PropertiesLiteral> {
-    let any_priority = or_all(
-        [
-            PriorityOption::Low,
-            PriorityOption::Medium,
-            PriorityOption::High,
-            PriorityOption::Urgent,
-        ]
-        .into_iter()
-        .map(|option| {
-            Expr::val(PropertiesLiteral {
-                property_definition_id: SystemPropertyKey::PRIORITY_UUID,
-                entity_type: Some(PropertyEntityType::Task),
-                value: PropertyMatchValue::SelectOption(option.uuid()),
-            })
-        }),
-    )
-    .expect("priority options are non-empty");
-    Expr::is_not(any_priority)
+/// OR of the selected priorities; `None` in the list adds "no priority",
+/// expressed as the negation of every priority option.
+fn or_priority(priorities: &[Option<PriorityOption>]) -> Option<Expr<PropertiesLiteral>> {
+    let set = or_all(
+        priorities
+            .iter()
+            .flatten()
+            .map(|p| select_literal(SystemPropertyKey::PRIORITY_UUID, p.uuid())),
+    );
+    let unset = priorities.contains(&None).then(|| {
+        let any_priority = or_all(
+            ALL_PRIORITIES
+                .into_iter()
+                .map(|p| select_literal(SystemPropertyKey::PRIORITY_UUID, p.uuid())),
+        )
+        .expect("priority options are non-empty");
+        Expr::is_not(any_priority)
+    });
+    or_all([set, unset].into_iter().flatten())
 }
 
 fn assignee_literal(user_id: &str) -> Result<Expr<PropertiesLiteral>, String> {
@@ -449,30 +379,6 @@ fn assignee_literal(user_id: &str) -> Result<Expr<PropertiesLiteral>, String> {
         entity_type: Some(PropertyEntityType::Task),
         value: PropertyMatchValue::EntityRef(entity_ref),
     }))
-}
-
-fn task_only_ast(
-    document_filter: Expr<DocumentLiteral>,
-    properties_filter: Option<Expr<PropertiesLiteral>>,
-) -> EntityFilterAst {
-    let nil = Uuid::nil();
-    EntityFilterAst {
-        calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(nil)))),
-        document_filter: Some(Arc::new(document_filter)),
-        project_filter: Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(nil)))),
-        chat_filter: Some(Arc::new(Expr::val(ChatLiteral::ChatId(nil)))),
-        email_filter: EmailFilterAst {
-            tree: Some(Arc::new(Expr::val(EmailLiteral::ThreadId(nil)))),
-            crm_scope: None,
-        },
-        channel_filter: Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(nil)))),
-        channel_thread_filter: Some(Arc::new(Expr::val(ChannelThreadLiteral::ThreadId(nil)))),
-        call_filter: Some(Arc::new(Expr::val(CallLiteral::CallId(nil)))),
-        crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(nil)))),
-        foreign_entity_filter: Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(nil)))),
-        reminder_filter: None,
-        properties_filter: properties_filter.map(Arc::new),
-    }
 }
 
 fn and_all<T>(exprs: impl IntoIterator<Item = Expr<T>>) -> Option<Expr<T>> {

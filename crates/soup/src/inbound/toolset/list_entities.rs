@@ -15,11 +15,9 @@ use item_filters::{
     SharedEmailFilter,
     ast::{
         EntityFilterAst, LiteralTree,
-        calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral},
         chat::ChatLiteral,
-        crm_company::CrmCompanyLiteral,
         document::DocumentLiteral,
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
@@ -28,10 +26,8 @@ use item_filters::{
     },
 };
 use models_pagination::{SimpleSortMethod, TypeEraseCursor};
-use models_properties::DataType;
-use models_properties::service::property_value::PropertyValue;
 use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
-use models_soup::{SoupProperty, document::SoupDocumentSubType, item::SoupItem};
+use models_soup::{document::SoupDocumentSubType, item::SoupItem};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -253,7 +249,7 @@ impl EntityItem {
                 conference_url: event.conference_url,
                 conference_provider: event.conference_provider,
                 time: serde_json::to_value(event.time).unwrap_or(serde_json::Value::Null),
-                tags: resolve_applied_tags(&event.extra.properties, tag_map),
+                tags: event.extra.applied_tags(tag_map),
             },
             SoupItem::Document(doc) => EntityItem::Document {
                 id: doc.id,
@@ -267,17 +263,17 @@ impl EntityItem {
                 }),
                 file_type: doc.file_type,
                 name: doc.name,
-                tags: resolve_applied_tags(&doc.extra.properties, tag_map),
+                tags: doc.extra.applied_tags(tag_map),
             },
             SoupItem::Chat(chat) => EntityItem::AiChat {
                 id: chat.id,
                 name: chat.name,
-                tags: resolve_applied_tags(&chat.extra.properties, tag_map),
+                tags: chat.extra.applied_tags(tag_map),
             },
             SoupItem::Project(project) => EntityItem::Project {
                 id: project.id,
                 name: project.name,
-                tags: resolve_applied_tags(&project.extra.properties, tag_map),
+                tags: project.extra.applied_tags(tag_map),
             },
             SoupItem::EmailThread(thread) => EntityItem::Email {
                 id: thread.thread.id,
@@ -288,7 +284,7 @@ impl EntityItem {
                 inbox_visible: thread.thread.inbox_visible,
                 is_read: thread.thread.is_read,
                 is_draft: thread.thread.is_draft,
-                tags: resolve_applied_tags(&thread.extra.properties, tag_map),
+                tags: thread.extra.applied_tags(tag_map),
             },
             SoupItem::Channel(channel) => EntityItem::Channel {
                 id: channel.channel.channel.id.0,
@@ -301,7 +297,7 @@ impl EntityItem {
             SoupItem::Call(record) => EntityItem::Call {
                 id: record.call_id,
                 created_by: record.created_by,
-                tags: resolve_applied_tags(&record.extra.properties, tag_map),
+                tags: record.extra.applied_tags(tag_map),
             },
             // `entity_filter_ast` force-filters CrmCompany and Reminder out —
             // kept loud here so a contract break is obvious, not silent.
@@ -321,51 +317,57 @@ impl EntityItem {
     }
 }
 
-/// Resolve an item's tag properties to labels via the caller's tag sets.
-/// Option ids outside the caller's sets are dropped.
-fn resolve_applied_tags(
-    properties: &[SoupProperty],
-    tag_map: &HashMap<Uuid, AppliedTag>,
-) -> Vec<AppliedTag> {
-    let mut tags: Vec<AppliedTag> = Vec::new();
-    for property in properties {
-        if property.definition.data_type != DataType::Tag {
-            continue;
-        }
-        let Some(PropertyValue::SelectOption(option_ids)) = &property.value else {
-            continue;
-        };
-        for option_id in option_ids {
-            if let Some(tag) = tag_map.get(option_id)
-                && !tags.contains(tag)
-            {
-                tags.push(tag.clone());
-            }
-        }
-    }
-    tags
-}
-
 /// True when any item carries a tag property that would need label resolution.
-fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
-    items.iter().any(|EnrichedSoupItem { item, .. }| {
-        let properties = match item {
-            SoupItem::Document(doc) => &doc.extra.properties,
-            SoupItem::Chat(chat) => &chat.extra.properties,
-            SoupItem::Project(project) => &project.extra.properties,
-            SoupItem::EmailThread(thread) => &thread.extra.properties,
-            SoupItem::CalendarEvent(event) => &event.extra.properties,
-            SoupItem::CrmCompany(company) => &company.extra.properties,
+pub(super) fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
+    items
+        .iter()
+        .any(|EnrichedSoupItem { item, .. }| match item {
+            SoupItem::Document(doc) => doc.extra.has_tags(),
+            SoupItem::Chat(chat) => chat.extra.has_tags(),
+            SoupItem::Project(project) => project.extra.has_tags(),
+            SoupItem::EmailThread(thread) => thread.extra.has_tags(),
+            SoupItem::CalendarEvent(event) => event.extra.has_tags(),
+            SoupItem::CrmCompany(company) => company.extra.has_tags(),
             SoupItem::Channel(_)
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
             | SoupItem::ForeignEntity(_)
-            | SoupItem::Reminder(_) => return false,
-        };
-        properties
-            .iter()
-            .any(|p| p.definition.data_type == DataType::Tag)
-    })
+            | SoupItem::Reminder(_) => false,
+        })
+}
+
+/// Resolve tag labels against the caller's tag sets into a properties
+/// filter. Fails loudly on an unknown label so the agent sees the available
+/// tags. `all` requires each filter to name exactly one tag, because
+/// expanding an unscoped label across scopes would AND both variants in.
+pub(super) fn tag_filter_expr(
+    sets: &CallerTagSets,
+    filters: &[TagFilter],
+    tags_match: TagMatch,
+) -> ToolResult<Option<Expr<PropertiesLiteral>>> {
+    fn tag_error(e: impl std::error::Error + Send + Sync + 'static) -> ToolCallError {
+        ToolCallError {
+            description: e.to_string(),
+            internal_error: anyhow::anyhow!(e),
+        }
+    }
+    let (resolved, combine): (_, fn(_, _) -> _) = match tags_match {
+        TagMatch::Any => (sets.resolve_filters(filters).map_err(tag_error)?, Expr::or),
+        TagMatch::All => (
+            sets.resolve_filters_unique(filters).map_err(tag_error)?,
+            Expr::and,
+        ),
+    };
+    Ok(resolved
+        .into_iter()
+        .map(|option| {
+            Expr::val(PropertiesLiteral {
+                property_definition_id: option.definition_id,
+                entity_type: None,
+                value: PropertyMatchValue::SelectOption(option.option_id),
+            })
+        })
+        .reduce(combine))
 }
 
 /// Response returned by the list entities AI tool.
@@ -558,7 +560,7 @@ impl ListEntities {
             call_filter: self.call_filter.clone(),
             // CrmCompany not in the tool surface — force-filter so the
             // AI never sees one.
-            crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(Uuid::nil())))),
+            crm_company_filter: EntityFilterAst::match_nothing().crm_company_filter,
             foreign_entity_filter: self.foreign_entity_filter.clone(),
             // Reminders are opt-in in Soup, so leaving this unset is already
             // what keeps them out of the tool surface — no force-filter needed.
@@ -581,59 +583,56 @@ impl ListEntities {
             return ast;
         };
 
+        let none = EntityFilterAst::match_nothing();
+        let keep = |item_type: ItemType| include_types.contains(&item_type);
         EntityFilterAst {
-            calendar_event_filter: if include_types.contains(&ItemType::CalendarEvent) {
+            calendar_event_filter: if keep(ItemType::CalendarEvent) {
                 ast.calendar_event_filter
             } else {
-                Some(Arc::new(Expr::val(CalendarEventLiteral::Id(Uuid::nil()))))
+                none.calendar_event_filter
             },
-            document_filter: if include_types.contains(&ItemType::Document) {
+            document_filter: if keep(ItemType::Document) {
                 ast.document_filter
             } else {
-                Some(Arc::new(Expr::val(DocumentLiteral::Id(Uuid::nil()))))
+                none.document_filter
             },
-            project_filter: if include_types.contains(&ItemType::Project) {
+            project_filter: if keep(ItemType::Project) {
                 ast.project_filter
             } else {
-                Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(Uuid::nil()))))
+                none.project_filter
             },
-            chat_filter: if include_types.contains(&ItemType::AiChat) {
+            chat_filter: if keep(ItemType::AiChat) {
                 ast.chat_filter
             } else {
-                Some(Arc::new(Expr::val(ChatLiteral::ChatId(Uuid::nil()))))
+                none.chat_filter
             },
-            email_filter: if include_types.contains(&ItemType::Email) {
+            email_filter: if keep(ItemType::Email) {
                 ast.email_filter
             } else {
-                item_filters::ast::EmailFilterAst {
-                    tree: Some(Arc::new(Expr::val(EmailLiteral::ThreadId(Uuid::nil())))),
-                    crm_scope: None,
-                }
+                none.email_filter
             },
-            channel_filter: if include_types.contains(&ItemType::Channel) {
+            channel_filter: if keep(ItemType::Channel) {
                 ast.channel_filter
             } else {
-                Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(Uuid::nil()))))
+                none.channel_filter
             },
-            channel_thread_filter: if include_types.contains(&ItemType::ChannelThread) {
+            channel_thread_filter: if keep(ItemType::ChannelThread) {
                 ast.channel_thread_filter
             } else {
-                Some(Arc::new(Expr::val(ChannelThreadLiteral::ThreadId(
-                    Uuid::nil(),
-                ))))
+                none.channel_thread_filter
             },
-            call_filter: if include_types.contains(&ItemType::Call) {
+            call_filter: if keep(ItemType::Call) {
                 ast.call_filter
             } else {
-                Some(Arc::new(Expr::val(CallLiteral::CallId(Uuid::nil()))))
+                none.call_filter
             },
             // Preserve the upstream nil filter — no ItemType::CrmCompany
             // to toggle against.
             crm_company_filter: ast.crm_company_filter,
-            foreign_entity_filter: if include_types.contains(&ItemType::ForeignEntity) {
+            foreign_entity_filter: if keep(ItemType::ForeignEntity) {
                 ast.foreign_entity_filter
             } else {
-                Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(Uuid::nil()))))
+                none.foreign_entity_filter
             },
             // Same as CrmCompany — no ItemType::Reminder to toggle against.
             reminder_filter: ast.reminder_filter,
@@ -689,40 +688,7 @@ where
             None
         } else {
             let sets = fetch_caller_tag_sets(&service_context, &request_context).await?;
-            // In all mode every filter must name exactly one tag — expanding
-            // an unscoped label across scopes would AND both variants in.
-            let resolved = match self.tags_match {
-                TagMatch::Any => {
-                    sets.resolve_filters(self.tag_filters())
-                        .map_err(|e| ToolCallError {
-                            description: e.to_string(),
-                            internal_error: anyhow::anyhow!(e),
-                        })?
-                }
-                TagMatch::All => sets
-                    .resolve_filters_unique(self.tag_filters())
-                    .map_err(|e| ToolCallError {
-                        description: e.to_string(),
-                        internal_error: anyhow::anyhow!(e),
-                    })?,
-            };
-            // Each resolved option becomes its own literal; the match mode
-            // picks how they combine (any = OR, all = AND across the item's
-            // tag properties, which may span definitions).
-            let combine = match self.tags_match {
-                TagMatch::Any => Expr::or,
-                TagMatch::All => Expr::and,
-            };
-            let expr = resolved
-                .into_iter()
-                .map(|option| {
-                    Expr::val(PropertiesLiteral {
-                        property_definition_id: option.definition_id,
-                        entity_type: None,
-                        value: PropertyMatchValue::SelectOption(option.option_id),
-                    })
-                })
-                .reduce(combine);
+            let expr = tag_filter_expr(&sets, self.tag_filters(), self.tags_match)?;
             tag_sets = Some(sets);
             expr
         };

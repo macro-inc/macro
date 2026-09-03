@@ -1,7 +1,7 @@
 //! ListTasks tool for querying Macro tasks.
 
 use crate::domain::list_tasks::{
-    DEFAULT_LIMIT, MAX_LIMIT, OPEN_STATUSES, TaskListQuery, TaskPriorityFilter, TaskRecord,
+    DEFAULT_LIMIT, MAX_LIMIT, OPEN_STATUSES, TaskAssigneeScope, TaskListQuery, TaskRecord,
     TaskSort, extract_task, resolve_assignee_id, sort_tasks,
 };
 use crate::domain::{
@@ -13,8 +13,6 @@ use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use email::domain::{models::PreviewView, ports::EmailService};
-use filter_ast::Expr;
-use item_filters::ast::properties::{PropertiesLiteral, PropertyMatchValue};
 use models_pagination::TypeEraseCursor;
 use models_properties::service::tag_sets::{AppliedTag, CallerTagSets, TagFilter, TagMatch};
 use models_soup::item::SoupItem;
@@ -24,7 +22,7 @@ use system_properties::{PriorityOption, StatusOption};
 use uuid::Uuid;
 
 use super::SoupToolContext;
-use super::list_entities::fetch_caller_tag_sets;
+use super::list_entities::{any_item_has_tags, fetch_caller_tag_sets, tag_filter_expr};
 
 /// Which task list to query, matching the tasks view tabs.
 #[derive(Debug, Clone, Copy, Default, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -36,46 +34,6 @@ pub enum TaskScope {
     MyTasks,
     /// Every task the user can see. No default assignee or status filter.
     All,
-}
-
-/// Task status labels used by the tasks view.
-#[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ToolTaskStatus {
-    /// Not Started.
-    NotStarted,
-    /// In Progress.
-    InProgress,
-    /// In Review.
-    InReview,
-    /// Completed.
-    Completed,
-    /// Canceled.
-    Canceled,
-}
-
-impl From<ToolTaskStatus> for StatusOption {
-    fn from(status: ToolTaskStatus) -> Self {
-        match status {
-            ToolTaskStatus::NotStarted => Self::NotStarted,
-            ToolTaskStatus::InProgress => Self::InProgress,
-            ToolTaskStatus::InReview => Self::InReview,
-            ToolTaskStatus::Completed => Self::Completed,
-            ToolTaskStatus::Canceled => Self::Canceled,
-        }
-    }
-}
-
-impl From<StatusOption> for ToolTaskStatus {
-    fn from(status: StatusOption) -> Self {
-        match status {
-            StatusOption::NotStarted => Self::NotStarted,
-            StatusOption::InProgress => Self::InProgress,
-            StatusOption::InReview => Self::InReview,
-            StatusOption::Completed => Self::Completed,
-            StatusOption::Canceled => Self::Canceled,
-        }
-    }
 }
 
 /// Task priority labels used by the tasks view, plus "no priority".
@@ -94,45 +52,15 @@ pub enum ToolTaskPriority {
     None,
 }
 
-impl From<ToolTaskPriority> for TaskPriorityFilter {
-    fn from(priority: ToolTaskPriority) -> Self {
-        match priority {
-            ToolTaskPriority::Urgent => Self::Option(PriorityOption::Urgent),
-            ToolTaskPriority::High => Self::Option(PriorityOption::High),
-            ToolTaskPriority::Medium => Self::Option(PriorityOption::Medium),
-            ToolTaskPriority::Low => Self::Option(PriorityOption::Low),
-            ToolTaskPriority::None => Self::Unset,
-        }
-    }
-}
-
-/// How to order the returned tasks.
-#[derive(Debug, Clone, Copy, Deserialize, JsonSchema, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ToolTaskSort {
-    /// Most recently updated first.
-    RecentlyUpdated,
-    /// Most recently viewed first.
-    RecentlyViewed,
-    /// Most recently created first.
-    RecentlyCreated,
-    /// Urgent first, then High / Medium / Low / no priority.
-    Priority,
-    /// Not Started first, then In Progress / In Review / Completed / Canceled.
-    Status,
-    /// Soonest due date first; tasks with no due date last.
-    DueDate,
-}
-
-impl From<ToolTaskSort> for TaskSort {
-    fn from(sort: ToolTaskSort) -> Self {
-        match sort {
-            ToolTaskSort::RecentlyUpdated => Self::RecentlyUpdated,
-            ToolTaskSort::RecentlyViewed => Self::RecentlyViewed,
-            ToolTaskSort::RecentlyCreated => Self::RecentlyCreated,
-            ToolTaskSort::Priority => Self::Priority,
-            ToolTaskSort::Status => Self::Status,
-            ToolTaskSort::DueDate => Self::DueDate,
+impl ToolTaskPriority {
+    /// The priority bucket to match; `None` is the "no priority" bucket.
+    fn option(self) -> Option<PriorityOption> {
+        match self {
+            Self::Urgent => Some(PriorityOption::Urgent),
+            Self::High => Some(PriorityOption::High),
+            Self::Medium => Some(PriorityOption::Medium),
+            Self::Low => Some(PriorityOption::Low),
+            Self::None => None,
         }
     }
 }
@@ -145,6 +73,24 @@ pub struct TaskSelectValue {
     pub option_id: Uuid,
     /// Human-readable label (e.g. "In Progress", "Urgent").
     pub label: String,
+}
+
+impl From<StatusOption> for TaskSelectValue {
+    fn from(status: StatusOption) -> Self {
+        Self {
+            option_id: status.uuid(),
+            label: status.display_value().to_string(),
+        }
+    }
+}
+
+impl From<PriorityOption> for TaskSelectValue {
+    fn from(priority: PriorityOption) -> Self {
+        Self {
+            option_id: priority.uuid(),
+            label: priority.display_value().to_string(),
+        }
+    }
 }
 
 /// One Macro task.
@@ -179,6 +125,23 @@ pub struct TaskListItem {
     pub updated_at: DateTime<Utc>,
 }
 
+impl From<TaskRecord> for TaskListItem {
+    fn from(task: TaskRecord) -> Self {
+        Self {
+            id: task.id,
+            name: task.name,
+            status: task.status.map(TaskSelectValue::from),
+            priority: task.priority.map(TaskSelectValue::from),
+            assignees: task.assignees,
+            due_date: task.due_date,
+            project_id: task.project_id,
+            tags: task.tags,
+            created_at: task.created_at,
+            updated_at: task.updated_at,
+        }
+    }
+}
+
 /// Response from ListTasks.
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -211,7 +174,7 @@ pub struct ListTasks {
         description = "Filter by status. Values: not_started, in_progress, in_review, completed, canceled. Multiple values are OR'd. On my_tasks this defaults to the three open statuses; pass completed to see finished work."
     )]
     #[serde(default)]
-    pub status: Option<Vec<ToolTaskStatus>>,
+    pub status: Option<Vec<StatusOption>>,
 
     /// Priority values to include.
     #[schemars(
@@ -280,7 +243,7 @@ pub struct ListTasks {
         description = "Sort order: priority (default on my_tasks), status, due_date, recently_updated (default on scope=all), recently_viewed, recently_created."
     )]
     #[serde(default)]
-    pub sort_by: Option<ToolTaskSort>,
+    pub sort_by: Option<TaskSort>,
 
     /// Maximum tasks to return.
     #[schemars(description = "Maximum tasks to return. Defaults to 50; max 200.")]
@@ -294,49 +257,43 @@ impl ToolAnnotated for ListTasks {
 
 impl ListTasks {
     pub(super) fn resolved_query(&self, current_user_id: &str) -> TaskListQuery {
+        let my_tasks = self.scope == TaskScope::MyTasks;
+
         let statuses = match self.status.as_deref() {
-            Some(status) if !status.is_empty() => {
-                status.iter().copied().map(StatusOption::from).collect()
-            }
-            _ => match self.scope {
-                TaskScope::MyTasks => OPEN_STATUSES.to_vec(),
-                TaskScope::All => vec![],
-            },
+            Some(status) if !status.is_empty() => status.to_vec(),
+            _ if my_tasks => OPEN_STATUSES.to_vec(),
+            _ => vec![],
         };
 
-        let explicit_assignee = self
+        let assignee = match self
             .assignee
             .as_deref()
             .map(str::trim)
-            .filter(|s| !s.is_empty());
-        let (assignee_user_id, mine_user_id) = match explicit_assignee {
-            Some(assignee) => (Some(resolve_assignee_id(assignee, current_user_id)), None),
-            None => match self.scope {
-                TaskScope::MyTasks => (None, Some(current_user_id.to_string())),
-                TaskScope::All => (None, None),
-            },
+            .filter(|s| !s.is_empty())
+        {
+            Some(assignee) => {
+                TaskAssigneeScope::Assignee(resolve_assignee_id(assignee, current_user_id))
+            }
+            None if my_tasks => TaskAssigneeScope::Mine(current_user_id.to_string()),
+            None => TaskAssigneeScope::Any,
         };
 
-        let sort = match self.sort_by {
-            Some(sort) => TaskSort::from(sort),
-            None => match self.scope {
-                TaskScope::MyTasks => TaskSort::Priority,
-                TaskScope::All => TaskSort::RecentlyUpdated,
-            },
-        };
+        let sort = self.sort_by.unwrap_or(if my_tasks {
+            TaskSort::Priority
+        } else {
+            TaskSort::RecentlyUpdated
+        });
 
         TaskListQuery {
             statuses,
             priorities: self
                 .priority
                 .as_deref()
-                .unwrap_or(&[])
+                .unwrap_or_default()
                 .iter()
-                .copied()
-                .map(TaskPriorityFilter::from)
+                .map(|p| p.option())
                 .collect(),
-            assignee_user_id,
-            mine_user_id,
+            assignee,
             project_id: self.project_id,
             due_after: self.due_after,
             due_before: self.due_before,
@@ -368,50 +325,21 @@ where
     ) -> ToolResult<Self::Output> {
         tracing::info!(params=?self, "List tasks");
 
-        let current_user_id = request_context.user_id.to_string();
-        let query = self.resolved_query(&current_user_id);
+        let query = self.resolved_query(&request_context.user_id.to_string());
         let response_limit = self.limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
 
         let mut tag_sets: Option<CallerTagSets> = None;
-        let tag_filter_expr = if self.tag_filters().is_empty() {
+        let tag_filter = if self.tag_filters().is_empty() {
             None
         } else {
             let sets = fetch_caller_tag_sets(&service_context, &request_context).await?;
-            let resolved = match self.tags_match {
-                TagMatch::Any => {
-                    sets.resolve_filters(self.tag_filters())
-                        .map_err(|e| ToolCallError {
-                            description: e.to_string(),
-                            internal_error: anyhow::anyhow!(e),
-                        })?
-                }
-                TagMatch::All => sets
-                    .resolve_filters_unique(self.tag_filters())
-                    .map_err(|e| ToolCallError {
-                        description: e.to_string(),
-                        internal_error: anyhow::anyhow!(e),
-                    })?,
-            };
-            let combine = match self.tags_match {
-                TagMatch::Any => Expr::or,
-                TagMatch::All => Expr::and,
-            };
-            let expr = resolved
-                .into_iter()
-                .map(|option| {
-                    Expr::val(PropertiesLiteral {
-                        property_definition_id: option.definition_id,
-                        entity_type: None,
-                        value: PropertyMatchValue::SelectOption(option.option_id),
-                    })
-                })
-                .reduce(combine);
+            let expr = tag_filter_expr(&sets, self.tag_filters(), self.tags_match)?;
             tag_sets = Some(sets);
             expr
         };
 
         let filters = query
-            .entity_filter_ast(tag_filter_expr)
+            .entity_filter_ast(tag_filter)
             .map_err(|description| ToolCallError {
                 description,
                 internal_error: anyhow::anyhow!("invalid ListTasks filter"),
@@ -439,7 +367,7 @@ where
 
         let paginated = result.type_erase();
         let more_from_soup = paginated.next_cursor.is_some();
-        if tag_sets.is_none() && any_task_has_tags(&paginated.items) {
+        if tag_sets.is_none() && any_item_has_tags(&paginated.items) {
             tag_sets = Some(fetch_caller_tag_sets(&service_context, &request_context).await?);
         }
         let tag_map = tag_sets
@@ -460,7 +388,7 @@ where
 
         let total_matching = tasks.len();
         tasks.truncate(usize::from(response_limit));
-        let items: Vec<TaskListItem> = tasks.into_iter().map(to_list_item).collect();
+        let items: Vec<TaskListItem> = tasks.into_iter().map(TaskListItem::from).collect();
         let summary = build_summary(&items, total_matching, more_from_soup, query.sort);
 
         Ok(ListTasksResponse {
@@ -468,39 +396,6 @@ where
             summary,
         })
     }
-}
-
-fn to_list_item(task: TaskRecord) -> TaskListItem {
-    TaskListItem {
-        id: task.id,
-        name: task.name,
-        status: task.status.map(|status| TaskSelectValue {
-            option_id: status.uuid(),
-            label: status.display_value().to_string(),
-        }),
-        priority: task.priority.map(|priority| TaskSelectValue {
-            option_id: priority.uuid(),
-            label: priority.display_value().to_string(),
-        }),
-        assignees: task.assignees,
-        due_date: task.due_date,
-        project_id: task.project_id,
-        tags: task.tags,
-        created_at: task.created_at,
-        updated_at: task.updated_at,
-    }
-}
-
-fn any_task_has_tags(items: &[EnrichedSoupItem]) -> bool {
-    items.iter().any(|EnrichedSoupItem { item, .. }| {
-        let SoupItem::Document(doc) = item else {
-            return false;
-        };
-        doc.extra
-            .properties
-            .iter()
-            .any(|p| p.definition.data_type == models_properties::DataType::Tag)
-    })
 }
 
 pub(super) fn build_summary(
@@ -522,29 +417,21 @@ pub(super) fn build_summary(
         return "No tasks match the given filters.".to_string();
     }
 
-    let truncated = total_matching > items.len();
-    if truncated || more_from_soup {
-        if truncated {
-            let total = if more_from_soup {
-                format!("at least {total_matching}")
-            } else {
-                total_matching.to_string()
-            };
-            format!(
-                "Showing {} of {total} matching tasks, sorted by {sort_label}. Narrow the filters or raise limit.",
-                items.len(),
-            )
-        } else {
-            format!(
-                "Showing {} matching tasks, sorted by {sort_label}. More tasks match; narrow the filters or raise limit.",
-                items.len(),
-            )
-        }
-    } else {
-        format!(
-            "Found {} task{}, sorted by {sort_label}.",
-            items.len(),
-            if items.len() == 1 { "" } else { "s" }
-        )
+    let shown = items.len();
+    let truncated = total_matching > shown;
+    match (truncated, more_from_soup) {
+        (false, false) => format!(
+            "Found {shown} task{}, sorted by {sort_label}.",
+            if shown == 1 { "" } else { "s" }
+        ),
+        (false, true) => format!(
+            "Showing {shown} matching tasks, sorted by {sort_label}. More tasks match; narrow the filters or raise limit."
+        ),
+        (true, false) => format!(
+            "Showing {shown} of {total_matching} matching tasks, sorted by {sort_label}. Narrow the filters or raise limit."
+        ),
+        (true, true) => format!(
+            "Showing {shown} of at least {total_matching} matching tasks, sorted by {sort_label}. Narrow the filters or raise limit."
+        ),
     }
 }

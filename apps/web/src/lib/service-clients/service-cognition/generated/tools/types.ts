@@ -515,9 +515,9 @@ export type NotificationEntityType =
  */
 export type TaskScope = 'my_tasks' | 'all';
 /**
- * Task status labels used by the tasks view.
+ * Type-safe enum for Status property options.
  */
-export type ToolTaskStatus =
+export type StatusOption =
   | 'not_started'
   | 'in_progress'
   | 'in_review'
@@ -528,9 +528,9 @@ export type ToolTaskStatus =
  */
 export type ToolTaskPriority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 /**
- * How to order the returned tasks.
+ * Sort modes that match the tasks view, plus recency.
  */
-export type ToolTaskSort =
+export type TaskSort =
   | 'recently_updated'
   | 'recently_viewed'
   | 'recently_created'
@@ -3173,7 +3173,7 @@ export interface CompanyListItem {
   revenue?: number | null;
 }
 /**
- * Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as "what happened today", "what's going on", "catch me up", or "what happened in standup today"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For listing or filtering Macro tasks (status, priority, assignee, due date, my tasks), use ListTasks — do not reconstruct task queries with df/propf here. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. "my items tagged bug-report"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead.
+ * Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as "what happened today", "what's going on", "catch me up", or "what happened in standup today"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For listing or filtering Macro tasks (status, priority, assignee, due date, my tasks), use ListTasks — do not reconstruct task queries with df/propf here. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. "my items tagged bug-report"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use NameSearch or ContentSearch instead.
  */
 export interface ListEntities {
   /**
@@ -3621,7 +3621,7 @@ export interface ToolTag {
 /**
  * List Macro tasks with the same filters and sorts as the tasks view. Prefer this over ListEntities for any task question ("my tasks", "urgent tasks", "tasks assigned to me", "overdue", "in review"). Do not use Linear or other external trackers unless the user names them.
  *
- * Defaults match the My tasks tab: assigned to the current user, open statuses (Not Started, In Progress, In Review), sorted by priority (Urgent first). Pass scope="all" to see every task the user can access. Each row includes id, name, status, priority, assignees, dueDate, projectId, and tags — use SetEntityProperty (entity_type=document) to change those fields, and GetEntityProperties for custom properties.
+ * Defaults match the My tasks tab: owned by or assigned to the current user, open statuses (Not Started, In Progress, In Review), sorted by priority (Urgent first). Pass scope="all" to see every task the user can access. Each row includes id, name, status, priority, assignees, dueDate, projectId, and tags — use SetEntityProperty (entity_type=document) to change those fields, and GetEntityProperties for custom properties.
  *
  * Filters compose with AND. Multiple values on one filter are OR (status=["in_progress","in_review"] matches either). dueAfter/dueBefore filter the Due Date property; updatedAfter/updatedBefore filter last edit time (use those for "completed yesterday").
  */
@@ -3630,13 +3630,13 @@ export interface ListTasks {
   /**
    * Filter by status. Values: not_started, in_progress, in_review, completed, canceled. Multiple values are OR'd. On my_tasks this defaults to the three open statuses; pass completed to see finished work.
    */
-  status?: ToolTaskStatus[] | null;
+  status?: StatusOption[] | null;
   /**
    * Filter by priority. Values: urgent, high, medium, low, none. Multiple values are OR'd. "none" matches tasks with no priority set.
    */
   priority?: ToolTaskPriority[] | null;
   /**
-   * Filter by assignee. Use "me" for the current user, a Macro user id (macro|user@example.com), or a bare email. Use ListTeamMembers to find ids. Overrides the my_tasks assignee default when set.
+   * Filter by assignee. Use "me" for the current user, a Macro user id (macro|user@example.com), or a bare email. Use ListTeamMembers to find ids. Overrides the my_tasks owner-or-assignee default when set.
    */
   assignee?: string | null;
   /**
@@ -3671,7 +3671,7 @@ export interface ListTasks {
   /**
    * Sort order: priority (default on my_tasks), status, due_date, recently_updated (default on scope=all), recently_viewed, recently_created.
    */
-  sortBy?: ToolTaskSort | null;
+  sortBy?: TaskSort | null;
   /**
    * Maximum tasks to return. Defaults to 50; max 200.
    */
