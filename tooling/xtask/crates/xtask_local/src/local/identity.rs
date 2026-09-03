@@ -75,11 +75,14 @@ pub const MAIL_FROM: &str = "noreply@macro.local";
 /// new-user registration fail), so both sides read this one constant. Local-only.
 pub const INTERNAL_AUTH_KEY: &str = "local";
 
-/// The auth-service OAuth redirect URI for an instance on `auth_port`. The
-/// FusionAuth kickstart authorizes it and services read it as
-/// `FUSIONAUTH_OAUTH_REDIRECT_URI` — build it one way so they can't drift.
-pub fn oauth_redirect_uri(auth_port: u16) -> String {
-    format!("http://localhost:{auth_port}/oauth/redirect")
+/// Localhost OAuth redirect URI for a service published on `port`.
+///
+/// FusionAuth's kickstart authorizes both authentication_service and
+/// document_cognition_service this way so a named instance's host port cannot
+/// drift from the registered callback. Auth-service also reads the auth-port
+/// variant as `FUSIONAUTH_OAUTH_REDIRECT_URI`.
+pub fn oauth_redirect_uri(port: u16) -> String {
+    format!("http://localhost:{port}/oauth/redirect")
 }
 
 /// Deterministically derive a local-only internal secret from a label and the
