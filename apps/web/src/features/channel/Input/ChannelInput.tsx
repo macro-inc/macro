@@ -313,7 +313,10 @@ export function ChannelInput(props: ChannelInputProps) {
       mentionsTracker.onMentionRemove(mention);
     },
     onChange: (markdown) => {
+      const previous = inputState.view().value;
       inputState.setValue(markdown);
+      if (markdown.trim() === previous.trim()) return;
+      typingTracker.keystroke();
     },
     onEnter: () => {
       if (isTouchDevice()) return false;
@@ -471,7 +474,7 @@ export function ChannelInput(props: ChannelInputProps) {
               }
             }}
           >
-            <Input.Editor onInput={() => typingTracker.keystroke()}>
+            <Input.Editor>
               <MarkdownShell
                 config={markdownEditor}
                 placeholder={props.input.placeholder}

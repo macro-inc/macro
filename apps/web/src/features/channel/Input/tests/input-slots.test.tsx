@@ -269,9 +269,26 @@ describe('Input slots', () => {
     await Promise.resolve();
     expect(onStartTyping).not.toHaveBeenCalled();
 
-    screen
-      .getByTestId('markdown-shell')
-      .dispatchEvent(new InputEvent('input', { bubbles: true }));
+    editorMocks.emitChange?.('hello');
+    expect(onStartTyping).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start typing when hydrate echoes an existing draft', async () => {
+    const onStartTyping = vi.fn();
+    render(() => (
+      <ChannelInput
+        input={{ ...baseInput, value: 'draft' }}
+        onStartTyping={onStartTyping}
+      />
+    ));
+
+    await Promise.resolve();
+    expect(onStartTyping).not.toHaveBeenCalled();
+
+    editorMocks.emitChange?.('draft');
+    expect(onStartTyping).not.toHaveBeenCalled();
+
+    editorMocks.emitChange?.('draft plus');
     expect(onStartTyping).toHaveBeenCalledTimes(1);
   });
 
