@@ -56,5 +56,15 @@ fn dev_mode_excludes_workers_and_optin() {
         .collect();
     assert!(!dev.contains(&"email_pubsub_workers"));
     assert!(!dev.contains(&"search_processing_service"));
+    assert!(!dev.contains(&"scheduled_action_service"));
     assert!(dev.contains(&"authentication-service"));
+}
+
+#[test]
+fn scheduled_action_is_local_only() {
+    let svc = RUST_SERVICES
+        .iter()
+        .find(|s| s.compose_name == "scheduled_action_service")
+        .unwrap();
+    assert_eq!(svc.modes, &[Mode::Local]);
 }

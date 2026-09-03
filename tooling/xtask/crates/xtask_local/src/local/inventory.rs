@@ -201,7 +201,10 @@ pub const RUST_SERVICES: &[RustService] = &[
         host_port: Some(Port::ScheduledAction),
         path_prefix: Some("/scheduled-action"),
         is_websocket: false,
-        modes: &[Mode::Local, Mode::Dev],
+        // Local-only: the binary always boots `PgPollingDispatcher`. Running it
+        // under `run-dev` against the shared-dev MacroDB would race the deployed
+        // agent-schedule-dev service for due schedules.
+        modes: &[Mode::Local],
         opt_in: false,
         no_default_features: false,
     },
