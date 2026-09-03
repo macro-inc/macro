@@ -10,6 +10,7 @@ import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
 import { recipientEntityMapper, useContacts } from '@core/user';
+import AirplaneTiltIcon from '@phosphor/airplane-tilt.svg';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
 import { invalidateCalendarOccurrences } from '@queries/calendar/occurrences';
 import { useChatQuery } from '@queries/chat';
@@ -30,6 +31,7 @@ import { CalendarToolEventPreview } from './EventPreview';
 import {
   createCalendarEventToEditorInitialValues,
   editorSubmitValuesToCreateCalendarEvent,
+  outOfOfficeNotice,
 } from './event-form-adapter';
 import { openToolCalendarEvent } from './open-tool-event';
 
@@ -338,6 +340,28 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
               Waiting for the response to finish before this event can be
               edited.
             </p>
+          </Show>
+          <Show when={outOfOfficeNotice(props.initialData)}>
+            {(notice) => (
+              <div
+                role="note"
+                aria-label="Out-of-office event"
+                class="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-bg p-3 text-xs text-warning-ink"
+              >
+                <AirplaneTiltIcon class="mt-px size-4 shrink-0" />
+                <div class="flex min-w-0 flex-col gap-1">
+                  <span class="font-medium">Out-of-office event</span>
+                  <span>{notice().effect}</span>
+                  <Show when={notice().declineMessage}>
+                    {(message) => (
+                      <span class="italic">
+                        Auto-decline reply: “{message()}”
+                      </span>
+                    )}
+                  </Show>
+                </div>
+              </div>
+            )}
           </Show>
           <EventForm
             controller={controller}

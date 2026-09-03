@@ -7,6 +7,44 @@ import type {
   EventTimeInput,
 } from '@service-cognition/generated/tools/types';
 import { format, isValid, parseISO, subDays } from 'date-fns';
+import { match } from 'ts-pattern';
+
+/**
+ * The consequential side effects of a deferred out-of-office create, so the
+ * confirmation composer can disclose them before the user confirms. EventForm
+ * does not surface `eventType`/`outOfOffice`, so without this an event that
+ * looks ordinary would silently write an away block and auto-decline meetings.
+ */
+export type OutOfOfficeNotice = {
+  /** Plain-language description of the away status and auto-decline behavior. */
+  effect: string;
+  /** The reply sent to auto-declined organizers, when one is set. */
+  declineMessage?: string;
+};
+
+/** Describe a deferred create's out-of-office effects, or `undefined` when it is a regular event. */
+export function outOfOfficeNotice(
+  event: CreateCalendarEvent
+): OutOfOfficeNotice | undefined {
+  if (event.eventType !== 'out_of_office') return undefined;
+  const effect = match(event.outOfOffice?.autoDeclineMode ?? 'decline_none')
+    .with(
+      'decline_all',
+      () =>
+        'Google will show you as away and automatically decline all conflicting invitations.'
+    )
+    .with(
+      'decline_new_only',
+      () =>
+        'Google will show you as away and automatically decline newly received conflicting invitations.'
+    )
+    .otherwise(
+      () =>
+        'Google will show you as away for this time; conflicting invitations are left untouched.'
+    );
+  const declineMessage = event.outOfOffice?.declineMessage?.trim() || undefined;
+  return { effect, declineMessage };
+}
 
 const DATE_VALUE = 'yyyy-MM-dd';
 const DATETIME_VALUE = "yyyy-MM-dd'T'HH:mm";
