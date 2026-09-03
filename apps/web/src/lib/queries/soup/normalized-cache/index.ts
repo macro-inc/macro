@@ -16,6 +16,7 @@ export {
   removeSoupEntities,
   removeSoupEntitiesFromDoneFilteredQueries,
   removeSoupEntitiesFromQueriesReferencing,
+  restoreSoupEntityToDoneFilteredQueries,
 } from './operations';
 export type {
   SoupEntityTag,

@@ -79,6 +79,7 @@ vi.mock('@queries/soup/normalized-cache', () => ({
   optimisticUpdateSoupItemUpdatedAt: vi.fn(),
   hasSoupEntity: vi.fn(() => false),
   refetchSoupEntity: vi.fn(),
+  restoreSoupEntityToDoneFilteredQueries: vi.fn(),
 }));
 
 vi.mock('@service-storage/graphql-soup', () => ({
@@ -90,6 +91,7 @@ import {
   hasSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
   refetchSoupEntity,
+  restoreSoupEntityToDoneFilteredQueries,
 } from '@queries/soup/normalized-cache';
 
 const mockOptimisticUpdateSoupItemUpdatedAt = vi.mocked(
@@ -715,6 +717,11 @@ describe('optimisticInsertNotification', () => {
       newNotification.entity_id,
       newNotification.created_at
     );
+    // A row marked done was removed from the done-filtered feeds; the merge
+    // above can't restore page membership, so the insert path re-adds it.
+    expect(
+      vi.mocked(restoreSoupEntityToDoneFilteredQueries)
+    ).toHaveBeenCalledWith(newNotification.entity_id);
     expect(mockRefetchSoupEntity).not.toHaveBeenCalled();
   });
 
@@ -777,6 +784,14 @@ describe('optimisticInsertNotification', () => {
       'channel-1',
       expect.anything()
     );
+    // The feed row for a thread-scoped notification is the thread, so that is
+    // the row restored into the done-filtered feeds.
+    expect(
+      vi.mocked(restoreSoupEntityToDoneFilteredQueries)
+    ).toHaveBeenCalledWith('thread-1');
+    expect(
+      vi.mocked(restoreSoupEntityToDoneFilteredQueries)
+    ).not.toHaveBeenCalledWith('channel-1');
   });
 
   it('should bump the updatedAt of an already-cached email thread', () => {

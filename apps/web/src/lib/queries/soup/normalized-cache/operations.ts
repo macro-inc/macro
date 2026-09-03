@@ -472,6 +472,110 @@ export function removeSoupEntitiesFromDoneFilteredQueries(
   return removeSoupEntitiesWhere(entityIds, soupQueryExcludesDone);
 }
 
+/**
+ * Prepend a cached entity to the done-excluding soup queries (see
+ * `soupQueryExcludesDone`) whose pages don't contain it. A fresh notification
+ * puts its entity back into those feeds server-side, but the client row may
+ * have been optimistically removed when it was marked done — or the feed was
+ * fetched while the entity had nothing outstanding — and the normalized
+ * field merge only patches rows already present, so without this the feeds
+ * would not show the entity again until their next refetch. Grouped pages
+ * whose target group can't be resolved locally (e.g. date buckets)
+ * invalidate instead.
+ */
+export function restoreSoupEntityToDoneFilteredQueries(entityId: string): void {
+  const item = getSoupEntityById(entityId);
+  if (!item) return;
+
+  const cancelQuery = (key: QueryKey) =>
+    queryClient.cancelQueries({
+      queryKey: key,
+      exact: true,
+      predicate: (query) => query.state.data !== undefined,
+    });
+
+  const metaFor = (key: QueryKey) =>
+    getSoupQueryMeta(queryClient.getQueryCache().find({ queryKey: key })?.meta);
+
+  const containsEntity = (items: SoupApiItem[]) =>
+    items.some((existing) => getSoupItemId(existing) === entityId);
+
+  for (const [key, prev] of queryClient.getQueriesData<SoupItemsInfiniteData>({
+    queryKey: soupKeys.items._def,
+  })) {
+    if (!soupQueryExcludesDone(key)) continue;
+    if (!prev?.pages?.length) continue;
+    if (prev.pages.some((page) => containsEntity(page.items))) continue;
+
+    const filter = metaFor(key).itemFilter;
+    if (filter && !filter(item)) continue;
+
+    cancelQuery(key);
+    queryClient.setQueryData<SoupItemsInfiniteData>(key, {
+      ...prev,
+      pages: prev.pages.map((page, index) =>
+        index === 0 ? { ...page, items: [item, ...page.items] } : page
+      ),
+    });
+  }
+
+  for (const [
+    key,
+    prev,
+  ] of queryClient.getQueriesData<SoupAstItemsInfiniteData>({
+    queryKey: soupKeys.astItems._def,
+  })) {
+    if (!soupQueryExcludesDone(key)) continue;
+    if (!prev?.pages?.length) continue;
+
+    const meta = metaFor(key);
+    if (meta.itemFilter && !meta.itemFilter(item)) continue;
+
+    const firstPage = prev.pages[0];
+
+    if (firstPage.kind === 'flat') {
+      if (
+        prev.pages.some(
+          (page) => page.kind === 'flat' && containsEntity(page.items)
+        )
+      ) {
+        continue;
+      }
+
+      cancelQuery(key);
+      queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
+        ...prev,
+        pages: prev.pages.map((page, index) =>
+          index === 0 && page.kind === 'flat'
+            ? { ...page, items: [item, ...page.items] }
+            : page
+        ),
+      });
+      continue;
+    }
+
+    // Grouped parents keep membership entirely on the first page.
+    if (
+      entityId in firstPage.items ||
+      firstPage.groups.some((group) => group.itemIds.includes(entityId))
+    ) {
+      continue;
+    }
+
+    const nextPage = insertGroupedPage(firstPage, item, entityId, meta.groupBy);
+    if (!nextPage) {
+      queryClient.invalidateQueries({ queryKey: key });
+      continue;
+    }
+
+    cancelQuery(key);
+    queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
+      ...prev,
+      pages: [nextPage, ...prev.pages.slice(1)],
+    });
+  }
+}
+
 /** Remove entities from the soup queries whose key matches the predicate. */
 function removeSoupEntitiesWhere(
   entityIds: Set<string>,
