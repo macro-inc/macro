@@ -5,6 +5,7 @@ import {
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
 import CaretRightIcon from '@phosphor/caret-right.svg';
+import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import XIcon from '@phosphor/x.svg';
@@ -19,18 +20,19 @@ import { FEATURED_DISCOVER, providerIcon } from './provider-meta';
 import { openConnectionsProvider } from './view-state';
 
 export function DiscoverView(props: { model: ConnectionsModel }) {
-  const connectedSlugs = createMemo(
-    () =>
-      new Set(
-        props.model.capabilities
-          .filter(
-            (row) =>
-              row.mechanism === 'pipedream' && row.status !== 'not-connected'
-          )
-          .map((row) => row.provider)
-      )
-  );
-  const catalog = createPipedreamCatalogSearch(connectedSlugs);
+  const alreadyHave = createMemo(() => {
+    const slugs = new Set<string>();
+    for (const row of props.model.capabilities) {
+      if (row.status !== 'not-connected') slugs.add(row.provider);
+    }
+    for (const leftover of props.model.leftovers) {
+      if (leftover.mechanism === 'pipedream') {
+        slugs.add(leftover.id.slice('pipedream:'.length));
+      }
+    }
+    return slugs;
+  });
+  const catalog = createPipedreamCatalogSearch(() => new Set());
   const [addingCustom, setAddingCustom] = createSignal(false);
 
   const featured = createMemo(() => {
@@ -99,6 +101,9 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
                     title={item.name}
                     description={item.note}
                   >
+                    <Show when={alreadyHave().has(item.id)}>
+                      <AddedMark />
+                    </Show>
                     <CaretRightIcon class="size-4 text-ink-extra-muted" />
                   </IntegrationRow>
                 </button>
@@ -128,7 +133,14 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
             </div>
           </Show>
           <Show when={!catalog.query.isError}>
-            <For each={rest()}>{(entry) => <CatalogRow entry={entry} />}</For>
+            <For each={rest()}>
+              {(entry) => (
+                <CatalogRow
+                  entry={entry}
+                  added={alreadyHave().has(entry.app_slug)}
+                />
+              )}
+            </For>
             <Show
               when={
                 !catalog.query.isFetching &&
@@ -196,7 +208,19 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
   );
 }
 
-function CatalogRow(props: { entry: PipedreamCatalogEntryResponse }) {
+function AddedMark() {
+  return (
+    <span class="inline-flex items-center gap-1 text-sm text-ink-muted">
+      <CheckIcon class="size-3.5" />
+      Added
+    </span>
+  );
+}
+
+function CatalogRow(props: {
+  entry: PipedreamCatalogEntryResponse;
+  added: boolean;
+}) {
   const { connect, busy } = createPipedreamCatalogConnect({
     entry: () => props.entry,
     onConnected: (entry) => toast.success(`${entry.display_name} connected`),
@@ -214,11 +238,18 @@ function CatalogRow(props: { entry: PipedreamCatalogEntryResponse }) {
       title={props.entry.display_name}
       description={props.entry.description ?? props.entry.app_slug}
     >
-      <ConnectAction
-        label="Connect"
-        onClick={() => void connect()}
-        loading={busy()}
-      />
+      <Show
+        when={props.added}
+        fallback={
+          <ConnectAction
+            label="Connect"
+            onClick={() => void connect()}
+            loading={busy()}
+          />
+        }
+      >
+        <AddedMark />
+      </Show>
     </IntegrationRow>
   );
 }
