@@ -50,31 +50,26 @@ export function SettingsPage(props: {
             {props.backLabel ?? 'Connections'}
           </button>
         </Show>
-        <header class="flex items-start justify-between gap-4">
-          <div class="flex min-w-0 items-start gap-3.5">
-            <Show when={props.icon}>
-              <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-8 [&_img]:size-8">
-                {props.icon}
-              </div>
-            </Show>
-            <div class="flex flex-col gap-1.5 min-w-0">
-              <h1
-                class={cn(
-                  'text-2xl/tight font-semibold text-ink',
-                  props.icon && 'flex min-h-9 items-center'
-                )}
-              >
+        <header class="flex flex-col gap-1.5">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex min-w-0 items-center gap-3.5">
+              <Show when={props.icon}>
+                <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-8 [&_img]:size-8">
+                  {props.icon}
+                </div>
+              </Show>
+              <h1 class="min-w-0 text-2xl/tight font-semibold text-ink">
                 {props.title}
               </h1>
-              <Show when={props.description}>
-                <p class="text-sm text-ink-muted text-balance">
-                  {props.description}
-                </p>
-              </Show>
             </div>
+            <Show when={props.actions}>
+              <div class="shrink-0 pt-1">{props.actions}</div>
+            </Show>
           </div>
-          <Show when={props.actions}>
-            <div class="shrink-0 pt-1">{props.actions}</div>
+          <Show when={props.description}>
+            <p class="text-sm text-ink-muted text-balance">
+              {props.description}
+            </p>
           </Show>
         </header>
         <div class="mt-9 flex flex-col gap-10">{props.children}</div>
