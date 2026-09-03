@@ -183,7 +183,7 @@ export function SettingsRow(props: {
           class={cn(
             'flex items-center gap-2',
             props.stackOnNarrow
-              ? '@[460px]:shrink-0 @[460px]:justify-end @[460px]:text-right'
+              ? 'w-full @[460px]:w-auto @[460px]:shrink-0 @[460px]:justify-end @[460px]:text-right'
               : 'shrink-0 justify-end text-right'
           )}
         >

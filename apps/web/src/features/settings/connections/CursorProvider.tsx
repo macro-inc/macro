@@ -7,8 +7,10 @@ import {
   useSaveCursorApiKey,
   useSetCursorDefaultModel,
 } from '@queries/auth/cursor-api-key';
-import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import type { CursorModelOption } from '@service-auth/generated/schemas';
+import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import { Button, Select } from '@ui';
+import { createSignal, Show } from 'solid-js';
 import { DisconnectAction } from '../integration-ui';
 import {
   SettingsCard,
@@ -104,7 +106,11 @@ export function CursorProvider() {
           >
             <Show
               when={!cursorStatus.isPlaceholderData}
-              fallback={<span class="text-xs text-ink-muted">Loading…</span>}
+              fallback={
+                <span role="status" aria-label="Loading">
+                  <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
+                </span>
+              }
             >
               <Show when={cursorRegistered()}>
                 <DisconnectAction
@@ -172,27 +178,44 @@ export function CursorProvider() {
                 stackOnNarrow
                 align="start"
               >
-                <select
-                  id="cursor-default-model"
-                  class="settings-input w-full min-w-0 bg-inset disabled:opacity-100 @[460px]:w-56"
-                  value={selectedModelId()}
+                <Select<CursorModelOption>
+                  class="w-full"
+                  options={models()}
+                  optionValue="id"
+                  optionTextValue="displayName"
+                  value={
+                    models().find((model) => model.id === selectedModelId()) ??
+                    undefined
+                  }
+                  onChange={(model) => {
+                    if (model) void handleCursorModelChange(model.id);
+                  }}
                   disabled={
                     setCursorDefaultModel.isPending || models().length === 0
                   }
-                  aria-busy={models().length === 0}
-                  onChange={(event) =>
-                    void handleCursorModelChange(event.currentTarget.value)
-                  }
                 >
-                  <Show when={models().length === 0}>
-                    <option value="">Loading models…</option>
-                  </Show>
-                  <For each={models()}>
-                    {(model) => (
-                      <option value={model.id}>{model.displayName}</option>
-                    )}
-                  </For>
-                </select>
+                  <Select.Trigger
+                    id="cursor-default-model"
+                    class="settings-input w-full min-w-0 bg-inset disabled:opacity-100 @[460px]:w-56"
+                    aria-label="Default model"
+                    aria-busy={models().length === 0}
+                  >
+                    <Select.Value<CursorModelOption>>
+                      {(state) => state.selectedOption()?.displayName ?? ''}
+                    </Select.Value>
+                    <Show
+                      when={models().length === 0}
+                      fallback={<Select.Icon />}
+                    >
+                      <span role="status" aria-label="Loading models">
+                        <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
+                      </span>
+                    </Show>
+                  </Select.Trigger>
+                  <Select.Content>
+                    <Select.Listbox />
+                  </Select.Content>
+                </Select>
               </SettingsRow>
             </Show>
           </Show>

@@ -105,23 +105,20 @@ describe('CursorProvider', () => {
       defaultModelId: null,
       updatedAt: '2026-08-27T12:00:00Z',
     };
+    mocks.models.data = {
+      models: [
+        { id: 'default-model', displayName: 'Default Model' },
+        { id: 'grok-4.6', displayName: 'Grok 4.6' },
+      ],
+    };
 
     render(() => <CursorProvider />);
 
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
-    expect(screen.getByLabelText('Default model')).toHaveProperty(
-      'value',
-      'default-model'
-    );
-
-    fireEvent.change(screen.getByLabelText('Default model'), {
-      target: { value: 'default-model' },
-    });
-    await waitFor(() => {
-      expect(mocks.setDefaultModel).toHaveBeenCalledWith('default-model');
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');
-    });
+    const picker = screen.getByRole('button', { name: /Default Model/ });
+    expect(picker.textContent).toContain('Default Model');
+    expect(picker.getAttribute('aria-haspopup')).toBe('listbox');
 
     fireEvent.click(
       screen.getByRole('button', { name: 'Disconnect from Macro' })
@@ -146,7 +143,7 @@ describe('CursorProvider', () => {
 
     render(() => <CursorProvider />);
 
-    expect(screen.getByText('Loading…')).toBeTruthy();
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
   });
 
@@ -160,9 +157,11 @@ describe('CursorProvider', () => {
 
     render(() => <CursorProvider />);
 
-    const select = screen.getByLabelText('Default model');
-    expect(select).toHaveProperty('disabled', true);
-    expect(select).toHaveProperty('value', '');
-    expect(screen.getByRole('option', { name: 'Loading models…' })).toBeTruthy();
+    const picker = document.getElementById('cursor-default-model');
+    expect(picker).toBeTruthy();
+    expect(picker).toHaveProperty('disabled', true);
+    expect(picker?.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('status', { name: 'Loading models' })).toBeTruthy();
+    expect(screen.queryByText('Loading models…')).toBeNull();
   });
 });

@@ -6,6 +6,8 @@ import {
 } from '@core/pipedream/catalog';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import XIcon from '@phosphor/x.svg';
 import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -60,15 +62,26 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
 
   return (
     <div class="flex flex-col gap-10">
-      <label class="block">
+      <label class="relative block">
         <span class="sr-only">Search Connections</span>
         <input
           type="search"
           value={catalog.searchInput()}
           onInput={(event) => catalog.onSearchInput(event.currentTarget.value)}
           placeholder="Search Connections"
-          class="settings-input h-11 w-full"
+          class="settings-input h-11 w-full pr-10 [&::-webkit-search-cancel-button]:hidden"
         />
+        <Show when={catalog.searchInput()}>
+          <button
+            type="button"
+            aria-label="Clear search"
+            class="absolute top-1/2 right-2 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-ink-muted outline-none hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+            onPointerDown={(event) => event.preventDefault()}
+            onClick={() => catalog.onSearchInput('')}
+          >
+            <XIcon class="size-4" />
+          </button>
+        </Show>
       </label>
 
       <SettingsSection title="Featured">
@@ -118,17 +131,6 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
             <For each={rest()}>{(entry) => <CatalogRow entry={entry} />}</For>
             <Show
               when={
-                catalog.query.isFetching &&
-                rest().length === 0 &&
-                featured().length === 0
-              }
-            >
-              <p class="px-6 py-6 text-sm text-ink-muted">
-                Loading connectors…
-              </p>
-            </Show>
-            <Show
-              when={
                 !catalog.query.isFetching &&
                 rest().length === 0 &&
                 featured().length === 0 &&
@@ -139,16 +141,30 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
                 No Connections match that search.
               </p>
             </Show>
-            <Show when={catalog.query.hasNextPage}>
+            <Show when={catalog.query.isFetching}>
+              <div
+                class="flex justify-center px-6 py-6"
+                role="status"
+                aria-label="Loading"
+              >
+                <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
+              </div>
+            </Show>
+            <Show
+              when={
+                rest().length > 0 &&
+                !catalog.query.isFetching &&
+                catalog.query.hasNextPage
+              }
+            >
               <div class="px-4 py-3 text-center">
                 <Button
                   variant="outline"
                   size="sm"
                   depth={3}
-                  disabled={catalog.query.isFetchingNextPage}
                   onClick={() => void catalog.query.fetchNextPage()}
                 >
-                  {catalog.query.isFetchingNextPage ? 'Loading…' : 'Load more'}
+                  Load more
                 </Button>
               </div>
             </Show>
