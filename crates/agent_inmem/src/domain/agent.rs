@@ -537,7 +537,7 @@ async fn run_ask(
     let (question, options) = parse_ask(&question);
     let requester = AcpUserInputRequester {
         connection: connection.clone(),
-        session_id: acp_session_id,
+        session_id: acp_session_id.clone(),
     };
     let text = match requester.ask(UserInputRequest { question, options }).await {
         Ok(UserInputOutcome::Answered(value)) => format!("You answered: {value}"),
