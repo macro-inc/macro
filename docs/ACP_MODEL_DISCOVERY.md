@@ -1,6 +1,6 @@
 # ACP model discovery
 
-Status: design sketch.
+Status: implemented without result caching.
 
 ## Goal
 
@@ -187,8 +187,11 @@ promise that every repository exposes exactly the same models.
 ### Cursor
 
 Resolve the authenticated user's Cursor key exactly as a normal Cursor session
-does, start `CursorSessionService` over a duplex pipe, and run the common probe.
-Dropping the pipe ends the service task.
+does and fetch `/v1/models`. The adapter builds the same raw model
+`SessionConfigOption` used by `CursorSessionService`, then runs it through the
+shared fold projector. Cursor's ACP model option is itself backed by this API,
+so creating an otherwise empty ACP transport would add no discovery behavior.
+No Cursor cloud agent or external-session row is created.
 
 This replaces the settings-only `GET /cursor-api-key/models` path after the new
 path is proven. Keeping both indefinitely would allow the session picker and
@@ -196,10 +199,9 @@ settings picker to disagree.
 
 ### In-memory
 
-The in-memory ACP agent currently accepts `session/set_config_option` but its
-`session/new` response does not advertise `configOptions`. Make it return a
-model select describing the model or models the in-memory engine can actually
-run. Then execute the common probe over an ephemeral in-process channel.
+The in-memory ACP agent returns a model select describing the models its
+`TurnEngine` can actually run. The discovery adapter builds that same option
+from the same engine and runs it through the shared fold projector.
 
 The frontend-owned `IN_MEMORY_HARNESS` model list can be removed once this path
 ships.
@@ -227,12 +229,18 @@ server still uses the same projector as Cursor, in-memory, and live folds.
 
 Keep this control exchange distinct from the existing multiplexed ACP frames.
 It is connection-level runtime control, not traffic for a persisted session.
-Only one model probe per harness should be in flight at a time to prevent
-repeated UI actions from starting multiple child processes.
 
 Closing the child's stdio and waiting for it to exit is the normal cleanup.
 After a short grace period macrod may terminate that specific child process.
 It must never kill processes by executable name.
+
+### Pairing macrod
+
+Before opening a pairing, macrod starts the same temporary ACP subprocess
+locally and includes its projected model catalog in `CreatePairingRequest`.
+The catalog lives on the pairing row for that row's existing fifteen-minute
+lifetime, allowing the approval dialog to show real models before a
+`HarnessId`, runtime connection, or `agent_session` row exists.
 
 ## Authorization
 
@@ -273,11 +281,8 @@ provider default or an agent-config default remains a separate write concern.
   harness must not hold back completed selectors.
 - If the dialog closes, cancel its requests, but do not assume HTTP cancellation
   reached every provider. The service still closes every probe.
-- Coalesce concurrent loads for the same connected macrod harness while they
-  are in flight. This is concurrency control, not a result cache.
-- Apply a service-wide probe semaphore so repeated clients cannot create
-  unbounded subprocess fan-out. A request still schedules exactly one probe per
-  target; the semaphore only bounds how many run at once across the deployment.
+- Each macrod request starts its own subprocess. The initial implementation has
+  no result cache, in-flight deduplication, or concurrency semaphore.
 - Do not persist ACP session ids, fold logs, or external-agent rows.
 - Do not call provider teardown for a normal Macro session.
 - Never send a prompt.

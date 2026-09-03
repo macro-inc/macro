@@ -32,6 +32,24 @@ export type AgentAction = (AgentPromptAction & {
 export type AgentActionId = string;
 
 /**
+ * One model picker option.
+ */
+export type AgentModelDto = {
+    /**
+     * Optional provider description.
+     */
+    description?: string | null;
+    /**
+     * Provider model id.
+     */
+    id: string;
+    /**
+     * Display name.
+     */
+    name: string;
+};
+
+/**
  * Ask the agent to work on something.
  */
 export type AgentPromptAction = {
@@ -358,6 +376,38 @@ export type ExternalSessionResponse = {
 };
 
 /**
+ * HTTP request selecting one provider to probe.
+ */
+export type LoadAgentModelsRequest = {
+    /**
+     * `in-memory`, `cursor`, or `macrod`.
+     */
+    harness: string;
+    /**
+     * Required for macrod and forbidden for other targets.
+     */
+    harnessId?: string | null;
+};
+
+/**
+ * Successful model-discovery response.
+ */
+export type LoadAgentModelsResponse = {
+    /**
+     * Current provider model, if model selection is available.
+     */
+    currentModel?: string | null;
+    /**
+     * Ordered model catalog.
+     */
+    models: Array<AgentModelDto>;
+    /**
+     * `available` or `unsupported`.
+     */
+    status: string;
+};
+
+/**
  * Which way a logged frame travelled, mirroring [`Message`]'s discriminant.
  */
 export type LogDirectionDto = 'to_server' | 'to_runtime';
@@ -476,6 +526,49 @@ export type SessionStatusDto = {
 } | {
     kind: 'disconnected';
 };
+
+export type LoadAgentModelsHandlerData = {
+    body: LoadAgentModelsRequest;
+    path?: never;
+    query?: never;
+    url: '/agent-models/load';
+};
+
+export type LoadAgentModelsHandlerErrors = {
+    /**
+     * Invalid target
+     */
+    400: unknown;
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * Harness is not visible to caller
+     */
+    403: unknown;
+    /**
+     * Macrod runtime is disconnected
+     */
+    409: unknown;
+    /**
+     * Provider probe failed
+     */
+    502: unknown;
+    /**
+     * Macrod probe timed out
+     */
+    504: unknown;
+};
+
+export type LoadAgentModelsHandlerResponses = {
+    /**
+     * Fresh provider model catalog
+     */
+    200: LoadAgentModelsResponse;
+};
+
+export type LoadAgentModelsHandlerResponse = LoadAgentModelsHandlerResponses[keyof LoadAgentModelsHandlerResponses];
 
 export type GetAgentSandboxSizeData = {
     body?: never;

@@ -10,6 +10,53 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agent-models/load": {
+      "post": {
+        "tags": ["agent-models"],
+        "summary": "Probe one provider's model catalog without creating an agent session.",
+        "operationId": "load_agent_models_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoadAgentModelsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Fresh provider model catalog",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoadAgentModelsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid target"
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Harness is not visible to caller"
+          },
+          "409": {
+            "description": "Macrod runtime is disconnected"
+          },
+          "502": {
+            "description": "Provider probe failed"
+          },
+          "504": {
+            "description": "Macrod probe timed out"
+          }
+        }
+      }
+    },
     "/agent-sandbox-size": {
       "get": {
         "tags": ["agent-sessions"],
@@ -878,6 +925,25 @@
         "format": "uuid",
         "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nMinted only by the server at accept time, as a v7 uuid so ids sort by mint\ntime. On the wire and in JSON it is the bare uuid, and a uuid-shaped\nrequest id is the whole ownership test: the server is the only writer of\nruntime-bound frames. The machine's own handshake request ids\n(`agent_session:{session}:{n}`) are not uuids and stay `None`."
       },
+      "AgentModelDto": {
+        "type": "object",
+        "description": "One model picker option.",
+        "required": ["id", "name"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional provider description."
+          },
+          "id": {
+            "type": "string",
+            "description": "Provider model id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          }
+        }
+      },
       "AgentPromptAction": {
         "type": "object",
         "description": "Ask the agent to work on something.",
@@ -1203,6 +1269,44 @@
           }
         }
       },
+      "LoadAgentModelsRequest": {
+        "type": "object",
+        "description": "HTTP request selecting one provider to probe.",
+        "required": ["harness"],
+        "properties": {
+          "harness": {
+            "type": "string",
+            "description": "`in-memory`, `cursor`, or `macrod`."
+          },
+          "harnessId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Required for macrod and forbidden for other targets."
+          }
+        }
+      },
+      "LoadAgentModelsResponse": {
+        "type": "object",
+        "description": "Successful model-discovery response.",
+        "required": ["status", "models"],
+        "properties": {
+          "currentModel": {
+            "type": ["string", "null"],
+            "description": "Current provider model, if model selection is available."
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentModelDto"
+            },
+            "description": "Ordered model catalog."
+          },
+          "status": {
+            "type": "string",
+            "description": "`available` or `unsupported`."
+          }
+        }
+      },
       "LogDirectionDto": {
         "type": "string",
         "description": "Which way a logged frame travelled, mirroring [`Message`]'s discriminant.",
@@ -1345,6 +1449,10 @@
     {
       "name": "agent-sessions",
       "description": "Agent sessions"
+    },
+    {
+      "name": "agent-models",
+      "description": "Fresh provider model discovery"
     }
   ]
 }
