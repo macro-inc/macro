@@ -453,6 +453,9 @@ fn queued_draft_save_is_visible_in_the_thread_page_read() {
 // The discard flow layered on the save flow: a queued DeleteEmailDraft with
 // a Remove link patch must compose with the still-queued save, so an
 // offline save-then-discard reads back as a thread without the draft.
+// The two writes deliberately use distinct uuids: production reuses the
+// draft handle so the delete REPLACES the queued save, but this test pins
+// layer composition, which needs both layers present.
 #[test]
 fn queued_draft_delete_removes_the_draft_from_the_thread_page_read() {
     block_on(async {

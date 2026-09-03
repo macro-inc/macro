@@ -1053,9 +1053,9 @@ async fn test_upsert_guard_rejects_cross_inbox_overwrite(
 ) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
 
-    // A draft owned by the cccc inbox; the write is issued from aaaa. Draft
-    // IDs are client-generated, so a caller can name any UUID — the conflict
-    // clause, not the validation read, is what must hold the line.
+    // A draft owned by the cccc inbox; the write is issued from aaaa. The
+    // IDs reaching the upsert come from validated reads, but reads race —
+    // the conflict clause, not the read, is what must hold the line.
     let victim = Uuid::parse_str("ee000005-0000-0000-0000-000000000005")?;
     let attacker_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let attacker_thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
@@ -1133,7 +1133,7 @@ async fn test_insert_message_reports_applied_on_create(pool: Pool<Postgres>) -> 
         .insert_message(&attack_input(fresh_id, thread), &contacts, link, None, true)
         .await?;
 
-    assert!(applied, "a fresh client-generated id inserts normally");
+    assert!(applied, "a fresh unclaimed id inserts normally");
 
     Ok(())
 }

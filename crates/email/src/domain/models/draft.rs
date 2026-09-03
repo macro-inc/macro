@@ -48,10 +48,9 @@ pub struct CreateDraftInput {
     /// Ignored for drafts.
     pub actor: Option<MacroUserIdStr<'static>>,
     /// Client draft handle to bind to the final message row. Set only by
-    /// user-scoped (GraphQL) saves whose handle did not resolve through the
-    /// mapping table — never from a request body. The binding is upserted
-    /// inside the insert transaction so replayed offline saves converge on
-    /// one server-minted row.
+    /// user-scoped (GraphQL) saves during handle resolution — never from a
+    /// request body. The binding is upserted inside the insert transaction
+    /// so replayed offline saves converge on one server-minted row.
     pub draft_client_binding: Option<Uuid>,
     /// Client thread handle to bind to the final thread row; same contract
     /// as `draft_client_binding`.
@@ -130,7 +129,7 @@ pub struct SavedUserDraft {
     pub link: Link,
 }
 
-/// The rows removed by one guarded draft delete.
+/// What an applied guarded draft delete removed beyond the draft row.
 #[derive(Debug, Clone, Copy)]
 pub struct DraftDeletion {
     /// Whether deleting the draft emptied its thread and removed it too.

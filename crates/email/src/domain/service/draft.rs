@@ -99,20 +99,25 @@ where
                 }
             }
         }
-        if let Some(handle) = input.thread_db_id {
-            input.thread_client_binding = Some(handle);
-            if let Some(thread_id) = self
-                .email_repo
-                .thread_id_for_client_thread_id(handle, accessible_link_ids)
-                .await
-                .map_err(anyhow::Error::from)?
-            {
-                input.thread_db_id = Some(thread_id);
+        // Thread handles are a compose concern: replies derive their thread
+        // from the reply target, and binding the reply's server-thread hint
+        // here would write junk mapping rows — or, for a cross-inbox reply,
+        // map the original thread's ID onto the newly created thread.
+        if input.replying_to_id.is_none() {
+            if let Some(handle) = input.thread_db_id {
+                input.thread_client_binding = Some(handle);
+                if let Some(thread_id) = self
+                    .email_repo
+                    .thread_id_for_client_thread_id(handle, accessible_link_ids)
+                    .await
+                    .map_err(anyhow::Error::from)?
+                {
+                    input.thread_db_id = Some(thread_id);
+                }
+                // Unmapped handles stay in place: validate_thread_hint
+                // attaches an accessible server thread, and anything else
+                // gets a server-minted thread the binding then points at.
             }
-            // Unmapped: the hint may still be an accessible server thread
-            // ID — validate_thread_hint attaches it — or a fresh client
-            // handle, which gets a server-minted thread. Either way the
-            // binding makes replays converge.
         }
         Ok(())
     }
@@ -494,10 +499,10 @@ where
     /// Reply drafts never reach the decision: their linkage was already
     /// re-derived from the reply target. A hint naming an accessible thread
     /// in the sending inbox attaches to it; any other hint — unknown, or a
-    /// thread owned elsewhere, both reported by behaving identically — gets
-    /// a fresh server-minted thread. Compose saves replayed offline still
-    /// converge on one thread through the client-handle binding, never by
-    /// letting the hint become the thread's primary key.
+    /// thread owned elsewhere, handled identically — gets a fresh
+    /// server-minted thread. Compose saves replayed offline still converge
+    /// on one thread through the client-handle binding, never by letting
+    /// the hint become the thread's primary key.
     async fn validate_thread_hint(
         &self,
         link_id: Uuid,

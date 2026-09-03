@@ -78,10 +78,10 @@ pub(crate) async fn insert_message(
 /// Upsert a draft message row.
 ///
 /// The conflict clause is owner-guarded: an existing row is only updated when
-/// it is an unsent draft in the sending inbox. Draft IDs can be
-/// client-generated, so without this a caller could name another inbox's
-/// message ID and overwrite it — validation reads race, this clause cannot.
-/// Returns `false` when the guard rejected the write.
+/// it is an unsent draft in the sending inbox. The IDs reaching this upsert
+/// come from validated reads, but reads race — the guard, not the read, is
+/// what keeps a raced save from rewriting another inbox's row or a sent
+/// message. Returns `false` when the guard rejected the write.
 pub(crate) async fn upsert_draft(
     tx: &mut sqlx::PgConnection,
     input: &ResolvedDraftInput,
