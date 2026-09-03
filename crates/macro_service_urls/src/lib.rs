@@ -527,8 +527,15 @@ service_url! {
         /// Connection gateway HTTP API URL.
         pub ConnectionGatewayUrl {
             local: "http://localhost:8082",
-            dev: "https://connection-gateway-dev.macro.com",
-            prod: "https://connection-gateway.macro.com",
+            dev: "https://dev-gateway.macro.com/connection-gateway",
+            prod: "https://gateway.macro.com/connection-gateway",
+        },
+        /// Connection gateway WebSocket URL. Keep this in lockstep with
+        /// [`ConnectionGatewayUrl`]. Both hosts move in the same release.
+        pub ConnectionGatewayWebsocketUrl {
+            local: "ws://localhost:8082",
+            dev: "wss://dev-gateway.macro.com/connection-gateway",
+            prod: "wss://gateway.macro.com/connection-gateway",
         },
         /// Document cognition service API URL.
         pub DocumentCognitionServiceUrl {

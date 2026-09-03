@@ -58,8 +58,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "connection-gateway",
-		dev: "https://connection-gateway-dev.macro.com/api-doc/openapi.json",
-		prod: "https://connection-gateway-service.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/connection-gateway/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/connection-gateway/api-doc/openapi.json",
 		local: "http://localhost:8082/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-connection/",
 		orvalKey: "connectionGateway",
