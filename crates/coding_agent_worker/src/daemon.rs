@@ -51,7 +51,12 @@ impl Daemon {
         let cancel = CancellationToken::new();
         let client = EventStreamClient::new(&config.macro_api, &credentials);
         let api = HarnessApi::new(&config.macro_api, &credentials);
-        let runtime = Runtime::new(&config.macro_api, &credentials, config.harness.clone());
+        let runtime = Runtime::new(
+            &config.macro_api,
+            &credentials,
+            config.harness.clone(),
+            &config.workspace.path,
+        );
         let executor = Dispatcher::new(api, runtime, config.workspace.clone());
 
         tracing::info!(

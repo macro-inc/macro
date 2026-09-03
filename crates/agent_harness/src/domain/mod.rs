@@ -1,5 +1,7 @@
 pub mod error;
 pub mod model;
+/// Fresh model discovery without creating an agent session.
+pub mod model_load;
 pub mod ports;
 /// The per-session queue of turn-occupying actions awaiting their turn.
 pub mod queue;

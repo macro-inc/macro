@@ -126,6 +126,7 @@ where
                     requested_name: name.to_owned(),
                     host: host.clone(),
                     requested_scope: req.scope,
+                    model_catalog: req.model_catalog.clone(),
                     expires_at,
                 })
                 .await

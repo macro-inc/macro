@@ -5,4 +5,6 @@
 
 pub mod forward;
 pub mod kafka;
+/// Authenticated model discovery.
+pub mod model_load;
 pub mod runtime_gateway;

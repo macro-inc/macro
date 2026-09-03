@@ -11,6 +11,7 @@
 //! What that buys: a harness starts once per daemon rather than once per
 //! session, so only the first mention after boot pays for a cold agent.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -46,17 +47,24 @@ pub struct Runtime {
     gateway_url: String,
     token: String,
     harness: Harness,
+    cwd: PathBuf,
     live: Arc<AtomicBool>,
 }
 
 impl Runtime {
     /// A runtime that dials with the given credentials and spawns the given
     /// harness.
-    pub fn new(macro_api: &MacroApi, credentials: &HarnessCredentials, harness: Harness) -> Self {
+    pub fn new(
+        macro_api: &MacroApi,
+        credentials: &HarnessCredentials,
+        harness: Harness,
+        cwd: &Path,
+    ) -> Self {
         Self {
             gateway_url: macro_api.gateway_url(),
             token: credentials.token.clone(),
             harness,
+            cwd: cwd.to_owned(),
             live: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -86,6 +94,7 @@ impl Runtime {
             channel,
             self.token.clone(),
             self.harness.clone(),
+            self.cwd.clone(),
             Arc::clone(&self.live),
         ));
         Ok(())
@@ -101,16 +110,17 @@ async fn serve(
     channel: RuntimeChannel,
     token: String,
     harness: Harness,
+    cwd: PathBuf,
     live: Arc<AtomicBool>,
 ) {
     tracing::info!("harness bridge starting");
     // A bridge that ends cleanly is a runtime that is done being asked for
     // anything; the next delivery dials again.
-    match harness::bridge(&harness, channel).await {
+    match harness::bridge(&harness, &cwd, channel).await {
         Ok(()) => tracing::info!("harness bridge ended"),
         Err(error) => {
             tracing::warn!(error = ?error, "harness bridge ended with an error");
-            rebuild(&gateway_url, &token, &harness).await;
+            rebuild(&gateway_url, &token, &harness, &cwd).await;
         }
     }
     live.store(false, Ordering::Release);
@@ -118,7 +128,7 @@ async fn serve(
 
 /// Dial and serve again, as one retried operation: ending cleanly stops it, as
 /// does a gateway verdict no retry can change.
-async fn rebuild(gateway_url: &str, token: &str, harness: &Harness) {
+async fn rebuild(gateway_url: &str, token: &str, harness: &Harness, cwd: &Path) {
     let outcome = RetryIf::start(
         rebuild_strategy(),
         || async {
@@ -126,7 +136,7 @@ async fn rebuild(gateway_url: &str, token: &str, harness: &Harness) {
                 .await
                 .map_err(ServeError::Dial)?;
             tracing::info!("harness bridge restarting");
-            harness::bridge(harness, channel)
+            harness::bridge(harness, cwd, channel)
                 .await
                 .map_err(ServeError::Bridge)
         },

@@ -11,6 +11,8 @@ pub mod harness;
 pub mod log;
 /// The renderable message vocabulary.
 pub mod model;
+/// Projection of ACP model configuration into domain model choices.
+pub mod model_selection;
 /// The driving query port and the driven log-source port.
 pub mod ports;
 /// The domain service answering queries by folding on read.

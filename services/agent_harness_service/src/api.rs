@@ -7,8 +7,10 @@ use std::time::Duration;
 
 use agent_egress::domain::service::EgressService;
 use agent_egress::inbound::axum_router::{EgressRouterState, egress_router};
+use agent_harness::domain::model_load::AgentModelsService;
 use agent_harness::domain::service::ForwardedCommands;
 use agent_harness::inbound::forward::{ForwardGatewayState, forward_router};
+use agent_harness::inbound::model_load::{AgentModelsRouterState, agent_models_router};
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
@@ -74,12 +76,13 @@ where
 }
 
 /// Build the router and serve it until the process is asked to stop.
-pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Harness>(
+pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Harness, Models>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
     gateway_state: RuntimeGatewayState<Auth>,
     forward_state: ForwardGatewayState<Harness, Auth>,
+    model_state: AgentModelsRouterState<Models, Auth>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
@@ -91,6 +94,7 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
     Harness: ForwardedCommands,
+    Models: AgentModelsService,
 {
     let inner = api_router(
         read_state,
@@ -98,6 +102,7 @@ where
         create_state,
         gateway_state,
         forward_state,
+        model_state,
     )
     .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
     .merge(health_router())
@@ -121,12 +126,13 @@ where
         .context("agent harness service http failed")
 }
 
-fn api_router<T, R, Opener, Bots, Access, Auth, Harness>(
+fn api_router<T, R, Opener, Bots, Access, Auth, Harness, Models>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
     gateway_state: RuntimeGatewayState<Auth>,
     forward_state: ForwardGatewayState<Harness, Auth>,
+    model_state: AgentModelsRouterState<Models, Auth>,
 ) -> Router
 where
     T: AgentSessionService,
@@ -136,6 +142,7 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
     Harness: ForwardedCommands,
+    Models: AgentModelsService,
 {
     let agent_sessions = agent_session_read_router(read_state.clone())
         .merge(agent_session_control_router(control_state))
@@ -143,6 +150,7 @@ where
     Router::new()
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(read_state))
+        .merge(agent_models_router(model_state))
         .nest("/runtime", runtime_gateway_router(gateway_state))
         // Replica-to-replica command forwarding. Internal-key authenticated,
         // and reached over task-to-task networking rather than the load

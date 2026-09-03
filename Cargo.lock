@@ -169,6 +169,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "agent_acp_probe"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
@@ -277,6 +288,7 @@ dependencies = [
  "tokio-util",
  "tracing",
  "url",
+ "utoipa",
  "workspace-hack",
 ]
 
@@ -284,6 +296,7 @@ dependencies = [
 name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
+ "agent-client-protocol",
  "agent_egress",
  "agent_fold",
  "agent_harness",
@@ -309,6 +322,7 @@ dependencies = [
  "entity_access",
  "github",
  "harness_id",
+ "harnesses",
  "kafka_util",
  "lexical_client",
  "macro_auth",
@@ -357,6 +371,7 @@ dependencies = [
  "ai_toolset",
  "ai_usage",
  "bot_id",
+ "chat",
  "dashmap",
  "futures",
  "macro_user_id",
@@ -3555,6 +3570,8 @@ name = "coding_agent_worker"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "agent_acp_probe",
+ "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",

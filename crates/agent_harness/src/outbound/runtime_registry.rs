@@ -63,6 +63,26 @@ where
     pub fn is_connected(&self, harness: HarnessId) -> bool {
         self.connections.contains_key(&harness)
     }
+
+    /// Ask a harness's live runtime to probe a fresh ACP process.
+    ///
+    /// Returns `None` when no live connection exists. The caller owns the
+    /// request deadline because timeout is use-case policy.
+    pub async fn probe_models(
+        &self,
+        harness: HarnessId,
+    ) -> Option<
+        Result<
+            Vec<agent_client_protocol::schema::v1::SessionConfigOption>,
+            agent_session::domain::connection::ModelProbeError,
+        >,
+    > {
+        let connection = self
+            .connections
+            .get(&harness)
+            .map(|entry| Arc::clone(&entry))?;
+        Some(connection.probe_models().await)
+    }
 }
 
 impl<Sender> RuntimeRegistry<Sender>

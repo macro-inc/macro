@@ -28,10 +28,10 @@ use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
 };
 use agent_runtime_protocol::domain::schema::v0::{
-    AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
+    AcpMessage, ModelProbeId, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
 use dashmap::DashMap;
-use tokio::sync::{Mutex, mpsc, watch};
+use tokio::sync::{Mutex, mpsc, oneshot, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::AgentSessionId;
@@ -57,6 +57,8 @@ pub(crate) enum Routed {
     Session(AgentSessionId),
     /// The whole connection's business: a system event, or its end.
     Connection,
+    /// A connection-level model probe response, never session traffic.
+    Probe(ModelProbeId),
     /// Nothing owns it. Kept as its own answer rather than folded into
     /// `Connection` so it can be counted and logged as the anomaly it is.
     Orphan,
@@ -94,6 +96,9 @@ impl Routes {
     /// expectation is consumed - a second answer to one request has no owner.
     /// Anything carrying a `sessionId` belongs to that ACP session's owner.
     pub(crate) fn route(&mut self, message: &ToServerMessage) -> Routed {
+        if let ToServerMessage::ModelProbeResponse { request_id, .. } = message {
+            return Routed::Probe(request_id.clone());
+        }
         let ToServerMessage::Acp(AcpMessage(frame)) = message else {
             return Routed::Connection;
         };
@@ -171,6 +176,7 @@ impl<Connector> RuntimeAttachment<Connector> {
 
 /// Every session this connection carries, and where to reach it.
 type Bound = DashMap<AgentSessionId, mpsc::Sender<ToServerMessage>>;
+type PendingProbes = DashMap<ModelProbeId, oneshot::Sender<ModelProbeResult>>;
 
 /// One runtime connection and the sessions riding on it.
 ///
@@ -187,6 +193,7 @@ pub struct RuntimeConnection<Sender> {
     /// afterwards has to be able to learn it happened.
     runtime_ready: AtomicBool,
     bound: Bound,
+    pending_probes: PendingProbes,
     routes: Mutex<Routes>,
     router: OnceLock<tokio::task::AbortHandle>,
     /// Cancelled once this connection's transport has ended.
@@ -218,6 +225,7 @@ where
             handshake,
             runtime_ready: AtomicBool::new(false),
             bound: DashMap::new(),
+            pending_probes: DashMap::new(),
             routes: Mutex::new(Routes::default()),
             router: OnceLock::new(),
             closed: CancellationToken::new(),
@@ -230,6 +238,7 @@ where
     /// Stop serving this connection: it has been displaced by a newer dial.
     pub fn evict(&self) {
         self.bound.clear();
+        self.pending_probes.clear();
         if let Some(router) = self.router.get() {
             router.abort();
         }
@@ -246,6 +255,34 @@ where
     /// holder has to be told rather than discover it on the next send.
     pub async fn closed(&self) {
         self.closed.cancelled().await;
+    }
+
+    /// Ask the runtime to inspect a separate fresh ACP process and await only
+    /// the response correlated to this request.
+    pub async fn probe_models(
+        &self,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::SessionConfigOption>, ModelProbeError> {
+        let request_id = ModelProbeId::new();
+        let (reply, response) = oneshot::channel();
+        self.pending_probes.insert(request_id.clone(), reply);
+        let pending = PendingProbe {
+            request_id: request_id.clone(),
+            probes: &self.pending_probes,
+        };
+
+        self.outbound
+            .send(ToRuntimeMessage::ModelProbeRequest { request_id })
+            .await
+            .map_err(ModelProbeError::Transport)?;
+        let result = tokio::select! {
+            result = response => result.map_err(|_| ModelProbeError::Closed)?,
+            () = self.closed.cancelled() => return Err(ModelProbeError::Closed),
+        };
+        drop(pending);
+        match result {
+            ModelProbeResult::Available { config_options } => Ok(config_options),
+            ModelProbeResult::Error { message } => Err(ModelProbeError::Runtime(message)),
+        }
     }
 
     /// The gate every session on this connection shares.
@@ -344,6 +381,7 @@ where
             match routed {
                 Routed::Session(session) => self.deliver(session, message).await,
                 Routed::Connection => self.on_connection_message(message).await,
+                Routed::Probe(request_id) => self.complete_probe(request_id, message),
                 Routed::Orphan => {
                     tracing::warn!(
                         frame = ?message,
@@ -353,7 +391,23 @@ where
             }
         }
         self.bound.clear();
+        self.pending_probes.clear();
         self.closed.cancel();
+    }
+
+    fn complete_probe(&self, request_id: ModelProbeId, message: ToServerMessage) {
+        let ToServerMessage::ModelProbeResponse { result, .. } = message else {
+            unreachable!("only model probe responses receive probe routing")
+        };
+        match self.pending_probes.remove(&request_id) {
+            Some((_, waiter)) => {
+                let _ = waiter.send(result);
+            }
+            None => tracing::warn!(
+                request_id = request_id.as_str(),
+                "dropping a model probe response with no matching waiter"
+            ),
+        }
     }
 
     async fn deliver(&self, session: AgentSessionId, message: ToServerMessage) {
@@ -431,6 +485,32 @@ where
                 self.bound.remove(&session);
             }
         }
+    }
+}
+
+/// A connection-level model probe failure.
+#[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
+pub enum ModelProbeError {
+    /// Sending the request over the runtime transport failed.
+    #[error("could not send model probe request: {0}")]
+    Transport(#[source] TransportError),
+    /// The runtime connection closed before answering.
+    #[error("runtime connection closed before answering the model probe")]
+    Closed,
+    /// The runtime safely reported a probe failure.
+    #[error("runtime model probe failed: {0}")]
+    Runtime(String),
+}
+
+struct PendingProbe<'a> {
+    request_id: ModelProbeId,
+    probes: &'a PendingProbes,
+}
+
+impl Drop for PendingProbe<'_> {
+    fn drop(&mut self) {
+        self.probes.remove(&self.request_id);
     }
 }
 

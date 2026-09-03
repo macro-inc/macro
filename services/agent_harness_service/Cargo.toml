@@ -26,6 +26,7 @@ aws-sdk-sqs = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots" }
 harness_id = { path = "../../crates/harness_id" }
+harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 aws-sdk-kms = { workspace = true }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
@@ -81,4 +82,6 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]
+agent-client-protocol = { workspace = true }
 agent_session = { path = "../../crates/agent_session", features = ["test-utils"] }
+harness_id = { path = "../../crates/harness_id", features = ["test-utils"] }

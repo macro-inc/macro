@@ -33,6 +33,7 @@ mockall = { workspace = true, optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 rand = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
@@ -44,5 +45,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
-serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

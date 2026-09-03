@@ -11,7 +11,7 @@ use uuid::Uuid;
 use super::models::{
     ApprovePairingRequest, ClaimOutcome, ClaimPairingRequest, CreatePairingRequest, CreatedPairing,
     Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-    PairingStatus, RequestedHarnessScope,
+    PairingModelCatalog, PairingStatus, RequestedHarnessScope,
 };
 
 /// A pairing row to persist.
@@ -29,6 +29,8 @@ pub struct NewPairing {
     pub host: Option<String>,
     /// The scope the daemon's config asked for.
     pub requested_scope: Option<RequestedHarnessScope>,
+    /// Model choices discovered from the daemon's configured harness.
+    pub model_catalog: Option<PairingModelCatalog>,
     /// When the pairing expires.
     pub expires_at: DateTime<Utc>,
 }

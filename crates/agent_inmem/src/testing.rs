@@ -5,6 +5,9 @@ use tokio::sync::mpsc;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
 
+/// Models advertised by shared test engines.
+pub(crate) const TEST_MODELS: &[&str] = &["test-model", "other-model"];
+
 /// An engine that plays back a script of parts for every turn.
 pub(crate) struct ScriptedEngine {
     script: Vec<StreamPart>,
@@ -37,6 +40,10 @@ impl ScriptedEngine {
 }
 
 impl TurnEngine for ScriptedEngine {
+    fn supported_models(&self) -> &[&str] {
+        TEST_MODELS
+    }
+
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
         self.requests
             .lock()
@@ -67,6 +74,10 @@ impl TurnEngine for ScriptedEngine {
 pub(crate) struct HangingEngine;
 
 impl TurnEngine for HangingEngine {
+    fn supported_models(&self) -> &[&str] {
+        TEST_MODELS
+    }
+
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
         let (parts, receiver) = mpsc::channel(1);
         tokio::spawn(async move {

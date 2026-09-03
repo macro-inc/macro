@@ -18,9 +18,10 @@ use agent_client_protocol::schema::v1::{
     AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, Implementation,
     InitializeRequest, InitializeResponse, Meta, NewSessionRequest, NewSessionResponse,
     PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
-    SessionCapabilities, SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
-    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
-    ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    SessionCapabilities, SessionConfigOption, SessionId, SessionNotification,
+    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, StopReason, ToolCall as AcpToolCall, ToolCallStatus,
+    ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
@@ -115,6 +116,18 @@ impl AgentState {
         }
     }
 
+    /// ACP model configuration backed by the engine's supported-model source
+    /// and this session's current selection.
+    fn model_config_options(&self) -> Vec<SessionConfigOption> {
+        let Some(session) = self.store.get(&self.session_id) else {
+            return Vec::new();
+        };
+        crate::domain::model_options::model_config_options(
+            &session.model,
+            self.engine.supported_models(),
+        )
+    }
+
     /// Everything from the session's state that a turn answering `prompt`
     /// runs from.
     fn turn_input(&self, prompt: &str) -> TurnInput {
@@ -188,7 +201,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     let state = Arc::clone(&state);
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
-                    responder.respond(NewSessionResponse::new(acp_id))
+                    responder.respond(
+                        NewSessionResponse::new(acp_id)
+                            .config_options(state.model_config_options()),
+                    )
                 }
             },
             agent_client_protocol::on_receive_request!(),

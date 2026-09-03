@@ -13,6 +13,7 @@ mod bots_directory;
 mod config;
 mod containers;
 mod harness_bindings;
+mod model_providers;
 mod trigger;
 
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -27,12 +28,14 @@ use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{
     AgentKind, AgentRuntimeConfig, HarnessCommand, HarnessDefaults, SessionDefaults,
 };
+use agent_harness::domain::model_load::AgentModelsServiceImpl;
 use agent_harness::domain::ports::AgentRuntimeDirectory as _;
 use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::domain::trigger_router::{
     RoutedTrigger, agent_trigger_bot_id, route_agent_trigger,
 };
 use agent_harness::inbound::forward::ForwardGatewayState;
+use agent_harness::inbound::model_load::AgentModelsRouterState;
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
@@ -48,6 +51,7 @@ use agent_harness::outbound::forward::HttpCommandForwarder;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
+use agent_inmem::domain::engine::TurnEngine;
 use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::outbound::rig_engine::RigTurnEngine;
@@ -83,6 +87,7 @@ use github::domain::service::{InstallationTokenConfig, InstallationTokenService}
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use harness_bindings::{PgHarnessBindings, PgHarnessPresence};
+use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -97,6 +102,7 @@ use macro_event_broker::{
     MacroEventCollection as _, MacroEventConsumerService,
 };
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
+use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
 use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
@@ -325,6 +331,7 @@ async fn run() -> anyhow::Result<()> {
     // Tracks event publishes the in-memory agent's tool context starts;
     // closed and drained on shutdown so nothing is dropped mid-publish.
     let event_broker_tracker = tokio_util::task::TaskTracker::new();
+    let mut inmem_model_engine: Option<Arc<dyn TurnEngine>> = None;
     let inmem = match inmem_bot {
         Some(_) => {
             let tool_context = ai_tools::build_tool_service_context_from_env(
@@ -334,6 +341,7 @@ async fn run() -> anyhow::Result<()> {
             .await
             .context("failed to build the in-memory agent tool context")?;
             let engine = Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
+            inmem_model_engine = Some(engine.clone());
             // Cold attaches (fresh spawns and post-restart resumes) rebuild
             // their model context from the same log every frame lands in.
             let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
@@ -359,13 +367,14 @@ async fn run() -> anyhow::Result<()> {
     // owner's key at spawn. Decrypt-only — registering keys belongs to the
     // authentication service, and a harness that could encrypt would be a
     // harness whose IAM role grants more than it uses.
+    let cursor_keys = PgCursorApiKeys::new(
+        pool.clone(),
+        KmsCursorApiKeyCipher::new(AwsKmsCiphertexts::decrypting(aws_sdk_kms::Client::new(
+            &aws_config,
+        ))),
+    );
     let cursor_manager = CursorContainerManager::new(
-        PgCursorApiKeys::new(
-            pool.clone(),
-            KmsCursorApiKeyCipher::new(AwsKmsCiphertexts::decrypting(aws_sdk_kms::Client::new(
-                &aws_config,
-            ))),
-        ),
+        cursor_keys.clone(),
         CURSOR_API_BASE_URL.to_owned(),
         CursorRepoUrl::parse(&config.cursor_repo_url)
             .context("CURSOR_REPO_URL is not a valid repository url")?,
@@ -543,6 +552,17 @@ async fn run() -> anyhow::Result<()> {
     .with_harness_authorizer(PgHarnessAuthorizer::new(PgHarnessAuthorizationRepo::new(
         pool.clone(),
     )));
+    let model_service = Arc::new(AgentModelsServiceImpl::new(
+        VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
+        InMemoryModels::new(inmem_model_engine, config.inmem_model.clone()),
+        CursorModels::new(cursor_keys, CURSOR_API_BASE_URL.to_owned()),
+        MacrodModels::new(Arc::clone(&runtimes)),
+        std::time::Duration::from_secs(10),
+    ));
+    let model_state = AgentModelsRouterState::new(
+        model_service,
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let read_state = AgentSessionRouterState::new(
         AgentSessionServiceImpl::new(
             session_repo.clone(),
@@ -579,6 +599,7 @@ async fn run() -> anyhow::Result<()> {
             create_state,
             gateway_state,
             forward_state,
+            model_state,
             http_port,
             shutdown_signal(),
         )

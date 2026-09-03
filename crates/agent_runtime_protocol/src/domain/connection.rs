@@ -6,13 +6,17 @@
 //! all of this connection's ACP traffic.
 
 use std::future::Future;
+use std::sync::Arc;
 
+use agent_client_protocol::schema::v1::SessionConfigOption;
 use agent_client_protocol::{Channel as AcpChannel, TransportFrame};
 use futures::StreamExt;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::domain::channel::Channel;
-use crate::domain::schema::v0::{AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage};
+use crate::domain::schema::v0::{
+    AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
+};
 
 #[cfg(test)]
 mod test;
@@ -33,6 +37,18 @@ pub trait SystemEventHandler: Send + Sync + 'static {
 impl SystemEventHandler for () {
     fn handle(&self, _event: SystemEvent) -> impl Future<Output = ()> + Send {
         std::future::ready(())
+    }
+}
+
+/// Handles connection-level requests to inspect a fresh ACP subprocess.
+pub trait ModelProbeHandler: Send + Sync + 'static {
+    /// Return the raw `session/new` options or a safe error message.
+    fn probe(&self) -> impl Future<Output = Result<Vec<SessionConfigOption>, String>> + Send;
+}
+
+impl ModelProbeHandler for () {
+    async fn probe(&self) -> Result<Vec<SessionConfigOption>, String> {
+        Err("model probing is not configured on this runtime".to_owned())
     }
 }
 
@@ -91,13 +107,31 @@ impl RuntimeConnection {
     /// [`AcpChannel`] for the single agent execution this connection hosts.
     #[must_use]
     pub fn connect(channel: RuntimeChannel) -> (Self, AcpChannel) {
+        Self::connect_with_model_probe_handler(channel, ())
+    }
+
+    /// Attach the runtime role and handle model probes outside the primary ACP
+    /// process. Every request is allowed to run concurrently.
+    #[must_use]
+    pub fn connect_with_model_probe_handler<H>(
+        channel: RuntimeChannel,
+        model_probes: H,
+    ) -> (Self, AcpChannel)
+    where
+        H: ModelProbeHandler,
+    {
         let Channel {
             tx: outbound,
             rx: inbound,
         } = channel;
         let (acp, acp_driver) = AcpChannel::duplex();
-        let driver =
-            tokio::spawn(run_runtime(inbound, outbound.clone(), acp_driver)).abort_handle();
+        let driver = tokio::spawn(run_runtime(
+            inbound,
+            outbound.clone(),
+            acp_driver,
+            Arc::new(model_probes),
+        ))
+        .abort_handle();
         (Self { outbound, driver }, acp)
     }
 
@@ -145,6 +179,9 @@ async fn run_server<H>(
                             acp_open = false;
                         }
                     }
+                    ToServerMessage::ModelProbeResponse { .. } => {
+                        tracing::warn!("dropping a model probe response without a probe waiter");
+                    }
                 }
             }
             message = acp.rx.next(), if acp_open => {
@@ -169,11 +206,14 @@ async fn run_server<H>(
     }
 }
 
-async fn run_runtime(
+async fn run_runtime<H>(
     mut inbound: tokio::sync::mpsc::UnboundedReceiver<ToRuntimeMessage>,
     outbound: UnboundedSender<ToServerMessage>,
     mut acp: AcpChannel,
-) {
+    model_probes: Arc<H>,
+) where
+    H: ModelProbeHandler,
+{
     // See the matching comment in `run_server`: dropping the ACP channel must
     // not tear down this connection - only an actual transport failure does.
     let mut acp_open = true;
@@ -190,6 +230,22 @@ async fn run_runtime(
                         {
                             acp_open = false;
                         }
+                    }
+                    ToRuntimeMessage::ModelProbeRequest { request_id } => {
+                        let model_probes = Arc::clone(&model_probes);
+                        let outbound = outbound.clone();
+                        tokio::spawn(async move {
+                            let result = match model_probes.probe().await {
+                                Ok(config_options) => {
+                                    ModelProbeResult::Available { config_options }
+                                }
+                                Err(message) => ModelProbeResult::Error { message },
+                            };
+                            let _ = outbound.send(ToServerMessage::ModelProbeResponse {
+                                request_id,
+                                result,
+                            });
+                        });
                     }
                 }
             }

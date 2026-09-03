@@ -21,6 +21,10 @@ struct Harness {
 struct CancelledEngine;
 
 impl TurnEngine for CancelledEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
     fn run_turn(
         &self,
         _request: TurnRequest,
@@ -44,7 +48,7 @@ impl TurnEngine for CancelledEngine {
 async fn with_agent<Engine, Out>(
     engine: Arc<Engine>,
     scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
-) -> (Vec<SessionNotification>, Out)
+) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out)
 where
     Engine: TurnEngine,
 {
@@ -110,7 +114,8 @@ where
                     .send_request(NewSessionRequest::new("/"))
                     .block_task()
                     .await?;
-                Ok(scenario(connection, session.session_id).await)
+                let out = scenario(connection, session.session_id).await;
+                Ok((session.config_options, out))
             },
         )
         .await
@@ -122,7 +127,7 @@ where
         .lock()
         .expect("notifications lock")
         .clone();
-    (notifications, out)
+    (notifications, out.0.unwrap_or_default(), out.1)
 }
 
 fn text_prompt(session: &SessionId, text: &str) -> PromptRequest {
@@ -130,6 +135,24 @@ fn text_prompt(session: &SessionId, text: &str) -> PromptRequest {
         session.clone(),
         vec![ContentBlock::Text(TextContent::new(text))],
     )
+}
+
+#[tokio::test]
+async fn new_session_advertises_the_engine_supported_models() {
+    let (_notifications, config_options, ()) =
+        with_agent(Arc::new(ScriptedEngine::new(vec![])), async |_, _| {}).await;
+
+    let selection = agent_fold::domain::model_selection::model_selection(&config_options)
+        .expect("session/new should advertise a model select");
+    assert_eq!(selection.current, "test-model");
+    assert_eq!(
+        selection
+            .options
+            .iter()
+            .map(|model| (model.id.as_str(), model.name.as_str()))
+            .collect::<Vec<_>>(),
+        vec![("test-model", "test-model"), ("other-model", "other-model")]
+    );
 }
 
 #[tokio::test]
@@ -151,14 +174,15 @@ async fn a_prompt_streams_updates_and_ends_the_turn() {
         StreamPart::Content("world".into()),
     ]));
 
-    let (notifications, response) = with_agent(Arc::clone(&engine), async |connection, session| {
-        connection
-            .send_request(text_prompt(&session, "find the roadmap"))
-            .block_task()
-            .await
-            .expect("the prompt should complete")
-    })
-    .await;
+    let (notifications, _config_options, response) =
+        with_agent(Arc::clone(&engine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "find the roadmap"))
+                .block_task()
+                .await
+                .expect("the prompt should complete")
+        })
+        .await;
 
     assert_eq!(response.stop_reason, StopReason::EndTurn);
     let kinds: Vec<&'static str> = notifications
@@ -304,25 +328,27 @@ async fn compact_clears_history_without_running_a_turn() {
 async fn cancel_stops_the_turn_with_the_cancelled_stop_reason() {
     let engine = Arc::new(HangingEngine);
 
-    let (_notifications, response) = with_agent(engine, async |connection, session| {
-        let pending = connection.send_request(text_prompt(&session, "hang"));
-        let cancel = agent_client_protocol::schema::v1::CancelNotification::new(session.clone());
-        connection
-            .send_notification(cancel)
-            .expect("the cancel notification should send");
-        pending
-            .block_task()
-            .await
-            .expect("a cancelled prompt still completes")
-    })
-    .await;
+    let (_notifications, _config_options, response) =
+        with_agent(engine, async |connection, session| {
+            let pending = connection.send_request(text_prompt(&session, "hang"));
+            let cancel =
+                agent_client_protocol::schema::v1::CancelNotification::new(session.clone());
+            connection
+                .send_notification(cancel)
+                .expect("the cancel notification should send");
+            pending
+                .block_task()
+                .await
+                .expect("a cancelled prompt still completes")
+        })
+        .await;
 
     assert_eq!(response.stop_reason, StopReason::Cancelled);
 }
 
 #[tokio::test]
 async fn engine_cancellation_is_not_rendered_as_an_error_message() {
-    let (notifications, response) =
+    let (notifications, _config_options, response) =
         with_agent(Arc::new(CancelledEngine), async |connection, session| {
             connection
                 .send_request(text_prompt(&session, "cancel me"))
