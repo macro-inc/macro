@@ -58,8 +58,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "connection-gateway",
-		dev: "https://connection-gateway-dev.macro.com/api-doc/openapi.json",
-		prod: "https://connection-gateway-service.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/connection-gateway/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/connection-gateway/api-doc/openapi.json",
 		local: "http://localhost:8082/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-connection/",
 		orvalKey: "connectionGateway",
@@ -74,8 +74,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "agent-harness",
-		dev: "https://agent-harness-dev.macro.com/api-doc/openapi.json",
-		prod: "https://agent-harness.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/agent-harness/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/agent-harness/api-doc/openapi.json",
 		local: "http://localhost:8101/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-agent-harness/",
 		orvalKey: "agentHarnessService",
@@ -106,8 +106,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "scheduled-action",
-		dev: "https://scheduled-action-dev.macro.com/api-doc/openapi.json",
-		prod: "https://scheduled-action.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/scheduled-action/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/scheduled-action/api-doc/openapi.json",
 		local: "http://localhost:8099/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-scheduled-action/",
 		orvalKey: "scheduledActionService",

@@ -7,11 +7,12 @@ import {
   type Query,
 } from '@app/features/next-soup/filters/filter-store';
 import {
-  ENABLE_CALENDAR_SEARCH_UI,
-  ENABLE_CALENDAR_UI,
-  ENABLE_REMINDERS,
-  ENABLE_SNIPPETS,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+  enableCalendarUi,
+  enableReminders,
+  enableSnippets,
+  enableSupportedSoupForeignEntities,
+  isCalendarSearchUiEnabled,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Params } from '@service-storage/generated/schemas/params';
@@ -87,10 +88,10 @@ const OPEN_TASK_STATUS_INCLUDE_PROPS = [
 ];
 
 const getExcludedDocumentSubTypes = (...subTypes: string[]) =>
-  ENABLE_SNIPPETS() ? subTypes : [...subTypes, 'snippet'];
+  isFeatureEnabled(enableSnippets) ? subTypes : [...subTypes, 'snippet'];
 
 const getDisabledSnippetSubtypeExclude = (): Query['exclude'] =>
-  ENABLE_SNIPPETS() ? {} : { subType: ['snippet'] };
+  isFeatureEnabled(enableSnippets) ? {} : { subType: ['snippet'] };
 
 /** Filters for inbox/signal: not done, importance=true for emails, 2-week window */
 const getInboxSignalFilters = () => {
@@ -122,11 +123,13 @@ const getInboxSignalFilters = () => {
       // tab below sends it too, for the not-yet-fired slice. Behind the flag
       // so an unflagged user never pays for the reminders lookup on every
       // Signal fetch.
-      ...(ENABLE_REMINDERS() ? { includeReminders: true } : {}),
+      ...(isFeatureEnabled(enableReminders) ? { includeReminders: true } : {}),
       // Calendar events with a not-done notification (a fired event alarm).
       // Referencing `calf` opts the calendar arm into the signal query, which
       // `defineQueryFilters` otherwise excludes with a nil id filter.
-      ...(ENABLE_CALENDAR_UI() ? { calendarEventDone: false } : {}),
+      ...(isFeatureEnabled(enableCalendarUi)
+        ? { calendarEventDone: false }
+        : {}),
     },
     exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',
@@ -211,7 +214,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           include: {
             calendarEventId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
-            ...(ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE
+            ...(isFeatureEnabled(enableSupportedSoupForeignEntities)
               ? { foreignEntitySource: ['github_pull_request'] }
               : {}),
             foreignEntityIncludesMe: true,
@@ -222,8 +225,11 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             channelId: [NIL_UUID],
             chatId: [NIL_UUID],
             folderId: [NIL_UUID],
-            foreignEntityRecordId:
-              ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE ? [NIL_UUID] : [],
+            foreignEntityRecordId: isFeatureEnabled(
+              enableSupportedSoupForeignEntities
+            )
+              ? [NIL_UUID]
+              : [],
             ...getDisabledSnippetSubtypeExclude(),
           },
           emailView: 'all',
@@ -620,7 +626,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             // Events are title-indexed, so search returns them — but opening
             // one needs the calendar block, which the flag gates. Without it
             // a hit would render an inert row, so exclude the type instead.
-            ...(ENABLE_CALENDAR_SEARCH_UI()
+            ...(isCalendarSearchUiEnabled()
               ? {}
               : { calendarEventId: [NIL_UUID] }),
           },

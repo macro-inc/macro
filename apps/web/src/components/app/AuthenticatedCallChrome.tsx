@@ -1,6 +1,7 @@
 import { useIncomingCallWidgetVisible } from '@app/features/block-call/sidebar/incoming-calls';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
+import { useSidebarNextFlag } from '@components/app/sidebar-next/use-sidebar-next-flag';
 import { cn } from '@ui';
 import {
   createEffect,
@@ -201,22 +202,20 @@ export function AuthenticatedCallChrome(props: {
 }) {
   const callCtx = useCallContextOptional();
   const incomingCallWidgetVisible = useIncomingCallWidgetVisible();
+  const sidebarNextEnabled = useSidebarNextFlag();
+  // SidebarRail has no slim mode, so collapsed call widgets stay off under it.
+  const slimChromeVisible = () =>
+    !sidebarNextEnabled() &&
+    props.sidebarVisible &&
+    props.sidebarState === 'slim';
   const activeCallWidgetVisible = createMemo(
-    () =>
-      props.sidebarVisible &&
-      props.sidebarState === 'slim' &&
-      !!callCtx?.isInCall() &&
-      !callCtx?.isCallPage()
+    () => slimChromeVisible() && !!callCtx?.isInCall() && !callCtx?.isCallPage()
   );
 
   return (
     <>
       <CollapsedSidebarIncomingCallWidget
-        visible={
-          props.sidebarVisible &&
-          props.sidebarState === 'slim' &&
-          incomingCallWidgetVisible()
-        }
+        visible={slimChromeVisible() && incomingCallWidgetVisible()}
         activeCallWidgetVisible={activeCallWidgetVisible()}
       />
       <CollapsedSidebarCallWidget visible={activeCallWidgetVisible()} />

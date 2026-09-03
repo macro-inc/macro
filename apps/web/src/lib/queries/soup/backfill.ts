@@ -1,8 +1,7 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   ENABLE_GRAPHQL_BACKFILL,
-  ENABLE_GRAPHQL_SOUP_FLAG,
-  ENABLE_GRAPHQL_SOUP_OVERRIDE,
+  enableGraphqlSoup,
 } from '@core/constant/featureFlags';
 import { createTabLeaderSignal } from '@core/cross-tab/tab-leader';
 import type { CacheHost } from '@graphql-cache/host/types';
@@ -528,9 +527,7 @@ const waitForGraphqlSoupCacheHost = Effect.suspend(() => {
  * cursors before restarting so they can never point past wiped cache data.
  */
 export function useSoupBackfills(userId: string): void {
-  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const isLeader = createTabLeaderSignal(
     `graphql-soup-backfill:v${BACKFILL_VERSION}:coordinator`
   );

@@ -92,6 +92,15 @@ impl CalendarRepository for FakeRepo {
             .collect())
     }
 
+    async fn list_team_out_of_office(
+        &self,
+        _requester_id: &str,
+        _range: OccurrenceRange,
+        _limit: u16,
+    ) -> Result<Vec<crate::domain::models::TeamOutOfOffice>, Report> {
+        Ok(Vec::new())
+    }
+
     async fn get_event_mutation_target(
         &self,
         _requester_id: &str,

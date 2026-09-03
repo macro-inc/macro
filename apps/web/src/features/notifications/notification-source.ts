@@ -1,6 +1,7 @@
 import {
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS,
-  ENABLE_GRAPHQL_SOUP,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
 import { muteItemForRef } from '@entity/utils/notification';
@@ -245,7 +246,7 @@ export function createNotificationSource(
     // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
     // REST notification source is retired. GraphQL consumers should use Soup
     // notification edges or dedicated notification queries instead.
-    if (ENABLE_GRAPHQL_SOUP()) return;
+    if (isFeatureEnabled(enableGraphqlSoup)) return;
     if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
@@ -320,7 +321,7 @@ export function createNotificationSource(
 
   const unsubscribeFromGraphql = subscribeToGraphqlNotificationPatches(
     (patch) => {
-      if (!ENABLE_GRAPHQL_SOUP()) return;
+      if (!isFeatureEnabled(enableGraphqlSoup)) return;
       scheduleGraphqlNotificationRefetch();
       if (patch.__typename !== 'GraphqlNewNotification') return;
       dispatchIncomingNotification(mapGraphqlNotification(patch.notification));
@@ -342,7 +343,10 @@ export function createNotificationSource(
   };
 
   createSocketEffect(ws, (wsData) => {
-    if (wsData.type !== NOTIFICATION_EVENT_TYPE || ENABLE_GRAPHQL_SOUP()) {
+    if (
+      wsData.type !== NOTIFICATION_EVENT_TYPE ||
+      isFeatureEnabled(enableGraphqlSoup)
+    ) {
       return;
     }
     let parsedNotification: UnifiedNotification;

@@ -4,8 +4,12 @@ import {
   type SoupGroup,
 } from '@app/features/soup/collection';
 import type { EntityData, WithNotification } from '@entity';
-import type { InboxTab } from '../types';
-import { inboxTabOrdersByNotification } from './inbox-query';
+import {
+  type InboxViewContext,
+  inboxTabOrdersByNotification,
+} from './inbox-query';
+
+type InboxOrderContext = Pick<InboxViewContext, 'tab' | 'capabilities'>;
 
 export const inboxSortTimestamp = (entity: EntityData) =>
   entity.sortTs ?? entity.updatedAt ?? entity.createdAt;
@@ -16,19 +20,22 @@ export const inboxSortTimestamp = (entity: EntityData) =>
  * arrive in; rows without a stamp (websocket inserts) and the other tabs fall
  * back to content recency.
  */
-export const inboxGroupTimestamp = (entity: EntityData, tab: InboxTab) =>
-  (inboxTabOrdersByNotification(tab) ? entity.notifiedAt : undefined) ??
+export const inboxGroupTimestamp = (
+  entity: EntityData,
+  context: InboxOrderContext
+) =>
+  (inboxTabOrdersByNotification(context) ? entity.notifiedAt : undefined) ??
   inboxSortTimestamp(entity);
 
 export function groupInboxEntitiesByDate(
   entities: WithNotification<EntityData>[],
-  tab: InboxTab,
+  context: InboxOrderContext,
   now = new Date()
 ): SoupGroup<WithNotification<EntityData>>[] {
   return groupSoupEntities(entities, {
     getGroupId: (entity) =>
-      dateBucket(inboxGroupTimestamp(entity, tab), now).key,
+      dateBucket(inboxGroupTimestamp(entity, context), now).key,
     getGroupLabel: (_groupId, firstEntity) =>
-      dateBucket(inboxGroupTimestamp(firstEntity, tab), now).label,
+      dateBucket(inboxGroupTimestamp(firstEntity, context), now).label,
   });
 }

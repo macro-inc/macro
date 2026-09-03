@@ -23,7 +23,8 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         CalendarEvent, CalendarMentionEvent, CalendarMentionPreview, CalendarMentionRequestItem,
-        CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, OccurrenceRange,
+        CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, EventTime,
+        OccurrenceRange,
     },
     ports::CalendarOccurrenceService,
     service::CalendarValidationError,
@@ -73,6 +74,10 @@ where
         .route(
             "/calendar-events/preview",
             post(mention_previews::<S, Auth>),
+        )
+        .route(
+            "/calendar-events/team-out-of-office",
+            get(list_team_out_of_office::<S, Auth>),
         )
         .with_state(state)
 }
@@ -234,6 +239,127 @@ where
         next_cursor,
         sync_status,
     }))
+}
+
+/// Query parameters for the team out-of-office viewport.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamOutOfOfficeQuery {
+    /// Inclusive UTC viewport start.
+    start: DateTime<Utc>,
+    /// Exclusive UTC viewport end.
+    end: DateTime<Utc>,
+    /// Inclusive local date boundary for all-day events.
+    start_date: Option<NaiveDate>,
+    /// Exclusive local date boundary for all-day events.
+    end_date: Option<NaiveDate>,
+    /// Maximum number of occurrences, from 1 through 2,000.
+    #[param(minimum = 1, maximum = 2000)]
+    limit: Option<u16>,
+}
+
+/// One teammate's out-of-office occurrence.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamOutOfOfficeItem {
+    /// Macro user id of the teammate who is out.
+    owner_id: String,
+    /// The teammate's calendar event id.
+    event_id: Uuid,
+    /// Stable occurrence key within the event.
+    occurrence_key: String,
+    /// Event title, absent when the event's visibility withholds details.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    /// Occurrence time span.
+    time: EventTime,
+}
+
+/// Team out-of-office viewport response.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamOutOfOfficeResponse {
+    items: Vec<TeamOutOfOfficeItem>,
+    has_more: bool,
+}
+
+/// Return teammates' out-of-office occurrences in the requested viewport.
+#[tracing::instrument(skip_all, err)]
+#[utoipa::path(
+    get,
+    path = "/calendar-events/team-out-of-office",
+    tag = "calendar_events",
+    params(TeamOutOfOfficeQuery),
+    responses(
+        (status = 200, description = "Teammates' out-of-office occurrences in the requested viewport", body = TeamOutOfOfficeResponse),
+        (status = 400, description = "Invalid or unsupported calendar viewport"),
+        (status = 401, description = "Authentication required"),
+        (status = 500, description = "Calendar query failed"),
+    )
+)]
+pub async fn list_team_out_of_office<S, Auth>(
+    State(state): State<CalendarRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(query): Query<TeamOutOfOfficeQuery>,
+) -> Result<Json<TeamOutOfOfficeResponse>, CalendarApiError>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+{
+    let default_end_date = default_end_date(query.end);
+    let range = OccurrenceRange {
+        starts_at: query.start,
+        ends_at: query.end,
+        start_date: query.start_date.unwrap_or_else(|| query.start.date_naive()),
+        end_date: query
+            .end_date
+            .or(default_end_date)
+            .ok_or(CalendarApiError {
+                status: StatusCode::BAD_REQUEST,
+                message: "calendar end is outside the supported date range",
+            })?,
+    };
+    let (limit, repository_limit) = query_limits(query.limit)?;
+    let mut occurrences = state
+        .service
+        .list_team_out_of_office(
+            user.authorization.user.macro_user_id.as_ref(),
+            range,
+            repository_limit,
+        )
+        .await
+        .map_err(|error| {
+            if error
+                .as_ref()
+                .downcast_current_context::<CalendarValidationError>()
+                .is_some()
+            {
+                return CalendarApiError {
+                    status: StatusCode::BAD_REQUEST,
+                    message: "calendar range must be positive, at most 370 days, inside the maintained one-year-history/two-year-future window, with limit 1–2000",
+                };
+            }
+            tracing::error!(error = ?error, "failed to query team out-of-office occurrences");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "unable to query team out-of-office occurrences",
+            }
+        })?;
+    let has_more = occurrences.len() > usize::from(limit);
+    occurrences.truncate(usize::from(limit));
+    let items = occurrences
+        .into_iter()
+        .map(|row| TeamOutOfOfficeItem {
+            owner_id: row.owner_id,
+            event_id: row.event_id,
+            occurrence_key: row.occurrence_key,
+            title: row.title,
+            time: row.time,
+        })
+        .collect();
+
+    Ok(Json(TeamOutOfOfficeResponse { items, has_more }))
 }
 
 /// One mentioned event to resolve for the requester.

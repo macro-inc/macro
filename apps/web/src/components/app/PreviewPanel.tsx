@@ -35,6 +35,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
 import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from './split-layout/components/PriorityCollapseOverflowSensor';
+import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from './split-layout/context';
@@ -66,6 +70,8 @@ function PreviewPanelContent(
   props: PreviewPanelProps & { selectedEntity: EntityData }
 ) {
   const scopedLayoutRefs: SplitPanelContextType['layoutRefs'] = {};
+  const headerCollapseController = createPriorityCollapseController();
+  const toolbarCollapseController = createPriorityCollapseController();
   const [interactedWith, setInteractedWith] = createSignal(false);
   const [attachHotkeys, previewHotkeyScope] =
     useHotkeyDOMScope('preview-panel');
@@ -201,25 +207,36 @@ function PreviewPanelContent(
       onPointerDown={() => setInteractedWith(true)}
       tabIndex={-1}
     >
-      <div class="relative flex min-h-10 w-full shrink-0 items-center justify-between bg-surface px-2">
-        <div
-          class="flex h-full items-center gap-1"
-          ref={(ref) => {
-            scopedLayoutRefs.headerLeft = ref;
+      <div
+        ref={headerCollapseController.setRow}
+        class="relative flex min-h-10 w-full shrink-0 items-center justify-between bg-surface px-2"
+      >
+        <PriorityCollapseOverflowSensor
+          controller={headerCollapseController}
+          truncateAsLastResort
+          class="relative h-full min-w-0 shrink overflow-hidden"
+          contentClass="flex h-full items-center gap-1"
+          contentRef={(element) => {
+            scopedLayoutRefs.headerLeft = element;
           }}
         />
         <div
-          class="flex h-full items-center gap-1"
+          class="flex h-full grow shrink items-center justify-end gap-1"
           ref={(ref) => {
             scopedLayoutRefs.headerRight = ref;
           }}
         />
       </div>
-      <div class="relative flex min-h-0 w-full shrink-0 items-center justify-between bg-surface px-2">
-        <div
-          class="flex h-full items-center gap-1"
-          ref={(ref) => {
-            scopedLayoutRefs.toolbarLeft = ref;
+      <div
+        ref={toolbarCollapseController.setRow}
+        class="relative flex min-h-0 w-full shrink-0 items-center justify-between bg-surface px-2"
+      >
+        <PriorityCollapseOverflowSensor
+          controller={toolbarCollapseController}
+          class="min-w-0 flex-1 overflow-hidden"
+          contentClass="flex items-center gap-1"
+          contentRef={(element) => {
+            scopedLayoutRefs.toolbarLeft = element;
           }}
         />
         <div
@@ -236,6 +253,8 @@ function PreviewPanelContent(
             splitHotkeyScope: previewHotkeyScope,
             isInlinePreview: true,
             layoutRefs: scopedLayoutRefs,
+            headerCollapser: headerCollapseController.collapser,
+            toolbarCollapser: toolbarCollapseController.collapser,
           }}
         >
           <PreviewPanelContext

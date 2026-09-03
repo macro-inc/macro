@@ -345,6 +345,7 @@ export const storageBacklog = [
   'listHarnesses',
   'listOccurrences',
   'listReminders',
+  'listTeamOutOfOffice',
   'listUserApiKeys',
   'postActivity',
   'presaveDocumentHandler',

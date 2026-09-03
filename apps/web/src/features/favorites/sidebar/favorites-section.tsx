@@ -22,7 +22,10 @@ import {
   MenuSeparator,
 } from '@core/component/ContextMenu';
 import type { EntityIconSelector } from '@core/component/EntityIcon';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -192,7 +195,7 @@ export const FavoritesSection = (props: {
   const unreadNotificationsByChannel = createMemo(() => {
     // TODO(dev-rb/notifications): Restore favorite notification badges,
     // previews, and actions from notifications attached to favorite Soup items.
-    if (ENABLE_GRAPHQL_SOUP()) {
+    if (isFeatureEnabled(enableGraphqlSoup)) {
       return new Map<string, UnifiedNotification[]>();
     }
 

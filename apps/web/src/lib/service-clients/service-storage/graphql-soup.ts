@@ -1,6 +1,7 @@
 import {
   ENABLE_BEARER_TOKEN_AUTH,
-  ENABLE_GRAPHQL_SOUP,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
@@ -352,7 +353,7 @@ function fallbackAfterInitializationFailure(): void {
   cachedCacheCleanup = undefined;
   cachedCacheHost = undefined;
   cacheInitializationFailed = true;
-  cachedClient = ENABLE_GRAPHQL_SOUP()
+  cachedClient = isFeatureEnabled(enableGraphqlSoup)
     ? getUncachedRealtimeClient()
     : graphqlSoupClient;
   browserCacheClientActivated = false;
@@ -385,7 +386,7 @@ export function getGraphqlSoupClient(): Client {
     return cachedClient;
   const rollout = getBrowserTursoCacheRolloutDecision();
   if (!rollout.enabled) {
-    return ENABLE_GRAPHQL_SOUP()
+    return isFeatureEnabled(enableGraphqlSoup)
       ? getUncachedRealtimeClient()
       : graphqlSoupClient;
   }
@@ -465,7 +466,7 @@ export function getGraphqlSoupClient(): Client {
       cachedCacheCleanup = undefined;
       cacheInitializationFailed = true;
       console.warn('graphql cache init failed; using uncached client', error);
-      return ENABLE_GRAPHQL_SOUP()
+      return isFeatureEnabled(enableGraphqlSoup)
         ? getUncachedRealtimeClient()
         : graphqlSoupClient;
     }

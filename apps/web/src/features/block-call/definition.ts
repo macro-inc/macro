@@ -21,7 +21,7 @@ export const definition = defineBlock({
     }))
   ),
   async load(source, _intent) {
-    if (!ENABLE_CALLS()) return LoadErrors.MISSING;
+    if (!ENABLE_CALLS) return LoadErrors.MISSING;
     if (source.type !== 'dss') return LoadErrors.MISSING;
 
     const callId = source.id;

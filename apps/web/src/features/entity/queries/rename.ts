@@ -1,6 +1,9 @@
 import { renameItem } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { callKeys } from '@queries/call/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
@@ -326,7 +329,7 @@ const bulkRenameMutationFn = async (
 ): Promise<BulkRenameDssEntityMutationData> => {
   validateBulkRename(params);
 
-  if (!ENABLE_GRAPHQL_SOUP()) {
+  if (!isFeatureEnabled(enableGraphqlSoup)) {
     return await Promise.all(params.map(performEntityRename));
   }
 

@@ -1,26 +1,51 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
+import Banner from '@app/features/auth/banner/Banner';
+import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
+import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
+import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
+import { CommandMenu } from '@app/features/command';
+import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
   createMenuOpen,
+  Launcher,
   setCreateMenuOpen,
-} from '@app/features/command/launcher-state';
+} from '@app/features/command/Launcher';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { isAddInboxDialogOpen } from '@app/features/inbox/addInboxDialogState';
+import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
+import { CreateContactModal } from '@app/features/companies/CreateContactModal';
+import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
+import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import {
+  AddInboxDialog,
+  isAddInboxDialogOpen,
+} from '@app/features/inbox/AddInboxDialog';
+import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
+import { Paywall } from '@app/features/paywall/Paywall';
+import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
+import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
+import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
+import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
-import type { SidebarState } from '@components/app/app-sidebar/sidebar';
+import { AutomationComposer } from '@block-automation/component';
+import { CreateChannelModal } from '@channel/CreateChannelModal';
+import {
+  AppSidebar,
+  GoToHotkeys,
+  type SidebarState,
+} from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
+import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
+import { useSidebarNextFlag } from '@components/app/sidebar-next/use-sidebar-next-flag';
 import {
   isSidebarVisible,
   SidebarCollapseContext,
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
-import {
-  ENABLE_REMINDERS_FLAG,
-  ENABLE_REMINDERS_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableReminders } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -29,7 +54,6 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
-import { devPerfLog } from '@core/util/devPerf';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -49,158 +73,21 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
+import GlobalShortcuts from './GlobalHotkeys';
+import { ItemDndProvider } from './ItemDragAndDrop';
+import { FloatRegion } from './mobile/float-regions/FloatRegion';
+import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
+import { MobileDockRow } from './mobile/MobileDockRow';
+import { MobileViewsRow } from './mobile/MobileViewsRow';
+import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
+import { useAppSquishHandlers } from './useAppSquishHandlers';
 
-const Banner = lazy(() => import('@app/features/auth/banner/Banner'));
-const CalendarPermissionPrompt = lazy(() =>
-  import('@app/features/auth/CalendarPermissionPrompt').then((module) => ({
-    default: module.CalendarPermissionPrompt,
-  }))
-);
-const GithubReauthenticationPrompt = lazy(() =>
-  import('@app/features/auth/GithubReauthenticationPrompt').then((module) => ({
-    default: module.GithubReauthenticationPrompt,
-  }))
-);
-const GmailReauthenticationPrompt = lazy(() =>
-  import('@app/features/auth/GmailReauthenticationPrompt').then((module) => ({
-    default: module.GmailReauthenticationPrompt,
-  }))
-);
-const CommandMenu = lazy(() =>
-  import('@app/features/command').then((module) => ({
-    default: module.CommandMenu,
-  }))
-);
-const FavoritesCommands = lazy(() =>
-  import('@app/features/command/FavoritesCommands').then((module) => ({
-    default: module.FavoritesCommands,
-  }))
-);
-const CreateCompanyModal = lazy(() =>
-  import('@app/features/companies/CreateCompanyModal').then((module) => ({
-    default: module.CreateCompanyModal,
-  }))
-);
-const CreateContactModal = lazy(() =>
-  import('@app/features/companies/CreateContactModal').then((module) => ({
-    default: module.CreateContactModal,
-  }))
-);
-const DevStatusBar = lazy(() =>
-  import('@app/features/devtools/DevStatusBar').then((module) => ({
-    default: module.DevStatusBar,
-  }))
-);
-const GlobalBulkEditEntityModal = lazy(() =>
-  import('@app/features/entity/bulk-edit/BulkEditEntityModal').then(
-    (module) => ({ default: module.GlobalBulkEditEntityModal })
-  )
-);
-const MacroMcpSetupModal = lazy(() =>
-  import('@app/features/integrations/mcp-setup/MacroMcpSetupModal').then(
-    (module) => ({ default: module.MacroMcpSetupModal })
-  )
-);
-const Paywall = lazy(() =>
-  import('@app/features/paywall/Paywall').then((module) => ({
-    default: module.Paywall,
-  }))
-);
-const PropertyEditorModal = lazy(() =>
-  import('@app/features/property/editor/PropertyEditorModal').then(
-    (module) => ({
-      default: module.PropertyEditorModal,
-    })
-  )
-);
-const ReminderComposerModal = lazy(() =>
-  import('@app/features/reminders/ReminderComposerModal').then((module) => ({
-    default: module.ReminderComposerModal,
-  }))
-);
-const GlobalShareModal = lazy(() =>
-  import('@app/features/sharing/global-share-modal/GlobalShareModal').then(
-    (module) => ({ default: module.GlobalShareModal })
-  )
-);
-const IosShareSheet = lazy(() =>
-  import('@app/features/sharing/ios-share-sheet/IosShareSheet').then(
-    (module) => ({ default: module.IosShareSheet })
-  )
-);
-const AutomationComposer = lazy(() =>
-  import('@block-automation/component').then((module) => ({
-    default: module.AutomationComposer,
-  }))
-);
-const CreateChannelModal = lazy(() =>
-  import('@channel/CreateChannelModal').then((module) => ({
-    default: module.CreateChannelModal,
-  }))
-);
-const AppSidebar = lazy(() =>
-  import('@components/app/app-sidebar/sidebar').then((module) => ({
-    default: module.AppSidebar,
-  }))
-);
-const GoToHotkeys = lazy(() =>
-  import('@components/app/app-sidebar/sidebar').then((module) => ({
-    default: module.GoToHotkeys,
-  }))
-);
-const AddInboxDialog = lazy(() =>
-  import('@app/features/inbox/AddInboxDialog').then((module) => ({
-    default: module.AddInboxDialog,
-  }))
-);
 const AuthenticatedCallChrome = lazy(() =>
   import('./AuthenticatedCallChrome').then((module) => ({
     default: module.AuthenticatedCallChrome,
   }))
 );
-const Launcher = lazy(() =>
-  import('@app/features/command/Launcher').then((module) => ({
-    default: module.Launcher,
-  }))
-);
-const GlobalShortcuts = lazy(() => import('./GlobalHotkeys'));
-const ItemDndProvider = lazy(() =>
-  import('./ItemDragAndDrop').then((module) => ({
-    default: module.ItemDndProvider,
-  }))
-);
-const MobileDockRow = lazy(() =>
-  import('./mobile/MobileDockRow').then((module) => ({
-    default: module.MobileDockRow,
-  }))
-);
-const MobileViewsRow = lazy(() =>
-  import('./mobile/MobileViewsRow').then((module) => ({
-    default: module.MobileViewsRow,
-  }))
-);
-const FloatRegion = lazy(() =>
-  import('./mobile/float-regions/FloatRegion').then((module) => ({
-    default: module.FloatRegion,
-  }))
-);
-const FloatRegionHost = lazy(() =>
-  import('./mobile/float-regions/FloatRegionHost').then((module) => ({
-    default: module.FloatRegionHost,
-  }))
-);
-const SwipeDownDismissKeyboard = lazy(() =>
-  import('./mobile/SwipeDownDismissKeyboard').then((module) => ({
-    default: module.SwipeDownDismissKeyboard,
-  }))
-);
-const BundleUpdateProgressBar = lazy(() =>
-  import('./BundleUpdateProgressBar').then((module) => ({
-    default: module.BundleUpdateProgressBar,
-  }))
-);
-
-import { useAppSquishHandlers } from './useAppSquishHandlers';
 
 const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}login`,
@@ -293,8 +180,12 @@ function LayoutInner(props: RouteSectionProps) {
   const [sidebarOverlayOpen, setSidebarOverlayOpen] = createSignal(false);
   const [sidebarOverlayTriggerHovered, setSidebarOverlayTriggerHovered] =
     createSignal(false);
+  const sidebarNextEnabled = useSidebarNextFlag();
+  // SidebarRail is already narrow and has no slim mode, so nothing should arm
+  // the hover-peek overlay strip or the slim-mode call widget under it.
   const sidebarCollapsed = createMemo(
-    () => isSidebarVisible() && sidebarState() === 'slim'
+    () =>
+      !sidebarNextEnabled() && isSidebarVisible() && sidebarState() === 'slim'
   );
   let sidebarOverlayCloseTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -346,12 +237,6 @@ function LayoutInner(props: RouteSectionProps) {
   });
 
   onMount(() => {
-    // #region agent log
-    devPerfLog('G', 'Layout.tsx:347', 'layout mounted', {
-      pathname: window.location.pathname,
-      authenticated: isAuthenticated(),
-    });
-    // #endregion
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');
@@ -372,9 +257,7 @@ function LayoutInner(props: RouteSectionProps) {
       )}
     >
       <ImperativeDialogHost />
-      <Suspense>
-        <BundleUpdateProgressBar />
-      </Suspense>
+      <BundleUpdateProgressBar />
       <Suspense>
         <Show when={isAuthenticated()}>
           <NewOnboardingRedirect />
@@ -401,13 +284,10 @@ function LayoutInner(props: RouteSectionProps) {
           <CreateChannelModal />
           <CreateCompanyModal />
           <CreateContactModal />
-          {/* Reactive, unlike the imperative ENABLE_REMINDERS() gate on the
+          {/* Reactive, unlike the imperative isFeatureEnabled(enableReminders) gate on the
               action: this decides whether the composer is mounted at all, so it
               has to pick up a late PostHog answer. */}
-          <ShowFeatureFlag
-            key={ENABLE_REMINDERS_FLAG}
-            enabledOverride={ENABLE_REMINDERS_OVERRIDE}
-          >
+          <ShowFeatureFlag flag={enableReminders}>
             <ReminderComposerModal />
           </ShowFeatureFlag>
           <Show when={isAddInboxDialogOpen()}>
@@ -428,65 +308,58 @@ function LayoutInner(props: RouteSectionProps) {
       </Show> */}
 
       <Show when={paywallOpen()}>
-        <Suspense>
-          <Paywall />
-        </Suspense>
+        <Paywall />
       </Show>
       <div class="max-h-full grow flex">
-        {/* Drag-drop (and the EntityIcon graph it pulls) is only needed once
-            the workspace chrome is up. Login/signup skip it. */}
-        <Show
-          when={isAuthenticated()}
-          fallback={
-            <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
-              {props.children}
-            </div>
-          }
-        >
-          <Suspense
-            fallback={
-              <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
-                {props.children}
-              </div>
-            }
-          >
-            <ItemDndProvider>
-              <Show when={isSidebarVisible()}>
-                <Suspense>
-                  <AppSidebar
-                    sidebarState={sidebarState()}
-                    overlayOpen={sidebarOverlayOpen()}
-                    onOverlayOpenChange={setSidebarOverlayOpenGuarded}
-                    onOpenChange={(open) => {
-                      if (!open) {
-                        setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
-                        return;
-                      }
+        {/* The provider spans the sidebar too so its favorites can register
+            sortables with the same drag-drop context as the entity drags. */}
+        <ItemDndProvider>
+          <Show when={isSidebarVisible()}>
+            <Show
+              when={sidebarNextEnabled()}
+              fallback={
+                <AppSidebar
+                  sidebarState={sidebarState()}
+                  overlayOpen={sidebarOverlayOpen()}
+                  onOverlayOpenChange={setSidebarOverlayOpenGuarded}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
+                      return;
+                    }
 
-                      setSidebarState('expanded');
-                    }}
-                  />
-                </Suspense>
-              </Show>
-              <Show when={sidebarCollapsed()}>
-                <div
-                  class="fixed left-0 inset-y-0 z-modal-content w-[8px]"
-                  onPointerEnter={() => {
-                    setSidebarOverlayTriggerHovered(true);
-                    setSidebarOverlayOpenGuarded(true);
-                  }}
-                  onPointerLeave={() => {
-                    setSidebarOverlayTriggerHovered(false);
-                    setSidebarOverlayOpenGuarded(false);
+                    setSidebarState('expanded');
                   }}
                 />
-              </Show>
-              <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
-                {props.children}
-              </div>
-            </ItemDndProvider>
-          </Suspense>
-        </Show>
+              }
+            >
+              <SidebarRail
+                sidebarState={sidebarState()}
+                onOpenChange={(open) =>
+                  // The rail has no slim mode, so `cmd+.` hides it outright.
+                  setSidebarState(open ? 'expanded' : 'hidden')
+                }
+              />
+            </Show>
+          </Show>
+          <Show when={sidebarCollapsed()}>
+            <div
+              class="fixed left-0 inset-y-0 z-modal-content w-[8px]"
+              onPointerEnter={() => {
+                setSidebarOverlayTriggerHovered(true);
+                setSidebarOverlayOpenGuarded(true);
+              }}
+              onPointerLeave={() => {
+                setSidebarOverlayTriggerHovered(false);
+                setSidebarOverlayOpenGuarded(false);
+              }}
+            />
+          </Show>
+
+          <div class="flex-1 w-full min-h-0 font-sans text-ink caret-accent">
+            {props.children}
+          </div>
+        </ItemDndProvider>
       </div>
       <Show when={isAuthenticated()}>
         <Suspense>
@@ -512,9 +385,7 @@ function LayoutInner(props: RouteSectionProps) {
           <MobileDockRow />
         </FloatRegion>
       </Show>
-      <Suspense>
-        <SwipeDownDismissKeyboard />
-      </Suspense>
+      <SwipeDownDismissKeyboard />
       <Suspense>
         <Show
           when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}
@@ -523,9 +394,7 @@ function LayoutInner(props: RouteSectionProps) {
           <AutomationComposer />
         </Show>
       </Suspense>
-      <Suspense>
-        <DevStatusBar />
-      </Suspense>
+      <DevStatusBar />
       <ScreencastHotkeys />
     </div>
   );

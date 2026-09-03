@@ -7,7 +7,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
-import { ENABLE_ONBOARDING_V4_OVERRIDE } from '@core/constant/featureFlags';
+import { enableOnboardingV4 } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
@@ -95,7 +95,10 @@ function InitialInteractiveOnboardingModal() {
 
   const modalOpen = () =>
     open() &&
-    ENABLE_ONBOARDING_V4_OVERRIDE !== false &&
+    // `just run_local` sets VITE_ENABLE_ONBOARDING_V4=false; without this the
+    // v4-off fallback would still open this legacy modal. Opt in with
+    // `just run_local --enable-onboarding`.
+    enableOnboardingV4.override !== false &&
     (isMobile() || (!onboardingV4().loading && !onboardingV4().enabled)) &&
     !isNativeMobilePlatform() &&
     userInfoQuery.data?.authenticated === true &&

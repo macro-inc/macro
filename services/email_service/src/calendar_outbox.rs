@@ -63,6 +63,13 @@ pub async fn run<R>(
                     tracing::error!(error=?error, "failed to schedule due Google Calendar syncs");
                 })
                 .ok();
+            scheduler
+                .reap_once(Utc::now())
+                .await
+                .inspect_err(|error| {
+                    tracing::error!(error=?error, "failed to reap wedged Google Calendar syncs");
+                })
+                .ok();
             drain_calendar(&db, &sqs)
                 .await
                 .inspect_err(|error| {

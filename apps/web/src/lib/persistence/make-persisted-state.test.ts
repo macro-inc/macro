@@ -112,15 +112,23 @@ describe('makePersistedState', () => {
     createRoot((dispose) => {
       const initialize = vi.fn();
       const storageDispose = vi.fn();
+      let readCurrent!: () => string;
       const storage: PersistenceStorage<string> = {
         restore: () => undefined,
         write: vi.fn(),
-        initialize,
+        initialize: (value, read) => {
+          initialize(value);
+          readCurrent = read;
+        },
         dispose: storageDispose,
       };
 
-      makePersistedState(createSignal('default'), { storages: storage });
+      const signal = createSignal('default');
+      makePersistedState(signal, { storages: storage });
       expect(initialize).toHaveBeenCalledWith('default');
+
+      signal[1]('latest');
+      expect(readCurrent()).toBe('latest');
 
       dispose();
       expect(storageDispose).toHaveBeenCalledOnce();

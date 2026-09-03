@@ -241,6 +241,15 @@ impl CalendarRepository for FakeRepo {
         unreachable!()
     }
 
+    async fn list_team_out_of_office(
+        &self,
+        _requester_id: &str,
+        _range: OccurrenceRange,
+        _limit: u16,
+    ) -> Result<Vec<crate::domain::models::TeamOutOfOffice>, rootcause::Report> {
+        unreachable!()
+    }
+
     async fn upsert_google_calendar(
         &self,
         _key: CalendarBackfillJobKey,

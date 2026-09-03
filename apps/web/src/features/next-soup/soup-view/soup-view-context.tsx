@@ -52,9 +52,10 @@ import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
-  ENABLE_REMINDERS,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+  enableInboxNotifiedSort,
+  enableReminders,
+  enableSupportedSoupForeignEntities,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -266,7 +267,11 @@ const resolveTabId = (
   // A remembered tab can also be flag-gated out of the tab bar (see
   // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
   // off would leave a hidden tab active, still querying reminders.
-  if (view === 'inbox' && remembered === 'reminders' && !ENABLE_REMINDERS()) {
+  if (
+    view === 'inbox' &&
+    remembered === 'reminders' &&
+    !isFeatureEnabled(enableReminders)
+  ) {
     return config.default;
   }
   return remembered;
@@ -668,6 +673,7 @@ export const SoupViewContextProvider: FlowComponent<
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
   const isTeamAdmin = useIsTeamAdmin();
+  const notifiedSortFF = useFeatureFlag(enableInboxNotifiedSort);
 
   // Sits below `activeTab`/`userId` because the page direction comes from the
   // active tab's preset, which some views resolve against user context.
@@ -680,6 +686,13 @@ export const SoupViewContextProvider: FlowComponent<
         })
       : undefined;
   });
+
+  const presetSortMethod = () => {
+    const method = activePreset()?.sortMethod;
+    return method === 'notified_at' && !notifiedSortFF().enabled
+      ? 'updated_at'
+      : method;
+  };
 
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
@@ -695,13 +708,12 @@ export const SoupViewContextProvider: FlowComponent<
     // user's own touches — not to the sort method state, so the preset owns
     // them. Omitted when absent so the server default (desc) applies and
     // the query keys of every existing view stay byte-identical.
-    const preset = activePreset();
-    const sortDirection = preset?.sortDirection;
+    const sortDirection = activePreset()?.sortDirection;
 
     return {
       // Mail views use a smaller page size
       limit: view === 'mail' ? 30 : 100,
-      sort_method: preset?.sortMethod ?? sortMethod,
+      sort_method: presetSortMethod() ?? sortMethod,
       ...(sortDirection ? { sort_direction: sortDirection } : {}),
     };
   });
@@ -712,7 +724,7 @@ export const SoupViewContextProvider: FlowComponent<
   // inbox's All and Reminders tabs stay on update recency even when a row
   // carries a notification stamp from a Signal page or a live delivery.
   const clientSort = createMemo((): SortConfig<SoupEntity>[] =>
-    activePreset()?.sortMethod === 'notified_at'
+    presetSortMethod() === 'notified_at'
       ? [SORT_CONFIGS.notified_at]
       : soup.sort.active()
   );
@@ -915,10 +927,7 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const showSupportedForeignEntitiesFF = useFeatureFlag(
-    ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-    {
-      enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
-    }
+    enableSupportedSoupForeignEntities
   );
   // Create filter context for context-aware filter predicates
   const getFilterContext = (): FilterContext => ({

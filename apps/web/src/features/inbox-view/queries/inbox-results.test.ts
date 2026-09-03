@@ -38,16 +38,24 @@ const freshEmail = {
   sortTs: '2026-09-02T16:00:00Z',
 } as unknown as WithNotification<EntityData>;
 
+const capabilities = {
+  calendar: false,
+  foreignEntities: false,
+  notifiedSort: true,
+  reminders: false,
+  snippets: false,
+};
+
 const context = {
   facets: {},
   facetContext: { notificationSource: undefined as never },
-  capabilities: {
-    calendar: false,
-    foreignEntities: false,
-    reminders: false,
-    snippets: false,
-  },
+  capabilities,
   userId: 'macro|alice@example.com',
+};
+
+const withoutNotifiedSort = {
+  ...context,
+  capabilities: { ...capabilities, notifiedSort: false },
 };
 
 describe('inbox sort method per tab', () => {
@@ -66,16 +74,25 @@ describe('inbox sort method per tab', () => {
       );
     }
   });
+
+  it('keeps recency ordering everywhere while the notified sort is off', () => {
+    for (const tab of ['signal', 'noise', 'all', 'reminders'] as const) {
+      expect(
+        buildInboxQuery({ ...withoutNotifiedSort, tab }).params.sort_method
+      ).toBe('updated_at');
+    }
+  });
 });
 
 describe('inbox date buckets', () => {
   it('buckets a notified row by its notification on the notification tabs', () => {
-    expect(inboxGroupTimestamp(staleTaskFreshComment, 'signal')).toBe(
+    const signal = { tab: 'signal' as const, capabilities };
+    expect(inboxGroupTimestamp(staleTaskFreshComment, signal)).toBe(
       '2026-09-02T17:00:00Z'
     );
     const groups = groupInboxEntitiesByDate(
       [freshEmail, staleTaskFreshComment],
-      'signal',
+      signal,
       now
     );
     expect(groups).toHaveLength(1);
@@ -83,15 +100,35 @@ describe('inbox date buckets', () => {
   });
 
   it('falls back to content recency without a stamp and on the other tabs', () => {
-    expect(inboxGroupTimestamp(freshEmail, 'signal')).toBe(
-      '2026-09-02T16:00:00Z'
-    );
-    expect(inboxGroupTimestamp(staleTaskFreshComment, 'all')).toBe(
+    expect(
+      inboxGroupTimestamp(freshEmail, { tab: 'signal', capabilities })
+    ).toBe('2026-09-02T16:00:00Z');
+    const all = { tab: 'all' as const, capabilities };
+    expect(inboxGroupTimestamp(staleTaskFreshComment, all)).toBe(
       '2026-08-31T19:00:00Z'
     );
     const groups = groupInboxEntitiesByDate(
       [freshEmail, staleTaskFreshComment],
-      'all',
+      all,
+      now
+    );
+    expect(groups.map((group) => group.label)).toEqual([
+      'Today',
+      'Last 7 days',
+    ]);
+  });
+
+  it('buckets by content recency while the notified sort is off', () => {
+    const signal = {
+      tab: 'signal' as const,
+      capabilities: withoutNotifiedSort.capabilities,
+    };
+    expect(inboxGroupTimestamp(staleTaskFreshComment, signal)).toBe(
+      '2026-08-31T19:00:00Z'
+    );
+    const groups = groupInboxEntitiesByDate(
+      [freshEmail, staleTaskFreshComment],
+      signal,
       now
     );
     expect(groups.map((group) => group.label)).toEqual([

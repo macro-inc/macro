@@ -475,6 +475,8 @@ fn document_event_cases() -> Vec<EventCase> {
                     document_id: DOCUMENT_ID.to_string(),
                     owner: user_id("macro|owner@example.com"),
                     actor_user_id: Some(user_id("macro|editor@example.com")),
+                    actor: None,
+                    on_behalf_of: None,
                     document_name: Some("renamed".to_string()),
                     previous_project_id: None,
                     project_id: None,
@@ -493,6 +495,8 @@ fn document_event_cases() -> Vec<EventCase> {
                 DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
                     actor_user_id: Some(user_id("macro|owner@example.com")),
+                    actor: None,
+                    on_behalf_of: None,
                     project_id: None,
                 }),
                 2,
@@ -1257,6 +1261,8 @@ async fn malformed_document_id_is_permanent_and_skips_access_resolution() {
     let event = Event::new(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
         document_id: "not-a-uuid".to_string(),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         project_id: None,
     }));
 

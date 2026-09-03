@@ -676,7 +676,7 @@ where
         if property_definition_id == SystemPropertyKey::ASSIGNEES_UUID
             && entity_type == EntityType::Task
         {
-            self.handle_task_assignees_property(entity_id, value, access.authenticated_user())
+            self.handle_task_assignees_property(entity_id, value, access.acting_user_id())
                 .await?;
         }
 
