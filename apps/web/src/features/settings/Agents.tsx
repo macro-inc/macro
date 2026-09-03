@@ -66,6 +66,8 @@ type ConnectedHarness = {
 type HarnessModel = {
   id: string;
   name: string;
+  /** The heading the harness lists this model under, when it groups them. */
+  group?: string;
 };
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
@@ -117,6 +119,7 @@ export function Agents() {
             models: (cursorModels.data?.models ?? []).map((model) => ({
               id: model.id,
               name: model.displayName,
+              group: model.group,
             })),
             kind: 'builtin' as const,
           },
@@ -797,6 +800,7 @@ function AgentDialog(props: {
                             (model) => ({
                               id: model.id,
                               label: model.name,
+                              group: model.group,
                             })
                           )}
                           onSelect={setDefaultModelId}

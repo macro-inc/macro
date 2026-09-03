@@ -60,14 +60,14 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
     props.options.find((option) => option.id === shown())?.name ??
     shown() ??
     'Model';
-  const useCatalog = () =>
-    isLargeModelCatalog(
-      props.options.map((option) => ({
-        id: option.id,
-        label: option.name,
-        description: option.description ?? undefined,
-      }))
-    );
+  const catalogOptions = () =>
+    props.options.map((option) => ({
+      id: option.id,
+      label: option.name,
+      description: option.description ?? undefined,
+      group: option.group ?? undefined,
+    }));
+  const useCatalog = () => isLargeModelCatalog(catalogOptions());
 
   return (
     <Show when={props.options.length > 0}>
@@ -127,11 +127,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         <div class="min-w-44">
           <ModelCatalogPicker
             value={shown()}
-            options={props.options.map((option) => ({
-              id: option.id,
-              label: option.name,
-              description: option.description ?? undefined,
-            }))}
+            options={catalogOptions()}
             onSelect={(id) => {
               if (id !== props.model) props.onSelect(id);
             }}

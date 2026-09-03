@@ -82,6 +82,7 @@ export function Harness() {
     (cursorModels.data?.models ?? []).map((model) => ({
       id: model.id,
       label: model.displayName,
+      group: model.group,
     }));
   const selectedCursorModelId = () =>
     cursorStatus.data?.defaultModelId ?? cursorModelOptions()[0]?.id ?? null;

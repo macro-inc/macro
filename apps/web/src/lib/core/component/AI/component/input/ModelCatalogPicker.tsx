@@ -6,7 +6,7 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   buildModelCatalog,
   type CatalogModelOption,
-  familyForModel,
+  matchesModelQuery,
   moreModelFamilies,
 } from './modelCatalog';
 
@@ -65,13 +65,9 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
   const filtered = createMemo(() => {
     const currentQuery = normalizedQuery();
     if (!currentQuery) return [];
-    return props.options.filter((option) => {
-      const family = familyForModel(option.label).toLowerCase();
-      return (
-        option.label.toLowerCase().includes(currentQuery) ||
-        family.includes(currentQuery)
-      );
-    });
+    return props.options.filter((option) =>
+      matchesModelQuery(option, currentQuery)
+    );
   });
   const catalog = createMemo(() =>
     buildModelCatalog(props.options, props.value ?? undefined)
@@ -160,9 +156,11 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
                         <For each={extraFamilies()}>
                           {(family) => (
                             <>
-                              <Dropdown.GroupLabel>
-                                {family.label}
-                              </Dropdown.GroupLabel>
+                              <Show when={family.label}>
+                                <Dropdown.GroupLabel>
+                                  {family.label}
+                                </Dropdown.GroupLabel>
+                              </Show>
                               <For each={family.options}>
                                 {(option) => (
                                   <ModelRow
@@ -193,7 +191,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
               {(option) => (
                 <ModelRow
                   option={option}
-                  hint={familyForModel(option.label)}
+                  hint={option.group}
                   selected={option.id === props.value}
                   onSelect={() => props.onSelect(option.id)}
                 />

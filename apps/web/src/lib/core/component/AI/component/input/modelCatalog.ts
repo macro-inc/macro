@@ -2,10 +2,17 @@ export type CatalogModelOption = {
   id: string;
   label: string;
   description?: string;
+  /**
+   * The heading the harness listed this model under (an ACP select group
+   * name). Absent when the harness offered a flat list, in which case the
+   * catalog has one unlabelled family.
+   */
+  group?: string;
 };
 
 export type ModelFamily = {
-  label: string;
+  /** `null` for models the harness did not put under any heading. */
+  label: string | null;
   options: CatalogModelOption[];
 };
 
@@ -14,29 +21,11 @@ export type ModelCatalog = {
   families: ModelFamily[];
 };
 
-const FAMILY_RULES: readonly {
-  label: string;
-  match: (label: string) => boolean;
-}[] = [
-  {
-    label: 'Auto',
-    match: (label) => label === 'Auto' || label.startsWith('Auto '),
-  },
-  { label: 'Cursor Grok', match: (label) => label.startsWith('Cursor Grok') },
-  { label: 'Claude Opus', match: (label) => label.startsWith('Claude Opus') },
-  {
-    label: 'Claude Sonnet',
-    match: (label) => label.startsWith('Claude Sonnet'),
-  },
-  { label: 'Claude Fable', match: (label) => label.startsWith('Claude Fable') },
-  { label: 'Claude Haiku', match: (label) => label.startsWith('Claude Haiku') },
-  { label: 'GPT', match: (label) => label.startsWith('GPT-') },
-  { label: 'Gemini', match: (label) => label.startsWith('Gemini ') },
-  { label: 'Codex', match: (label) => label.startsWith('Codex ') },
-  { label: 'Kimi', match: (label) => label.startsWith('Kimi ') },
-  { label: 'GLM', match: (label) => label.startsWith('GLM ') },
-];
-
+/**
+ * The flagship models to feature on the first screen, matched against the
+ * label the harness gave them. Product curation, not grouping: which model
+ * belongs to which family is the harness's call and arrives on `group`.
+ */
 const RECOMMENDED_PREFIXES = [
   'Auto',
   'Cursor Grok 4.6',
@@ -56,17 +45,23 @@ export function isLargeModelCatalog(options: readonly CatalogModelOption[]) {
   return options.length > 10;
 }
 
-export function familyForModel(label: string) {
-  return (
-    FAMILY_RULES.find((rule) => rule.match(label))?.label ??
-    label.split(' ').slice(0, 2).join(' ')
-  );
+/** Bucket options under the harness's headings, in the order it listed them. */
+function familiesOf(options: readonly CatalogModelOption[]): ModelFamily[] {
+  const families: ModelFamily[] = [];
+  for (const option of options) {
+    const label = option.group ?? null;
+    const family = families.find((candidate) => candidate.label === label);
+    if (family) family.options.push(option);
+    else families.push({ label, options: [option] });
+  }
+  return families;
 }
 
 export function buildModelCatalog(
   options: readonly CatalogModelOption[],
   selectedId?: string | null
 ): ModelCatalog {
+  const families = familiesOf(options);
   const recommended: CatalogModelOption[] = [];
   const recommendedIds = new Set<string>();
   const recommendedLabels = new Set<string>();
@@ -94,27 +89,11 @@ export function buildModelCatalog(
       )
     );
   }
-
-  const grouped = new Map<string, CatalogModelOption[]>();
-  for (const option of options) {
-    const family = familyForModel(option.label);
-    const entries = grouped.get(family);
-    if (entries) entries.push(option);
-    else grouped.set(family, [option]);
+  // A harness whose names the curated list does not know still gets a useful
+  // shortlist: the first model of each of its headings, in its own order.
+  for (const family of families) {
+    pushRecommended(family.options[0]);
   }
-
-  const familyOrder = FAMILY_RULES.map((rule) => rule.label);
-  const families = Array.from(grouped.entries())
-    .sort(([left], [right]) => {
-      const leftIndex = familyOrder.indexOf(left);
-      const rightIndex = familyOrder.indexOf(right);
-      if (leftIndex === -1 && rightIndex === -1)
-        return left.localeCompare(right);
-      if (leftIndex === -1) return 1;
-      if (rightIndex === -1) return -1;
-      return leftIndex - rightIndex;
-    })
-    .map(([label, familyOptions]) => ({ label, options: familyOptions }));
 
   return { recommended, families };
 }
@@ -136,4 +115,12 @@ export function moreModelFamilies(catalog: ModelCatalog): ModelFamily[] {
       ),
     }))
     .filter((family) => family.options.length > 0);
+}
+
+/** Whether a search query hits this model by name or by its heading. */
+export function matchesModelQuery(option: CatalogModelOption, query: string) {
+  return (
+    option.label.toLowerCase().includes(query) ||
+    (option.group?.toLowerCase().includes(query) ?? false)
+  );
 }
