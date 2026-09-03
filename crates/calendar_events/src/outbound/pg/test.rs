@@ -4498,25 +4498,6 @@ async fn merged_event_reminder_firings_follow_the_primary_not_the_shared_copy(po
     // Firings are only kept for occurrences that have not already passed, so the
     // fixtures use a single future instance shared by both sources.
     let starts_at = Utc::now().trunc_subsecs(0) + Duration::days(10);
-    let retime = |upsert: &mut CalendarEventUpsert| {
-        let ends_at = starts_at + Duration::hours(1);
-        upsert.event.time = EventTime::Timed {
-            starts_at,
-            ends_at,
-            time_zone: Some("UTC".to_string()),
-        };
-        upsert.occurrences = vec![CalendarOccurrence {
-            event_id: upsert.event.id,
-            occurrence_key: starts_at.to_rfc3339(),
-            recurrence_id: None,
-            time: EventTime::Timed {
-                starts_at,
-                ends_at,
-                time_zone: Some("UTC".to_string()),
-            },
-            is_cancelled: false,
-        }];
-    };
 
     let mut primary = member_primary_upsert(
         member,
@@ -4525,7 +4506,7 @@ async fn merged_event_reminder_firings_follow_the_primary_not_the_shared_copy(po
         uid,
         "OOO",
     );
-    retime(&mut primary);
+    set_future_instance(&mut primary, starts_at);
     let event_id = repo.upsert_event_fixture(primary).await.unwrap();
 
     let mut copy = shared_copy_upsert(
@@ -4535,7 +4516,7 @@ async fn merged_event_reminder_firings_follow_the_primary_not_the_shared_copy(po
         uid,
         "[teo] OOO",
     );
-    retime(&mut copy);
+    set_future_instance(&mut copy, starts_at);
     repo.upsert_event_fixture(copy).await.unwrap();
 
     // The schedule reflects the member's 30-minute reminder, not the copy's 5.
@@ -4552,6 +4533,183 @@ async fn merged_event_reminder_firings_follow_the_primary_not_the_shared_copy(po
     .await
     .unwrap();
     assert_eq!(minutes, vec![30]);
+}
+
+/// Replace an upsert's span with a single future instance so its reminder
+/// firings are not dropped as already past.
+fn set_future_instance(upsert: &mut CalendarEventUpsert, starts_at: DateTime<Utc>) {
+    let ends_at = starts_at + Duration::hours(1);
+    let time = EventTime::Timed {
+        starts_at,
+        ends_at,
+        time_zone: Some("UTC".to_string()),
+    };
+    upsert.event.time = time.clone();
+    upsert.occurrences = vec![CalendarOccurrence {
+        event_id: upsert.event.id,
+        occurrence_key: starts_at.to_rfc3339(),
+        recurrence_id: None,
+        time,
+        is_cancelled: false,
+    }];
+}
+
+/// A calendar carrying a single popup default reminder `minutes` before start.
+async fn insert_calendar_with_default(
+    repo: &PgCalendarRepository,
+    account_id: Uuid,
+    provider_calendar_id: &str,
+    is_primary: bool,
+    minutes: u32,
+) -> Uuid {
+    repo.upsert_calendar_fixture(
+        account_id,
+        ProviderCalendar {
+            provider_calendar_id: provider_calendar_id.to_string(),
+            name: provider_calendar_id.to_string(),
+            description: None,
+            time_zone: Some("UTC".to_string()),
+            color: None,
+            access_role: Some(if is_primary { "owner" } else { "reader" }.to_string()),
+            is_primary,
+            is_selected: true,
+            default_reminders: vec![EventReminderOverride {
+                method: REMINDER_METHOD_POPUP.to_string(),
+                minutes,
+            }],
+        },
+    )
+    .await
+    .unwrap()
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn retiring_an_unrelated_source_keeps_the_primary_owned_fields(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id).await;
+    let uid = "teo-ooo@example.com";
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            "OOO",
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        "[teo] OOO",
+    ))
+    .await
+    .unwrap();
+
+    // Reconciliation rewrites the event from its freshest remaining source (the
+    // copy) while the member's primary source still exists. The projection
+    // follows the copy, but the primary-owned fields must survive.
+    let mut tx = pool.begin().await.unwrap();
+    let outcome = restore_best_source_or_delete(&mut tx, event_id)
+        .await
+        .unwrap()
+        .expect("the event still has sources");
+    assert!(!outcome.deleted);
+    tx.commit().await.unwrap();
+
+    let title = sqlx::query_scalar!(
+        r#"SELECT title FROM calendar_events WHERE id = $1"#,
+        event_id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(title, "[teo] OOO");
+    assert_primary_owned_fields(&pool, event_id).await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn calendar_default_reminder_changes_follow_the_owning_calendar(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let account_id = repo.upsert_google_account(link_id).await.unwrap();
+    let primary_calendar_id =
+        insert_calendar_with_default(&repo, account_id, "primary", true, 30).await;
+    let shared_calendar_id =
+        insert_calendar_with_default(&repo, account_id, "shared", false, 5).await;
+    let uid = "teo-standup@example.com";
+    let starts_at = Utc::now().trunc_subsecs(0) + Duration::days(10);
+
+    // A regular use-default event on the member's primary calendar, then a
+    // shared-calendar copy that wins the projection. Its reminders resolve to
+    // the primary calendar's defaults (30), never the shared calendar's (5).
+    let mut primary = timed_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        "Standup",
+        1,
+    );
+    primary.event.recurrence_lines.clear();
+    set_future_instance(&mut primary, starts_at);
+    let event_id = repo.upsert_event_fixture(primary).await.unwrap();
+
+    let mut copy = timed_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        "[teo] Standup",
+        1,
+    );
+    copy.event.recurrence_lines.clear();
+    copy.event.updated_at += Duration::hours(1);
+    copy.source = CalendarEventSource::Google(GoogleEventSource {
+        email_link_id: link_id,
+        account_id,
+        calendar_id: shared_calendar_id,
+        provider_event_id: format!("shared-copy-{uid}"),
+        provider_recurring_event_id: None,
+        provider_etag: None,
+        raw_payload: serde_json::json!({}),
+    });
+    set_future_instance(&mut copy, starts_at);
+    repo.upsert_event_fixture(copy).await.unwrap();
+
+    assert_eq!(event_firing_minutes(&pool, event_id).await, vec![30]);
+
+    // Changing the shared calendar's defaults must not reach a member's event
+    // it merely holds a projection of.
+    insert_calendar_with_default(&repo, account_id, "shared", false, 99).await;
+    assert_eq!(event_firing_minutes(&pool, event_id).await, vec![30]);
+
+    // Changing the primary calendar's defaults — the owner — must reach it.
+    insert_calendar_with_default(&repo, account_id, "primary", true, 45).await;
+    assert_eq!(event_firing_minutes(&pool, event_id).await, vec![45]);
+}
+
+/// The popup reminder offsets scheduled for an event, ascending.
+async fn event_firing_minutes(pool: &PgPool, event_id: Uuid) -> Vec<i32> {
+    sqlx::query_scalar!(
+        r#"
+        SELECT minutes_before
+        FROM calendar_event_reminder_firings
+        WHERE event_id = $1
+        ORDER BY minutes_before
+        "#,
+        event_id,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

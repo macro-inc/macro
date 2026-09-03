@@ -972,7 +972,7 @@ impl CalendarRepository for PgCalendarRepository {
         // member's reminders with its own or the shared calendar's empty
         // defaults. Skipped only when nothing above touched the event.
         if applied.is_some() || corrected_primary {
-            rebuild_event_reminder_firings_from_owner(&mut tx, event_id, source.calendar_id)
+            rebuild_event_reminder_firings_from_owner(&mut tx, event_id, Some(source.calendar_id))
                 .await?;
         }
 
@@ -2943,6 +2943,40 @@ async fn restore_best_source_or_delete(
 
     let projection: StoredSourceProjection =
         serde_json::from_value(source.normalized_payload).map_err(report)?;
+
+    // The freshest remaining source drives the projection, but Google's
+    // per-primary and owner-scoped fields still belong to the event's primary
+    // source when one survives the retirement. Retiring an unrelated source
+    // must not let a shared calendar's copy or a reader's view become the
+    // authority for the type, access, availability, visibility, or reminders
+    // just because it is now the freshest source left.
+    let primary_event: Option<CalendarEvent> = sqlx::query_scalar!(
+        r#"
+        SELECT source.normalized_payload
+        FROM calendar_event_sources source
+        JOIN calendars calendar ON calendar.id = source.calendar_id
+        JOIN calendar_accounts account ON account.id = source.account_id
+        WHERE source.event_id = $1
+          AND calendar.is_primary
+          AND NOT calendar.is_deleted
+          AND account.sync_status <> 'disabled'
+        ORDER BY
+            source.source_sequence DESC,
+            source.source_updated_at DESC,
+            source.last_seen_at DESC,
+            source.id DESC
+        LIMIT 1
+        "#,
+        event_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?
+    .map(|payload| serde_json::from_value::<StoredSourceProjection>(payload).map(|p| p.event))
+    .transpose()
+    .map_err(report)?;
+    let owner = primary_event.as_ref().unwrap_or(&projection.event);
+
     let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&projection.event.time);
     sqlx::query!(
         r#"
@@ -2981,8 +3015,8 @@ async fn restore_best_source_or_delete(
         projection.event.description.as_deref(),
         projection.event.location.as_deref(),
         projection.event.status.as_str(),
-        projection.event.visibility.as_str(),
-        projection.event.transparency.as_str(),
+        owner.visibility.as_str(),
+        owner.transparency.as_str(),
         starts_at,
         ends_at,
         start_date,
@@ -2993,20 +3027,20 @@ async fn restore_best_source_or_delete(
         projection.event.organizer_name.as_deref(),
         projection.event.conference_url.as_deref(),
         db_sequence(projection.event.sequence)?,
-        projection.event.is_read_only,
+        owner.is_read_only,
         &source.source_kind,
         source.source_updated_at,
         projection.event.created_at,
         projection.event.updated_at,
-        projection.event.reminders.use_default,
-        serde_json::to_value(&projection.event.reminders.overrides).map_err(report)?,
+        owner.reminders.use_default,
+        serde_json::to_value(&owner.reminders.overrides).map_err(report)?,
         projection
             .event
             .conference_provider
             .map(ConferenceProvider::as_str),
         projection.event.creator_email.as_deref(),
         projection.event.creator_name.as_deref(),
-        projection.event.event_type.as_str(),
+        owner.event_type.as_str(),
     )
     .execute(&mut **tx)
     .await
@@ -3020,16 +3054,9 @@ async fn restore_best_source_or_delete(
         &projection.occurrences,
     )
     .await?;
-    let calendar = fetch_calendar_reminder_context(tx, source.calendar_id).await?;
-    rebuild_event_reminder_firings(
-        tx,
-        event_id,
-        projection.event.status,
-        projection.event.event_type,
-        &projection.event.reminders,
-        calendar.as_ref(),
-    )
-    .await?;
+    // Rebuild from the settled row and the calendar that owns its reminders (the
+    // surviving primary source when there is one), consistent with the upsert.
+    rebuild_event_reminder_firings_from_owner(tx, event_id, source.calendar_id).await?;
     Ok(Some(RetiredCalendarEvent {
         event_id,
         owner_id: identity.owner_id,
@@ -3356,7 +3383,7 @@ async fn rebuild_event_reminder_firings(
 async fn rebuild_event_reminder_firings_from_owner(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
-    fallback_calendar_id: Uuid,
+    fallback_calendar_id: Option<Uuid>,
 ) -> Result<(), Report> {
     let row = sqlx::query!(
         r#"
@@ -3365,25 +3392,7 @@ async fn rebuild_event_reminder_firings_from_owner(
             event.event_type,
             event.reminders_use_default,
             event.reminder_overrides,
-            COALESCE(
-                (
-                    SELECT source.calendar_id
-                    FROM calendar_event_sources source
-                    JOIN calendars calendar ON calendar.id = source.calendar_id
-                    JOIN calendar_accounts account ON account.id = source.account_id
-                    WHERE source.event_id = event.id
-                      AND calendar.is_primary
-                      AND NOT calendar.is_deleted
-                      AND account.sync_status <> 'disabled'
-                    ORDER BY
-                        source.source_sequence DESC,
-                        source.source_updated_at DESC,
-                        source.last_seen_at DESC,
-                        source.id DESC
-                    LIMIT 1
-                ),
-                $2
-            ) AS "reminder_calendar_id!"
+            COALESCE(reminder_owner_calendar_id(event.id), $2) AS reminder_calendar_id
         FROM calendar_events event
         WHERE event.id = $1
         "#,
@@ -3401,7 +3410,7 @@ async fn rebuild_event_reminder_firings_from_owner(
             })
             .unwrap_or_default(),
     };
-    let calendar = fetch_calendar_reminder_context(tx, Some(row.reminder_calendar_id)).await?;
+    let calendar = fetch_calendar_reminder_context(tx, row.reminder_calendar_id).await?;
     rebuild_event_reminder_firings(
         tx,
         event_id,
@@ -3414,13 +3423,13 @@ async fn rebuild_event_reminder_firings_from_owner(
     Ok(())
 }
 
-/// Rebuild the firing schedule for every event whose canonical source lives
-/// on one calendar, after its default reminders or time zone changed.
-/// Set-based because a defaults change fans out to every `useDefault` event
-/// on the calendar. Both statements rank sources exactly like
-/// `restore_best_source_or_delete` and the read path: an event that also
-/// holds a secondary source on this calendar keeps the schedule its
-/// canonical calendar derived.
+/// Rebuild the firing schedule for every event this calendar owns the reminders
+/// of, after its default reminders or time zone changed. Set-based because a
+/// defaults change fans out to every `useDefault` event on the calendar. Keyed
+/// on `reminder_owner_calendar_id`, not the canonical projection, so a member's
+/// event that a shared calendar's copy has taken over the projection of still
+/// follows its own primary calendar's defaults — this calendar's change reaches
+/// it only when this calendar is that owner.
 async fn rebuild_calendar_reminder_firings(
     tx: &mut Transaction<'_, Postgres>,
     calendar_id: Uuid,
@@ -3433,17 +3442,7 @@ async fn rebuild_calendar_reminder_firings(
         USING calendar_event_sources source
         WHERE source.event_id = firing.event_id
           AND source.calendar_id = $1
-          AND (
-              SELECT canonical.calendar_id
-              FROM calendar_event_sources canonical
-              WHERE canonical.event_id = firing.event_id
-              ORDER BY
-                  canonical.source_sequence DESC,
-                  canonical.source_updated_at DESC,
-                  canonical.last_seen_at DESC,
-                  canonical.id DESC
-              LIMIT 1
-          ) = $1
+          AND reminder_owner_calendar_id(firing.event_id) = $1
         "#,
         calendar_id,
     )
@@ -3484,17 +3483,7 @@ async fn rebuild_calendar_reminder_firings(
               AND (reminder.value ->> 'minutes')::int >= 0
         ) offsets
         WHERE source.calendar_id = $1
-          AND (
-              SELECT canonical.calendar_id
-              FROM calendar_event_sources canonical
-              WHERE canonical.event_id = event.id
-              ORDER BY
-                  canonical.source_sequence DESC,
-                  canonical.source_updated_at DESC,
-                  canonical.last_seen_at DESC,
-                  canonical.id DESC
-              LIMIT 1
-          ) = $1
+          AND reminder_owner_calendar_id(event.id) = $1
           AND event.status <> 'cancelled'
           AND NOT occurrence.is_cancelled
           AND COALESCE(

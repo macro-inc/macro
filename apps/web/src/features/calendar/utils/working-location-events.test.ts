@@ -33,6 +33,7 @@ function event(
     isReadOnly: true,
     attendees: [],
     recurrenceLines: ['RRULE:FREQ=WEEKLY'],
+    sourceCalendarIds: [],
     title: overrides.title ?? 'Office',
     start,
     end,

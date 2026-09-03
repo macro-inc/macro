@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            event.status,\n            event.event_type,\n            event.reminders_use_default,\n            event.reminder_overrides,\n            COALESCE(reminder_owner_calendar_id(event.id), $2) AS reminder_calendar_id\n        FROM calendar_events event\n        WHERE event.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "reminders_use_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "reminder_overrides",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "reminder_calendar_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "11309d6353c26ad865ea73dfc7aed3fc7ba68c363e036d4909130d261069d97c"
+}
