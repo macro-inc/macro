@@ -12,7 +12,7 @@ const serverHostLocal: Servers = {
   contacts: 'http://localhost:8083',
   'email-service': 'http://localhost:8087',
   'image-proxy-service': 'http://localhost:8097',
-  'scheduled-action': 'http://localhost:8098',
+  'scheduled-action': 'http://localhost:8099',
   'agent-harness': 'http://localhost:8101',
 } as const;
 
@@ -42,7 +42,7 @@ const serverHostRemote = {
   contacts: `${gatewayHost}/contacts`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
   'image-proxy-service': `${gatewayHost}/image-proxy`,
-  'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,
+  'scheduled-action': `${gatewayHost}/agent-schedule`,
   'agent-harness': `https://agent-harness${devServerSuffix}.macro.com`,
 } as const;
 
@@ -105,7 +105,7 @@ function proxyServers(): Servers | undefined {
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,
-    'scheduled-action': serverHostLocal['scheduled-action'], // no local container
+    'scheduled-action': `${proxyOrigin}/agent-schedule`,
   };
 }
 

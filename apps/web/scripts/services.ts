@@ -106,8 +106,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "scheduled-action",
-		dev: "https://scheduled-action-dev.macro.com/api-doc/openapi.json",
-		prod: "https://scheduled-action.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/agent-schedule/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/agent-schedule/api-doc/openapi.json",
 		local: "http://localhost:8099/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-scheduled-action/",
 		orvalKey: "scheduledActionService",
