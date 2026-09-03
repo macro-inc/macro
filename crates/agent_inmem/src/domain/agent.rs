@@ -30,11 +30,16 @@ use agent_client_protocol::{
 };
 use agent_runtime_protocol::domain::action::{COMPACT_COMMAND, MODEL_CONFIG_ID};
 use agent_session::domain::model::AgentSessionId;
+use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
 use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
+use crate::domain::user_input::{
+    SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
+    UserInputRequester,
+};
 
 #[cfg(test)]
 mod test;
@@ -180,6 +185,74 @@ impl AgentState {
             cancel.cancel();
         }
     }
+}
+
+/// ACP-backed user-input port for one connected session.
+struct AcpUserInputRequester {
+    connection: ConnectionTo<Client>,
+    session_id: SessionId,
+}
+
+#[async_trait]
+impl UserInputRequester for AcpUserInputRequester {
+    async fn ask(&self, request: UserInputRequest) -> Result<UserInputOutcome, UserInputError> {
+        let mut field = StringPropertySchema::new().title("Answer");
+        if !request.options.is_empty() {
+            field = field.one_of(
+                request
+                    .options
+                    .iter()
+                    .map(|option| EnumOption::new(option.clone(), option.clone()))
+                    .collect::<Vec<_>>(),
+            );
+        }
+        let schema = ElicitationSchema::new().property(ASK_FIELD, field, true);
+        let request = CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationSessionScope::new(self.session_id.clone()),
+                schema,
+            ),
+            request.question,
+        );
+
+        let response = self
+            .connection
+            .send_request(request)
+            .block_task()
+            .await
+            .map_err(|error| UserInputError::RequestFailed(error.to_string()))?;
+        match response.action {
+            ElicitationAction::Accept(accept) => accept
+                .content
+                .as_ref()
+                .and_then(|content| content.get(ASK_FIELD))
+                .and_then(|value| serde_json::to_value(value).ok())
+                .map(|value| match value {
+                    serde_json::Value::String(text) => text,
+                    other => other.to_string(),
+                })
+                .map(UserInputOutcome::Answered)
+                .ok_or(UserInputError::MissingAnswer),
+            ElicitationAction::Decline => Ok(UserInputOutcome::Declined),
+            ElicitationAction::Cancel => Ok(UserInputOutcome::Cancelled),
+            _ => Err(UserInputError::RequestFailed(
+                "the client returned an unknown elicitation action".to_owned(),
+            )),
+        }
+    }
+}
+
+fn user_input_requester(
+    state: &AgentState,
+    connection: &ConnectionTo<Client>,
+    session_id: SessionId,
+) -> Option<SharedUserInputRequester> {
+    state.client_renders_forms.load(Ordering::Relaxed).then(|| {
+        Arc::new(AcpUserInputRequester {
+            connection: connection.clone(),
+            session_id,
+        }) as SharedUserInputRequester
+    })
 }
 
 /// Serve this session's agent on `acp` until the connection closes.
@@ -355,12 +428,14 @@ async fn run_turn(
         model,
         instructions,
     } = state.turn_input(&prompt);
+    let user_input = user_input_requester(state, connection, acp_session_id.clone());
     let mut parts = state.engine.run_turn(TurnRequest {
         owner: state.owner.clone(),
         model,
         instructions,
         messages,
         cancel: cancel.clone(),
+        user_input,
     });
 
     let mut accumulator = StreamAccumulator::new();
@@ -459,43 +534,16 @@ async fn run_ask(
         return StopReason::EndTurn;
     }
 
-    let (message, options) = parse_ask(&question);
-    let mut field = StringPropertySchema::new().title("Answer");
-    if !options.is_empty() {
-        field = field.one_of(
-            options
-                .iter()
-                .map(|option| EnumOption::new(option.clone(), option.clone()))
-                .collect::<Vec<_>>(),
-        );
-    }
-    let schema = ElicitationSchema::new().property(ASK_FIELD, field, true);
-    let request = CreateElicitationRequest::new(
-        ElicitationFormMode::new(ElicitationSessionScope::new(acp_session_id.clone()), schema),
-        message,
-    );
-
-    let answer = connection.send_request(request).block_task().await;
-    let text = match answer {
-        Ok(response) => match response.action {
-            ElicitationAction::Accept(accept) => {
-                let value = accept
-                    .content
-                    .as_ref()
-                    .and_then(|content| content.get(ASK_FIELD))
-                    .and_then(|value| serde_json::to_value(value).ok())
-                    .map(|value| match value {
-                        serde_json::Value::String(text) => text,
-                        other => other.to_string(),
-                    })
-                    .unwrap_or_else(|| "nothing".to_owned());
-                format!("You answered: {value}")
-            }
-            ElicitationAction::Decline => "You declined to answer.".to_owned(),
-            ElicitationAction::Cancel => "The question was cancelled.".to_owned(),
-            _ => "You answered in a way this agent does not understand.".to_owned(),
-        },
-        Err(error) => format!("The client refused the question: {error}"),
+    let (question, options) = parse_ask(&question);
+    let requester = AcpUserInputRequester {
+        connection: connection.clone(),
+        session_id: acp_session_id,
+    };
+    let text = match requester.ask(UserInputRequest { question, options }).await {
+        Ok(UserInputOutcome::Answered(value)) => format!("You answered: {value}"),
+        Ok(UserInputOutcome::Declined) => "You declined to answer.".to_owned(),
+        Ok(UserInputOutcome::Cancelled) => "The question was cancelled.".to_owned(),
+        Err(error) => error.to_string(),
     };
     let text = say(text);
     state.push_turn(prompt, vec![AssistantMessagePart::Text { text }]);

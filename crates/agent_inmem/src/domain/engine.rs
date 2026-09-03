@@ -6,6 +6,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
+use super::user_input::SharedUserInputRequester;
+
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
     /// The user the turn acts on behalf of. Tools run with their identity and
@@ -23,6 +25,9 @@ pub struct TurnRequest {
     /// Cancelling this token stops the turn; the stream ends after the
     /// engine has drained cooperatively.
     pub cancel: CancellationToken,
+    /// User-input capability for model-callable tools. Absent when the ACP
+    /// client did not advertise form elicitation.
+    pub user_input: Option<SharedUserInputRequester>,
 }
 
 /// Runs one conversational turn and streams its parts back.
