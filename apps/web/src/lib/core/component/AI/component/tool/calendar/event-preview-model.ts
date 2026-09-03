@@ -67,6 +67,7 @@ export function buildCalendarToolPreviewEvent(
     isReadOnly: true,
     attendees: [],
     recurrenceLines: input.recurrenceLines ?? input.values.recurrenceLines,
+    sourceCalendarIds: [],
     calendarId: input.calendar?.id ?? input.values.calendarId,
     title: input.values.title.trim() || 'New event',
     calendar,

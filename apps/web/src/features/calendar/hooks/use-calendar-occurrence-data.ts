@@ -9,6 +9,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import {
   type CalendarEvent,
   type CalendarSource,
+  isCalendarEventVisible,
   mapCalendarOccurrence,
 } from '../types';
 import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
@@ -61,11 +62,13 @@ export function useCalendarOccurrenceData(
       )
     );
   });
-  const visibleEvents = createMemo(() =>
-    events().filter(
-      (event) => options.isSourceVisible?.(event.calendar.id) !== false
-    )
-  );
+  const visibleEvents = createMemo(() => {
+    const isSourceVisible = options.isSourceVisible;
+    if (!isSourceVisible) return events();
+    return events().filter((event) =>
+      isCalendarEventVisible(event, isSourceVisible)
+    );
+  });
   const eventsById = createMemo(
     () => new Map(events().map((event) => [event.id, event]))
   );

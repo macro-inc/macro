@@ -1369,6 +1369,16 @@ export type CalendarEvent = {
      */
     sequence: number;
     /**
+     * Every visible calendar this event is synced from. A shared calendar can
+     * copy a member's event onto itself (Google's vacation-calendar script
+     * re-imports out-of-office events under the same UID), so one entity can
+     * belong to several calendars at once; `calendar_id` names the canonical
+     * one for color and attribution while this lists all of them, letting a
+     * client keep an event visible while any of its calendars is shown.
+     * Populated only on the read path, so stored projections omit it.
+     */
+    sourceCalendarIds?: Array<string>;
+    /**
      * Event status.
      */
     status: EventStatus;

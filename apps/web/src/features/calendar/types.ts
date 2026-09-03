@@ -76,6 +76,12 @@ export interface CalendarEvent {
   eventType?: EventType;
   /** Canonical calendar entity id, for resolving default reminders. */
   calendarId?: string;
+  /**
+   * Every visible calendar this event is synced from. A shared calendar can
+   * copy an event a member also owns, so the event belongs to several
+   * calendars at once; it stays visible while any of them is shown.
+   */
+  sourceCalendarIds: string[];
   /** Raw recurrence rules attached to the canonical event. */
   recurrenceLines: string[];
   /** Original IANA timezone for a timed occurrence. */
@@ -102,6 +108,22 @@ export const DEFAULT_CALENDAR_SOURCE: CalendarSource = {
   name: 'Calendar',
   color: 'var(--color-accent)',
 };
+
+/**
+ * Whether an event should render given a per-source visibility predicate. An
+ * event synced from several calendars stays visible while any of them is shown;
+ * the canonical calendar is the fallback for projections without source ids.
+ */
+export function isCalendarEventVisible(
+  event: CalendarEvent,
+  isSourceVisible: (sourceId: string) => boolean
+): boolean {
+  const sourceIds =
+    event.sourceCalendarIds.length > 0
+      ? event.sourceCalendarIds
+      : [event.calendar.id];
+  return sourceIds.some((id) => isSourceVisible(id));
+}
 
 function optionalText(value: string | null | undefined) {
   return value ?? undefined;
@@ -140,6 +162,7 @@ export function mapCalendarOccurrence(
     reminders: event.reminders ?? undefined,
     eventType: event.eventType ?? undefined,
     calendarId: event.calendarId ?? undefined,
+    sourceCalendarIds: event.sourceCalendarIds ?? [],
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: event.title,
     calendar: source,

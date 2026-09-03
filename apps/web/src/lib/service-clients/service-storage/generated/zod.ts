@@ -1171,6 +1171,12 @@ export const listOccurrencesResponse = zod
                 .number()
                 .min(listOccurrencesResponseItemsItemEventSequenceMin)
                 .describe('Provider\/iCalendar sequence number.'),
+              sourceCalendarIds: zod
+                .array(zod.uuid())
+                .optional()
+                .describe(
+                  "Every visible calendar this event is synced from. A shared calendar can\ncopy a member's event onto itself (Google's vacation-calendar script\nre-imports out-of-office events under the same UID), so one entity can\nbelong to several calendars at once; `calendar_id` names the canonical\none for color and attribution while this lists all of them, letting a\nclient keep an event visible while any of its calendars is shown.\nPopulated only on the read path, so stored projections omit it."
+                ),
               status: zod
                 .enum(['confirmed', 'tentative', 'cancelled'])
                 .describe('Canonical event status.'),

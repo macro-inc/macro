@@ -125,6 +125,7 @@ fn timed_upsert(
             owner_id: owner_id.to_string(),
             ical_uid: uid.to_string(),
             calendar_id: Some(calendar_id),
+            source_calendar_ids: Vec::new(),
             title: title.to_string(),
             description: None,
             location: None,
@@ -2804,6 +2805,7 @@ fn reminder_upsert(
             owner_id: owner_id.to_string(),
             ical_uid: uid.to_string(),
             calendar_id: Some(calendar_id),
+            source_calendar_ids: Vec::new(),
             title: "Reminder subject".to_string(),
             description: None,
             location: None,
@@ -4138,6 +4140,182 @@ async fn team_out_of_office_requires_an_active_primary_calendar_source(pool: PgP
         .unwrap();
 
     assert!(rows.is_empty());
+}
+
+/// A shared calendar Google's vacation-calendar script maintains, populated by
+/// re-importing members' out-of-office events under the same UID with the type
+/// forced to `default`.
+async fn insert_shared_calendar(repo: &PgCalendarRepository, account_id: Uuid) -> Uuid {
+    repo.upsert_calendar_fixture(
+        account_id,
+        ProviderCalendar {
+            provider_calendar_id: "c_shared@group.calendar.google.com".to_string(),
+            name: "Macro Vacation".to_string(),
+            description: None,
+            time_zone: Some("UTC".to_string()),
+            color: None,
+            access_role: Some("reader".to_string()),
+            is_primary: false,
+            is_selected: true,
+            default_reminders: Vec::new(),
+        },
+    )
+    .await
+    .unwrap()
+}
+
+/// The shared calendar's re-imported copy of a member's out-of-office event: a
+/// bracketed title, the type flattened to `default`, and an `updated` stamp
+/// newer than the member's own event so it wins the canonical projection.
+fn shared_copy_upsert(
+    owner_id: &str,
+    link_id: Uuid,
+    provider: (Uuid, Uuid),
+    uid: &str,
+    title: &str,
+) -> CalendarEventUpsert {
+    let (account_id, calendar_id) = provider;
+    let mut upsert = timed_upsert(owner_id, link_id, provider, uid, title, 1);
+    upsert.event.event_type = EventType::Default;
+    upsert.event.attendees.clear();
+    upsert.event.recurrence_lines.clear();
+    upsert.event.updated_at += Duration::hours(1);
+    upsert.source = CalendarEventSource::Google(GoogleEventSource {
+        email_link_id: link_id,
+        account_id,
+        calendar_id,
+        provider_event_id: format!("shared-copy-{uid}"),
+        provider_recurring_event_id: None,
+        provider_etag: None,
+        raw_payload: serde_json::json!({}),
+    });
+    upsert
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn shared_calendar_copy_keeps_the_status_type_and_lists_under_both_calendars(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let viewer = "macro|watcher@example.com";
+    insert_team(&pool, member, &[member, viewer]).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id).await;
+    let uid = "teo-ooo@example.com";
+
+    // The member's own out-of-office event on their primary calendar syncs
+    // first, then the shared calendar's `default` copy wins the projection.
+    let event_id = repo
+        .upsert_event_fixture(ooo_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            "OOO",
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        "[teo] OOO",
+    ))
+    .await
+    .unwrap();
+
+    // The copy won the title but never downgraded the type.
+    let row = sqlx::query!(
+        r#"SELECT title, event_type FROM calendar_events WHERE id = $1"#,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.title, "[teo] OOO");
+    assert_eq!(row.event_type, "out_of_office");
+
+    // The event lists under both calendars; the canonical stays the copy.
+    let occurrences = repo
+        .list_occurrences(member, july_2026_range(), None, 100)
+        .await
+        .unwrap();
+    let (event, _) = occurrences.first().expect("the merged event lists");
+    assert_eq!(event.calendar_id, Some(shared_calendar_id));
+    let mut sources = event.source_calendar_ids.clone();
+    sources.sort();
+    let mut expected = [primary_calendar_id, shared_calendar_id];
+    expected.sort();
+    assert_eq!(sources, expected);
+
+    // The team overlay still reads the member's out-of-office time.
+    let team = repo
+        .list_team_out_of_office(viewer, july_2026_range(), 100)
+        .await
+        .unwrap();
+    assert!(team.iter().any(|row| row.owner_id == member));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_late_primary_sync_reclaims_the_status_type_from_a_shared_copy(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let viewer = "macro|watcher@example.com";
+    insert_team(&pool, member, &[member, viewer]).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id).await;
+    let uid = "teo-ooo@example.com";
+
+    // The shared copy backfills first, so the row starts life as `default`.
+    let event_id = repo
+        .upsert_event_fixture(shared_copy_upsert(
+            member,
+            link_id,
+            (account_id, shared_calendar_id),
+            uid,
+            "[teo] OOO",
+        ))
+        .await
+        .unwrap();
+    let seeded = sqlx::query_scalar!(
+        r#"SELECT event_type FROM calendar_events WHERE id = $1"#,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(seeded, "default");
+
+    // The member's primary out-of-office event syncs later. Its projection
+    // loses the freshness guard to the copy, but the primary is the authority
+    // for the type, so it is reclaimed even though the title stays the copy's.
+    repo.upsert_event_fixture(ooo_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        "OOO",
+    ))
+    .await
+    .unwrap();
+
+    let row = sqlx::query!(
+        r#"SELECT title, event_type FROM calendar_events WHERE id = $1"#,
+        event_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.event_type, "out_of_office");
+    assert_eq!(row.title, "[teo] OOO");
+
+    let team = repo
+        .list_team_out_of_office(viewer, july_2026_range(), 100)
+        .await
+        .unwrap();
+    assert!(team.iter().any(|row| row.owner_id == member));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

@@ -75,6 +75,7 @@ fn sample_event(recurrence_lines: Vec<String>) -> crate::domain::models::Calenda
         owner_id: "macro|owner@example.com".to_string(),
         ical_uid: "uid-1".to_string(),
         calendar_id: Some(Uuid::from_u128(9)),
+        source_calendar_ids: Vec::new(),
         title: "Standup".to_string(),
         description: Some("Daily sync".to_string()),
         location: Some("Room 1".to_string()),

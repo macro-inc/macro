@@ -57,6 +57,7 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
     isReadOnly: true,
     attendees: [],
     recurrenceLines: [],
+    sourceCalendarIds: [],
     eventType: EventType.out_of_office,
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: name ? `${name}: ${title}` : title,

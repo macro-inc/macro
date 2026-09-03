@@ -277,6 +277,7 @@ struct StoredCalendarRow {
 struct OccurrenceJoinRow {
     event_id: Uuid,
     canonical_calendar_id: Option<Uuid>,
+    source_calendar_ids: Vec<Uuid>,
     occurrence_key: String,
     recurrence_id: Option<String>,
     occurrence_starts_at: Option<DateTime<Utc>>,
@@ -706,6 +707,20 @@ impl CalendarRepository for PgCalendarRepository {
         let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&upsert.event.time);
         let proposed_id = upsert.event.id;
 
+        // Google forbids status event types (out-of-office, focus-time,
+        // working-location) anywhere but a primary calendar, so a shared
+        // calendar that re-imports a member's out-of-office event carries it as
+        // `default`. The primary calendar is the authority for the type, so
+        // whether this source is a primary calendar decides if it may set it.
+        let incoming_is_primary = sqlx::query_scalar!(
+            "SELECT is_primary FROM calendars WHERE id = $1",
+            source.calendar_id,
+        )
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(report)?
+        .unwrap_or(false);
+
         // Google is the authoritative source when the same RFC UID was first
         // discovered in email. Email can still create/update entities that do
         // not yet have a Google source.
@@ -740,7 +755,14 @@ impl CalendarRepository for PgCalendarRepository {
                 status = EXCLUDED.status,
                 visibility = EXCLUDED.visibility,
                 transparency = EXCLUDED.transparency,
-                event_type = EXCLUDED.event_type,
+                -- A non-primary source (a shared calendar's copy) must never
+                -- downgrade a status type to `default`: take the incoming type
+                -- only from a primary calendar, or when nothing typed it yet.
+                event_type = CASE
+                    WHEN $31 OR calendar_events.event_type = 'default'
+                        THEN EXCLUDED.event_type
+                    ELSE calendar_events.event_type
+                END,
                 starts_at = EXCLUDED.starts_at,
                 ends_at = EXCLUDED.ends_at,
                 start_date = EXCLUDED.start_date,
@@ -804,6 +826,7 @@ impl CalendarRepository for PgCalendarRepository {
             upsert.event.creator_email.as_deref(),
             upsert.event.creator_name.as_deref(),
             upsert.event.event_type.as_str(),
+            incoming_is_primary,
         )
         .fetch_optional(&mut *tx)
         .await
@@ -812,7 +835,7 @@ impl CalendarRepository for PgCalendarRepository {
         // No returned row means the sequence guard rejected the write as
         // stale: the source is still recorded below, but the canonical row and
         // its projections are untouched.
-        let (event_id, change) = match &applied {
+        let (event_id, mut change) = match &applied {
             Some(row) => (
                 row.id,
                 if row.inserted {
@@ -836,6 +859,28 @@ impl CalendarRepository for PgCalendarRepository {
         };
 
         persist_source(&mut tx, event_id, &upsert).await?;
+
+        // A shared calendar's copy usually wins the canonical projection because
+        // it is re-imported (and so re-stamped) more recently than the member's
+        // own event, which parks the primary sync in the rejected branch above.
+        // The primary is still the authority for the event type, so reconcile it
+        // directly here even when its projection lost — this is the only path
+        // that lifts a status type back out of the copy's `default`.
+        if incoming_is_primary && applied.is_none() {
+            let corrected = sqlx::query!(
+                "UPDATE calendar_events SET event_type = $2 \
+                 WHERE id = $1 AND event_type IS DISTINCT FROM $2",
+                event_id,
+                upsert.event.event_type.as_str(),
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(report)?
+            .rows_affected();
+            if corrected > 0 {
+                change = CalendarEventChange::Updated;
+            }
+        }
 
         // Only the source selected as canonical replaces projections and
         // attendees. Lower-sequence/stale sources are still recorded above.
@@ -887,6 +932,7 @@ impl CalendarRepository for PgCalendarRepository {
             SELECT
                 occurrence.event_id,
                 canonical_source.calendar_id AS "canonical_calendar_id?",
+                source_calendars.calendar_ids AS "source_calendar_ids!: Vec<Uuid>",
                 occurrence.occurrence_key,
                 occurrence.recurrence_id,
                 occurrence.starts_at AS occurrence_starts_at,
@@ -938,6 +984,18 @@ impl CalendarRepository for PgCalendarRepository {
                     source.id DESC
                 LIMIT 1
             ) canonical_source ON true
+            LEFT JOIN LATERAL (
+                SELECT COALESCE(
+                    array_agg(DISTINCT source.calendar_id),
+                    ARRAY[]::uuid[]
+                ) AS calendar_ids
+                FROM calendar_event_sources source
+                JOIN calendars calendar ON calendar.id = source.calendar_id
+                JOIN calendar_accounts account ON account.id = source.account_id
+                WHERE source.event_id = event.id
+                  AND NOT calendar.is_deleted
+                  AND account.sync_status <> 'disabled'
+            ) source_calendars ON true
             WHERE occurrence.owner_id IN (
                     SELECT $1::text
                     UNION
@@ -3519,6 +3577,7 @@ fn event_from_join(
         owner_id: row.owner_id,
         ical_uid: row.ical_uid,
         calendar_id: row.canonical_calendar_id,
+        source_calendar_ids: row.source_calendar_ids,
         title: row.title,
         description: row.description,
         location: row.location,

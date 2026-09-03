@@ -4,11 +4,12 @@ import { makePersisted } from '@solid-primitives/storage';
 import { batch, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarSources } from '../hooks/use-calendar-sources';
-import type {
-  CalendarEvent,
-  CalendarPeriodView,
-  CalendarTimeFormat,
-  CalendarWeekStart,
+import {
+  type CalendarEvent,
+  type CalendarPeriodView,
+  type CalendarTimeFormat,
+  type CalendarWeekStart,
+  isCalendarEventVisible,
 } from '../types';
 import { getDefaultCalendarTimeFormat } from '../utils/time-format';
 
@@ -107,7 +108,12 @@ export const [CalendarViewContextProvider, useCalendarView] =
             : [...current, sourceId]
       );
 
-      if (!visible && selection.event()?.calendar.id === sourceId) {
+      const selected = selection.event();
+      if (
+        !visible &&
+        selected &&
+        !isCalendarEventVisible(selected, isSourceVisible)
+      ) {
         closeEventDetails();
       }
     };

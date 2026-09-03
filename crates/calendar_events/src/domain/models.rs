@@ -542,6 +542,15 @@ pub struct CalendarEvent {
     /// projections stored before calendars were attributed.
     #[serde(default)]
     pub calendar_id: Option<Uuid>,
+    /// Every visible calendar this event is synced from. A shared calendar can
+    /// copy a member's event onto itself (Google's vacation-calendar script
+    /// re-imports out-of-office events under the same UID), so one entity can
+    /// belong to several calendars at once; `calendar_id` names the canonical
+    /// one for color and attribution while this lists all of them, letting a
+    /// client keep an event visible while any of its calendars is shown.
+    /// Populated only on the read path, so stored projections omit it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub source_calendar_ids: Vec<Uuid>,
     /// Display title.
     pub title: String,
     /// Optional event body.
