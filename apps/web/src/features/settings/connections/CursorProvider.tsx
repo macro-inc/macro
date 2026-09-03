@@ -7,7 +7,6 @@ import {
   useSaveCursorApiKey,
   useSetCursorDefaultModel,
 } from '@queries/auth/cursor-api-key';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { DisconnectAction } from '../integration-ui';
@@ -22,6 +21,7 @@ import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
+import { ConnectionsCardSkeleton } from './loading';
 import { closeConnectionsProvider } from './view-state';
 
 const CURSOR_KEY_PREFIX = 'crsr_';
@@ -94,37 +94,30 @@ export function CursorProvider() {
     >
       <SettingsSection title="Your Connections">
         <SettingsCard>
-          <CapabilityRow
-            title="Cursor"
-            outcome="Use your Cursor account to run agent sessions in Macro. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
-            status={
-              !cursorStatus.isPlaceholderData && cursorRegistered()
-                ? 'connected'
-                : undefined
-            }
-          >
-            <Show when={!cursorStatus.isPlaceholderData && cursorRegistered()}>
-              <DisconnectAction
-                disabled={disconnectCursor.isPending}
-                onClick={() =>
-                  setDisconnect({
-                    title: 'Disconnect from Macro',
-                    body: "Disconnect Cursor? This deletes Macro's copy of the key. It does not revoke the key in Cursor.",
-                    onConfirm: () => void handleDisconnectCursor(),
-                  })
-                }
-              />
-            </Show>
-          </CapabilityRow>
           <Show
             when={!cursorStatus.isPlaceholderData}
             fallback={
-              <div class="flex items-center gap-2 px-6 py-3.5 text-sm text-ink-muted">
-                <SpinnerIcon class="size-4 animate-spin" />
-                Loading…
-              </div>
+              <ConnectionsCardSkeleton label="Loading Cursor connection" />
             }
           >
+            <CapabilityRow
+              title="Cursor"
+              outcome="Use your Cursor account to run agent sessions in Macro. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
+              status={cursorRegistered() ? 'connected' : undefined}
+            >
+              <Show when={cursorRegistered()}>
+                <DisconnectAction
+                  disabled={disconnectCursor.isPending}
+                  onClick={() =>
+                    setDisconnect({
+                      title: 'Disconnect from Macro',
+                      body: "Disconnect Cursor? This deletes Macro's copy of the key. It does not revoke the key in Cursor.",
+                      onConfirm: () => void handleDisconnectCursor(),
+                    })
+                  }
+                />
+              </Show>
+            </CapabilityRow>
             <Show
               when={cursorRegistered()}
               fallback={

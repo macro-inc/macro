@@ -146,7 +146,9 @@ describe('CursorProvider', () => {
 
     render(() => <CursorProvider />);
 
-    expect(screen.getByText('Loading…')).toBeTruthy();
+    expect(
+      screen.getByRole('status', { name: 'Loading Cursor connection' })
+    ).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
   });
 
