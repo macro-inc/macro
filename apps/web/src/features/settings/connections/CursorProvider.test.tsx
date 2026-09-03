@@ -107,7 +107,10 @@ describe('CursorProvider', () => {
 
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
-    expect(screen.getByText(/does not revoke the key in Cursor/)).toBeTruthy();
+    expect(screen.getByLabelText('Default model')).toHaveProperty(
+      'value',
+      'default-model'
+    );
 
     fireEvent.change(screen.getByLabelText('Default model'), {
       target: { value: 'default-model' },
@@ -123,6 +126,7 @@ describe('CursorProvider', () => {
 
     expect(mocks.disconnect).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeTruthy();
+    expect(screen.getByText(/does not revoke the key in Cursor/)).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
 

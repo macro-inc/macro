@@ -40,6 +40,13 @@ export function CursorProvider() {
   const cursorRegistered = () => cursorStatus.data?.registered ?? false;
   const cursorModels = useCursorModelsQuery(cursorRegistered);
   const setCursorDefaultModel = useSetCursorDefaultModel();
+  const models = () => cursorModels.data?.models ?? [];
+  const selectedModelId = () => {
+    const id = cursorStatus.data?.defaultModelId;
+    const list = models();
+    if (id && list.some((model) => model.id === id)) return id;
+    return list[0]?.id ?? '';
+  };
 
   const handleCursorModelChange = async (modelId: string) => {
     try {
@@ -88,7 +95,7 @@ export function CursorProvider() {
         <SettingsCard>
           <CapabilityRow
             title="Cursor"
-            outcome="Use your Cursor account to run agent sessions in Macro. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
+            outcome="Use your Cursor account to run agent sessions in Macro."
             facts="Personal"
             status={
               !cursorStatus.isPlaceholderData && cursorRegistered()
@@ -165,23 +172,21 @@ export function CursorProvider() {
               <SettingsRow
                 label={<label for="cursor-default-model">Default model</label>}
                 description="The model new @cursor sessions start on. You can still switch it per session."
+                stackOnNarrow
+                align="start"
               >
                 <select
                   id="cursor-default-model"
-                  class="settings-input w-56"
-                  value={cursorStatus.data?.defaultModelId ?? ''}
-                  disabled={setCursorDefaultModel.isPending}
+                  class="settings-input w-full min-w-0 bg-surface @[460px]:w-56"
+                  value={selectedModelId()}
+                  disabled={
+                    setCursorDefaultModel.isPending || models().length === 0
+                  }
                   onChange={(event) =>
                     void handleCursorModelChange(event.currentTarget.value)
                   }
                 >
-                  <For
-                    each={
-                      cursorModels.isSuccess
-                        ? (cursorModels.data?.models ?? [])
-                        : []
-                    }
-                  >
+                  <For each={models()}>
                     {(model) => (
                       <option value={model.id}>{model.displayName}</option>
                     )}
