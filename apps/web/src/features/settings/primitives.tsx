@@ -166,7 +166,7 @@ export function SettingsRow(props: {
         <Show when={props.description}>
           <div
             class={cn(
-              'text-xs text-ink-extra-muted mobile:text-[11px]',
+              'text-xs text-ink-extra-muted text-balance mobile:text-[11px]',
               props.hideDescriptionOnMobile && 'mobile:hidden'
             )}
           >
@@ -274,7 +274,9 @@ export function IntegrationRow(props: {
           </Show>
         </div>
         <Show when={props.description}>
-          <div class="text-sm text-ink-muted">{props.description}</div>
+          <div class="text-sm text-ink-muted text-balance">
+            {props.description}
+          </div>
         </Show>
         <Show when={props.facts}>
           <div class="text-xs text-ink-extra-muted">{props.facts}</div>
