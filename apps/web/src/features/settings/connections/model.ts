@@ -126,7 +126,6 @@ const NATIVE_CURATED: {
   { provider: 'slack', url: 'https://mcp.slack.com/mcp' },
 ];
 
-/** Shared Discover + Connected overview line for Google. */
 export const GOOGLE_PROVIDER_NOTE = 'Connect Gmail and Calendar to Macro.';
 
 const PROVIDER_NAMES: Record<Exclude<ProviderId, 'other'>, string> = {

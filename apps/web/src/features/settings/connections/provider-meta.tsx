@@ -49,15 +49,6 @@ export const EMPTY_STARTERS: FeaturedStarter[] = [
 
 export const FEATURED_DISCOVER = EMPTY_STARTERS;
 
-/**
- * Pipedream catalog slugs Macro already covers outside Browse.
- * Featured keeps Google / GitHub / Linear / Notion / Slack / Cursor.
- * Browse hides these so users do not get a second connect path.
- *
- * `gmail` and `google_calendar` are first-party Google aliases. Featured
- * provider ids that match catalog slugs (`github`, `linear`, …) are included
- * too. Drive/Sheets stay visible.
- */
 export const PIPEDREAM_BROWSE_HIDDEN_SLUGS: ReadonlySet<string> = new Set([
   ...FEATURED_DISCOVER.map((item) => item.id),
   'gmail',

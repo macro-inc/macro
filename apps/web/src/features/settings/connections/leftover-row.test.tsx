@@ -4,7 +4,10 @@
 
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { writeMcpAuthAttempted } from '../mcp-auth-attempt';
+import {
+  readMcpAuthAttempted,
+  writeMcpAuthAttempted,
+} from '../mcp-auth-attempt';
 import { LeftoverRow } from './leftover-row';
 import type { Leftover } from './model';
 
@@ -105,5 +108,14 @@ describe('LeftoverRow native MCP auth', () => {
     render(() => <LeftoverRow leftover={leftover} />);
     expect(screen.getByText('Last attempt failed')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Try Again' })).toBeTruthy();
+  });
+
+  it('clears a persisted attempt after the server authenticates', () => {
+    writeMcpAuthAttempted(leftover.url, true);
+    render(() => (
+      <LeftoverRow leftover={{ ...leftover, authenticated: true }} />
+    ));
+    expect(readMcpAuthAttempted(leftover.url)).toBe(false);
+    expect(screen.queryByText('Last attempt failed')).toBeNull();
   });
 });

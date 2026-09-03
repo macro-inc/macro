@@ -67,7 +67,6 @@ function BackfillProgressBar(props: { progress: BackfillProgress }) {
   );
 }
 
-/** Dest inbox sync line: live backfill, initial-complete, or coarse status. */
 export function InboxSyncStatus(props: { link: EmailLink }) {
   const backfillJobsQuery = useBackfillJobsQuery();
   const latestJob = (): BackfillJob | undefined => {

@@ -104,8 +104,6 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const variant = () => props.variant ?? 'split';
 
-  // Nav uses isAvailable. Harness and Agents stay off the sidebar but still
-  // mount so /settings/harness?pair= and old /settings/agents URLs work.
   const isCurrentTab = (tab: SettingsTab) => {
     if (activeTabId() !== tab) return false;
     if (tab === 'Harness' || tab === 'Agents') return true;
