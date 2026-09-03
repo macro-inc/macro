@@ -25,7 +25,7 @@ use memory::outbound::pg_memory_repo::PgMemoryRepo;
 use sqlx::PgPool;
 use tokio::sync::mpsc;
 
-use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::domain::engine::{SUPPORTED_MODELS, SupportedModel, TurnEngine, TurnRequest};
 
 #[cfg(test)]
 mod test;
@@ -39,6 +39,7 @@ const PART_BUFFER: usize = 256;
 pub struct RigTurnEngine {
     db: PgPool,
     tool_context: ToolServiceContext,
+    supported_models: Vec<SupportedModel>,
 }
 
 impl RigTurnEngine {
@@ -46,11 +47,26 @@ impl RigTurnEngine {
     /// memory comes from `db`.
     #[must_use]
     pub fn new(db: PgPool, tool_context: ToolServiceContext) -> Self {
-        Self { db, tool_context }
+        let supported_models = SUPPORTED_MODELS
+            .iter()
+            .copied()
+            .filter(|model| {
+                !model.id.starts_with("google/") || agent::model_is_configured(model.id)
+            })
+            .collect();
+        Self {
+            db,
+            tool_context,
+            supported_models,
+        }
     }
 }
 
 impl TurnEngine for RigTurnEngine {
+    fn supported_models(&self) -> &[SupportedModel] {
+        &self.supported_models
+    }
+
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
         let db = self.db.clone();
@@ -71,6 +87,7 @@ async fn drive_turn(
     parts: &mpsc::Sender<Result<StreamPart, AgentError>>,
 ) -> Result<(), AgentError> {
     let TurnRequest {
+        session_id,
         owner,
         model,
         instructions,
@@ -88,7 +105,7 @@ async fn drive_turn(
 
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
     let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
-    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner);
+    let usage_ctx = usage_context(session_id, owner);
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = base_context;
     tool_context.usage_context = usage_ctx.clone();
@@ -124,6 +141,14 @@ async fn drive_turn(
     .await;
     forward.abort();
     result
+}
+
+fn usage_context(
+    session_id: agent_session::domain::model::AgentSessionId,
+    owner: MacroUserIdStr<'static>,
+) -> ai_usage::UsageContext {
+    ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner)
+        .with_entity(Some(session_id.as_uuid()))
 }
 
 /// The turn's system prompt: the agent-session preamble, the static Macro

@@ -122,7 +122,7 @@ pub struct Config {
     pub cursor_repo_url: String,
     /// Model id stamped onto sessions the in-memory bot opens. Unknown ids
     /// fall back to the agent loop's default model.
-    #[macro_config_default(String::from("claude-sonnet-5"))]
+    #[macro_config_default(String::from("anthropic/claude-sonnet-5"))]
     pub inmem_model: String,
     /// Harness slug stamped onto sessions the in-memory bot opens.
     #[macro_config_default(String::from("macro-inmem"))]

@@ -17,8 +17,10 @@ use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, InitializeRequest,
     InitializeResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionId,
-    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigId,
+    SessionConfigKind, SessionConfigOption, SessionConfigSelect, SessionConfigSelectOption,
+    SessionConfigSelectOptions, SessionConfigValueId, SessionId, SessionNotification,
+    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
     SetSessionConfigOptionResponse, StopReason, ToolCall as AcpToolCall, ToolCallStatus,
     ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
@@ -30,7 +32,7 @@ use agent_session::domain::model::AgentSessionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 
-use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::domain::engine::{DEFAULT_MODEL, TurnEngine, TurnRequest};
 use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
 
 #[cfg(test)]
@@ -102,6 +104,46 @@ impl AgentState {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
             state.model = model;
         }
+    }
+
+    /// Model configuration advertised over ACP.
+    ///
+    /// Old sessions may carry the former bare default (`claude-sonnet-5`) or
+    /// another unroutable value. Normalize those sessions onto the product
+    /// default so the selected option and the model that runs stay identical.
+    fn model_config_options(&self) -> Vec<SessionConfigOption> {
+        let supported = self.engine.supported_models();
+        let current = self
+            .store
+            .get_mut(&self.session_id)
+            .map(|mut state| {
+                if !supported.iter().any(|model| model.id == state.model) {
+                    tracing::warn!(
+                        configured_model = %state.model,
+                        fallback_model = DEFAULT_MODEL,
+                        %self.session_id,
+                        "normalizing unsupported in-memory agent model"
+                    );
+                    state.model = DEFAULT_MODEL.to_owned();
+                }
+                state.model.clone()
+            })
+            .unwrap_or_else(|| DEFAULT_MODEL.to_owned());
+        let options = supported
+            .iter()
+            .map(|model| {
+                SessionConfigSelectOption::new(SessionConfigValueId::new(model.id), model.name)
+            })
+            .collect();
+
+        vec![SessionConfigOption::new(
+            SessionConfigId::new(MODEL_CONFIG_ID),
+            "Model",
+            SessionConfigKind::Select(SessionConfigSelect::new(
+                SessionConfigValueId::new(current),
+                SessionConfigSelectOptions::Ungrouped(options),
+            )),
+        )]
     }
 
     /// Everything from the session's state that a turn answering `prompt`
@@ -177,7 +219,10 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     let state = Arc::clone(&state);
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
-                    responder.respond(NewSessionResponse::new(acp_id))
+                    responder.respond(
+                        NewSessionResponse::new(acp_id)
+                            .config_options(state.model_config_options()),
+                    )
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -192,7 +237,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     // attach replayed the frame log back into it (see
                     // `domain::replay`).
                     state.bind_acp_session(request.session_id, true);
-                    responder.respond(ResumeSessionResponse::new())
+                    responder.respond(
+                        ResumeSessionResponse::new().config_options(state.model_config_options()),
+                    )
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -257,8 +304,21 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                             AcpError::invalid_params().data("the model option takes a value id"),
                         );
                     };
-                    state.set_model(model.to_string());
-                    responder.respond(SetSessionConfigOptionResponse::new(Vec::new()))
+                    let model = model.to_string();
+                    if !state
+                        .engine
+                        .supported_models()
+                        .iter()
+                        .any(|supported| supported.id == model)
+                    {
+                        return responder.respond_with_error(
+                            AcpError::invalid_params().data(format!("unknown model {model}")),
+                        );
+                    }
+                    state.set_model(model);
+                    responder.respond(SetSessionConfigOptionResponse::new(
+                        state.model_config_options(),
+                    ))
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -295,6 +355,7 @@ async fn run_turn(
         instructions,
     } = state.turn_input(&prompt);
     let mut parts = state.engine.run_turn(TurnRequest {
+        session_id: state.session_id,
         owner: state.owner.clone(),
         model,
         instructions,

@@ -4,6 +4,19 @@ use super::*;
 const TOOLS: &str = "TOOLS";
 
 #[test]
+fn usage_is_attributed_to_the_owner_session_and_agent_feature() {
+    let session = agent_session::domain::model::AgentSessionId::TEST_A;
+    let owner =
+        MacroUserIdStr::try_from_email("owner@macro.com").expect("test owner should be valid");
+
+    let usage = usage_context(session, owner.clone());
+
+    assert_eq!(usage.feature, ai_usage::AiFeature::AgentSession);
+    assert_eq!(usage.user, owner);
+    assert_eq!(usage.entity, Some(session.as_uuid()));
+}
+
+#[test]
 fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     let prompt = system_prompt(&TOOLS, Some("be terse"), None);
 
