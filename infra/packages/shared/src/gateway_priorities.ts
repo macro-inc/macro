@@ -11,11 +11,8 @@ export enum GatewayService {
   SEARCH_PROCESSING_SERVICE = 'SEARCH_PROCESSING_SERVICE',
   IMAGE_PROXY_SERVICE = 'IMAGE_PROXY_SERVICE',
   AGENT_HARNESS_SERVICE = 'AGENT_HARNESS_SERVICE',
-<<<<<<< HEAD
-  CONNECTION_GATEWAY = 'CONNECTION_GATEWAY',
-=======
   AGENT_SCHEDULE_SERVICE = 'AGENT_SCHEDULE_SERVICE',
->>>>>>> c341e592d (Migrate agent schedule to shared gateway)
+  CONNECTION_GATEWAY = 'CONNECTION_GATEWAY',
 }
 
 /**
@@ -35,11 +32,8 @@ export const GATEWAY_PRIORITIES: GatewayPriorityMap = {
   [GatewayService.SEARCH_PROCESSING_SERVICE]: 50,
   [GatewayService.IMAGE_PROXY_SERVICE]: 60,
   [GatewayService.AGENT_HARNESS_SERVICE]: 70,
-<<<<<<< HEAD
-  [GatewayService.CONNECTION_GATEWAY]: 90,
-=======
   [GatewayService.AGENT_SCHEDULE_SERVICE]: 80,
->>>>>>> c341e592d (Migrate agent schedule to shared gateway)
+  [GatewayService.CONNECTION_GATEWAY]: 90,
   [GatewayService.CONVERT_SERVICE]: 3000,
 };
 
