@@ -933,6 +933,63 @@ export const CreateCalendarEvent = z.object({
     ])
     .optional(),
   addGoogleMeet: z.boolean().optional(),
+  eventType: z
+    .any()
+    .superRefine((x, ctx) => {
+      const schemas = [z.literal('default'), z.literal('out_of_office')];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    })
+    .optional(),
+  outOfOffice: z
+    .union([
+      z.object({
+        autoDeclineMode: z
+          .union([
+            z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z.literal('decline_none'),
+                z.literal('decline_all'),
+                z.literal('decline_new_only'),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+            z.null(),
+          ])
+          .optional(),
+        declineMessage: z.union([z.string(), z.null()]).optional(),
+      }),
+      z.null(),
+    ])
+    .optional(),
 });
 
 export const UserToolResponseForToolCalendarEvent = z
@@ -4501,6 +4558,42 @@ export const UpdateCalendarEvent = z.object({
             message: 'Invalid input: Should pass single schema',
           });
         }
+      }),
+      z.null(),
+    ])
+    .optional(),
+  outOfOffice: z
+    .union([
+      z.object({
+        autoDeclineMode: z
+          .union([
+            z.any().superRefine((x, ctx) => {
+              const schemas = [
+                z.literal('decline_none'),
+                z.literal('decline_all'),
+                z.literal('decline_new_only'),
+              ];
+              const errors = schemas.reduce<z.ZodError[]>(
+                (errors, schema) =>
+                  ((result) =>
+                    result.error ? [...errors, result.error] : errors)(
+                    schema.safeParse(x)
+                  ),
+                []
+              );
+              if (schemas.length - errors.length !== 1) {
+                ctx.addIssue({
+                  path: ctx.path,
+                  code: 'invalid_union',
+                  unionErrors: errors,
+                  message: 'Invalid input: Should pass single schema',
+                });
+              }
+            }),
+            z.null(),
+          ])
+          .optional(),
+        declineMessage: z.union([z.string(), z.null()]).optional(),
       }),
       z.null(),
     ])

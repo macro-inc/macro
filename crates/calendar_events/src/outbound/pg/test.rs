@@ -2608,6 +2608,10 @@ async fn creation_target_prefers_the_requesters_own_primary_inbox(pool: PgPool) 
     assert_eq!(target.calendar_id, calendar_id);
     assert_eq!(target.owner_id, owner_id);
     assert!(!target.is_read_only);
+    assert!(
+        target.is_primary,
+        "resolving without a calendar id lands on the primary calendar"
+    );
 
     let explicit = repo
         .get_creation_target(owner_id, Some(link_id), None)

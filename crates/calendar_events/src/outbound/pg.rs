@@ -1747,6 +1747,7 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.id AS calendar_id,
                 calendar.provider_calendar_id,
                 calendar.access_role,
+                calendar.is_primary,
                 link.fusionauth_user_id,
                 link.email_address,
                 link.provider::text AS "provider!"
@@ -1798,6 +1799,7 @@ impl CalendarRepository for PgCalendarRepository {
             calendar_id: row.calendar_id,
             provider_calendar_id: row.provider_calendar_id,
             is_read_only: !matches!(row.access_role.as_deref(), Some("owner" | "writer")),
+            is_primary: row.is_primary,
             token_identity,
             actor,
         }))

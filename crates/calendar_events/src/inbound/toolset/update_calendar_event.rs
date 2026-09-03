@@ -10,8 +10,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use super::{
-    AttendeeInput, CalendarToolContext, EventRemindersInput, EventTimeInput, ToolCalendarEvent,
-    mutation_tool_error,
+    AttendeeInput, CalendarToolContext, EventRemindersInput, EventTimeInput, OutOfOfficeInput,
+    ToolCalendarEvent, mutation_tool_error,
 };
 use crate::domain::{
     models::{AttendeeResponseStatus, CalendarEventPatch, ConferenceChange},
@@ -194,6 +194,17 @@ pub struct UpdateCalendarEvent {
     )]
     #[serde(default)]
     pub rsvp: Option<RsvpResponseInput>,
+
+    /// Replacement out-of-office decline behavior.
+    #[schemars(
+        description = "Adjust out-of-office decline behavior; only valid on an event that is \
+                       already out of office (its event type cannot be changed). Replaces the \
+                       whole block: set `autoDeclineMode` (\"decline_none\", \"decline_all\", \
+                       or \"decline_new_only\") and optionally `declineMessage`. Omit to leave \
+                       it untouched."
+    )]
+    #[serde(default)]
+    pub out_of_office: Option<OutOfOfficeInput>,
 }
 
 impl ToolAnnotated for UpdateCalendarEvent {
@@ -267,6 +278,7 @@ where
             transparency: None,
             reminders: self.reminders.clone().map(Into::into),
             conference: self.conference.map(Into::into),
+            out_of_office: self.out_of_office.clone().map(Into::into),
         };
 
         // An RSVP is its own provider call, so a call carrying only one runs
