@@ -74,8 +74,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "agent-harness",
-		dev: "https://agent-harness-dev.macro.com/api-doc/openapi.json",
-		prod: "https://agent-harness.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/agent-harness/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/agent-harness/api-doc/openapi.json",
 		local: "http://localhost:8101/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-agent-harness/",
 		orvalKey: "agentHarnessService",

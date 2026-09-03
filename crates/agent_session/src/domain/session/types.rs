@@ -204,6 +204,13 @@ pub enum Effect<Token> {
         /// Whether the action reached the transport.
         result: Result<()>,
     },
+    /// The runtime answered the in-flight turn's `session/prompt` - however it
+    /// ended, including cancelled and refused. What the harness drains its
+    /// queue on: the agent can take another prompt now.
+    TurnEnded {
+        /// The action whose turn this was.
+        action_id: AgentActionId,
+    },
     /// Tear the connection down. Always the final effect of its batch; the
     /// machine is [`RuntimeStatus::Dead`] once it appears.
     Stop {

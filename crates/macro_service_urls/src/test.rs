@@ -90,6 +90,23 @@ fn static_file_service_url_parses() {
 }
 
 #[test]
+fn agent_harness_service_url_parses() {
+    assert_parses_for_all_environments(AgentHarnessServiceUrl::default_for_environment);
+}
+
+#[test]
+fn agent_harness_service_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = AgentHarnessServiceUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
+}
+
+#[test]
 fn unfurl_service_url_parses() {
     assert_parses_for_all_environments(UnfurlServiceUrl::default_for_environment);
 }
@@ -119,6 +136,18 @@ fn email_service_url_parses() {
 #[test]
 fn image_proxy_service_url_parses() {
     assert_parses_for_all_environments(ImageProxyServiceUrl::default_for_environment);
+}
+
+#[test]
+fn image_proxy_service_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = ImageProxyServiceUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
 }
 
 #[test]
@@ -380,6 +409,10 @@ fn exported_service_urls_match_dev_values() {
         "https://static-file-service-dev.macro.com",
     );
     assert_eq!(
+        service_urls.agent_harness_service_url.as_ref(),
+        "https://dev-gateway.macro.com/agent-harness",
+    );
+    assert_eq!(
         service_urls.unfurl_service_url.as_ref(),
         "https://dev-gateway.macro.com/unfurl",
     );
@@ -393,7 +426,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),
-        "https://image-proxy-dev.macro.com",
+        "https://dev-gateway.macro.com/image-proxy",
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),
@@ -443,6 +476,10 @@ fn exported_service_urls_match_prod_values() {
         "https://static-file-service.macro.com",
     );
     assert_eq!(
+        service_urls.agent_harness_service_url.as_ref(),
+        "https://gateway.macro.com/agent-harness",
+    );
+    assert_eq!(
         service_urls.unfurl_service_url.as_ref(),
         "https://gateway.macro.com/unfurl",
     );
@@ -456,7 +493,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),
-        "https://image-proxy.macro.com",
+        "https://gateway.macro.com/image-proxy",
     );
     assert_eq!(
         service_urls.lexical_service_url.as_ref(),

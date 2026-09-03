@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 258
 expression: messages
 input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
 ---
@@ -14,7 +13,11 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                656abeab-6cd2-4042-8b68-e29bbd247673,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {
@@ -139,7 +142,11 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                24df345f-2d57-4071-a748-4421cbcc5bf3,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {
@@ -933,7 +940,11 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
         author: User {
             user_id: None,
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                27e3ed1d-3814-4805-abd6-92bbc9bcf3cc,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Control {
@@ -955,7 +966,11 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                47b3c2d1-4da4-4820-a008-3d9f2f092b64,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {

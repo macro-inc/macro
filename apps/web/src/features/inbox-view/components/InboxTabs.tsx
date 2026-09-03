@@ -1,8 +1,8 @@
 import { useViewTabHotkeys } from '@app/components/view-shell';
 import { PillTabs } from '@components/app/mobile/PillTabs';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { TabsInset } from '@core/component/TabsInset';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { Tabs } from '@ui';
 import { Show } from 'solid-js';
 import { useInboxView } from '../inbox-view-context';
 import type { InboxTab } from '../types';
@@ -40,17 +40,12 @@ export function InboxTabs() {
       when={isTouchDevice()}
       fallback={
         <div class="flex h-8 min-w-0 flex-1 items-center gap-3">
-          <div class="h-8 min-w-0 basis-3/4 shrink max-w-72">
-            <TabsInset
-              aria-label="Inbox views"
-              list={INBOX_TABS}
-              value={state.tab}
-              onChange={handleTabChange}
-              class="h-8"
-              trackClass="h-full"
-              fullWidth
-            />
-          </div>
+          <Tabs
+            aria-label="Inbox views"
+            list={INBOX_TABS}
+            value={state.tab}
+            onChange={handleTabChange}
+          />
           <InboxFilterDropdown />
         </div>
       }

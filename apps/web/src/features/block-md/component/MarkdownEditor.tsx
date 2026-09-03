@@ -136,11 +136,12 @@ import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import {
-  ENABLE_GIT_BLAME,
   ENABLE_MARKDOWN_AI_GENERATE,
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
+  enableGitBlame,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
@@ -954,7 +955,7 @@ export function MarkdownEditor(props: {
   });
 
   const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
-  if (ENABLE_GIT_BLAME()) {
+  if (isFeatureEnabled(enableGitBlame)) {
     plugins.use(
       blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) })
     );
@@ -1047,7 +1048,7 @@ export function MarkdownEditor(props: {
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
-        <Show when={ENABLE_GIT_BLAME()}>
+        <Show when={isFeatureEnabled(enableGitBlame)}>
           <Suspense>
             <BlameTooltip state={blameTooltipStore} documentId={blockId} />
           </Suspense>

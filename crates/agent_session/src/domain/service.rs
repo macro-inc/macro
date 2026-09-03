@@ -53,7 +53,8 @@ use super::model::{
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionNameGenerator,
-    AgentSessionRealtime, AgentSessionRepo, NoOpAgentSessionNameGenerator, SessionOwnership,
+    AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
+    NoOpAgentSessionNameGenerator, NoOpTurnObserver, SessionOwnership, SessionTurnObserver,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 use super::session::{CloseReason, Input};
@@ -202,6 +203,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// that have to be kept agreeing. See [`SessionLog`].
     fn session_log(&self, id: AgentSessionId) -> impl Future<Output = Result<SessionLog>> + Send;
 
+    /// Push a session's changed queue - the whole queue, every time - to its
+    /// viewers.
+    ///
+    /// Here because this service is the harness's one door to the realtime
+    /// stream and its audience: the queue itself lives above, but who is
+    /// watching a session is answered here for log frames already.
+    fn publish_queue_changed(
+        &self,
+        event: AgentSessionQueueChanged,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Persist the sandbox size this session is running at.
     fn set_sandbox_size(
         &self,
@@ -238,6 +250,9 @@ pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGen
     folds: Folds,
     realtime: Rt,
     name_generator: Namer,
+    /// Told when a session's turn ends or its actor stops - the harness's
+    /// prompt-queue gate. Erased so wiring it is not another type parameter.
+    turn_observer: Arc<dyn SessionTurnObserver>,
     active: Arc<ActiveSessions>,
     /// This service's identity in the session-management lease. Minted at
     /// construction: a restarted process is a new replica, and its claims
@@ -261,6 +276,7 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             folds,
             realtime,
             name_generator: NoOpAgentSessionNameGenerator,
+            turn_observer: Arc::new(NoOpTurnObserver),
             active: Arc::new(DashMap::new()),
             replica: ReplicaId::mint(),
             tasks: TaskTracker::new(),
@@ -282,12 +298,21 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             folds: self.folds,
             realtime: self.realtime,
             name_generator,
+            turn_observer: self.turn_observer,
             active: self.active,
             replica: self.replica,
             tasks: self.tasks,
             cancellation: self.cancellation,
             lifecycle: self.lifecycle,
         }
+    }
+
+    /// Replace the no-op turn observer with whoever gates prompts on turns -
+    /// in production, the harness's queue.
+    #[must_use]
+    pub fn with_turn_observer(mut self, turn_observer: Arc<dyn SessionTurnObserver>) -> Self {
+        self.turn_observer = turn_observer;
+        self
     }
 
     /// This service's identity in the session-management lease, for the
@@ -397,6 +422,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             logs,
             command_rx,
             attachment.handshake,
+            Arc::clone(&self.turn_observer),
         );
         self.tasks.spawn(
             run_session(
@@ -407,6 +433,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                 self.cancellation.clone(),
                 self.repo.clone(),
                 claim,
+                Arc::clone(&self.turn_observer),
             )
             .with_current_subscriber(),
         );
@@ -694,6 +721,10 @@ where
             bot: self.repo.session_bot(session.bot_id).await?,
             entries,
         })
+    }
+
+    async fn publish_queue_changed(&self, event: AgentSessionQueueChanged) -> Result<()> {
+        Ok(self.realtime.publish_queue_changed(event).await?)
     }
 
     async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
@@ -1070,6 +1101,9 @@ where
 
 /// Step the actor until its machine stops, then release the registry entry
 /// and the session's management claim.
+// One argument per fact the loop owns; a struct here would only move the
+// same list one level down.
+#[allow(clippy::too_many_arguments)]
 async fn run_session<Connector, Logs, Ownership>(
     mut actor: SessionActor<Connector, Logs>,
     active: std::sync::Weak<ActiveSessions>,
@@ -1078,6 +1112,7 @@ async fn run_session<Connector, Logs, Ownership>(
     cancellation: CancellationToken,
     ownership: Ownership,
     claim: SessionClaim,
+    turn_observer: Arc<dyn SessionTurnObserver>,
 ) where
     Connector: AgentConnector,
     Logs: AgentSessionLogWriter + AgentSessionRepo,
@@ -1115,4 +1150,8 @@ async fn run_session<Connector, Logs, Ownership>(
             current.commands.is_some() && Arc::ptr_eq(&current.marker, &marker)
         });
     }
+    // Last, after the registry entry is gone: whatever the observer does with
+    // the fact - clear a busy flag, dispatch nothing - it sees a session that
+    // really has no actor anymore.
+    turn_observer.session_stopped(id);
 }

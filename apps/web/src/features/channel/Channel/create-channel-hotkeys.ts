@@ -3,6 +3,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { Accessor } from 'solid-js';
 import type { MessageActions, MessageData } from '../Message';
+import { getMessageReplyPreviewTexts } from '../Message/browser-selection';
 import { isBotMessage } from '../Thread/utils/message-actions';
 import type { MessageSelection } from './create-message-selection';
 import type { ThreadListNavigation } from './ThreadList';
@@ -123,7 +124,10 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       const msg = getSelectedMessage();
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
-      actions?.onReply?.({ message: msg });
+      actions?.onReply?.({
+        message: msg,
+        ...getMessageReplyPreviewTexts(msg.id),
+      });
       return true;
     },
   });

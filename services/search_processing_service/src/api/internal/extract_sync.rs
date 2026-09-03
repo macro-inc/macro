@@ -18,6 +18,10 @@ pub struct SyncDocument {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub document_version_id: Option<String>,
     pub file_type: FileType,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
@@ -33,11 +37,13 @@ fn documents_to_events(documents: Vec<SyncDocument>) -> Vec<DocumentMacroEvent> 
             let document_id = document.document_id;
             DocumentMacroEvent::sync_content_updated(
                 document_id.clone(),
-                DocumentSyncContentUpdatedMetadata {
+                DocumentSyncContentUpdatedMetadata::from_extract(
                     document_id,
-                    file_type: document.file_type,
-                    document_version_id: document.document_version_id,
-                },
+                    document.file_type,
+                    document.document_version_id,
+                    document.actor,
+                    document.on_behalf_of,
+                ),
             )
         })
         .collect()

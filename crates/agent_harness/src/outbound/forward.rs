@@ -9,7 +9,7 @@ use agent_session::domain::model::{AgentSessionId, ReplicaAddress};
 use reqwest::StatusCode;
 
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::HarnessCommand;
+use crate::domain::model::{CommandOutcome, HarnessCommand};
 use crate::domain::ports::CommandForwarder;
 
 /// Header carrying the deployment's shared internal key, as
@@ -57,7 +57,7 @@ impl CommandForwarder for HttpCommandForwarder {
         target: &ReplicaAddress,
         session: AgentSessionId,
         command: HarnessCommand,
-    ) -> Result<()> {
+    ) -> Result<CommandOutcome> {
         let url = format!(
             "{}/internal/agent-sessions/{}/command",
             target.as_str().trim_end_matches('/'),
@@ -81,7 +81,12 @@ impl CommandForwarder for HttpCommandForwarder {
         let status = response.status();
         tracing::Span::current().record("http.response.status_code", status.as_u16());
         if status.is_success() {
-            return Ok(());
+            // A body-less success (an older peer's 204, mid-deploy) reads as
+            // completed: that was the only outcome such a peer could produce.
+            return Ok(response
+                .json::<CommandOutcome>()
+                .await
+                .unwrap_or(CommandOutcome::Completed));
         }
         let body = response.text().await.unwrap_or_default();
         // 409 is the peer saying "not attached here after all" - the caller's

@@ -527,7 +527,7 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
         WHERE false
 "#;
 
-fn build_notification_exists_clause(
+pub(in crate::outbound::pg_soup_repo) fn build_notification_exists_clause(
     entity_id_sql: &str,
     entity_type: &str,
     predicate_sql: &str,
@@ -579,13 +579,13 @@ pub(in crate::outbound::pg_soup_repo) fn build_notification_seen_clause(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NotificationPredicate {
+pub(in crate::outbound::pg_soup_repo) enum NotificationPredicate {
     Done(bool),
     Seen(bool),
 }
 
 impl NotificationPredicate {
-    fn sql(self) -> &'static str {
+    pub(in crate::outbound::pg_soup_repo) fn sql(self) -> &'static str {
         match self {
             NotificationPredicate::Done(true) => "un.done = true",
             NotificationPredicate::Done(false) => "un.done = false",
@@ -1145,7 +1145,9 @@ pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
     })
 }
 
-fn calendar_event_filter_is_impossible(ast: Option<&Expr<CalendarEventLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn calendar_event_filter_is_impossible(
+    ast: Option<&Expr<CalendarEventLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,

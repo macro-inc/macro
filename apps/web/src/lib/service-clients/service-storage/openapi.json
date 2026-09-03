@@ -9546,7 +9546,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at.",
+            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -18818,6 +18818,10 @@
         "description": "Metadata for [`DocumentTopicEvent::SyncContentUpdated`].",
         "required": ["document_id", "file_type"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically changed the content. Absent on events published\nbefore attribution, and on human-only collab sessions."
+          },
           "document_id": {
             "type": "string",
             "description": "The id of the live-collab document whose content changed."
@@ -18829,6 +18833,17 @@
           "file_type": {
             "$ref": "#/components/schemas/FileType",
             "description": "File type of the sync document (markdown today)."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this edit belongs on, when different from\n[`Self::actor`]."
+              }
+            ]
           }
         }
       },
@@ -21972,7 +21987,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at."
+                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at."
               }
             ]
           }
@@ -24033,6 +24048,11 @@
                 "type": "boolean",
                 "description": "Whether the requesting user has favorited this entity."
               },
+              "notified_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value."
+              },
               "touched_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
@@ -24052,7 +24072,8 @@
           "updated_at",
           "viewed_updated",
           "frecency",
-          "touched_by_me"
+          "touched_by_me",
+          "notified_at"
         ]
       },
       "SoupApiSortDirection": {

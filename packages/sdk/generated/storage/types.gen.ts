@@ -4423,6 +4423,11 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill';
  */
 export type DocumentSyncContentUpdatedMetadata = {
     /**
+     * Who mechanically changed the content. Absent on events published
+     * before attribution, and on human-only collab sessions.
+     */
+    actor?: string | null;
+    /**
      * The id of the live-collab document whose content changed.
      */
     document_id: string;
@@ -4434,6 +4439,7 @@ export type DocumentSyncContentUpdatedMetadata = {
      * File type of the sync document (markdown today).
      */
     file_type: FileType;
+    on_behalf_of?: null | MacroUserIdStr;
 };
 
 /**
@@ -7235,6 +7241,12 @@ export type SoupApiItem = SoupItem & {
      */
     is_favorited: boolean;
     /**
+     * When the caller was last notified about this entity, present only
+     * when the page was ordered by `notified_at`. Clients keep the notified
+     * feed ordered and date-bucketed on this value.
+     */
+    notified_at?: string | null;
+    /**
      * The caller's latest own mutation of this entity, present only when the
      * page was ordered by `touched_by_me`. Clients keep the touched feed
      * ordered on this value, so it can be bumped optimistically.
@@ -7245,7 +7257,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -12887,7 +12899,8 @@ export type GetItemsSoupData = {
         limit?: number;
         /**
          * Sort method. Options are viewed_at, created_at, updated_at,
-         * viewed_updated, frecency, touched_by_me. Defaults to viewed_at.
+         * viewed_updated, frecency, touched_by_me, notified_at. Defaults to
+         * viewed_at.
          */
         sort_method?: SoupApiSort;
         /**

@@ -14,8 +14,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{HarnessError, Result};
 use super::model::{
-    AgentRuntimeConfig, HarnessCommand, PriorChannelMessage, ProvisionedEgress, SandboxEgress,
-    SessionAnnouncement, SpawnContainer,
+    AgentRuntimeConfig, CommandOutcome, HarnessCommand, PriorChannelMessage, ProvisionedEgress,
+    SandboxEgress, SessionAnnouncement, SpawnContainer,
 };
 use super::sandbox::SandboxResizeEffect;
 
@@ -28,13 +28,14 @@ use super::sandbox::SandboxResizeEffect;
 /// caller that awaited a forward has the same guarantee as one that executed
 /// locally.
 pub trait CommandForwarder: Send + Sync + 'static {
-    /// Run `command` for `session` on the replica at `target`.
+    /// Run `command` for `session` on the replica at `target`, reporting
+    /// what that replica's execution did with it.
     fn forward(
         &self,
         target: &ReplicaAddress,
         session: AgentSessionId,
         command: HarnessCommand,
-    ) -> impl Future<Output = Result<()>> + Send;
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send;
 }
 
 /// A forwarder for deployments with exactly one replica, where a live peer
@@ -49,7 +50,7 @@ impl CommandForwarder for NoPeers {
         target: &ReplicaAddress,
         session: AgentSessionId,
         _command: HarnessCommand,
-    ) -> Result<()> {
+    ) -> Result<CommandOutcome> {
         Err(HarnessError::Forward(rootcause::report!(
             "this deployment has no command forwarding, yet {target} manages session {session}"
         )))

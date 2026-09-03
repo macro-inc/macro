@@ -15,14 +15,10 @@ import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/Chat
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
   ENABLE_ANIMATED_ICONS,
-  ENABLE_CHAT_V3_AGENTS,
-  ENABLE_CHAT_V3_AGENTS_FLAG,
-  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
-  ENABLE_REMINDERS,
-  ENABLE_REMINDERS_FLAG,
-  ENABLE_REMINDERS_OVERRIDE,
-  ENABLE_SNIPPETS_FLAG,
-  ENABLE_SNIPPETS_OVERRIDE,
+  enableChatV3Agents,
+  enableReminders,
+  enableSnippets,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import {
@@ -411,7 +407,7 @@ export function runCreateAction(
     // A reminder has no block to open: the composer asks what and when, and the
     // reminder lives in the Reminders lists from there.
     case 'reminder':
-      if (!ENABLE_REMINDERS()) return;
+      if (!isFeatureEnabled(enableReminders)) return;
       setCreateMenuOpen(false, false);
       openStandaloneReminderComposer();
       return;
@@ -471,7 +467,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     // pick between them by condition; the default 'override' would let the
     // later one silently replace the earlier.
     registrationType: 'add',
-    enabled: () => !ENABLE_CHAT_V3_AGENTS(),
+    enabled: () => !isFeatureEnabled(enableChatV3Agents),
     keyDownHandler: () => {
       runCreateAction('chat', { shouldInsert: pressedKeys().has('shift') });
       return true;
@@ -502,7 +498,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     altHotkeyToken: TOKENS.create.agentNewSplit,
     hotkey: 'a',
     registrationType: 'add',
-    enabled: () => ENABLE_CHAT_V3_AGENTS(),
+    enabled: () => isFeatureEnabled(enableChatV3Agents),
     keyDownHandler: () => {
       runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
       return true;
@@ -563,7 +559,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     // No `altHotkeyToken`: a reminder opens no split, so there is no
     // shift-variant to bind.
     hotkey: 'r',
-    enabled: () => ENABLE_REMINDERS(),
+    enabled: () => isFeatureEnabled(enableReminders),
     keyDownHandler: () => {
       runCreateAction('reminder');
       return true;
@@ -676,18 +672,12 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
 export function useCreateMenuBlocks(
   source: () => CreatableBlock[] = () => CREATABLE_BLOCKS
 ): Accessor<CreatableBlock[]> {
-  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
-    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
-  });
+  const snippetsFlag = useFeatureFlag(enableSnippets);
   // Subscribed to rather than left to the block's own `enabled`, which reads
   // PostHog without tracking it: this memo has no other reason to re-run, so a
   // flag that resolves after mount would leave the menu as it was until reload.
-  const remindersFlag = useFeatureFlag(ENABLE_REMINDERS_FLAG, {
-    enabledOverride: ENABLE_REMINDERS_OVERRIDE,
-  });
-  const agentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
-    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
-  });
+  const remindersFlag = useFeatureFlag(enableReminders);
+  const agentsFlag = useFeatureFlag(enableChatV3Agents);
   return createMemo(() => {
     remindersFlag();
     agentsFlag();

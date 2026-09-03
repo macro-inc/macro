@@ -77,6 +77,13 @@ function ChannelEditHarness(props: {
   return (
     <div ref={attachGlobalDOMScope}>
       <div ref={attachMessageListRef} tabIndex={-1} data-testid="message-list">
+        <div data-message data-message-id={originalMessage.id}>
+          <div data-message-content>
+            <div data-message-reply-preview="Resolved bot response">
+              Resolved bot response
+            </div>
+          </div>
+        </div>
         <Show when={isEditing()}>
           <TestMessageEditor
             onSave={() => {
@@ -135,5 +142,22 @@ describe('createChannelHotkeys', () => {
     fireEvent.keyUp(messageList, { key: 'd' });
     fireEvent.keyUp(messageList, { key: 'Enter' });
     expect(onReply).not.toHaveBeenCalled();
+  });
+
+  it('passes resolved decorator text when Enter opens a reply', () => {
+    const onSave = vi.fn();
+    const onReply = vi.fn();
+    render(() => <ChannelEditHarness onSave={onSave} onReply={onReply} />);
+
+    const messageList = screen.getByTestId('message-list');
+    messageList.focus();
+    fireEvent.keyDown(messageList, { key: 'Enter' });
+
+    expect(onReply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: originalMessage,
+        renderedText: 'Resolved bot response',
+      })
+    );
   });
 });

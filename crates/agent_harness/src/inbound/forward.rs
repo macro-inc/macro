@@ -100,10 +100,9 @@ where
     let session_id = AgentSessionId::new_from_uuid(session_id);
     let span = tracing::Span::current();
     match state.harness.execute_forwarded(session_id, command).await {
-        Ok(()) => {
-            span.record("agent.command.outcome", "executed");
-            StatusCode::NO_CONTENT.into_response()
-        }
+        // The outcome rides back in the body so the sender can answer its own
+        // caller honestly - a queued deliver is not a delivered one.
+        Ok(outcome) => (StatusCode::OK, axum::Json(outcome)).into_response(),
         // Surfaced with its own status so the sender can tell "the actor is
         // not here after all" from an execution failure: the sender's
         // fallback re-reads the lease on any error, but a 409 is the signal

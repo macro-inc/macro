@@ -14,6 +14,7 @@ export enum ServiceUrl {
   DOCUMENT_COGNITION_SERVICE_URL = 'DOCUMENT_COGNITION_SERVICE_URL',
   LEXICAL_SERVICE_URL = 'LEXICAL_SERVICE_URL',
   UNFURL_SERVICE_URL = 'UNFURL_SERVICE_URL',
+  AGENT_HARNESS_SERVICE_URL = 'AGENT_HARNESS_SERVICE_URL',
 }
 
 /**
@@ -44,6 +45,8 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.LEXICAL_SERVICE_URL]:
     'https://lexical-service-dev.macroverse.workers.dev',
   [ServiceUrl.UNFURL_SERVICE_URL]: 'https://dev-gateway.macro.com/unfurl',
+  [ServiceUrl.AGENT_HARNESS_SERVICE_URL]:
+    'https://dev-gateway.macro.com/agent-harness',
 };
 
 /**
@@ -64,6 +67,8 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.LEXICAL_SERVICE_URL]:
     'https://lexical-service-prod.macroverse.workers.dev',
   [ServiceUrl.UNFURL_SERVICE_URL]: 'https://gateway.macro.com/unfurl',
+  [ServiceUrl.AGENT_HARNESS_SERVICE_URL]:
+    'https://gateway.macro.com/agent-harness',
 };
 
 /**

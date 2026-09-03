@@ -197,6 +197,8 @@ fn search_only_document_events_do_not_emit_patches() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: "md".parse().expect("valid file type"),
             document_version_id: None,
+            actor: None,
+            on_behalf_of: None,
         }),
         DocumentTopicEvent::Purged(DocumentPurgedMetadata {
             document_id: DOCUMENT_ID.to_string(),

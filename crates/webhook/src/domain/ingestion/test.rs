@@ -544,6 +544,8 @@ fn search_only_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicE
                     document_id: DOCUMENT_ID.to_string(),
                     file_type: "md".parse().expect("valid file type"),
                     document_version_id: None,
+                    actor: None,
+                    on_behalf_of: None,
                 },
             )),
         ),

@@ -39,6 +39,16 @@ export interface AgentInputProps {
    * chip can quote selected text into this composer.
    */
   registerQuoteInsert?: (insert: QuoteInsert | undefined) => void;
+  /**
+   * Up (or Shift+Tab/Left, the app's focus-leave convention) at the very
+   * start of the input: focus moves to whatever sits above — the queued
+   * prompt about to dispatch. Ordinary in-text cursor movement never
+   * triggers it.
+   */
+  onNavigateUp?: () => void;
+  /** Ref-style: how the queue's Down-past-the-end refocuses this input;
+   *  `undefined` again on unmount. */
+  registerFocus?: (focus: (() => void) | undefined) => void;
 }
 
 /** Past this height the controls drop below the text instead of overlaying it. */
@@ -48,8 +58,8 @@ export function AgentInput(props: AgentInputProps) {
   const [markdown, setMarkdown] = createSignal('');
   let bodyRef: HTMLDivElement | undefined;
 
-  // Sending while busy is allowed — the block queues prompts and flushes
-  // them when the running turn settles.
+  // Sending while busy is allowed — the service queues prompts behind the
+  // running turn.
   const canSend = () => markdown().trim().length > 0 && !props.disabled;
 
   // Same content-driven switch as ChatInput: once the editor body wraps past
@@ -83,9 +93,20 @@ export function AgentInput(props: AgentInputProps) {
       send();
       return true;
     })
+    .onFocusLeave({
+      onStart: (event) => {
+        if (!props.onNavigateUp) return;
+        event.preventDefault();
+        props.onNavigateUp();
+      },
+      // Nothing sits below the input; the key keeps its default behavior.
+      onEnd: () => {},
+    })
     .onChange(setMarkdown);
 
   onMount(() => {
+    props.registerFocus?.(() => editor.controls.focus());
+    onCleanup(() => props.registerFocus?.(undefined));
     props.registerQuoteInsert?.((text) => {
       // Discrete so the chip is committed to the DOM before focus moves in.
       editor.lexical.update(() => $insertReferencedPaste(text), {

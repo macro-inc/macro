@@ -552,8 +552,8 @@ service_url! {
         /// routes, which run in the process that owns the live sessions.
         pub AgentHarnessServiceUrl {
             local: "http://localhost:8101",
-            dev: "https://agent-harness-dev.macro.com",
-            prod: "https://agent-harness.macro.com",
+            dev: "https://dev-gateway.macro.com/agent-harness",
+            prod: "https://gateway.macro.com/agent-harness",
         },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
@@ -576,8 +576,8 @@ service_url! {
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {
             local: "http://localhost:8097",
-            dev: "https://image-proxy-dev.macro.com",
-            prod: "https://image-proxy.macro.com",
+            dev: "https://dev-gateway.macro.com/image-proxy",
+            prod: "https://gateway.macro.com/image-proxy",
         },
         /// Lexical conversion service API URL.
         pub LexicalServiceUrl {

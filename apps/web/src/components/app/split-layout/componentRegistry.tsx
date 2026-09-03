@@ -1,6 +1,7 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { ChannelsView } from '@app/features/channels-view/channels-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
 import { InboxView } from '@app/features/inbox-view/inbox-view';
@@ -31,13 +32,14 @@ import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
-  ENABLE_CRM,
-  ENABLE_NEW_APP_VIEWS_FLAG,
-  ENABLE_NEW_APP_VIEWS_OVERRIDE,
-  ENABLE_REMINDERS,
+  enableCrm,
+  enableNewAppViews,
+  enableReminders,
+  isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
 import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
@@ -47,8 +49,10 @@ import {
   createRenderEffect,
   type JSXElement,
   lazy,
+  Match,
   onMount,
   Show,
+  Switch,
 } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
@@ -65,11 +69,9 @@ function usePageViewTracking(pageTitle: string) {
 function useNewAppViews() {
   const panel = useSplitPanelOrThrow();
   const posthog = usePosthog();
-  const flag = useFeatureFlag(ENABLE_NEW_APP_VIEWS_FLAG, {
-    enabledOverride: ENABLE_NEW_APP_VIEWS_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableNewAppViews);
   const ready = () =>
-    ENABLE_NEW_APP_VIEWS_OVERRIDE !== undefined || posthog.flagsLoaded();
+    enableNewAppViews.override !== undefined || posthog.flagsLoaded();
   const enabled = () => ready() && flag().enabled;
 
   createRenderEffect(() => {
@@ -329,7 +331,7 @@ registerComponent(
   withAuth(() => {
     // Registered even when the flag is closed so a bookmarked /reminders or a
     // restored split recovers to the inbox instead of an empty split.
-    if (!ENABLE_REMINDERS()) {
+    if (!isFeatureEnabled(enableReminders)) {
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('reminders');
@@ -441,21 +443,47 @@ registerComponent(
   })
 );
 
-registerComponent(
-  'channels',
-  withAuth(() => {
-    usePageViewTracking('channels');
-    const preset = getViewPreset('channels');
-    return (
-      <SoupView
-        viewName="Channels"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
+function LegacyChannelsView() {
+  const preset = getViewPreset('channels');
+
+  return (
+    <SoupView
+      viewName="Channels"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      initialGroupBy={preset?.groupBy}
+    />
+  );
+}
+
+function FeatureGatedChannelsView() {
+  const newAppViews = useNewAppViews();
+
+  return (
+    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+      <Show when={newAppViews.enabled()} fallback={<LegacyChannelsView />}>
+        <ChannelsView />
+      </Show>
+    </Show>
+  );
+}
+
+function RegisteredChannelsView() {
+  usePageViewTracking('channels');
+
+  return (
+    <Switch>
+      <Match when={isTouchDevice()}>
+        <LegacyChannelsView />
+      </Match>
+      <Match when={!isTouchDevice()}>
+        <FeatureGatedChannelsView />
+      </Match>
+    </Switch>
+  );
+}
+
+registerComponent('channels', withAuth(RegisteredChannelsView));
 
 registerComponent(
   'calls',
@@ -478,7 +506,7 @@ registerComponent(
   withAuth(() => {
     // Registered even when the CRM feature is off so direct navigation /
     // restored splits redirect instead of throwing in resolveComponent.
-    if (!ENABLE_CRM()) {
+    if (!isFeatureEnabled(enableCrm)) {
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('companies');

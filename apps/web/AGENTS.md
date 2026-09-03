@@ -51,6 +51,7 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - All API/network calls live in service-clients.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
+- When adding or changing a feature flag, follow the `define-feature-flag` skill.
 
 ### SolidJs
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems (DOM APIs, third-party libs). If you're using it to derive state or trigger updates, use a derived signal or wrap the setter instead.

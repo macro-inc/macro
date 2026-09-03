@@ -8,6 +8,7 @@ use agent_client_protocol::schema::v1::{
     SetSessionConfigOptionRequest,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
+use macro_uuid::Uuid;
 use serde::{Deserialize, Serialize};
 
 use crate::domain::schema::v0::{AcpMessage, ToRuntimeMessage};
@@ -21,57 +22,58 @@ pub const MODEL_CONFIG_ID: &str = "model";
 /// Identifies one accepted [`AgentAction`] end to end: returned by the
 /// control endpoint, written as the JSON-RPC request id on the action's wire
 /// frame, and read back off that frame as `request_id` on the folded message
-/// it derives. Correlation is string equality; the value is opaque.
+/// it derives.
 ///
-/// Minted only by the server at accept time, as `agent_session:{uuid}` - the
-/// prefix is what lets [`Self::from_request_id`] tell our ids from ones other
-/// clients picked.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// Minted only by the server at accept time, as a v7 uuid so ids sort by mint
+/// time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
+/// request id is the whole ownership test: the server is the only writer of
+/// runtime-bound frames. The machine's own handshake request ids
+/// (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
-pub struct AgentActionId(String);
+pub struct AgentActionId(Uuid);
 
 impl AgentActionId {
-    /// What every id this side mints starts with.
-    const PREFIX: &'static str = "agent_session:";
-
-    /// Mint a fresh id for an action being accepted. v7 so ids sort by mint
-    /// time.
+    /// Mint a fresh id for an action being accepted.
     #[must_use]
     pub fn mint() -> Self {
-        Self(format!(
-            "{}{}",
-            Self::PREFIX,
-            macro_uuid::generate_uuid_v7()
-        ))
+        Self(macro_uuid::generate_uuid_v7())
     }
 
-    /// The same string as the transport's request id type.
+    /// The same id as the transport's request id type.
     #[must_use]
     pub fn to_request_id(&self) -> RequestId {
-        RequestId::Str(self.0.clone())
+        RequestId::Str(self.0.to_string())
     }
 
     /// Read an id back off a logged frame. `None` for ids this side did not
     /// mint.
     #[must_use]
     pub fn from_request_id(id: &RequestId) -> Option<Self> {
-        match id {
-            RequestId::Str(id) if id.starts_with(Self::PREFIX) => Some(Self(id.to_string())),
-            _ => None,
-        }
+        let RequestId::Str(id) = id else {
+            return None;
+        };
+        id.parse().ok().map(Self)
     }
 
-    /// The id as the string a caller correlates with.
+    /// The raw uuid, for callers that key on it.
     #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+
+    /// Rebuild an id a caller was handed earlier, e.g. a queue route's path
+    /// parameter.
+    #[must_use]
+    pub fn from_uuid(id: Uuid) -> Self {
+        Self(id)
     }
 }
 
 impl std::fmt::Display for AgentActionId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(&self.0)
+        self.0.fmt(f)
     }
 }
 
@@ -212,15 +214,16 @@ impl AgentAction {
         }
     }
 
-    /// Whether accepting this action voids the actions queued ahead of it.
+    /// Whether this action occupies a whole agent turn once sent.
     ///
-    /// A stop means "not the work you are about to start either", so the
-    /// machine drops what it has queued rather than sending it and then
-    /// cancelling it. Every other action is additive and answers `false`.
-    pub fn supersedes_queued(&self) -> bool {
+    /// Both prompts and compaction travel as `session/prompt`, and ACP runs
+    /// one prompt at a time - so these are the actions the harness holds in
+    /// its queue while a turn is running, and the ones whose response ends a
+    /// turn. A stop and a model change ride alongside a running turn freely.
+    pub fn occupies_turn(&self) -> bool {
         match self {
-            Self::Stop => true,
-            Self::Prompt(_) | Self::SetModel(_) | Self::Compact => false,
+            Self::Prompt(_) | Self::Compact => true,
+            Self::SetModel(_) | Self::Stop => false,
         }
     }
 

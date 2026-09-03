@@ -30,7 +30,8 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_GRAPHQL_SOUP: mocks.graphqlSoupEnabled,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: mocks.graphqlSoupEnabled,
 }));
 
 vi.mock(

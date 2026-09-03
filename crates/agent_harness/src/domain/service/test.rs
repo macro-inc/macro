@@ -28,12 +28,14 @@ use agent_session::testing::InMemoryAgentSessionRepo;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use tokio::sync::mpsc;
 
 use super::AgentHarnessService;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AgentRuntimeConfig, AnnounceOrigin, DeliverAction, HarnessCommand, HarnessDefaults,
-    MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeliverAction, HarnessCommand,
+    HarnessDefaults, MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults,
+    SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
@@ -50,6 +52,12 @@ use agent_session::domain::ports::{
 
 fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
+}
+
+/// A sender whose email domain is `is_macro_staff` - the identity the
+/// Daytona staff gate admits.
+fn staff_sender() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from_email("staff@macro.com").expect("a valid user id")
 }
 
 fn open_command() -> OpenSession {
@@ -75,9 +83,11 @@ fn open_command() -> OpenSession {
 /// A prompt arriving from a channel that is not the session's own, so it is
 /// the announcing case.
 fn forward_message(content: &str) -> DeliverAction {
+    // Staff: `disconnected_session` is a Daytona coder bot, and the
+    // execute() gate admits only macro.com actors onto those.
     DeliverAction::prompt(
         content,
-        Some(sender()),
+        Some(staff_sender()),
         Some(AnnounceOrigin {
             channel_id: macro_uuid::Uuid::from_u128(0xf0),
             thread_id: macro_uuid::Uuid::from_u128(0xf1),
@@ -206,26 +216,79 @@ fn harness_for_bot(bot: BotId) -> harness_id::HarnessId {
 type TestConnections =
     crate::outbound::runtime_registry::HarnessKeyedConnections<MirrorBindings, ContainerSender>;
 
-fn harness_with_edges(
-    prompt_context: PromptContextMock,
-    prompt_composer: PromptComposerMock,
-) -> (
+/// Forwards turn events to the harness, then reports them to the test.
+///
+/// The order is the point: `turn_ended` admits the harness's internal
+/// `TurnEnded` command onto the session's FIFO worker *synchronously*, so by
+/// the time the test hears the signal, anything it does next is admitted -
+/// and therefore executed - after the turn end. That is what lets a test
+/// answer a prompt and then act on an idle session without polling.
+struct SignallingTurnObserver {
+    harness: TestHarness,
+    ended: mpsc::UnboundedSender<AgentSessionId>,
+}
+
+impl agent_session::domain::ports::SessionTurnObserver for SignallingTurnObserver {
+    fn turn_ended(&self, id: AgentSessionId) {
+        agent_session::domain::ports::SessionTurnObserver::turn_ended(&self.harness, id);
+        let _ = self.ended.send(id);
+    }
+
+    fn session_stopped(&self, id: AgentSessionId) {
+        agent_session::domain::ports::SessionTurnObserver::session_stopped(&self.harness, id);
+    }
+}
+
+/// The test's half of [`SignallingTurnObserver`].
+struct TurnSignals {
+    ended: mpsc::UnboundedReceiver<AgentSessionId>,
+}
+
+impl TurnSignals {
+    /// Wait until `id`'s running turn has ended *and* the harness has been
+    /// told - after this, the session is idle and the next turn-occupying
+    /// action dispatches instead of queueing.
+    async fn settled(&mut self, id: AgentSessionId) {
+        loop {
+            let ended = self
+                .ended
+                .recv()
+                .await
+                .expect("the turn observer outlives the test");
+            if ended == id {
+                return;
+            }
+        }
+    }
+}
+
+/// Everything a test drives: the service under test and its edges.
+type TestBench = (
     TestHarness,
     InMemoryAgentSessionRepo,
     MockContainerManager,
     AnnouncerMock,
     Arc<RuntimeRegistry<ContainerSender>>,
-) {
+);
+
+fn harness_with_signals(
+    prompt_context: PromptContextMock,
+    prompt_composer: PromptComposerMock,
+) -> (TestBench, TurnSignals) {
     let repo = InMemoryAgentSessionRepo::new();
     let containers = MockContainerManager::new();
     let announcer = AnnouncerMock::new();
     let runtimes = RuntimeRegistry::new();
+    // Same knot as production wiring: the harness is built from the session
+    // service and is also its turn observer, so the observer binds late.
+    let turn_observer = Arc::new(agent_session::domain::ports::LateBoundTurnObserver::new());
     let service = AgentHarnessService::new(
         AgentSessionServiceImpl::new(
             repo.clone(),
             FoldedMessageService::new(repo.clone()),
             NoOpRealtime,
-        ),
+        )
+        .with_turn_observer(turn_observer.clone()),
         containers.clone(),
         announcer.clone(),
         TestConnections::new(MirrorBindings, Arc::clone(&runtimes)),
@@ -240,28 +303,32 @@ fn harness_with_edges(
             repo_url: "https://github.com/macro-inc/macro".to_owned(),
         },
     );
-    (service, repo, containers, announcer, runtimes)
+    let (ended, ended_rx) = mpsc::unbounded_channel();
+    turn_observer.bind(SignallingTurnObserver {
+        harness: service.clone(),
+        ended,
+    });
+    (
+        (service, repo, containers, announcer, runtimes),
+        TurnSignals { ended: ended_rx },
+    )
 }
 
-fn harness_with_context(
+fn harness_with_edges(
     prompt_context: PromptContextMock,
-) -> (
-    TestHarness,
-    InMemoryAgentSessionRepo,
-    MockContainerManager,
-    AnnouncerMock,
-    Arc<RuntimeRegistry<ContainerSender>>,
-) {
+    prompt_composer: PromptComposerMock,
+) -> TestBench {
+    // Dropping the receiver is fine: sends to a closed channel are ignored,
+    // and a test that never waits on turns does not need the signal.
+    let (bench, _signals) = harness_with_signals(prompt_context, prompt_composer);
+    bench
+}
+
+fn harness_with_context(prompt_context: PromptContextMock) -> TestBench {
     harness_with_edges(prompt_context, PromptComposerMock::default())
 }
 
-fn harness() -> (
-    TestHarness,
-    InMemoryAgentSessionRepo,
-    MockContainerManager,
-    AnnouncerMock,
-    Arc<RuntimeRegistry<ContainerSender>>,
-) {
+fn harness() -> TestBench {
     harness_with_context(PromptContextMock::default())
 }
 
@@ -451,7 +518,7 @@ async fn context_failure_still_calls_composer_with_empty_messages_and_delivers()
 }
 
 #[tokio::test]
-async fn composer_failure_stops_open_before_announcement_or_delivery() {
+async fn composer_failure_stops_open_delivery_and_keeps_the_prompt_queued() {
     let composer = PromptComposerMock::failing("lexical unavailable");
     let (service, repo, containers, announcer, _runtimes) =
         harness_with_edges(PromptContextMock::default(), composer.clone());
@@ -461,11 +528,25 @@ async fn composer_failure_stops_open_before_announcement_or_delivery() {
         .execute(id, HarnessCommand::Open(open_command()))
         .await;
 
+    // Composition happens at dispatch, after the session and its sandbox
+    // exist - so those stand, while the chip is never posted and the prompt
+    // never reaches the agent. The raw prompt stays queued: composition is
+    // retried when the queue next drains, so a transient lexical outage does
+    // not eat the mention.
     assert!(matches!(result, Err(HarnessError::PromptComposition(_))));
     assert_eq!(composer.calls().len(), 1);
-    assert!(repo.get(id).await.is_err());
-    assert_eq!(containers.spawned(), 0);
+    assert!(repo.get(id).await.is_ok());
+    assert_eq!(containers.spawned(), 1);
     assert!(announcer.announced().is_empty());
+    let queued = service
+        .queued_controls(id)
+        .await
+        .expect("queue is listable");
+    assert_eq!(queued.len(), 1);
+    assert!(matches!(
+        &queued[0].action,
+        AgentAction::Prompt(action) if action.prompt == "@claude fix the failing test"
+    ));
 }
 
 #[tokio::test]
@@ -636,10 +717,13 @@ async fn forward_to_a_live_session_reuses_the_transport() {
 #[tokio::test]
 async fn composer_failure_stops_follow_up_announcement_and_delivery() {
     let composer = PromptComposerMock::default();
-    let (service, _repo, containers, announcer, _runtimes) =
-        harness_with_edges(PromptContextMock::default(), composer.clone());
+    let ((service, _repo, containers, announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), composer.clone());
     let id = AgentSessionId::new();
     let container = live_session(&service, &containers, id).await;
+    // Idle first, so the follow-up dispatches - and fails - rather than
+    // queueing behind the opening turn.
+    turns.settled(id).await;
     *composer.failure.lock().unwrap() = Some("lexical unavailable".to_owned());
     let prompts_before = prompts(&container.agent()).len();
     let announcements_before = announcer.announced().len();
@@ -662,7 +746,8 @@ async fn composer_failure_stops_follow_up_announcement_and_delivery() {
 
 #[tokio::test]
 async fn forward_announces_before_delivering_the_prompt() {
-    let (service, _repo, containers, announcer, _runtimes) = harness();
+    let ((service, _repo, containers, announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(open_command()));
     let drive = async {
@@ -681,6 +766,7 @@ async fn forward_announces_before_delivering_the_prompt() {
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("open should succeed");
     assert_eq!(prompts(&container.agent()).len(), 1);
+    turns.settled(id).await;
 
     // A chip that cannot be posted has nothing to anchor the response, so the
     // prompt must not reach the agent at all.
@@ -702,7 +788,8 @@ async fn forward_announces_before_delivering_the_prompt() {
 
 #[tokio::test]
 async fn a_delivery_failure_is_not_automatically_resumed() {
-    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let ((service, _repo, containers, _announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
     let command = open_command();
     let id = AgentSessionId::new();
     let open = service.execute(id, HarnessCommand::Open(command));
@@ -721,6 +808,7 @@ async fn a_delivery_failure_is_not_automatically_resumed() {
     };
     let (opened, container) = tokio::join!(open, drive);
     opened.expect("open should succeed");
+    turns.settled(id).await;
     container.fails_sends_after(0);
 
     let result = service
@@ -914,16 +1002,29 @@ async fn an_admitted_command_survives_caller_cancellation() {
 }
 
 #[tokio::test]
-async fn a_failed_announce_surfaces_and_does_not_start_the_agent() {
+async fn a_failed_announce_surfaces_and_keeps_the_prompt_queued() {
     let (service, repo, containers, announcer, _runtimes) = harness();
     announcer.fails("comms is down");
+    let id = AgentSessionId::new();
 
     let result = service
-        .execute(AgentSessionId::new(), HarnessCommand::Open(open_command()))
+        .execute(id, HarnessCommand::Open(open_command()))
         .await;
 
+    // Announcement happens at dispatch, after the sandbox exists - so the
+    // spawn stands, while the prompt never reaches the agent (the chip
+    // anchors the reply, so no chip means no delivery) and stays queued for
+    // the next drain.
     assert!(matches!(result, Err(HarnessError::Announce(_))));
-    assert_eq!(containers.spawned(), 0);
+    assert_eq!(containers.spawned(), 1);
+    assert_eq!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue is listable")
+            .len(),
+        1
+    );
     drop(repo);
 }
 
@@ -961,16 +1062,16 @@ async fn live_session(
     container
 }
 
-async fn live_cursor_session(
+/// Open a Daytona-backed (sandboxed coder) session with a staff opener - the
+/// only identity the gate in `execute` lets past `Open`.
+async fn live_sandboxed_coder_session(
     service: &TestHarness,
     containers: &MockContainerManager,
     id: AgentSessionId,
 ) -> ContainerMock {
     let mut command = open_command();
-    command.bot_id = bot_id::CURSOR_BOT_ID;
-    command.runtime.kind = AgentKind::Cursor;
-    command.runtime.harness = "cursor".to_owned();
-    command.origin.sender = sender();
+    command.bot_id = bot_id::MACRO_CODER_BOT_ID;
+    command.origin.sender = staff_sender();
     let open = service.execute(id, HarnessCommand::Open(command));
     let drive = async {
         loop {
@@ -986,7 +1087,7 @@ async fn live_cursor_session(
         container
     };
     let (opened, container) = tokio::join!(open, drive);
-    opened.expect("cursor session should open");
+    opened.expect("sandboxed coder session should open");
     container
 }
 
@@ -1088,23 +1189,275 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
 }
 
 #[tokio::test]
-async fn a_user_control_event_can_drive_their_cursor_session() {
+async fn a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session() {
     let (service, _repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
-    let container = live_cursor_session(&service, &containers, id).await;
+    let container = live_sandboxed_coder_session(&service, &containers, id).await;
+
+    let error = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("spend daytona credits"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect_err("non-staff must not control sandboxed coder sessions");
+
+    assert!(matches!(error, AgentSessionError::Forbidden));
+    assert_eq!(prompts(&container.agent()).len(), 1);
+}
+
+#[tokio::test]
+async fn a_staff_control_event_can_drive_a_sandboxed_coder_session() {
+    let ((service, _repo, containers, _announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = live_sandboxed_coder_session(&service, &containers, id).await;
+    turns.settled(id).await;
 
     service
         .control_event(
             id,
             ControlEvent {
                 action: AgentAction::prompt("continue"),
+                actor: Some(staff_sender()),
+            },
+        )
+        .await
+        .expect("macro staff may control sandboxed coder sessions");
+
+    assert_eq!(prompts(&container.agent()).len(), 2);
+}
+
+/// Open a session and finish the handshake, but leave the opening prompt's
+/// turn running: the agent has received it and not answered.
+async fn session_with_a_running_turn(
+    service: &TestHarness,
+    containers: &MockContainerManager,
+    id: AgentSessionId,
+) -> ContainerMock {
+    let open = service.execute(id, HarnessCommand::Open(open_command()));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(containers))
+            .expect("the spawned container is findable");
+        complete_session_handshake(&container).await;
+        // initialize, session/new, and the opening prompt.
+        container.agent().wait_for_requests(3).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+    container
+}
+
+#[tokio::test]
+async fn a_prompt_during_a_running_turn_queues_and_dispatches_when_it_ends() {
+    let ((service, _repo, containers, _announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+
+    let accepted = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("and then this"),
                 actor: Some(sender()),
             },
         )
         .await
-        .expect("the session owner may control cursor sessions");
+        .expect("a mid-turn prompt is accepted");
 
-    assert_eq!(prompts(&container.agent()).len(), 2);
+    assert_eq!(
+        accepted.disposition,
+        agent_session::domain::ports::ControlDisposition::Queued
+    );
+    let queued = service.queued_controls(id).await.expect("queue lists");
+    assert_eq!(queued.len(), 1);
+    assert_eq!(queued[0].action_id, accepted.action_id);
+    assert_eq!(prompts(&agent).len(), 1, "nothing reached the agent yet");
+
+    // The running turn ends; the queued prompt dispatches with no user action.
+    agent.completes_prompt().await;
+    agent.wait_for_requests(4).await;
+    turns.settled(id).await;
+
+    assert_eq!(
+        prompts(&agent)[1],
+        // No announce origin, so no channel context: the raw text composes
+        // to itself in the mock.
+        vec![ContentBlock::from("and then this")]
+    );
+    assert!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue lists")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
+    let ((service, _repo, containers, _announcer, _runtimes), _turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+
+    let queued = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("still wanted after the stop"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("a mid-turn prompt is accepted");
+    assert_eq!(
+        queued.disposition,
+        agent_session::domain::ports::ControlDisposition::Queued
+    );
+
+    // The stop bypasses the queue - it cancels the running turn, nothing else.
+    let stopped = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::Stop,
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("a stop is accepted");
+    assert_eq!(
+        stopped.disposition,
+        agent_session::domain::ports::ControlDisposition::Sent
+    );
+    assert_eq!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue lists")
+            .len(),
+        1,
+        "a stop never clears the queue"
+    );
+
+    // The cancelled turn's answer is an ordinary turn end: the queued prompt
+    // dispatches right away.
+    agent.completes_prompt().await;
+    agent.wait_for_requests(4).await;
+
+    assert_eq!(
+        prompts(&agent)[1],
+        vec![ContentBlock::from("still wanted after the stop")]
+    );
+}
+
+#[tokio::test]
+async fn queued_prompts_are_editable_and_removable_until_dispatch() {
+    let ((service, _repo, containers, _announcer, _runtimes), _turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+
+    let prompt = |text: &str| ControlEvent {
+        action: AgentAction::prompt(text),
+        actor: Some(sender()),
+    };
+    let second = service.control_event(id, prompt("second")).await.unwrap();
+    let third = service.control_event(id, prompt("third")).await.unwrap();
+
+    service
+        .edit_queued_control(
+            id,
+            second.action_id,
+            "second, rewritten".to_owned(),
+            Some(staff_sender()),
+        )
+        .await
+        .expect("a waiting prompt is editable");
+    let queued = service.queued_controls(id).await.expect("queue lists");
+    let rewritten = queued
+        .iter()
+        .find(|entry| entry.action_id == second.action_id)
+        .expect("the edited entry is still queued");
+    assert_eq!(
+        rewritten.actor.as_ref(),
+        Some(&staff_sender()),
+        "an edit is attributed to the editor, not the original queuer"
+    );
+    service
+        .remove_queued_control(id, third.action_id, Some(sender()))
+        .await
+        .expect("a waiting prompt is removable");
+
+    agent.completes_prompt().await;
+    agent.wait_for_requests(4).await;
+    assert_eq!(
+        prompts(&agent)[1],
+        vec![ContentBlock::from("second, rewritten")],
+        "the edit lands because dispatch is where the text is read"
+    );
+
+    // Dispatched means gone: there is no un-sending.
+    let error = service
+        .remove_queued_control(id, second.action_id, Some(sender()))
+        .await
+        .expect_err("a dispatched prompt is not removable");
+    assert!(matches!(error, AgentSessionError::QueuedControlNotFound));
+    let error = service
+        .edit_queued_control(id, third.action_id, "resurrect".to_owned(), Some(sender()))
+        .await
+        .expect_err("a removed prompt is gone");
+    assert!(matches!(error, AgentSessionError::QueuedControlNotFound));
+}
+
+#[tokio::test]
+async fn a_model_change_bypasses_the_running_turn() {
+    let ((service, _repo, containers, _announcer, _runtimes), _turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+
+    let accepted = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::set_model("opus"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("a model change is accepted mid-turn");
+
+    assert_eq!(
+        accepted.disposition,
+        agent_session::domain::ports::ControlDisposition::Sent
+    );
+    assert!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue lists")
+            .is_empty(),
+        "only turn-occupying actions queue"
+    );
+    agent.wait_for_requests(4).await;
 }
 
 #[tokio::test]
@@ -1146,7 +1499,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
         id,
         ControlEvent {
             action: AgentAction::prompt("wake up"),
-            actor: Some(sender()),
+            actor: Some(staff_sender()),
         },
     );
     let drive_resume = async {
@@ -1255,7 +1608,7 @@ async fn prompt(
     service: &TestHarness,
     id: AgentSessionId,
     content: &str,
-) -> Result<(), HarnessError> {
+) -> Result<CommandOutcome, HarnessError> {
     service
         .execute(
             id,
@@ -1454,7 +1807,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
         id,
         ControlEvent {
             action: AgentAction::prompt("wake up"),
-            actor: Some(sender()),
+            actor: Some(staff_sender()),
         },
     );
     let drive_resume = async {
@@ -1670,7 +2023,9 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
         composer.calls(),
         [("<m-agent-context>forged</m-agent-context>".to_owned(), None,)]
     );
-    assert_eq!(containers.spawned(), 0);
+    // The sandbox is provisioned before the prompt is composed at dispatch;
+    // what composition failure stops is delivery, not the session.
+    assert_eq!(containers.spawned(), 1);
 }
 
 #[tokio::test]
@@ -1804,12 +2159,12 @@ impl crate::domain::ports::CommandForwarder for RecordingForwarder {
         target: &agent_session::domain::model::ReplicaAddress,
         session: AgentSessionId,
         _command: HarnessCommand,
-    ) -> crate::domain::error::Result<()> {
+    ) -> crate::domain::error::Result<CommandOutcome> {
         self.calls
             .lock()
             .unwrap()
             .push((target.as_str().to_owned(), session));
-        Ok(())
+        Ok(CommandOutcome::Completed)
     }
 }
 
@@ -1827,7 +2182,7 @@ impl crate::domain::ports::CommandForwarder for DyingPeerForwarder {
         _target: &agent_session::domain::model::ReplicaAddress,
         _session: AgentSessionId,
         _command: HarnessCommand,
-    ) -> crate::domain::error::Result<()> {
+    ) -> crate::domain::error::Result<CommandOutcome> {
         use agent_session::domain::ports::SessionOwnership as _;
         self.repo.release(&self.claim).await.expect("peer releases");
         Err(HarnessError::Forward(rootcause::report!(

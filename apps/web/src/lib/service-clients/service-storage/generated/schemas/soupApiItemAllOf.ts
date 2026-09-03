@@ -4,12 +4,17 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SoupApiItemAllOfNotifiedAt } from './soupApiItemAllOfNotifiedAt';
 import type { SoupApiItemAllOfTouchedAt } from './soupApiItemAllOfTouchedAt';
 
 export type SoupApiItemAllOf = {
   frecency_score: number;
   /** Whether the requesting user has favorited this entity. */
   is_favorited: boolean;
+  /** When the caller was last notified about this entity, present only
+when the page was ordered by `notified_at`. Clients keep the notified
+feed ordered and date-bucketed on this value. */
+  notified_at?: SoupApiItemAllOfNotifiedAt;
   /** The caller's latest own mutation of this entity, present only when the
 page was ordered by `touched_by_me`. Clients keep the touched feed
 ordered on this value, so it can be bumped optimistically. */

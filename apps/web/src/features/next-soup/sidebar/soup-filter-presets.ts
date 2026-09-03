@@ -7,11 +7,12 @@ import {
   type Query,
 } from '@app/features/next-soup/filters/filter-store';
 import {
-  ENABLE_CALENDAR_SEARCH_UI,
-  ENABLE_CALENDAR_UI,
-  ENABLE_REMINDERS,
-  ENABLE_SNIPPETS,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+  enableCalendarUi,
+  enableReminders,
+  enableSnippets,
+  enableSupportedSoupForeignEntities,
+  isCalendarSearchUiEnabled,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Params } from '@service-storage/generated/schemas/params';
@@ -34,12 +35,12 @@ type SoupFiltersPreset = {
    */
   sortDirection?: 'asc' | 'desc';
   /**
-   * Server sort this tab's meaning requires (e.g. `touched_by_me`), taking
-   * precedence over the client sort state. Tabs that force one usually also
-   * clear the client sort (`SoupView`'s `initialClientSort={[]}`) so the
-   * server's ordering survives to the rendered rows. Frecency is excluded:
-   * it is a different query flavor with its own client handling, not a
-   * per-tab ordering.
+   * Server sort this tab's meaning requires (e.g. `touched_by_me`,
+   * `notified_at`), taking precedence over the client sort state. Tabs that
+   * force one usually also pin the client sort (`SoupView`'s
+   * `initialClientSort`) so the server's ordering survives to the rendered
+   * rows. Frecency is excluded: it is a different query flavor with its own
+   * client handling, not a per-tab ordering.
    */
   sortMethod?: Exclude<NonNullable<Params['sort_method']>, 'frecency'>;
 };
@@ -87,10 +88,10 @@ const OPEN_TASK_STATUS_INCLUDE_PROPS = [
 ];
 
 const getExcludedDocumentSubTypes = (...subTypes: string[]) =>
-  ENABLE_SNIPPETS() ? subTypes : [...subTypes, 'snippet'];
+  isFeatureEnabled(enableSnippets) ? subTypes : [...subTypes, 'snippet'];
 
 const getDisabledSnippetSubtypeExclude = (): Query['exclude'] =>
-  ENABLE_SNIPPETS() ? {} : { subType: ['snippet'] };
+  isFeatureEnabled(enableSnippets) ? {} : { subType: ['snippet'] };
 
 /** Filters for inbox/signal: not done, importance=true for emails, 2-week window */
 const getInboxSignalFilters = () => {
@@ -122,11 +123,13 @@ const getInboxSignalFilters = () => {
       // tab below sends it too, for the not-yet-fired slice. Behind the flag
       // so an unflagged user never pays for the reminders lookup on every
       // Signal fetch.
-      ...(ENABLE_REMINDERS() ? { includeReminders: true } : {}),
+      ...(isFeatureEnabled(enableReminders) ? { includeReminders: true } : {}),
       // Calendar events with a not-done notification (a fired event alarm).
       // Referencing `calf` opts the calendar arm into the signal query, which
       // `defineQueryFilters` otherwise excludes with a nil id filter.
-      ...(ENABLE_CALENDAR_UI() ? { calendarEventDone: false } : {}),
+      ...(isFeatureEnabled(enableCalendarUi)
+        ? { calendarEventDone: false }
+        : {}),
     },
     exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',
@@ -183,16 +186,27 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   inbox: {
     default: 'signal',
     tabs: {
+      // Signal and Noise order by when the viewer was last notified about
+      // each row, not by the row's own recency: a comment on a week-old
+      // task is today's news. The sort is also a filter (rows without a
+      // notification are absent), which is what these tabs mean anyway.
+      // The inbox's client sort (`notified_at`, see `SoupView`) keeps the
+      // server order and buckets the date headers on the same timestamp.
       signal: () => ({
         filters: getInboxSignalFilters(),
         clientFilters: { and: ['inbox'] },
         groupBy: 'date',
+        sortMethod: 'notified_at',
       }),
       noise: () => ({
         filters: getInboxNoiseFilters(),
         clientFilters: { and: ['noise'] },
         groupBy: 'date',
+        sortMethod: 'notified_at',
       }),
+      // All and Reminders keep their recency ordering. Named explicitly
+      // because the inbox's client sort id is not an API sort method, so
+      // without a preset value the API would fall back to created_at.
       all: () => ({
         filters: {
           // Calendar events are not rendered by Soup, and CRM companies are
@@ -200,7 +214,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           include: {
             calendarEventId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
-            ...(ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE
+            ...(isFeatureEnabled(enableSupportedSoupForeignEntities)
               ? { foreignEntitySource: ['github_pull_request'] }
               : {}),
             foreignEntityIncludesMe: true,
@@ -211,14 +225,18 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             channelId: [NIL_UUID],
             chatId: [NIL_UUID],
             folderId: [NIL_UUID],
-            foreignEntityRecordId:
-              ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE ? [NIL_UUID] : [],
+            foreignEntityRecordId: isFeatureEnabled(
+              enableSupportedSoupForeignEntities
+            )
+              ? [NIL_UUID]
+              : [],
             ...getDisabledSnippetSubtypeExclude(),
           },
           emailView: 'all',
         },
         clientFilters: { and: ['explicit-noise'] },
         groupBy: 'date',
+        sortMethod: 'updated_at',
       }),
       // Every reminder still on the hook: the ones coming up and the ones that
       // have fired and are waiting to be dealt with (fired ones also surface in
@@ -233,6 +251,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         }),
         clientFilters: { and: ['reminders-not-done'] },
         sortDirection: 'asc',
+        sortMethod: 'updated_at',
       }),
     },
   },
@@ -607,7 +626,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             // Events are title-indexed, so search returns them — but opening
             // one needs the calendar block, which the flag gates. Without it
             // a hit would render an inert row, so exclude the type instead.
-            ...(ENABLE_CALENDAR_SEARCH_UI()
+            ...(isCalendarSearchUiEnabled()
               ? {}
               : { calendarEventId: [NIL_UUID] }),
           },
