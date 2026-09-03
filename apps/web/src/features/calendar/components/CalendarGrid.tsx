@@ -41,6 +41,7 @@ import {
   formatCompactCalendarTime,
 } from '../utils/time-format';
 import { TIME_GRID_OPENING_SCROLL_TIME } from '../utils/time-grid-scroller';
+import { mergeWorkingLocationEvents } from '../utils/working-location-events';
 import { EventContent } from './EventContent';
 import '../calendar.css';
 
@@ -150,7 +151,7 @@ function CalendarGridHost(props: {
 /** Query-free, single-page calendar grid. */
 export function CalendarGrid(props: CalendarGridProps) {
   const mappedEvents = createMemo<EventInput[]>(() =>
-    props.events.map((event) => {
+    mergeWorkingLocationEvents(props.events).map((event) => {
       const mapped = mapCalendarEventToFullCalendar(event);
       const emphasized = props.emphasizedEventIds?.has(event.id);
       return {
