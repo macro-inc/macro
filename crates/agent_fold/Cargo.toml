@@ -43,6 +43,7 @@ agent-client-protocol = { workspace = true }
 # whoever else needs the transport turns it back on, and cargo unifies.
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 clap = { workspace = true, optional = true }
+lazy-regex = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 non_empty = { path = "../non_empty" }

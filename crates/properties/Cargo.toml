@@ -41,6 +41,7 @@ async-trait = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 document_sub_type = { path = "../document_sub_type" }
+bot_id = { path = "../bot_id" }
 entity_access = { path = "../entity_access", default-features = false, features = [
   "ports",
 ] }

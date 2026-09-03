@@ -721,6 +721,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         logs,
         command_rx,
         handshake,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
     );
     let active = Arc::new(ActiveSessions::new());
     let cancellation = CancellationToken::new();
@@ -735,6 +736,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         cancellation.clone(),
         repo.clone(),
         claim,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
     ));
 
     open_test_session(&inbound_tx, &mut outbound_rx, session).await;
@@ -798,6 +800,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
         logs,
         command_rx,
         handshake,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
     );
     let active = Arc::new(ActiveSessions::new());
     let cancellation = CancellationToken::new();
@@ -812,6 +815,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
             cancellation.clone(),
             repo.clone(),
             claim,
+            Arc::new(crate::domain::ports::NoOpTurnObserver),
         )
         .with_current_subscriber(),
     );

@@ -258,6 +258,15 @@ impl CalendarOccurrenceService for MockOccurrences {
     ) -> Result<Vec<crate::domain::models::CalendarMentionPreview>, rootcause::Report> {
         unreachable!("no calendar tool resolves mention previews")
     }
+
+    async fn list_team_out_of_office(
+        &self,
+        _requester_id: &str,
+        _range: OccurrenceRange,
+        _limit: u16,
+    ) -> Result<Vec<crate::domain::models::TeamOutOfOffice>, rootcause::Report> {
+        unreachable!("no calendar tool lists team out-of-office")
+    }
 }
 
 fn context(
@@ -353,6 +362,8 @@ async fn create_converts_input_into_a_domain_draft() {
             }],
         }),
         add_google_meet: true,
+        event_type: CalendarEventTypeInput::Default,
+        out_of_office: None,
     };
     let response = tool.call(context, request_context()).await.unwrap();
     assert_eq!(response.event_id, Uuid::from_u128(7));
@@ -383,6 +394,70 @@ async fn create_converts_input_into_a_domain_draft() {
 }
 
 #[tokio::test]
+async fn create_maps_out_of_office_input_into_the_draft() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool = CreateCalendarEvent {
+        title: "Out".to_string(),
+        time: EventTimeInput::Timed {
+            starts_at: Utc.with_ymd_and_hms(2026, 8, 20, 12, 0, 0).unwrap(),
+            ends_at: Utc.with_ymd_and_hms(2026, 8, 20, 18, 0, 0).unwrap(),
+            time_zone: None,
+        },
+        description: None,
+        location: None,
+        attendees: Vec::new(),
+        recurrence_lines: Vec::new(),
+        calendar_id: None,
+        reminders: None,
+        add_google_meet: false,
+        event_type: CalendarEventTypeInput::OutOfOffice,
+        out_of_office: Some(OutOfOfficeInput {
+            auto_decline_mode: Some(AutoDeclineModeInput::DeclineAll),
+            decline_message: Some("Away".to_string()),
+        }),
+    };
+    tool.call(context, request_context()).await.unwrap();
+
+    let created = mutations.created.lock().unwrap();
+    let (_, _, draft) = created.first().expect("one create call");
+    let out_of_office = draft
+        .out_of_office
+        .as_ref()
+        .expect("out-of-office properties carried into the draft");
+    assert_eq!(
+        out_of_office.auto_decline_mode,
+        crate::domain::models::OutOfOfficeAutoDeclineMode::DeclineAllConflictingInvitations
+    );
+    assert_eq!(out_of_office.decline_message.as_deref(), Some("Away"));
+}
+
+#[tokio::test]
+async fn create_rejects_out_of_office_settings_on_a_default_event() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+
+    let tool = CreateCalendarEvent {
+        title: "Regular".to_string(),
+        time: EventTimeInput::Timed {
+            starts_at: Utc.with_ymd_and_hms(2026, 8, 20, 12, 0, 0).unwrap(),
+            ends_at: Utc.with_ymd_and_hms(2026, 8, 20, 13, 0, 0).unwrap(),
+            time_zone: None,
+        },
+        description: None,
+        location: None,
+        attendees: Vec::new(),
+        recurrence_lines: Vec::new(),
+        calendar_id: None,
+        reminders: None,
+        add_google_meet: false,
+        event_type: CalendarEventTypeInput::Default,
+        out_of_office: Some(OutOfOfficeInput::default()),
+    };
+    tool.call(context, request_context()).await.unwrap_err();
+    assert!(mutations.created.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn create_surfaces_missing_calendar_as_an_actionable_error() {
     let mutations = MockMutations {
         create_error: Mutex::new(Some(CalendarMutationError::NoWritableCalendar)),
@@ -404,6 +479,8 @@ async fn create_surfaces_missing_calendar_as_an_actionable_error() {
         calendar_id: None,
         reminders: None,
         add_google_meet: false,
+        event_type: CalendarEventTypeInput::Default,
+        out_of_office: None,
     };
     let error = tool.call(context, request_context()).await.unwrap_err();
     assert!(
@@ -436,6 +513,7 @@ async fn update_converts_input_into_a_domain_patch() {
         conference: Some(ConferenceChangeInput::Remove),
         reminders: None,
         rsvp: None,
+        out_of_office: None,
     };
     tool.call(context, request_context()).await.unwrap();
 
@@ -451,6 +529,44 @@ async fn update_converts_input_into_a_domain_patch() {
         Some(1)
     );
     assert_eq!(patch.conference, Some(ConferenceChange::Removed));
+    assert!(patch.out_of_office.is_none());
+}
+
+#[tokio::test]
+async fn update_maps_out_of_office_settings_into_the_patch() {
+    let (mutations, context) = context(MockMutations::default(), empty_occurrences());
+    let event_id = Uuid::from_u128(11);
+
+    let tool = UpdateCalendarEvent {
+        event_id,
+        scope: UpdateScopeInput::All,
+        recurrence_id: None,
+        title: None,
+        description: None,
+        location: None,
+        time: None,
+        attendees: None,
+        recurrence_lines: None,
+        conference: None,
+        reminders: None,
+        rsvp: None,
+        out_of_office: Some(OutOfOfficeInput {
+            auto_decline_mode: Some(AutoDeclineModeInput::DeclineNewOnly),
+            decline_message: None,
+        }),
+    };
+    tool.call(context, request_context()).await.unwrap();
+
+    let updated = mutations.updated.lock().unwrap();
+    let (_, patch, _) = updated.first().expect("one update call");
+    let out_of_office = patch
+        .out_of_office
+        .as_ref()
+        .expect("out-of-office settings carried into the patch");
+    assert_eq!(
+        out_of_office.auto_decline_mode,
+        crate::domain::models::OutOfOfficeAutoDeclineMode::DeclineOnlyNewConflictingInvitations
+    );
 }
 
 #[tokio::test]
@@ -475,6 +591,7 @@ async fn update_passes_the_selected_occurrence_scope() {
         conference: None,
         reminders: None,
         rsvp: None,
+        out_of_office: None,
     };
     tool.call(context, request_context()).await.unwrap();
 
@@ -505,6 +622,7 @@ async fn scoped_update_requires_a_recurrence_id() {
         conference: None,
         reminders: None,
         rsvp: None,
+        out_of_office: None,
     };
     let error = tool.call(context, request_context()).await.unwrap_err();
     assert!(error.description.contains("recurrenceId"));
@@ -531,6 +649,7 @@ async fn series_update_rejects_a_stray_recurrence_id() {
         conference: None,
         reminders: None,
         rsvp: None,
+        out_of_office: None,
     };
     let error = tool.call(context, request_context()).await.unwrap_err();
     assert!(error.description.contains("this_event"));
@@ -560,6 +679,7 @@ async fn update_carries_reminders_into_the_patch() {
             }],
         }),
         rsvp: None,
+        out_of_office: None,
     };
     tool.call(context, request_context()).await.unwrap();
 
@@ -597,6 +717,7 @@ async fn rsvp_alone_answers_without_patching() {
         conference: None,
         reminders: None,
         rsvp: Some(RsvpResponseInput::Declined),
+        out_of_office: None,
     };
     tool.call(context, request_context()).await.unwrap();
 
@@ -629,6 +750,7 @@ async fn rsvp_follows_the_occurrence_scope_of_the_call() {
         conference: None,
         reminders: None,
         rsvp: Some(RsvpResponseInput::Tentative),
+        out_of_office: None,
     };
     tool.call(context, request_context()).await.unwrap();
 
@@ -665,6 +787,7 @@ async fn update_answers_after_applying_the_patch() {
         conference: None,
         reminders: None,
         rsvp: Some(RsvpResponseInput::Accepted),
+        out_of_office: None,
     };
     tool.call(context, request_context()).await.unwrap();
 
@@ -689,6 +812,7 @@ async fn update_without_a_change_or_an_rsvp_is_rejected() {
         conference: None,
         reminders: None,
         rsvp: None,
+        out_of_office: None,
     };
     let error = tool.call(context, request_context()).await.unwrap_err();
     assert!(error.description.contains("changes nothing"));
@@ -839,6 +963,7 @@ async fn list_calendars_maps_visible_calendars() {
             color: None,
             is_primary: true,
             is_writable: true,
+            is_subscription: false,
             default_reminders: Vec::new(),
         }]),
         ..Default::default()

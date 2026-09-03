@@ -232,11 +232,6 @@ export function InboxList() {
     { storages: createInboxListEntryStorage(panel.handle) }
   );
 
-  createEffect(() => {
-    const focusKey = list.focus.requestedKey();
-    setPersistedListState((current) => ({ ...current, focusKey }));
-  });
-
   const rows = source.items;
 
   const swipeRowsById = createMemo(() => {
@@ -405,10 +400,6 @@ export function InboxList() {
     const handle = virtualizer();
     if (!handle) return;
 
-    setPersistedListState((current) => ({
-      ...current,
-      scrollOffset: handle.scrollOffset,
-    }));
     if (!source.hasMore()) return;
 
     const distance =

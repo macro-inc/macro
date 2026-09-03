@@ -4,6 +4,8 @@ import {
   config,
   getAiToolsInfra,
   getMacroApiToken,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -119,6 +121,8 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
   ],
 });
 
-export const agentHarnessServiceUrl = pulumi.interpolate`${service.domain}`;
+export const agentHarnessServiceUrl = getServiceUrl(
+  ServiceUrl.AGENT_HARNESS_SERVICE_URL
+);
 export const agentHarnessEgressUrl = pulumi.interpolate`${service.egressDomain}`;
 export const agentHarnessServiceRoleArn = service.role.arn;

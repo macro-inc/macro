@@ -171,6 +171,7 @@ fn create_body(
         "transparency": draft.transparency,
         "reminders": draft.reminders,
         "conference": draft.conference,
+        "outOfOffice": draft.out_of_office,
     })
 }
 
@@ -196,6 +197,7 @@ fn update_body(patch: &CalendarEventPatch, scope: &CalendarUpdateScope) -> serde
         "transparency": patch.transparency,
         "reminders": patch.reminders,
         "conference": patch.conference,
+        "outOfOffice": patch.out_of_office,
         "scope": scope_name,
         "recurrenceId": recurrence_id,
     })

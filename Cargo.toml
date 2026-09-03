@@ -209,6 +209,7 @@ jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features
   "rust_crypto",
 ] }
 lambda_runtime = "0.13.0"
+lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
 livekit-api = { version = "0.4.16", default-features = false, features = [
   "access-token",

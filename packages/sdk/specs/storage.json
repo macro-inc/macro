@@ -1015,6 +1015,88 @@
         }
       }
     },
+    "/calendar-events/team-out-of-office": {
+      "get": {
+        "tags": ["calendar_events"],
+        "summary": "Return teammates' out-of-office occurrences in the requested viewport.",
+        "operationId": "list_team_out_of_office",
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "description": "Inclusive UTC viewport start.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "description": "Exclusive UTC viewport end.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Inclusive local date boundary for all-day events.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "Exclusive local date boundary for all-day events.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of occurrences, from 1 through 2,000.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 2000,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Teammates' out-of-office occurrences in the requested viewport",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamOutOfOfficeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or unsupported calendar viewport"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "500": {
+            "description": "Calendar query failed"
+          }
+        }
+      }
+    },
     "/call/active": {
       "get": {
         "tags": ["call::inbound::axum_router"],
@@ -9546,7 +9628,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at.",
+            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -15177,6 +15259,17 @@
             "$ref": "#/components/schemas/ChannelType",
             "description": "Type of channel that was created."
           },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "User the actor created the channel for, when the actor is a bot."
+              }
+            ]
+          },
           "participant_user_ids": {
             "type": "array",
             "items": {
@@ -18263,6 +18356,10 @@
         "description": "Metadata for [`DocumentTopicEvent::Deleted`].",
         "required": ["document_id"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically deleted the document. Absent on events published\nbefore attribution, and on user-receipt writes (ingest then uses\n[`Self::actor_user_id`])."
+          },
           "actor_user_id": {
             "oneOf": [
               {
@@ -18277,6 +18374,17 @@
           "document_id": {
             "type": "string",
             "description": "The id of the deleted document."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this delete belongs on, when different from\n[`Self::actor`]."
+              }
+            ]
           },
           "project_id": {
             "type": ["string", "null"],
@@ -18818,6 +18926,10 @@
         "description": "Metadata for [`DocumentTopicEvent::SyncContentUpdated`].",
         "required": ["document_id", "file_type"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically changed the content. Absent on events published\nbefore attribution, and on human-only collab sessions."
+          },
           "document_id": {
             "type": "string",
             "description": "The id of the live-collab document whose content changed."
@@ -18829,6 +18941,17 @@
           "file_type": {
             "$ref": "#/components/schemas/FileType",
             "description": "File type of the sync document (markdown today)."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this edit belongs on, when different from\n[`Self::actor`]."
+              }
+            ]
           }
         }
       },
@@ -18978,6 +19101,10 @@
         "description": "Metadata for [`DocumentTopicEvent::Updated`].",
         "required": ["document_id", "owner", "share_permission_updated"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically updated the document. Absent on events published\nbefore attribution, and on user-receipt writes (ingest then uses\n[`Self::actor_user_id`])."
+          },
           "actor_user_id": {
             "oneOf": [
               {
@@ -19005,6 +19132,17 @@
               {
                 "$ref": "#/components/schemas/FileTypeUpdate",
                 "description": "Requested file type change; `None` when unchanged."
+              }
+            ]
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this update belongs on, when different from\n[`Self::actor`]."
               }
             ]
           },
@@ -21972,7 +22110,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at."
+                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at."
               }
             ]
           }
@@ -24033,6 +24171,11 @@
                 "type": "boolean",
                 "description": "Whether the requesting user has favorited this entity."
               },
+              "notified_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value."
+              },
               "touched_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
@@ -24052,7 +24195,8 @@
           "updated_at",
           "viewed_updated",
           "frecency",
-          "touched_by_me"
+          "touched_by_me",
+          "notified_at"
         ]
       },
       "SoupApiSortDirection": {
@@ -25802,6 +25946,50 @@
           "include_cbm_atm_nc": {
             "type": ["boolean", "null"],
             "description": "Include tasks that are created by me, assigned to me, and not completed,\neven when they do not match other document filters."
+          }
+        }
+      },
+      "TeamOutOfOfficeItem": {
+        "type": "object",
+        "description": "One teammate's out-of-office occurrence.",
+        "required": ["ownerId", "eventId", "occurrenceKey", "time"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The teammate's calendar event id."
+          },
+          "occurrenceKey": {
+            "type": "string",
+            "description": "Stable occurrence key within the event."
+          },
+          "ownerId": {
+            "type": "string",
+            "description": "Macro user id of the teammate who is out."
+          },
+          "time": {
+            "$ref": "#/components/schemas/EventTime",
+            "description": "Occurrence time span."
+          },
+          "title": {
+            "type": ["string", "null"],
+            "description": "Event title, absent when the event's visibility withholds details."
+          }
+        }
+      },
+      "TeamOutOfOfficeResponse": {
+        "type": "object",
+        "description": "Team out-of-office viewport response.",
+        "required": ["items", "hasMore"],
+        "properties": {
+          "hasMore": {
+            "type": "boolean"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamOutOfOfficeItem"
+            }
           }
         }
       },

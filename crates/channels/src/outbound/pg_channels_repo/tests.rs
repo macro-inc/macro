@@ -2988,3 +2988,55 @@ async fn bot_profiles_includes_soft_deleted_bots(pool: Pool<Postgres>) -> anyhow
     assert!(!profiles.contains_key(&missing));
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_channel_cascades_contacts_backfill_outbox_rows(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let created = repo
+        .create_channel(
+            macro_user_id(USER_A),
+            None,
+            CreateChannelRequest {
+                name: Some("delete-with-outbox".to_string()),
+                channel_type: ChannelType::Private,
+                team_id: None,
+                auto_join_team: false,
+                participants: HashSet::new(),
+            },
+        )
+        .await
+        .unwrap();
+
+    sqlx::query!(
+        "INSERT INTO contacts_backfill_outbox (comms_channel_id, user_ids) \
+         VALUES ($1, '[\"macro|user-a@test.com\"]'::jsonb)",
+        created.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    repo.delete_channel(created.id, USER_A.to_string())
+        .await
+        .expect("channel delete must succeed when contacts_backfill_outbox references the channel");
+
+    let channel_count = sqlx::query_scalar!(
+        "SELECT count(*) FROM comms_channels WHERE id = $1",
+        created.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(channel_count, 0);
+
+    let outbox_count = sqlx::query_scalar!(
+        "SELECT count(*) FROM contacts_backfill_outbox WHERE comms_channel_id = $1",
+        created.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(outbox_count, 0);
+}

@@ -31,6 +31,11 @@ message; ordinary Markdown blockquotes remain presentation-only and do not count
 The composer always keeps an editable empty line after a block reference, including after
 the user deletes that line, so clicking below the reference can restore the text caret.
 
+`@Macro` answers in the thread (classic bot). `@macro-new` / `@coder` / `@cursor` open
+an agent session; follow-up `@` mentions of that bot in the same thread route to it.
+Agent replies may contain mention chips (`<m-document-mention>`) that render like any
+other channel mention.
+
 ## Channel tabs
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,

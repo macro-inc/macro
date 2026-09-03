@@ -17,10 +17,7 @@ import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientC
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_EMAIL_SIGNATURES_FLAG,
-  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableEmailSignatures } from '@core/constant/featureFlags';
 
 import { useChatQuery } from '@queries/chat';
 import { useEmailLinksQuery, useEmailSignature } from '@queries/email/link';
@@ -175,9 +172,7 @@ export function ComposeTool(props: ComposeToolProps) {
   const sendingLink = createMemo(() => emailLinksQuery.data?.links?.[0]);
   const fromAddress = () => sendingLink()?.email_address;
   const signature = useEmailSignature(() => sendingLink()?.id);
-  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
-    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-  });
+  const emailSignaturesFlag = useFeatureFlag(enableEmailSignatures);
   // Whether this email includes the signature. Defaults on; the preview's ✕
   // drops it for this one message. Mirrors the normal composer.
   // Initialize from the persisted tool args so a dismiss survives re-render /

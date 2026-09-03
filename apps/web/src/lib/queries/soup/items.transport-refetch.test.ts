@@ -30,8 +30,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: vi.fn(() => () => ({ enabled: testState.graphqlEnabled })),
 }));
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_GRAPHQL_SOUP_FLAG: 'enable-graphql-soup',
-  ENABLE_GRAPHQL_SOUP_OVERRIDE: undefined,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
 }));
 vi.mock('@core/util/result', () => ({ throwOnErr: vi.fn() }));
 vi.mock('@queries/soup/grouped/api', () => ({

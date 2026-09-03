@@ -14,10 +14,10 @@ use uuid::Uuid;
 use super::{
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
-        CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget, CalendarEventPatch,
-        CalendarEventUpsert, DisconnectedGoogleCalendar, EventReminders, EventTime,
-        OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP, REMINDER_MINUTES_MAX,
-        REMINDER_OVERRIDES_MAX,
+        CalendarCreationTarget, CalendarEvent, CalendarEventDraft, CalendarEventMutationTarget,
+        CalendarEventPatch, CalendarEventUpsert, DisconnectedGoogleCalendar, EventReminders,
+        EventTime, OccurrenceRange, REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
+        REMINDER_MINUTES_MAX, REMINDER_OVERRIDES_MAX,
     },
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventChange,
@@ -184,7 +184,13 @@ where
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
-        ensure_organizer_attendee(&mut draft.attendees, &target.token_identity.email_address);
+        // An out-of-office event carries no attendees and Google auto-declines
+        // on the owner's behalf, so it must not gain an organizer guest.
+        if draft.out_of_office.is_some() {
+            validate_out_of_office_create(&draft, &target)?;
+        } else {
+            ensure_organizer_attendee(&mut draft.attendees, &target.token_identity.email_address);
+        }
         let access_token = self.fetch_token(&target.token_identity).await?;
         let upsert = self
             .provider
@@ -541,6 +547,37 @@ fn validate_time(time: &EventTime) -> Result<(), CalendarMutationError> {
     if !time.is_valid() {
         return Err(CalendarMutationError::InvalidInput(
             "event end must be after its start".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Enforce Google's rules for creating an out-of-office event so the provider
+/// never rejects a write we already accepted: primary calendar only, a timed
+/// span rather than whole days, and no attendees.
+fn validate_out_of_office_create(
+    draft: &CalendarEventDraft,
+    target: &CalendarCreationTarget,
+) -> Result<(), CalendarMutationError> {
+    if !target.is_primary {
+        return Err(CalendarMutationError::InvalidInput(
+            "out-of-office events can only be created on your primary calendar".to_string(),
+        ));
+    }
+    if !matches!(draft.time, EventTime::Timed { .. }) {
+        return Err(CalendarMutationError::InvalidInput(
+            "out-of-office events must have specific start and end times, not span whole days"
+                .to_string(),
+        ));
+    }
+    if !draft.attendees.is_empty() {
+        return Err(CalendarMutationError::InvalidInput(
+            "out-of-office events cannot have attendees".to_string(),
+        ));
+    }
+    if draft.conference.is_some() {
+        return Err(CalendarMutationError::InvalidInput(
+            "out-of-office events cannot have a video conference".to_string(),
         ));
     }
     Ok(())

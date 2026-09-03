@@ -16,7 +16,7 @@ use crate::domain::{
         ConferenceProvider, EventReminderOverride, EventReminders, EventStart, EventStatus,
         EventTime, EventTransparency, EventType, EventVisibility, GoogleCalendarTarget,
         GoogleEventSource, GoogleEventSyncBatch, GoogleSyncPlan, GoogleWatchChannel,
-        GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
+        GoogleWatchConfig, OccurrenceRange, OutOfOfficeProperties, ProviderCalendar,
     },
     ports::{
         CalendarRsvpScope, GoogleCalendarMutationProvider, GoogleCalendarProvider,
@@ -1519,6 +1519,27 @@ fn draft_body(draft: &CalendarEventDraft) -> serde_json::Value {
     if let Some(conference) = draft.conference {
         body["conferenceData"] = google_conference_body(conference);
     }
+    // An out-of-office event must declare its type, block availability, and
+    // carry its decline properties, so this overrides any transparency set
+    // above. The type is immutable, so it is only ever written on creation.
+    if let Some(out_of_office) = &draft.out_of_office {
+        body["eventType"] = serde_json::Value::String("outOfOffice".to_string());
+        body["transparency"] =
+            serde_json::Value::String(EventTransparency::Opaque.as_str().to_string());
+        body["outOfOfficeProperties"] = google_out_of_office_body(out_of_office);
+    }
+    body
+}
+
+/// Serialize the `outOfOfficeProperties` block Google requires on an
+/// out-of-office event.
+fn google_out_of_office_body(properties: &OutOfOfficeProperties) -> serde_json::Value {
+    let mut body = serde_json::json!({
+        "autoDeclineMode": properties.auto_decline_mode.as_google_str(),
+    });
+    if let Some(decline_message) = &properties.decline_message {
+        body["declineMessage"] = serde_json::Value::String(decline_message.clone());
+    }
     body
 }
 
@@ -1589,6 +1610,11 @@ fn patch_body(patch: &CalendarEventPatch) -> serde_json::Value {
     }
     if let Some(conference) = patch.conference {
         body["conferenceData"] = google_conference_body(conference);
+    }
+    // The event type itself is immutable; only the decline properties of an
+    // already out-of-office event can change.
+    if let Some(out_of_office) = &patch.out_of_office {
+        body["outOfOfficeProperties"] = google_out_of_office_body(out_of_office);
     }
     body
 }
@@ -1896,6 +1922,24 @@ fn map_upsert(
             .ok()
             .flatten()
         })
+        .fold(
+            BTreeMap::<String, CalendarOccurrence>::new(),
+            |mut deduped, occurrence| {
+                // Google can expand two instances onto one occurrence key — a
+                // moved exception whose original start still lands on the series
+                // slot, a DST boundary, a pagination overlap. Both would carry
+                // the same (event_id, occurrence_key) primary key, so collapse
+                // them here and keep the live instance over a cancelled tombstone.
+                let replace = deduped
+                    .get(&occurrence.occurrence_key)
+                    .is_none_or(|existing| existing.is_cancelled && !occurrence.is_cancelled);
+                if replace {
+                    deduped.insert(occurrence.occurrence_key.clone(), occurrence);
+                }
+                deduped
+            },
+        )
+        .into_values()
         .collect();
 
     Ok(CalendarEventUpsert {

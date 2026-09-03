@@ -13,6 +13,7 @@ import {
   useCalendarOccurrenceData,
 } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
+import { useTeamOooEvents } from '@app/features/calendar/hooks/use-team-ooo';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
@@ -236,6 +237,20 @@ export function Page(props: {
       refetchOnWindowFocus: isActive(),
     }),
   });
+  const teamOoo = useTeamOooEvents({
+    range,
+    isSourceVisible: calendarView.isSourceVisible,
+    refetchOnWindowFocus: isActive,
+  });
+  const visibleEvents = createMemo(() => [
+    ...data.visibleEvents(),
+    ...teamOoo.visibleEvents(),
+  ]);
+  const eventsById = createMemo(() =>
+    teamOoo.eventsById().size === 0
+      ? data.eventsById()
+      : new Map([...data.eventsById(), ...teamOoo.eventsById()])
+  );
   const updateEventTime = useUpdateCalendarEventMutation();
   const handleSelect = (selection: DateSelectArg) => {
     if (!isActive()) return;
@@ -305,8 +320,8 @@ export function Page(props: {
   return (
     <CalendarGrid
       initialDate={props.initialDate}
-      events={data.visibleEvents()}
-      eventsById={data.eventsById()}
+      events={visibleEvents()}
+      eventsById={eventsById()}
       settings={{
         initialView: calendarView.displaySettings.periodView,
         showWeekends: calendarView.displaySettings.showWeekends,
@@ -327,7 +342,15 @@ export function Page(props: {
       onDatesSet={handleDatesSet}
       onEventTimeChange={handleEventTimeChange}
     >
-      {(grid) => <CalendarPageHost id={props.id} data={data} grid={grid} />}
+      {(grid) => (
+        <CalendarPageHost
+          id={props.id}
+          data={data}
+          teamEvents={teamOoo.visibleEvents}
+          eventsById={eventsById}
+          grid={grid}
+        />
+      )}
     </CalendarGrid>
   );
 }
@@ -335,6 +358,10 @@ export function Page(props: {
 function CalendarPageHost(props: {
   id: CalendarPageId;
   data: CalendarOccurrenceData;
+  /** Teammate out-of-office events rendered on this page. */
+  teamEvents: Accessor<CalendarEvent[]>;
+  /** Occurrence events merged with the team out-of-office overlay. */
+  eventsById: Accessor<Map<string, CalendarEvent>>;
   grid: CalendarGridHandle;
 }) {
   const pager = useCalendarPager();
@@ -361,7 +388,7 @@ function CalendarPageHost(props: {
       return;
     }
     const targetId = calendarFocusTargetId(target);
-    const event = props.data.eventsById().get(targetId);
+    const event = props.eventsById().get(targetId);
     const chip = props.grid.eventElements.get(targetId);
     if (!event || !chip?.isConnected) return;
     calendarFocus.consume(target.requestId);
@@ -380,6 +407,7 @@ function CalendarPageHost(props: {
       dateInfo: props.grid.dateInfo,
       element: props.grid.element,
       data: props.data,
+      teamEvents: props.teamEvents,
     });
     onCleanup(unregister);
   });
@@ -417,7 +445,7 @@ function CalendarPageHost(props: {
           return;
         }
 
-        const selectedEvent = props.data.eventsById().get(selectedEventId);
+        const selectedEvent = props.eventsById().get(selectedEventId);
         if (selectedEvent) calendarView.refreshSelectedEvent(selectedEvent);
         else calendarView.closeEventDetails();
       }

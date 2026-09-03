@@ -33,6 +33,8 @@ pub struct AuthToken {
     pub user_id: Option<String>,
     document_id: String,
     pub access_level: AccessLevel,
+    #[serde(default)]
+    pub actor: Option<String>,
 }
 
 impl AuthToken {
@@ -103,6 +105,7 @@ did not match expected value: {}",
                     user_id: None,
                     document_id: "TODO should be option".to_string(),
                     access_level: AccessLevel::Admin,
+                    actor: None,
                 });
             }
 

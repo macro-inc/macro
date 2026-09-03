@@ -43,6 +43,7 @@ pub fn write_kickstart(
     let doc = kickstart::build(
         instance.port(Port::Frontend),
         instance.port(Port::Auth),
+        instance.port(Port::DocCognition),
         &read_lambda(POPULATE_JWT_LAMBDA)?,
         &read_lambda(RECONCILE_LAMBDA)?,
         google,

@@ -1,0 +1,56 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 270
+expression: machine.metadata()
+input_file: crates/agent_fold/fixtures/real/subagent_claude_code.jsonl
+---
+SessionMetadata {
+    harness: ClaudeCode,
+    model: Some(
+        "opus[1m]",
+    ),
+    supported_models: [
+        ModelOption {
+            id: "default",
+            name: "Default (recommended)",
+            description: Some(
+                "Use the default model (currently Opus 5 (1M context)) · $5/$25 per Mtok",
+            ),
+        },
+        ModelOption {
+            id: "opus[1m]",
+            name: "Opus (1M context)",
+            description: Some(
+                "Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
+            ),
+        },
+        ModelOption {
+            id: "claude-fable-5[1m]",
+            name: "Fable",
+            description: Some(
+                "Fable 5 · Most capable for your hardest and longest-running tasks · $10/$50 per Mtok",
+            ),
+        },
+        ModelOption {
+            id: "sonnet",
+            name: "Sonnet",
+            description: Some(
+                "Sonnet 5 · Efficient for routine tasks · $2/$10 per Mtok · promo through Aug 31",
+            ),
+        },
+        ModelOption {
+            id: "haiku",
+            name: "Haiku",
+            description: Some(
+                "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
+            ),
+        },
+    ],
+    title: Some(
+        "Spawn subagent to add numbers with Python",
+    ),
+    available_commands: [],
+    status: Some(
+        "acp_ready",
+    ),
+}

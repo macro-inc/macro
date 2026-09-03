@@ -5,6 +5,7 @@ expression: machine.metadata()
 input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
 ---
 SessionMetadata {
+    harness: ClaudeCode,
     model: Some(
         "claude-fable-5[1m]",
     ),

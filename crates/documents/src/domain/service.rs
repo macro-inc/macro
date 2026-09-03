@@ -15,15 +15,15 @@ use std::str::FromStr;
 use std::time::{SystemTime, UNIX_EPOCH};
 use unicode_segmentation::UnicodeSegmentation;
 
-use activity::Attribution;
+use activity::{Actor, Attribution};
 use anyhow::anyhow;
 use cloudfront_sign::{SignedOptions, get_signed_url};
 use connection::domain::models::{InvalidationEvent, InvalidationReason};
 use connection::domain::ports::ConnectionService;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, MemberTeamRole, OwnerAccessLevel,
-    ViewAccessLevel,
+    BotReceiptScope, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, MemberTeamRole,
+    OwnerAccessLevel, ViewAccessLevel,
 };
 use foreign_entity::domain::models::{ForeignEntity, SourceId};
 use foreign_entity::domain::ports::ForeignEntityService;
@@ -147,14 +147,35 @@ fn should_revoke_non_owner_user_access(
     }
 }
 
-/// The user id to attribute a document lifecycle event to, when the caller is
-/// an authenticated user.
-fn event_actor_user_id(auth: &EntityAccessAuth) -> Option<MacroUserIdStr<'static>> {
+/// Attribution fields published on document `updated` / `deleted` events.
+///
+/// User receipts keep filling the legacy `actor_user_id`; bot receipts acting
+/// for a user fill `actor` + `on_behalf_of`. Team-scoped bots, internal and
+/// unauthenticated callers publish nothing attributable.
+#[derive(Default)]
+struct PublishedDocumentActors {
+    actor: Option<Actor<'static>>,
+    on_behalf_of: Option<MacroUserIdStr<'static>>,
+    actor_user_id: Option<MacroUserIdStr<'static>>,
+}
+
+fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors {
     match auth {
-        EntityAccessAuth::Authenticated(user_id) => Some(user_id.clone()),
-        EntityAccessAuth::Bot(_)
-        | EntityAccessAuth::Unauthenticated
-        | EntityAccessAuth::Internal => None,
+        EntityAccessAuth::Authenticated(user_id) => PublishedDocumentActors {
+            actor_user_id: Some(user_id.clone()),
+            ..Default::default()
+        },
+        EntityAccessAuth::Bot(bot) => match bot.scope() {
+            BotReceiptScope::User { acting_user } => PublishedDocumentActors {
+                actor: Some(Actor::new_from_bot(bot.bot_id())),
+                on_behalf_of: Some(acting_user.clone()),
+                actor_user_id: None,
+            },
+            BotReceiptScope::Team { .. } => PublishedDocumentActors::default(),
+        },
+        EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
+            PublishedDocumentActors::default()
+        }
     }
 }
 
@@ -750,8 +771,16 @@ impl<
         user_id: MacroUserIdStr<'static>,
         document_id: &str,
         request: &CreateTaskRequest,
+        attribution: &Attribution,
     ) -> Result<(), DocumentError> {
-        <Self as DocumentService>::handle_task_properties(self, user_id, document_id, request).await
+        <Self as DocumentService>::handle_task_properties(
+            self,
+            user_id,
+            document_id,
+            request,
+            attribution,
+        )
+        .await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -1028,11 +1057,18 @@ impl<
                 tracing::error!(error=?e, "failed to send invalidation event");
             });
 
+        let PublishedDocumentActors {
+            actor,
+            on_behalf_of,
+            actor_user_id,
+        } = published_document_actors(entity_access_receipt.auth());
         self.publish_document_event(&DocumentMacroEvent::deleted(
             entity_access_receipt.entity().entity_id.clone(),
             DocumentDeletedMetadata {
                 document_id: entity_access_receipt.entity().entity_id.clone(),
-                actor_user_id: event_actor_user_id(entity_access_receipt.auth()),
+                actor_user_id,
+                actor,
+                on_behalf_of,
                 project_id,
             },
         ));
@@ -1435,12 +1471,19 @@ impl<
                 tracing::error!(error=?e, "failed to send invalidation event");
             });
 
+        let PublishedDocumentActors {
+            actor,
+            on_behalf_of,
+            actor_user_id,
+        } = published_document_actors(entity_access_receipt.auth());
         self.publish_document_event(&DocumentMacroEvent::updated(
             entity_access_receipt.entity().entity_id.clone(),
             DocumentUpdatedMetadata {
                 document_id: entity_access_receipt.entity().entity_id.clone(),
                 owner: document_context.owner.clone(),
-                actor_user_id: event_actor_user_id(entity_access_receipt.auth()),
+                actor_user_id,
+                actor,
+                on_behalf_of,
                 document_name,
                 previous_project_id: document_context.project_id.clone(),
                 project_id: args.project_id,
@@ -1796,12 +1839,13 @@ impl<
     }
 
     /// Assigns the task properties to a document
-    #[tracing::instrument(skip(self, request), err)]
+    #[tracing::instrument(skip(self, request, attribution), err)]
     async fn handle_task_properties(
         &self,
         user_id: MacroUserIdStr<'static>,
         document_id: &str,
         request: &CreateTaskRequest,
+        attribution: &Attribution,
     ) -> Result<(), DocumentError> {
         if request.share_with_team
             && let Some(team_id) = request.team_id
@@ -1852,6 +1896,7 @@ impl<
                     document_id,
                     property_uuid,
                     Some(property_input.value.clone()),
+                    attribution,
                 )
                 .await
                 .inspect_err(|e| {

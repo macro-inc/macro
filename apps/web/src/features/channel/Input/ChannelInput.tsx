@@ -12,7 +12,10 @@ import {
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
 import { isCursorBotId } from '@core/constant/cursorAgent';
-import { ENABLE_CHAT_V3_AGENTS } from '@core/constant/featureFlags';
+import {
+  enableChatV3Agents,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useCursorAgentsAccess } from '@core/cursor/flag';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -207,6 +210,7 @@ export function ChannelInput(props: ChannelInputProps) {
   const isCollapsed = () => !!props.collapsible && collapsedInput.isCollapsed();
 
   let isEditorConnected = false;
+  let acceptTyping = false;
   let pendingRestore:
     | {
         snapshot: InputSnapshot;
@@ -222,11 +226,15 @@ export function ChannelInput(props: ChannelInputProps) {
     snapshot: InputSnapshot,
     options?: RestoreSnapshotOptions
   ) => {
+    acceptTyping = false;
     markdownEditor.controls.setMarkdown(snapshot.value);
     pendingCursor = options?.cursor;
     attachmentTracker.setAttachments(snapshot.attachments);
     mentionsTracker.setMentions(snapshot.mentions);
     if (options?.focus !== false) focusEditorNow();
+    queueMicrotask(() => {
+      acceptTyping = true;
+    });
   };
 
   const flushPendingRestore = () => {
@@ -273,13 +281,13 @@ export function ChannelInput(props: ChannelInputProps) {
       ...(props.bots?.() ?? []),
     ].filter((user) => cursorEnabled || !isCursorBotId(user.id));
     if (
-      ENABLE_CHAT_V3_AGENTS() &&
+      isFeatureEnabled(enableChatV3Agents) &&
       !base.some((user) => isMacroCoderId(user.id))
     ) {
       base.unshift(macroCoderMentionUser());
     }
     if (
-      ENABLE_CHAT_V3_AGENTS() &&
+      isFeatureEnabled(enableChatV3Agents) &&
       !base.some((user) => isMacroNewId(user.id))
     ) {
       base.unshift(macroNewMentionUser());
@@ -310,7 +318,10 @@ export function ChannelInput(props: ChannelInputProps) {
       mentionsTracker.onMentionRemove(mention);
     },
     onChange: (markdown) => {
+      const previous = inputState.view().value ?? '';
       inputState.setValue(markdown);
+      if (!acceptTyping) return;
+      if (markdown.trim() === previous.trim()) return;
       typingTracker.keystroke();
     },
     onEnter: () => {
@@ -481,6 +492,9 @@ export function ChannelInput(props: ChannelInputProps) {
                   isEditorConnected = true;
                   flushPendingRestore();
                   flushPendingFocus();
+                  queueMicrotask(() => {
+                    acceptTyping = true;
+                  });
                 }}
               />
               <DragInsertIndicator

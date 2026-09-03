@@ -37,7 +37,6 @@ export const lapisTheme: ThemeV3 = {
     pink: 'oklch(0.55 0.17 354.308deg)',
     surface: 'var(--layer-surface)',
     inset: 'var(--layer-inset)',
-    lift: 'var(--layer-lift)',
     ink: 'var(--color-content-0)',
     'ink-muted': 'var(--color-content-1)',
     'ink-subtle': 'var(--color-content-2)',
@@ -53,8 +52,8 @@ export const lapisTheme: ThemeV3 = {
     tooltip: 'var(--color-surface-2)',
     toast: 'var(--color-surface-2)',
     input: 'transparent',
-    'input-focus': 'var(--color-lift)',
-    message: 'var(--color-lift)',
+    'input-focus': 'var(--color-surface-1)',
+    message: 'var(--color-surface-1)',
     hover:
       'color-mix(in oklch, color-mix(in oklch, var(--color-content-0) 50%, var(--color-accent)) 3%, transparent)',
     active:

@@ -4,7 +4,7 @@ use crate::domain::models::{
     REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
 };
 use crate::domain::ports::GoogleCalendarSyncRepository;
-use crate::domain::service::GoogleCalendarBackfillFailureService;
+use crate::domain::service::{CalendarService, GoogleCalendarBackfillFailureService};
 use chrono::{Duration, SubsecRound, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
@@ -333,6 +333,203 @@ async fn calendar_capability_transition_schedules_once_and_failed_jobs_can_retry
     .unwrap();
     assert_eq!(status, "pending");
     assert!(published_at.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reaper_rearms_a_dead_lettered_pending_job(pool: PgPool) {
+    let owner_id = "macro|calendar-wedged-pending@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job_id = enabled.jobs[0].id;
+
+    // The drain published the delivery; the deterministic failure then sat the
+    // job back to pending without touching the outbox — exactly the wedge.
+    sqlx::query!(
+        "UPDATE calendar_sync_outbox SET published_at = now() WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A job still inside its SQS retry budget keeps getting touched, so the
+    // reaper leaves it alone.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+
+    // The job reached a worker once (started_at set) and a deterministic
+    // failure sat it back to pending; once the delivery dead-letters nothing
+    // touches it again.
+    sqlx::query!(
+        "UPDATE calendar_backfill_jobs SET started_at = now() - interval '25 minutes', updated_at = now() - interval '20 minutes' WHERE id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        1
+    );
+    let published_at = sqlx::query_scalar!(
+        "SELECT published_at FROM calendar_sync_outbox WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        published_at.is_none(),
+        "the reaper republishes the outbox row"
+    );
+
+    // Republished rows are no longer published, so a second pass is a no-op.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reaper_leaves_a_never_delivered_queued_job_alone(pool: PgPool) {
+    let owner_id = "macro|calendar-queued@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job_id = enabled.jobs[0].id;
+
+    // The drain published the delivery, but a backed-up queue means it has not
+    // reached a worker yet: started_at is still NULL though the outbox row and
+    // the job both look old.
+    sqlx::query!(
+        "UPDATE calendar_sync_outbox SET published_at = now() - interval '30 minutes' WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_backfill_jobs SET updated_at = now() - interval '30 minutes' WHERE id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Republishing would only duplicate the delivery still in flight, so the
+    // reaper leaves an un-claimed job alone.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+    let published_at = sqlx::query_scalar!(
+        "SELECT published_at FROM calendar_sync_outbox WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        published_at.is_some(),
+        "the queued delivery stays published, not re-armed"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reaper_rearms_a_running_job_behind_a_dead_lease(pool: PgPool) {
+    let owner_id = "macro|calendar-wedged-running@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job_id = enabled.jobs[0].id;
+    let key = CalendarBackfillJobKey {
+        job_id,
+        email_link_id: link_id,
+    };
+
+    let CalendarBackfillClaim::Claimed { .. } = repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the freshly granted job should be claimable");
+    };
+    sqlx::query!(
+        "UPDATE calendar_sync_outbox SET published_at = now() WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A live lease means a worker is on it, so the reaper leaves it alone.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+
+    // The worker died: its lease expired long ago and no longer renews.
+    sqlx::query!(
+        "UPDATE calendar_backfill_jobs SET lease_expires_at = now() - interval '20 minutes' WHERE id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        1
+    );
+    let row = sqlx::query!(
+        r#"
+        SELECT job.status, job.lease_token, outbox.published_at
+        FROM calendar_backfill_jobs job
+        JOIN calendar_sync_outbox outbox ON outbox.backfill_job_id = job.id
+        WHERE job.id = $1
+        "#,
+        job_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.status, "pending");
+    assert!(row.lease_token.is_none());
+    assert!(row.published_at.is_none());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -2411,6 +2608,10 @@ async fn creation_target_prefers_the_requesters_own_primary_inbox(pool: PgPool) 
     assert_eq!(target.calendar_id, calendar_id);
     assert_eq!(target.owner_id, owner_id);
     assert!(!target.is_read_only);
+    assert!(
+        target.is_primary,
+        "resolving without a calendar id lands on the primary calendar"
+    );
 
     let explicit = repo
         .get_creation_target(owner_id, Some(link_id), None)
@@ -3741,4 +3942,327 @@ async fn mention_preview_picks_the_requested_or_nearest_occurrence(pool: PgPool)
         .unwrap();
     let (_, key) = preview_time(&previews[0]);
     assert_eq!(key.as_deref(), Some(first_start.to_rfc3339().as_str()));
+}
+
+async fn insert_team(pool: &PgPool, owner_id: &str, member_ids: &[&str]) -> Uuid {
+    for member_id in member_ids {
+        insert_user(pool, member_id).await;
+    }
+    let team_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)"#,
+        team_id,
+        owner_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for member_id in member_ids {
+        sqlx::query!(
+            r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member')"#,
+            member_id,
+            team_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    team_id
+}
+
+fn ooo_upsert(
+    owner_id: &str,
+    link_id: Uuid,
+    provider: (Uuid, Uuid),
+    uid: &str,
+    title: &str,
+) -> CalendarEventUpsert {
+    let mut upsert = timed_upsert(owner_id, link_id, provider, uid, title, 1);
+    upsert.event.event_type = EventType::OutOfOffice;
+    upsert.event.attendees.clear();
+    upsert.event.recurrence_lines.clear();
+    upsert
+}
+
+fn july_2026_range() -> OccurrenceRange {
+    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
+    let ends_at = Utc.with_ymd_and_hms(2026, 7, 27, 0, 0, 0).unwrap();
+    OccurrenceRange {
+        starts_at,
+        ends_at,
+        start_date: starts_at.date_naive(),
+        end_date: ends_at.date_naive(),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_returns_teammates_status_only(pool: PgPool) {
+    let requester = "macro|gab@example.com";
+    let teammate = "macro|teammate@example.com";
+    let outsider = "macro|outsider@example.com";
+    insert_team(&pool, requester, &[requester, teammate]).await;
+    insert_team(&pool, outsider, &[outsider]).await;
+    let requester_link = insert_link(&pool, requester).await;
+    let teammate_link = insert_link(&pool, teammate).await;
+    let outsider_link = insert_link(&pool, outsider).await;
+    let repo = PgCalendarRepository::new(pool);
+    let requester_provider = provider_ids(&repo, requester_link).await;
+    let teammate_provider = provider_ids(&repo, teammate_link).await;
+    let outsider_provider = provider_ids(&repo, outsider_link).await;
+    repo.upsert_event_fixture(ooo_upsert(
+        requester,
+        requester_link,
+        requester_provider,
+        "own-ooo@example.com",
+        "My own OOO",
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        teammate_link,
+        teammate_provider,
+        "teammate-ooo@example.com",
+        "Vacation",
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(timed_upsert(
+        teammate,
+        teammate_link,
+        teammate_provider,
+        "teammate-meeting@example.com",
+        "Regular meeting",
+        1,
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        outsider,
+        outsider_link,
+        outsider_provider,
+        "outsider-ooo@example.com",
+        "Elsewhere",
+    ))
+    .await
+    .unwrap();
+
+    let rows = repo
+        .list_team_out_of_office(requester, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|row| row.owner_id == teammate));
+    assert!(
+        rows.iter()
+            .all(|row| row.title.as_deref() == Some("Vacation"))
+    );
+    let starts: Vec<_> = rows
+        .iter()
+        .map(|row| match row.time {
+            EventTime::Timed { starts_at, .. } => starts_at,
+            EventTime::AllDay { .. } => panic!("out-of-office fixtures are timed"),
+        })
+        .collect();
+    assert!(starts.windows(2).all(|pair| pair[0] <= pair[1]));
+
+    let empty = repo
+        .list_team_out_of_office(outsider, july_2026_range(), 100)
+        .await
+        .unwrap();
+    assert!(empty.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_requires_an_active_primary_calendar_source(pool: PgPool) {
+    let requester = "macro|viewer@example.com";
+    let subscribed = "macro|subscribed@example.com";
+    let disabled = "macro|disabled@example.com";
+    insert_team(&pool, requester, &[requester, subscribed, disabled]).await;
+    let subscribed_link = insert_link(&pool, subscribed).await;
+    let disabled_link = insert_link(&pool, disabled).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+
+    // An out-of-office event on a calendar the teammate merely subscribes to
+    // is someone else's status and must not surface as theirs.
+    let subscribed_account = repo.upsert_google_account(subscribed_link).await.unwrap();
+    let subscribed_calendar = repo
+        .upsert_calendar_fixture(
+            subscribed_account,
+            ProviderCalendar {
+                provider_calendar_id: "someone-else".to_string(),
+                name: "Someone else".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("reader".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        subscribed,
+        subscribed_link,
+        (subscribed_account, subscribed_calendar),
+        "subscribed-ooo@example.com",
+        "Not their own",
+    ))
+    .await
+    .unwrap();
+
+    let disabled_provider = provider_ids(&repo, disabled_link).await;
+    repo.upsert_event_fixture(ooo_upsert(
+        disabled,
+        disabled_link,
+        disabled_provider,
+        "disabled-ooo@example.com",
+        "Stale",
+    ))
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"UPDATE calendar_accounts SET sync_status = 'disabled' WHERE email_link_id = $1"#,
+        disabled_link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let rows = repo
+        .list_team_out_of_office(requester, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert!(rows.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_masks_private_titles_and_collapses_duplicate_inboxes(pool: PgPool) {
+    let requester = "macro|asker@example.com";
+    let teammate = "macro|double@example.com";
+    insert_team(&pool, requester, &[requester, teammate]).await;
+    let first_link = insert_link(&pool, teammate).await;
+    let second_link = insert_link(&pool, teammate).await;
+    let repo = PgCalendarRepository::new(pool);
+    let first_provider = provider_ids(&repo, first_link).await;
+    let second_provider = provider_ids(&repo, second_link).await;
+    let mut private_ooo = ooo_upsert(
+        teammate,
+        first_link,
+        first_provider,
+        "shared-ooo@example.com",
+        "Surgery",
+    );
+    private_ooo.event.visibility = EventVisibility::Private;
+    repo.upsert_event_fixture(private_ooo).await.unwrap();
+    let mut duplicate = ooo_upsert(
+        teammate,
+        second_link,
+        second_provider,
+        "shared-ooo@example.com",
+        "Surgery",
+    );
+    duplicate.event.visibility = EventVisibility::Private;
+    repo.upsert_event_fixture(duplicate).await.unwrap();
+
+    let service = CalendarService::new(repo);
+    let rows = service
+        .list_team_out_of_office(requester, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|row| row.title.is_none()));
+    let mut keys: Vec<_> = rows.iter().map(|row| row.occurrence_key.as_str()).collect();
+    keys.sort_unstable();
+    keys.dedup();
+    assert_eq!(keys.len(), 2);
+}
+
+fn shift_upsert_days(upsert: &mut CalendarEventUpsert, days: i64) {
+    let delta = Duration::days(days);
+    if let EventTime::Timed {
+        starts_at, ends_at, ..
+    } = &mut upsert.event.time
+    {
+        *starts_at += delta;
+        *ends_at += delta;
+    }
+    for occurrence in &mut upsert.occurrences {
+        if let EventTime::Timed {
+            starts_at, ends_at, ..
+        } = &mut occurrence.time
+        {
+            *starts_at += delta;
+            *ends_at += delta;
+        }
+        occurrence.occurrence_key = occurrence.time.occurrence_key();
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_deduplicates_before_the_limit(pool: PgPool) {
+    let requester = "macro|limit-viewer@example.com";
+    let teammate = "macro|limit-double@example.com";
+    insert_team(&pool, requester, &[requester, teammate]).await;
+    let first_link = insert_link(&pool, teammate).await;
+    let second_link = insert_link(&pool, teammate).await;
+    let repo = PgCalendarRepository::new(pool);
+    let first_provider = provider_ids(&repo, first_link).await;
+    let second_provider = provider_ids(&repo, second_link).await;
+
+    // The earliest event exists on both of the teammate's inboxes, so its
+    // occurrences arrive first and duplicated.
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        first_link,
+        first_provider,
+        "dup-ooo@example.com",
+        "Duplicated",
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        second_link,
+        second_provider,
+        "dup-ooo@example.com",
+        "Duplicated",
+    ))
+    .await
+    .unwrap();
+    let mut later = ooo_upsert(
+        teammate,
+        first_link,
+        first_provider,
+        "later-ooo@example.com",
+        "Later",
+    );
+    shift_upsert_days(&mut later, 1);
+    repo.upsert_event_fixture(later).await.unwrap();
+
+    let rows = repo
+        .list_team_out_of_office(requester, july_2026_range(), 3)
+        .await
+        .unwrap();
+
+    // Duplicates collapse before the limit: the page fills with distinct
+    // occurrences and the later unique event still claims a slot, so a
+    // full page keeps signalling truncation accurately.
+    assert_eq!(rows.len(), 3);
+    let mut identities: Vec<_> = rows
+        .iter()
+        .map(|row| (row.ical_uid.as_str(), row.occurrence_key.as_str()))
+        .collect();
+    identities.sort_unstable();
+    identities.dedup();
+    assert_eq!(identities.len(), 3);
+    assert!(
+        rows.iter()
+            .any(|row| row.ical_uid == "later-ooo@example.com")
+    );
 }

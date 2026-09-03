@@ -1,6 +1,6 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
+import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRightIcon from '@phosphor/caret-right.svg';
@@ -15,6 +15,10 @@ import {
   useCalendarAccounts,
 } from '../hooks/use-calendar-accounts';
 import type { CalendarTimeFormat, CalendarWeekStart } from '../types';
+import {
+  type CalendarAccountGroup,
+  groupCalendarSourcesByAccount,
+} from '../utils/calendar-source-groups';
 import { useCalendarView } from './CalendarViewContext';
 import { MobilePeriodControls } from './PeriodSelector';
 import {
@@ -42,9 +46,7 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
   const calendarView = useCalendarView();
   const accounts = useCalendarAccounts();
   const startAddInbox = useAddInboxFlow();
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const [turnOffTarget, setTurnOffTarget] =
     createSignal<TurnOffCalendarTarget | null>(null);
 
@@ -65,10 +67,21 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
       )?.label ?? '12-hour'
   );
 
-  const changeSourceVisibility = (sourceId: string, visible: boolean) => {
+  // The account row checkbox shows or hides every calendar in the group.
+  const changeAccountVisibility = (
+    group: CalendarAccountGroup,
+    visible: boolean
+  ) => {
     calendarView.closeEventDetails();
-    calendarView.setSourceVisibility(sourceId, visible);
+    for (const source of group.calendars) {
+      calendarView.setSourceVisibility(source.id, visible);
+    }
   };
+  const isAccountVisible = (group: CalendarAccountGroup) =>
+    group.calendars.every((source) => calendarView.isSourceVisible(source.id));
+  const isAccountPartiallyVisible = (group: CalendarAccountGroup) =>
+    !isAccountVisible(group) &&
+    group.calendars.some((source) => calendarView.isSourceVisible(source.id));
 
   const changeShowWeekends = (showWeekends: boolean) => {
     calendarView.closeEventDetails();
@@ -118,7 +131,9 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     showCalendarVisibility,
     weekStartLabel,
     timeFormatLabel,
-    changeSourceVisibility,
+    changeAccountVisibility,
+    isAccountVisible,
+    isAccountPartiallyVisible,
     changeShowWeekends,
     changeWeekStartsOn,
     changeTimeFormat,
@@ -155,21 +170,18 @@ function DesktopCalendarSettings(props: {
         <Show when={controls.showCalendarVisibility()}>
           <Dropdown.Group>
             <Dropdown.GroupLabel>Calendars</Dropdown.GroupLabel>
-            <For each={calendarView.sources()}>
-              {(source) => (
+            <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
+              {(group) => (
                 <Dropdown.CheckboxItem
-                  checked={calendarView.isSourceVisible(source.id)}
+                  checked={controls.isAccountVisible(group)}
                   closeOnSelect={false}
                   onChange={(checked) =>
-                    controls.changeSourceVisibility(source.id, checked)
+                    controls.changeAccountVisibility(group, checked)
                   }
                 >
-                  <span
-                    aria-hidden="true"
-                    class="size-2.5 shrink-0 rounded-sm"
-                    style={{ 'background-color': source.color }}
-                  />
-                  <span class="min-w-0 flex-1 truncate">{source.name}</span>
+                  <span class="min-w-0 flex-1 truncate">
+                    {group.emailAddress}
+                  </span>
                 </Dropdown.CheckboxItem>
               )}
             </For>
@@ -340,22 +352,18 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
           <Show when={controls.showCalendarVisibility()}>
             <MobileDrawer.Label>Calendars</MobileDrawer.Label>
             <MobileDrawer.Section class="flex shrink-0 flex-col">
-              <For each={calendarView.sources()}>
-                {(source) => (
+              <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
+                {(group) => (
                   <Checkbox
-                    checked={calendarView.isSourceVisible(source.id)}
+                    checked={controls.isAccountVisible(group)}
+                    indeterminate={controls.isAccountPartiallyVisible(group)}
                     onChange={(checked) =>
-                      controls.changeSourceVisibility(source.id, checked)
+                      controls.changeAccountVisibility(group, checked)
                     }
                     class={DRAWER_ROW_CLASS}
                   >
-                    <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
-                      <span
-                        aria-hidden="true"
-                        class="size-2.5 shrink-0 rounded-sm"
-                        style={{ 'background-color': source.color }}
-                      />
-                      <span class="min-w-0 flex-1 truncate">{source.name}</span>
+                    <Checkbox.Label class="min-w-0 flex-1 truncate">
+                      {group.emailAddress}
                     </Checkbox.Label>
                     <Checkbox.Control />
                   </Checkbox>

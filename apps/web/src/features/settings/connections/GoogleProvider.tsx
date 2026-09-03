@@ -5,9 +5,8 @@ import {
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  ENABLE_EMAIL_SIGNATURES_FLAG,
-  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-  ENABLE_MULTI_INBOX_OVERRIDE,
+  enableEmailSignatures,
+  enableMultiInbox,
 } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
@@ -57,9 +56,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
     }));
   };
 
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const startAddInbox = useAddInboxFlow();
   const emailLinks = useEmailLinksQuery();
   const linkById = (id: string | undefined): EmailLink | undefined =>
@@ -288,9 +285,7 @@ function GoogleInboxCapability(props: {
   onRemoveGmail: () => void;
   onTurnOffCalendar: () => void;
 }) {
-  const signaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
-    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-  });
+  const signaturesFlag = useFeatureFlag(enableEmailSignatures);
   const isGmail = () => props.row.kind === 'gmail';
   const isOwn = () => props.row.scope === 'personal';
   const showSignature = () =>

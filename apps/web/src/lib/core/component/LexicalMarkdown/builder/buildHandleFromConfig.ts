@@ -7,7 +7,6 @@ import {
   actionsPlugin,
   agentCommandsPlugin,
   awaitPlugin,
-  blockDecoratorTrailingParagraphPlugin,
   codePlugin,
   createAccessoryStore,
   createDraggableBlockStore,
@@ -28,6 +27,7 @@ import {
   tabIndentationPlugin,
   tagsPlugin,
   textPastePlugin,
+  trailingParagraphPlugin,
 } from '../plugins';
 import { checkboxToTaskPlugin } from '../plugins/checkbox-to-task';
 import { normalizeEnterPlugin } from '../plugins/normalize-enter';
@@ -129,7 +129,7 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
   }
 
   if (config.type !== 'plain-text' && !config.singleLine) {
-    plugins.use(blockDecoratorTrailingParagraphPlugin());
+    plugins.use(trailingParagraphPlugin());
   }
 
   // History

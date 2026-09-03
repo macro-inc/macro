@@ -12,7 +12,7 @@ const serverHostLocal: Servers = {
   contacts: 'http://localhost:8083',
   'email-service': 'http://localhost:8087',
   'image-proxy-service': 'http://localhost:8097',
-  'scheduled-action': 'http://localhost:8098',
+  'scheduled-action': 'http://localhost:8099',
   'agent-harness': 'http://localhost:8101',
 } as const;
 
@@ -35,15 +35,15 @@ const serverHostRemote = {
   'document-storage-service': `${gatewayHost}/dss`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
   'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
-  'connection-gateway': `wss://connection-gateway${devServerSuffix}.macro.com`,
+  'connection-gateway': `${gatewayHost.replace(/^http/, 'ws')}/connection-gateway`,
   'notification-service': `${gatewayHost}/notification`,
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,
   'unfurl-service': `${gatewayHost}/unfurl`,
   contacts: `${gatewayHost}/contacts`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
-  'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
-  'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,
-  'agent-harness': `https://agent-harness${devServerSuffix}.macro.com`,
+  'image-proxy-service': `${gatewayHost}/image-proxy`,
+  'scheduled-action': `${gatewayHost}/scheduled-action`,
+  'agent-harness': `${gatewayHost}/agent-harness`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;
@@ -105,7 +105,7 @@ function proxyServers(): Servers | undefined {
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,
-    'scheduled-action': serverHostLocal['scheduled-action'], // no local container
+    'scheduled-action': `${proxyOrigin}/scheduled-action`,
   };
 }
 

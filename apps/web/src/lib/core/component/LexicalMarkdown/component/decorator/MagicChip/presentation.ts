@@ -2,8 +2,14 @@ import type { MagicChipStatus } from '@macro-inc/lexical-core';
 import type {
   FoldedMessage,
   MessagePart,
+  ToolName,
 } from '@service-agent-fold/generated/types';
 import { match } from 'ts-pattern';
+
+/** The tool's own name, without its MCP server namespace. */
+function toolLabel(name: ToolName): string {
+  return name.kind === 'mcp' ? name.tool : name.name;
+}
 
 export type MagicChipActivity = {
   label: string;
@@ -41,6 +47,7 @@ function toolActivity(
 ): MagicChipActivity {
   const busy = part.status === 'pending' || part.status === 'running';
   const failed = part.status === 'failed';
+  const label = toolLabel(part.name);
   return match(part.detail)
     .with({ kind: 'terminal' }, (detail) => ({
       label: failed
@@ -48,12 +55,12 @@ function toolActivity(
         : busy
           ? 'Running command'
           : 'Command finished',
-      detail: detail.command ?? part.label,
+      detail: detail.command ?? label,
       busy,
     }))
     .with({ kind: 'edit' }, (detail) => ({
       label: failed ? 'Edit failed' : busy ? 'Editing files' : 'Files updated',
-      detail: detail.diffs.at(-1)?.path ?? part.label,
+      detail: detail.diffs.at(-1)?.path ?? label,
       busy,
     }))
     .with({ kind: 'read' }, (detail) => ({
@@ -62,7 +69,7 @@ function toolActivity(
         : busy
           ? 'Reading files'
           : 'Finished reading',
-      detail: detail.paths.at(-1) ?? part.label,
+      detail: detail.paths.at(-1) ?? label,
       busy,
     }))
     .with(
@@ -70,15 +77,44 @@ function toolActivity(
       { kind: 'move' },
       { kind: 'search' },
       (detail) => ({
-        label: failed ? `${part.label} failed` : part.label,
-        detail: detail.paths.at(-1) ?? part.label,
+        label: failed ? `${label} failed` : label,
+        detail: detail.paths.at(-1) ?? label,
         busy,
       })
     )
     .with({ kind: 'fetch' }, { kind: 'think' }, { kind: 'other' }, () => ({
-      label: failed ? `${part.label} failed` : part.label,
+      label: failed ? `${label} failed` : label,
       busy,
     }))
+    .with({ kind: 'macro' }, () => ({
+      label: failed ? `${label} failed` : busy ? `Using ${label}` : label,
+      busy,
+    }))
+    .with({ kind: 'user_tool' }, (detail) => ({
+      label:
+        detail.outcome.kind === 'pending'
+          ? `${label} drafted`
+          : `${label} ${detail.outcome.kind.replace('_', ' ')}`,
+      busy: false,
+    }))
+    .with({ kind: 'subagent' }, (detail) => {
+      // What the subagent is doing right now says more than that it exists.
+      const child = detail.children.findLast(
+        (child) =>
+          child.kind === 'tool_use' &&
+          (child.status === 'pending' || child.status === 'running')
+      );
+      if (busy && child?.kind === 'tool_use') return toolActivity(child);
+      return {
+        label: failed
+          ? 'Subagent failed'
+          : busy
+            ? 'Delegating work'
+            : 'Subagent finished',
+        detail: detail.title,
+        busy,
+      };
+    })
     .exhaustive();
 }
 

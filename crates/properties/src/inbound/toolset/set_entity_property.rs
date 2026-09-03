@@ -5,7 +5,7 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolR
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::models::{BotAccessScope, EditAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
@@ -225,9 +225,9 @@ where
         // Prove the requesting user can edit the entity before writing anything.
         let entity_access_receipt = service_context
             .entity_access_service
-            .generate_entity_access_receipt::<EditAccessLevel>(
-                &request_context.user_id,
-                None,
+            .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                service_context.actor,
+                BotAccessScope::user(request_context.user_id.clone()),
                 &self.entity_id,
                 entity_type,
             )

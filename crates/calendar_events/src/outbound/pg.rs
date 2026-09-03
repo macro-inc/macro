@@ -22,7 +22,7 @@ use crate::domain::{
         EventReminders, EventStart, EventStatus, EventTime, EventTransparency, EventType,
         EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet,
         GoogleWatchChannel, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
-        VisibleCalendar,
+        TeamOutOfOffice, VisibleCalendar, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -1017,6 +1017,119 @@ impl CalendarRepository for PgCalendarRepository {
             .collect()
     }
 
+    #[tracing::instrument(skip(self, requester_id, range), err)]
+    async fn list_team_out_of_office(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        limit: u16,
+    ) -> Result<Vec<TeamOutOfOffice>, Report> {
+        // The primary-calendar source guard keeps this to the teammate's own
+        // status: an out-of-office event on a calendar they merely subscribe
+        // to belongs to that calendar's owner, not to them. DISTINCT ON
+        // collapses the same provider event synced through more than one of
+        // the teammate's inboxes before the limit, so duplicates never eat
+        // page slots or skew the caller's truncation detection.
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                owner_id AS "owner_id!",
+                event_id AS "event_id!",
+                ical_uid AS "ical_uid!",
+                occurrence_key AS "occurrence_key!",
+                title AS "title!",
+                visibility AS "visibility!",
+                time_zone,
+                occurrence_starts_at AS "occurrence_starts_at?",
+                occurrence_ends_at AS "occurrence_ends_at?",
+                occurrence_start_date AS "occurrence_start_date?",
+                occurrence_end_date AS "occurrence_end_date?"
+            FROM (
+                SELECT DISTINCT ON (event.owner_id, event.ical_uid, occurrence.occurrence_key)
+                    event.owner_id,
+                    occurrence.event_id,
+                    event.ical_uid,
+                    occurrence.occurrence_key,
+                    event.title,
+                    event.visibility,
+                    event.time_zone,
+                    occurrence.starts_at AS occurrence_starts_at,
+                    occurrence.ends_at AS occurrence_ends_at,
+                    occurrence.start_date AS occurrence_start_date,
+                    occurrence.end_date AS occurrence_end_date,
+                    COALESCE(
+                        occurrence.starts_at,
+                        occurrence.start_date::timestamp AT TIME ZONE 'UTC'
+                    ) AS occurrence_ordering
+                FROM calendar_event_occurrences occurrence
+                JOIN calendar_events event ON event.id = occurrence.event_id
+                WHERE occurrence.owner_id IN (
+                        SELECT teammate.user_id
+                        FROM team_user membership
+                        JOIN team_user teammate ON teammate.team_id = membership.team_id
+                        WHERE membership.user_id = $1
+                          AND teammate.user_id <> $1
+                  )
+                  AND event.event_type = 'out_of_office'
+                  AND event.status <> 'cancelled'
+                  AND NOT occurrence.is_cancelled
+                  AND EXISTS (
+                        SELECT 1
+                        FROM calendar_event_sources source
+                        JOIN calendars calendar ON calendar.id = source.calendar_id
+                        JOIN calendar_accounts account ON account.id = source.account_id
+                        WHERE source.event_id = event.id
+                          AND calendar.is_primary
+                          AND NOT calendar.is_deleted
+                          AND account.sync_status <> 'disabled'
+                  )
+                  AND (
+                        occurrence.timed_span && tstzrange($2, $3, '[)')
+                        OR occurrence.day_span && daterange($4, $5, '[)')
+                  )
+                ORDER BY
+                    event.owner_id,
+                    event.ical_uid,
+                    occurrence.occurrence_key,
+                    occurrence.event_id
+            ) occurrence
+            ORDER BY
+                occurrence.occurrence_ordering,
+                occurrence.event_id,
+                occurrence.occurrence_key
+            LIMIT $6
+            "#,
+            requester_id,
+            range.starts_at,
+            range.ends_at,
+            range.start_date,
+            range.end_date,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(TeamOutOfOffice {
+                    owner_id: row.owner_id,
+                    event_id: row.event_id,
+                    ical_uid: row.ical_uid,
+                    occurrence_key: row.occurrence_key,
+                    title: Some(row.title),
+                    visibility: event_visibility(&row.visibility),
+                    time: row_time(
+                        row.occurrence_starts_at,
+                        row.occurrence_ends_at,
+                        row.occurrence_start_date,
+                        row.occurrence_end_date,
+                        row.time_zone,
+                    )?,
+                })
+            })
+            .collect()
+    }
+
     #[tracing::instrument(skip(self, requester_id, items), err)]
     async fn mention_previews(
         &self,
@@ -1634,6 +1747,7 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.id AS calendar_id,
                 calendar.provider_calendar_id,
                 calendar.access_role,
+                calendar.is_primary,
                 link.fusionauth_user_id,
                 link.email_address,
                 link.provider::text AS "provider!"
@@ -1685,6 +1799,7 @@ impl CalendarRepository for PgCalendarRepository {
             calendar_id: row.calendar_id,
             provider_calendar_id: row.provider_calendar_id,
             is_read_only: !matches!(row.access_role.as_deref(), Some("owner" | "writer")),
+            is_primary: row.is_primary,
             token_identity,
             actor,
         }))
@@ -1705,6 +1820,7 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.color,
                 calendar.is_primary,
                 calendar.access_role,
+                calendar.provider_calendar_id,
                 calendar.default_reminders
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
@@ -1743,6 +1859,7 @@ impl CalendarRepository for PgCalendarRepository {
                 color: row.color,
                 is_primary: row.is_primary,
                 is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
+                is_subscription: is_system_calendar(&row.provider_calendar_id),
                 default_reminders: serde_json::from_value(row.default_reminders)
                     .inspect_err(|e| {
                         tracing::error!(error = ?e, calendar_id = %row.id, "malformed calendar default_reminders json");
@@ -1857,6 +1974,71 @@ impl GoogleCalendarSyncRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
         Ok(due_count as usize)
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn reap_wedged_google_syncs(
+        &self,
+        stalled_before: DateTime<Utc>,
+    ) -> Result<usize, Report> {
+        let required_scopes = GOOGLE_CALENDAR_SCOPES.map(str::to_owned);
+        let reaped = sqlx::query_scalar!(
+            r#"
+            WITH wedged AS (
+                UPDATE calendar_backfill_jobs job
+                SET status = 'pending',
+                    last_error = NULL,
+                    started_at = NULL,
+                    completed_at = NULL,
+                    lease_token = NULL,
+                    lease_expires_at = NULL,
+                    updated_at = now()
+                FROM calendar_sync_outbox outbox,
+                     calendar_accounts account,
+                     email_link_google_scopes scopes
+                WHERE outbox.backfill_job_id = job.id
+                  AND account.id = job.account_id
+                  AND account.email_link_id = job.email_link_id
+                  AND scopes.link_id = job.email_link_id
+                  AND job.kind = 'google_calendar'
+                  AND job.grant_version = scopes.grant_version
+                  AND scopes.granted_scopes @> $2::text[]
+                  AND account.sync_status <> 'disabled'
+                  AND (
+                        -- Dead-lettered: a delivery reached a worker at least
+                        -- once (started_at is set) and failed back to pending,
+                        -- and nothing has touched the job since. started_at
+                        -- separates this from a job merely waiting its turn in a
+                        -- backed-up queue — the drain publishes that one without
+                        -- ever claiming it, so republishing would only duplicate
+                        -- the message still in flight.
+                        (job.status = 'pending'
+                         AND job.started_at IS NOT NULL
+                         AND outbox.published_at IS NOT NULL
+                         AND job.updated_at <= $1)
+                        -- Abandoned: a worker claimed the job and died without
+                        -- releasing or renewing the lease.
+                        OR (job.status = 'running'
+                            AND job.lease_expires_at IS NOT NULL
+                            AND job.lease_expires_at <= $1)
+                  )
+                RETURNING job.id
+            ),
+            republished AS (
+                UPDATE calendar_sync_outbox outbox
+                SET published_at = NULL
+                FROM wedged
+                WHERE outbox.backfill_job_id = wedged.id
+            )
+            SELECT count(*) AS "reaped!" FROM wedged
+            "#,
+            stalled_before,
+            &required_scopes,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(reaped as usize)
     }
 }
 
@@ -2873,6 +3055,14 @@ async fn replace_occurrences(
                 starts_at, ends_at, start_date, end_date, is_cancelled
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            ON CONFLICT (event_id, occurrence_key) DO UPDATE SET
+                owner_id = EXCLUDED.owner_id,
+                recurrence_id = EXCLUDED.recurrence_id,
+                starts_at = EXCLUDED.starts_at,
+                ends_at = EXCLUDED.ends_at,
+                start_date = EXCLUDED.start_date,
+                end_date = EXCLUDED.end_date,
+                is_cancelled = EXCLUDED.is_cancelled
             "#,
             event_id,
             owner_id,

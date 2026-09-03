@@ -30,6 +30,23 @@ use utoipa_swagger_ui::SwaggerUi;
 
 pub mod swagger;
 
+#[cfg(test)]
+mod test;
+
+/// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
+/// alongside `/` so the dedicated ALB keeps working during cutover.
+const GATEWAY_PATH_PREFIX: &str = "/agent-harness";
+
+fn mount_at_root_and_prefix(inner: Router) -> Router {
+    Router::new()
+        .merge(inner.clone())
+        .nest(GATEWAY_PATH_PREFIX, inner)
+}
+
+fn health_router() -> Router {
+    Router::new().route("/health", get(health))
+}
+
 /// Serve the sandbox-facing egress proxy on its own listener.
 ///
 /// No CORS layer and no Swagger: nothing browses this. Its only client is a
@@ -75,7 +92,7 @@ where
     Auth: MacroAuthorizationService,
     Harness: ForwardedCommands,
 {
-    let app = api_router(
+    let inner = api_router(
         read_state,
         control_state,
         create_state,
@@ -83,9 +100,14 @@ where
         forward_state,
     )
     .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
-    .merge(Router::new().route("/health", get(health)))
-    .layer(macro_cors::cors_layer())
-    .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+    .merge(health_router())
+    .layer(macro_cors::cors_layer());
+    let app = mount_at_root_and_prefix(inner)
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(SwaggerUi::new("/agent-harness/docs").url(
+            "/agent-harness/api-doc/openapi.json",
+            swagger::ApiDoc::openapi(),
+        ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await

@@ -1,0 +1,60 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+assertion_line: 270
+expression: machine.metadata()
+input_file: crates/agent_fold/fixtures/real/subagent_opencode.jsonl
+---
+SessionMetadata {
+    harness: OpenCode,
+    model: Some(
+        "openai/gpt-5.6-terra",
+    ),
+    supported_models: [
+        ModelOption {
+            id: "openai/gpt-5.4",
+            name: "OpenAI/GPT-5.4",
+            description: None,
+        },
+        ModelOption {
+            id: "openai/gpt-5.5",
+            name: "OpenAI/GPT-5.5",
+            description: None,
+        },
+        ModelOption {
+            id: "openai/gpt-5.6-terra",
+            name: "OpenAI/GPT-5.6 Terra",
+            description: None,
+        },
+        ModelOption {
+            id: "openai/gpt-5.6-terra-fast",
+            name: "OpenAI/GPT-5.6 Terra Fast",
+            description: None,
+        },
+    ],
+    title: None,
+    available_commands: [
+        AvailableCommand {
+            name: "dump-schema",
+            description: "Dump clean Postgres schema to a file and copy path to clipboard.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "init",
+            description: "guided AGENTS.md setup",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "qc",
+            description: "Quality gate. 5 parallel agents review changes. All must pass.",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "review",
+            description: "review changes [commit|branch|pr], defaults to uncommitted",
+            input_hint: None,
+        },
+    ],
+    status: Some(
+        "acp_ready",
+    ),
+}

@@ -468,8 +468,10 @@ new FusionAuthIdpOpenIdConnect(
     oauth2ClientId: GOOGLE_CLIENT_ID,
     oauth2ClientSecret: GOOGLE_CLIENT_SECRET,
     oauth2ClientAuthenticationMethod: 'client_secret_basic',
+    // Logins mint a fresh refresh token. include_granted_scopes keeps the
+    // scopes granted earlier through /link/gmail (calendar) on that token.
     oauth2AuthorizationEndpoint:
-      'https://accounts.google.com/o/oauth2/v2/auth?prompt=consent&access_type=offline',
+      'https://accounts.google.com/o/oauth2/v2/auth?prompt=consent&access_type=offline&include_granted_scopes=true',
     oauth2TokenEndpoint: 'https://oauth2.googleapis.com/token',
     oauth2UserInfoEndpoint: 'https://openidconnect.googleapis.com/v1/userinfo',
     buttonText: 'GoogleGmail',

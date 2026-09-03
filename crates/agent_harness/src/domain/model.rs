@@ -132,6 +132,11 @@ pub struct AgentRuntimeConfig {
     pub instructions: String,
 }
 
+/// Whether a user belongs to the Macro staff domain - the egress crate's
+/// predicate, reused so the harness's staff gates and the proxy's can never
+/// disagree about who staff is.
+pub(crate) use agent_egress::domain::model::is_macro_staff;
+
 /// Where a prompt came from, when it came from somewhere the session should
 /// answer back into.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -186,10 +191,47 @@ pub enum HarnessCommand {
     Open(OpenSession),
     /// Act on a session that already exists.
     Deliver(DeliverAction),
+    /// Replace a queued prompt's text before it dispatches.
+    EditQueued {
+        /// The queue entry to edit.
+        action_id: AgentActionId,
+        /// The new raw prompt text.
+        prompt: String,
+        /// The user responsible, judged by the same gates as sending: whoever
+        /// may not prompt a session may not rewrite what it is about to be
+        /// prompted with.
+        actor: Option<MacroUserIdStr<'static>>,
+    },
+    /// Remove a queued action before it dispatches.
+    RemoveQueued {
+        /// The queue entry to remove.
+        action_id: AgentActionId,
+        /// The user responsible, as on [`Self::EditQueued`].
+        actor: Option<MacroUserIdStr<'static>>,
+    },
+    /// The session's runtime answered its in-flight turn: clear the busy
+    /// mark and dispatch the next queued action. Internal - enqueued by the
+    /// turn observer on the managing replica, never forwarded.
+    TurnEnded,
+    /// The session's live actor stopped: clear the busy mark and nothing
+    /// more - resuming a dead runtime stays the next user action's job.
+    /// Internal, like [`Self::TurnEnded`].
+    SessionStopped,
     /// Change the session's sandbox size and the owner's default.
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
     Delete,
+}
+
+/// What executing a command did with it, beyond succeeding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandOutcome {
+    /// The command ran to completion - for a deliver, the action reached the
+    /// runtime.
+    Completed,
+    /// The action waits in the session's queue for the running turn to end.
+    Queued,
 }
 
 impl DeliverAction {

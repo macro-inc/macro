@@ -112,6 +112,7 @@ impl GithubIdp {
 pub fn build(
     frontend_port: u16,
     auth_port: u16,
+    doc_cognition_port: u16,
     lambda_body: &str,
     reconcile_lambda_body: &str,
     google: Option<&GoogleIdp>,
@@ -127,7 +128,11 @@ pub fn build(
         format!("http://localhost:{frontend_port}/app"),
         identity::oauth_redirect_uri(auth_port),
         "http://authentication-service:8080/oauth/redirect",
-        "http://localhost:8085/oauth/redirect",
+        // MCP client-connector callback on document_cognition_service. Must
+        // track the instance host port: a named `--port-base` stack publishes
+        // DCS somewhere other than 8085, and FusionAuth rejects (or the
+        // browser cannot reach) a callback that still points at 8085.
+        identity::oauth_redirect_uri(doc_cognition_port),
         "https://mcp-server-local.macro.com/oauth/callback",
     ]);
 

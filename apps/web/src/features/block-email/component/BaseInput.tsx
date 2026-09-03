@@ -24,9 +24,9 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_EMAIL_SCHEDULED_SEND,
-  ENABLE_EMAIL_SIGNATURES_FLAG,
-  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-  ENABLE_GRAPHQL_SOUP,
+  enableEmailSignatures,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useEmail } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -358,9 +358,7 @@ export function BaseInput(props: {
     emailLinksQuery.data?.links.find((l) => l.id === activeLinkId())
   );
   const signature = useEmailSignature(activeLinkId);
-  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
-    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-  });
+  const emailSignaturesFlag = useFeatureFlag(enableEmailSignatures);
   // Whether this reply includes the signature. Defaults on, reset per reply,
   // and dismissable via the preview ✕.
   const [includeSignature, setIncludeSignature] = createSignal(true);
@@ -525,7 +523,7 @@ export function BaseInput(props: {
     // survives navigation — while the context read covers snapshotless undos
     // in a still-mounted thread.
     const threadId = snapshot?.threadId ?? ctx.thread()?.db_id;
-    if (threadId && !ENABLE_GRAPHQL_SOUP()) {
+    if (threadId && !isFeatureEnabled(enableGraphqlSoup)) {
       queryClient.setQueryData(
         emailKeys.threadMessages(threadId).queryKey,
         (old: any) => {
@@ -561,7 +559,7 @@ export function BaseInput(props: {
     // After the draft-body restore, so the single fetch returns the message
     // as a draft with the pre-send content, dropping it from the message
     // list and re-seeding the draft map in one pass.
-    if (threadId && ENABLE_GRAPHQL_SOUP()) {
+    if (threadId && isFeatureEnabled(enableGraphqlSoup)) {
       void fetchAndCacheThread(threadId);
     }
 
