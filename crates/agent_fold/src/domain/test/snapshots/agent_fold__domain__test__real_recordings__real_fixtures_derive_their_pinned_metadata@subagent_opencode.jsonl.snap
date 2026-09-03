@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 270
 expression: machine.metadata()
 input_file: crates/agent_fold/fixtures/real/subagent_opencode.jsonl
 ---
@@ -14,21 +13,25 @@ SessionMetadata {
             id: "openai/gpt-5.4",
             name: "OpenAI/GPT-5.4",
             description: None,
+            group: None,
         },
         ModelOption {
             id: "openai/gpt-5.5",
             name: "OpenAI/GPT-5.5",
             description: None,
+            group: None,
         },
         ModelOption {
             id: "openai/gpt-5.6-terra",
             name: "OpenAI/GPT-5.6 Terra",
             description: None,
+            group: None,
         },
         ModelOption {
             id: "openai/gpt-5.6-terra-fast",
             name: "OpenAI/GPT-5.6 Terra Fast",
             description: None,
+            group: None,
         },
     ],
     title: None,

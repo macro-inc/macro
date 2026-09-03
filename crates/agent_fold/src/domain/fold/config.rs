@@ -6,8 +6,8 @@ use agent_client_protocol::schema::MaybeUndefined;
 use agent_client_protocol::schema::v1::{
     AvailableCommandInput, AvailableCommandsUpdate as AcpAvailableCommandsUpdate,
     InitializeRequest, InitializeResponse, LoadSessionRequest, NewSessionRequest,
-    ResumeSessionRequest, SessionConfigKind, SessionConfigOption, SessionConfigSelectOptions,
-    SessionInfoUpdate, SetSessionConfigOptionRequest,
+    ResumeSessionRequest, SessionConfigKind, SessionConfigOption, SessionConfigSelectOption,
+    SessionConfigSelectOptions, SessionInfoUpdate, SetSessionConfigOptionRequest,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::MODEL_CONFIG_ID;
@@ -104,20 +104,29 @@ impl FoldState {
         };
 
         let model = Some(select.current_value.to_string());
-        let supported: Vec<ModelOption> = match select.options {
-            SessionConfigSelectOptions::Ungrouped(options) => options,
-            SessionConfigSelectOptions::Grouped(groups) => {
-                groups.into_iter().flat_map(|group| group.options).collect()
-            }
-            _ => return false,
-        }
-        .into_iter()
-        .map(|option| ModelOption {
+        let to_option = |option: SessionConfigSelectOption, group: Option<&str>| ModelOption {
             id: option.value.to_string(),
             name: option.name,
             description: option.description,
-        })
-        .collect();
+            group: group.map(str::to_owned),
+        };
+        let supported: Vec<ModelOption> = match select.options {
+            SessionConfigSelectOptions::Ungrouped(options) => options
+                .into_iter()
+                .map(|option| to_option(option, None))
+                .collect(),
+            SessionConfigSelectOptions::Grouped(groups) => groups
+                .into_iter()
+                .flat_map(|group| {
+                    let name = group.name;
+                    group
+                        .options
+                        .into_iter()
+                        .map(move |option| to_option(option, Some(&name)))
+                })
+                .collect(),
+            _ => return false,
+        };
 
         let changed = self.metadata.model != model || self.metadata.supported_models != supported;
         self.metadata.model = model;

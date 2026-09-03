@@ -776,7 +776,10 @@ const Equation: TypedRenderableEntity<EquationNode> = {
   guard: (node: LexicalNode): node is EquationNode =>
     node.__type === 'equation',
   render: (props) => (
-    <EquationDecorator equation={props.node.__equation} inline={true} />
+    <EquationDecorator
+      equation={props.node.__equation}
+      inline={props.node.__inline}
+    />
   ),
 };
 

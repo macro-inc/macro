@@ -63,6 +63,56 @@ fn the_session_open_response_seeds_the_model_and_the_menu() {
     );
 }
 
+/// The same handshake with the runtime grouping its models under family
+/// headers, as the Cursor agent does.
+const OPEN_GROUPED: &str = concat!(
+    r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"n","method":"session/new","params":{"cwd":"/w","mcpServers":[]}}}"#,
+    "\n",
+    r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"n","result":{"sessionId":"s1","configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"opus-5","options":[{"group":"claude-opus","name":"Claude Opus","options":[{"value":"opus-5","name":"Claude Opus 5"},{"value":"opus-4.8","name":"Claude Opus 4.8"}]},{"group":"gpt","name":"GPT","options":[{"value":"gpt-5.6","name":"GPT-5.6 Sol","description":"fast"}]}]}]}}}"#,
+);
+
+#[test]
+fn grouped_models_keep_their_heading_in_listing_order() {
+    let mut machine = FoldMachineImpl::new();
+    let events = drive(&mut machine, OPEN_GROUPED);
+
+    assert_eq!(events, 1);
+    let metadata = machine.metadata();
+    assert_eq!(metadata.model.as_deref(), Some("opus-5"));
+    let listed: Vec<(&str, Option<&str>)> = metadata
+        .supported_models
+        .iter()
+        .map(|model| (model.id.as_str(), model.group.as_deref()))
+        .collect();
+    assert_eq!(
+        listed,
+        vec![
+            ("opus-5", Some("Claude Opus")),
+            ("opus-4.8", Some("Claude Opus")),
+            ("gpt-5.6", Some("GPT")),
+        ]
+    );
+    assert_eq!(
+        metadata.supported_models[2].description.as_deref(),
+        Some("fast"),
+        "the option's own fields survive grouping"
+    );
+}
+
+#[test]
+fn flat_models_carry_no_heading() {
+    let mut machine = FoldMachineImpl::new();
+    drive(&mut machine, OPEN);
+
+    assert!(
+        machine
+            .metadata()
+            .supported_models
+            .iter()
+            .all(|model| model.group.is_none())
+    );
+}
+
 #[test]
 fn a_rejected_model_change_moves_nothing() {
     let mut machine = FoldMachineImpl::new();

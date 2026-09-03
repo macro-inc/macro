@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 270
 expression: machine.metadata()
 input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
 ---
@@ -16,6 +15,7 @@ SessionMetadata {
             description: Some(
                 "Use the default model (currently Opus 5 (1M context)) · $5/$25 per Mtok",
             ),
+            group: None,
         },
         ModelOption {
             id: "opus[1m]",
@@ -23,6 +23,7 @@ SessionMetadata {
             description: Some(
                 "Opus 5 with 1M context · Best for everyday, complex tasks · $5/$25 per Mtok",
             ),
+            group: None,
         },
         ModelOption {
             id: "claude-fable-5[1m]",
@@ -30,6 +31,7 @@ SessionMetadata {
             description: Some(
                 "Fable 5 · Most capable for your hardest and longest-running tasks · $10/$50 per Mtok",
             ),
+            group: None,
         },
         ModelOption {
             id: "sonnet",
@@ -37,6 +39,7 @@ SessionMetadata {
             description: Some(
                 "Sonnet 5 · Efficient for routine tasks · $2/$10 per Mtok · promo through Aug 31",
             ),
+            group: None,
         },
         ModelOption {
             id: "haiku",
@@ -44,6 +47,7 @@ SessionMetadata {
             description: Some(
                 "Haiku 4.5 · Fastest for quick answers · $1/$5 per Mtok",
             ),
+            group: None,
         },
     ],
     title: Some(

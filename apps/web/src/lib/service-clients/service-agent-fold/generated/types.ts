@@ -222,6 +222,13 @@ export type ModelOption = {
   name: string;
   /**  Descriptive copy - pricing, context size, and the like. */
   description: string | null;
+  /**
+   *  The heading the runtime listed this model under, when it grouped its
+   *  options (ACP's `SessionConfigSelectGroup.name`). `None` for a runtime
+   *  that offered a flat list; the flattened order still follows the
+   *  runtime's, group by group.
+   */
+  group: string | null;
 };
 
 /**  One choice offered for a permission request. */
@@ -437,10 +444,11 @@ export type SubagentResult = {
  *  kind ACP defines - only for `switch_mode` (nothing a reader would want
  *  rendered) and a kind this fold does not yet know about.
  *
- *  Two variants are chosen by *name* rather than kind: Macro's own tools
+ *  Three variants are chosen by *name* rather than kind: Macro's own tools
  *  ([`Self::Macro`], [`Self::UserTool`]) arrive as ACP `other`, and what a
- *  reader wants for them is the tool's own JSON, not a generic card. The
- *  harness reader decides which names are Macro's.
+ *  reader wants for them is the tool's own JSON, not a generic card; a
+ *  delegation ([`Self::Subagent`]) is a tool call by whatever name its
+ *  harness gives it. The harness layer decides which names are which.
  */
 export type ToolDetail =
   /**  A shell command. ACP's `execute`. */

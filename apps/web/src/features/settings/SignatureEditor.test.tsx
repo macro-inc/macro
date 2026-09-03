@@ -15,7 +15,7 @@ describe('SignatureEditor', () => {
     const quill = await waitFor(() => {
       const container = document.querySelector('.ql-container');
       const instance = container ? Quill.find(container) : null;
-      if (!instance || typeof instance === 'symbol') {
+      if (!(instance instanceof Quill)) {
         throw new Error('Quill is not mounted');
       }
       return instance;
