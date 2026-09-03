@@ -61,12 +61,12 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
   return (
     <div class="flex flex-col gap-10">
       <label class="block">
-        <span class="sr-only">Search providers</span>
+        <span class="sr-only">Search connections</span>
         <input
           type="search"
           value={catalog.searchInput()}
           onInput={(event) => catalog.onSearchInput(event.currentTarget.value)}
-          placeholder="Search providers"
+          placeholder="Search connections"
           class="settings-input h-11 w-full"
         />
       </label>
@@ -94,7 +94,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
           </For>
         </div>
         <Show when={featured().length === 0}>
-          <p class="text-sm text-ink-muted">No featured providers match.</p>
+          <p class="text-sm text-ink-muted">No featured connections match.</p>
         </Show>
       </SettingsSection>
 
@@ -136,7 +136,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
               }
             >
               <p class="px-6 py-6 text-sm text-ink-muted">
-                No providers match that search.
+                No connections match that search.
               </p>
             </Show>
             <Show when={catalog.query.hasNextPage}>
