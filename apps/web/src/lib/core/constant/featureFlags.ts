@@ -408,22 +408,10 @@ export const enableEmailSignatures = defineFlag({
 //
 // The PostHog key is deliberately broader than the local names: `enable-new-app-views`
 // is the rollout switch for the rebuilt app surfaces, of which this sidebar is one.
-export const ENABLE_SIDEBAR_NEXT_FLAG = 'enable-new-app-views';
-// Read statically rather than through `getFeatureFlagOverride` for the same
-// reason as VITE_ENABLE_REMINDERS below: Vite substitutes `import.meta.env.VITE_X`
-// by text at build time, so that helper's dynamic lookup can come back
-// undefined in a production bundle.
-//
-// Written out rather than using `|| undefined` so an explicit
-// VITE_ENABLE_SIDEBAR_NEXT=false stays false instead of being coerced to
-// undefined and falling through to PostHog.
-const SIDEBAR_NEXT_ENV_OVERRIDE = import.meta.env.VITE_ENABLE_SIDEBAR_NEXT;
-export const ENABLE_SIDEBAR_NEXT_OVERRIDE: boolean | undefined =
-  SIDEBAR_NEXT_ENV_OVERRIDE === 'true'
-    ? true
-    : SIDEBAR_NEXT_ENV_OVERRIDE === 'false'
-      ? false
-      : undefined;
+export const enableSidebarNext = defineFlag({
+  key: 'enable-new-app-views',
+  env: 'ENABLE_SIDEBAR_NEXT',
+});
 
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
