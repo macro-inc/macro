@@ -32,7 +32,7 @@ export function ConnectionsPage() {
           onBack={provider() ? closeConnectionsProvider : undefined}
         >
           <div class="flex items-center gap-3 text-sm text-ink-muted">
-            Couldn't load connections.
+            Couldn't load Connections.
             <Button variant="outline" size="sm" depth={3} onClick={retry}>
               Retry
             </Button>
@@ -61,7 +61,7 @@ export function ConnectionsPage() {
           <Show
             when={ready()}
             fallback={
-              <p class="text-sm text-ink-muted">Loading connections…</p>
+              <p class="text-sm text-ink-muted">Loading Connections…</p>
             }
           >
             <Show

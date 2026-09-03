@@ -72,7 +72,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
       <Show
         when={inboxes().length > 0}
         fallback={
-          <SettingsSection title="Your connections">
+          <SettingsSection title="Your Connections">
             <SettingsCard>
               <CapabilityRow
                 title="Gmail"

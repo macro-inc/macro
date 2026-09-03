@@ -81,7 +81,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
       description="Connect Macro to your GitHub account and repositories."
       onBack={closeConnectionsProvider}
     >
-      <SettingsSection title="Your connections">
+      <SettingsSection title="Your Connections">
         <SettingsCard>
           <Show when={account()}>
             {(row) => (
@@ -270,7 +270,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
         </SettingsCard>
       </SettingsSection>
 
-      <SettingsSection title="Team connections">
+      <SettingsSection title="Team Connections">
         <SettingsCard>
           <Show when={team()}>
             {(row) => (

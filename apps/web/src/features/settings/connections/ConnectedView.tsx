@@ -50,7 +50,7 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
       </Button>
 
       <Show when={props.model.leftovers.length > 0}>
-        <SettingsSection title="Other connections">
+        <SettingsSection title="Other Connections">
           <button
             type="button"
             class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6 rounded-xl"
@@ -124,7 +124,7 @@ function EmptyConnected() {
         class="w-full justify-between"
         onClick={showConnectionsDiscover}
       >
-        Browse all connections
+        Browse all Connections
         <CaretRightIcon class="size-4 text-ink-extra-muted" />
       </Button>
     </>

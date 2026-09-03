@@ -14,7 +14,7 @@ import { closeConnectionsProvider } from './view-state';
 export function OtherView(props: { leftovers: Leftover[] }) {
   return (
     <SettingsPage
-      title="Other connections"
+      title="Other Connections">
       description="These do not sit under a provider yet."
       onBack={closeConnectionsProvider}
     >

@@ -68,7 +68,7 @@ Workspace → `Team`, `Tags`, `CRM`, `Connections` (Connected / Discover), `MCP 
 ## Settings — Connections — `/app/settings/connections`
 
 `Connected` lists mapped providers (ready-of-total) plus leftover records under
-Other connections. Empty state offers Google first, then GitHub, Linear, Notion,
+Other Connections. Empty state offers Google first, then GitHub, Linear, Notion,
 Slack, Cursor. `Discover` searches the Pipedream catalog; featured cards are
 Google, GitHub, Linear, Slack, Cursor. Click a provider for its page: Google
 (Gmail + Calendar per inbox, no Docs), GitHub (account, team install, AI),

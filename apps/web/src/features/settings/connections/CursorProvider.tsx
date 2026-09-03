@@ -91,7 +91,7 @@ export function CursorProvider() {
       description="Use your Cursor account to run agent sessions in Macro."
       onBack={closeConnectionsProvider}
     >
-      <SettingsSection title="Your connections">
+      <SettingsSection title="Your Connections">
         <SettingsCard>
           <CapabilityRow
             title="Cursor"

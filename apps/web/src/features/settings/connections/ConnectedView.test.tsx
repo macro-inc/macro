@@ -38,7 +38,7 @@ describe('ConnectedView', () => {
     setDebugSetting(DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES, true);
     render(() => <ConnectedView model={connectedCursor} />);
     expect(screen.getByText('Start with Google')).toBeTruthy();
-    expect(screen.getByText('Browse all connections')).toBeTruthy();
+    expect(screen.getByText('Browse all Connections')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add a connection' })).toBeNull();
   });
 });
