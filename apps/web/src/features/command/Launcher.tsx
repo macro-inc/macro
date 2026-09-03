@@ -1142,7 +1142,16 @@ export const Launcher = (props: LauncherProps) => {
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal"></Dialog.Overlay>
-        <Dialog.Content class="[--color-surface:var(--color-dialog)]">
+        <Dialog.Content
+          class="[--color-surface:var(--color-dialog)]"
+          onCloseAutoFocus={(event) => {
+            // Create actions pass shouldReturnFocus: false and focus their
+            // destination (agent composer, email To, …). Kobalte's restore
+            // otherwise lands on the previous pane after the dialog unmounts
+            // — same suppress as CommandMenu search rows.
+            event.preventDefault();
+          }}
+        >
           <div
             class={cn(
               'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal w-screen flex justify-center px-2',
