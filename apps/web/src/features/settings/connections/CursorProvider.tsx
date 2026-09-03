@@ -217,9 +217,7 @@ export function CursorProvider() {
                         aria-busy={modelsLoading()}
                       >
                         <Select.Value<CursorModelOption>>
-                          {(state) =>
-                            state.selectedOption()?.displayName ?? ''
-                          }
+                          {(state) => state.selectedOption()?.displayName ?? ''}
                         </Select.Value>
                         <Show
                           when={!modelsLoading()}
