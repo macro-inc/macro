@@ -92,6 +92,14 @@ impl FoldState {
             return None;
         };
         let message = at.message;
+
+        // A call a question absorbed (see `request_elicitation`) is patched
+        // as the question: the only thing a later update can add is the
+        // harness's own reading of the answer.
+        if matches!(self.part_at_mut(&at), Some(MessagePart::Elicitation { .. })) {
+            return self.patch_absorbed_elicitation(&at, &ToolFrame::of_update(&update));
+        }
+
         let Some(MessagePart::ToolUse {
             name,
             status,

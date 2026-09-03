@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 270
 expression: machine.metadata()
 input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
 ---
@@ -426,4 +425,5 @@ SessionMetadata {
     status: Some(
         "acp_ready",
     ),
+    pending_elicitation: None,
 }

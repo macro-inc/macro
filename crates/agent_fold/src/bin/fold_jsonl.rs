@@ -12,8 +12,9 @@
 use agent_fold::domain::fold::FoldMachineImpl;
 use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::{
-    Author, Control, ControlOutcome, FoldedMessage, MessagePart, PermissionOption,
-    PermissionOutcome, PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUseId,
+    Author, Control, ControlOutcome, ElicitationOutcome, ElicitationPropertySchema,
+    ElicitationRequest, FoldedMessage, MessagePart, PermissionOption, PermissionOutcome,
+    PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUseId,
 };
 use agent_fold::domain::ports::FoldMachine;
 use agent_fold::domain::ports::LogRepo;
@@ -272,7 +273,107 @@ fn render_part(part: &MessagePart) -> String {
                     let _ = writeln!(out, "{}", indent(&format!("[{mark}] {}", entry.content)));
                 }
             }
+            MessagePart::Elicitation {
+                message: question,
+                request,
+                outcome,
+                reported,
+                ..
+            } => out.push_str(&render_elicitation(
+                question,
+                request,
+                outcome,
+                reported.as_ref(),
+            )),
         }
+    }
+    out
+}
+
+/// A question: `[question · outcome]`, the message, then each field or the URL.
+fn render_elicitation(
+    question: &str,
+    request: &ElicitationRequest,
+    outcome: &ElicitationOutcome,
+    reported: Option<&serde_json::Value>,
+) -> String {
+    let mut out = String::new();
+    let state = match outcome {
+        ElicitationOutcome::Pending => "pending".to_owned(),
+        ElicitationOutcome::Accepted { content } => match content {
+            Some(content) => format!("accepted {content}"),
+            None => "accepted".to_owned(),
+        },
+        ElicitationOutcome::Declined => "declined".to_owned(),
+        ElicitationOutcome::Cancelled => "cancelled".to_owned(),
+        ElicitationOutcome::Completed => "completed".to_owned(),
+        ElicitationOutcome::Errored { message } => format!("error: {message}"),
+        ElicitationOutcome::Unrecognized => "unrecognized".to_owned(),
+    };
+    let _ = writeln!(out, "[question · {state}]");
+    let _ = writeln!(out, "{}", indent(question.trim_end()));
+    match request {
+        ElicitationRequest::Form { schema } => {
+            for property in &schema.properties {
+                let label = property.title.as_deref().unwrap_or(&property.name);
+                let required = if schema.required.contains(&property.name) {
+                    "*"
+                } else {
+                    ""
+                };
+                let shape = match &property.schema {
+                    ElicitationPropertySchema::String {
+                        options,
+                        custom_field,
+                        ..
+                    } if !options.is_empty() => {
+                        let choices: Vec<&str> = options
+                            .iter()
+                            .map(|option| option.title.as_deref().unwrap_or(&option.value))
+                            .collect();
+                        let other = if custom_field.is_some() {
+                            " | other…"
+                        } else {
+                            ""
+                        };
+                        format!("select: {}{other}", choices.join(" | "))
+                    }
+                    ElicitationPropertySchema::String { .. } => "text".to_owned(),
+                    ElicitationPropertySchema::Number { .. } => "number".to_owned(),
+                    ElicitationPropertySchema::Integer { .. } => "integer".to_owned(),
+                    ElicitationPropertySchema::Boolean { .. } => "boolean".to_owned(),
+                    ElicitationPropertySchema::MultiSelect {
+                        options,
+                        custom_field,
+                        ..
+                    } => {
+                        let choices: Vec<&str> = options
+                            .iter()
+                            .map(|option| option.title.as_deref().unwrap_or(&option.value))
+                            .collect();
+                        let other = if custom_field.is_some() {
+                            " | other…"
+                        } else {
+                            ""
+                        };
+                        format!("multi-select: {}{other}", choices.join(" | "))
+                    }
+                    ElicitationPropertySchema::Unrecognized { type_name, .. } => {
+                        format!("unrecognized type {type_name}")
+                    }
+                };
+                let _ = writeln!(out, "{}", indent(&format!("{label}{required} ({shape})")));
+            }
+        }
+        ElicitationRequest::Url { url, .. } => {
+            let _ = writeln!(out, "{}", indent(&format!("open {url}")));
+        }
+        ElicitationRequest::Unrecognized { mode, .. } => {
+            let _ = writeln!(out, "{}", indent(&format!("unrecognized mode {mode}")));
+        }
+    }
+    if let Some(reported) = reported {
+        let _ = writeln!(out, "{}", indent(&format!("agent read: {reported}")));
     }
     out
 }

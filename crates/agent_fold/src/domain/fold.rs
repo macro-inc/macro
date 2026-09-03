@@ -12,6 +12,8 @@
 //! - A tool call whose opening frame carried no useful fields gets them from
 //!   later patches. Until then it renders as a bare tool row.
 //! - A permission request with no answer is outstanding.
+//! - A question the agent asked with no answer is outstanding too - in the
+//!   transcript forever, on the metadata only while its turn is open.
 //!
 //! What is left over - a patch for a tool call that was never opened, an
 //! update variant this fold does not model - is logged through [`FoldError`]
@@ -63,6 +65,8 @@ mod content;
 mod control;
 /// ACP-to-vocabulary conversions shared by the handlers.
 mod convert;
+/// Questions the agent asks the user, their answers, and their completion.
+mod elicitation;
 /// Permission requests and their answers.
 mod permission;
 /// The agent's plan (todo list).
