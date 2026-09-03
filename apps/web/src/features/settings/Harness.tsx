@@ -6,13 +6,13 @@ import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import { useAgentModelsQuery } from '@queries/agents/models';
 import {
   useCursorApiKeyStatusQuery,
   useDisconnectCursorApiKey,
   useSaveCursorApiKey,
   useSetCursorDefaultModel,
 } from '@queries/auth/cursor-api-key';
-import { useAgentModelsQuery } from '@queries/agents/models';
 import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
