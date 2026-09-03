@@ -11,6 +11,7 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
+import { createDevSpeedPlugins } from './scripts/vite-dev-speed';
 
 function readShortSha(): string {
   try {
@@ -117,6 +118,10 @@ export const createAppViteConfig = (): UserConfigFn => {
         solid(),
         wasm(),
         tailwind(),
+        // Serve-only: unbarrel @ui/@entity/@notifications, collapse Phosphor
+        // SVGs into one module, and skip babel/SVGO on remaining icons.
+        // Production still uses vite-plugin-solid-svg.
+        ...createDevSpeedPlugins(__dirname),
         solidSvg({ defaultAsComponent: true }),
         tsconfigpaths({
           root: './',
@@ -200,6 +205,12 @@ export const createAppViteConfig = (): UserConfigFn => {
           '@internationalized/date',
           '@internationalized/number',
           '@use-gesture/core',
+          'date-fns',
+          'zod',
+          '@floating-ui/dom',
+          '@solid-primitives/storage',
+          '@solid-primitives/resize-observer',
+          'detect-browser',
         ],
         // loro-crdt is a wasm singleton. The app imports it directly (esbuild
         // pre-bundles a copy) while the linked `@loro-mirror/core` workspace

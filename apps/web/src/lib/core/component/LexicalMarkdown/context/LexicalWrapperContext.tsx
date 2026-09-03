@@ -1,6 +1,7 @@
 /**
  * @file Wrap the Lexical Editor in some helpful utilities.
  */
+import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import {
   type EditorType,
   type NodeIdMappings,
@@ -83,6 +84,7 @@ export function createLexicalWrapper({
   withIds,
   theme,
 }: LexicalWrapperProps): LexicalWrapper {
+  initializeLexical();
   _id++;
 
   const nodes = RegisteredNodesByType[type];

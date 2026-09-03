@@ -27,7 +27,7 @@ import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-
 import { useQuickAccessSkillsQuery } from '@queries/soup/quick-access-skills';
 import { useQuickAccessSnippetsQuery } from '@queries/soup/quick-access-snippets';
 import { useRecentlyViewedSoupQuery } from '@queries/soup/recently-viewed';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md-id';
 import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { getGraphqlSoupCacheHost } from '@service-storage/graphql-soup';
 import { formatDocumentName } from '@service-storage/util/filename';

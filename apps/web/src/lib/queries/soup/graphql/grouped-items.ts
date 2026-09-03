@@ -11,7 +11,7 @@ import {
   resolveGroupMetaForKey,
 } from '@queries/soup/grouped/api';
 import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md-id';
 import {
   GroupSoupDocument,
   type GroupSoupQuery,

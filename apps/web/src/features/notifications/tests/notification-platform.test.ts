@@ -8,7 +8,7 @@ vi.mock('@app/util/favicon', () => ({
   getFaviconUrl: () => 'favicon.ico',
 }));
 
-vi.mock('@macro-inc/lexical-core', () => ({
+vi.mock('@macro-inc/lexical-core/utils/parsers', () => ({
   markdownToPlainText: (content: string) => content,
 }));
 

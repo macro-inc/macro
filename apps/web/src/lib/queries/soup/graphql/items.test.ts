@@ -38,7 +38,7 @@ vi.mock('@macro-inc/observability', () => ({
   },
 }));
 
-vi.mock('@queries/storage/instructions-md', () => ({
+vi.mock('@queries/storage/instructions-md-id', () => ({
   useInstructionsMdIdQuery: vi.fn(() => ({})),
 }));
 

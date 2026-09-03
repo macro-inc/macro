@@ -9,7 +9,7 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
 import { restoreSettingsReturnTo } from '@core/constant/SettingsState';
 import { appendSettingsSplitToUrl } from '@core/constant/settingsSplitUrl';
-import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
+import { settingsTabToSlug } from '@core/constant/settingsTabSlug';
 import { useEmailLinks } from '@core/email-link';
 import { consumeInboxLinkReturn } from '@core/email-link/return-layout';
 import { isMobile } from '@core/mobile/isMobile';

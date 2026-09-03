@@ -7,7 +7,7 @@ import type {
 } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
-import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
+import { settingsTabToSlug } from '@core/constant/settingsTabSlug';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type {
   BlockInstanceHandle,

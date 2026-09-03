@@ -22,7 +22,7 @@ import {
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import type { Span } from '@macro-inc/observability';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md-id';
 import { storageServiceClient } from '@service-storage/client';
 import { Scroll } from '@ui';
 import {

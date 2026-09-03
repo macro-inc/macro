@@ -1,14 +1,22 @@
 import { setGlobalSplitManager } from '@app/signal/splitLayout';
 import type { WithRequired } from '@core/util/withRequired';
 import type { RouteDefinition, RouteSectionProps } from '@solidjs/router';
-import { SplitLayoutContainer } from './SplitLayout';
+import { lazy, Suspense } from 'solid-js';
+
+const SplitLayoutContainer = lazy(() =>
+  import('./SplitLayout').then((module) => ({
+    default: module.SplitLayoutContainer,
+  }))
+);
 
 function LayoutRoute(props: RouteSectionProps) {
   return (
-    <SplitLayoutContainer
-      pairs={props.params.splits?.split('/') ?? []}
-      setManager={setGlobalSplitManager}
-    />
+    <Suspense>
+      <SplitLayoutContainer
+        pairs={props.params.splits?.split('/') ?? []}
+        setManager={setGlobalSplitManager}
+      />
+    </Suspense>
   );
 }
 

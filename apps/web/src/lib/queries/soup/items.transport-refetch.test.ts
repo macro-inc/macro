@@ -51,7 +51,7 @@ vi.mock('@queries/soup/transform-utils', () => ({
   mapApiSoupItemToEntity: vi.fn(),
   mapSoupPageToEntityList: vi.fn(),
 }));
-vi.mock('@queries/storage/instructions-md', () => ({
+vi.mock('@queries/storage/instructions-md-id', () => ({
   useInstructionsMdIdQuery: vi.fn(() => ({})),
 }));
 vi.mock('@service-storage/client', () => ({

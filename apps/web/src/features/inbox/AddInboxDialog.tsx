@@ -1,22 +1,15 @@
 import { useAddInboxFlow } from '@core/email-link';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, onCleanup } from 'solid-js';
+import {
+  closeAddInboxDialog,
+  isAddInboxDialogOpen,
+} from './addInboxDialogState';
 
-const [isOpen, setIsOpen] = createSignal(false);
-
-/**
- * Requests the add-inbox confirmation dialog. Rendered at the app root
- * (Layout), gated on this signal, so it opens immediately and independent of
- * the settings surface.
- *
- * Entitlement is enforced by the backend: `POST /link/gmail` answers 402 when
- * the user isn't allowed another inbox, and `useAddInboxFlow` maps that to the
- * multi-inbox paywall — so callers can invoke the add-inbox flow directly
- * without a client-side gate that would have to mirror the backend's rule.
- */
-export const openAddInboxDialog = () => setIsOpen(true);
-
-export const isAddInboxDialogOpen = isOpen;
+export {
+  isAddInboxDialogOpen,
+  openAddInboxDialog,
+} from './addInboxDialogState';
 
 /**
  * Confirmation step before the add-inbox OAuth redirect. Confirming kicks off
@@ -26,7 +19,7 @@ export function AddInboxDialog() {
   const addInbox = useAddInboxFlow();
   const [pending, setPending] = createSignal(false);
 
-  onCleanup(() => setIsOpen(false));
+  onCleanup(closeAddInboxDialog);
 
   const handleConfirm = async () => {
     if (pending()) return;
@@ -37,14 +30,16 @@ export function AddInboxDialog() {
       await addInbox();
     } finally {
       setPending(false);
-      setIsOpen(false);
+      closeAddInboxDialog();
     }
   };
 
   return (
     <Dialog
-      open={isOpen()}
-      onOpenChange={setIsOpen}
+      open={isAddInboxDialogOpen()}
+      onOpenChange={(open) => {
+        if (!open) closeAddInboxDialog();
+      }}
       position="center"
       class="w-120"
     >
@@ -63,7 +58,7 @@ export function AddInboxDialog() {
               variant="outline"
               depth={3}
               disabled={pending()}
-              onClick={() => setIsOpen(false)}
+              onClick={closeAddInboxDialog}
             >
               Cancel
             </Button>

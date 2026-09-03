@@ -29,7 +29,7 @@ vi.mock('@queries/soup/grouped/api', () => ({
   }),
 }));
 
-vi.mock('@queries/storage/instructions-md', () => ({
+vi.mock('@queries/storage/instructions-md-id', () => ({
   useInstructionsMdIdQuery: vi.fn(() => ({})),
 }));
 

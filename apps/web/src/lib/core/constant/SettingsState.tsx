@@ -11,7 +11,7 @@ import {
   appendSettingsSplitToUrl,
   stripSettingsSplitFromUrl,
 } from './settingsSplitUrl';
-import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
+import { settingsSlugToTab, settingsTabToSlug } from './settingsTabSlug';
 
 export type SettingsTab =
   | 'Account'

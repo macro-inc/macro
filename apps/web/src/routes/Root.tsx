@@ -1,50 +1,27 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
-import { makeEmailAuthComponents } from '@app/features/auth/EmailAuth';
 import { setCookie } from '@app/features/auth/Shared';
-import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
-import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
-import { SearchProvider } from '@app/features/soup/search/context';
 import {
   AnalyticsContextProvider,
   useAnalytics,
 } from '@app/lib/analytics/analytics-context';
 import { PosthogProvider, usePosthog } from '@app/lib/analytics/posthog';
 import { trackSignupCompletion } from '@app/lib/analytics/signupCompletion';
-import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
-import { useSoupBackfills } from '@app/lib/queries/soup/backfill';
 import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
-import { CallProvider } from '@channel/Call/CallContext';
-import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
-import { CallKitSync } from '@channel/Call/use-callkit';
-import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
-import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
 import { publishLoginSuccess } from '@core/auth/login-events';
-import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { ENABLE_ONBOARDING_V4_OVERRIDE } from '@core/constant/featureFlags';
-import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
-import { QuickAccessProvider } from '@core/context/quickAccess';
-import { TeamContextProvider } from '@core/context/team';
 import {
   UserContextProvider,
-  useUserId,
+  useIsAuthenticated,
   useUserInfo,
 } from '@core/context/user';
-import { initAndStartEmailSync } from '@core/email-link';
 import { useHotKeyRoot } from '@core/hotkey/hotkeys';
-import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
-import { IpadUnsupportedDialog } from '@core/mobile/IpadUnsupportedDialog';
-import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import {
   getLoginCookieOptions,
@@ -55,27 +32,16 @@ import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isTauri } from '@core/util/platform';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { EntityProvider } from '@entity';
-import { MaybeTauriProvider } from '@macro/tauri';
-import { TauriRouteListener } from '@macro/tauri/TauriProvider';
-import { Telemetry } from '@macro-inc/observability';
 import {
-  BrowserNotificationModal,
-  createNotificationSource,
-  type UnifiedNotification,
-  useNotificationUpdates,
-  usePlatformNotificationState,
-} from '@notifications';
-import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
+  MaybeTauriProvider,
+  TauriRouteListener,
+} from '@macro/tauri/MaybeTauriProvider';
+import { Telemetry } from '@macro-inc/observability';
 import {
   invalidateUserInfo,
   prefetchUserInfo,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
-import { useChatRenameWebsocketSync } from '@queries/chat';
-import { QuerySyncProvider } from '@queries/sync/SyncProvider';
-import { MutationUndoProvider } from '@queries/undo';
-import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
-import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
@@ -96,7 +62,6 @@ import { Button } from '@ui';
 import { detect } from 'detect-browser';
 import {
   createEffect,
-  createSignal,
   type JSX,
   lazy,
   on,
@@ -106,7 +71,12 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { BasePathComponent } from './BasePath';
+
+const BasePathComponent = lazy(() =>
+  import('./BasePath').then((module) => ({
+    default: module.BasePathComponent,
+  }))
+);
 
 const Login = lazy(() =>
   import('@app/features/auth/Login').then((module) => ({
@@ -128,11 +98,6 @@ const ChannelInviteAcceptance = lazy(() =>
     (module) => ({ default: module.ChannelInviteAcceptance })
   )
 );
-const InteractiveOnboardingModal = lazy(() =>
-  import('@app/features/onboarding/InteractiveOnboardingModal').then(
-    (module) => ({ default: module.InteractiveOnboardingModal })
-  )
-);
 const MobileWebSignup = lazy(
   () => import('@app/features/onboarding/MobileWebSignup')
 );
@@ -148,6 +113,30 @@ const TeamInviteAcceptance = lazy(() =>
 );
 const TaskRoute = lazy(() =>
   import('./TaskRoute').then((module) => ({ default: module.TaskRoute }))
+);
+const WorkspaceProviders = lazy(() => import('./WorkspaceProviders'));
+
+const EMAIL_CALLBACK_PATH = '/email-signup-callback';
+const EMAIL_LINK_CALLBACK_PATH = '/inbox-link-callback';
+const EmailCallback = lazy(() =>
+  import('@app/features/auth/EmailAuth').then((module) => {
+    const { EmailCallback: Callback } = module.makeEmailAuthComponents({
+      callbackPath: EMAIL_CALLBACK_PATH,
+      linkCallbackPath: EMAIL_LINK_CALLBACK_PATH,
+      successPath: '/',
+    });
+    return { default: Callback };
+  })
+);
+const EmailLinkCallback = lazy(() =>
+  import('@app/features/auth/EmailAuth').then((module) => {
+    const { EmailLinkCallback: Callback } = module.makeEmailAuthComponents({
+      callbackPath: EMAIL_CALLBACK_PATH,
+      linkCallbackPath: EMAIL_LINK_CALLBACK_PATH,
+      successPath: '/',
+    });
+    return { default: Callback };
+  })
 );
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
@@ -209,13 +198,6 @@ function NotFound() {
   window.location.href = window.location.origin;
   return '';
 }
-
-const { EmailCallback, CALLBACK_PATH, EmailLinkCallback, LINK_CALLBACK_PATH } =
-  makeEmailAuthComponents({
-    callbackPath: '/email-signup-callback',
-    linkCallbackPath: '/inbox-link-callback',
-    successPath: '/',
-  });
 
 /** The retired /setup path forwards to the onboarding flow, query intact. */
 function SetupRedirect() {
@@ -323,11 +305,11 @@ const ROUTES: RouteDefinition[] = [
     component: () => <Login signupMode />,
   },
   {
-    path: CALLBACK_PATH,
+    path: EMAIL_CALLBACK_PATH,
     component: EmailCallback,
   },
   {
-    path: LINK_CALLBACK_PATH,
+    path: EMAIL_LINK_CALLBACK_PATH,
     component: EmailLinkCallback,
   },
   {
@@ -404,50 +386,6 @@ const ROUTES: RouteDefinition[] = [
   },
 ];
 
-function ConfiguredGlobalAppStateProvider(props: ParentProps) {
-  // Initialize global notification helpers
-  const notifInterface = usePlatformNotificationState();
-  useChatRenameWebsocketSync();
-  useReopenTrackedEntitiesOnReconnect();
-
-  if (isNativeMobilePlatform()) {
-    useInvalidateQueriesOnReconnect();
-  }
-
-  const onNotification = (notification: UnifiedNotification) => {
-    if (notifInterface === 'not-supported') return;
-    const layoutManager = globalSplitManager();
-    if (!layoutManager) return;
-    maybeHandlePlatformNotification(
-      notification,
-      notifInterface,
-      layoutManager
-    );
-  };
-  const notificationSource = createNotificationSource(
-    connectionGatewayWebsocket,
-    onNotification
-  );
-  useNotificationUpdates(notificationSource);
-
-  const blockOrchestrator = createBlockOrchestrator();
-  usePendingNotificationNavigationEffect(notificationSource);
-
-  return (
-    <GlobalAppStateProvider
-      notificationSource={notificationSource}
-      blockOrchestrator={blockOrchestrator}
-    >
-      {props.children}
-    </GlobalAppStateProvider>
-  );
-}
-
-function SoupBackfillSideEffect(props: { userId: string }) {
-  useSoupBackfills(props.userId);
-  return null;
-}
-
 /** Sets user info for observability, analytics, and login cookie. Must be inside QueryClientProvider. */
 function UserInfoSideEffects() {
   const analytics = useAnalytics();
@@ -501,11 +439,7 @@ function UserInfoSideEffects() {
     })
   );
 
-  return (
-    <Show when={userInfo()?.id} keyed>
-      {(userId) => <SoupBackfillSideEffect userId={userId} />}
-    </Show>
-  );
+  return null;
 }
 
 const clearBodyInlineStyleColor = () => {
@@ -514,72 +448,14 @@ const clearBodyInlineStyleColor = () => {
   document.body.style.backgroundColor = '';
 };
 
-function QuerySyncProviderWithUserId() {
-  const userId = useUserId();
-  return <QuerySyncProvider userId={userId} />;
-}
-
-function InitialInteractiveOnboardingModal() {
-  const userInfoQuery = useUserInfoQuery();
-  const onboardingV4 = useOnboardingV4Flag();
-  const [open, setOpen] = createSignal(true);
-  const [onboardingStarted, setOnboardingStarted] = createSignal(false);
-
-  const modalOpen = () =>
-    open() &&
-    // `just run_local` sets VITE_ENABLE_ONBOARDING_V4=false; without this the
-    // v4-off fallback would still open this legacy modal. Opt in with
-    // `just run_local --enable-onboarding`.
-    ENABLE_ONBOARDING_V4_OVERRIDE !== false &&
-    // Onboarding-v4 replaces this modal on desktop; the Layout redirect
-    // sends first-time users to /onboarding instead. Desktop waits for the
-    // flag to resolve so this doesn't flash before that redirect fires.
-    (isMobile() || (!onboardingV4().loading && !onboardingV4().enabled)) &&
-    !isNativeMobilePlatform() &&
-    userInfoQuery.data?.authenticated === true &&
-    (userInfoQuery.data.tutorialComplete === false || onboardingStarted());
-
-  createEffect(() => {
-    if (modalOpen()) {
-      setOnboardingStarted(true);
-    }
-  });
-
-  // First-time users (tutorial not yet completed) reach the app without passing
-  // through a login route that inits the email link — e.g. marketing SSO returns to
-  // /app, not /login — so kick off email sync once here. Idempotent on the backend;
-  // AlreadyInitialized is ignored. Keyed by user id (not a bare flag) so a native
-  // mobile logout→login of a different user in the same session still inits.
-  let emailInitForUserId: string | undefined;
-  createEffect(() => {
-    const data = userInfoQuery.data;
-    if (data?.authenticated !== true || data.tutorialComplete !== false) return;
-    if (emailInitForUserId === data.id) return;
-    emailInitForUserId = data.id;
-
-    void initAndStartEmailSync().match(
-      () => {},
-      (err) => {
-        if (err.tag !== 'AlreadyInitialized') {
-          console.error('Failed to init email link for new user', err);
-        }
-      }
-    );
-  });
-
-  const handleOpenChange = (nextOpen: boolean) => {
-    setOpen(nextOpen);
-    if (!nextOpen) {
-      setOnboardingStarted(false);
-    }
-  };
-
+function MaybeWorkspaceShell(props: ParentProps) {
+  const isAuthenticated = useIsAuthenticated();
   return (
-    <InteractiveOnboardingModal
-      open={modalOpen()}
-      isFirstTimeOnboarding
-      onOpenChange={handleOpenChange}
-    />
+    <Show when={isAuthenticated() === true} fallback={props.children}>
+      <Suspense fallback={<LoadingBlock />}>
+        <WorkspaceProviders>{props.children}</WorkspaceProviders>
+      </Suspense>
+    </Show>
   );
 }
 
@@ -612,50 +488,25 @@ export function Root() {
             <EntityProvider>
               <UserContextProvider>
                 <EmailLinksContextProvider>
-                  <BrowserNotificationModal />
-                  <IosPushNotificationModal />
-                  <IpadUnsupportedDialog />
-                  <GlobalShareInboxConflictDialog />
-                  <QuerySyncProviderWithUserId />
                   <UserInfoSideEffects />
-                  <TeamContextProvider>
-                    <ConfiguredGlobalAppStateProvider>
-                      <MutationUndoProvider>
-                        <ChannelsContextProvider>
-                          <CallProvider>
-                            <CallKitSync />
-                            <CallStartedNotifier />
-                            <IncomingCallEvents />
-                            <QuickAccessProvider>
-                              <SearchProvider>
-                                <ChatAttachmentsInit />
-                                <ReactiveFavicon />
-                                <Title>{tabTitle()}</Title>
-                                <Suspense>
-                                  <IsomorphicRouter
-                                    transformUrl={transformShortIdInUrlPathname}
-                                    root={Layout}
-                                    rootPreload={rootPreload}
-                                    base={ROUTER_BASE}
-                                  >
-                                    {{
-                                      path: '/',
-                                      component: TauriRouteListener,
-                                      children: ROUTES,
-                                    }}
-                                  </IsomorphicRouter>
-                                </Suspense>
-                                <Suspense>
-                                  <InitialInteractiveOnboardingModal />
-                                </Suspense>
-                                <ToastRegion />
-                              </SearchProvider>
-                            </QuickAccessProvider>
-                          </CallProvider>
-                        </ChannelsContextProvider>
-                      </MutationUndoProvider>
-                    </ConfiguredGlobalAppStateProvider>
-                  </TeamContextProvider>
+                  <MaybeWorkspaceShell>
+                    <Title>{tabTitle()}</Title>
+                    <Suspense>
+                      <IsomorphicRouter
+                        transformUrl={transformShortIdInUrlPathname}
+                        root={Layout}
+                        rootPreload={rootPreload}
+                        base={ROUTER_BASE}
+                      >
+                        {{
+                          path: '/',
+                          component: TauriRouteListener,
+                          children: ROUTES,
+                        }}
+                      </IsomorphicRouter>
+                    </Suspense>
+                    <ToastRegion />
+                  </MaybeWorkspaceShell>
                 </EmailLinksContextProvider>
               </UserContextProvider>
             </EntityProvider>

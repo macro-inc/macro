@@ -12,7 +12,7 @@ import {
 } from '@app/lib/graphql-cache';
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import { Telemetry } from '@macro-inc/observability';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md-id';
 import {
   SoupDocument,
   SoupItemFieldsFragmentDoc,

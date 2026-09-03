@@ -41,7 +41,6 @@ import {
   createMarkdownFile,
   createSnippet,
 } from '@core/util/create';
-import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import SkillIcon from '@icon/skill.svg';
 import WideAutomation from '@icon/wide-automation.svg';
 import { AnimatedChannelIcon } from '@icon/wide-channel';
@@ -95,6 +94,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { createMenuOpen, setCreateMenuOpen } from './launcher-state';
 import type { CreatableBlock, CreatableName } from './types';
 
 const LAUNCHER_FRECENCY_STORE = 'launcher-frecency-v1';
@@ -717,10 +717,7 @@ export function useCreatableEnabled(): (name: CreatableName) => boolean {
   return (name) => blocks().some((block) => block.blockName === name);
 }
 
-export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
-  false,
-  { id: 'launcher' }
-);
+export { createMenuOpen, setCreateMenuOpen } from './launcher-state';
 
 type LauncherMenuItemProps = {
   creatableBlock: CreatableBlock;

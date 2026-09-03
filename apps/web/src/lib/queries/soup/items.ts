@@ -20,7 +20,7 @@ import {
   mapApiSoupItemToEntity,
   mapSoupPageToEntityList,
 } from '@queries/soup/transform-utils';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md-id';
 import { storageServiceClient } from '@service-storage/client';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { ApiEntityFilterAst } from '@service-storage/generated/schemas/apiEntityFilterAst';

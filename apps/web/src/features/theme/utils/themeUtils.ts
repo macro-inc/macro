@@ -1,5 +1,11 @@
-import { toast } from '@core/component/Toast/Toast';
 import { batch, createEffect, on } from 'solid-js';
+
+function themeAlert(message: string) {
+  void import('@core/component/Toast/Toast').then(({ toast }) => {
+    toast.alert(message);
+  });
+}
+
 import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME } from '../constants';
 import { themeReactive } from '../signals/themeReactive';
 import {
@@ -48,7 +54,7 @@ async function _importTheme(): Promise<void> {
         ? convertThemev2v3(parsed)
         : null;
     if (!imported) {
-      toast.alert('Clipboard does not contain a valid theme.');
+      themeAlert('Clipboard does not contain a valid theme.');
       return;
     }
     const id = crypto.randomUUID();
@@ -66,7 +72,7 @@ async function _importTheme(): Promise<void> {
     applyTheme(id);
   } catch (e) {
     console.error('Failed to import theme:', e);
-    toast.alert('Failed to import theme from clipboard.');
+    themeAlert('Failed to import theme from clipboard.');
   }
 }
 
@@ -383,7 +389,7 @@ export function ensureMinimalThemeContrast() {
   const lowContrastTheme = Math.abs(content.l - surface.l) < 0.2;
   if (lowContrastTheme) {
     applyTheme(DEFAULT_DARK_THEME);
-    toast.alert(
+    themeAlert(
       'Tried to load a theme with low contrast, applying a readable theme.'
     );
   }

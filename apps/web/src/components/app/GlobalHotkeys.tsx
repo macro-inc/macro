@@ -45,7 +45,7 @@ import Plus from '@phosphor/plus.svg';
 import LogoutIcon from '@phosphor/sign-out.svg';
 import Upload from '@phosphor/upload.svg';
 import UserIcon from '@phosphor/user.svg';
-import { AiInstructionsIcon } from '@queries/storage/instructions-md';
+import { AiInstructionsIcon } from '@queries/storage/instructions-md-id';
 import { useMutationUndoContext } from '@queries/undo';
 import { debounce } from '@solid-primitives/scheduled';
 import { ThemeChips } from '@theme/components/ThemeChips';

@@ -1,4 +1,4 @@
-import { isAgentContextData } from '../nodes/AgentContextNode';
+import { isAgentContextData } from '../nodes/agent-context-data';
 
 export function parseUserMentions(text: string): string {
   return text.replace(/<m-user-mention>(.*?)<\/m-user-mention>/g, (_, json) => {

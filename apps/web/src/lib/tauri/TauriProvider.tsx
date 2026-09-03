@@ -6,47 +6,27 @@ import { PlatformNotificationProvider } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import { type OsType, type as osType } from '@tauri-apps/plugin-os';
+import { type as osType } from '@tauri-apps/plugin-os';
 import {
-  type Accessor,
-  createContext,
   createEffect,
   createSignal,
   type JSX,
   onCleanup,
   onMount,
-  useContext,
 } from 'solid-js';
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 import { ShareTargetProvider } from './ShareTargetProvider';
+import {
+  type BundleUpdateStatus,
+  TauriContext,
+  type TauriContextValue,
+} from './tauri-context';
 
 type NotAndroid = 'not-android';
 
-export type BundleUpdateStatus =
-  | { status: 'Idle' }
-  | { status: 'CheckingForUpdate' }
-  | { status: 'UpdateFound'; data: { version: string; notes: string | null } }
-  | { status: 'NoUpdateNeeded' }
-  | { status: 'WaitingForWifi' }
-  | { status: 'Downloading'; data: { progress: number } }
-  | { status: 'Unzipping'; data: { progress: number } }
-  | { status: 'ClearRequired'; data: { reason: string } }
-  | {
-      status: 'NativeUpdateRequired';
-      data: { bundleBuild: number; minNativeBuild: number };
-    }
-  | { status: 'Completed' }
-  | { status: 'Error'; data: { message: string } };
-
-interface TauriContextValue {
-  os: OsType;
-  runtimeInsets: Accessor<Insets | NotAndroid>;
-  bundleUpdateStatus: Accessor<BundleUpdateStatus>;
-}
-
-const TauriContext = createContext<TauriContextValue | undefined>(undefined);
+export type { BundleUpdateStatus } from './tauri-context';
 
 const LOADED_BUNDLE_BUILD = (() => {
   if (typeof document === 'undefined') return undefined;
@@ -205,22 +185,7 @@ export function MaybeTauriProvider(props: { children: JSX.Element }) {
   );
 }
 
-/// return the value of the tauri context
-export function useTauri() {
-  return useContext(TauriContext);
-}
-
-/// same as useTauri but throws if the structure of the component tree is invalid
-export function useExpectTauri() {
-  const res = useTauri();
-  if (res === undefined) {
-    throw new Error(
-      'Tauri Context was not found, did you mean to call useTauri instead?'
-    );
-  }
-
-  return res;
-}
+export { useExpectTauri, useTauri } from './tauri-context';
 
 /// we need this as a separate component since it must be a child of solidjs Router
 export function TauriRouteListener(props: RouteSectionProps) {

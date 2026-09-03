@@ -4,7 +4,7 @@ import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import { useQuery } from '@tanstack/solid-query';
 import { queryClient } from './client';
 import { historyKeys } from './history/keys';
-import { invalidatePreview } from './preview';
+import { invalidatePreview } from './preview/preview';
 import { soupKeys } from './soup/keys';
 
 const CHAT_STALE_TIME = 30 * 1000;

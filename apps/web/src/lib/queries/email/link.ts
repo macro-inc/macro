@@ -1,9 +1,7 @@
 import { useUserId } from '@core/context/user';
 import { throwOnErr } from '@core/util/result';
 import { invalidateUserInfo } from '@queries/auth/user-info';
-import { invalidateCalendarViews } from '@queries/calendar/sync';
 import { queryClient } from '@queries/client';
-import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { emailClient } from '@service-email/client';
 import type { ListLinksResponse } from '@service-email/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
@@ -165,7 +163,11 @@ export function useDisableCalendarMutation(
 
         onSuccess: () => {
           invalidateEmailLinks();
-          invalidateCalendarViews();
+          void import('@queries/calendar/sync').then(
+            ({ invalidateCalendarViews }) => {
+              invalidateCalendarViews();
+            }
+          );
         },
 
         onError: (_error, _linkId, context) => {
@@ -237,6 +239,9 @@ export function useRemoveInboxMutation(callbacks?: RemoveInboxCallbacks) {
           // synchronous edge drop). An owned inbox is torn down asynchronously,
           // so its threads are dropped when the `refresh_email` `link_removed`
           // event arrives after teardown — refetching now would race that.
+          const { invalidateAllSoup } = await import(
+            '@queries/soup/normalized-cache'
+          );
           invalidateAllSoup();
           await invalidateUserInfo();
         },

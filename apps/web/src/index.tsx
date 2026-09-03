@@ -6,7 +6,6 @@ import '@fontsource-variable/roboto-mono';
 import '@fontsource-variable/playfair-display';
 // SolidDevtools retains disposed memos, causes memory leak
 // import 'solid-devtools';
-import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform, isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
@@ -31,7 +30,6 @@ if (isTauri()) {
   });
 }
 
-initializeLexical();
 initMonochromeIcons();
 
 const renderApp = () => {

@@ -17,7 +17,7 @@ import {
   isInstructionsMdDoc,
   mapApiSoupItemToEntity,
 } from '@queries/soup/transform-utils';
-import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
+import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md-id';
 import {
   type GroupedSoupInput,
   GroupSoupDocument,

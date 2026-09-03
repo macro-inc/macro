@@ -52,10 +52,16 @@ import { UserMention } from './component/decorator/UserMention';
 import { Watermark } from './component/decorator/Watermark';
 import { registerDiffNodeFactory } from './component/dom-factory/diff-factory';
 
+let initialized = false;
+
 /**
- * This has to run once before any Lexicals mount. Currently imported in index.tsx.
+ * Register decorator components. Must run before any Lexical editor mounts.
+ * Called from the editor factories, not index.tsx, so login/boot does not
+ * download the markdown decorator graph.
  */
 export function initializeLexical() {
+  if (initialized) return;
+  initialized = true;
   clearDecorators();
   setDecorator(AgentContextNode, AgentContext);
   setDecorator(HorizontalRuleNode, HorizontalRule);
