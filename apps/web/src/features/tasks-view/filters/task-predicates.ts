@@ -1,11 +1,11 @@
 import { testFacets } from '@app/features/soup';
 import { getTaskAssigneeIds, type TaskEntityWithProperties } from '@entity';
+import type { TaskTab } from '../types';
 import {
   EMPTY_TASK_FACET_CONTEXT,
   TASK_FACETS,
   type TaskFacetContext,
 } from './task-facets';
-import type { TaskTab } from '../types';
 
 export type TaskViewContext = {
   tab: TaskTab;

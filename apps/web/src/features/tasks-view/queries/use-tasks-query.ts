@@ -149,11 +149,7 @@ export function useTasksDataSource(
 
   const groupedQueries = createGroupedSoupQueries({
     initialPage: createMemo(() => {
-      if (
-        search.isSearching() ||
-        query.isLoading ||
-        query.isPlaceholderData
-      ) {
+      if (search.isSearching() || query.isLoading || query.isPlaceholderData) {
         return;
       }
 
