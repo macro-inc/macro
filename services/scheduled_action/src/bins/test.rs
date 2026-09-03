@@ -9,8 +9,7 @@ use tower::ServiceExt;
 fn docs_router() -> Router {
     Router::new()
         .merge(mount_at_root_and_prefix(
-        Router::new()
-            .route("/health", axum::routing::get(health))
+            Router::new().route("/health", axum::routing::get(health)),
         ))
         .merge(mount_docs_at_root_and_prefix())
 }
@@ -35,7 +34,11 @@ async fn openapi_is_served_at_root_and_gateway_prefix() {
             .await
             .unwrap();
 
-        assert_eq!(response.status(), StatusCode::OK, "openapi at {uri} should be 200");
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "openapi at {uri} should be 200"
+        );
     }
 }
 
@@ -55,6 +58,10 @@ async fn health_is_served_at_root_and_gateway_prefix() {
             )
             .await
             .unwrap();
-        assert_eq!(response.status(), StatusCode::OK, "health at {uri} should be 200");
+        assert_eq!(
+            response.status(),
+            StatusCode::OK,
+            "health at {uri} should be 200"
+        );
     }
 }

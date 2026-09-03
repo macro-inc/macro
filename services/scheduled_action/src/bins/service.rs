@@ -188,8 +188,8 @@ fn mount_at_root_and_prefix(inner: Router) -> Router {
 fn mount_docs_at_root_and_prefix() -> Router {
     Router::new()
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", ApiDoc::openapi()))
-        .merge(
-            SwaggerUi::new(format!("{GATEWAY_PATH_PREFIX}/docs"))
-                .url(format!("{GATEWAY_PATH_PREFIX}/api-doc/openapi.json"), ApiDoc::openapi()),
-        )
+        .merge(SwaggerUi::new(format!("{GATEWAY_PATH_PREFIX}/docs")).url(
+            format!("{GATEWAY_PATH_PREFIX}/api-doc/openapi.json"),
+            ApiDoc::openapi(),
+        ))
 }
