@@ -22,7 +22,7 @@ use crate::domain::{
         EventReminders, EventStart, EventStatus, EventTime, EventTransparency, EventType,
         EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet,
         GoogleWatchChannel, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
-        TeamOutOfOffice, VisibleCalendar,
+        TeamOutOfOffice, VisibleCalendar, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -1818,6 +1818,7 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.color,
                 calendar.is_primary,
                 calendar.access_role,
+                calendar.provider_calendar_id,
                 calendar.default_reminders
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
@@ -1856,6 +1857,7 @@ impl CalendarRepository for PgCalendarRepository {
                 color: row.color,
                 is_primary: row.is_primary,
                 is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
+                is_subscription: is_system_calendar(&row.provider_calendar_id),
                 default_reminders: serde_json::from_value(row.default_reminders)
                     .inspect_err(|e| {
                         tracing::error!(error = ?e, calendar_id = %row.id, "malformed calendar default_reminders json");

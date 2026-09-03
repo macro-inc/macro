@@ -38,6 +38,12 @@ section listing each connected account with a per-account `Enable` (grant calend
 `Turn off` action, plus `Connect another account` to connect a new Google account
 (email + calendar).
 
+The side panel's `Calendars` section folds each connected account into a collapsible
+group: a caret plus the account address header with a checkbox that shows or hides all of
+that account's calendars at once, and the account's calendars listed beneath it (color dot,
+name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
+carry a small RSS icon.
+
 Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
 `<name>: <event title>`. The side panel's `Team out of office` section (shown only when the
 user belongs to a team with other members) has a checkbox in its header row toggling the

@@ -1036,6 +1036,9 @@ pub struct VisibleCalendar {
     pub is_primary: bool,
     /// Whether the grant can create and modify events on this calendar.
     pub is_writable: bool,
+    /// Whether this is one of Google's shared system calendars (holidays,
+    /// birthdays) the account subscribes to rather than one a person maintains.
+    pub is_subscription: bool,
     /// Default reminders applied to events that keep `useDefault`.
     pub default_reminders: Vec<EventReminderOverride>,
 }

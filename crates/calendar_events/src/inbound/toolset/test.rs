@@ -848,6 +848,7 @@ async fn list_calendars_maps_visible_calendars() {
             color: None,
             is_primary: true,
             is_writable: true,
+            is_subscription: false,
             default_reminders: Vec::new(),
         }]),
         ..Default::default()

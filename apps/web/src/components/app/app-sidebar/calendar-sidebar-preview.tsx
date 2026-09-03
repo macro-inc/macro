@@ -12,6 +12,7 @@ import type {
   CalendarTimeFormat,
 } from '@app/features/calendar/types';
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { groupCalendarSourcesByAccount } from '@app/features/calendar/utils/calendar-source-groups';
 import {
   formatCalendarTime,
   getDefaultCalendarTimeFormat,
@@ -26,6 +27,7 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GearIcon from '@phosphor/gear.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import RssIcon from '@phosphor/rss.svg';
 import VideoCameraIcon from '@phosphor/video-camera.svg';
 import XIcon from '@phosphor/x.svg';
 import type { CalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
@@ -350,28 +352,46 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
                       depth={4}
                       class="max-h-52 w-56 overflow-y-auto"
                     >
-                      <Dropdown.Group>
-                        <For each={sources()}>
-                          {(source) => (
-                            <Dropdown.CheckboxItem
-                              checked={isSourceVisible(source.id)}
-                              closeOnSelect={false}
-                              onChange={(visible) =>
-                                setSourceVisibility(source.id, visible)
-                              }
-                            >
-                              <span
-                                aria-hidden="true"
-                                class="size-2.5 shrink-0 rounded-sm"
-                                style={{ 'background-color': source.color }}
-                              />
-                              <span class="min-w-0 flex-1 truncate">
-                                {source.name}
-                              </span>
-                            </Dropdown.CheckboxItem>
-                          )}
-                        </For>
-                      </Dropdown.Group>
+                      <For each={groupCalendarSourcesByAccount(sources())}>
+                        {(group) => (
+                          <Dropdown.Group>
+                            <Dropdown.GroupLabel>
+                              {group.emailAddress}
+                            </Dropdown.GroupLabel>
+                            <For each={group.calendars}>
+                              {(source) => (
+                                <Dropdown.CheckboxItem
+                                  checked={isSourceVisible(source.id)}
+                                  closeOnSelect={false}
+                                  onChange={(visible) =>
+                                    setSourceVisibility(source.id, visible)
+                                  }
+                                >
+                                  <span
+                                    aria-hidden="true"
+                                    class="size-2.5 shrink-0 rounded-sm"
+                                    style={{ 'background-color': source.color }}
+                                  />
+                                  <span class="min-w-0 flex-1 truncate">
+                                    {source.name}
+                                  </span>
+                                  <Show when={source.isSubscription}>
+                                    <span
+                                      title="Subscription calendar"
+                                      class="flex shrink-0 text-ink-muted"
+                                    >
+                                      <RssIcon
+                                        class="size-3"
+                                        aria-label="Subscription calendar"
+                                      />
+                                    </span>
+                                  </Show>
+                                </Dropdown.CheckboxItem>
+                              )}
+                            </For>
+                          </Dropdown.Group>
+                        )}
+                      </For>
                     </Dropdown.SubContent>
                   </Dropdown.Sub>
 
