@@ -108,7 +108,6 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
   return (
     <SettingsPage
       title="Google"
-      description="Read, organize, and act on your email."
       icon={providerIcon('google')}
       onBack={closeConnectionsProvider}
     >

@@ -80,6 +80,7 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
 }
 
 function EmptyConnected() {
+  const google = EMPTY_STARTERS.find((item) => item.id === 'google');
   return (
     <>
       <SettingsCard>
@@ -91,7 +92,7 @@ function EmptyConnected() {
           <IntegrationRow
             icon={providerIcon('google')}
             title="Start with Google"
-            description="Read, organize, and act on your email."
+            description={google?.note}
           >
             <span class={buttonClasses({ variant: 'accent', size: 'sm' })}>
               Connect Google

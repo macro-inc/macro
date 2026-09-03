@@ -1,5 +1,5 @@
+import GoogleIcon from '@icon/macro-google.svg';
 import GithubIcon from '@icon/mcp-github.svg';
-import GmailIcon from '@icon/mcp-gmail.svg';
 import LinearIcon from '@icon/mcp-linear.svg';
 import NotionIcon from '@icon/mcp-notion.svg';
 import SlackIcon from '@icon/mcp-slack.svg';
@@ -17,7 +17,7 @@ export const EMPTY_STARTERS: FeaturedStarter[] = [
   {
     id: 'google',
     name: 'Google',
-    note: 'Read, organize, and act on your email.',
+    note: 'Connect Gmail and Calendar to Macro.',
   },
   {
     id: 'github',
@@ -70,7 +70,7 @@ export function isPipedreamBrowseHidden(appSlug: string): boolean {
 export function providerIcon(id: Exclude<ProviderId, 'other'>): JSX.Element {
   switch (id) {
     case 'google':
-      return <GmailIcon />;
+      return <GoogleIcon />;
     case 'github':
       return <GithubIcon />;
     case 'linear':
