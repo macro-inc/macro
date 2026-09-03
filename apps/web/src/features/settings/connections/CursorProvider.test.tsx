@@ -113,7 +113,7 @@ describe('CursorProvider', () => {
   it('shows the default model picker and disconnect when connected', async () => {
     mocks.status.data = {
       registered: true,
-      defaultModelId: null,
+      defaultModelId: 'default-model',
       updatedAt: '2026-08-27T12:00:00Z',
     };
     mocks.models.data = {
@@ -156,12 +156,14 @@ describe('CursorProvider', () => {
     expect(screen.queryByLabelText('API key')).toBeNull();
   });
 
-  it('shows Loading models while the roster is empty', () => {
+  it('shows Loading models while the roster query is pending', () => {
     mocks.status.data = {
       registered: true,
       defaultModelId: null,
       updatedAt: '2026-08-27T12:00:00Z',
     };
+    mocks.models.isPending = true;
+    mocks.models.isSuccess = false;
     mocks.models.data = { models: [] };
 
     render(() => <CursorProvider />);
@@ -171,7 +173,41 @@ describe('CursorProvider', () => {
     expect(picker).toHaveProperty('disabled', true);
     expect(picker?.getAttribute('aria-busy')).toBe('true');
     expect(screen.getByRole('status', { name: 'Loading models' })).toBeTruthy();
-    expect(screen.queryByText('Loading models…')).toBeNull();
+  });
+
+  it('shows an empty state when the roster loads with no models', () => {
+    mocks.status.data = {
+      registered: true,
+      defaultModelId: null,
+      updatedAt: '2026-08-27T12:00:00Z',
+    };
+    mocks.models.data = { models: [] };
+
+    render(() => <CursorProvider />);
+
+    expect(screen.getByText('No models available.')).toBeTruthy();
+    expect(document.getElementById('cursor-default-model')).toBeNull();
+    expect(screen.queryByRole('status', { name: 'Loading models' })).toBeNull();
+  });
+
+  it('leaves the picker unselected when the stored default is not offered', () => {
+    mocks.status.data = {
+      registered: true,
+      defaultModelId: 'retired-model',
+      updatedAt: '2026-08-27T12:00:00Z',
+    };
+    mocks.models.data = {
+      models: [
+        { id: 'default-model', displayName: 'Default Model' },
+        { id: 'grok-4.6', displayName: 'Grok 4.6' },
+      ],
+    };
+
+    render(() => <CursorProvider />);
+
+    const picker = screen.getByRole('button', { name: 'Default model' });
+    expect(picker.textContent).not.toContain('Default Model');
+    expect(picker.textContent).not.toContain('Grok 4.6');
   });
 
   it('shows retry when the model roster fails to load', () => {

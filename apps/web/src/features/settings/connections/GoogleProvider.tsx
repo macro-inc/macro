@@ -23,6 +23,7 @@ import { match } from 'ts-pattern';
 import { InboxSyncStatus } from '../inbox-sync-status';
 import { ConnectAction } from '../integration-ui';
 import {
+  IntegrationRow,
   SettingsCard,
   SettingsPage,
   SettingsRow,
@@ -41,7 +42,6 @@ import {
   signatureRowAction,
   signatureRowLabel,
 } from '../signature-row-action';
-import { CapabilityRow } from './capability-row';
 import { ConnectionRowActions } from './connection-more';
 import {
   type Capability,
@@ -122,16 +122,16 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
         fallback={
           <SettingsSection title="Your Connections">
             <SettingsCard>
-              <CapabilityRow
+              <IntegrationRow
                 title="Gmail"
-                outcome="Read, organize, and act on your email."
+                description="Read, organize, and act on your email."
               >
                 <ConnectAction
                   label="Connect"
                   onClick={() => void connect()}
                   disabled={pending()}
                 />
-              </CapabilityRow>
+              </IntegrationRow>
             </SettingsCard>
           </SettingsSection>
         }
@@ -192,9 +192,9 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
               title={<span class="ph-no-capture truncate">{email()}</span>}
             >
               <SettingsCard>
-                <CapabilityRow
+                <IntegrationRow
                   title="Gmail"
-                  outcome="Sync disabled"
+                  description="Sync disabled"
                   facts="Primary · Disabled"
                   muted
                 >
@@ -204,7 +204,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
                     onClick={() => void connect()}
                     disabled={pending()}
                   />
-                </CapabilityRow>
+                </IntegrationRow>
               </SettingsCard>
             </SettingsSection>
           )}
@@ -338,9 +338,9 @@ function GoogleInboxCapability(props: {
   };
 
   const capabilityRow = () => (
-    <CapabilityRow
+    <IntegrationRow
       title={props.row.title}
-      outcome={props.row.outcome}
+      description={props.row.outcome}
       facts={
         isGmail() && props.link ? (
           <InboxSyncStatus link={props.link} />
@@ -358,7 +358,7 @@ function GoogleInboxCapability(props: {
         onRemoveGmail={props.onRemoveGmail}
         onTurnOffCalendar={props.onTurnOffCalendar}
       />
-    </CapabilityRow>
+    </IntegrationRow>
   );
 
   return (

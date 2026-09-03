@@ -28,7 +28,7 @@ describe('reserveOauthPopup', () => {
 
 describe('assignOauthUrl', () => {
   it('assigns the reserved popup when one exists', () => {
-    const popup = { location: { href: '' } } as Window;
+    const popup = { closed: false, location: { href: '' } } as Window;
     assignOauthUrl(popup, 'https://oauth.example/start');
     expect(popup.location.href).toBe('https://oauth.example/start');
     expect(openExternalUrl).not.toHaveBeenCalled();
@@ -36,6 +36,13 @@ describe('assignOauthUrl', () => {
 
   it('falls back to openExternalUrl when the popup is missing', () => {
     assignOauthUrl(null, 'https://oauth.example/start');
+    expect(openExternalUrl).toHaveBeenCalledWith('https://oauth.example/start');
+  });
+
+  it('falls back to openExternalUrl when the reserved popup is already closed', () => {
+    const popup = { closed: true, location: { href: '' } } as Window;
+    assignOauthUrl(popup, 'https://oauth.example/start');
+    expect(popup.location.href).toBe('');
     expect(openExternalUrl).toHaveBeenCalledWith('https://oauth.example/start');
   });
 });

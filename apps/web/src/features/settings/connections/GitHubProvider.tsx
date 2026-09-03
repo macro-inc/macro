@@ -14,9 +14,14 @@ import {
 import { createSignal, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ConnectAction } from '../integration-ui';
-import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
+import {
+  IntegrationRow,
+  SettingsCard,
+  SettingsPage,
+  SettingsSection,
+} from '../primitives';
 import { AiGrantActions } from './ai-grant-actions';
-import { CapabilityRow, capabilityFacts } from './capability-row';
+import { capabilityFacts } from './capability-row';
 import {
   type ConnectionMenuItem,
   ConnectionRowActions,
@@ -243,22 +248,22 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
         <SettingsCard>
           <Show when={account()}>
             {(row) => (
-              <CapabilityRow
+              <IntegrationRow
                 title={row().title}
-                outcome={row().outcome}
+                description={row().outcome}
                 facts={capabilityFacts(row())}
               >
                 {accountActions(row().status)}
-              </CapabilityRow>
+              </IntegrationRow>
             )}
           </Show>
 
           <Show
             when={ai()}
             fallback={
-              <CapabilityRow
+              <IntegrationRow
                 title={CURATED_AI.github.title}
-                outcome={CURATED_AI.github.outcome}
+                description={CURATED_AI.github.outcome}
                 facts="Powered by Pipedream"
               >
                 <ConnectionRowActions
@@ -271,18 +276,18 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                   }
                   items={[]}
                 />
-              </CapabilityRow>
+              </IntegrationRow>
             }
           >
             {(row) => (
-              <CapabilityRow
+              <IntegrationRow
                 title={row().title}
-                outcome={row().outcome}
+                description={row().outcome}
                 facts={capabilityFacts(row())}
                 muted={row().status === 'off'}
               >
                 {aiActions(row().status)}
-              </CapabilityRow>
+              </IntegrationRow>
             )}
           </Show>
         </SettingsCard>
@@ -290,9 +295,9 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
 
       <SettingsSection title="Team Connections">
         <SettingsCard>
-          <CapabilityRow
+          <IntegrationRow
             title="GitHub App"
-            outcome="Choose repositories for Macro to sync."
+            description="Choose repositories for Macro to sync."
           >
             <Show
               when={accountConnected()}
@@ -307,7 +312,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                 href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
               />
             </Show>
-          </CapabilityRow>
+          </IntegrationRow>
         </SettingsCard>
       </SettingsSection>
       <DisconnectConfirmDialog

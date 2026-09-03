@@ -10,7 +10,7 @@ export function reserveOauthPopup(): Window | null {
 }
 
 export function assignOauthUrl(popup: Window | null, url: string) {
-  if (popup) {
+  if (popup && !popup.closed) {
     popup.location.href = url;
     return;
   }

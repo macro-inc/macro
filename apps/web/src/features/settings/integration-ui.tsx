@@ -55,12 +55,17 @@ export function ConnectAction(props: {
     </>
   );
   if (props.href) {
+    const inert = () => Boolean(props.disabled || props.loading);
     return (
       <a
         href={props.href}
         target="_blank"
         rel="noopener noreferrer"
         aria-label={props.ariaLabel}
+        aria-disabled={inert() || undefined}
+        onClick={(event) => {
+          if (inert()) event.preventDefault();
+        }}
         class={className()}
       >
         {body}

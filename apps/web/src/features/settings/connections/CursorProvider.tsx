@@ -12,12 +12,12 @@ import type { CursorModelOption } from '@service-auth/generated/schemas';
 import { Button, Select } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import {
+  IntegrationRow,
   SettingsCard,
   SettingsPage,
   SettingsRow,
   SettingsSection,
 } from '../primitives';
-import { CapabilityRow } from './capability-row';
 import { ConnectionRowActions } from './connection-more';
 import {
   type DisconnectConfirm,
@@ -45,15 +45,12 @@ export function CursorProvider() {
   const setCursorDefaultModel = useSetCursorDefaultModel();
   const models = () => cursorModels.data?.models ?? [];
   const modelsLoading = () =>
-    cursorRegistered() &&
-    !cursorModels.isError &&
-    (cursorModels.isPending ||
-      (cursorModels.isSuccess && models().length === 0));
+    cursorRegistered() && !cursorModels.isError && cursorModels.isPending;
   const selectedModelId = () => {
     const id = cursorStatus.data?.defaultModelId;
     const list = models();
     if (id && list.some((model) => model.id === id)) return id;
-    return list[0]?.id ?? '';
+    return '';
   };
 
   const handleCursorModelChange = async (modelId: string) => {
@@ -101,9 +98,9 @@ export function CursorProvider() {
     >
       <SettingsSection title="Your Connections">
         <SettingsCard>
-          <CapabilityRow
+          <IntegrationRow
             title="Cursor"
-            outcome="Use your Cursor account to run agent sessions in Macro."
+            description="Use your Cursor account to run agent sessions in Macro."
             facts="Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
           >
             <Show
@@ -133,7 +130,7 @@ export function CursorProvider() {
                 />
               </Show>
             </Show>
-          </CapabilityRow>
+          </IntegrationRow>
           <Show when={!cursorStatus.isPlaceholderData}>
             <Show
               when={cursorRegistered()}
@@ -189,47 +186,58 @@ export function CursorProvider() {
                 <Show
                   when={cursorModels.isError}
                   fallback={
-                    <Select<CursorModelOption>
-                      class="w-full"
-                      options={models()}
-                      optionValue="id"
-                      optionTextValue="displayName"
-                      value={
-                        models().find(
-                          (model) => model.id === selectedModelId()
-                        ) ?? undefined
-                      }
-                      onChange={(model) => {
-                        if (model) void handleCursorModelChange(model.id);
-                      }}
-                      disabled={
-                        setCursorDefaultModel.isPending || modelsLoading()
+                    <Show
+                      when={models().length > 0 || modelsLoading()}
+                      fallback={
+                        <span class="text-sm text-ink-muted">
+                          No models available.
+                        </span>
                       }
                     >
-                      <Select.Trigger
-                        id="cursor-default-model"
-                        class="settings-input w-full min-w-0 bg-inset disabled:opacity-100 @[460px]:w-56"
-                        aria-label="Default model"
-                        aria-busy={modelsLoading()}
+                      <Select<CursorModelOption>
+                        class="w-full"
+                        options={models()}
+                        optionValue="id"
+                        optionTextValue="displayName"
+                        value={
+                          models().find(
+                            (model) => model.id === selectedModelId()
+                          ) ?? undefined
+                        }
+                        onChange={(model) => {
+                          if (model) void handleCursorModelChange(model.id);
+                        }}
+                        disabled={
+                          setCursorDefaultModel.isPending || modelsLoading()
+                        }
                       >
-                        <Select.Value<CursorModelOption>>
-                          {(state) => state.selectedOption()?.displayName ?? ''}
-                        </Select.Value>
-                        <Show
-                          when={!modelsLoading()}
-                          fallback={
-                            <span role="status" aria-label="Loading models">
-                              <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
-                            </span>
-                          }
+                        <Select.Trigger
+                          id="cursor-default-model"
+                          class="settings-input w-full min-w-0 bg-inset disabled:opacity-100 @[460px]:w-56"
+                          aria-label="Default model"
+                          aria-busy={modelsLoading()}
                         >
-                          <Select.Icon />
-                        </Show>
-                      </Select.Trigger>
-                      <Select.Content>
-                        <Select.Listbox />
-                      </Select.Content>
-                    </Select>
+                          <Select.Value<CursorModelOption>>
+                            {(state) =>
+                              state.selectedOption()?.displayName ?? ''
+                            }
+                          </Select.Value>
+                          <Show
+                            when={!modelsLoading()}
+                            fallback={
+                              <span role="status" aria-label="Loading models">
+                                <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
+                              </span>
+                            }
+                          >
+                            <Select.Icon />
+                          </Show>
+                        </Select.Trigger>
+                        <Select.Content>
+                          <Select.Listbox />
+                        </Select.Content>
+                      </Select>
+                    </Show>
                   }
                 >
                   <div class="flex items-center gap-2">

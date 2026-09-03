@@ -100,45 +100,42 @@ export function ConnectionsPage() {
           </SettingsPage>
         }
       >
-        {(activeProvider) => {
-          const slug = activeProvider();
-          return (
-            <Show
-              when={slug === 'cursor' || ready()}
-              fallback={
-                <SettingsPage
-                  title={providerTitle(slug)}
-                  description={CONNECTIONS_DESCRIPTION}
-                  icon={providerIcon(slug)}
-                  onBack={closeConnectionsProvider}
-                >
-                  <p class="text-sm text-ink-muted">Loading…</p>
-                </SettingsPage>
-              }
-            >
-              <Switch>
-                <Match when={slug === 'github'}>
-                  <GitHubProvider model={model()} />
-                </Match>
-                <Match when={slug === 'google'}>
-                  <GoogleProvider model={model()} />
-                </Match>
-                <Match when={slug === 'linear'}>
-                  <PipedreamAiProvider model={model()} provider="linear" />
-                </Match>
-                <Match when={slug === 'notion'}>
-                  <PipedreamAiProvider model={model()} provider="notion" />
-                </Match>
-                <Match when={slug === 'slack'}>
-                  <PipedreamAiProvider model={model()} provider="slack" />
-                </Match>
-                <Match when={slug === 'cursor'}>
-                  <CursorProvider />
-                </Match>
-              </Switch>
-            </Show>
-          );
-        }}
+        {(slug) => (
+          <Show
+            when={slug() === 'cursor' || ready()}
+            fallback={
+              <SettingsPage
+                title={providerTitle(slug())}
+                description={CONNECTIONS_DESCRIPTION}
+                icon={providerIcon(slug())}
+                onBack={closeConnectionsProvider}
+              >
+                <p class="text-sm text-ink-muted">Loading…</p>
+              </SettingsPage>
+            }
+          >
+            <Switch>
+              <Match when={slug() === 'github'}>
+                <GitHubProvider model={model()} />
+              </Match>
+              <Match when={slug() === 'google'}>
+                <GoogleProvider model={model()} />
+              </Match>
+              <Match when={slug() === 'linear'}>
+                <PipedreamAiProvider model={model()} provider="linear" />
+              </Match>
+              <Match when={slug() === 'notion'}>
+                <PipedreamAiProvider model={model()} provider="notion" />
+              </Match>
+              <Match when={slug() === 'slack'}>
+                <PipedreamAiProvider model={model()} provider="slack" />
+              </Match>
+              <Match when={slug() === 'cursor'}>
+                <CursorProvider />
+              </Match>
+            </Switch>
+          </Show>
+        )}
       </Show>
     </Show>
   );

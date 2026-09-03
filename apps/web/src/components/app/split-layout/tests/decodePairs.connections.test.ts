@@ -21,8 +21,11 @@ describe('decodePairs Connections rest', () => {
   });
 
   it('does not consume an unknown token as Connections rest', () => {
-    expect(decodePairs(['settings', 'connections', 'nope'])).toEqual([
+    expect(
+      decodePairs(['settings', 'connections', 'nope', 'component', 'inbox'])
+    ).toEqual([
       { type: 'component', id: 'settings' },
+      { type: 'nope', id: 'component' },
     ]);
   });
 });

@@ -5,9 +5,14 @@ import {
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { createSignal, type JSX } from 'solid-js';
-import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
+import {
+  IntegrationRow,
+  SettingsCard,
+  SettingsPage,
+  SettingsSection,
+} from '../primitives';
 import { AiGrantActions } from './ai-grant-actions';
-import { CapabilityRow, capabilityFacts } from './capability-row';
+import { capabilityFacts } from './capability-row';
 import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
@@ -160,14 +165,14 @@ export function PipedreamAiProvider(props: {
     >
       <SettingsSection title="Your Connections">
         <SettingsCard>
-          <CapabilityRow
+          <IntegrationRow
             title={copy.title}
-            outcome={copy.outcome}
+            description={copy.outcome}
             facts={aiFacts()}
             muted={row()?.status === 'off'}
           >
             {actions()}
-          </CapabilityRow>
+          </IntegrationRow>
         </SettingsCard>
       </SettingsSection>
       <DisconnectConfirmDialog

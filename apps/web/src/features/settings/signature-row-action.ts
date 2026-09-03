@@ -1,3 +1,5 @@
+import { match } from 'ts-pattern';
+
 export type SignatureRowAction = 'edit' | 'done' | 'save';
 
 export function signatureRowAction(
@@ -9,18 +11,11 @@ export function signatureRowAction(
 }
 
 export function signatureRowLabel(action: SignatureRowAction): string {
-  switch (action) {
-    case 'edit':
-      return 'Edit';
-    case 'done':
-      return 'Done';
-    case 'save':
-      return 'Save';
-    default: {
-      const _never: never = action;
-      return _never;
-    }
-  }
+  return match(action)
+    .with('edit', () => 'Edit')
+    .with('done', () => 'Done')
+    .with('save', () => 'Save')
+    .exhaustive();
 }
 
 export function finishSignatureRow(input: {

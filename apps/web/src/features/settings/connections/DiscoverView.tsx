@@ -50,7 +50,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
   });
 
   const rest = createMemo(() => {
-    const query = catalog.searchInput().trim().toLowerCase();
+    const query = catalog.search().trim().toLowerCase();
     return catalog.entries().filter((entry) => {
       if (!query) return true;
       return `${entry.display_name} ${entry.description ?? ''} ${entry.app_slug}`

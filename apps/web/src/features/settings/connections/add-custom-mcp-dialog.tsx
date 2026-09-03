@@ -17,7 +17,13 @@ export function AddCustomMcpDialog(props: {
     setUrl('');
   };
 
+  const close = () => {
+    reset();
+    props.onOpenChange(false);
+  };
+
   const handleSubmit = () => {
+    if (addMutation.isPending) return;
     const n = name().trim();
     const u = url().trim();
     if (!n || !u) return;
@@ -26,8 +32,7 @@ export function AddCustomMcpDialog(props: {
       { server_name: n, url: u },
       {
         onSuccess: () => {
-          reset();
-          props.onOpenChange(false);
+          close();
           props.onAdded?.();
         },
         onError: () => {
@@ -40,7 +45,9 @@ export function AddCustomMcpDialog(props: {
   return (
     <Dialog
       open={props.open}
-      onOpenChange={(open) => !open && props.onOpenChange(false)}
+      onOpenChange={(open) => {
+        if (!open) close();
+      }}
       position="center"
       visibleScrim
       class="w-100"
@@ -61,10 +68,7 @@ export function AddCustomMcpDialog(props: {
                 onInput={(e) => setName(e.currentTarget.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSubmit();
-                  if (e.key === 'Escape') {
-                    reset();
-                    props.onOpenChange(false);
-                  }
+                  if (e.key === 'Escape') close();
                 }}
               />
             </label>
@@ -78,25 +82,14 @@ export function AddCustomMcpDialog(props: {
                 onInput={(e) => setUrl(e.currentTarget.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') handleSubmit();
-                  if (e.key === 'Escape') {
-                    reset();
-                    props.onOpenChange(false);
-                  }
+                  if (e.key === 'Escape') close();
                 }}
               />
             </label>
           </div>
 
           <div class="flex justify-end gap-2 pt-1">
-            <Button
-              variant="outline"
-              size="sm"
-              depth={3}
-              onClick={() => {
-                reset();
-                props.onOpenChange(false);
-              }}
-            >
+            <Button variant="outline" size="sm" depth={3} onClick={close}>
               Cancel
             </Button>
             <Button
