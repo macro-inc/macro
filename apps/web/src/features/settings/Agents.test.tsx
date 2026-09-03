@@ -697,6 +697,52 @@ describe('Agents', () => {
     expect(within(defaultModel).getAllByRole('option')).toHaveLength(2);
   });
 
+  it('falls back to the first advertised model when current is absent', () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels(
+      [
+        { id: 'claude-code', name: 'Claude Code' },
+        { id: 'codex', name: 'Codex' },
+      ],
+      'retired-model'
+    );
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+      target: { value: MACROD_HARNESS.id },
+    });
+
+    expect(within(dialog).getByLabelText('Default model')).toHaveProperty(
+      'value',
+      'claude-code'
+    );
+  });
+
+  it('shows the current model when an available catalog has no options', () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels(
+      [],
+      'provider-default'
+    );
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+      target: { value: MACROD_HARNESS.id },
+    });
+
+    const defaultModel = within(dialog).getByLabelText('Default model');
+    expect(defaultModel).toHaveProperty('value', 'provider-default');
+    expect(
+      within(defaultModel).getByRole('option', {
+        name: 'provider-default (unavailable)',
+      })
+    ).toBeTruthy();
+  });
+
   it('submits macrod agents with the macrod slug and harness id', async () => {
     harnessMocks.query.data = [MACROD_HARNESS];
     modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels(
