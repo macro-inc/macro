@@ -9,7 +9,7 @@ import {
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
-import { Checkbox, Calendar as MiniCalendar } from '@ui';
+import { Calendar as MiniCalendar, ToggleSwitch } from '@ui';
 import { format } from 'date-fns';
 import {
   createEffect,
@@ -128,16 +128,11 @@ function CalendarTeamOooSidePanelSection() {
         defaultOpen
         actions={
           <span title="Show on calendar">
-            <Checkbox
+            <ToggleSwitch
               checked={isOverlayVisible()}
               onChange={setOverlayVisible}
-              class="flex items-center"
-            >
-              <Checkbox.Label class="sr-only">
-                Show team out of office on the calendar
-              </Checkbox.Label>
-              <Checkbox.Control />
-            </Checkbox>
+              aria-label="Show team out of office on the calendar"
+            />
           </span>
         }
       >
