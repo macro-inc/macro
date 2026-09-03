@@ -3,9 +3,14 @@
 //!
 //! Consumption mirrors the scheduled-action executor
 //! (`services/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
-//! the full static toolset, the tool-use system prompt plus the agent-session
-//! preamble and the owner's memory, and usage recorded per turn against the
-//! session owner.
+//! the full static toolset, the agent-session preamble, the static Macro
+//! prompt (immediately before any session instructions), and the owner's
+//! memory, with usage recorded per turn against the session owner.
+//!
+//! This is also where a session's own instructions become a system prompt.
+//! Nothing has to be transported for it - the loop runs in this process - which
+//! is why the in-memory runtime is the one provider that needs no wire format
+//! for them. See [`system_prompt`] for how the sections are ordered.
 
 use std::sync::Arc;
 
@@ -21,6 +26,9 @@ use sqlx::PgPool;
 use tokio::sync::mpsc;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
+
+#[cfg(test)]
+mod test;
 
 /// How many stream parts may sit unread before the engine pauses; keeps a
 /// slow consumer from buffering a whole turn.
@@ -65,21 +73,18 @@ async fn drive_turn(
     let TurnRequest {
         owner,
         model,
+        instructions,
         messages,
         cancel,
     } = request;
 
     let tools = all_tools();
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
-    let system_prompt = match user_memory {
-        Some(memory) => format!(
-            "{}\n{}\n<user_memory>\n{}\n</user_memory>",
-            tools.prompt,
-            prompt::agent_session::PROMPT,
-            memory
-        ),
-        None => format!("{}\n{}", tools.prompt, prompt::agent_session::PROMPT),
-    };
+    let system_prompt = system_prompt(
+        &tools.prompt,
+        instructions.as_deref(),
+        user_memory.as_deref(),
+    );
 
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
     let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
@@ -119,6 +124,37 @@ async fn drive_turn(
     .await;
     forward.abort();
     result
+}
+
+/// The turn's system prompt: the agent-session preamble, the static Macro
+/// prompt (how to use the product: mentions, tools, terminology), then the
+/// session's own instructions and the owner's memory when there are any.
+///
+/// The static Macro prompt sits immediately before `<session_instructions>`
+/// so it is the preamble the model reads as it takes in the caller's word —
+/// the same reason DCS puts `additional_instructions` after the standing
+/// prompt. Memory stays last so a remembered fact is never read as an
+/// instruction.
+fn system_prompt(
+    tools_prompt: &impl std::fmt::Display,
+    instructions: Option<&str>,
+    user_memory: Option<&str>,
+) -> String {
+    let mut prompt = format!("{}\n{}", prompt::agent_session::PROMPT, tools_prompt);
+    // Blank instructions are "none" stated clumsily. A delimited section with
+    // nothing in it is worse than no section: the model has to decide what an
+    // empty instruction means.
+    if let Some(instructions) = instructions.filter(|text| !text.trim().is_empty()) {
+        prompt.push_str("\n<session_instructions>\n");
+        prompt.push_str(instructions);
+        prompt.push_str("\n</session_instructions>");
+    }
+    if let Some(memory) = user_memory {
+        prompt.push_str("\n<user_memory>\n");
+        prompt.push_str(memory);
+        prompt.push_str("\n</user_memory>");
+    }
+    prompt
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.

@@ -38,22 +38,15 @@ jobs:
             - 'Cargo.lock'
             - 'rust-toolchain.toml'
             - 'services/lexical-service/**'
-            - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/setup-reqs-web/**'
-            - '.github/workflows/web-app-check-main.yml'
           api_changed:
             - 'crates/**/*.rs'
             - 'services/**/*.rs'
-            - 'tooling/xtask/**/*.rs'
             - 'Cargo.toml'
             - 'Cargo.lock'
-            - 'flake.nix'
-            - 'flake.lock'
             - 'apps/web/scripts/generate-api-schema.ts'
             - 'apps/web/scripts/services.ts'
-            - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/setup-reqs-web/**'
-            - '.github/workflows/web-app-check-main.yml'
   typescript:
     needs:
     - path-check

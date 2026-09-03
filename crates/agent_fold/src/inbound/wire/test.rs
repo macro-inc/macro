@@ -18,6 +18,8 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
                 output: None,
                 exit_code: None,
             },
+            raw_input: Some(Box::new(json!({ "command": "ls" }))),
+            raw_output: None,
         }),
         stop: None,
     };
@@ -40,7 +42,9 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
                     "command": "ls",
                     "output": null,
                     "exitCode": null
-                }
+                },
+                "rawInput": { "command": "ls" },
+                "rawOutput": null
             }],
             "stop": null
         })

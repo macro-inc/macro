@@ -47,6 +47,16 @@ export function resolveFeatureFlag(
 export const DEV_MODE_ENV = import.meta.env.MODE === 'development';
 
 /**
+ * Switches Inbox and Tasks from the current SoupView implementations to the
+ * new composable view implementations. Override locally with
+ * VITE_ENABLE_NEW_APP_VIEWS.
+ */
+export const ENABLE_NEW_APP_VIEWS_FLAG = 'enable-new-app-views';
+export const ENABLE_NEW_APP_VIEWS_OVERRIDE = getFeatureFlagOverride(
+  'ENABLE_NEW_APP_VIEWS'
+);
+
+/**
  * This constant reflects whether the app is running in production mode with prod backend environment
  *
  * @returns true in macro.com, false otherwise
@@ -152,6 +162,31 @@ export function ENABLE_EMAIL_SIGNATURES(): boolean {
     analytics.posthog.isFeatureEnabled(ENABLE_EMAIL_SIGNATURES_FLAG) ?? false
   );
 }
+
+// SidebarNext: the rebuilt app sidebar — the narrow icon rail in
+// `components/app/sidebar-next` — rendered in place of `AppSidebar`.
+// PostHog-gated everywhere, dev included: no dev-mode default, so `AppSidebar`
+// stays the sidebar you get by default until the flag is on for you. Set
+// VITE_ENABLE_SIDEBAR_NEXT=true to force the rail on locally without PostHog.
+//
+// The PostHog key is deliberately broader than the local names: `enable-new-app-views`
+// is the rollout switch for the rebuilt app surfaces, of which this sidebar is one.
+export const ENABLE_SIDEBAR_NEXT_FLAG = 'enable-new-app-views';
+// Read statically rather than through `getFeatureFlagOverride` for the same
+// reason as VITE_ENABLE_REMINDERS below: Vite substitutes `import.meta.env.VITE_X`
+// by text at build time, so that helper's dynamic lookup can come back
+// undefined in a production bundle.
+//
+// Written out rather than using `|| undefined` so an explicit
+// VITE_ENABLE_SIDEBAR_NEXT=false stays false instead of being coerced to
+// undefined and falling through to PostHog.
+const SIDEBAR_NEXT_ENV_OVERRIDE = import.meta.env.VITE_ENABLE_SIDEBAR_NEXT;
+export const ENABLE_SIDEBAR_NEXT_OVERRIDE: boolean | undefined =
+  SIDEBAR_NEXT_ENV_OVERRIDE === 'true'
+    ? true
+    : SIDEBAR_NEXT_ENV_OVERRIDE === 'false'
+      ? false
+      : undefined;
 
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
@@ -486,6 +521,11 @@ export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG =
 export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
+
+export const ENABLE_INBOX_NOTIFIED_SORT_FLAG = 'enable-inbox-notified-sort';
+export const ENABLE_INBOX_NOTIFIED_SORT_OVERRIDE =
+  getFeatureFlagOverride('ENABLE_INBOX_NOTIFIED_SORT') ??
+  (DEV_MODE_ENV ? true : undefined);
 
 export const ENABLE_GRAPHQL_SOUP_FLAG = 'enable-graphql-soup';
 export const ENABLE_GRAPHQL_SOUP_OVERRIDE = getFeatureFlagOverride(

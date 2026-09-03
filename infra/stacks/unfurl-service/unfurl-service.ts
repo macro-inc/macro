@@ -8,14 +8,19 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
+  ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
+  getGatewayAlb,
+  GatewayService,
   stack,
 } from '../../packages/shared';
+
+const gatewayLoadBalancer = getGatewayAlb();
 
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
@@ -100,6 +105,22 @@ export class UnfurlService extends pulumi.ComponentResource {
     this.serviceAlbSg = sg.serviceAlbSg;
     this.serviceSg = sg.serviceSg;
 
+    const gatewayTargetGroup = new ServiceTargetGroup(
+      `${stack}-${BASE_NAME}`,
+      {
+        tags: this.tags,
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
+        vpcId: vpc.vpcId,
+        containerPort: serviceContainerPort,
+        service: GatewayService.UNFURL_SERVICE,
+        healthCheckPath,
+        pathPatterns: ['/unfurl', '/unfurl/*'],
+        serviceSecurityGroupId: this.serviceSg.id,
+        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+      },
+      { parent: this }
+    );
+
     // lb
     const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
       serviceName: BASE_NAME, // service name
@@ -159,6 +180,18 @@ export class UnfurlService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
+        loadBalancers: [
+          {
+            targetGroupArn: targetGroup.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+          {
+            targetGroupArn: gatewayTargetGroup.target_group.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+        ],
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
@@ -214,6 +247,7 @@ export class UnfurlService extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        dependsOn: [gatewayTargetGroup.listener_rule],
       }
     );
 

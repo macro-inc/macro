@@ -19,6 +19,7 @@ anyhow = { workspace = true }
 axum = { workspace = true, features = ["ws"] }
 base64 = { workspace = true }
 bot_id = { path = "../bot_id" }
+harness_id = { path = "../harness_id" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
 channels = { path = "../channels", features = ["ports"] }
@@ -57,4 +58,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
+harness_id = { path = "../harness_id", features = ["test-utils"] }
 mockall = { workspace = true }
+model_user = { path = "../model_user" }

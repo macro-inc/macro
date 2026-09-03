@@ -85,7 +85,7 @@ export const MeasureContainer = (props: ParentProps<MeasureContainerProps>) => {
         innerRef = el;
       }}
       classList={{
-        'transition-position duration-50': props.transition,
+        'transition-[left,right,top,bottom] duration-50': props.transition,
       }}
     >
       {props.children}

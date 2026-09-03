@@ -311,7 +311,7 @@ function TokenSlider(props: {
         step="0.01"
         value={draft()}
         aria-label={props.label}
-        class="theme-token-slider h-1 min-w-16 flex-1 cursor-pointer appearance-none rounded-full"
+        class="theme-token-slider h-1 min-w-16 flex-1 appearance-none rounded-full"
         style={{
           '--slider-color': props.color,
           'accent-color': props.color,
@@ -541,13 +541,12 @@ function RampEditor(props: { tokens: readonly string[] }) {
           </div>
         </div>
         <Checkbox
-          as="label"
           checked={overwrite()}
           onChange={setOverwriteAll}
           class="flex items-center gap-2 text-xs text-ink-muted"
         >
           <Checkbox.Control />
-          <span>Overwrite custom stops</span>
+          <Checkbox.Label>Overwrite custom stops</Checkbox.Label>
         </Checkbox>
       </div>
 

@@ -41,6 +41,8 @@ import {
   type SidebarState,
 } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
+import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
+import { useSidebarNextFlag } from '@components/app/sidebar-next/use-sidebar-next-flag';
 import {
   isSidebarVisible,
   SidebarCollapseContext,
@@ -350,8 +352,12 @@ function LayoutInner(props: RouteSectionProps) {
     createSignal(false);
   const callCtx = useCallContextOptional();
   const incomingCallWidgetVisible = useIncomingCallWidgetVisible();
+  const sidebarNextEnabled = useSidebarNextFlag();
+  // SidebarRail is already narrow and has no slim mode, so nothing should arm
+  // the hover-peek overlay strip or the slim-mode call widget under it.
   const sidebarCollapsed = createMemo(
-    () => isSidebarVisible() && sidebarState() === 'slim'
+    () =>
+      !sidebarNextEnabled() && isSidebarVisible() && sidebarState() === 'slim'
   );
   const activeCallWidgetVisible = createMemo(
     () =>
@@ -491,19 +497,32 @@ function LayoutInner(props: RouteSectionProps) {
             sortables with the same drag-drop context as the entity drags. */}
         <ItemDndProvider>
           <Show when={isSidebarVisible()}>
-            <AppSidebar
-              sidebarState={sidebarState()}
-              overlayOpen={sidebarOverlayOpen()}
-              onOverlayOpenChange={setSidebarOverlayOpenGuarded}
-              onOpenChange={(open) => {
-                if (!open) {
-                  setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
-                  return;
-                }
+            <Show
+              when={sidebarNextEnabled()}
+              fallback={
+                <AppSidebar
+                  sidebarState={sidebarState()}
+                  overlayOpen={sidebarOverlayOpen()}
+                  onOverlayOpenChange={setSidebarOverlayOpenGuarded}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
+                      return;
+                    }
 
-                setSidebarState('expanded');
-              }}
-            />
+                    setSidebarState('expanded');
+                  }}
+                />
+              }
+            >
+              <SidebarRail
+                sidebarState={sidebarState()}
+                onOpenChange={(open) =>
+                  // The rail has no slim mode, so `cmd+.` hides it outright.
+                  setSidebarState(open ? 'expanded' : 'hidden')
+                }
+              />
+            </Show>
           </Show>
           <Show when={sidebarCollapsed()}>
             <div

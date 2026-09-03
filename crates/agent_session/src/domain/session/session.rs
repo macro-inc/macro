@@ -35,6 +35,13 @@ pub struct SessionMachine<Token> {
     next_request: u64,
     /// Held outside the phase so a partial flush strands nothing.
     pending: VecDeque<PendingAction<Token>>,
+    /// The newest turn-occupying request the runtime has not answered yet.
+    /// The harness dispatches its queue one turn at a time, so there is at
+    /// most one in the ordinary course; a direct `send_action` caller racing
+    /// the previous turn's answer displaces the old entry (see
+    /// [`Self::flush`]). Its response - result or error alike - is what emits
+    /// [`Effect::TurnEnded`].
+    in_flight_turn: Option<(RequestId, AgentActionId)>,
     resume_session_id: Option<SessionId>,
     /// Directory the agent works in, snapshotted on the session row at
     /// creation; `session/new`, `session/resume`, and `session/load` all
@@ -55,6 +62,7 @@ impl<Token> SessionMachine<Token> {
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
             pending: VecDeque::new(),
+            in_flight_turn: None,
             resume_session_id: None,
             workspace,
             mcp_servers,
@@ -73,6 +81,7 @@ impl<Token> SessionMachine<Token> {
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
             pending: VecDeque::new(),
+            in_flight_turn: None,
             resume_session_id: Some(session_id),
             workspace,
             mcp_servers,
@@ -139,12 +148,6 @@ impl<Token> SessionMachine<Token> {
         token: Token,
     ) -> Vec<Effect<Token>> {
         let mut effects = Vec::new();
-
-        // A superseding action - a stop - means the queued actions must not
-        // reach the agent at all, rather than being sent and then cancelled.
-        if action.supersedes_queued() {
-            self.drop_pending(&mut effects);
-        }
 
         let session_id = match &self.phase {
             SessionPhase::Booting
@@ -231,6 +234,19 @@ impl<Token> SessionMachine<Token> {
 
     fn on_frame(&mut self, frame: RawJsonRpcMessage, effects: &mut Vec<Effect<Token>>) {
         if matches!(self.phase, SessionPhase::Live { .. }) {
+            // The in-flight turn's answer ends the turn whichever shape it
+            // takes: a result carries the stop reason, an error is the agent
+            // refusing the prompt. Either way the agent can take another.
+            if let Some((request_id, _)) = &self.in_flight_turn
+                && frame.response_id() == Some(request_id)
+            {
+                let (_, action_id) = self
+                    .in_flight_turn
+                    .take()
+                    .expect("checked just above; nothing between the check and the take");
+                effects.push(Effect::TurnEnded { action_id });
+                return;
+            }
             self.respond_to_permission_request(&frame, effects);
             return;
         }
@@ -486,8 +502,24 @@ impl<Token> SessionMachine<Token> {
     fn flush(&mut self, session_id: &SessionId, effects: &mut Vec<Effect<Token>>) {
         while let Some(queued) = self.pending.pop_front() {
             let request_id = queued.action_id.to_request_id();
-            match queued.action.to_runtime(session_id, request_id) {
+            match queued.action.to_runtime(session_id, request_id.clone()) {
                 Ok(message) => {
+                    if queued.action.occupies_turn() {
+                        // The harness dispatches one turn at a time, but
+                        // `send_action` is public and a direct caller can race
+                        // the previous turn's answer. Track the newest: its
+                        // answer is what ends the turn, and the displaced
+                        // one's answer simply matches nothing.
+                        if let Some((_, displaced)) =
+                            self.in_flight_turn.replace((request_id, queued.action_id))
+                        {
+                            tracing::warn!(
+                                id = %self.id,
+                                %displaced,
+                                "a turn-occupying action was sent while a turn was in flight"
+                            );
+                        }
+                    }
                     effects.push(Effect::Send {
                         from: queued.from,
                         message,
@@ -505,25 +537,15 @@ impl<Token> SessionMachine<Token> {
         }
     }
 
-    /// Drop every queued action without sending it, resolving each caller.
-    ///
-    /// `Ok` rather than an error: the action was accepted and then superseded
-    /// by a later one, which is not a failure of the caller's request. It also
-    /// matters upstream - the harness treats `Disconnected` as "reattach and
-    /// resend", which would resurrect the very prompt a stop just dropped.
-    fn drop_pending(&mut self, effects: &mut Vec<Effect<Token>>) {
-        while let Some(queued) = self.pending.pop_front() {
-            effects.push(Effect::Complete {
-                token: queued.token,
-                result: Ok(()),
-            });
-        }
-    }
-
     /// End the connection: fail everything queued, then stop. The `Stop` is
     /// last so the shell resolves waiting callers before it tears down.
+    ///
+    /// A turn that was in flight is forgotten without [`Effect::TurnEnded`]:
+    /// the turn did not end, the session stopped, and the shell reports that
+    /// as its own event.
     fn die(&mut self, reason: StopReason, effects: &mut Vec<Effect<Token>>) {
         self.phase = SessionPhase::Dead;
+        self.in_flight_turn = None;
         while let Some(queued) = self.pending.pop_front() {
             effects.push(Effect::Complete {
                 token: queued.token,

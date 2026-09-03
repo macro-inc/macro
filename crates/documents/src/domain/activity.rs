@@ -41,12 +41,8 @@ impl ActivitySource for DocumentTopicEvent {
                     .actor
                     .clone()
                     .unwrap_or_else(|| Actor::new_from_user(metadata.owner.clone()));
-                let attribution = match metadata.on_behalf_of.clone() {
-                    Some(subject) => Attribution::delegated(actor, subject),
-                    None => Attribution::direct(actor),
-                };
                 single(
-                    attribution,
+                    Attribution::new(actor, metadata.on_behalf_of.clone()),
                     CommonAction::Created,
                     &metadata.document_id,
                     metadata.created_at.unwrap_or_else(|| event_time(event_id)),
@@ -82,9 +78,17 @@ impl ActivitySource for DocumentTopicEvent {
             }
             // Extraction-pipeline noise, not user activity.
             DocumentTopicEvent::ContentUploaded(_) => Ingest::Ignore,
-            // Carries no actor today; becomes an Edited activity once collab
-            // edits are attributed.
-            DocumentTopicEvent::SyncContentUpdated(_) => Ingest::Ignore,
+            // Only AI-attributed sessions carry an actor; human-only collab
+            // sessions stay unattributed.
+            DocumentTopicEvent::SyncContentUpdated(metadata) => match metadata.actor.clone() {
+                Some(actor) => single(
+                    Attribution::new(actor, metadata.on_behalf_of.clone()),
+                    CommonAction::Edited,
+                    &metadata.document_id,
+                    event_time(event_id),
+                ),
+                None => Ingest::Ignore,
+            },
             // Session lifecycle (first join / last leave), no actor.
             DocumentTopicEvent::Interaction(_) => Ingest::Ignore,
         }

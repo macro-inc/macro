@@ -33,8 +33,9 @@ import {
   type StaleTime,
   useInfiniteQuery,
 } from '@tanstack/solid-query';
-import type { Accessor } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import { queryClient } from '../client';
+import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
 import {
@@ -75,6 +76,8 @@ interface SoupItemsQueryOptions {
     itemFilter?: (item: SoupApiItem) => boolean;
   };
   showSupportedForeignEntities?: boolean;
+  /** Resets view-owned GraphQL state before a mutation-driven network refresh. */
+  onBeforeGraphqlRefresh?: () => void;
 }
 
 /**
@@ -388,6 +391,17 @@ export function useSoupAstItemsQuery(
       enabled: queryEnabled() && !usesGraphql(),
     };
   });
+
+  onCleanup(
+    registerActiveGraphqlSoupQuery({
+      isEnabled: () => usesGraphql() && activeGraphqlQuery().isEnabled(),
+      refresh: async () => {
+        activeGraphqlQuery().resetToInitialPage();
+        options?.().onBeforeGraphqlRefresh?.();
+        await activeGraphqlQuery().refresh();
+      },
+    })
+  );
 
   const resetRestToInitialPage = () => {
     const { params, body, groupBy, transport } = args();

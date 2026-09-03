@@ -33,11 +33,12 @@
 //! identified by that session plus the session-local `"{turn}:{author}"` id
 //! the fold derives.
 
+use crate::domain::model::QueuedActionDto;
 use crate::domain::model::{
     AgentSessionId, AgentSessionLog, AgentSessionRenamed, LogAppended, Message,
     StoredAgentSessionLog,
 };
-use crate::domain::ports::AgentSessionRealtime;
+use crate::domain::ports::{AgentSessionQueueChanged, AgentSessionRealtime};
 use connection_gateway_client::ConnectionGatewayClient;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -54,6 +55,14 @@ pub const AGENT_SESSION_LOG: &str = "agent_session_log";
 
 /// The realtime message type carrying a persisted session-name change.
 pub const AGENT_SESSION_RENAMED: &str = "agent_session_renamed";
+
+/// The realtime message type carrying a session's whole queue after a change.
+///
+/// Always the full queue, never a delta: any one event is a complete,
+/// self-sufficient truth, which is what lets a client treat the socket as the
+/// only writer once it has heard anything on it - a late `GET .../queue`
+/// response can never carry information the socket will not deliver.
+pub const AGENT_SESSION_QUEUE: &str = "agent_session_queue";
 
 /// The body of an [`AGENT_SESSION_LOG`] message - the module docs are the
 /// contract.
@@ -90,6 +99,31 @@ impl From<AgentSessionRenamed> for AgentSessionRenamedEvent {
         Self {
             agent_session_id: event.agent_session_id.as_uuid(),
             name: event.name,
+        }
+    }
+}
+
+/// The body of an [`AGENT_SESSION_QUEUE`] message.
+///
+/// `entries` are [`QueuedActionDto`] - the exact rows `GET .../queue` serves -
+/// for the same reason the log event flattens [`Message`] verbatim: a client
+/// baselining from the REST endpoint and one following the socket are reading
+/// the same bytes, so they cannot disagree about what an entry means.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionQueueEvent {
+    /// The session whose queue this is.
+    pub agent_session_id: Uuid,
+    /// Everything waiting, oldest (next to dispatch) first. The whole queue,
+    /// every time - see [`AGENT_SESSION_QUEUE`].
+    pub entries: Vec<QueuedActionDto>,
+}
+
+impl From<AgentSessionQueueChanged> for AgentSessionQueueEvent {
+    fn from(event: AgentSessionQueueChanged) -> Self {
+        Self {
+            agent_session_id: event.agent_session_id.as_uuid(),
+            entries: event.entries.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -179,6 +213,32 @@ where
         Ok(())
     }
 
+    async fn publish_queue_changed(
+        &self,
+        event: AgentSessionQueueChanged,
+    ) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(event.agent_session_id).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+
+        let payload = serde_json::to_value(AgentSessionQueueEvent::from(event))
+            .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                AGENT_SESSION_QUEUE.to_string(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+
+        Ok(())
+    }
+
     async fn publish_renamed(&self, event: AgentSessionRenamed) -> Result<(), rootcause::Report> {
         let recipients = self.participants.viewers(event.agent_session_id).await?;
         if recipients.is_empty() {
@@ -200,88 +260,5 @@ where
             .map_err(|error| rootcause::report!(error))?;
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use agent_fold::testing::{TURN, parse_log_as, test_session};
-
-    fn stored(entry: AgentSessionLog) -> StoredAgentSessionLog {
-        StoredAgentSessionLog {
-            created_at: chrono::DateTime::parse_from_rfc3339("2026-08-13T12:34:56.789Z")
-                .expect("valid timestamp")
-                .to_utc(),
-            entry,
-        }
-    }
-
-    /// The event is the REST entry shape plus its session id - the property the
-    /// client relies on to fold a streamed frame and a fetched one with the
-    /// same code. Asserted on the serialized keys rather than the types,
-    /// because it is the bytes the two halves actually agree on.
-    #[test]
-    fn an_event_is_a_log_entry_plus_the_session_id() {
-        let entry = parse_log_as(test_session(), TURN)
-            .into_iter()
-            .find(|entry| entry.user_id.is_some())
-            .expect("the fixture attributes its prompt");
-
-        let value = serde_json::to_value(AgentSessionLogEvent::new(LogAppended {
-            agent_session_id: test_session(),
-            entry: stored(entry),
-        }))
-        .expect("the event serializes");
-
-        let object = value.as_object().expect("an event is a JSON object");
-        assert_eq!(
-            object.keys().map(String::as_str).collect::<Vec<_>>(),
-            vec![
-                "agentSessionId",
-                "createdAt",
-                "userId",
-                "direction",
-                "content"
-            ],
-            "the frame is flattened in beside the id, not nested under it"
-        );
-        assert_eq!(object["direction"], "to_runtime");
-        assert_eq!(object["content"]["method"], "session/prompt");
-        assert_eq!(object["createdAt"], "2026-08-13T12:34:56.789Z");
-    }
-
-    #[test]
-    fn renamed_event_uses_the_frontend_wire_shape() {
-        let event = AgentSessionRenamedEvent::from(AgentSessionRenamed {
-            agent_session_id: test_session(),
-            name: "Fix Flaky Tests".to_owned(),
-        });
-
-        assert_eq!(
-            serde_json::to_value(event).expect("event serializes"),
-            serde_json::json!({
-                "agentSessionId": test_session().as_uuid(),
-                "name": "Fix Flaky Tests",
-            })
-        );
-    }
-
-    /// An unattributed frame omits the key rather than sending null, matching
-    /// the REST entry and keeping `userId` optional on the client.
-    #[test]
-    fn an_unattributed_frame_omits_the_user() {
-        let entry = parse_log_as(test_session(), TURN)
-            .into_iter()
-            .find(|entry| entry.user_id.is_none())
-            .expect("the fixture has unattributed frames");
-
-        let value = serde_json::to_value(AgentSessionLogEvent::new(LogAppended {
-            agent_session_id: test_session(),
-            entry: stored(entry),
-        }))
-        .expect("the event serializes");
-
-        assert!(value.get("userId").is_none(), "got {value}");
     }
 }

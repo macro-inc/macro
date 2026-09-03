@@ -9,6 +9,9 @@ mod get;
 mod register;
 mod verify;
 
+#[cfg(test)]
+mod test;
+
 impl FusionAuthClient {
     /// Gets a user's FusionAuth ID by their email address.
     #[tracing::instrument(skip(self), fields(application_id=%self.client_id, fusion_auth_base_url=%self.fusion_auth_base_url))]
@@ -30,11 +33,7 @@ impl FusionAuthClient {
             &self.auth_client,
             &self.fusion_auth_base_url,
             None,
-            create::CreateUserRequest {
-                application_id: Cow::Borrowed(&self.client_id),
-                skip_verification,
-                user,
-            },
+            create::CreateUserRequest::new(Cow::Borrowed(&self.client_id), skip_verification, user),
             client_ip,
         )
         .await
@@ -55,11 +54,7 @@ impl FusionAuthClient {
             &self.auth_client,
             &self.fusion_auth_base_url,
             Some(user_id),
-            create::CreateUserRequest {
-                application_id: Cow::Borrowed(&self.client_id),
-                skip_verification,
-                user,
-            },
+            create::CreateUserRequest::new(Cow::Borrowed(&self.client_id), skip_verification, user),
             client_ip,
         )
         .await

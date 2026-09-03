@@ -2023,3 +2023,56 @@ async fn test_create_document_does_not_reuse_email_document_by_sha(pool: Pool<Po
     assert!(matches!(imported, EmailImportRepoOutcome::Created(_)));
     assert_ne!(imported.metadata().document_id, created_doc.document_id);
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_import_email_attachment_only_reuses_latest_instance_sha(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let attachments = insert_email_attachments(&pool, 3).await;
+    let old_sha = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+    let new_sha = "1111111111111111111111111111111111111111111111111111111111111111";
+
+    let first = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, old_sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+    let document_id = first.metadata().document_id.clone();
+
+    sqlx::query(
+        r#"
+        INSERT INTO "DocumentInstance" ("documentId", sha, "createdAt", "updatedAt")
+        VALUES ($1, $2, NOW() + INTERVAL '1 second', NOW() + INTERVAL '1 second')
+        "#,
+    )
+    .bind(&document_id)
+    .bind(new_sha)
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let reused_latest = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, new_sha, attachments[1]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+    let superseded = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, old_sha, attachments[2]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(first, EmailImportRepoOutcome::Created(_)));
+    assert!(matches!(reused_latest, EmailImportRepoOutcome::Reused(_)));
+    assert_eq!(document_id, reused_latest.metadata().document_id);
+    assert!(matches!(superseded, EmailImportRepoOutcome::Created(_)));
+    assert_ne!(document_id, superseded.metadata().document_id);
+}

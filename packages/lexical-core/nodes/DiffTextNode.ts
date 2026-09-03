@@ -14,20 +14,8 @@ export type SerializedDiffTextNode = Spread<
   SerializedTextNode
 >;
 
-const LANE_HUES = [30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
-
-export function diffAuthorColor(author: string): string {
-  // claude hashing magic
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < author.length; i++) {
-    hash ^= author.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return `var(--color-accent-${LANE_HUES[(hash >>> 0) % LANE_HUES.length]})`;
-}
-
 // Inline diff marker: a TextNode that renders highlighted (insert) or struck
-// (delete), tinted by its author's color via a per-node `--diff-author`
+// (delete) and exposes its author for app-owned attribution and tinting.
 export class DiffTextNode extends TextNode {
   __diffStatus: DiffStatus;
   __author: string;
@@ -60,8 +48,6 @@ export class DiffTextNode extends TextNode {
     dom.dataset.diffStatus = this.__diffStatus;
     if (this.__author) {
       dom.dataset.diffAuthor = this.__author;
-      // Tint this run by its own editor, overriding the container default.
-      dom.style.setProperty('--diff-author', diffAuthorColor(this.__author));
     }
     return dom;
   }

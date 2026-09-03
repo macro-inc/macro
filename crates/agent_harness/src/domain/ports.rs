@@ -1,20 +1,104 @@
 //! Outbound capabilities required by the harness domain.
 
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+
 use agent_session::domain::connection::RuntimeAttachment;
-use agent_session::domain::model::{AgentSessionId, SandboxSize};
+use agent_session::domain::model::{AgentSessionId, ReplicaAddress, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
+use harness_id::HarnessId;
 
 use macro_user_id::user_id::MacroUserIdStr;
 
-use super::error::Result;
+use super::error::{HarnessError, Result};
 use super::model::{
-    PriorChannelMessage, ProvisionedEgress, SandboxEgress, SessionAnnouncement, SpawnContainer,
+    AgentRuntimeConfig, CommandOutcome, HarnessCommand, PriorChannelMessage, ProvisionedEgress,
+    SandboxEgress, SessionAnnouncement, SpawnContainer,
 };
 use super::sandbox::SandboxResizeEffect;
 
+/// Delivers a session's command to the replica that manages its live actor.
+///
+/// The receiving side executes without re-resolving management (a forward is
+/// single-hop by contract, so two replicas with momentarily different views
+/// cannot bounce a command between each other). Success means the peer ran
+/// the command to completion - the response is the acknowledgment - so a
+/// caller that awaited a forward has the same guarantee as one that executed
+/// locally.
+pub trait CommandForwarder: Send + Sync + 'static {
+    /// Run `command` for `session` on the replica at `target`, reporting
+    /// what that replica's execution did with it.
+    fn forward(
+        &self,
+        target: &ReplicaAddress,
+        session: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send;
+}
+
+/// A forwarder for deployments with exactly one replica, where a live peer
+/// cannot exist: being asked to forward is itself the error, loudly, rather
+/// than a silent local fallback that would mask a mis-wiring.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPeers;
+
+impl CommandForwarder for NoPeers {
+    async fn forward(
+        &self,
+        target: &ReplicaAddress,
+        session: AgentSessionId,
+        _command: HarnessCommand,
+    ) -> Result<CommandOutcome> {
+        Err(HarnessError::Forward(rootcause::report!(
+            "this deployment has no command forwarding, yet {target} manages session {session}"
+        )))
+    }
+}
+
 #[cfg(test)]
 mod test;
+
+/// Resolves which registered harness currently serves a bot's sessions.
+///
+/// Resolved at bind time, not stamped at session creation, so rebinding an
+/// agent to another harness re-routes its existing sessions.
+pub trait HarnessBindings: Send + Sync + 'static {
+    /// The bot's current harness binding, or `None` for an unbound bot.
+    fn harness_for(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+}
+
+/// Durable attach/detach bookkeeping for harness runtime connections.
+///
+/// The registry itself is in-process liveness; this is what lets the rest of
+/// the product (the harness settings page) see whether a daemon is up.
+/// Methods take `Arc<Self>` and return owned futures so the registry can fire
+/// them from its own background tasks.
+pub trait HarnessPresence: Send + Sync + 'static {
+    /// A runtime attached for this harness.
+    fn connected(self: Arc<Self>, harness: HarnessId) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+
+    /// This harness's runtime connection closed.
+    fn disconnected(
+        self: Arc<Self>,
+        harness: HarnessId,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+}
+
+/// Resolves the runtime configuration for a bot that may receive agent
+/// session triggers.
+pub trait AgentRuntimeDirectory: Send + Sync + 'static {
+    /// Return a runtime profile for a managed agent, an external profile for a
+    /// BYOA bot, or `None` when the bot has no agent configuration.
+    fn runtime_for(
+        &self,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<Option<AgentRuntimeConfig>>> + Send;
+}
 
 /// Loads messages preceding a channel-originated agent prompt.
 pub trait ChannelPromptContext: Send + Sync + 'static {
@@ -77,6 +161,15 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         bot: BotId,
         session: AgentSessionId,
     ) -> impl Future<Output = Option<RuntimeAttachment<Self::Connector>>> + Send;
+
+    /// The harness a bot's sessions currently bind to, without attaching
+    /// anything. `None` for an unbound bot. Same resolution as [`bind`], for
+    /// callers that need to know which harness serves a bot rather than to
+    /// route to it.
+    fn bound_harness(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
 }
 
 /// Mints the one secret a sandbox is given, and the config that points it at

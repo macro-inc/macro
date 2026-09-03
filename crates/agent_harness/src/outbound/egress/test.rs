@@ -151,7 +151,8 @@ fn egress(slugs: &[&str]) -> SandboxEgress {
 fn points_every_acp_server_at_the_proxy() {
     let servers = egress(&["datadog", "linear"]).acp_servers();
 
-    let rendered: Vec<(String, String, Vec<(String, String)>)> = servers
+    type RenderedServer = (String, String, Vec<(String, String)>);
+    let rendered: Vec<RenderedServer> = servers
         .into_iter()
         .map(|server| match server {
             agent_client_protocol::schema::v1::McpServer::Http(http) => (

@@ -10,7 +10,6 @@
  * and keeps rows reconciled so a streaming turn updates in place.
  */
 
-import { isCursorBotId } from '@core/constant/cursorAgent';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
 import { acquireAgentSessionFold } from '@queries/agent-session/session-fold';
 import { subscribeAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
@@ -26,7 +25,6 @@ import type {
 import {
   type Accessor,
   batch,
-  createEffect,
   createResource,
   createSignal,
   onCleanup,
@@ -48,6 +46,11 @@ export type AgentSessionFeed = {
   retry: () => void;
   /** The newest turn has no stop reason yet — the agent is working. */
   working: Accessor<boolean>;
+  /**
+   * Adopt a newer snapshot of this session (the bounded external-url poll).
+   * No-op when the payload is for a different session or the feed has closed.
+   */
+  applySnapshot: (session: AgentSessionResponse) => void;
 };
 
 /** Prompt sorts before reply within a turn. */
@@ -195,30 +198,10 @@ export function createAgentSessionFeed(
     return last.author.kind === 'user' || last.stop == null;
   };
 
-  // The external identity — the Cursor agent's id, name, and the link out to
-  // it — is minted inside the session's *first prompt*, so the snapshot
-  // fetched at load never carries it: `create` returns those columns NULL by
-  // construction. Nothing announces it on the wire either, so re-read the
-  // snapshot once a turn has settled, and keep the whole payload this time.
-  //
-  // Bounded by construction: the only session kind that gets one is Cursor's,
-  // and the moment it lands this stops matching. A turn that settles without
-  // minting one (a prompt that failed outright) is retried on the next.
-  createEffect(() => {
-    const id = sessionId();
-    const session = resource.latest;
-    if (!id || !session || session.external) return;
-    if (!isCursorBotId(session.botId) || working() || messages().length === 0) {
-      return;
-    }
-    const run = generation;
-    void agentHarnessServiceClient.get(id).then((refreshed) => {
-      // A superseded run has already replaced the value this would land on.
-      if (refreshed.isErr() || closed || generation !== run) return;
-      if (sessionId() !== id || !refreshed.value.external) return;
-      mutate(refreshed.value);
-    });
-  });
+  const applySnapshot = (session: AgentSessionResponse) => {
+    if (closed || sessionId() !== session.id) return;
+    mutate(session);
+  };
 
   return {
     session: () => resource.latest,
@@ -228,5 +211,6 @@ export function createAgentSessionFeed(
     loadFailed: () => resource.error !== undefined,
     retry: () => void refetch(),
     working,
+    applySnapshot,
   };
 }

@@ -1,8 +1,11 @@
 import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import { handleAgentSessionQueue } from '@queries/agent-session/queue-sync';
 import {
   AGENT_SESSION_LOG_EVENT,
+  AGENT_SESSION_QUEUE_EVENT,
   AGENT_SESSION_RENAMED_EVENT,
   type AgentSessionLogEvent,
+  type AgentSessionQueueEvent,
   type AgentSessionRenamedEvent,
 } from '@queries/agent-session/realtime-protocol';
 import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
@@ -74,6 +77,16 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           data.type,
           data.data,
           handleAgentSessionRenamed
+        );
+      })
+      // A session's whole action queue after a change. Full snapshot every
+      // time: once one has arrived on this socket, the socket is the queue's
+      // only writer and the last event wins unconditionally.
+      .with({ type: AGENT_SESSION_QUEUE_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionQueueEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionQueue
         );
       })
       .with({ type: 'comms_reaction' }, () => {

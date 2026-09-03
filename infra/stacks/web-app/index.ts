@@ -196,7 +196,7 @@ const appRouteLambda = new aws.lambda.Function('app-route-lambda', {
   publish: true,
   environment: {
     variables: {
-      PREVIEW_URL: `https://cloud-storage${stack === 'dev' ? '-dev' : ''}.macro.com/documents/preview`,
+      PREVIEW_URL: `https://${stack === 'dev' ? 'dev-' : ''}gateway.macro.com/dss/documents/preview`,
     },
   },
 });

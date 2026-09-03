@@ -18,6 +18,7 @@ const config: CodegenConfig = {
         preResolveTypes: false,
         scalars: {
           JSON: 'unknown',
+          SoupCacheProjection: 'string',
         },
         useTypeImports: true,
       },

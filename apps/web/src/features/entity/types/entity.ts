@@ -23,6 +23,12 @@ export type EntityBase = {
    * helpers may bump it optimistically.
    */
   touchedAt?: DateValue | null;
+  /**
+   * When the viewer was last notified about this entity, present only on
+   * rows from `notified_at` pages. The inbox sorts and date-buckets on it,
+   * and incoming notifications bump it optimistically.
+   */
+  notifiedAt?: DateValue | null;
   createdAt?: DateValue | null;
   updatedAt?: DateValue | null;
   viewedAt?: DateValue | null;

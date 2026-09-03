@@ -2,6 +2,7 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import type { BlockName } from '@core/block';
 import {
@@ -45,6 +46,7 @@ import { Portal } from 'solid-js/web';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
+import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 import {
@@ -204,22 +206,8 @@ function SplitCloseButton() {
     return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
   });
 
-  // A Viewer has no close affordance or close hotkey: it closes with its
-  // Controller, when its Preview Pair dissolves (external navigation or the
-  // Controller leaving its list view), or via the preview toggle.
-  const isPreviewViewer = () => context.handle.isViewerSplit();
-
-  // A Preview Pair occupies two split slots but is a single logical split: its
-  // Viewer isn't independently closable. Subtract one slot per pair so that
-  // when the only splits open are a single Preview Pair, the Controller hides
-  // its close button — just like a lone split does.
-  const hasMultipleSplits = createMemo(
-    () =>
-      layout.manager.splits().length - layout.manager.previewPairs().length > 1
-  );
-
   return (
-    <Show when={hasMultipleSplits() && !isPreviewViewer()}>
+    <Show when={shouldShowSplitCloseButton(layout.manager, context.handle)}>
       <Button
         square
         size="sm"
@@ -237,6 +225,7 @@ function SplitCloseButton() {
 function SoupNavigationButtons() {
   const context = useContext(SplitPanelContext);
   const soup = useSoup();
+  const notificationSource = useGlobalNotificationSource();
   if (!context) return null;
 
   const rows = createMemo(() => soup.rows());
@@ -279,6 +268,7 @@ function SoupNavigationButtons() {
       splitHandle: context.handle,
       mergeHistory: true,
       referredFrom: navigationReferredFrom(),
+      notificationSource,
     });
   };
 
@@ -474,6 +464,7 @@ export function SplitHeader(props: {
   collapseController: PriorityCollapseController;
 }) {
   const panel = useContext(SplitPanelContext);
+  const notificationSource = useGlobalNotificationSource();
   if (!panel) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   }
@@ -510,6 +501,7 @@ export function SplitHeader(props: {
     void openEntityInSplitFromUnifiedList(data, {
       splitHandle: panel.handle,
       allowDuplicate: true,
+      notificationSource,
     });
   });
 

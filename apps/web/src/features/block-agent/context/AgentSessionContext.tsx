@@ -9,6 +9,8 @@
  * so each stateful concern stays a composable unit as wiring grows.
  */
 
+import { isCursorBotId } from '@core/constant/cursorAgent';
+import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
 import type {
   FoldedMessage,
   SessionMetadata,
@@ -22,6 +24,7 @@ import {
   createContext,
   createEffect,
   type ParentProps,
+  Suspense,
   useContext,
 } from 'solid-js';
 import { controlOutcome } from '../state/control-message';
@@ -31,6 +34,10 @@ import {
   type ComposerController,
   createComposerController,
 } from './create-composer-controller';
+import {
+  createQueueController,
+  type QueueController,
+} from './create-queue-controller';
 import {
   createSessionStatusController,
   isDisconnected,
@@ -85,6 +92,12 @@ export type AgentSessionState = {
   resuming: Accessor<boolean>;
   composer: ComposerController;
   /**
+   * The session's server-side action queue: prompts sent mid-turn wait
+   * there and dispatch one per turn end. The server is the only truth —
+   * nothing is queued client-side.
+   */
+  queue: QueueController;
+  /**
    * Quote selected transcript text into the composer as a referenced paste
    * chip. No-op until the composer editor has mounted.
    */
@@ -119,6 +132,10 @@ export function AgentSessionProvider(
   // status stream knows when the runtime disconnected without closing it.
   // Combining them here is what keeps "working" a single truth.
   const working = () => feed.working() && !isDisconnected(status.status());
+  const queue = createQueueController({
+    sessionId,
+    messages: feed.messages,
+  });
   const composer = createComposerController({
     sessionId,
     working,
@@ -138,35 +155,78 @@ export function AgentSessionProvider(
   // Anything the service can only deliver over a live transport: a prompt on
   // the wire, or a model change waiting to be seen in the fold.
   const awaitingRuntime = () =>
-    composer.sendingId() !== undefined ||
-    composer.changingModel() !== undefined;
+    composer.sending() || composer.changingModel() !== undefined;
   const resuming = () => isDisconnected(status.status()) && awaitingRuntime();
 
   return (
-    <AgentSessionCtx.Provider
-      value={{
-        sessionId,
-        pending,
-        session: feed.session,
-        bot: feed.bot,
-        metadata: feed.metadata,
-        messages: feed.messages,
-        // A create that failed leaves the block with nothing to load, which
-        // is the same dead end for the reader as a load that failed.
-        loadFailed: () => feed.loadFailed() || failed(),
-        loadRetryable: feed.loadFailed,
-        retryLoad: feed.retry,
-        working,
-        status: status.status,
-        resuming,
-        composer,
-        quoteSelection,
-        registerQuoteInsert,
-      }}
-    >
-      {props.children}
-    </AgentSessionCtx.Provider>
+    <>
+      {/* Nested so a pending poll cannot take the block orchestrator's
+          <Suspense fallback={<LoadingBlock />}> and blank the transcript.
+          The poll component gates on `isSuccess` so it should not suspend;
+          this boundary is the backstop if a read of `query.data` ever does. */}
+      <Suspense fallback={null}>
+        <CursorExternalUrlPoll
+          sessionId={sessionId}
+          session={feed.session}
+          applySnapshot={feed.applySnapshot}
+        />
+      </Suspense>
+      <AgentSessionCtx.Provider
+        value={{
+          sessionId,
+          pending,
+          session: feed.session,
+          bot: feed.bot,
+          metadata: feed.metadata,
+          messages: feed.messages,
+          // A create that failed leaves the block with nothing to load, which
+          // is the same dead end for the reader as a load that failed.
+          loadFailed: () => feed.loadFailed() || failed(),
+          loadRetryable: feed.loadFailed,
+          retryLoad: feed.retry,
+          working,
+          status: status.status,
+          resuming,
+          composer,
+          queue,
+          quoteSelection,
+          registerQuoteInsert,
+        }}
+      >
+        {props.children}
+      </AgentSessionCtx.Provider>
+    </>
   );
+}
+
+/**
+ * Compensating read for a Cursor session whose provider url arrived after
+ * the feed's snapshot. Lives in its own Suspense so the rest of the block
+ * stays mounted while this query's first fetch is in flight.
+ */
+function CursorExternalUrlPoll(props: {
+  sessionId: Accessor<string | undefined>;
+  session: Accessor<AgentSessionResponse | undefined>;
+  applySnapshot: (session: AgentSessionResponse) => void;
+}) {
+  // Only a loaded Cursor session whose provider url is still missing polls;
+  // everything else passes `undefined`, which disables the query.
+  const query = useAgentSessionExternalUrlQuery(() => {
+    const id = props.sessionId();
+    const session = props.session();
+    if (!id || !session || session.external?.url) return undefined;
+    return isCursorBotId(session.botId) ? id : undefined;
+  });
+  createEffect(() => {
+    // `query.data` suspends while pending and throws once it errors
+    // (`useFavoritesData`). Gate on success so neither reaches the
+    // orchestrator Suspense / an error boundary.
+    if (!query.isSuccess) return;
+    const snapshot = query.data;
+    if (!snapshot?.external?.url) return;
+    props.applySnapshot(snapshot);
+  });
+  return null;
 }
 
 export function useAgentSession(): AgentSessionState {

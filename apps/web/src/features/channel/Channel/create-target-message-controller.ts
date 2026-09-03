@@ -66,15 +66,22 @@ export function createTargetMessageController(
     flashTimeout = undefined;
   };
 
+  /**
+   * Whether a target element still owes the viewport a scroll — the root row,
+   * a nested reply, or both. A nested target acknowledges its outer row early
+   * (see the effect below) so the reply's own scroll can begin, so the root's
+   * pending id alone does not answer this.
+   */
+  const hasPendingElementScroll = () =>
+    targetMessageData['pendingScrollTargetId'] !== undefined ||
+    targetMessageData['pendingTargetReplyId'] !== undefined;
+
   const syncFlash = () => {
     cancelFlash();
 
     const activeTargetMessageId = targetMessageData['activeTargetMessageId'];
-    const hasPendingScroll =
-      targetMessageData['pendingScrollTargetId'] !== undefined ||
-      targetMessageData['pendingTargetReplyId'] !== undefined;
 
-    if (!activeTargetMessageId || hasPendingScroll) return;
+    if (!activeTargetMessageId || hasPendingElementScroll()) return;
 
     flashTimeout = setTimeout(() => {
       flashTimeout = undefined;
@@ -202,6 +209,7 @@ export function createTargetMessageController(
     loadAroundMessageId: () => targetMessageData['loadAroundMessageId'],
     pendingScrollTargetId: () => targetMessageData['pendingScrollTargetId'],
     pendingTargetReplyId: () => targetMessageData['pendingTargetReplyId'],
+    hasPendingElementScroll,
 
     goToMessage,
     completePendingScroll,

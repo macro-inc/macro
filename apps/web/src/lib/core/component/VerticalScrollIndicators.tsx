@@ -3,6 +3,19 @@ import { type Accessor, createEffect, onCleanup } from 'solid-js';
 
 const SCROLL_THRESHOLD = 20;
 
+const GRADIENT_COLOR = {
+  surface: 'var(--color-surface)',
+  panel: 'var(--color-panel)',
+  page: 'var(--color-page)',
+  inset: 'var(--color-inset)',
+  lift: 'var(--color-lift)',
+  dialog: 'var(--color-dialog)',
+  menu: 'var(--color-menu)',
+} as const;
+
+/** Fade start color for `appearance="gradient"`. Defaults to surface. */
+export type ScrollIndicatorGradientColor = keyof typeof GRADIENT_COLOR;
+
 function thresholdOpacity(distance: number) {
   return Math.max(0, Math.min(distance, SCROLL_THRESHOLD) / SCROLL_THRESHOLD);
 }
@@ -16,6 +29,7 @@ export const ScrollIndicators = (props: {
   scrollRef: Accessor<HTMLElement | undefined>;
   direction?: 'vertical' | 'horizontal';
   appearance?: 'pattern' | 'gradient';
+  gradientColor?: ScrollIndicatorGradientColor;
   class?: string;
   noBorderStart?: boolean;
   noBorderEnd?: boolean;
@@ -25,6 +39,9 @@ export const ScrollIndicators = (props: {
 
   const isHorizontal = () => props.direction === 'horizontal';
   const isGradient = () => props.appearance === 'gradient';
+  const gradientColor = () => GRADIENT_COLOR[props.gradientColor ?? 'surface'];
+  const gradientStyle = () =>
+    isGradient() ? { '--scroll-indicator-from': gradientColor() } : undefined;
 
   const updateIndicators = () => {
     const ref = props.scrollRef();
@@ -72,12 +89,13 @@ export const ScrollIndicators = (props: {
       <div
         ref={startIndicator}
         aria-hidden="true"
+        style={gradientStyle()}
         class={cn(
           'pointer-events-none absolute z-annotation-layer',
           isGradient()
             ? isHorizontal()
-              ? 'inset-y-0 left-0 w-4 bg-linear-to-r from-surface to-transparent transition-opacity'
-              : 'inset-x-0 top-0 h-4 bg-linear-to-b from-surface to-transparent transition-opacity'
+              ? 'inset-y-0 left-0 w-4 bg-linear-to-r from-(--scroll-indicator-from) to-transparent transition-opacity'
+              : 'inset-x-0 top-0 h-4 bg-linear-to-b from-(--scroll-indicator-from) to-transparent transition-opacity'
             : isHorizontal()
               ? cn(
                   'inset-y-px left-0 w-3 mask-r-from-0% pattern-diagonal-4 pattern-edge',
@@ -93,12 +111,13 @@ export const ScrollIndicators = (props: {
       <div
         ref={endIndicator}
         aria-hidden="true"
+        style={gradientStyle()}
         class={cn(
           'pointer-events-none absolute z-annotation-layer',
           isGradient()
             ? isHorizontal()
-              ? 'inset-y-0 right-0 w-4 bg-linear-to-l from-surface to-transparent transition-opacity'
-              : 'inset-x-0 bottom-0 h-4 bg-linear-to-t from-surface to-transparent transition-opacity'
+              ? 'inset-y-0 right-0 w-4 bg-linear-to-l from-(--scroll-indicator-from) to-transparent transition-opacity'
+              : 'inset-x-0 bottom-0 h-4 bg-linear-to-t from-(--scroll-indicator-from) to-transparent transition-opacity'
             : isHorizontal()
               ? cn(
                   'inset-y-px right-0 w-3 mask-l-from-0% pattern-diagonal-4 pattern-edge',

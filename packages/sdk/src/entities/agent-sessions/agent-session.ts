@@ -1,13 +1,14 @@
 import type {
   AgentAction,
-  AgentActionId,
   AgentSessionLogResponse,
   AgentSessionResponse,
+  ControlResponse,
   SandboxSize,
 } from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
+import { QueuedAction } from './queued-action';
 
 /** A managed or externally hosted coding-agent session. */
 export class AgentSession extends MacroEntity<AgentSessionResponse> {
@@ -19,11 +20,11 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Create a managed session, optionally delivering its first prompt. */
   static async createManaged(
     client: MacroClient,
-    opts?: { prompt?: string },
+    opts?: { prompt?: string; instructions?: string },
   ): Promise<AgentSession> {
     const { session } = unwrap(
       await client.agentHarness.createAgentSession({
-        body: { prompt: opts?.prompt },
+        body: { prompt: opts?.prompt, instructions: opts?.instructions },
       }),
     );
     return new AgentSession(client, session.id, session);
@@ -51,6 +52,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
 
   /** The directory in which the agent harness runs. */
   readonly workspace = this.field('workspace');
+
+  /**
+   * Instructions the session's runtime works under, when any were stated at
+   * creation. Fixed for the session's life.
+   */
+  readonly instructions = this.field('instructions');
 
   /** The session's latest runtime status. */
   readonly status = this.field('status');
@@ -102,13 +109,40 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     ).size;
   }
 
-  /** Send a prompt or lifecycle operation to the live agent session. */
-  async control(action: AgentAction): Promise<AgentActionId> {
+  /**
+   * Send a prompt or lifecycle operation to the live agent session.
+   *
+   * The returned `actionId` matches `requestId` on the folded message the
+   * action derives once it dispatches. A `queued` status means a turn was
+   * running: the action waits in the session's queue ({@link queue}) and
+   * dispatches when that turn ends.
+   */
+  async control(action: AgentAction): Promise<ControlResponse> {
     return this.mutate((client) =>
       client.agentHarness.controlAgentSession({
         path: { session_id: this.id },
         body: action,
       }),
+    );
+  }
+
+  /** Send a prompt to the session — sugar over {@link control}. */
+  prompt(text: string): Promise<ControlResponse> {
+    return this.control({ type: 'prompt', prompt: text });
+  }
+
+  /**
+   * The actions waiting to dispatch in this session, oldest first. Each can
+   * be edited or removed until it dispatches.
+   */
+  async queue(): Promise<QueuedAction[]> {
+    const { entries } = unwrap(
+      await this.client.agentHarness.getAgentSessionQueue({
+        path: { session_id: this.id },
+      }),
+    );
+    return entries.map((entry) =>
+      QueuedAction.from(this.client, this.id, entry),
     );
   }
 

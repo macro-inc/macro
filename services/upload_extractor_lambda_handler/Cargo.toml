@@ -29,7 +29,7 @@ serde_json = { workspace = true }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 sha2 = { workspace = true }
 sqs_client = { path = "../../crates/sqs_client" }
-tempfile = "3.19.1"
+tempfile = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tokio-util = { workspace = true }

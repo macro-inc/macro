@@ -72,7 +72,7 @@ pub(super) async fn messages_by_thread_id_paginated(
             headers_jsonb, created_at, updated_at
         FROM email_messages
         WHERE thread_id = $1
-        ORDER BY internal_date_ts DESC
+        ORDER BY COALESCE(internal_date_ts, sent_at, created_at) DESC, id DESC
         LIMIT $2 OFFSET $3
         "#,
         thread_id,

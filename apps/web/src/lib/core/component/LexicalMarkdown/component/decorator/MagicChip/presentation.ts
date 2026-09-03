@@ -84,7 +84,7 @@ function toolActivity(
 
 function partActivity(part: MessagePart): MagicChipActivity {
   return match(part)
-    .with({ kind: 'text' }, () => ({ label: 'Writing response', busy: true }))
+    .with({ kind: 'text' }, () => ({ label: 'Writing response', busy: false }))
     .with({ kind: 'thought' }, ({ text }) => ({
       label: 'Thinking',
       detail: text.trim() || undefined,

@@ -2,6 +2,7 @@ export * from './actions';
 export * from './agent-commands';
 export * from './await';
 export * from './blame-tooltip';
+export * from './block-decorator-trailing-paragraph';
 export * from './checklist';
 export * from './code';
 export * from './comments';

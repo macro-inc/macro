@@ -7,5 +7,7 @@
 //! runtime surprise on someone's laptop.
 
 pub mod agent_session;
+pub mod credentials;
 pub mod link;
-pub mod registration;
+pub mod pairing;
+pub mod stream;

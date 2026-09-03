@@ -23,6 +23,7 @@ import type { GraphqlSoupInput } from '@service-storage/graphql-soup';
 import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
+  graphqlSoupProjectionSupported,
   mapGraphqlSoupItem,
   mapGraphqlSoupPage,
 } from '@service-storage/graphql-soup';
@@ -105,8 +106,11 @@ export function createGraphqlSoupAstItemsQuery(
   const [localProjection, setLocalProjection] = createSignal<
     LocalProjection | undefined
   >();
+  const [localEvaluationTrigger, setLocalEvaluationTrigger] = createSignal(0);
   const soupItemSelection = selectRecords(SoupItemFieldsFragmentDoc);
   let localRequest = 0;
+  let localEvaluationRunning = false;
+  let localEvaluationPending = false;
   let cacheGeneration = 0;
   let resetContinuationPages: (() => void) | undefined;
   let previousInitialInput: GraphqlSoupInput | undefined;
@@ -176,6 +180,7 @@ export function createGraphqlSoupAstItemsQuery(
   });
 
   createEffect(() => {
+    localEvaluationTrigger();
     const revision = currentCacheRevision();
     const input = firstPageInput();
     const queryOptions = options();
@@ -189,19 +194,34 @@ export function createGraphqlSoupAstItemsQuery(
       revision === undefined ||
       networkAuthorityRevision() === revision ||
       !queryOptions.enabled ||
+      !graphqlSoupProjectionSupported() ||
       !input ||
       !host ||
       !('initial' in input)
     ) {
+      localEvaluationPending = false;
       return;
     }
     const initial = input.initial;
-    if (!initial) return;
+    if (!initial) {
+      localEvaluationPending = false;
+      return;
+    }
     const filters = initial.filters ?? {};
     const sortMethod = initial.sortMethod;
-    if (!sortMethod || sortMethod === 'VIEWED_AT') return;
+    if (!sortMethod || sortMethod === 'VIEWED_AT') {
+      localEvaluationPending = false;
+      return;
+    }
     const sortDirection = initial.sortDirection ?? 'DESC';
     const limit = initial.limit ?? 20;
+
+    if (localEvaluationRunning) {
+      localEvaluationPending = true;
+      return;
+    }
+    localEvaluationRunning = true;
+    localEvaluationPending = false;
 
     void (async () => {
       const span = Telemetry.span('graphql_cache.soup_local_evaluation');
@@ -279,6 +299,11 @@ export function createGraphqlSoupAstItemsQuery(
         span.setAttr('evaluation.retry_count', retryCount);
         span.setAttr('evaluation.discarded', discarded);
         span.end();
+        localEvaluationRunning = false;
+        if (localEvaluationPending) {
+          localEvaluationPending = false;
+          setLocalEvaluationTrigger((trigger) => trigger + 1);
+        }
       }
     })();
   });

@@ -430,6 +430,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'id',
           'kind',
           'originOpId',
+          'uuid',
           'query',
           'operationName',
           'variables',
@@ -442,6 +443,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'leaseExpiresAtMs',
         ]) &&
         isOptionalString(value.originOpId) &&
+        isString(value.uuid) &&
         isString(value.query) &&
         isOptionalString(value.operationName) &&
         isOptionalRecord(value.variables) &&
