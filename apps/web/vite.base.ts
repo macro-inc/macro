@@ -1,6 +1,6 @@
 import { exec, execSync } from 'node:child_process';
-import { appendFileSync, unwatchFile, watchFile } from 'node:fs';
-import { resolve } from 'node:path';
+import { appendFileSync, mkdirSync, unwatchFile, watchFile } from 'node:fs';
+import { dirname, resolve } from 'node:path';
 import tailwind from '@tailwindcss/vite';
 import { Features } from 'lightningcss';
 import type { Plugin, UserConfigFn } from 'vite';
@@ -50,6 +50,7 @@ function appendDebugLog(
   data: Record<string, unknown> = {}
 ) {
   try {
+    mkdirSync(dirname(DEBUG_LOG_PATH), { recursive: true });
     appendFileSync(
       DEBUG_LOG_PATH,
       `${JSON.stringify({
