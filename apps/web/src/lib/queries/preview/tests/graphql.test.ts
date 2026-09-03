@@ -1,10 +1,17 @@
 import type { CacheHost, ReadRecordsByKeysArgs } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { ItemPreviewFieldsFragment } from '@service-storage/graphql/generated/graphql';
+import { createRoot } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { describe, expect, it, vi } from 'vitest';
 
+const createUrqlQueryMock = vi.hoisted(() => vi.fn());
 const getGraphqlSoupCacheHostMock = vi.hoisted(() => vi.fn());
 const getGraphqlSoupClientMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@app/lib/urql-solid', () => ({
+  createUrqlQuery: createUrqlQueryMock,
+}));
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: getGraphqlSoupCacheHostMock,
@@ -12,6 +19,7 @@ vi.mock('@service-storage/graphql-soup', () => ({
 }));
 
 import {
+  createGraphqlItemPreviewQuery,
   getGraphqlItemPreview,
   graphqlRecordToPreview,
   isGraphqlPreviewItem,
@@ -20,6 +28,7 @@ import {
   setGraphqlPreviewName,
   setGraphqlPreviewOnCreate,
 } from '../graphql';
+import type { PreviewItem } from '../types';
 
 function cacheHost(
   read: (
@@ -123,7 +132,106 @@ describe('GraphQL item previews', () => {
     );
   });
 
+  it('holds creation grace before the asynchronous cache seed is readable', async () => {
+    vi.useFakeTimers();
+    let finishWrite!: () => void;
+    const write = new Promise<void>((resolve) => {
+      finishWrite = resolve;
+    });
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      disabled: false,
+      writeQuery: () => write,
+      readRecordsByKeys: async () => ({
+        revision: INITIAL_CACHE_REVISION,
+        records: [],
+      }),
+    });
+    const [result] = createStore({
+      data: undefined,
+      error: null,
+      isError: false,
+      isFetched: true,
+      isFetching: false,
+      isLoading: false,
+      isEnabled: true,
+      stale: false,
+      refetch: vi.fn(async () => undefined),
+    });
+    createUrqlQueryMock.mockReturnValue(result);
+
+    try {
+      const seed = setGraphqlPreviewOnCreate(
+        {
+          itemId: 'new-doc',
+          itemType: 'document',
+          name: 'New document',
+          fileType: 'md',
+        },
+        'user-1'
+      );
+
+      createRoot((dispose) => {
+        const query = createGraphqlItemPreviewQuery(
+          () => ({ id: 'new-doc', type: 'document' }),
+          () => true
+        );
+
+        expect(query.data()).toBeUndefined();
+        expect(query.shouldFallback()).toBe(false);
+        dispose();
+      });
+
+      finishWrite();
+      await seed;
+    } finally {
+      vi.runAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps an established REST fallback selected during GraphQL refresh', () => {
+    getGraphqlSoupCacheHostMock.mockReturnValue(undefined);
+    const [result, setResult] = createStore({
+      data: undefined as PreviewItem | undefined,
+      error: null,
+      isError: false,
+      isFetched: true,
+      isFetching: false,
+      isLoading: false,
+      isEnabled: true,
+      stale: false,
+      refetch: vi.fn(async () => undefined),
+    });
+    createUrqlQueryMock.mockReturnValue(result);
+
+    createRoot((dispose) => {
+      const query = createGraphqlItemPreviewQuery(
+        () => ({ id: 'missing-doc', type: 'document' }),
+        () => true
+      );
+
+      expect(query.shouldFallback()).toBe(true);
+      setResult({ isFetching: true });
+      expect(query.shouldFallback()).toBe(true);
+      setResult({
+        data: {
+          id: 'missing-doc',
+          type: 'document',
+          access: 'access',
+          loading: false,
+          rawName: 'Now available',
+          name: 'Now available',
+        },
+        isFetched: true,
+        isFetching: false,
+      });
+      expect(query.shouldFallback()).toBe(false);
+      dispose();
+    });
+  });
+
   it('bypasses cached access state for security-sensitive lookups', async () => {
+    getGraphqlSoupCacheHostMock.mockClear();
     const query = vi.fn(() => ({
       toPromise: async () => ({
         data: {

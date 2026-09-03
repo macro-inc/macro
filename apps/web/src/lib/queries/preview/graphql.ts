@@ -24,7 +24,12 @@ import {
 } from '@service-storage/graphql-soup';
 import { stringifyDocument } from '@urql/core';
 import type { Accessor } from 'solid-js';
-import { createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  createComputed,
+  createEffect,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
 import { registerActiveGraphqlPreviewQuery } from './active-queries';
 import type { ItemEntity, PreviewItem } from './types';
@@ -310,6 +315,12 @@ function createdPreviewRecord({
   }
 }
 
+/** Whether the normalized GraphQL cache can accept imperative writes. */
+export function canWriteGraphqlPreviewCache(): boolean {
+  const host = getGraphqlSoupCacheHost();
+  return host !== undefined && !host.disabled;
+}
+
 async function writeGraphqlPreviewCache(
   args: Parameters<CacheHost['writeQuery']>[0]
 ): Promise<void> {
@@ -507,14 +518,28 @@ export function createGraphqlItemPreviewQuery(
     return current.preview;
   };
   const data = () => result.data ?? cachedPreview();
+  const currentNeedsFallback = () =>
+    (result.isError &&
+      (result.error?.networkError == null || cachedPreview() === undefined)) ||
+    (result.isFetched &&
+      !result.isFetching &&
+      result.data === undefined &&
+      !hasCreationGrace(item()));
+  const [fallbackRecordKey, setFallbackRecordKey] = createSignal<string>();
+
+  createComputed(() => {
+    const recordKey = normalizedRecordKey(item());
+    if (!enabled() || !recordKey || result.data !== undefined) {
+      setFallbackRecordKey(undefined);
+      return;
+    }
+    if (currentNeedsFallback()) setFallbackRecordKey(recordKey);
+  });
+
   const shouldFallback = () =>
     isGraphqlPreviewItem(item()) &&
-    ((result.isError &&
-      (result.error?.networkError == null || cachedPreview() === undefined)) ||
-      (result.isFetched &&
-        !result.isFetching &&
-        result.data === undefined &&
-        (cachedPreview() === undefined || !hasCreationGrace(item()))));
+    (fallbackRecordKey() === normalizedRecordKey(item()) ||
+      currentNeedsFallback());
 
   return {
     data,

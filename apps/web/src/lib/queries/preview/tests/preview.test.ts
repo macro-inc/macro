@@ -6,9 +6,11 @@ const useQueryOptions = vi.hoisted(() => [] as Array<() => unknown>);
 const getQueryDataMock = vi.hoisted(() => vi.fn());
 const setQueryDataMock = vi.hoisted(() => vi.fn());
 const invalidateQueriesMock = vi.hoisted(() => vi.fn());
+const canWriteGraphqlPreviewCacheMock = vi.hoisted(() => vi.fn());
 const createGraphqlItemPreviewQueryMock = vi.hoisted(() => vi.fn());
 const setGraphqlPreviewFileTypeMock = vi.hoisted(() => vi.fn());
 const setGraphqlPreviewNameMock = vi.hoisted(() => vi.fn());
+const setGraphqlPreviewOnCreateMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: true, loading: false }),
@@ -45,18 +47,20 @@ vi.mock('../fetchers', () => ({
 }));
 
 vi.mock('../graphql', () => ({
+  canWriteGraphqlPreviewCache: canWriteGraphqlPreviewCacheMock,
   createGraphqlItemPreviewQuery: createGraphqlItemPreviewQueryMock,
   getGraphqlItemPreview: vi.fn(),
   isGraphqlPreviewItem: () => true,
   setGraphqlPreviewFileType: setGraphqlPreviewFileTypeMock,
   setGraphqlPreviewName: setGraphqlPreviewNameMock,
-  setGraphqlPreviewOnCreate: vi.fn(),
+  setGraphqlPreviewOnCreate: setGraphqlPreviewOnCreateMock,
 }));
 
 const {
   invalidatePreview,
   setPreviewFileType,
   setPreviewName,
+  setPreviewOnCreate,
   useItemPreview,
 } = await import('../preview');
 
@@ -73,6 +77,7 @@ describe('preview transport facade', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useQueryOptions.length = 0;
+    canWriteGraphqlPreviewCacheMock.mockReturnValue(true);
     useQueryMock.mockImplementation((options: () => unknown) => {
       useQueryOptions.push(options);
       return { isLoading: false, isPending: false, isSuccess: false };
@@ -81,6 +86,7 @@ describe('preview transport facade', () => {
     invalidateQueriesMock.mockResolvedValue(undefined);
     setGraphqlPreviewFileTypeMock.mockResolvedValue(undefined);
     setGraphqlPreviewNameMock.mockResolvedValue(undefined);
+    setGraphqlPreviewOnCreateMock.mockResolvedValue(undefined);
     createGraphqlItemPreviewQueryMock.mockReturnValue({
       data: () => preview,
       error: () => null,
@@ -198,12 +204,40 @@ describe('preview transport facade', () => {
     });
   });
 
+  it('seeds REST when the normalized GraphQL cache host is unavailable', () => {
+    canWriteGraphqlPreviewCacheMock.mockReturnValue(false);
+
+    setPreviewOnCreate({
+      itemId: 'doc-2',
+      itemType: 'document',
+      name: 'Created',
+      fileType: 'md',
+    });
+
+    expect(setGraphqlPreviewOnCreateMock).not.toHaveBeenCalled();
+    expect(setQueryDataMock).toHaveBeenCalledOnce();
+    const updater = setQueryDataMock.mock.calls[0]?.[1];
+    expect(updater(undefined)).toMatchObject({
+      id: 'doc-2',
+      type: 'document',
+      access: 'access',
+      rawName: 'Created',
+      fileType: 'md',
+    });
+  });
+
   it('keeps GraphQL writes out of the TanStack preview cache', () => {
     setPreviewFileType('doc-1', 'pdf');
     setPreviewName({
       itemId: 'doc-1',
       itemType: 'document',
       name: 'Renamed',
+    });
+    setPreviewOnCreate({
+      itemId: 'doc-2',
+      itemType: 'document',
+      name: 'Created',
+      fileType: 'md',
     });
 
     expect(setGraphqlPreviewFileTypeMock).toHaveBeenCalledWith(
@@ -214,6 +248,16 @@ describe('preview transport facade', () => {
     expect(setGraphqlPreviewNameMock).toHaveBeenCalledWith(
       { id: 'doc-1', type: 'document' },
       'Renamed',
+      'user-1'
+    );
+    expect(setGraphqlPreviewOnCreateMock).toHaveBeenCalledWith(
+      {
+        itemId: 'doc-2',
+        itemType: 'document',
+        name: 'Created',
+        fileType: 'md',
+        subType: undefined,
+      },
       'user-1'
     );
     expect(setQueryDataMock).not.toHaveBeenCalled();

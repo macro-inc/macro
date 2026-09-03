@@ -20,6 +20,7 @@ import {
   fetchRestPreviewBatch,
 } from './fetchers';
 import {
+  canWriteGraphqlPreviewCache,
   createGraphqlItemPreviewQuery,
   getGraphqlItemPreview,
   isGraphqlPreviewItem,
@@ -381,19 +382,20 @@ export function setPreviewOnCreate({
     (itemType === 'document' || itemType === 'chat' || itemType === 'project')
   ) {
     const userId = cachedUserId();
-    if (!userId) return;
-    return runGraphqlPreviewWrite(
-      setGraphqlPreviewOnCreate(
-        {
-          itemId,
-          itemType,
-          name,
-          fileType,
-          subType,
-        },
-        userId
-      )
-    );
+    if (userId && canWriteGraphqlPreviewCache()) {
+      return runGraphqlPreviewWrite(
+        setGraphqlPreviewOnCreate(
+          {
+            itemId,
+            itemType,
+            name,
+            fileType,
+            subType,
+          },
+          userId
+        )
+      );
+    }
   }
   const defaultPreviewItem: AccessiblePreviewItem = {
     id: itemId,
