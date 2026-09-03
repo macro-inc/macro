@@ -12,7 +12,12 @@ import {
 } from 'pulumi-fusionauth';
 import * as pulumi from '@pulumi/pulumi';
 import * as fs from 'fs';
-import { config, getServiceUrl, ServiceUrl, stack } from '../../packages/shared';
+import {
+  config,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 
 import 'dotenv/config';
 import {
