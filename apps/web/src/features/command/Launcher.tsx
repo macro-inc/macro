@@ -517,7 +517,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     label: 'Agent',
     icon: Robot,
     description: 'Create agent session',
-    launcherHint: 'Sandboxed coding session',
+    launcherHint: 'Dedicated Agent Session',
     keywords: ['new', 'make', 'add', 'agent', 'code', 'coder', 'session'],
     blockName: 'agent',
     hotkeyToken: TOKENS.create.agent,
