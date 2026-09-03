@@ -67,6 +67,7 @@ export function InboxListEntity(props: InboxListEntityProps) {
           selected={props.checked}
           highlighted={props.highlighted}
           focusable={props.focusable}
+          showUnreadIndicator={props.hideCheckbox}
           onClick={props.onClick}
         />
       </MaybeEntityRow>
