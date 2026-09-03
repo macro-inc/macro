@@ -32,6 +32,7 @@ use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::domain::trigger_router::{
     RoutedTrigger, agent_trigger_bot_id, route_agent_trigger,
 };
+use agent_harness::inbound::redis_commands::consume_runtime_commands;
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
@@ -43,7 +44,7 @@ use agent_harness::outbound::daytona::{
     DaytonaContainerManager, DaytonaSettings, Snapshot,
 };
 use agent_harness::outbound::egress::EgressProvisioner;
-use agent_harness::outbound::forward::{RedisCommandForwarder, consume_runtime_commands};
+use agent_harness::outbound::forward::RedisCommandForwarder;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
@@ -454,7 +455,7 @@ async fn run() -> anyhow::Result<()> {
         prompt_context,
         prompt_composer,
         EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
-        RedisCommandForwarder::new(redis.clone(), replica),
+        RedisCommandForwarder::new(redis.clone(), config.internal_api_key.clone()),
         defaults,
     ));
     // Close the loop: turn ends observed by the session actors drain the
@@ -462,6 +463,8 @@ async fn run() -> anyhow::Result<()> {
     turn_observer.bind(harness.clone());
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
+    let runtime_command_runtimes = Arc::clone(&runtimes);
+    let runtime_command_api_key = config.internal_api_key.clone();
     let (runtime_commands_ready, mut runtime_commands_readiness) =
         tokio::sync::watch::channel(false);
     let runtime_commands = tokio::spawn(async move {
@@ -470,6 +473,11 @@ async fn run() -> anyhow::Result<()> {
             if let Err(error) = consume_runtime_commands(
                 runtime_command_redis.clone(),
                 replica,
+                runtime_command_api_key.clone(),
+                {
+                    let runtimes = Arc::clone(&runtime_command_runtimes);
+                    Arc::new(move |harness| runtimes.is_connected(harness))
+                },
                 runtime_command_harness.clone(),
                 runtime_commands_ready.clone(),
             )
@@ -529,6 +537,7 @@ async fn run() -> anyhow::Result<()> {
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let http_runtime_commands_readiness = runtime_commands_readiness.clone();
     let http_port = config.port;
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -536,6 +545,7 @@ async fn run() -> anyhow::Result<()> {
             control_state,
             create_state,
             gateway_state,
+            http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),
         )
@@ -551,11 +561,15 @@ async fn run() -> anyhow::Result<()> {
     // release each claim eagerly in the actor teardown path; this loop is
     // what covers the ungraceful ones.
     let heartbeat_repo = session_repo.clone();
+    let heartbeat_readiness = runtime_commands_readiness.clone();
     let heartbeat = tokio::spawn(async move {
         let mut ticker =
             tokio::time::interval(agent_session::domain::ports::REPLICA_HEARTBEAT_INTERVAL);
         loop {
             ticker.tick().await;
+            if !*heartbeat_readiness.borrow() {
+                continue;
+            }
             if let Err(error) = heartbeat_repo.heartbeat(replica, None).await {
                 tracing::warn!(error = ?error, %replica, "failed to heartbeat harness replica");
             }

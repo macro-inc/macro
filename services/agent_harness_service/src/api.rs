@@ -19,6 +19,8 @@ use agent_session::inbound::axum_router::{
 };
 use anyhow::Context;
 use axum::Router;
+use axum::extract::State;
+use axum::http::StatusCode;
 use axum::routing::get;
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::MacroAuthorizationService;
@@ -41,8 +43,8 @@ fn mount_at_root_and_prefix(inner: Router) -> Router {
         .nest(GATEWAY_PATH_PREFIX, inner)
 }
 
-fn health_router() -> Router {
-    Router::new().route("/health", get(health))
+fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
+    Router::new().route("/health", get(health).with_state(ready))
 }
 
 /// Serve the sandbox-facing egress proxy on its own listener.
@@ -77,6 +79,7 @@ pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth>(
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
     gateway_state: RuntimeGatewayState<Auth>,
+    runtime_commands_ready: tokio::sync::watch::Receiver<bool>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
@@ -90,7 +93,7 @@ where
 {
     let inner = api_router(read_state, control_state, create_state, gateway_state)
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
-        .merge(health_router())
+        .merge(health_router(runtime_commands_ready))
         .layer(macro_cors::cors_layer());
     let app = mount_at_root_and_prefix(inner)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
@@ -134,6 +137,10 @@ where
         .nest("/runtime", runtime_gateway_router(gateway_state))
 }
 
-async fn health() -> &'static str {
-    "ok"
+async fn health(State(ready): State<tokio::sync::watch::Receiver<bool>>) -> StatusCode {
+    if *ready.borrow() {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    }
 }

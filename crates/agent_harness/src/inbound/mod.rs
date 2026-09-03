@@ -4,4 +4,5 @@
 //! is addressed to us, hand one value inward. No policy lives here.
 
 pub mod kafka;
+pub mod redis_commands;
 pub mod runtime_gateway;

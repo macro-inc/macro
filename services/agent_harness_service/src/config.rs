@@ -51,7 +51,7 @@ pub struct Config {
     pub kafka_brokers: KafkaBrokers,
     /// MacroDB connection string; `agent_sessions` lives here.
     pub database_url: DatabaseUrl,
-    /// Shared Redis used for cross-replica external runtime command forwarding.
+    /// Shared Redis used for cross-replica command forwarding.
     pub redis_uri: RedisUri,
     /// Base URL of the Daytona REST API.
     #[macro_config_default(String::from("https://app.daytona.io/api"))]

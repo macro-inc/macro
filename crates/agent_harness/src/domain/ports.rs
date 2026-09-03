@@ -19,15 +19,23 @@ use super::model::{
 };
 use super::sandbox::SandboxResizeEffect;
 
-/// Broadcasts commands for whichever replica currently owns their execution.
+/// The distributed destination for a forwarded command.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CommandTarget {
+    /// The replica that owns the session actor.
+    Replica(agent_session::domain::model::ReplicaId),
+    /// The replica holding a registered harness's runtime socket.
+    Harness(HarnessId),
+}
+
+/// Forwards commands to the replica currently responsible for execution.
 pub trait CommandForwarder: Send + Sync + 'static {
-    /// Run `command` on the responsible replica. `harness` narrows an
-    /// unmanaged external session to the process holding that runtime socket.
+    /// Run `command` at `target`.
     fn forward(
         &self,
         session: AgentSessionId,
         command: HarnessCommand,
-        harness: Option<HarnessId>,
+        target: CommandTarget,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send;
 }
 
@@ -42,7 +50,7 @@ impl CommandForwarder for NoPeers {
         &self,
         session: AgentSessionId,
         _command: HarnessCommand,
-        _harness: Option<HarnessId>,
+        _target: CommandTarget,
     ) -> Result<CommandOutcome> {
         Err(HarnessError::Disconnected(session))
     }

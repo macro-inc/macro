@@ -70,16 +70,10 @@ type Args = {
  * partitions across live tasks; ownership plus Redis routing is what makes
  * that split correct.
  *
- * Deploys roll (min healthy 100%, max 200%): the outgoing tasks keep serving
- * until their replacements pass health checks, so the control API and egress
- * proxy stay up instead of blacking out for the old tasks' sandbox cleanup.
- * A deploy therefore doubles the replica count for its duration rather than
- * introducing coexistence - replicas coexist all the time, and the lease is
- * what makes both the steady state and the overlap correct. A command routed
- * to a new task for a session whose live actor is still on an old one
- * self-heals through resume. Live sessions already restart across every
- * deploy (`shutdown_all` stops each sandbox), so the overlap narrows the
- * blast radius rather than widening it.
+ * This protocol cutover deploys without old/new overlap because prior tasks
+ * understand only direct HTTP forwarding. Steady state still runs two
+ * replicas; subsequent changes may restore rolling overlap once every live
+ * task speaks the Redis protocol.
  */
 export class AgentHarnessService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
@@ -342,11 +336,10 @@ export class AgentHarnessService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
-        // Rolling replace: the old task serves until the new one is healthy
-        // (see the class doc comment for the overlap semantics). A failed
-        // deploy rolls back with the old task still up rather than at zero.
-        deploymentMinimumHealthyPercent: 100,
-        deploymentMaximumPercent: 200,
+        // Redis replaces direct HTTP forwarding in one protocol cutover, so
+        // old and new replicas must not overlap during this deployment.
+        deploymentMinimumHealthyPercent: 0,
+        deploymentMaximumPercent: 100,
         // Every environment runs two, so dev stays prod-shaped: forwarding is
         // dead code at one task (management() can only answer Ours or
         // Unmanaged), and a path only dev never exercises is one whose
