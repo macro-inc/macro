@@ -135,12 +135,14 @@ async fn main() -> Result<()> {
     };
     let authed_routes = scheduled_action_router::<_, _, ()>(state);
 
-    let prefixed_router = Router::new()
-        .route("/health", axum::routing::get(health))
-        .merge(authed_routes)
-        .merge(mount_docs_at_root_and_prefix());
-
-    let router = mount_at_root_and_prefix(prefixed_router).layer(macro_cors::cors_layer());
+    let router = Router::new()
+        .merge(mount_at_root_and_prefix(
+            Router::new()
+                .route("/health", axum::routing::get(health))
+                .merge(authed_routes),
+        ))
+        .merge(mount_docs_at_root_and_prefix())
+        .layer(macro_cors::cors_layer());
 
     let port = config.port;
     let addr = format!("0.0.0.0:{port}");
