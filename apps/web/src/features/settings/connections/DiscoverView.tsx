@@ -242,7 +242,10 @@ function CatalogRow(props: {
       title={name()}
       description={<span id={descriptionId}>{description}</span>}
     >
-      <Show when={props.added} fallback={<ConnectAction label="Connect" loading={busy()} />}>
+      <Show
+        when={props.added}
+        fallback={<ConnectAction label="Connect" loading={busy()} />}
+      >
         <AddedMark />
       </Show>
     </IntegrationRow>

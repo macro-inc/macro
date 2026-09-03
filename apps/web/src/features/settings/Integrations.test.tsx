@@ -29,11 +29,7 @@ describe('AddCustomMcpDialog', () => {
     mocks.add.mockImplementation((_vars, opts) => opts?.onSuccess?.());
 
     render(() => (
-      <AddCustomMcpDialog
-        open
-        onOpenChange={onOpenChange}
-        onAdded={onAdded}
-      />
+      <AddCustomMcpDialog open onOpenChange={onOpenChange} onAdded={onAdded} />
     ));
 
     fireEvent.input(screen.getByLabelText('Name'), {

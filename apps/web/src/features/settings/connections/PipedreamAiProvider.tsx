@@ -226,9 +226,7 @@ export function PipedreamAiProvider(props: {
           <CapabilityRow
             title={copy.title}
             outcome={copy.outcome}
-            facts={
-              row() ? capabilityFacts(row()!) : 'Powered by Pipedream'
-            }
+            facts={row() ? capabilityFacts(row()!) : 'Powered by Pipedream'}
             muted={row()?.status === 'off'}
           >
             {actions()}

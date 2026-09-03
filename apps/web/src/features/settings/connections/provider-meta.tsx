@@ -1,5 +1,5 @@
-import GoogleIcon from '@icon/mcp-google.svg';
 import GithubIcon from '@icon/mcp-github.svg';
+import GoogleIcon from '@icon/mcp-google.svg';
 import LinearIcon from '@icon/mcp-linear.svg';
 import NotionIcon from '@icon/mcp-notion.svg';
 import SlackIcon from '@icon/mcp-slack.svg';
