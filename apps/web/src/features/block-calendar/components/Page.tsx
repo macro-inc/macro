@@ -346,6 +346,7 @@ export function Page(props: {
         <CalendarPageHost
           id={props.id}
           data={data}
+          teamEvents={teamOoo.visibleEvents}
           eventsById={eventsById}
           grid={grid}
         />
@@ -357,6 +358,8 @@ export function Page(props: {
 function CalendarPageHost(props: {
   id: CalendarPageId;
   data: CalendarOccurrenceData;
+  /** Teammate out-of-office events rendered on this page. */
+  teamEvents: Accessor<CalendarEvent[]>;
   /** Occurrence events merged with the team out-of-office overlay. */
   eventsById: Accessor<Map<string, CalendarEvent>>;
   grid: CalendarGridHandle;
@@ -404,6 +407,7 @@ function CalendarPageHost(props: {
       dateInfo: props.grid.dateInfo,
       element: props.grid.element,
       data: props.data,
+      teamEvents: props.teamEvents,
     });
     onCleanup(unregister);
   });
