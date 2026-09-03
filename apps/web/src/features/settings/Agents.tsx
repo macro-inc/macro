@@ -536,8 +536,17 @@ function AgentDialog(props: {
   };
   const preferredModelId = (id: string) => {
     const data = modelDataForHarness(id);
+    if (data?.status === 'unsupported') return 'default';
     if (data?.status !== 'available') return '';
-    return data.currentModel ?? data.models[0]?.id ?? '';
+    const current = data.currentModel;
+    if (
+      current &&
+      (data.models.length === 0 ||
+        data.models.some((model) => model.id === current))
+    ) {
+      return current;
+    }
+    return data.models[0]?.id ?? '';
   };
   const [defaultModelId, setDefaultModelId] = createSignal(
     props.agent?.default_model ?? ''
@@ -555,7 +564,6 @@ function AgentDialog(props: {
       props.agent?.default_model === selected &&
       (props.agent.harness_id ?? props.agent.harness) === harnessId();
     if (
-      !savedModel ||
       selected.length === 0 ||
       data.models.some((model) => model.id === selected)
     ) {
@@ -565,8 +573,9 @@ function AgentDialog(props: {
       ...data.models,
       {
         id: selected,
-        name: `${selected} (saved, unavailable)`,
+        name: `${selected} (${savedModel ? 'saved, ' : ''}unavailable)`,
         description: undefined,
+        group: undefined,
       },
     ];
   };
@@ -854,34 +863,45 @@ function AgentDialog(props: {
                             }
                           >
                             <Show
-                              when={selectedHarnessUsesCatalog()}
+                              when={selectedModelOptions().length > 0}
                               fallback={
-                                <select
-                                  aria-label="Default model"
-                                  class="settings-input w-full"
-                                  value={selectedDefaultModelId()}
-                                  onChange={(event) =>
-                                    setDefaultModelId(event.currentTarget.value)
-                                  }
-                                >
-                                  <For each={selectedModelOptions()}>
-                                    {(model) => (
-                                      <option value={model.id}>
-                                        {model.name}
-                                      </option>
-                                    )}
-                                  </For>
-                                </select>
+                                <p class="settings-input text-ink-muted">
+                                  This harness did not return any models.
+                                </p>
                               }
                             >
-                              <ModelCatalogPicker
-                                value={selectedDefaultModelId()}
-                                options={selectedCatalogOptions()}
-                                onSelect={setDefaultModelId}
-                                ariaLabel="Default model"
-                                triggerClass="w-full justify-between"
-                                contentClass="overflow-hidden"
-                              />
+                              <Show
+                                when={selectedHarnessUsesCatalog()}
+                                fallback={
+                                  <select
+                                    aria-label="Default model"
+                                    class="settings-input w-full"
+                                    value={selectedDefaultModelId()}
+                                    onChange={(event) =>
+                                      setDefaultModelId(
+                                        event.currentTarget.value
+                                      )
+                                    }
+                                  >
+                                    <For each={selectedModelOptions()}>
+                                      {(model) => (
+                                        <option value={model.id}>
+                                          {model.name}
+                                        </option>
+                                      )}
+                                    </For>
+                                  </select>
+                                }
+                              >
+                                <ModelCatalogPicker
+                                  value={selectedDefaultModelId()}
+                                  options={selectedCatalogOptions()}
+                                  onSelect={setDefaultModelId}
+                                  ariaLabel="Default model"
+                                  triggerClass="w-full justify-between"
+                                  contentClass="overflow-hidden"
+                                />
+                              </Show>
                             </Show>
                           </Show>
                         </Show>

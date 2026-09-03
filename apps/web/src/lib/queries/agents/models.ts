@@ -32,8 +32,14 @@ export function agentModelsQueryOptions(target: AgentModelTarget) {
       target.harness,
       target.harnessId ?? null,
     ] as const,
-    queryFn: async (): Promise<LoadAgentModelsResponse> =>
-      await throwOnErr(() => agentHarnessServiceClient.loadAgentModels(target)),
+    queryFn: async ({
+      signal,
+    }: {
+      signal: AbortSignal;
+    }): Promise<LoadAgentModelsResponse> =>
+      await throwOnErr(() =>
+        agentHarnessServiceClient.loadAgentModels(target, signal)
+      ),
     gcTime: 0,
     staleTime: 0,
     retry: false,

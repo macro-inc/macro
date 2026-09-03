@@ -123,13 +123,13 @@ export function HarnessPairingDialog(props: {
       visibleScrim
       class="w-[min(480px,calc(100vw-16px))]"
     >
-      <Panel depth={2} class="rounded-xl text-ink">
+      <Panel depth={2} class="max-h-[88vh] rounded-xl text-ink">
         <Panel.Header class="px-5 py-3">
           <Dialog.Title class="text-sm font-semibold">
             {approved() ? 'Harness connected' : 'Connect a harness'}
           </Dialog.Title>
         </Panel.Header>
-        <Panel.Body class="p-5">
+        <Panel.Body class="overflow-y-auto p-5">
           <Switch>
             <Match when={approved()}>
               <p class="text-sm leading-5 text-ink-muted">
