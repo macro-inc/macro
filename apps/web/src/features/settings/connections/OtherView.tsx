@@ -2,7 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { useDeleteMcpServerMutation } from '@queries/mcp-servers';
 import { useDeletePipedreamConnectionMutation } from '@queries/pipedream-connectors';
 import { createSignal, For } from 'solid-js';
-import { ConnectAction } from '../integration-ui';
+import { DisconnectAction } from '../integration-ui';
 import { IntegrationRow, SettingsCard, SettingsPage } from '../primitives';
 import {
   type DisconnectConfirm,
@@ -67,9 +67,7 @@ function LeftoverRow(props: { leftover: Leftover }) {
         description={props.leftover.note}
         facts={props.leftover.facts}
       >
-        <ConnectAction
-          label="Disconnect from Macro"
-          variant="danger"
+        <DisconnectAction
           onClick={() =>
             setDisconnectConfirm({
               title: 'Disconnect from Macro',

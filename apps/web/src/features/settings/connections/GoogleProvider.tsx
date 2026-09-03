@@ -19,7 +19,7 @@ import type { Link as EmailLink } from '@service-email/generated/schemas';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { InboxSyncStatus } from '../inbox-sync-status';
-import { ConnectAction } from '../integration-ui';
+import { ConnectAction, DisconnectAction } from '../integration-ui';
 import {
   SettingsCard,
   SettingsPage,
@@ -356,20 +356,14 @@ function GoogleCapabilityActions(props: {
           <Show
             when={isCalendar()}
             fallback={
-              <ConnectAction
-                label="Disconnect from Macro"
-                variant="danger"
+              <DisconnectAction
                 onClick={props.onRemoveGmail}
                 disabled={props.removing}
               />
             }
           >
             <Show when={isOwn() && props.row.status === 'connected'}>
-              <ConnectAction
-                label="Disconnect from Macro"
-                variant="danger"
-                onClick={props.onTurnOffCalendar}
-              />
+              <DisconnectAction onClick={props.onTurnOffCalendar} />
             </Show>
             <Show when={isOwn() && props.row.status === 'off'}>
               <ConnectAction

@@ -5,7 +5,7 @@ import {
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { createSignal, Show } from 'solid-js';
-import { ConnectAction } from '../integration-ui';
+import { ConnectAction, DisconnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
 import { CapabilityRow, capabilityFacts } from './capability-row';
 import {
@@ -130,9 +130,7 @@ export function PipedreamAiProvider(props: {
                           }}
                           disabled={native.update.isPending}
                         />
-                        <ConnectAction
-                          label="Disconnect from Macro"
-                          variant="danger"
+                        <DisconnectAction
                           onClick={() => {
                             const url = row()?.sourceUrl;
                             if (!url) return;
@@ -175,9 +173,7 @@ export function PipedreamAiProvider(props: {
                       }
                       disabled={update.isPending}
                     />
-                    <ConnectAction
-                      label="Disconnect from Macro"
-                      variant="danger"
+                    <DisconnectAction
                       onClick={() =>
                         setDisconnect({
                           title: 'Disconnect from Macro',

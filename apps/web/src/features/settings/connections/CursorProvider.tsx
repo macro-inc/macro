@@ -9,7 +9,7 @@ import {
 } from '@queries/auth/cursor-api-key';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { ConnectAction } from '../integration-ui';
+import { DisconnectAction } from '../integration-ui';
 import {
   SettingsCard,
   SettingsPage,
@@ -103,9 +103,7 @@ export function CursorProvider() {
             }
           >
             <Show when={!cursorStatus.isPlaceholderData && cursorRegistered()}>
-              <ConnectAction
-                label="Disconnect from Macro"
-                variant="danger"
+              <DisconnectAction
                 disabled={disconnectCursor.isPending}
                 onClick={() =>
                   setDisconnect({

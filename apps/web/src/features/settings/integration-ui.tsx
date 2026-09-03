@@ -1,7 +1,7 @@
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { cn } from '@ui';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 
 /*
  * Shared bits for the Connected accounts integration cards: the trailing
@@ -17,11 +17,12 @@ export type ConnectionState = 'connected' | 'attention' | 'disconnected' | 'off'
  * `variant` to render a neutral or destructive action (e.g. Disconnect).
  */
 export function ConnectAction(props: {
-  label: string;
+  label: JSX.Element;
   onClick?: () => void;
   href?: string;
   disabled?: boolean;
   loading?: boolean;
+  ariaLabel?: string;
   /** 'connect' shows the external-link arrow; the others are plain buttons. */
   variant?: 'connect' | 'neutral' | 'danger';
 }) {
@@ -55,6 +56,7 @@ export function ConnectAction(props: {
         href={props.href}
         target="_blank"
         rel="noopener noreferrer"
+        aria-label={props.ariaLabel}
         class={className()}
       >
         {body}
@@ -65,11 +67,35 @@ export function ConnectAction(props: {
     <button
       type="button"
       disabled={props.disabled || props.loading}
+      aria-label={props.ariaLabel}
       onClick={() => props.onClick?.()}
       class={className()}
     >
       {body}
     </button>
+  );
+}
+
+/** Danger disconnect. Narrow cards hide "from Macro". The name stays full. */
+export function DisconnectAction(props: {
+  onClick?: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+}) {
+  return (
+    <ConnectAction
+      variant="danger"
+      ariaLabel="Disconnect from Macro"
+      label={
+        <>
+          Disconnect
+          <span class="hidden @[460px]:inline"> from Macro</span>
+        </>
+      }
+      onClick={props.onClick}
+      disabled={props.disabled}
+      loading={props.loading}
+    />
   );
 }
 
