@@ -14106,6 +14106,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "utoipa-swagger-ui",
