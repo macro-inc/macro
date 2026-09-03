@@ -136,7 +136,7 @@ describe('CursorProvider', () => {
 
     render(() => <CursorProvider />);
 
-    expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Connected' })).toBeNull();
     expect(screen.queryByLabelText('API key')).toBeNull();
     const picker = screen.getByRole('button', { name: /Default Model/ });
     expect(picker.textContent).toContain('Default Model');

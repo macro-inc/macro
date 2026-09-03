@@ -71,7 +71,8 @@ inbound connectors to Connections Discover), `Bots`; `Log out`.
 `Connected` lists mapped providers (ready-of-total). Custom MCP grants sit in
 a second section. More holds Turn off, Rename, Reconnect, Disconnect.
 Connect and Turn on stay on the row when that is the job. Reconnect also
-sits on the row when auth is broken. Unmatched
+sits on the row when auth is broken. Healthy rows have no status
+light. Off keeps the muted dot. Unmatched
 Pipedream leftovers stay with the providers.
 Empty state offers Google first, then GitHub, Linear, Notion,
 Slack, Cursor. `Discover` searches the Pipedream catalog; featured cards are

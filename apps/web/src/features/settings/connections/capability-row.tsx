@@ -2,7 +2,6 @@ import type { JSX } from 'solid-js';
 import { StatusDot } from '../integration-ui';
 import { IntegrationRow } from '../primitives';
 import type { Capability, CapabilityScope } from './model';
-import { connectionState, statusLabel } from './status';
 
 const SCOPE_LABEL: Record<CapabilityScope, string> = {
   personal: 'Personal',
@@ -31,11 +30,8 @@ export function CapabilityRow(props: {
       icon={props.icon}
       title={props.title}
       status={
-        props.status ? (
-          <StatusDot
-            state={connectionState(props.status)}
-            label={statusLabel(props.status)}
-          />
+        props.status === 'off' ? (
+          <StatusDot state="off" label="Off" />
         ) : undefined
       }
       description={props.outcome}
