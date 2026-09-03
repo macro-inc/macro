@@ -116,7 +116,9 @@ export function moreModelFamilies(catalog: ModelCatalog): ModelFamily[] {
   return catalog.families
     .map((family) => ({
       label: family.label,
-      options: family.options.filter((option) => !recommendedIds.has(option.id)),
+      options: family.options.filter(
+        (option) => !recommendedIds.has(option.id)
+      ),
     }))
     .filter((family) => family.options.length > 0);
 }
