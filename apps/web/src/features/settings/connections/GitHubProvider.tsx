@@ -10,15 +10,22 @@ import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
 import { CapabilityRow, capabilityFacts } from './capability-row';
+import {
+  type DisconnectConfirm,
+  DisconnectConfirmDialog,
+} from './disconnect-confirm';
 import { CURATED_AI, type ConnectionsModel, capabilitiesFor } from './model';
 import { useNativeMcpActions } from './native-actions';
 import { closeConnectionsProvider } from './view-state';
 
 export function GitHubProvider(props: { model: ConnectionsModel }) {
+  const [disconnect, setDisconnect] = createSignal<DisconnectConfirm | null>(
+    null
+  );
   const rows = () => capabilitiesFor(props.model, 'github');
   const account = () => rows().find((row) => row.id === 'github-account');
   const team = () => rows().find((row) => row.id === 'github-team');
@@ -100,7 +107,13 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                       <ConnectAction
                         label="Disconnect from Macro"
                         variant="danger"
-                        onClick={() => void disconnectAccount()}
+                        onClick={() =>
+                          setDisconnect({
+                            title: 'Disconnect from Macro',
+                            body: 'Disconnect GitHub? Pull requests will stop showing up in Macro.',
+                            onConfirm: () => void disconnectAccount(),
+                          })
+                        }
                         disabled={deleteGithubLink.isPending}
                       />
                     </Show>
@@ -173,17 +186,24 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                               onClick={() => {
                                 const url = row().sourceUrl;
                                 if (!url) return;
-                                native.remove.mutate(
-                                  { url },
-                                  {
-                                    onSuccess: () =>
-                                      toast.success(
-                                        'Disconnected GitHub AI from Macro'
-                                      ),
-                                    onError: () =>
-                                      toast.failure('Failed to disconnect'),
-                                  }
-                                );
+                                setDisconnect({
+                                  title: 'Disconnect from Macro',
+                                  body: 'Disconnect GitHub from Macro AI?',
+                                  onConfirm: () =>
+                                    native.remove.mutate(
+                                      { url },
+                                      {
+                                        onSuccess: () =>
+                                          toast.success(
+                                            'Disconnected GitHub AI from Macro'
+                                          ),
+                                        onError: () =>
+                                          toast.failure(
+                                            'Failed to disconnect'
+                                          ),
+                                      }
+                                    ),
+                                });
                               }}
                               disabled={native.remove.isPending}
                             />
@@ -224,14 +244,22 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                     label="Disconnect from Macro"
                     variant="danger"
                     onClick={() =>
-                      deletePipedream.mutate(
-                        { app_slug: 'github' },
-                        {
-                          onSuccess: () =>
-                            toast.success('Disconnected GitHub AI from Macro'),
-                          onError: () => toast.failure('Failed to disconnect'),
-                        }
-                      )
+                      setDisconnect({
+                        title: 'Disconnect from Macro',
+                        body: 'Disconnect GitHub from Macro AI?',
+                        onConfirm: () =>
+                          deletePipedream.mutate(
+                            { app_slug: 'github' },
+                            {
+                              onSuccess: () =>
+                                toast.success(
+                                  'Disconnected GitHub AI from Macro'
+                                ),
+                              onError: () =>
+                                toast.failure('Failed to disconnect'),
+                            }
+                          ),
+                      })
                     }
                     disabled={deletePipedream.isPending}
                   />
@@ -270,6 +298,10 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
           </Show>
         </SettingsCard>
       </SettingsSection>
+      <DisconnectConfirmDialog
+        request={disconnect()}
+        onClose={() => setDisconnect(null)}
+      />
     </SettingsPage>
   );
 }

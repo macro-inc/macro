@@ -121,6 +121,11 @@ describe('CursorProvider', () => {
       screen.getByRole('button', { name: 'Disconnect from Macro' })
     );
 
+    expect(mocks.disconnect).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+
     await waitFor(() => {
       expect(mocks.disconnect).toHaveBeenCalledOnce();
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Cursor disconnected');

@@ -4,10 +4,14 @@ import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
-import { Show } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
 import { CapabilityRow, capabilityFacts } from './capability-row';
+import {
+  type DisconnectConfirm,
+  DisconnectConfirmDialog,
+} from './disconnect-confirm';
 import {
   CURATED_AI,
   type ConnectionsModel,
@@ -68,6 +72,9 @@ export function PipedreamAiProvider(props: {
     onConnected: () => toast.success(`${copy.name} connected`),
   });
 
+  const [disconnect, setDisconnect] = createSignal<DisconnectConfirm | null>(
+    null
+  );
   const granted = () =>
     row()?.status === 'connected' || row()?.status === 'off';
 
@@ -129,17 +136,22 @@ export function PipedreamAiProvider(props: {
                           onClick={() => {
                             const url = row()?.sourceUrl;
                             if (!url) return;
-                            native.remove.mutate(
-                              { url },
-                              {
-                                onSuccess: () =>
-                                  toast.success(
-                                    `Disconnected ${copy.name} from Macro`
-                                  ),
-                                onError: () =>
-                                  toast.failure('Failed to disconnect'),
-                              }
-                            );
+                            setDisconnect({
+                              title: 'Disconnect from Macro',
+                              body: `Disconnect ${copy.name}?`,
+                              onConfirm: () =>
+                                native.remove.mutate(
+                                  { url },
+                                  {
+                                    onSuccess: () =>
+                                      toast.success(
+                                        `Disconnected ${copy.name} from Macro`
+                                      ),
+                                    onError: () =>
+                                      toast.failure('Failed to disconnect'),
+                                  }
+                                ),
+                            });
                           }}
                           disabled={native.remove.isPending}
                         />
@@ -167,16 +179,22 @@ export function PipedreamAiProvider(props: {
                       label="Disconnect from Macro"
                       variant="danger"
                       onClick={() =>
-                        remove.mutate(
-                          { app_slug: props.provider },
-                          {
-                            onSuccess: () =>
-                              toast.success(
-                                `Disconnected ${copy.name} from Macro`
-                              ),
-                            onError: () => toast.failure('Failed to disconnect'),
-                          }
-                        )
+                        setDisconnect({
+                          title: 'Disconnect from Macro',
+                          body: `Disconnect ${copy.name}?`,
+                          onConfirm: () =>
+                            remove.mutate(
+                              { app_slug: props.provider },
+                              {
+                                onSuccess: () =>
+                                  toast.success(
+                                    `Disconnected ${copy.name} from Macro`
+                                  ),
+                                onError: () =>
+                                  toast.failure('Failed to disconnect'),
+                              }
+                            ),
+                        })
                       }
                       disabled={remove.isPending}
                     />
@@ -198,6 +216,10 @@ export function PipedreamAiProvider(props: {
         </SettingsCard>
         <p class="text-xs text-ink-extra-muted">{copy.later}</p>
       </SettingsSection>
+      <DisconnectConfirmDialog
+        request={disconnect()}
+        onClose={() => setDisconnect(null)}
+      />
     </SettingsPage>
   );
 }

@@ -17,6 +17,10 @@ import {
   SettingsSection,
 } from '../primitives';
 import { CapabilityRow } from './capability-row';
+import {
+  type DisconnectConfirm,
+  DisconnectConfirmDialog,
+} from './disconnect-confirm';
 import { closeConnectionsProvider } from './view-state';
 
 const CURSOR_KEY_PREFIX = 'crsr_';
@@ -27,6 +31,9 @@ function failureMessage(error: unknown, fallback: string): string {
 
 export function CursorProvider() {
   const [cursorApiKey, setCursorApiKey] = createSignal('');
+  const [disconnect, setDisconnect] = createSignal<DisconnectConfirm | null>(
+    null
+  );
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
   const disconnectCursor = useDisconnectCursorApiKey();
@@ -94,7 +101,13 @@ export function CursorProvider() {
                 label="Disconnect from Macro"
                 variant="danger"
                 disabled={disconnectCursor.isPending}
-                onClick={() => void handleDisconnectCursor()}
+                onClick={() =>
+                  setDisconnect({
+                    title: 'Disconnect from Macro',
+                    body: "Disconnect Cursor? This deletes Macro's copy of the key. It does not revoke the key in Cursor.",
+                    onConfirm: () => void handleDisconnectCursor(),
+                  })
+                }
               />
             </Show>
           </CapabilityRow>
@@ -179,6 +192,10 @@ export function CursorProvider() {
           </Show>
         </SettingsCard>
       </SettingsSection>
+      <DisconnectConfirmDialog
+        request={disconnect()}
+        onClose={() => setDisconnect(null)}
+      />
     </SettingsPage>
   );
 }
