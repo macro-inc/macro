@@ -237,7 +237,7 @@ async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
         }),
     ]));
 
-    let (notifications, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
         connection
             .send_request(text_prompt(&session, "go"))
             .block_task()
