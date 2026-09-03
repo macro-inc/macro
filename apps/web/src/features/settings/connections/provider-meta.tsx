@@ -1,4 +1,4 @@
-import GoogleIcon from '@icon/macro-google.svg';
+import GoogleIcon from '@icon/mcp-google.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import LinearIcon from '@icon/mcp-linear.svg';
 import NotionIcon from '@icon/mcp-notion.svg';
