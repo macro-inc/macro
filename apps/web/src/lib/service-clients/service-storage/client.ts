@@ -130,9 +130,9 @@ import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesP
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
 import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
+import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
-import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PinRequest } from './generated/schemas/pinRequest';
 import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
