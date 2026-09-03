@@ -11,6 +11,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
+import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
 import { Button, SendButton, Surface } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 
@@ -21,6 +22,11 @@ export interface AgentInputProps {
   placeholder?: string;
   /** The agent is working: the send button becomes a stop square. */
   busy?: boolean;
+  /**
+   * A waiting action can be advanced by ending the current turn. While the
+   * input is empty, Enter and the matching button do exactly that.
+   */
+  hasQueuedMessages?: boolean;
   disabled?: boolean;
   autofocus?: boolean;
   /**
@@ -77,6 +83,20 @@ export function AgentInput(props: AgentInputProps) {
     props.onSend(content);
   };
 
+  const canSendNext = () =>
+    markdown().trim().length === 0 &&
+    props.busy &&
+    props.hasQueuedMessages &&
+    !props.disabled &&
+    props.onStop !== undefined;
+
+  const sendNext = () => {
+    if (!canSendNext()) return;
+    // Stop bypasses the server queue. The cancelled turn ending immediately
+    // dispatches its oldest waiting action, so the queue remains FIFO.
+    props.onStop?.();
+  };
+
   const editor = buildConfig('chat')
     .namespace('agent-input')
     .withMentions({
@@ -90,7 +110,8 @@ export function AgentInput(props: AgentInputProps) {
     .withRestoreFocus()
     .withAgentCommands({ commands: () => props.commands?.() ?? [] })
     .onEnter(() => {
-      send();
+      if (canSend()) send();
+      else sendNext();
       return true;
     })
     .onFocusLeave({
@@ -162,15 +183,28 @@ export function AgentInput(props: AgentInputProps) {
                 />
               }
             >
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                label="Stop"
-                onClick={() => props.onStop?.()}
-                class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+              <Show
+                when={canSendNext()}
+                fallback={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    label="Stop"
+                    onClick={() => props.onStop?.()}
+                    class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+                  >
+                    <div class="size-3.5 rounded-sm bg-current" />
+                  </Button>
+                }
               >
-                <div class="size-3.5 rounded-sm bg-current" />
-              </Button>
+                <SendButton
+                  tooltip="Send next queued message"
+                  shortcut="Enter"
+                  onClick={sendNext}
+                >
+                  <EnterIcon />
+                </SendButton>
+              </Show>
             </Show>
           </div>
         </div>

@@ -76,6 +76,7 @@ export function AgentComposer() {
         placeholder="Message the agent, @mention anything"
         autofocus={autofocus}
         busy={composer.busy()}
+        hasQueuedMessages={queuedItems().length > 0}
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed
         // into, but not sent from, until the id lands.
