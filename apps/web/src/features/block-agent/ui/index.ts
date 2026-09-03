@@ -20,6 +20,10 @@ export {
 } from './ComposerNotice';
 export { type CountItem, CountSummary } from './CountSummary';
 export { DiffChanges, type DiffChangesProps } from './DiffChanges';
+export {
+  ElicitationForm,
+  type ElicitationFormProps,
+} from './ElicitationForm';
 export { FoldedAnsiText } from './FoldedAnsiText';
 export { FoldedOutput } from './FoldedOutput';
 export { FoldedPathList } from './FoldedPathList';

@@ -869,6 +869,25 @@
                 "enum": ["stop"]
               }
             }
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentRespondElicitationAction",
+                "description": "Answer an `elicitation/create` the agent sent.\n\nThe one action whose wire form is a JSON-RPC *response* rather than a\nrequest or notification: the agent asked, we answer on its id. The\nminted [`AgentActionId`] therefore never reaches the wire for this\naction; the fold correlates on the agent's id instead."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["respondElicitation"]
+                  }
+                }
+              }
+            ],
+            "description": "Answer an `elicitation/create` the agent sent.\n\nThe one action whose wire form is a JSON-RPC *response* rather than a\nrequest or notification: the agent asked, we answer on its id. The\nminted [`AgentActionId`] therefore never reaches the wire for this\naction; the fold correlates on the agent's id instead."
           }
         ],
         "description": "One thing a caller wants an agent to do."
@@ -888,6 +907,25 @@
             "description": "What to tell the agent."
           }
         }
+      },
+      "AgentRespondElicitationAction": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ElicitationAnswer",
+            "description": "The decision."
+          },
+          {
+            "type": "object",
+            "required": ["requestId"],
+            "properties": {
+              "requestId": {
+                "$ref": "#/components/schemas/ElicitationRequestId",
+                "description": "The agent's `elicitation/create` request id - not an\n[`AgentActionId`], because the agent minted it."
+              }
+            }
+          }
+        ],
+        "description": "Answer an elicitation the agent is waiting on."
       },
       "AgentSessionLogEntryDto": {
         "allOf": [
@@ -1183,6 +1221,66 @@
             "minLength": 1
           }
         }
+      },
+      "ElicitationAnswer": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "The user submitted the form, or consented to open the URL.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["accept"]
+              },
+              "content": {
+                "type": ["object", "null"],
+                "description": "Form: the submitted values keyed by property. URL: omitted.",
+                "additionalProperties": {},
+                "propertyNames": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user explicitly said no.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["decline"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user dismissed the request without choosing.",
+            "required": ["action"],
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": ["cancel"]
+              }
+            }
+          }
+        ],
+        "description": "What the user decided about an elicitation. Mirrors ACP's three actions;\nthere is no `Other` because we never originate an action we do not know."
+      },
+      "ElicitationRequestId": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "A numeric JSON-RPC id. Specta refuses `i64` (it does not fit a JS\nnumber); agents count their requests from zero, so `i32` is the\nhonest TypeScript face."
+          },
+          {
+            "type": "string",
+            "description": "A string JSON-RPC id."
+          }
+        ],
+        "description": "The JSON-RPC id of an agent's `elicitation/create` request, carried whole\nso the answer echoes exactly what the agent sent.\n\nAgents pick these, not us: Claude Code counts from `0`, others use\nstrings. `null` is not a legal id for a request that expects a response,\nso it is not representable here."
       },
       "ExternalSessionResponse": {
         "type": "object",

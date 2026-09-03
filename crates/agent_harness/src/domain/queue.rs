@@ -162,9 +162,10 @@ impl SessionQueues {
                 entry.actor = actor;
                 Ok(())
             }
-            AgentAction::SetModel(_) | AgentAction::Compact | AgentAction::Stop => {
-                Err(QueueError::NotEditable)
-            }
+            AgentAction::SetModel(_)
+            | AgentAction::Compact
+            | AgentAction::Stop
+            | AgentAction::RespondElicitation(_) => Err(QueueError::NotEditable),
         }
     }
 

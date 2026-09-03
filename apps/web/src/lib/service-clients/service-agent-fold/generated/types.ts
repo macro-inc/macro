@@ -73,6 +73,215 @@ export type ControlOutcome =
       message: string;
     };
 
+/**  One choice in a select. */
+export type ElicitationOption = {
+  /**  The value sent back when chosen. */
+  value: string;
+  /**
+   *  Label to show; absent for an untitled `enum`, where the value is the
+   *  label.
+   */
+  title: string | null;
+  /**  Help text, when the agent gave one. */
+  description: string | null;
+};
+
+/**
+ *  How an elicitation has resolved so far.
+ *
+ *  [`Self::Pending`] is a legitimate final state on a dead session, like an
+ *  unanswered permission.
+ */
+export type ElicitationOutcome =
+  /**  No response has gone out yet. */
+  | { kind: 'pending' }
+  /**  The user submitted the form, or consented to open the URL. */
+  | {
+      kind: 'accepted';
+      /**  The submitted values, absent for a URL consent. */
+      content: unknown;
+    }
+  /**  The user explicitly said no. */
+  | { kind: 'declined' }
+  /**  The user dismissed it, or a stop cancelled it. */
+  | { kind: 'cancelled' }
+  /**  URL only: the agent reported the external interaction finished. */
+  | { kind: 'completed' }
+  /**
+   *  The response was a JSON-RPC error - including this client's own
+   *  refusal of a request it could not hold.
+   */
+  | {
+      kind: 'errored';
+      /**  The error's message, verbatim. */
+      message: string;
+    }
+  /**  A result arrived that this fold could not read as an ACP action. */
+  | { kind: 'unrecognized' };
+
+/**  One form field. */
+export type ElicitationProperty = {
+  /**  The key the answer is sent back under. */
+  name: string;
+  /**  Label to show, when the agent gave one. */
+  title: string | null;
+  /**  Help text, when the agent gave one. */
+  description: string | null;
+  /**  The field's type and constraints. */
+  schema: ElicitationPropertySchema;
+};
+
+/**
+ *  A field's type and constraints, mirroring ACP's restricted property
+ *  schemas.
+ */
+export type ElicitationPropertySchema =
+  /**  Free text, or a single choice when `options` is non-empty. */
+  | {
+      type: 'string';
+      /**  Minimum length, when constrained. */
+      minLength: number | null;
+      /**  Maximum length, when constrained. */
+      maxLength: number | null;
+      /**
+       *  A regular expression the value must match. Agent-supplied, so a
+       *  renderer must bound its evaluation.
+       */
+      pattern: string | null;
+      /**
+       *  ACP's format hint as its wire string (`email`, `uri`, `date`,
+       *  `date-time`, or something this fold does not know).
+       */
+      format: string | null;
+      /**  Pre-filled value. */
+      default: string | null;
+      /**  The choices, when this is a single select. Empty for free text. */
+      options: ElicitationOption[];
+      /**
+       *  The key a free-text answer is sent under when one is accepted
+       *  alongside `options` - the user picks a choice *or* types their
+       *  own. A harness idiom (Claude Code's and Codex's "Other" field),
+       *  never ACP's own; `None` for a plain select.
+       */
+      customField: string | null;
+    }
+  /**  A floating-point number. */
+  | {
+      type: 'number';
+      /**  Lower bound, when constrained. */
+      minimum: number | null;
+      /**  Upper bound, when constrained. */
+      maximum: number | null;
+      /**  Pre-filled value. */
+      default: number | null;
+    }
+  /**  A whole number. */
+  | {
+      type: 'integer';
+      /**  Lower bound, when constrained. */
+      minimum: number | null;
+      /**  Upper bound, when constrained. */
+      maximum: number | null;
+      /**  Pre-filled value. */
+      default: number | null;
+    }
+  /**  A yes/no. */
+  | {
+      type: 'boolean';
+      /**  Pre-filled value. */
+      default: boolean | null;
+    }
+  /**  Several choices from a list. */
+  | {
+      type: 'multi_select';
+      /**  Fewest selections allowed, when constrained. */
+      minItems: number | null;
+      /**  Most selections allowed, when constrained. */
+      maxItems: number | null;
+      /**  The choices. */
+      options: ElicitationOption[];
+      /**  Pre-selected values. */
+      default: string[];
+      /**
+       *  The key a free-text answer is sent under when one is accepted
+       *  instead of the choices. Harness idiom, `None` for a plain
+       *  multi-select. See the `String` variant.
+       */
+      customField: string | null;
+    }
+  /**
+   *  A property type this fold does not know. A renderer shows that it
+   *  cannot display the field; decline and cancel still work.
+   */
+  | {
+      type: 'unrecognized';
+      /**  The wire `type`. */
+      typeName: string;
+      /**  The property schema, verbatim. */
+      raw: unknown;
+    };
+
+/**  What the agent asked for. */
+export type ElicitationRequest =
+  /**  Structured data through a form the client renders. */
+  | {
+      kind: 'form';
+      /**  The restricted schema describing the form. */
+      schema: ElicitationSchema;
+    }
+  /**  An out-of-band interaction the user consents to open. */
+  | {
+      kind: 'url';
+      /**
+       *  The agent's handle for this interaction; `elicitation/complete`
+       *  names it.
+       */
+      elicitationId: string;
+      /**  Where the user is sent. */
+      url: string;
+    }
+  /**
+   *  A mode this fold does not know. Kept raw so nothing is lost; a
+   *  renderer must not treat it as form or url.
+   */
+  | {
+      kind: 'unrecognized';
+      /**  The wire mode. */
+      mode: string;
+      /**  The request params, verbatim. */
+      raw: unknown;
+    };
+
+/**
+ *  The JSON-RPC id of an agent's `elicitation/create` request, carried whole
+ *  so the answer echoes exactly what the agent sent.
+ *
+ *  Agents pick these, not us: Claude Code counts from `0`, others use
+ *  strings. `null` is not a legal id for a request that expects a response,
+ *  so it is not representable here.
+ */
+export type ElicitationRequestId =
+  /**
+   *  A numeric JSON-RPC id. Specta refuses `i64` (it does not fit a JS
+   *  number); agents count their requests from zero, so `i32` is the
+   *  honest TypeScript face.
+   */
+  | number
+  /**  A string JSON-RPC id. */
+  | string;
+
+/**  ACP's restricted form schema: a flat object of primitive properties. */
+export type ElicitationSchema = {
+  /**  Schema-level title, when the agent gave one. */
+  title: string | null;
+  /**  Schema-level description, when the agent gave one. */
+  description: string | null;
+  /**  The fields, in the order the agent declared them. */
+  properties: ElicitationProperty[];
+  /**  Property names the agent requires an answer for. */
+  required: string[];
+};
+
 /**  A file modification a tool reported. */
 export type FileDiff = {
   /**  The file that changed. */
@@ -212,6 +421,36 @@ export type MessagePart =
       kind: 'plan';
       /**  The tasks, in the order the agent listed them. */
       entries: PlanEntry[];
+    }
+  /**
+   *  The agent asking the user a question.
+   *
+   *  When the question was asked on behalf of a tool call this fold had
+   *  already opened (Claude Code's `AskUserQuestion`), this part *replaces*
+   *  that tool's part in place: the question is the call, and rendering
+   *  both would show one thing twice.
+   */
+  | {
+      kind: 'elicitation';
+      /**
+       *  The agent's `elicitation/create` request id - what an answer must
+       *  echo.
+       */
+      requestId: ElicitationRequestId;
+      /**  The tool call the question belongs to, when the agent said. */
+      toolCall: ToolUseId | null;
+      /**  What the agent is asking, in prose. */
+      message: string;
+      /**  The form or URL. */
+      request: ElicitationRequest;
+      /**  How it has resolved so far. */
+      outcome: ElicitationOutcome;
+      /**
+       *  The harness's own reading of the answer, when it reported one
+       *  after the response went back (Claude Code echoes the chosen
+       *  option through its tool result). Absent otherwise.
+       */
+      reported: unknown;
     };
 
 /**  One model the runtime offers. */
@@ -222,6 +461,24 @@ export type ModelOption = {
   name: string;
   /**  Descriptive copy - pricing, context size, and the like. */
   description: string | null;
+};
+
+/**
+ *  The one elicitation the user can answer right now, surfaced on
+ *  [`SessionMetadata`](super::SessionMetadata) so a reader need not scan the
+ *  transcript for it.
+ */
+export type PendingElicitation = {
+  /**  The agent's request id; what an answer must name. */
+  requestId: ElicitationRequestId;
+  /**  The turn whose agent message holds the matching part. */
+  turn: number;
+  /**  The tool call it was asked on behalf of, when any. */
+  toolCall: ToolUseId | null;
+  /**  What the agent is asking, in prose. */
+  message: string;
+  /**  The form or URL. */
+  request: ElicitationRequest;
 };
 
 /**  One choice offered for a permission request. */
@@ -322,6 +579,8 @@ export type PlanEntryStatus =
 /**
  *  Session-level state derived from the log, latest-wins and carried whole.
  *  Fields start absent and fill in as the log reveals them.
+ *
+ *  `PartialEq` only: a pending form's numeric bounds are `f64`.
  */
 export type SessionMetadata = {
   /**  The agent that produced the log. See [`Harness`]. */
@@ -346,6 +605,12 @@ export type SessionMetadata = {
    *  `None` until the runtime reports one.
    */
   status: string | null;
+  /**
+   *  The one elicitation the user can answer right now. `None` when
+   *  nothing is pending, when the turn that asked has ended, or when the
+   *  connection that asked is gone - the request id dies with it.
+   */
+  pendingElicitation: PendingElicitation | null;
 };
 
 /**
@@ -437,10 +702,11 @@ export type SubagentResult = {
  *  kind ACP defines - only for `switch_mode` (nothing a reader would want
  *  rendered) and a kind this fold does not yet know about.
  *
- *  Two variants are chosen by *name* rather than kind: Macro's own tools
+ *  Three variants are chosen by *name* rather than kind: Macro's own tools
  *  ([`Self::Macro`], [`Self::UserTool`]) arrive as ACP `other`, and what a
- *  reader wants for them is the tool's own JSON, not a generic card. The
- *  harness reader decides which names are Macro's.
+ *  reader wants for them is the tool's own JSON, not a generic card; a
+ *  delegation ([`Self::Subagent`]) is a tool call by whatever name its
+ *  harness gives it. The harness layer decides which names are which.
  */
 export type ToolDetail =
   /**  A shell command. ACP's `execute`. */
