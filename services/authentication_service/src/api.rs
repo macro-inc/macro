@@ -59,6 +59,7 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
         .layer(cors)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .layer(CompressionLayer::new());
+    let app = Router::new().merge(app.clone()).nest("/auth", app);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await

@@ -27,7 +27,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
   dev: {
     'agent-harness': 'https://dev-gateway.macro.com/agent-harness',
     storage: 'https://dev-gateway.macro.com/dss',
-    auth: 'https://auth-service-dev.macro.com',
+    auth: 'https://dev-gateway.macro.com/auth',
     email: 'https://email-service-dev.macro.com',
     cognition: 'https://document-cognition-dev.macro.com',
     notification: 'https://dev-gateway.macro.com/notification',
@@ -42,7 +42,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
   prod: {
     'agent-harness': 'https://gateway.macro.com/agent-harness',
     storage: 'https://gateway.macro.com/dss',
-    auth: 'https://auth-service.macro.com',
+    auth: 'https://gateway.macro.com/auth',
     email: 'https://email-service.macro.com',
     cognition: 'https://document-cognition.macro.com',
     notification: 'https://gateway.macro.com/notification',

@@ -29,7 +29,7 @@ const authLogoutUrl =
     : 'https://auth.macro.com/oauth2/logout?client_id=75409999-7dc4-4241-b73b-a51818c3a71c&tenantId=a3e53c3d-8d6a-3e92-d64c-fa3bf30a60be';
 
 const serverHostRemote = {
-  'auth-service': `https://auth-service${devServerSuffix}.macro.com`,
+  'auth-service': `${gatewayHost}/auth`,
   'auth-logout': authLogoutUrl,
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
   'document-storage-service': `${gatewayHost}/dss`,

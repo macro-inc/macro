@@ -425,7 +425,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
-        "https://auth-service-dev.macro.com",
+        "https://dev-gateway.macro.com/auth",
     );
     assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
@@ -496,7 +496,7 @@ fn exported_service_urls_match_prod_values() {
     assert_eq!(service_urls.app_service_url.as_ref(), "https://macro.com");
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
-        "https://auth-service.macro.com",
+        "https://gateway.macro.com/auth",
     );
     assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
