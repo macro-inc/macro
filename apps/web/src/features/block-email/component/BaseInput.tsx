@@ -890,11 +890,15 @@ export function BaseInput(props: {
       linkId: headerLinkId(),
       skipSoupRefetch,
     });
+    // Reset while the save was on the wire — see executeQueuedGraphqlSave.
+    // Checked before the upload too: it reads the live form, which after a
+    // reset may already hold the next draft's attachments.
+    if (resetGeneration !== generationAtDispatch) return;
 
     const draftId = draftResponse.draft.db_id;
     if (draftId) {
       await uploadPendingAttachments(draftId);
-      // Reset while the save was on the wire — see executeQueuedGraphqlSave.
+      // Reset during the upload: do not adopt the id into the fresh composer.
       if (resetGeneration !== generationAtDispatch) return;
       setSavedDraftId(draftId);
       queuedSaveOutstanding = false;
@@ -959,7 +963,7 @@ export function BaseInput(props: {
       // is queued either way — so the handle is still returned.
       queuedSaveOutstanding = true;
       try {
-        await uploadPendingAttachments(draftId, { syncForwarded: false });
+        await uploadLocalAttachments(draftId);
       } catch {
         // Reported by the upload mutation's onError (toast + cleanup).
       }
@@ -1092,10 +1096,12 @@ export function BaseInput(props: {
     return true;
   }
 
-  async function uploadPendingAttachments(
-    draftId: string,
-    { syncForwarded = true }: { syncForwarded?: boolean } = {}
-  ) {
+  async function uploadPendingAttachments(draftId: string) {
+    await uploadLocalAttachments(draftId);
+    await syncForwardedAttachments(draftId);
+  }
+
+  async function uploadLocalAttachments(draftId: string) {
     // Grab only the attachments that haven't been uploaded yet.
     const attachments = form()
       .attachments.list()
@@ -1130,9 +1136,9 @@ export function BaseInput(props: {
     }
     // Settled by the drain above, this only rethrows this save's own failure
     if (uploadRun) await uploadRun;
-    if (!syncForwarded) return;
+  }
 
-    // Sync forwarded attachments
+  async function syncForwardedAttachments(draftId: string) {
     const forwardedAttachments = form()
       .attachments.list()
       .filter((a) => a.type === 'forwarded') as Extract<
@@ -1436,6 +1442,21 @@ export function BaseInput(props: {
       pendingMarkDoneNavigationTargetId = undefined;
       toast.failure('Failed to send email', {
         subtext: 'Draft still syncing, try again',
+      });
+      return;
+    }
+    // A local attachment still without a record did not upload — the
+    // pre-send save was skipped by a guard, or its queued upload attempt
+    // failed — and the upload mutation has already reported it. Sending now
+    // would silently drop it.
+    if (
+      form()
+        .attachments.list()
+        .some((a) => a.type === 'local' && !a.attachmentID)
+    ) {
+      pendingMarkDoneNavigationTargetId = undefined;
+      toast.failure('Failed to send email', {
+        subtext: 'Attachment not uploaded',
       });
       return;
     }
@@ -1838,6 +1859,15 @@ export function BaseInput(props: {
         form().setSendTime(null);
         toast.failure('Failed to schedule message', {
           subtext: 'Draft required',
+        });
+        return;
+      }
+      // A queued save returned a handle the schedule endpoint cannot
+      // resolve; ask for a retry instead of failing on the wire.
+      if (queuedSaveOutstanding) {
+        form().setSendTime(null);
+        toast.failure('Failed to schedule message', {
+          subtext: 'Draft still syncing, try again',
         });
         return;
       }

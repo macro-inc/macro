@@ -938,6 +938,15 @@ export function EmailCompose(props: EmailComposeProps) {
         });
         return;
       }
+      // A queued save returned a handle the schedule endpoint cannot
+      // resolve; ask for a retry instead of failing on the wire.
+      if (queuedSaveOutstanding) {
+        form.setSendTime(null);
+        toast.failure('Failed to schedule message', {
+          subtext: 'Draft still syncing, try again',
+        });
+        return;
+      }
 
       try {
         const result = await emailClient.scheduleMessage(
