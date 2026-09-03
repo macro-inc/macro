@@ -173,7 +173,7 @@ export const SidebarCreateMenu = (props: {
           </Show>
         </Dropdown.Trigger>
       </Show>
-      <Dropdown.Content class="min-w-52 shadow-menu">
+      <Dropdown.Content class="min-w-52">
         <Dropdown.Group>
           <For each={visibleBlocks()}>
             {(block, index) => (

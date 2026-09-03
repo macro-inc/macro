@@ -203,7 +203,7 @@ export function CompanyViewsMenu(props: { hideLabel?: boolean } = {}) {
         </Show>
       </Dropdown.Trigger>
 
-      <Dropdown.Content class="w-64 shadow-menu">
+      <Dropdown.Content class="w-64">
         <Dropdown.Group>
           <Dropdown.GroupLabel>My views</Dropdown.GroupLabel>
           <For
@@ -349,7 +349,7 @@ export function CompanyDisplayMenu() {
           </Dropdown.Trigger>
       </Tooltip>
 
-      <Dropdown.Content class="w-56 shadow-menu">
+      <Dropdown.Content class="w-56">
           <Dropdown.Group>
             <Dropdown.GroupLabel>Layout</Dropdown.GroupLabel>
             <Dropdown.RadioGroup
