@@ -16,7 +16,11 @@ import { AddCustomMcpDialog } from '../Integrations';
 import { ConnectAction } from '../integration-ui';
 import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';
 import type { ConnectionsModel } from './model';
-import { FEATURED_DISCOVER, providerIcon } from './provider-meta';
+import {
+  FEATURED_DISCOVER,
+  PIPEDREAM_BROWSE_HIDDEN_SLUGS,
+  providerIcon,
+} from './provider-meta';
 import { openConnectionsProvider } from './view-state';
 
 export function DiscoverView(props: { model: ConnectionsModel }) {
@@ -30,7 +34,9 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
     }
     return slugs;
   });
-  const catalog = createPipedreamCatalogSearch(() => new Set());
+  const catalog = createPipedreamCatalogSearch(
+    () => PIPEDREAM_BROWSE_HIDDEN_SLUGS
+  );
   const [addingCustom, setAddingCustom] = createSignal(false);
 
   const featured = createMemo(() => {
@@ -41,18 +47,9 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
     });
   });
 
-  const featuredSlugs = new Set(FEATURED_DISCOVER.map((item) => item.id));
-
   const rest = createMemo(() => {
     const query = catalog.searchInput().trim().toLowerCase();
     return catalog.entries().filter((entry) => {
-      if (
-        featuredSlugs.has(
-          entry.app_slug as (typeof FEATURED_DISCOVER)[number]['id']
-        )
-      ) {
-        return false;
-      }
       if (!query) return true;
       return `${entry.display_name} ${entry.description ?? ''} ${entry.app_slug}`
         .toLowerCase()
