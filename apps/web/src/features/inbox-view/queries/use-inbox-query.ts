@@ -13,6 +13,8 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   ENABLE_CALENDAR_UI,
+  ENABLE_INBOX_NOTIFIED_SORT_FLAG,
+  ENABLE_INBOX_NOTIFIED_SORT_OVERRIDE,
   ENABLE_REMINDERS,
   ENABLE_SNIPPETS,
   ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
@@ -108,12 +110,16 @@ export function useInboxDataSource(
     ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
     { enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE }
   );
+  const notifiedSort = useFeatureFlag(ENABLE_INBOX_NOTIFIED_SORT_FLAG, {
+    enabledOverride: ENABLE_INBOX_NOTIFIED_SORT_OVERRIDE,
+  });
 
   const facetContext = (): InboxFacetContext => ({ notificationSource });
 
   const capabilities = (): InboxQueryCapabilities => ({
     calendar: ENABLE_CALENDAR_UI(),
     foreignEntities: foreignEntities().enabled,
+    notifiedSort: notifiedSort().enabled,
     reminders: ENABLE_REMINDERS(),
     snippets: ENABLE_SNIPPETS(),
   });
@@ -248,7 +254,7 @@ export function useInboxDataSource(
     let result: InboxDataSourceItem[];
     if (state.groupBy === 'date' && !search.isSearching()) {
       result = buildGroupedSoupRows(
-        groupInboxEntitiesByDate(entities().items, state.tab)
+        groupInboxEntitiesByDate(entities().items, viewContext())
       );
     } else {
       result = buildFlatSoupRows(entities().items);
