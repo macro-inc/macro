@@ -132,6 +132,7 @@ import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutO
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
+import type { PairingDetails } from './generated/schemas/pairingDetails';
 import type { PinRequest } from './generated/schemas/pinRequest';
 import type { PostActivityRequest } from './generated/schemas/postActivityRequest';
 import type { PostGroupedSoupAstGroupPageRequest } from './generated/schemas/postGroupedSoupAstGroupPageRequest';
@@ -308,15 +309,7 @@ export type Harness = {
 };
 
 /** A pending macrod pairing request, looked up by its printed code. */
-export type HarnessPairing = {
-  code: string;
-  requested_name: string;
-  host: string | null;
-  /** The scope the daemon's config asked for; preselects the dialog. */
-  requested_scope: 'private' | 'team' | null;
-  created_at: string;
-  expires_at: string;
-};
+export type HarnessPairing = PairingDetails;
 
 type ApproveHarnessPairingRequest = {
   name?: string;

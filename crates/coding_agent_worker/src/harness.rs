@@ -94,6 +94,7 @@ fn pairing_model_catalog(
                 id: option.id,
                 name: option.name,
                 description: option.description,
+                group: option.group,
             })
             .collect(),
     })

@@ -13,9 +13,95 @@ import type {
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
   EditQueuedActionRequest,
+  LoadAgentModelsRequest,
+  LoadAgentModelsResponse,
   RenameAgentSessionRequest,
   SandboxSizeBody,
 } from './schemas';
+
+/**
+ * @summary Probe one provider's model catalog without creating an agent session.
+ */
+export type loadAgentModelsHandlerResponse200 = {
+  data: LoadAgentModelsResponse;
+  status: 200;
+};
+
+export type loadAgentModelsHandlerResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type loadAgentModelsHandlerResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type loadAgentModelsHandlerResponse403 = {
+  data: void;
+  status: 403;
+};
+
+export type loadAgentModelsHandlerResponse409 = {
+  data: void;
+  status: 409;
+};
+
+export type loadAgentModelsHandlerResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type loadAgentModelsHandlerResponse504 = {
+  data: void;
+  status: 504;
+};
+
+export type loadAgentModelsHandlerResponseSuccess =
+  loadAgentModelsHandlerResponse200 & {
+    headers: Headers;
+  };
+export type loadAgentModelsHandlerResponseError = (
+  | loadAgentModelsHandlerResponse400
+  | loadAgentModelsHandlerResponse401
+  | loadAgentModelsHandlerResponse403
+  | loadAgentModelsHandlerResponse409
+  | loadAgentModelsHandlerResponse502
+  | loadAgentModelsHandlerResponse504
+) & {
+  headers: Headers;
+};
+
+export type loadAgentModelsHandlerResponse =
+  | loadAgentModelsHandlerResponseSuccess
+  | loadAgentModelsHandlerResponseError;
+
+export const getLoadAgentModelsHandlerUrl = () => {
+  return `/agent-models/load`;
+};
+
+export const loadAgentModelsHandler = async (
+  loadAgentModelsRequest: LoadAgentModelsRequest,
+  options?: RequestInit
+): Promise<loadAgentModelsHandlerResponse> => {
+  const res = await fetch(getLoadAgentModelsHandlerUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(loadAgentModelsRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: loadAgentModelsHandlerResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as loadAgentModelsHandlerResponse;
+};
 
 /**
  * @summary Read the caller's default sandbox size for new `@coder` sessions.

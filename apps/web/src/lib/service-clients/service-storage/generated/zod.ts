@@ -8275,6 +8275,42 @@ export const createHarnessPairingBody = zod
       .describe(
         'Display-only description of the machine, e.g. `eric@macbook \/ darwin`.'
       ),
+    model_catalog: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            current: zod
+              .string()
+              .describe('The model value currently selected by the harness.'),
+            options: zod
+              .array(
+                zod
+                  .object({
+                    description: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Optional descriptive copy supplied by the harness.'
+                      ),
+                    id: zod
+                      .string()
+                      .describe(
+                        'The value sent back to the harness to select this model.'
+                      ),
+                    name: zod.string().describe('Human-readable model label.'),
+                  })
+                  .describe('One selectable model discovered from a harness.')
+              )
+              .describe(
+                'Models offered by the harness, in its advertised order.'
+              ),
+          })
+          .describe(
+            'Model choices discovered from a harness while opening a pairing.\n\nThis transport-safe domain type deliberately does not expose ACP or fold\ntypes. The daemon maps its local probe result into this catalog.'
+          ),
+      ])
+      .optional(),
     name: zod
       .string()
       .describe(
@@ -8311,6 +8347,42 @@ export const getHarnessPairingResponse = zod
       .string()
       .nullish()
       .describe('Display-only description of the machine.'),
+    model_catalog: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            current: zod
+              .string()
+              .describe('The model value currently selected by the harness.'),
+            options: zod
+              .array(
+                zod
+                  .object({
+                    description: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Optional descriptive copy supplied by the harness.'
+                      ),
+                    id: zod
+                      .string()
+                      .describe(
+                        'The value sent back to the harness to select this model.'
+                      ),
+                    name: zod.string().describe('Human-readable model label.'),
+                  })
+                  .describe('One selectable model discovered from a harness.')
+              )
+              .describe(
+                'Models offered by the harness, in its advertised order.'
+              ),
+          })
+          .describe(
+            'Model choices discovered from a harness while opening a pairing.\n\nThis transport-safe domain type deliberately does not expose ACP or fold\ntypes. The daemon maps its local probe result into this catalog.'
+          ),
+      ])
+      .optional(),
     requested_name: zod
       .string()
       .describe('Harness display name the daemon asked for.'),

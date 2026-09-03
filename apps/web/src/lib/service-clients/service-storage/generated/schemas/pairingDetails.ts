@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PairingDetailsHost } from './pairingDetailsHost';
+import type { PairingDetailsModelCatalog } from './pairingDetailsModelCatalog';
 import type { PairingDetailsRequestedScope } from './pairingDetailsRequestedScope';
 
 /**
@@ -19,6 +20,7 @@ export interface PairingDetails {
   expires_at: string;
   /** Display-only description of the machine. */
   host?: PairingDetailsHost;
+  model_catalog?: PairingDetailsModelCatalog;
   /** Harness display name the daemon asked for. */
   requested_name: string;
   requested_scope?: PairingDetailsRequestedScope;

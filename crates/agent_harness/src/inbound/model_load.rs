@@ -64,6 +64,8 @@ pub struct AgentModelDto {
     pub name: String,
     /// Optional provider description.
     pub description: Option<String>,
+    /// Optional group heading supplied by the provider.
+    pub group: Option<String>,
 }
 
 /// Successful model-discovery response.
@@ -94,6 +96,7 @@ impl From<AgentModels> for LoadAgentModelsResponse {
                     id: model.id,
                     name: model.name,
                     description: model.description,
+                    group: model.group,
                 })
                 .collect(),
         }

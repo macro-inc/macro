@@ -21,9 +21,11 @@ import {
   useUpdateAgentMutation,
 } from '@queries/agents/agents';
 import {
-  useCursorApiKeyStatusQuery,
-  useCursorModelsQuery,
-} from '@queries/auth/cursor-api-key';
+  type AgentModelTarget,
+  buildAgentModelTargets,
+  useAgentModelsQueries,
+} from '@queries/agents/models';
+import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
 import { Avatar, Button, Dialog, Panel } from '@ui';
@@ -58,16 +60,9 @@ type AgentSummary = {
 type ConnectedHarness = {
   id: string;
   name: string;
-  models: readonly HarnessModel[];
   kind: 'builtin' | 'macrod';
+  target: AgentModelTarget;
   connected?: boolean;
-};
-
-type HarnessModel = {
-  id: string;
-  name: string;
-  /** The heading the harness lists this model under, when it groups them. */
-  group?: string;
 };
 
 type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
@@ -75,10 +70,8 @@ type ChannelOption = ReturnType<typeof botAssignableChannelOptions>[number];
 const IN_MEMORY_HARNESS: ConnectedHarness = {
   id: 'in-memory',
   name: 'In-memory',
-  models: [Model.sonnet5, Model.opus5, Model.haiku45, Model.gpt56].map(
-    (model) => ({ id: model, name: MODEL_PRETTYNAME[model] })
-  ),
   kind: 'builtin',
+  target: { harness: 'in-memory' },
 };
 
 const MACRO_AGENT: AgentSummary = {
@@ -107,33 +100,37 @@ export function Agents() {
   const isTeamOwner = useIsTeamOwner();
   const cursorStatus = useCursorApiKeyStatusQuery();
   const cursorConnected = () => cursorStatus.data?.registered ?? false;
-  const cursorModels = useCursorModelsQuery(cursorConnected);
   const harnessesQuery = useHarnessesQuery();
-  const connectedHarnesses = (): readonly ConnectedHarness[] => [
-    IN_MEMORY_HARNESS,
-    ...(cursorConnected()
-      ? [
-          {
+  const connectedHarnesses = (): readonly ConnectedHarness[] => {
+    const harnesses = harnessesQuery.data ?? [];
+    return buildAgentModelTargets(cursorConnected(), harnesses).map(
+      (target) => {
+        if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
+        if (target.harness === 'cursor') {
+          return {
             id: 'cursor',
             name: 'Cursor',
-            models: (cursorModels.data?.models ?? []).map((model) => ({
-              id: model.id,
-              name: model.displayName,
-              group: model.group,
-            })),
-            kind: 'builtin' as const,
-          },
-        ]
-      : []),
-    ...(harnessesQuery.data ?? []).map((harness) => ({
-      id: harness.id,
-      name:
-        harness.owner.type === 'team' ? `${harness.name} · Team` : harness.name,
-      models: [],
-      kind: 'macrod' as const,
-      connected: harness.connected,
-    })),
-  ];
+            kind: 'builtin',
+            target,
+          };
+        }
+
+        const harness = harnesses.find(
+          (candidate) => candidate.id === target.harnessId
+        );
+        return {
+          id: target.harnessId ?? '',
+          name:
+            harness?.owner.type === 'team'
+              ? `${harness.name} · Team`
+              : (harness?.name ?? 'macrod'),
+          kind: 'macrod',
+          target,
+          connected: harness?.connected,
+        };
+      }
+    );
+  };
   const channelOptions = createMemo(() =>
     botAssignableChannelOptions(channelsContext.channels())
   );
@@ -329,9 +326,6 @@ function summarizeAgent(
 ): AgentSummary {
   const harnessKey = agent.harness_id ?? agent.harness;
   const harness = harnesses.find((option) => option.id === harnessKey);
-  const model = harness?.models.find(
-    (option) => option.id === agent.default_model
-  );
   const selectedChannelNames = channels
     .filter((channel) => agent.channel_ids.includes(channel.id))
     .map((channel) => `#${channel.name}`);
@@ -349,7 +343,8 @@ function summarizeAgent(
     avatarUrl: agent.bot.avatar_url ?? undefined,
     instructions: agent.instructions,
     harness: harness?.name ?? harnessName(harnessKey),
-    defaultModel: model?.name ?? agent.default_model,
+    defaultModel:
+      MODEL_PRETTYNAME[agent.default_model as Model] ?? agent.default_model,
     channelSummary,
     share: agent.bot.owner?.type === 'team' ? 'Team' : 'Private',
     persistedAgent: agent,
@@ -524,20 +519,66 @@ function AgentDialog(props: {
       props.connectedHarnesses[0]?.id ??
       ''
   );
+  const modelQueries = useAgentModelsQueries(() =>
+    props.connectedHarnesses.map((harness) => harness.target)
+  );
   const selectedHarness = () =>
     props.connectedHarnesses.find((harness) => harness.id === harnessId());
+  const modelQueryForHarness = (id: string) => {
+    const index = props.connectedHarnesses.findIndex(
+      (harness) => harness.id === id
+    );
+    return index >= 0 ? modelQueries[index] : undefined;
+  };
+  const modelDataForHarness = (id: string) => {
+    const query = modelQueryForHarness(id);
+    return query?.isSuccess ? query.data : undefined;
+  };
+  const preferredModelId = (id: string) => {
+    const data = modelDataForHarness(id);
+    if (data?.status !== 'available') return '';
+    return data.currentModel ?? data.models[0]?.id ?? '';
+  };
   const [defaultModelId, setDefaultModelId] = createSignal(
     props.agent?.default_model ?? ''
   );
   const selectedDefaultModelId = () =>
-    defaultModelId() || selectedHarness()?.models[0]?.id || '';
+    defaultModelId() || preferredModelId(harnessId());
+  const selectedModelQuery = () => modelQueryForHarness(harnessId());
+  const selectedModelData = () => modelDataForHarness(harnessId());
+  const selectedModelOptions = () => {
+    const data = selectedModelData();
+    if (data?.status !== 'available') return [];
+
+    const selected = selectedDefaultModelId();
+    const savedModel =
+      props.agent?.default_model === selected &&
+      (props.agent.harness_id ?? props.agent.harness) === harnessId();
+    if (
+      !savedModel ||
+      selected.length === 0 ||
+      data.models.some((model) => model.id === selected)
+    ) {
+      return data.models;
+    }
+    return [
+      ...data.models,
+      {
+        id: selected,
+        name: `${selected} (saved, unavailable)`,
+        description: undefined,
+      },
+    ];
+  };
+  const selectedCatalogOptions = () =>
+    selectedModelOptions().map((model) => ({
+      id: model.id,
+      label: model.name,
+      description: model.description ?? undefined,
+      group: model.group ?? undefined,
+    }));
   const selectedHarnessUsesCatalog = () =>
-    isLargeModelCatalog(
-      (selectedHarness()?.models ?? []).map((model) => ({
-        id: model.id,
-        label: model.name,
-      }))
-    );
+    isLargeModelCatalog(selectedCatalogOptions());
   const [channelMode, setChannelMode] = createSignal<ChannelMode>(
     props.agent?.channel_scope ?? 'all'
   );
@@ -558,11 +599,7 @@ function AgentDialog(props: {
 
   const handleHarnessChange = (id: string) => {
     setHarnessId(id);
-    const harness = props.connectedHarnesses.find((option) => option.id === id);
-    // macrod treats 'default' as "use the harness's own configured model".
-    setDefaultModelId(
-      harness?.kind === 'macrod' ? 'default' : (harness?.models[0]?.id ?? '')
-    );
+    setDefaultModelId(preferredModelId(id));
   };
 
   const handleAvatarInput = (file: File | undefined) => {
@@ -767,58 +804,89 @@ function AgentDialog(props: {
                     Default model
                   </span>
                   <Show
-                    when={selectedHarness()?.kind === 'macrod'}
+                    when={selectedModelQuery()}
                     fallback={
+                      <p class="settings-input text-ink-muted">
+                        Model discovery unavailable
+                      </p>
+                    }
+                    keyed
+                  >
+                    {(query) => (
                       <Show
-                        when={selectedHarnessUsesCatalog()}
+                        when={!query.isPending}
                         fallback={
                           <select
+                            aria-label="Default model"
                             class="settings-input w-full"
-                            value={selectedDefaultModelId()}
-                            onChange={(event) =>
-                              setDefaultModelId(event.currentTarget.value)
-                            }
+                            disabled
                           >
-                            <For each={selectedHarness()?.models ?? []}>
-                              {(model) => (
-                                <option
-                                  value={model.id}
-                                  selected={
-                                    model.id === selectedDefaultModelId()
-                                  }
-                                >
-                                  {model.name}
-                                </option>
-                              )}
-                            </For>
+                            <option>Loading models…</option>
                           </select>
                         }
                       >
-                        <ModelCatalogPicker
-                          value={selectedDefaultModelId()}
-                          options={(selectedHarness()?.models ?? []).map(
-                            (model) => ({
-                              id: model.id,
-                              label: model.name,
-                              group: model.group,
-                            })
-                          )}
-                          onSelect={setDefaultModelId}
-                          ariaLabel="Default model"
-                          triggerClass="w-full justify-between"
-                          contentClass="overflow-hidden"
-                        />
+                        <Show
+                          when={!query.isError}
+                          fallback={
+                            <div class="flex items-center gap-2">
+                              <p class="min-w-0 flex-1 text-xs text-negative">
+                                Could not load models for{' '}
+                                {selectedHarness()?.name ?? 'this harness'}.
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                aria-label={`Retry models for ${selectedHarness()?.name ?? 'this harness'}`}
+                                onClick={() => void query.refetch()}
+                              >
+                                Retry
+                              </Button>
+                            </div>
+                          }
+                        >
+                          <Show
+                            when={selectedModelData()?.status === 'available'}
+                            fallback={
+                              <p class="settings-input text-ink-muted">
+                                Model selection is unsupported by this harness.
+                              </p>
+                            }
+                          >
+                            <Show
+                              when={selectedHarnessUsesCatalog()}
+                              fallback={
+                                <select
+                                  aria-label="Default model"
+                                  class="settings-input w-full"
+                                  value={selectedDefaultModelId()}
+                                  onChange={(event) =>
+                                    setDefaultModelId(event.currentTarget.value)
+                                  }
+                                >
+                                  <For each={selectedModelOptions()}>
+                                    {(model) => (
+                                      <option value={model.id}>
+                                        {model.name}
+                                      </option>
+                                    )}
+                                  </For>
+                                </select>
+                              }
+                            >
+                              <ModelCatalogPicker
+                                value={selectedDefaultModelId()}
+                                options={selectedCatalogOptions()}
+                                onSelect={setDefaultModelId}
+                                ariaLabel="Default model"
+                                triggerClass="w-full justify-between"
+                                contentClass="overflow-hidden"
+                              />
+                            </Show>
+                          </Show>
+                        </Show>
                       </Show>
-                    }
-                  >
-                    <input
-                      class="settings-input w-full"
-                      placeholder="default"
-                      value={defaultModelId()}
-                      onInput={(event) =>
-                        setDefaultModelId(event.currentTarget.value)
-                      }
-                    />
+                    )}
                   </Show>
                 </label>
               </div>

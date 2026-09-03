@@ -23,8 +23,14 @@ const mocks = vi.hoisted(() => ({
   },
   models: {
     data: {
-      models: [{ id: 'default-model', displayName: 'Default Model' }],
+      status: 'available' as const,
+      currentModel: 'default-model',
+      models: [{ id: 'default-model', name: 'Default Model' }],
     },
+    isPending: false,
+    isError: false,
+    isSuccess: true,
+    refetch: vi.fn(),
   },
   save: vi.fn(),
   disconnect: vi.fn(),
@@ -46,6 +52,7 @@ const harnessMocks = vi.hoisted(() => ({
       requested_name: 'Dev laptop',
       requested_scope: null,
       host: 'erics-mbp.local',
+      model_catalog: null,
       created_at: '2026-08-27T12:00:00Z',
       expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
     },
@@ -65,11 +72,14 @@ vi.mock('@queries/auth/cursor-api-key', () => ({
     mutateAsync: mocks.disconnect,
     isPending: false,
   }),
-  useCursorModelsQuery: () => mocks.models,
   useSetCursorDefaultModel: () => ({
     mutateAsync: mocks.setDefaultModel,
     isPending: false,
   }),
+}));
+
+vi.mock('@queries/agents/models', () => ({
+  useAgentModelsQuery: () => mocks.models,
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
@@ -86,6 +96,9 @@ vi.mock('@queries/harnesses/harnesses', () => ({
     },
     get isError() {
       return Boolean(code()) && harnessMocks.pairing.isError;
+    },
+    get isSuccess() {
+      return Boolean(code()) && !harnessMocks.pairing.isError;
     },
     get error() {
       return harnessMocks.pairing.isError ? new Error('gone') : null;
@@ -140,6 +153,14 @@ beforeEach(() => {
     updatedAt: null,
   };
   mocks.status.isPlaceholderData = false;
+  mocks.models.data = {
+    status: 'available',
+    currentModel: 'default-model',
+    models: [{ id: 'default-model', name: 'Default Model' }],
+  };
+  mocks.models.isPending = false;
+  mocks.models.isError = false;
+  mocks.models.isSuccess = true;
   mocks.save.mockResolvedValue(undefined);
   mocks.disconnect.mockResolvedValue(undefined);
   harnessMocks.query.data = [];
