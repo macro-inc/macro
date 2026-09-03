@@ -168,25 +168,39 @@ describe('GraphQL item previews', () => {
     });
 
     try {
-      await setGraphqlPreviewName({ id: 'doc-1', type: 'document' }, 'Renamed');
-      await setGraphqlPreviewFileType('doc-1', 'pdf');
-      await setGraphqlPreviewOnCreate({
-        itemId: 'doc-2',
-        itemType: 'document',
-        name: 'Created',
-        fileType: 'md',
-        subType: { type: 'task', is_completed: false },
-      });
+      await setGraphqlPreviewName(
+        { id: 'doc-1', type: 'document' },
+        'Renamed',
+        'user-1'
+      );
+      await setGraphqlPreviewFileType('doc-1', 'pdf', 'user-1');
+      await setGraphqlPreviewOnCreate(
+        {
+          itemId: 'doc-2',
+          itemType: 'document',
+          name: 'Created',
+          fileType: 'md',
+          subType: { type: 'task', is_completed: false },
+        },
+        'user-1'
+      );
 
       expect(writeQuery).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({
-          operationName: 'ItemPreviewNamePatch',
+          operationName: 'ItemPreviewNameCacheWrite',
           data: {
-            previewRecord: {
-              __typename: 'GraphqlSoupDocument',
-              id: 'doc-1',
-              displayName: 'Renamed',
+            user: {
+              id: 'user-1',
+              soup: {
+                items: [
+                  {
+                    __typename: 'GraphqlSoupDocument',
+                    id: 'doc-1',
+                    displayName: 'Renamed',
+                  },
+                ],
+              },
             },
           },
         })
@@ -194,12 +208,19 @@ describe('GraphQL item previews', () => {
       expect(writeQuery).toHaveBeenNthCalledWith(
         2,
         expect.objectContaining({
-          operationName: 'ItemPreviewFileTypePatch',
+          operationName: 'ItemPreviewFileTypeCacheWrite',
           data: {
-            previewRecord: {
-              __typename: 'GraphqlSoupDocument',
-              id: 'doc-1',
-              fileType: 'pdf',
+            user: {
+              id: 'user-1',
+              soup: {
+                items: [
+                  {
+                    __typename: 'GraphqlSoupDocument',
+                    id: 'doc-1',
+                    fileType: 'pdf',
+                  },
+                ],
+              },
             },
           },
         })
@@ -210,6 +231,7 @@ describe('GraphQL item previews', () => {
           operationName: 'ItemPreview',
           data: {
             user: {
+              id: 'user-1',
               soup: {
                 items: [
                   expect.objectContaining({

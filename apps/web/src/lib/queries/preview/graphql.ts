@@ -11,6 +11,10 @@ import {
   ItemPreviewDocument,
   type ItemPreviewFieldsFragment,
   ItemPreviewFieldsFragmentDoc,
+  ItemPreviewFileTypeCacheWriteDocument,
+  type ItemPreviewFileTypeCacheWriteQuery,
+  ItemPreviewNameCacheWriteDocument,
+  type ItemPreviewNameCacheWriteQuery,
   type ItemPreviewQuery,
   type ItemPreviewQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
@@ -18,7 +22,7 @@ import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
-import { gql, stringifyDocument } from '@urql/core';
+import { stringifyDocument } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
@@ -26,26 +30,6 @@ import { registerActiveGraphqlPreviewQuery } from './active-queries';
 import type { ItemEntity, PreviewItem } from './types';
 
 const previewSelection = selectRecords(ItemPreviewFieldsFragmentDoc);
-
-const previewNamePatchDocument = gql`
-  query ItemPreviewNamePatch {
-    previewRecord {
-      __typename
-      id
-      displayName
-    }
-  }
-`;
-
-const previewFileTypePatchDocument = gql`
-  query ItemPreviewFileTypePatch {
-    previewRecord {
-      __typename
-      id
-      fileType
-    }
-  }
-`;
 
 const GRAPHQL_PREVIEW_CREATION_GRACE_MS = 10_000;
 const recentlyCreatedPreviews = new Map<string, number>();
@@ -337,45 +321,67 @@ async function writeGraphqlPreviewCache(
 /** Optimistically patches a display name in the normalized GraphQL cache. */
 export async function setGraphqlPreviewName(
   item: ItemEntity,
-  name: string
+  name: string,
+  userId: string
 ): Promise<void> {
-  const recordKey = normalizedRecordKey(item);
-  if (!recordKey) return;
+  const input = itemPreviewInput(item);
+  if (!input) return;
   const type = normalizedItemType(item) as GraphqlPreviewType;
   await writeGraphqlPreviewCache({
-    query: stringifyDocument(previewNamePatchDocument),
-    operationName: 'ItemPreviewNamePatch',
+    query: stringifyDocument(ItemPreviewNameCacheWriteDocument),
+    operationName: 'ItemPreviewNameCacheWrite',
+    variables: { input },
     data: {
-      previewRecord: {
-        __typename: GRAPHQL_TYPENAMES[type],
-        id: item.id,
-        displayName: name,
+      user: {
+        id: userId,
+        soup: {
+          items: [
+            {
+              __typename: GRAPHQL_TYPENAMES[type],
+              id: item.id,
+              displayName: name,
+            },
+          ],
+        },
       },
-    },
+    } satisfies ItemPreviewNameCacheWriteQuery,
   });
 }
 
 /** Optimistically patches a document file type in the normalized GraphQL cache. */
 export async function setGraphqlPreviewFileType(
   itemId: string,
-  fileType: string
+  fileType: string,
+  userId: string
 ): Promise<void> {
+  const item = { id: itemId, type: 'document' } satisfies ItemEntity;
+  const input = itemPreviewInput(item);
+  if (!input) return;
   await writeGraphqlPreviewCache({
-    query: stringifyDocument(previewFileTypePatchDocument),
-    operationName: 'ItemPreviewFileTypePatch',
+    query: stringifyDocument(ItemPreviewFileTypeCacheWriteDocument),
+    operationName: 'ItemPreviewFileTypeCacheWrite',
+    variables: { input },
     data: {
-      previewRecord: {
-        __typename: GRAPHQL_TYPENAMES.document,
-        id: itemId,
-        fileType,
+      user: {
+        id: userId,
+        soup: {
+          items: [
+            {
+              __typename: GRAPHQL_TYPENAMES.document,
+              id: itemId,
+              fileType,
+            },
+          ],
+        },
       },
-    },
+    } satisfies ItemPreviewFileTypeCacheWriteQuery,
   });
 }
 
 /** Seeds a newly created entity into the normalized GraphQL preview query. */
 export async function setGraphqlPreviewOnCreate(
-  preview: CreatedGraphqlPreview
+  preview: CreatedGraphqlPreview,
+  userId: string
 ): Promise<void> {
   const item = {
     id: preview.itemId,
@@ -390,6 +396,7 @@ export async function setGraphqlPreviewOnCreate(
     variables: { input },
     data: {
       user: {
+        id: userId,
         soup: { items: [createdPreviewRecord(preview)] },
       },
     } satisfies ItemPreviewQuery,

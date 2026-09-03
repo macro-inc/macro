@@ -4,6 +4,8 @@ import {
   isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
+import { authKeys } from '@queries/auth/keys';
+import type { UserInfoData } from '@queries/auth/user-info';
 import { queryReadyGate } from '@queries/gate';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
 import { useQuery } from '@tanstack/solid-query';
@@ -226,6 +228,10 @@ export function invalidatePreview(itemId?: string) {
   return Promise.all([graphqlRefresh, restRefresh]);
 }
 
+function cachedUserId(): string | undefined {
+  return queryClient.getQueryData<UserInfoData>(authKeys.userInfo.queryKey)?.id;
+}
+
 function runGraphqlPreviewWrite(write: Promise<void>) {
   void write.catch((error) => {
     console.error('[graphql-preview] failed to update normalized cache', error);
@@ -248,7 +254,11 @@ function setPreviewData(itemId: string, updater: Setter<PreviewItem>) {
 
 export function setPreviewFileType(itemId: string, fileType: string) {
   if (isFeatureEnabled(enableGraphqlSoup)) {
-    return runGraphqlPreviewWrite(setGraphqlPreviewFileType(itemId, fileType));
+    const userId = cachedUserId();
+    if (!userId) return;
+    return runGraphqlPreviewWrite(
+      setGraphqlPreviewFileType(itemId, fileType, userId)
+    );
   }
   const prev = getPreviewData(itemId);
   if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, fileType }));
@@ -268,7 +278,9 @@ export function setPreviewName({
 }) {
   const item = { id: itemId, type: itemType } satisfies ItemEntity;
   if (isFeatureEnabled(enableGraphqlSoup) && isGraphqlPreviewItem(item)) {
-    return runGraphqlPreviewWrite(setGraphqlPreviewName(item, name));
+    const userId = cachedUserId();
+    if (!userId) return;
+    return runGraphqlPreviewWrite(setGraphqlPreviewName(item, name, userId));
   }
   const prev = getPreviewData(itemId);
   // only merge into accessible entries: a cached no_access/does_not_exist
@@ -369,14 +381,19 @@ export function setPreviewOnCreate({
     isFeatureEnabled(enableGraphqlSoup) &&
     (itemType === 'document' || itemType === 'chat' || itemType === 'project')
   ) {
+    const userId = cachedUserId();
+    if (!userId) return;
     return runGraphqlPreviewWrite(
-      setGraphqlPreviewOnCreate({
-        itemId,
-        itemType,
-        name,
-        fileType,
-        subType,
-      })
+      setGraphqlPreviewOnCreate(
+        {
+          itemId,
+          itemType,
+          name,
+          fileType,
+          subType,
+        },
+        userId
+      )
     );
   }
   const defaultPreviewItem: AccessiblePreviewItem = {

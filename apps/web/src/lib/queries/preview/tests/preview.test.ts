@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const useQueryMock = vi.hoisted(() => vi.fn());
 const useQueryOptions = vi.hoisted(() => [] as Array<() => unknown>);
+const getQueryDataMock = vi.hoisted(() => vi.fn());
 const setQueryDataMock = vi.hoisted(() => vi.fn());
 const invalidateQueriesMock = vi.hoisted(() => vi.fn());
 const createGraphqlItemPreviewQueryMock = vi.hoisted(() => vi.fn());
@@ -27,7 +28,7 @@ vi.mock('@tanstack/solid-query', () => ({
 vi.mock('../../client', () => ({
   queryClient: {
     fetchQuery: vi.fn(),
-    getQueryData: vi.fn(),
+    getQueryData: getQueryDataMock,
     invalidateQueries: invalidateQueriesMock,
     setQueryData: setQueryDataMock,
   },
@@ -76,6 +77,7 @@ describe('preview transport facade', () => {
       useQueryOptions.push(options);
       return { isLoading: false, isPending: false, isSuccess: false };
     });
+    getQueryDataMock.mockReturnValue({ id: 'user-1' });
     invalidateQueriesMock.mockResolvedValue(undefined);
     setGraphqlPreviewFileTypeMock.mockResolvedValue(undefined);
     setGraphqlPreviewNameMock.mockResolvedValue(undefined);
@@ -168,10 +170,15 @@ describe('preview transport facade', () => {
       name: 'Renamed',
     });
 
-    expect(setGraphqlPreviewFileTypeMock).toHaveBeenCalledWith('doc-1', 'pdf');
+    expect(setGraphqlPreviewFileTypeMock).toHaveBeenCalledWith(
+      'doc-1',
+      'pdf',
+      'user-1'
+    );
     expect(setGraphqlPreviewNameMock).toHaveBeenCalledWith(
       { id: 'doc-1', type: 'document' },
-      'Renamed'
+      'Renamed',
+      'user-1'
     );
     expect(setQueryDataMock).not.toHaveBeenCalled();
   });

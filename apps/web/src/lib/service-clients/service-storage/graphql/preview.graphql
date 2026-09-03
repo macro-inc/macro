@@ -1,5 +1,34 @@
+query ItemPreviewNameCacheWrite($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				displayName
+			}
+		}
+	}
+}
+
+query ItemPreviewFileTypeCacheWrite($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				... on GraphqlSoupDocument {
+					fileType
+				}
+			}
+		}
+	}
+}
+
 query ItemPreview($input: SoupInput!) {
 	user {
+		id
 		soup(input: $input) {
 			items {
 				...ItemPreviewFields
