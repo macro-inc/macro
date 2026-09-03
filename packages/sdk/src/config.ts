@@ -25,7 +25,7 @@ export const WEB_APP_URLS: Record<Env, string> = {
 
 export const HOSTS: Record<Env, Record<ServiceName, string>> = {
   dev: {
-    'agent-harness': 'https://agent-harness-dev.macro.com',
+    'agent-harness': 'https://dev-gateway.macro.com/agent-harness',
     storage: 'https://dev-gateway.macro.com/dss',
     auth: 'https://auth-service-dev.macro.com',
     email: 'https://email-service-dev.macro.com',
@@ -40,7 +40,7 @@ export const HOSTS: Record<Env, Record<ServiceName, string>> = {
     unfurl: 'https://dev-gateway.macro.com/unfurl',
   },
   prod: {
-    'agent-harness': 'https://agent-harness.macro.com',
+    'agent-harness': 'https://gateway.macro.com/agent-harness',
     storage: 'https://gateway.macro.com/dss',
     auth: 'https://auth-service.macro.com',
     email: 'https://email-service.macro.com',

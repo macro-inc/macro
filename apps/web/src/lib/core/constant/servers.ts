@@ -43,7 +43,7 @@ const serverHostRemote = {
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
   'image-proxy-service': `${gatewayHost}/image-proxy`,
   'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,
-  'agent-harness': `https://agent-harness${devServerSuffix}.macro.com`,
+  'agent-harness': `${gatewayHost}/agent-harness`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;

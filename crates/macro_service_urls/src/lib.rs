@@ -552,8 +552,8 @@ service_url! {
         /// routes, which run in the process that owns the live sessions.
         pub AgentHarnessServiceUrl {
             local: "http://localhost:8101",
-            dev: "https://agent-harness-dev.macro.com",
-            prod: "https://agent-harness.macro.com",
+            dev: "https://dev-gateway.macro.com/agent-harness",
+            prod: "https://gateway.macro.com/agent-harness",
         },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
