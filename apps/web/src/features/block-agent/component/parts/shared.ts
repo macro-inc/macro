@@ -9,6 +9,23 @@ import type { ToolName } from '@service-agent-fold/generated/types';
 import type { JSX } from 'solid-js';
 import type { ToolStatus } from '../../ui';
 
+/**
+ * Where a part sits in its transcript, for the chat components a Macro tool
+ * renders with: they key per-call state by chat, message, and part, and the
+ * agent block's equivalents are the session, the turn's message, and the
+ * part's index.
+ */
+export type ToolCallContext = {
+  /** The agent session id, standing in for the chat block's chat id. */
+  sessionId: string;
+  /** A stable per-turn id, standing in for the chat block's message id. */
+  messageId: string;
+  /** The part's index within its message. */
+  partIndex: number;
+  /** The turn is still in flight — the chat block's `isStreaming`. */
+  inFlight: boolean;
+};
+
 /** Row-level facts common to every tool card, derived once by the dispatcher. */
 export type ToolCallCommon = {
   /** The ACP tool call id. */

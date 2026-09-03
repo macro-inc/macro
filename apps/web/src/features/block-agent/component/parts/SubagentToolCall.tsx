@@ -12,7 +12,7 @@ import type {
 import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { FoldedOutput, Thought, ToolCard } from '../../ui';
-import type { ToolCallCommon } from './shared';
+import type { ToolCallCommon, ToolCallContext } from './shared';
 import { TextPart } from './TextPart';
 import { ToolCallPart } from './ToolCallPart';
 
@@ -42,15 +42,29 @@ function resultSummary(result: SubagentResult): string | undefined {
 }
 
 /** A subagent's nested part: prose, reasoning, or one of its tool calls. */
-function ChildPart(props: { part: MessagePart; inFlight: boolean }) {
+function ChildPart(props: {
+  part: MessagePart;
+  index: number;
+  context?: ToolCallContext;
+}) {
+  const inFlight = () => props.context?.inFlight ?? false;
   return (
     match(props.part)
       .with({ kind: 'text' }, (part) => <TextPart text={part.text} />)
       .with({ kind: 'thought' }, (part) => (
-        <Thought text={part.text} active={props.inFlight} />
+        <Thought text={part.text} active={inFlight()} />
       ))
       .with({ kind: 'tool_use' }, (part) => (
-        <ToolCallPart part={part} inFlight={props.inFlight} />
+        <ToolCallPart
+          part={part}
+          context={
+            props.context && {
+              ...props.context,
+              // A child's slot is its own; the parent's index is not it.
+              partIndex: props.index,
+            }
+          }
+        />
       ))
       // A subagent's permission, plan, or control has nowhere to nest today;
       // the harnesses that attribute children only attribute tool calls.
@@ -61,10 +75,16 @@ function ChildPart(props: { part: MessagePart; inFlight: boolean }) {
 export function SubagentToolCall(props: {
   detail: SubagentDetail;
   common: ToolCallCommon;
-  inFlight: boolean;
+  context?: ToolCallContext;
 }): JSX.Element {
   const working = () =>
     props.common.status === 'pending' || props.common.status === 'running';
+  // Children only shimmer while both the subagent and the turn are live.
+  const childContext = () =>
+    props.context && {
+      ...props.context,
+      inFlight: working() && props.context.inFlight,
+    };
   const title = () => props.detail.description ?? props.common.label;
   const subtitle = () =>
     [props.detail.agentType, props.detail.background ? 'background' : undefined]
@@ -105,10 +125,11 @@ export function SubagentToolCall(props: {
           <Show when={props.detail.children.length > 0}>
             <div class="flex flex-col gap-1 border-l-2 border-edge-muted pl-2">
               <For each={props.detail.children}>
-                {(child) => (
+                {(child, index) => (
                   <ChildPart
                     part={child}
-                    inFlight={working() && props.inFlight}
+                    index={index()}
+                    context={childContext()}
                   />
                 )}
               </For>

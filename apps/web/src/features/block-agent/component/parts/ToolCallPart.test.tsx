@@ -22,6 +22,11 @@ vi.mock('@core/component/AI/component/tool/handler', () => ({
     <div
       data-complete={String(props.isComplete)}
       data-has-response={String(props.response !== undefined)}
+      data-response={
+        props.response === undefined
+          ? undefined
+          : JSON.stringify(props.response.json)
+      }
       data-testid="macro-tool"
     >
       {props.name}
@@ -297,37 +302,77 @@ describe('ToolCallPart user tools', () => {
       { name: 'SendEmail' }
     );
 
-  it('shows the draft with recipients, subject, and body while pending', () => {
+  it("renders a pending draft with the chat block's SendEmail component", () => {
     const rendered = render(() => (
       <ToolCallPart part={email({ kind: 'pending' })} />
     ));
-    expect(rendered.getByTestId('title').textContent).toBe('SendEmail');
-    expect(rendered.getByTestId('subtitle').textContent).toBe(
-      'To Alice · Q3 plan'
-    );
-    expect(rendered.getByTestId('body').textContent).toBe('Hi Alice');
-    expect(rendered.getByTestId('trailing').textContent).toBe('Awaiting you');
+    const chat = rendered.getByTestId('macro-tool');
+    expect(chat.textContent).toBe('SendEmail');
+    expect(chat.dataset.response).toBe('"PendingUserExecution"');
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
   });
 
-  it('reads the outcome into the trailing label', () => {
-    for (const [outcome, label] of [
-      [{ kind: 'sent', messageId: 'm', threadId: 't' }, 'Sent'],
-      [{ kind: 'draft', draftId: 'd', threadId: null }, 'Saved as draft'],
+  it('maps every outcome the chat has a face for back onto UserToolResponse', () => {
+    for (const [outcome, response] of [
+      [{ kind: 'edited' }, { UserAction: 'userEdited' }],
+      [
+        {
+          kind: 'sent',
+          messageId: '9c4d2c6e-2f3a-4d1e-8b0a-5e6f7a8b9c0d',
+          threadId: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+        },
+        {
+          UserAction: {
+            sent: {
+              message_id: '9c4d2c6e-2f3a-4d1e-8b0a-5e6f7a8b9c0d',
+              thread_id: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+            },
+          },
+        },
+      ],
+      [
+        {
+          kind: 'draft',
+          draftId: '7e8f9a0b-1c2d-4e3f-8a9b-0c1d2e3f4a5b',
+          threadId: null,
+        },
+        {
+          UserAction: {
+            convertedToDraft: {
+              draft_id: '7e8f9a0b-1c2d-4e3f-8a9b-0c1d2e3f4a5b',
+            },
+          },
+        },
+      ],
       [{ kind: 'rejected' }, 'Rejected'],
-      [{ kind: 'edited' }, 'Edited'],
     ] as const) {
       const rendered = render(() => <ToolCallPart part={email(outcome)} />);
-      expect(rendered.getByTestId('trailing').textContent).toBe(label);
+      expect(
+        JSON.parse(rendered.getByTestId('macro-tool').dataset.response!)
+      ).toEqual(response);
       rendered.unmount();
     }
   });
 
-  it('shows a failed user tool faded with the error as body', () => {
+  it('keeps a failed user tool on a faded card with the error as body', () => {
     const rendered = render(() => (
       <ToolCallPart part={email({ kind: 'failed', message: 'no inbox' })} />
     ));
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
     expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
     expect(rendered.getByTestId('body').textContent).toBe('no inbox');
+    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
+  });
+
+  it('keeps an unrecognized outcome on the card with the draft as JSON', () => {
+    const rendered = render(() => (
+      <ToolCallPart part={email({ kind: 'unrecognized' })} />
+    ));
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+    expect(rendered.getByTestId('trailing').textContent).toBe('Answered');
+    expect(rendered.getByTestId('body').textContent).toContain(
+      '"subject": "Q3 plan"'
+    );
   });
 });
 

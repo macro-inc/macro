@@ -14,7 +14,7 @@ import type { EmailRecipient } from '@block-email/component/EmailContext';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
 import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
 import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
-import { useChatContext } from '@core/component/AI/context';
+import { useChatContextOptional } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
 import {
@@ -159,7 +159,7 @@ function updateToolParts(
 }
 
 export function ComposeTool(props: ComposeToolProps) {
-  const chat = useChatContext();
+  const chat = useChatContextOptional();
   const chatQuery = useChatQuery(() => props.chatId);
   const isOwner = () => chatQuery.data?.userAccessLevel === 'owner';
   const ownerGateDisabled = () => !chatQuery.isSuccess || !isOwner();
@@ -329,7 +329,7 @@ export function ComposeTool(props: ComposeToolProps) {
     const sentResponse = getSentToolResponse(result.value);
     if (sentResponse) {
       toolFinalized = true;
-      chat.setMessages((messages) =>
+      chat?.setMessages((messages) =>
         messages.map((message) => {
           if (
             message.id !== props.messageId ||

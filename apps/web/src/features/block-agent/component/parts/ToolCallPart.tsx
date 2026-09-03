@@ -17,7 +17,7 @@ import { MacroToolCall } from './MacroToolCall';
 import { OutputToolCall } from './OutputToolCall';
 import { PathsToolCall } from './PathsToolCall';
 import { SearchToolCall } from './SearchToolCall';
-import { type ToolCallCommon, toolLabel } from './shared';
+import { type ToolCallCommon, type ToolCallContext, toolLabel } from './shared';
 import { SubagentToolCall } from './SubagentToolCall';
 import { TerminalToolCall } from './TerminalToolCall';
 import { UserToolCall } from './UserToolCall';
@@ -26,8 +26,8 @@ type ToolUsePart = Extract<MessagePart, { kind: 'tool_use' }>;
 
 export function ToolCallPart(props: {
   part: ToolUsePart;
-  /** The turn is still in flight, for cards that shimmer while working. */
-  inFlight?: boolean;
+  /** Where the part sits, for the chat components Macro tools render with. */
+  context?: ToolCallContext;
 }): JSX.Element {
   const failed = () => props.part.status === 'failed';
   // The chat block's failed-tool treatment: the same row, faded, with a quiet
@@ -57,16 +57,20 @@ export function ToolCallPart(props: {
       <OutputToolCall detail={detail} common={common()} />
     ))
     .with({ kind: 'macro' }, (detail) => (
-      <MacroToolCall detail={detail} common={common()} />
+      <MacroToolCall
+        detail={detail}
+        common={common()}
+        context={props.context}
+      />
     ))
     .with({ kind: 'user_tool' }, (detail) => (
-      <UserToolCall detail={detail} common={common()} />
+      <UserToolCall detail={detail} common={common()} context={props.context} />
     ))
     .with({ kind: 'subagent' }, (detail) => (
       <SubagentToolCall
         detail={detail}
         common={common()}
-        inFlight={props.inFlight ?? false}
+        context={props.context}
       />
     ))
     .exhaustive();

@@ -17,13 +17,14 @@ import type { ToolDetail } from '@service-agent-fold/generated/types';
 import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
 import { createMemo, ErrorBoundary, type JSX, Show } from 'solid-js';
 import { FoldedOutput, ToolCard } from '../../ui';
-import type { ToolCallCommon } from './shared';
+import type { ToolCallCommon, ToolCallContext } from './shared';
 
 type MacroDetail = Extract<ToolDetail, { kind: 'macro' }>;
 
 export function MacroToolCall(props: {
   detail: MacroDetail;
   common: ToolCallCommon;
+  context?: ToolCallContext;
 }): JSX.Element {
   const finished = () =>
     props.common.status === 'completed' || props.common.status === 'failed';
@@ -52,9 +53,9 @@ export function MacroToolCall(props: {
               ? undefined
               : { json: props.detail.output, name: props.common.label }
           }
-          chat_id=""
-          message_id=""
-          part_index={0}
+          chat_id={props.context?.sessionId ?? ''}
+          message_id={props.context?.messageId ?? ''}
+          part_index={props.context?.partIndex ?? 0}
           isComplete={finished()}
           renderContext={{
             renderContext: { isStreaming: !finished(), grouped: false },

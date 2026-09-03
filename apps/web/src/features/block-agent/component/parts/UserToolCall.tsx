@@ -1,24 +1,59 @@
 /**
  * A Macro user tool: the agent drafted it, the user finishes it after the
- * turn. Shows the draft and where the user got to with it.
+ * turn. Rendered with the chat block's own component for the tool — the
+ * email composer for `SendEmail`, the event composer for
+ * `CreateCalendarEvent`, and their sent / drafted / rejected faces — fed the
+ * fold's draft and outcome.
  *
- * Read-only for now. The session-side API that lets the user edit, send, or
- * reject from here — the chat block's `callTool` loop — is a follow-up; when
- * it lands, this card mounts the compose surface on a pending outcome.
+ * The chat components switch on the backend's `UserToolResponse` shape, so
+ * the fold's outcome is mapped back onto it here. Editing and sending from a
+ * session go through the chat's `callTool` loop today, which a session has no
+ * counterpart for yet, so the composer mounts in its disabled state until
+ * that API lands.
  */
 
+import { RenderTool } from '@core/component/AI/component/tool/handler';
 import type {
   ToolDetail,
   UserToolOutcome,
 } from '@service-agent-fold/generated/types';
-import { type JSX, Show } from 'solid-js';
+import { deserializeToolResponse } from '@service-cognition/generated/tools/tool';
+import { createMemo, ErrorBoundary, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { FoldedOutput, ToolCard } from '../../ui';
-import type { ToolCallCommon } from './shared';
+import type { ToolCallCommon, ToolCallContext } from './shared';
 
 type UserToolDetail = Extract<ToolDetail, { kind: 'user_tool' }>;
 
-/** The one-line reading of an outcome, for the row's trailing slot. */
+/**
+ * The `UserToolResponse` JSON the chat components switch on, rebuilt from
+ * the fold's reading of it. `undefined` for an outcome the chat has no face
+ * for (a failed call, an unrecognized response).
+ */
+function userToolResponse(outcome: UserToolOutcome): unknown {
+  return match(outcome)
+    .with({ kind: 'pending' }, () => 'PendingUserExecution')
+    .with({ kind: 'rejected' }, () => 'Rejected')
+    .with({ kind: 'edited' }, () => ({ UserAction: 'userEdited' }))
+    .with({ kind: 'sent' }, (sent) => ({
+      UserAction: {
+        sent: { message_id: sent.messageId, thread_id: sent.threadId },
+      },
+    }))
+    .with({ kind: 'draft' }, (draft) => ({
+      UserAction: {
+        convertedToDraft: {
+          draft_id: draft.draftId,
+          ...(draft.threadId ? { thread_id: draft.threadId } : {}),
+        },
+      },
+    }))
+    .with({ kind: 'completed' }, (done) => ({ UserAction: done.result }))
+    .with({ kind: 'failed' }, { kind: 'unrecognized' }, () => undefined)
+    .exhaustive();
+}
+
+/** The one-line reading of an outcome, for the fallback card's trailing slot. */
 function outcomeLabel(outcome: UserToolOutcome): string {
   return match(outcome)
     .with({ kind: 'pending' }, () => 'Awaiting you')
@@ -32,74 +67,63 @@ function outcomeLabel(outcome: UserToolOutcome): string {
     .exhaustive();
 }
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : undefined;
-}
-
-function recipients(value: unknown): string | undefined {
-  if (!Array.isArray(value)) return undefined;
-  const labels = value
-    .map((entry) => {
-      const record = asRecord(entry);
-      const name = record?.name;
-      const email = record?.email;
-      return typeof name === 'string' && name.trim()
-        ? name
-        : typeof email === 'string'
-          ? email
-          : undefined;
-    })
-    .filter((label): label is string => label !== undefined);
-  return labels.length > 0 ? labels.join(', ') : undefined;
-}
-
-/** What to show in the row for a draft, by tool. */
-function draftSubtitle(tool: string, input: unknown): string | undefined {
-  const record = asRecord(input);
-  if (!record) return undefined;
-  if (tool === 'SendEmail') {
-    const to = recipients(record.to);
-    const subject =
-      typeof record.subject === 'string' ? record.subject : undefined;
-    return [to && `To ${to}`, subject].filter(Boolean).join(' · ') || undefined;
-  }
-  if (tool === 'CreateCalendarEvent') {
-    return typeof record.title === 'string' ? record.title : undefined;
-  }
-  return undefined;
-}
-
-/** The draft's body text, when the tool has one. */
-function draftBody(tool: string, input: unknown): string | undefined {
-  const record = asRecord(input);
-  if (!record) return undefined;
-  if (tool === 'SendEmail' && typeof record.body === 'string') {
-    return record.body;
-  }
-  if (tool === 'CreateCalendarEvent') {
-    const description = record.description;
-    return typeof description === 'string' ? description : undefined;
-  }
-  return JSON.stringify(input, null, 2);
-}
-
 export function UserToolCall(props: {
   detail: UserToolDetail;
   common: ToolCallCommon;
+  context?: ToolCallContext;
 }): JSX.Element {
-  const failure = () =>
+  const response = createMemo(() => userToolResponse(props.detail.outcome));
+  // The chat handler renders nothing for a response it cannot read, so a
+  // draft whose outcome the chat has no face for keeps the fallback card.
+  const chatRenders = createMemo(() => {
+    const json = response();
+    return (
+      json !== undefined &&
+      deserializeToolResponse({
+        id: props.common.id,
+        name: props.common.label,
+        json,
+      }).isOk()
+    );
+  });
+
+  return (
+    <Show when={chatRenders()} fallback={<FallbackUserToolCall {...props} />}>
+      <ErrorBoundary fallback={<FallbackUserToolCall {...props} />}>
+        <RenderTool
+          tool_id={props.common.id}
+          name={props.common.label}
+          json={props.detail.input}
+          response={{ json: response(), name: props.common.label }}
+          chat_id={props.context?.sessionId ?? ''}
+          message_id={props.context?.messageId ?? ''}
+          part_index={props.context?.partIndex ?? 0}
+          isComplete
+          renderContext={{
+            renderContext: {
+              isStreaming: props.context?.inFlight ?? false,
+              grouped: false,
+            },
+          }}
+        />
+      </ErrorBoundary>
+    </Show>
+  );
+}
+
+/** The draft as JSON with the outcome, for a tool or outcome the chat cannot show. */
+function FallbackUserToolCall(props: {
+  detail: UserToolDetail;
+  common: ToolCallCommon;
+}): JSX.Element {
+  const body = () =>
     props.detail.outcome.kind === 'failed'
       ? props.detail.outcome.message
-      : undefined;
-  const body = () =>
-    failure() ?? draftBody(props.common.label, props.detail.input);
+      : JSON.stringify(props.detail.input, null, 2);
 
   return (
     <ToolCard
       title={props.common.label}
-      subtitle={draftSubtitle(props.common.label, props.detail.input)}
       status={props.common.status}
       muted={props.common.muted || props.detail.outcome.kind === 'failed'}
       trailing={
