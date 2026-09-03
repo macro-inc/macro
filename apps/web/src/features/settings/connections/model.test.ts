@@ -107,7 +107,7 @@ describe('toConnectionsModel', () => {
       model.capabilities.find((row) => row.id === 'calendar:cam')?.status
     ).toBe('off');
     expect(model.providers.find((row) => row.id === 'google')?.summary).toBe(
-      'Use Gmail in Macro'
+      'Read, organize, and act on your email.'
     );
   });
 

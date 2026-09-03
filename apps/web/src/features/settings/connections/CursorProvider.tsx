@@ -74,18 +74,14 @@ export function CursorProvider() {
   return (
     <SettingsPage
       title="Cursor"
-      description={
-        cursorRegistered()
-          ? '1 of 1 capability ready'
-          : '0 of 1 capabilities ready'
-      }
+      description="Use your Cursor account to run agent sessions in Macro."
       onBack={closeConnectionsProvider}
     >
       <SettingsSection title="Your connections">
         <SettingsCard>
           <CapabilityRow
-            title="Run @cursor sessions on your Cursor account"
-            outcome="Macro AI can start Cursor Cloud Agents for @cursor. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
+            title="Cursor"
+            outcome="Use your Cursor account to run agent sessions in Macro. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
             facts="Personal"
             status={
               !cursorStatus.isPlaceholderData && cursorRegistered()

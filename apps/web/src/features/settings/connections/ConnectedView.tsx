@@ -58,10 +58,10 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
             <SettingsCard>
               <IntegrationRow
                 icon={<span class="text-xs font-medium text-ink-muted">?</span>}
-                title={`${props.model.leftovers.length} record${
+                title={`${props.model.leftovers.length} other connection${
                   props.model.leftovers.length === 1 ? '' : 's'
-                } Macro cannot map yet`}
-                description="Shown with the facts Macro can prove. Nothing is hidden."
+                }`}
+                description="These do not sit under a provider yet."
               >
                 <CaretRightIcon class="size-4 text-ink-extra-muted" />
               </IntegrationRow>
@@ -80,7 +80,7 @@ function EmptyConnected() {
         <IntegrationRow
           icon={providerIcon('google')}
           title="Start with Google"
-          description="Optional. Brings mail and calendar into Macro. Docs are not a connection."
+          description="Read, organize, and act on your email."
         >
           <Button
             type="button"

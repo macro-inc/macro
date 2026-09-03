@@ -14,7 +14,7 @@ import { Show } from 'solid-js';
 import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
 import { CapabilityRow, capabilityFacts } from './capability-row';
-import { type ConnectionsModel, capabilitiesFor } from './model';
+import { CURATED_AI, type ConnectionsModel, capabilitiesFor } from './model';
 import { useNativeMcpActions } from './native-actions';
 import { closeConnectionsProvider } from './view-state';
 
@@ -23,10 +23,6 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
   const account = () => rows().find((row) => row.id === 'github-account');
   const team = () => rows().find((row) => row.id === 'github-team');
   const ai = () => rows().find((row) => row.id === 'github-ai');
-  const counted = () => rows().filter((row) => row.id !== 'github-team');
-  const ready = () =>
-    counted().filter((row) => row.status === 'connected').length;
-  const total = () => counted().length + (ai() ? 0 : 1);
 
   const initGithubLink = useInitGithubLinkMutation();
   const deleteGithubLink = useDeleteGithubLinkMutation();
@@ -75,7 +71,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
   return (
     <SettingsPage
       title="GitHub"
-      description={`${ready()} of ${total()} capabilities ready`}
+      description="Connect Macro to your GitHub account and repositories."
       onBack={closeConnectionsProvider}
     >
       <SettingsSection title="Your connections">
@@ -124,8 +120,8 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
             when={ai()}
             fallback={
               <CapabilityRow
-                title="Use GitHub with Macro AI"
-                outcome="Let Macro AI answer questions about repositories, pull requests, and issues."
+                title={CURATED_AI.github.title}
+                outcome={CURATED_AI.github.outcome}
                 facts="Personal · Powered by Pipedream"
               >
                 <ConnectAction

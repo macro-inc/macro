@@ -14,27 +14,63 @@ export type FeaturedStarter = {
 };
 
 export const EMPTY_STARTERS: FeaturedStarter[] = [
-  { id: 'google', name: 'Google', note: 'Mail and calendar in Macro' },
-  { id: 'github', name: 'GitHub', note: 'Account, team, and AI' },
-  { id: 'linear', name: 'Linear', note: 'Issues for Macro AI' },
-  { id: 'notion', name: 'Notion', note: 'Search pages with Macro AI' },
-  { id: 'slack', name: 'Slack', note: 'Conversations for Macro AI' },
+  {
+    id: 'google',
+    name: 'Google',
+    note: 'Read, organize, and act on your email.',
+  },
+  {
+    id: 'github',
+    name: 'GitHub',
+    note: 'Bring your repos into your unified workspace.',
+  },
+  {
+    id: 'linear',
+    name: 'Linear',
+    note: 'Bring your issues into your unified workspace.',
+  },
+  {
+    id: 'notion',
+    name: 'Notion',
+    note: 'Bring your docs and wikis into your unified workspace.',
+  },
+  {
+    id: 'slack',
+    name: 'Slack',
+    note: 'Bring your conversations into your unified workspace.',
+  },
   {
     id: 'cursor',
     name: 'Cursor',
-    note: 'Run @cursor sessions on your Cursor account',
+    note: 'Use your Cursor account to run agent sessions in Macro.',
   },
 ];
 
 export const FEATURED_DISCOVER: FeaturedStarter[] = [
-  { id: 'google', name: 'Google', note: 'Email and Calendar in Macro' },
-  { id: 'github', name: 'GitHub', note: 'Account, team sync, and Macro AI' },
-  { id: 'linear', name: 'Linear', note: 'Issues for Macro AI' },
-  { id: 'slack', name: 'Slack', note: 'Conversations for Macro AI' },
+  {
+    id: 'google',
+    name: 'Google',
+    note: 'Read, organize, and act on your email.',
+  },
+  {
+    id: 'github',
+    name: 'GitHub',
+    note: 'Bring your repos into your unified workspace.',
+  },
+  {
+    id: 'linear',
+    name: 'Linear',
+    note: 'Bring your issues into your unified workspace.',
+  },
+  {
+    id: 'slack',
+    name: 'Slack',
+    note: 'Bring your conversations into your unified workspace.',
+  },
   {
     id: 'cursor',
     name: 'Cursor',
-    note: 'Run @cursor coding sessions from Macro',
+    note: 'Use your Cursor account to run agent sessions in Macro.',
   },
 ];
 

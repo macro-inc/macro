@@ -22,8 +22,6 @@ import { closeConnectionsProvider } from './view-state';
 
 export function GoogleProvider(props: { model: ConnectionsModel }) {
   const rows = () => capabilitiesFor(props.model, 'google');
-  const ready = () =>
-    rows().filter((row) => row.status === 'connected').length;
   const inboxes = () => {
     const emails = [...new Set(rows().map((row) => row.account))];
     return emails.map((email) => ({
@@ -68,11 +66,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
   return (
     <SettingsPage
       title="Google"
-      description={
-        rows().length > 0
-          ? `${ready()} of ${rows().length} capabilities ready`
-          : 'Connect a Google account to bring mail and calendar into Macro.'
-      }
+      description="Read, organize, and act on your email."
       onBack={closeConnectionsProvider}
     >
       <Show
@@ -81,8 +75,8 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
           <SettingsSection title="Your connections">
             <SettingsCard>
               <CapabilityRow
-                title="Use Gmail in Macro"
-                outcome="Read and send mail from a Google account in Macro."
+                title="Gmail"
+                outcome="Read, organize, and act on your email."
               >
                 <ConnectAction
                   label="Connect"

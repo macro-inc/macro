@@ -70,26 +70,27 @@ export type ConnectionsInput = {
   cursorRegistered: boolean;
 };
 
-const CURATED_AI: Record<
+export const CURATED_AI: Record<
   CuratedAiProvider,
   { title: string; outcome: string }
 > = {
   github: {
-    title: 'Use GitHub with Macro AI',
+    title: 'GitHub',
     outcome:
-      'Let Macro AI answer questions about repositories, pull requests, and issues.',
+      'Macro AI can answer questions about your repos, pull requests, and issues.',
   },
   linear: {
-    title: 'Use Linear with Macro AI',
-    outcome: 'Let Macro AI create, read, and update Linear issues.',
+    title: 'Linear',
+    outcome:
+      'Macro AI can create, read, and update Linear issues without leaving Macro.',
   },
   notion: {
-    title: 'Use Notion with Macro AI',
-    outcome: 'Let Macro AI search pages and wikis.',
+    title: 'Notion',
+    outcome: 'Macro AI can search your pages and wikis.',
   },
   slack: {
-    title: 'Use Slack with Macro AI',
-    outcome: 'Let Macro AI search conversations and post updates.',
+    title: 'Slack',
+    outcome: 'Macro AI can search conversations and post updates for you.',
   },
 };
 
@@ -137,11 +138,11 @@ function googleCapabilities(input: ConnectionsInput): Capability[] {
     const gmail: Capability = {
       id: `gmail:${link.id}`,
       provider: 'google',
-      title: 'Use Gmail in Macro',
+      title: 'Gmail',
       outcome:
         scope === 'shared'
-          ? 'Read and send mail from this shared inbox in Macro.'
-          : 'Read and send mail from this Google account in Macro.',
+          ? 'Read, organize, and act on this shared inbox.'
+          : 'Read, organize, and act on your email.',
       account: link.email_address,
       scope,
       status: link.needs_reauth ? 'action-required' : 'connected',
@@ -158,9 +159,9 @@ function googleCapabilities(input: ConnectionsInput): Capability[] {
     const calendar: Capability = {
       id: `calendar:${link.id}`,
       provider: 'google',
-      title: 'Use Google Calendar in Macro',
+      title: 'Calendar',
       outcome:
-        'Show this calendar in Macro. Disconnect drops calendar access and keeps mail.',
+        'Show your calendar events in Macro. Disconnect drops calendar access and keeps mail.',
       account: link.email_address,
       scope,
       status: calendarStatus,
@@ -185,8 +186,8 @@ function githubCapabilities(input: ConnectionsInput): Capability[] {
     {
       id: 'github-account',
       provider: 'github',
-      title: 'Connect your GitHub account',
-      outcome: 'Show pull requests in Macro where this is supported.',
+      title: 'Account',
+      outcome: 'Pull requests show up in Macro.',
       account: handle,
       scope: 'personal',
       status: accountStatus,
@@ -195,9 +196,8 @@ function githubCapabilities(input: ConnectionsInput): Capability[] {
     {
       id: 'github-team',
       provider: 'github',
-      title: 'Sync GitHub work for your team',
-      outcome:
-        'Associate branches and pull requests with Macro tasks, and update task state.',
+      title: 'GitHub App',
+      outcome: 'Choose repositories for Macro to sync.',
       account: 'Team organization',
       scope: 'team',
       status: 'not-connected',
@@ -249,8 +249,8 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
           leftoverNative(
             native,
             provider === 'github'
-              ? 'A GitHub AI relationship that does not match the curated capability. Outcome, account, or lifecycle did not line up.'
-              : 'A native MCP server that does not match the Pipedream-backed capability.'
+              ? 'A GitHub AI connection that did not line up with the curated one.'
+              : 'A native MCP server that did not line up with the Pipedream connection.'
           )
         );
       }
@@ -280,7 +280,7 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
     leftovers.push(
       leftoverNative(
         server,
-        'A native MCP server that disappeared from Settings after Pipedream shipped. Macro still has the grant.'
+        'A native MCP grant that is not on a provider page yet.'
       )
     );
   }
@@ -290,7 +290,7 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
     leftovers.push({
       id: `pipedream:${row.app_slug}`,
       title: row.server_name,
-      note: 'A Pipedream connection that is not a curated provider page yet.',
+      note: 'A Pipedream connection without a provider page yet.',
       facts: `Name: ${row.server_name} · Slug: ${row.app_slug} · Mechanism: Pipedream`,
       mechanism: 'pipedream',
     });
@@ -305,8 +305,8 @@ function cursorCapabilities(input: ConnectionsInput): Capability[] {
     {
       id: 'cursor',
       provider: 'cursor',
-      title: 'Run @cursor sessions on your Cursor account',
-      outcome: 'Macro AI can start Cursor Cloud Agents for @cursor.',
+      title: 'Cursor',
+      outcome: 'Use your Cursor account to run agent sessions in Macro.',
       account: 'Personal',
       scope: 'personal',
       status: 'connected',
@@ -352,7 +352,7 @@ function providerSummary(
       ? `Calendar needs a grant for ${inbox}`
       : 'Calendar needs a grant';
   } else if (readyRows[0]) {
-    summary = readyRows[0].title;
+    summary = readyRows[0].outcome;
   }
 
   return {

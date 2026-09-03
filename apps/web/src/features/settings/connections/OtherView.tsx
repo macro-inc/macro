@@ -11,7 +11,7 @@ export function OtherView(props: { leftovers: Leftover[] }) {
   return (
     <SettingsPage
       title="Other connections"
-      description="Records Macro cannot place under a provider yet. Shown with the facts Macro can prove. Nothing is hidden or guessed."
+      description="These do not sit under a provider yet."
       onBack={closeConnectionsProvider}
     >
       <SettingsCard>
@@ -20,8 +20,8 @@ export function OtherView(props: { leftovers: Leftover[] }) {
         </For>
       </SettingsCard>
       <p class="text-xs text-ink-extra-muted">
-        If a leftover later maps to a provider, it moves there. Until then it
-        stays here.
+        If one later maps to a provider, it moves there. Until then it stays
+        here.
       </p>
     </SettingsPage>
   );

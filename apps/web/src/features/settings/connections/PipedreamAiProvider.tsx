@@ -9,6 +9,7 @@ import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
 import { CapabilityRow, capabilityFacts } from './capability-row';
 import {
+  CURATED_AI,
   type ConnectionsModel,
   type CuratedAiProvider,
   capabilitiesFor,
@@ -19,28 +20,31 @@ import { closeConnectionsProvider } from './view-state';
 
 const COPY: Record<
   Exclude<CuratedAiProvider, 'github'>,
-  { title: string; name: string; outcome: string; later: string }
+  { title: string; name: string; page: string; outcome: string; later: string }
 > = {
   linear: {
     title: 'Linear',
     name: 'Linear',
-    outcome: 'Let Macro AI create, read, and update Linear issues.',
+    page: 'Bring your issues into your unified workspace.',
+    outcome: CURATED_AI.linear.outcome,
     later:
-      'Importing selected issues as Macro tasks is a later step. It is not a separate connection.',
+      'Macro can also import recent issues as tasks later. That is not a separate connection.',
   },
   notion: {
     title: 'Notion',
     name: 'Notion',
-    outcome: 'Let Macro AI search pages and wikis.',
+    page: 'Bring your docs and wikis into your unified workspace.',
+    outcome: CURATED_AI.notion.outcome,
     later:
-      'Importing selected pages as Macro docs is a later step. It is not continuous sync, and it is not a separate connection.',
+      'Macro can also import pages as docs later. That is not continuous sync, and it is not a separate connection.',
   },
   slack: {
     title: 'Slack',
     name: 'Slack',
-    outcome: 'Let Macro AI search conversations and post updates.',
+    page: 'Bring your conversations into your unified workspace.',
+    outcome: CURATED_AI.slack.outcome,
     later:
-      'Creating Macro channels from Slack channels is a later step. It is not a second connection.',
+      'Macro can also create channels from Slack later. That is not a second connection.',
   },
 };
 
@@ -70,18 +74,14 @@ export function PipedreamAiProvider(props: {
   return (
     <SettingsPage
       title={copy.title}
-      description={
-        row()?.status === 'connected'
-          ? '1 of 1 capability ready'
-          : '0 of 1 capabilities ready'
-      }
+      description={copy.page}
       onBack={closeConnectionsProvider}
     >
       <SettingsSection title="Your connections">
         <SettingsCard>
           <CapabilityRow
             icon={providerIcon(props.provider)}
-            title={`Use ${copy.name} with Macro AI`}
+            title={copy.title}
             outcome={copy.outcome}
             facts={
               row()

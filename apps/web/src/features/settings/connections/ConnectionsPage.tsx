@@ -28,7 +28,7 @@ export function ConnectionsPage() {
       fallback={
         <SettingsPage
           title="Connections"
-          description="What Macro can access, and who it affects."
+          description="Link your inbox, GitHub, Linear, Notion, and more."
           onBack={provider() ? closeConnectionsProvider : undefined}
         >
           <div class="flex items-center gap-3 text-sm text-ink-muted">
@@ -44,7 +44,7 @@ export function ConnectionsPage() {
       fallback={
         <SettingsPage
           title="Connections"
-          description="What Macro can access, and who it affects."
+          description="Link your inbox, GitHub, Linear, Notion, and more."
         >
           <TabsInset
             fullWidth

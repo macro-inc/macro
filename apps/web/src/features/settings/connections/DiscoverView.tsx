@@ -165,7 +165,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
           <IntegrationRow
             icon={<PlusIcon />}
             title="Add custom MCP"
-            description="For a service Pipedream does not support."
+            description="Give Macro's agent access to the tools your team already uses."
           >
             <CaretRightIcon class="size-4 text-ink-extra-muted" />
           </IntegrationRow>
