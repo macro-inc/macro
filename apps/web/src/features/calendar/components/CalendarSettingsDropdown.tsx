@@ -1,12 +1,24 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { enableMultiInbox } from '@core/constant/featureFlags';
+import { useAddInboxFlow } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GearIcon from '@phosphor/gear.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { Button, Checkbox, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { useCalendarConnectedInboxes } from '../hooks/use-calendar-connected-inboxes';
+import { match } from 'ts-pattern';
+import {
+  type CalendarAccount,
+  useCalendarAccounts,
+} from '../hooks/use-calendar-accounts';
 import type { CalendarTimeFormat, CalendarWeekStart } from '../types';
+import {
+  type CalendarAccountGroup,
+  groupCalendarSourcesByAccount,
+} from '../utils/calendar-source-groups';
 import { useCalendarView } from './CalendarViewContext';
 import { MobilePeriodControls } from './PeriodSelector';
 import {
@@ -32,7 +44,9 @@ const TIME_FORMAT_OPTIONS: Array<{
 
 function createCalendarSettingsControls(isNarrow: () => boolean) {
   const calendarView = useCalendarView();
-  const connectedInboxes = useCalendarConnectedInboxes();
+  const accounts = useCalendarAccounts();
+  const startAddInbox = useAddInboxFlow();
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const [turnOffTarget, setTurnOffTarget] =
     createSignal<TurnOffCalendarTarget | null>(null);
 
@@ -53,10 +67,21 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
       )?.label ?? '12-hour'
   );
 
-  const changeSourceVisibility = (sourceId: string, visible: boolean) => {
+  // The account row checkbox shows or hides every calendar in the group.
+  const changeAccountVisibility = (
+    group: CalendarAccountGroup,
+    visible: boolean
+  ) => {
     calendarView.closeEventDetails();
-    calendarView.setSourceVisibility(sourceId, visible);
+    for (const source of group.calendars) {
+      calendarView.setSourceVisibility(source.id, visible);
+    }
   };
+  const isAccountVisible = (group: CalendarAccountGroup) =>
+    group.calendars.every((source) => calendarView.isSourceVisible(source.id));
+  const isAccountPartiallyVisible = (group: CalendarAccountGroup) =>
+    !isAccountVisible(group) &&
+    group.calendars.some((source) => calendarView.isSourceVisible(source.id));
 
   const changeShowWeekends = (showWeekends: boolean) => {
     calendarView.closeEventDetails();
@@ -73,23 +98,32 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     calendarView.setTimeFormat(timeFormat);
   };
 
-  // Only ever the viewer's own connected inboxes, so a delegate can never turn
-  // off (and delete) the owner's calendar from here. The address is shown only
-  // when more than one inbox could be meant.
-  const turnOffItems = createMemo(() => {
-    const inboxes = connectedInboxes();
-    return inboxes.map((link) => ({
-      target: { linkId: link.id, emailAddress: link.email_address },
-      label:
-        inboxes.length > 1
-          ? `Turn off calendar for ${link.email_address}`
-          : 'Turn off calendar',
-    }));
-  });
+  // The add-inbox flow is entitlement-gated by the backend (402 -> paywall), so
+  // "Connect another account" follows the multi-inbox flag like the email
+  // inbox selector rather than mirroring that rule on the client.
+  const showConnectAccount = () => multiInboxFlag().enabled;
 
-  const startTurnOff = (target: TurnOffCalendarTarget) => {
+  // Enable re-runs Google consent for calendar on an already-connected inbox;
+  // turn off opens the confirmation, which lives outside the closing menu.
+  const runAccountAction = (account: CalendarAccount) => {
     calendarView.closeEventDetails();
-    setTurnOffTarget(target);
+    match(account.action)
+      .with('enable', () => {
+        startAddInbox({ scopes: 'calendar' });
+      })
+      .with('turnOff', () => {
+        setTurnOffTarget({
+          linkId: account.linkId,
+          emailAddress: account.emailAddress,
+        });
+      })
+      .exhaustive();
+  };
+
+  // A brand-new account needs the mailbox scopes alongside calendar.
+  const connectAnotherAccount = () => {
+    calendarView.closeEventDetails();
+    startAddInbox({ scopes: 'gmail_and_calendar' });
   };
 
   return {
@@ -97,13 +131,17 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     showCalendarVisibility,
     weekStartLabel,
     timeFormatLabel,
-    changeSourceVisibility,
+    changeAccountVisibility,
+    isAccountVisible,
+    isAccountPartiallyVisible,
     changeShowWeekends,
     changeWeekStartsOn,
     changeTimeFormat,
-    turnOffItems,
+    accounts,
+    showConnectAccount,
+    runAccountAction,
+    connectAnotherAccount,
     turnOffTarget,
-    startTurnOff,
     clearTurnOffTarget: () => setTurnOffTarget(null),
   };
 }
@@ -132,21 +170,18 @@ function DesktopCalendarSettings(props: {
         <Show when={controls.showCalendarVisibility()}>
           <Dropdown.Group>
             <Dropdown.GroupLabel>Calendars</Dropdown.GroupLabel>
-            <For each={calendarView.sources()}>
-              {(source) => (
+            <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
+              {(group) => (
                 <Dropdown.CheckboxItem
-                  checked={calendarView.isSourceVisible(source.id)}
+                  checked={controls.isAccountVisible(group)}
                   closeOnSelect={false}
                   onChange={(checked) =>
-                    controls.changeSourceVisibility(source.id, checked)
+                    controls.changeAccountVisibility(group, checked)
                   }
                 >
-                  <span
-                    aria-hidden="true"
-                    class="size-2.5 shrink-0 rounded-sm"
-                    style={{ 'background-color': source.color }}
-                  />
-                  <span class="min-w-0 flex-1 truncate">{source.name}</span>
+                  <span class="min-w-0 flex-1 truncate">
+                    {group.emailAddress}
+                  </span>
                 </Dropdown.CheckboxItem>
               )}
             </For>
@@ -235,20 +270,43 @@ function DesktopCalendarSettings(props: {
           </Dropdown.Sub>
         </Dropdown.Group>
 
-        <Show when={controls.turnOffItems().length > 0}>
+        <Show
+          when={controls.accounts().length > 0 || controls.showConnectAccount()}
+        >
           <Dropdown.Group>
-            <Dropdown.GroupLabel>Calendar access</Dropdown.GroupLabel>
-            <For each={controls.turnOffItems()}>
-              {(item) => (
+            <Dropdown.GroupLabel>Accounts</Dropdown.GroupLabel>
+            <For each={controls.accounts()}>
+              {(account) => (
                 <Dropdown.Item
                   closeOnSelect
-                  class="text-failure"
-                  onSelect={() => controls.startTurnOff(item.target)}
+                  onSelect={() => controls.runAccountAction(account)}
                 >
-                  <span class="min-w-0 flex-1 truncate">{item.label}</span>
+                  <span class="min-w-0 flex-1 truncate">
+                    {account.emailAddress}
+                  </span>
+                  <span
+                    class="shrink-0 text-xs font-medium"
+                    classList={{
+                      'text-accent': account.action === 'enable',
+                      'text-failure': account.action === 'turnOff',
+                    }}
+                  >
+                    {account.action === 'enable' ? 'Enable' : 'Turn off'}
+                  </span>
                 </Dropdown.Item>
               )}
             </For>
+            <Show when={controls.showConnectAccount()}>
+              <Dropdown.Item
+                closeOnSelect
+                onSelect={controls.connectAnotherAccount}
+              >
+                <PlusIcon class="size-3.5 shrink-0 text-ink-muted" />
+                <span class="min-w-0 flex-1 truncate">
+                  Connect another account
+                </span>
+              </Dropdown.Item>
+            </Show>
           </Dropdown.Group>
         </Show>
       </Dropdown.Content>
@@ -294,22 +352,19 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
           <Show when={controls.showCalendarVisibility()}>
             <MobileDrawer.Label>Calendars</MobileDrawer.Label>
             <MobileDrawer.Section class="flex shrink-0 flex-col">
-              <For each={calendarView.sources()}>
-                {(source) => (
+              <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
+                {(group) => (
                   <Checkbox
-                    as="label"
-                    checked={calendarView.isSourceVisible(source.id)}
+                    checked={controls.isAccountVisible(group)}
+                    indeterminate={controls.isAccountPartiallyVisible(group)}
                     onChange={(checked) =>
-                      controls.changeSourceVisibility(source.id, checked)
+                      controls.changeAccountVisibility(group, checked)
                     }
                     class={DRAWER_ROW_CLASS}
                   >
-                    <span
-                      aria-hidden="true"
-                      class="size-2.5 shrink-0 rounded-sm"
-                      style={{ 'background-color': source.color }}
-                    />
-                    <span class="min-w-0 flex-1 truncate">{source.name}</span>
+                    <Checkbox.Label class="min-w-0 flex-1 truncate">
+                      {group.emailAddress}
+                    </Checkbox.Label>
                     <Checkbox.Control />
                   </Checkbox>
                 )}
@@ -321,12 +376,13 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
           <MobileDrawer.Label>Display</MobileDrawer.Label>
           <MobileDrawer.Section class="flex shrink-0 flex-col">
             <Checkbox
-              as="label"
               checked={calendarView.displaySettings.showWeekends}
               onChange={controls.changeShowWeekends}
               class={DRAWER_ROW_CLASS}
             >
-              <span class="min-w-0 flex-1 truncate">Show weekends</span>
+              <Checkbox.Label class="min-w-0 flex-1 truncate">
+                Show weekends
+              </Checkbox.Label>
               <Checkbox.Control />
             </Checkbox>
           </MobileDrawer.Section>
@@ -383,27 +439,53 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
             </For>
           </MobileDrawer.Section>
 
-          <Show when={controls.turnOffItems().length > 0}>
-            <MobileDrawer.Label class="pt-4">
-              Calendar access
-            </MobileDrawer.Label>
+          <Show
+            when={
+              controls.accounts().length > 0 || controls.showConnectAccount()
+            }
+          >
+            <MobileDrawer.Label class="pt-4">Accounts</MobileDrawer.Label>
             <MobileDrawer.Section class="mb-3 flex shrink-0 flex-col">
-              <For each={controls.turnOffItems()}>
-                {(item) => (
+              <For each={controls.accounts()}>
+                {(account) => (
                   <button
                     type="button"
                     class={DRAWER_ROW_CLASS}
                     onClick={() => {
                       setOpen(false);
-                      controls.startTurnOff(item.target);
+                      controls.runAccountAction(account);
                     }}
                   >
-                    <span class="min-w-0 flex-1 truncate text-failure">
-                      {item.label}
+                    <span class="min-w-0 flex-1 truncate">
+                      {account.emailAddress}
+                    </span>
+                    <span
+                      class="shrink-0 text-xs font-medium"
+                      classList={{
+                        'text-accent': account.action === 'enable',
+                        'text-failure': account.action === 'turnOff',
+                      }}
+                    >
+                      {account.action === 'enable' ? 'Enable' : 'Turn off'}
                     </span>
                   </button>
                 )}
               </For>
+              <Show when={controls.showConnectAccount()}>
+                <button
+                  type="button"
+                  class={DRAWER_ROW_CLASS}
+                  onClick={() => {
+                    setOpen(false);
+                    controls.connectAnotherAccount();
+                  }}
+                >
+                  <PlusIcon class="size-4 shrink-0 text-ink-muted" />
+                  <span class="min-w-0 flex-1 truncate">
+                    Connect another account
+                  </span>
+                </button>
+              </Show>
             </MobileDrawer.Section>
           </Show>
         </MobileDrawer.Content>

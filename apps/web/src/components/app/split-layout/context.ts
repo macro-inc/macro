@@ -8,6 +8,7 @@ import {
   type Setter,
 } from 'solid-js';
 import type { SplitHandle, SplitManager } from './layoutManager';
+import type { ReplaceOwnedSlot } from './utils/createOwnedSlots';
 import type { PriorityCollapser } from './utils/createPriorityCollapser';
 
 export const SplitLayoutContext = createContext<{
@@ -39,7 +40,7 @@ export type SplitFileMenuActionGroups = {
   sender: SplitFileMenuAction[];
   /** Share, Copy Link, Copy ID, and friends. */
   sharing: SplitFileMenuAction[];
-  /** Macro platform features: Favorite, Remind me, Add tag. */
+  /** Macro platform features: Favorite, Mute, Remind me, Add tag. */
   macro: SplitFileMenuAction[];
   /** Non-destructive operations on the file itself: Duplicate, Rename, Move, Download. */
   file: SplitFileMenuAction[];
@@ -79,6 +80,8 @@ export function getSplitFileMenuActionSections(
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
+  /** Whether mounted block content is rendered in a passive inline preview. */
+  isInlinePreview?: boolean;
   isPanelActive: Accessor<boolean>;
   panelRef: Accessor<HTMLElement | null>;
   panelSize: NullableSize;
@@ -98,6 +101,7 @@ export type SplitPanelContextType = {
   setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
   titleFileMenuActions: Accessor<SplitFileMenuActionGroups | undefined>;
   setTitleFileMenuActions: Setter<SplitFileMenuActionGroups | undefined>;
+  replaceOwnedSlot: ReplaceOwnedSlot;
   headerCollapser: PriorityCollapser;
   toolbarCollapser: PriorityCollapser;
 };

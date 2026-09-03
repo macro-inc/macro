@@ -8,18 +8,24 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
+  ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
+  getGatewayAlb,
+  GatewayService,
   getKafkaClusterPolicy,
   stack,
 } from '../../packages/shared';
 
+const gatewayLoadBalancer = getGatewayAlb();
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
+const GATEWAY_PATH_PREFIX = '/scheduled-action';
+const GATEWAY_DOMAIN_NAME = `${stack === 'prod' ? 'gateway' : 'dev-gateway'}.${BASE_DOMAIN}`;
 
 export const SERVICE_DOMAIN_NAME = `agent-schedule${
   stack === 'prod' ? '' : `-${stack}`
@@ -80,7 +86,7 @@ export class AgentScheduleService extends pulumi.ComponentResource {
       bucketArns,
     } = args;
 
-    this.domain = `https://${SERVICE_DOMAIN_NAME}`;
+    this.domain = `https://${GATEWAY_DOMAIN_NAME}${GATEWAY_PATH_PREFIX}`;
     this.cloudStorageClusterName = cloudStorageClusterName;
     this.tags = tags;
 
@@ -205,6 +211,22 @@ export class AgentScheduleService extends pulumi.ComponentResource {
     this.serviceAlbSg = serviceAlbSg;
     this.serviceSg = serviceSg;
 
+    const gatewayTargetGroup = new ServiceTargetGroup(
+      `${stack}-${BASE_NAME}`,
+      {
+        tags: this.tags,
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
+        vpcId: vpc.vpcId,
+        containerPort: serviceContainerPort,
+        service: GatewayService.AGENT_SCHEDULE_SERVICE,
+        healthCheckPath,
+        pathPatterns: [GATEWAY_PATH_PREFIX, `${GATEWAY_PATH_PREFIX}/*`],
+        serviceSecurityGroupId: this.serviceSg.id,
+        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+      },
+      { parent: this }
+    );
+
     const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
       serviceName: BASE_NAME,
       serviceContainerPort,
@@ -238,6 +260,18 @@ export class AgentScheduleService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
+        loadBalancers: [
+          {
+            targetGroupArn: targetGroup.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+          {
+            targetGroupArn: gatewayTargetGroup.target_group.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+        ],
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
@@ -297,6 +331,7 @@ export class AgentScheduleService extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        dependsOn: [gatewayTargetGroup.listener_rule],
       }
     );
 

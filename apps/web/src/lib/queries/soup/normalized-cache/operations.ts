@@ -33,6 +33,7 @@ import {
   soupNormKey,
   stripSoupNormPrefix,
 } from './normalizer';
+import { raiseNotifiedFloor } from './notified-floor';
 import { ownTouchStamp } from './own-touch';
 import type {
   SoupEntityPartial,
@@ -171,6 +172,51 @@ export function bumpSoupEntityTouchedAt(
     data: { id: current.data.id },
     frecency_score,
     touched_at,
+  } as SoupEntityPartial);
+}
+
+/**
+ * Stamp a freshly delivered notification's time on its cached entity so the
+ * inbox's notified_at order moves the row up (and re-buckets its date header)
+ * without waiting for a refetch. Newest wins: an out-of-order delivery never
+ * moves a row back down. The stamp is also recorded as a floor (see
+ * `notified-floor.ts`) so a notified page that was in flight when the
+ * notification landed cannot overwrite it with the previous stamp; the floor
+ * clears once the server's value catches up. Non-notified responses omit the
+ * field, so the field-merge never clears the stamp either.
+ */
+export function bumpSoupEntityNotifiedAt(
+  entityId: string,
+  notifiedAt: string
+): SoupTransaction | undefined {
+  raiseNotifiedFloor(entityId, notifiedAt);
+  const current = getSoupEntityById(entityId);
+  if (!current) return undefined;
+  const existing = current.notified_at ?? undefined;
+  if (!shouldUpdateOptimisticTimestamp(existing, notifiedAt)) return undefined;
+  const frecency_score = current.frecency_score;
+
+  if (current.tag === 'channel') {
+    return optimisticUpdateSoupEntity({
+      tag: 'channel',
+      data: { channel: { id: current.data.channel.id } },
+      frecency_score,
+      notified_at: notifiedAt,
+    });
+  }
+  if (current.tag === 'call') {
+    return optimisticUpdateSoupEntity({
+      tag: 'call',
+      data: { callId: current.data.callId },
+      frecency_score,
+      notified_at: notifiedAt,
+    });
+  }
+  return optimisticUpdateSoupEntity({
+    tag: current.tag,
+    data: { id: current.data.id },
+    frecency_score,
+    notified_at: notifiedAt,
   } as SoupEntityPartial);
 }
 
@@ -424,6 +470,113 @@ export function removeSoupEntitiesFromDoneFilteredQueries(
   entityIds: Set<string>
 ): SoupTransaction {
   return removeSoupEntitiesWhere(entityIds, soupQueryExcludesDone);
+}
+
+/**
+ * Prepend a cached entity to the done-excluding soup queries (see
+ * `soupQueryExcludesDone`) whose pages don't contain it. A fresh notification
+ * puts its entity back into those feeds server-side, but the client row may
+ * have been optimistically removed when it was marked done — or the feed was
+ * fetched while the entity had nothing outstanding — and the normalized
+ * field merge only patches rows already present, so without this the feeds
+ * would not show the entity again until their next refetch. Grouped pages
+ * and expanded single-group caches (which back grouped views' rows and are
+ * cached with staleTime Infinity) are restored the same way; groups that
+ * can't be resolved locally (e.g. date buckets) invalidate instead.
+ */
+export function restoreSoupEntityToDoneFilteredQueries(entityId: string): void {
+  const item = getSoupEntityById(entityId);
+  if (!item) return;
+
+  const cancelQuery = (key: QueryKey) =>
+    queryClient.cancelQueries({
+      queryKey: key,
+      exact: true,
+      predicate: (query) => query.state.data !== undefined,
+    });
+
+  const metaFor = (key: QueryKey) =>
+    getSoupQueryMeta(queryClient.getQueryCache().find({ queryKey: key })?.meta);
+
+  const containsEntity = (items: SoupApiItem[]) =>
+    items.some((existing) => getSoupItemId(existing) === entityId);
+
+  for (const [key, prev] of queryClient.getQueriesData<SoupItemsInfiniteData>({
+    queryKey: soupKeys.items._def,
+  })) {
+    if (!soupQueryExcludesDone(key)) continue;
+    if (!prev?.pages?.length) continue;
+    if (prev.pages.some((page) => containsEntity(page.items))) continue;
+
+    const filter = metaFor(key).itemFilter;
+    if (filter && !filter(item)) continue;
+
+    cancelQuery(key);
+    queryClient.setQueryData<SoupItemsInfiniteData>(key, {
+      ...prev,
+      pages: prev.pages.map((page, index) =>
+        index === 0 ? { ...page, items: [item, ...page.items] } : page
+      ),
+    });
+  }
+
+  for (const [
+    key,
+    prev,
+  ] of queryClient.getQueriesData<SoupAstItemsInfiniteData>({
+    queryKey: soupKeys.astItems._def,
+  })) {
+    if (!soupQueryExcludesDone(key)) continue;
+    if (!prev?.pages?.length) continue;
+
+    const meta = metaFor(key);
+    if (meta.itemFilter && !meta.itemFilter(item)) continue;
+
+    const firstPage = prev.pages[0];
+
+    if (firstPage.kind === 'flat') {
+      if (
+        prev.pages.some(
+          (page) => page.kind === 'flat' && containsEntity(page.items)
+        )
+      ) {
+        continue;
+      }
+
+      cancelQuery(key);
+      queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
+        ...prev,
+        pages: prev.pages.map((page, index) =>
+          index === 0 && page.kind === 'flat'
+            ? { ...page, items: [item, ...page.items] }
+            : page
+        ),
+      });
+      continue;
+    }
+
+    // Grouped parents keep membership entirely on the first page.
+    if (
+      entityId in firstPage.items ||
+      firstPage.groups.some((group) => group.itemIds.includes(entityId))
+    ) {
+      continue;
+    }
+
+    const nextPage = insertGroupedPage(firstPage, item, entityId, meta.groupBy);
+    if (!nextPage) {
+      queryClient.invalidateQueries({ queryKey: key });
+      continue;
+    }
+
+    cancelQuery(key);
+    queryClient.setQueryData<SoupAstItemsInfiniteData>(key, {
+      ...prev,
+      pages: [nextPage, ...prev.pages.slice(1)],
+    });
+  }
+
+  insertGroupQueries(item, entityId, soupQueryExcludesDone);
 }
 
 /** Remove entities from the soup queries whose key matches the predicate. */

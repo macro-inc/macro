@@ -171,6 +171,10 @@ describe('createTargetMessageController', () => {
 
     expect(controller.pendingScrollTargetId()).toBeUndefined();
     expect(controller.pendingTargetReplyId()).toBe('reply-1');
+    expect(controller.hasPendingElementScroll()).toBe(true);
+
+    controller.completePendingReplyScroll('message-1', 'reply-1');
+    expect(controller.hasPendingElementScroll()).toBe(false);
     dispose();
   });
 

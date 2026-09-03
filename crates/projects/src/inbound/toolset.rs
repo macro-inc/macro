@@ -10,6 +10,7 @@ mod test;
 use std::sync::Arc;
 
 use ai_toolset::AsyncToolCollection;
+use bot_id::BotId;
 use entity_access::domain::ports::EntityAccessService;
 use entity_mutation::MoveEntity;
 
@@ -42,6 +43,9 @@ where
     pub chat_move_service: Arc<CSvc>,
     /// Move capability for email threads.
     pub email_move_service: Arc<EmSvc>,
+    /// The bot these tools act as, on behalf of the requesting user. Defaults
+    /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
+    pub actor: BotId,
 }
 
 impl<PSvc, ESvc, DSvc, CSvc, EmSvc> Clone for ProjectToolContext<PSvc, ESvc, DSvc, CSvc, EmSvc>
@@ -59,6 +63,7 @@ where
             document_move_service: self.document_move_service.clone(),
             chat_move_service: self.chat_move_service.clone(),
             email_move_service: self.email_move_service.clone(),
+            actor: self.actor,
         }
     }
 }
@@ -85,7 +90,14 @@ where
             document_move_service,
             chat_move_service,
             email_move_service,
+            actor: bot_id::MACRO_AI_BOT_ID,
         }
+    }
+
+    /// Set the bot these tools act as.
+    pub fn with_actor(mut self, actor: BotId) -> Self {
+        self.actor = actor;
+        self
     }
 }
 

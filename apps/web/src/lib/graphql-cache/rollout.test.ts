@@ -8,9 +8,12 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@core/util/platform', () => ({ isTauri: mocks.isTauri }));
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_GRAPHQL_SOUP: mocks.graphqlEnabled,
-  DISABLE_BROWSER_TURSO_CACHE_FLAG: 'disable-browser-turso-cache',
-  DISABLE_BROWSER_TURSO_CACHE_OVERRIDE: undefined,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  disableBrowserTursoCache: {
+    key: 'disable-browser-turso-cache',
+    override: undefined,
+  },
+  isFeatureEnabled: mocks.graphqlEnabled,
 }));
 vi.mock('@app/lib/analytics', () => ({
   analytics: {

@@ -4822,6 +4822,17 @@
             "type": ["string", "null"],
             "description": "Optional location label."
           },
+          "outOfOffice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OutOfOfficeProperties",
+                "description": "Out-of-office properties; present to create the event as a Google\nout-of-office status event (primary calendar only, timed, no\nattendees), omitted for a regular event."
+              }
+            ]
+          },
           "recurrenceLines": {
             "type": "array",
             "items": {
@@ -5595,6 +5606,29 @@
         "type": "string",
         "enum": ["Show", "Hide"]
       },
+      "OutOfOfficeAutoDeclineMode": {
+        "type": "string",
+        "description": "How an out-of-office event responds to conflicting invitations, mirroring\nGoogle's `autoDeclineMode`.",
+        "enum": [
+          "decline_none",
+          "decline_all_conflicting_invitations",
+          "decline_only_new_conflicting_invitations"
+        ]
+      },
+      "OutOfOfficeProperties": {
+        "type": "object",
+        "description": "The extra properties Google requires on an out-of-office event, mirroring\nits `outOfOfficeProperties` block. Their presence on a draft or patch is\nwhat marks the mutation as out-of-office.",
+        "properties": {
+          "autoDeclineMode": {
+            "$ref": "#/components/schemas/OutOfOfficeAutoDeclineMode",
+            "description": "How conflicting invitations are handled while the user is out."
+          },
+          "declineMessage": {
+            "type": ["string", "null"],
+            "description": "Message returned to organizers whose invitations are auto-declined."
+          }
+        }
+      },
       "ParsedMessage": {
         "type": "object",
         "required": [
@@ -6190,6 +6224,17 @@
             "type": ["string", "null"],
             "description": "Replacement location; an empty string clears it."
           },
+          "outOfOffice": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/OutOfOfficeProperties",
+                "description": "Replacement out-of-office properties, applied only to an event that is\nalready out-of-office — the provider event type is immutable. Omit to\nleave them untouched."
+              }
+            ]
+          },
           "recurrenceId": {
             "type": ["string", "null"],
             "description": "Original-start key of the occurrence the update targets."
@@ -6433,6 +6478,7 @@
           "name",
           "isPrimary",
           "isWritable",
+          "isSubscription",
           "defaultReminders"
         ],
         "properties": {
@@ -6464,6 +6510,10 @@
           "isPrimary": {
             "type": "boolean",
             "description": "Whether this is its account's primary calendar."
+          },
+          "isSubscription": {
+            "type": "boolean",
+            "description": "Whether this is one of Google's shared system calendars (holidays,\nbirthdays) the account subscribes to rather than one a person maintains."
           },
           "isWritable": {
             "type": "boolean",

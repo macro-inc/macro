@@ -32,6 +32,7 @@ import {
   I_USER_MENTION,
 } from './mentions';
 import { E_PASTE_NODE, I_PASTE_NODE } from './paste';
+import { E_REPLY_TARGET_NODE, I_REPLY_TARGET_NODE } from './reply-target';
 import { E_SNAPSHOT_NODE, I_SNAPSHOT_NODE } from './snapshot';
 import { E_TABLE_NODE, I_TABLE_NODE } from './tables';
 import {
@@ -76,6 +77,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_DATE_MENTION,
   I_AWAIT_NODE,
   I_MAGIC_CHIP,
+  I_REPLY_TARGET_NODE,
   I_AGENT_CONTEXT,
   I_TABLE_NODE,
   HTML_BLOCKQUOTE,
@@ -110,6 +112,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   E_PR_MENTION,
   E_CONTACT_MENTION,
   E_DATE_MENTION,
+  E_REPLY_TARGET_NODE,
   E_TAG_MENTION,
   // order matters
   E_MULTILINE_BLOCK_EQUATION_NODE,
@@ -159,6 +162,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   E_DATE_MENTION,
   I_AWAIT_NODE,
   I_MAGIC_CHIP,
+  I_REPLY_TARGET_NODE,
   I_AGENT_CONTEXT,
   I_MACRO_QUOTE,
   I_EQUATION_NODE,

@@ -892,3 +892,138 @@ async fn deleting_a_session_cascades_its_external_row(pool: PgPool) {
         None
     );
 }
+
+/// Backdate a replica's heartbeat far past `REPLICA_STALE_AFTER`, so its
+/// claims read as up for grabs.
+async fn let_heartbeat_go_stale(pool: &PgPool, replica: ReplicaId) {
+    sqlx::query!(
+        r#"UPDATE harness_replica SET last_heartbeat_at = now() - interval '10 minutes' WHERE id = $1"#,
+        replica.as_uuid(),
+    )
+    .execute(pool)
+    .await
+    .expect("backdate replica heartbeat");
+}
+
+fn claimed(outcome: ClaimOutcome) -> SessionClaim {
+    match outcome {
+        ClaimOutcome::Claimed(claim) => claim,
+        ClaimOutcome::ManagedElsewhere(holder) => {
+            panic!("expected to claim, but {holder} manages the session")
+        }
+    }
+}
+
+fn fenced_log(id: AgentSessionId) -> AgentSessionLog {
+    AgentSessionLog {
+        agent_session_id: id,
+        user_id: None,
+        content: Message::ToRuntime(ToRuntimeMessage::Acp(acp_notification())),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn claiming_is_reentrant_and_every_claim_bumps_the_fence(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let replica = ReplicaId::mint();
+
+    let first = claimed(repo.claim(session.id, replica).await.expect("first claim"));
+    let second = claimed(repo.claim(session.id, replica).await.expect("second claim"));
+
+    assert_eq!(first.fence, ManagerFence(1));
+    assert_eq!(second.fence, ManagerFence(2));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_live_holder_blocks_a_second_replica(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let holder = ReplicaId::mint();
+    let contender = ReplicaId::mint();
+
+    claimed(repo.claim(session.id, holder).await.expect("claim"));
+    match repo.claim(session.id, contender).await.expect("contend") {
+        ClaimOutcome::ManagedElsewhere(seen) => assert_eq!(seen, holder),
+        ClaimOutcome::Claimed(_) => panic!("a live holder's claim was stolen"),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_stale_holder_is_superseded(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let crashed = ReplicaId::mint();
+    let successor = ReplicaId::mint();
+
+    claimed(repo.claim(session.id, crashed).await.expect("claim"));
+    let_heartbeat_go_stale(&pool, crashed).await;
+
+    let takeover = claimed(repo.claim(session.id, successor).await.expect("takeover"));
+    assert_eq!(takeover.fence, ManagerFence(2));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn release_frees_the_lease_but_never_a_successors(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let crashed = ReplicaId::mint();
+    let successor = ReplicaId::mint();
+    let third = ReplicaId::mint();
+
+    let superseded = claimed(repo.claim(session.id, crashed).await.expect("claim"));
+    let_heartbeat_go_stale(&pool, crashed).await;
+    let current = claimed(repo.claim(session.id, successor).await.expect("takeover"));
+
+    // The superseded holder's release is a no-op: the successor still holds.
+    repo.release(&superseded).await.expect("stale release");
+    match repo.claim(session.id, third).await.expect("contend") {
+        ClaimOutcome::ManagedElsewhere(seen) => assert_eq!(seen, successor),
+        ClaimOutcome::Claimed(_) => panic!("a stale release freed the successor's lease"),
+    }
+
+    // The current holder's release frees it for anyone.
+    repo.release(&current).await.expect("current release");
+    claimed(repo.claim(session.id, third).await.expect("reclaim"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_fenced_append_rejects_a_superseded_writer(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    let zombie = ReplicaId::mint();
+    let successor = ReplicaId::mint();
+
+    let old_claim = claimed(repo.claim(session.id, zombie).await.expect("claim"));
+    repo.create_fenced(fenced_log(session.id), &old_claim)
+        .await
+        .expect("the live holder's fenced append lands");
+
+    let_heartbeat_go_stale(&pool, zombie).await;
+    let new_claim = claimed(repo.claim(session.id, successor).await.expect("takeover"));
+
+    // The zombie wakes and writes under its superseded fence: rejected by the
+    // same statement that would have written, no matter how it got confused.
+    match repo.create_fenced(fenced_log(session.id), &old_claim).await {
+        Err(AgentSessionError::FencedOut(id)) => assert_eq!(id, session.id),
+        other => panic!("a superseded fence wrote anyway: {other:?}"),
+    }
+
+    repo.create_fenced(fenced_log(session.id), &new_claim)
+        .await
+        .expect("the successor's fenced append lands");
+
+    let log = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .expect("list log");
+    assert_eq!(
+        log.len(),
+        2,
+        "exactly the two live-holder appends are in the log"
+    );
+}

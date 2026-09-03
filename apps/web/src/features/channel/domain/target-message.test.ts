@@ -1,18 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import {
-  type Command,
-  type MachineState,
-  type Target,
-  type TargetEvent,
   activeTargetMessageId,
   activeTargetMessageReplyId,
+  type Command,
+  hasPendingElementScroll,
   idleState,
   initialState,
   loadAroundMessageId,
+  type MachineState,
   makeTarget,
   pendingScrollTargetId,
   pendingTargetReplyId,
   reduce,
+  type Target,
+  type TargetEvent,
 } from './target-message';
 
 const loading = (
@@ -164,9 +165,10 @@ describe('reduce', () => {
         messageId: 'message-a',
         replyId: 'reply-a',
       },
-      expected: result(flashing(makeTarget('message-a', 'reply-a'), 'message-a'), [
-        { t: 'schedule-flash', messageId: 'message-a' },
-      ]),
+      expected: result(
+        flashing(makeTarget('message-a', 'reply-a'), 'message-a'),
+        [{ t: 'schedule-flash', messageId: 'message-a' }]
+      ),
     },
     {
       name: 'releases a flashing target when its flash elapses',
@@ -381,9 +383,10 @@ describe('reduce', () => {
           replyId: 'reply-a',
           targetLoaded: true,
         },
-        result(awaitingViewport(makeTarget('message-a', 'reply-a'), 'message-a'), [
-          { t: 'cancel-flash' },
-        ])
+        result(
+          awaitingViewport(makeTarget('message-a', 'reply-a'), 'message-a'),
+          [{ t: 'cancel-flash' }]
+        )
       );
     }
   );
@@ -421,41 +424,51 @@ describe('selectors', () => {
       name: 'idle',
       state: idleState,
       expected: [undefined, undefined, undefined, undefined, undefined],
+      pendingElement: false,
     },
     {
       name: 'loading',
       state: loading(makeTarget('message-a', 'reply-a')),
       expected: ['message-a', 'reply-a', 'message-a', 'message-a', 'reply-a'],
+      pendingElement: true,
     },
     {
       name: 'awaiting viewport',
       state: awaitingViewport(makeTarget('message-a', 'reply-a')),
       expected: ['message-a', 'reply-a', 'message-a', 'message-a', 'reply-a'],
+      pendingElement: true,
     },
     {
       name: 'scrolling a root',
       state: scrolling(makeTarget('message-a'), false),
       expected: ['message-a', undefined, 'message-a', 'message-a', undefined],
+      pendingElement: true,
     },
     {
       name: 'scrolling a reply',
       state: scrolling(makeTarget('message-a', 'reply-a'), true),
       expected: ['message-a', 'reply-a', 'message-a', undefined, 'reply-a'],
+      pendingElement: true,
     },
     {
       name: 'flashing',
       state: flashing(makeTarget('message-a', 'reply-a')),
       expected: ['message-a', 'reply-a', 'message-a', undefined, undefined],
+      pendingElement: false,
     },
   ];
 
-  it.each(selectorRows)('returns values for $name', ({ state, expected }) => {
-    expect([
-      activeTargetMessageId(state),
-      activeTargetMessageReplyId(state),
-      loadAroundMessageId(state),
-      pendingScrollTargetId(state),
-      pendingTargetReplyId(state),
-    ]).toEqual(expected);
-  });
+  it.each(selectorRows)(
+    'returns values for $name',
+    ({ state, expected, pendingElement }) => {
+      expect([
+        activeTargetMessageId(state),
+        activeTargetMessageReplyId(state),
+        loadAroundMessageId(state),
+        pendingScrollTargetId(state),
+        pendingTargetReplyId(state),
+      ]).toEqual(expected);
+      expect(hasPendingElementScroll(state)).toBe(pendingElement);
+    }
+  );
 });

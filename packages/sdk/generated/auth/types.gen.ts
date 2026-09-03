@@ -2204,6 +2204,7 @@ export type CreateUserData = {
 
 export type CreateUserErrors = {
     400: ErrorResponse;
+    403: ErrorResponse;
     500: ErrorResponse;
 };
 

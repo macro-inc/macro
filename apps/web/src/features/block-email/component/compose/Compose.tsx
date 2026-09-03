@@ -35,9 +35,9 @@ import { useHasPaidAccess } from '@core/auth';
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  ENABLE_EMAIL_SIGNATURES_FLAG,
-  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-  ENABLE_GRAPHQL_SOUP,
+  enableEmailSignatures,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
@@ -172,9 +172,7 @@ export function EmailCompose(props: EmailComposeProps) {
   // message. The backend injects it on send (see include_signature below); the
   // FE only renders the preview and signals an explicit dismiss.
   const signature = useEmailSignature(() => link()?.id);
-  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
-    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-  });
+  const emailSignaturesFlag = useFeatureFlag(enableEmailSignatures);
   const [includeSignature, setIncludeSignature] = createSignal(true);
 
   const hasLinkError = createMemo(() => {
@@ -267,6 +265,12 @@ export function EmailCompose(props: EmailComposeProps) {
     };
   }
 
+  // Content uploads still in flight, including ones started by earlier saves.
+  // attachmentID only proves the draft record exists, and the send path treats
+  // a resolved save as "attachments ready", so a save must not resolve while
+  // any of these are pending.
+  const inFlightAttachmentUploads = new Set<Promise<void>>();
+
   async function executeSaveDraft() {
     if (sendMutation.isPending) {
       return;
@@ -310,20 +314,28 @@ export function EmailCompose(props: EmailComposeProps) {
         { type: 'local' }
       >[];
 
+      let uploadRun: Promise<void> | undefined;
       if (attachments.length) {
-        const uploaded = await uploadAttachmentMutation.mutateAsync({
+        uploadRun = uploadAttachmentMutation.mutateAsync({
           draftID: draftId,
           attachments: attachments.map((a) => a.file),
           linkId: headerLinkId(),
+          onAttachmentAdded: form.attachments.assignAttachmentID,
+          onAttachmentUploadFailed: form.attachments.clearAttachmentID,
         });
-
-        for (const attachment of uploaded.attachments) {
-          form.attachments.assignAttachmentID(
-            attachment.file,
-            attachment.attachmentID
-          );
-        }
+        const tracked = uploadRun.then(
+          () => undefined,
+          () => undefined
+        );
+        inFlightAttachmentUploads.add(tracked);
+        tracked.then(() => inFlightAttachmentUploads.delete(tracked));
       }
+
+      while (inFlightAttachmentUploads.size) {
+        await Promise.all([...inFlightAttachmentUploads]);
+      }
+      // Settled by the drain above, this only rethrows this save's own failure
+      if (uploadRun) await uploadRun;
 
       setCurrentDraftID(draftId);
       return draftId;
@@ -413,7 +425,8 @@ export function EmailCompose(props: EmailComposeProps) {
   ) => {
     // Wipe the new thread's cache when its view unmounts (replaceSplit
     // below) so the next visit fetches fresh data without the sent message.
-    if (threadId && !ENABLE_GRAPHQL_SOUP()) markThreadDraftSaved(threadId);
+    if (threadId && !isFeatureEnabled(enableGraphqlSoup))
+      markThreadDraftSaved(threadId);
 
     // Overwrite the server-side draft with the pre-send content. The
     // snapshot itself stays for the compose remount below to restore the
@@ -438,7 +451,7 @@ export function EmailCompose(props: EmailComposeProps) {
     // markThreadDraftSaved's TanStack cleanup can't reach — refetch through
     // it (after the draft-body restore) so a revisit doesn't replay the
     // undone message from cache.
-    if (threadId && ENABLE_GRAPHQL_SOUP()) {
+    if (threadId && isFeatureEnabled(enableGraphqlSoup)) {
       void fetchAndCacheThread(threadId);
     }
 

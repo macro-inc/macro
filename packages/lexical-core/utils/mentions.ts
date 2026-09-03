@@ -176,6 +176,7 @@ export {
   parseGroupMentions,
   parseLinks,
   parsePullRequestMentions,
+  parseReplyTargets,
   parseTagMentions,
   parseUserMentions,
 } from './parsers';

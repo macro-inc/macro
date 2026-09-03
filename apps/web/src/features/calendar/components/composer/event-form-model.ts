@@ -173,14 +173,23 @@ function initialConferenceChoice(
     : 'existing';
 }
 
+/**
+ * Guest emails an existing event seeds into the editor: every attendee except
+ * the viewer when they are a mere guest. The organizer is kept even when it is
+ * the viewer, so a replacement attendee list submitted by the organizer never
+ * drops them.
+ */
+export function eventGuestEmails(event: CalendarEvent): string[] {
+  return event.attendees
+    .filter((attendee) => attendee.isOrganizer || !attendee.isSelf)
+    .map((attendee) => attendee.email);
+}
+
 /** Converts an existing event into values for the shared editor. */
 export function calendarEventToEditorInitialValues(
   event: CalendarEvent
 ): EventEditorInitialValues {
-  const guests = event.attendees
-    .filter((attendee) => attendee.isOrganizer || !attendee.isSelf)
-    .map((attendee) => attendee.email)
-    .join(', ');
+  const guests = eventGuestEmails(event).join(', ');
 
   if (event.allDay) {
     const start = isDateOnly(event.start)

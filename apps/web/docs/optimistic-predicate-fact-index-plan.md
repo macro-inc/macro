@@ -23,8 +23,6 @@ This plan builds on:
 
 Related plans:
 
-- [`entity-filter-cache-index-plan.md`](./entity-filter-cache-index-plan.md);
-- [`soup-flat-v1-support-manifest.md`](./soup-flat-v1-support-manifest.md);
 - [`local-predicate-pagination-plan.md`](./local-predicate-pagination-plan.md), which depends on this work;
 - [`graphql-cache-optimistic-enqueue-claim-plan.md`](./graphql-cache-optimistic-enqueue-claim-plan.md), whose enqueue-before-notification and strict-claim semantics must remain intact.
 

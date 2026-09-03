@@ -97,6 +97,13 @@ export function useSplitPanelOrThrow() {
 }
 
 /**
+ * Creates or replaces a named resource under the current split panel's owner.
+ */
+export function withSplitPanelOwner<T>(name: string, factory: () => T): T {
+  return useSplitPanelOrThrow().replaceOwnedSlot(name, factory);
+}
+
+/**
  * Get the context value for the the SplitPanel with possible undefined.
  * @returns
  */
@@ -119,13 +126,15 @@ export function shouldShowSplitCloseButton(
 
 /**
  * Whether content may claim focus automatically when it mounts in the current
- * split. Preview Pair Viewers stay passive until the user focuses them.
+ * split. Preview Pair Viewers and inline previews stay passive until the user
+ * focuses them.
  *
  * This is intentionally a snapshot: dissolving a Preview Pair later must not
  * trigger delayed autofocus in content that is already mounted.
  */
 export function useCanAutofocusSplitContent() {
-  return !useSplitPanel()?.handle.isViewerSplit();
+  const panel = useSplitPanel();
+  return !panel?.handle.isViewerSplit() && !panel?.isInlinePreview;
 }
 
 /**

@@ -9,10 +9,12 @@
  * Identifies one accepted [`AgentAction`] end to end: returned by the
 control endpoint, written as the JSON-RPC request id on the action's wire
 frame, and read back off that frame as `request_id` on the folded message
-it derives. Correlation is string equality; the value is opaque.
+it derives.
 
-Minted only by the server at accept time, as `agent_session:{uuid}` - the
-prefix is what lets [`Self::from_request_id`] tell our ids from ones other
-clients picked.
+Minted only by the server at accept time, as a v7 uuid so ids sort by mint
+time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
+request id is the whole ownership test: the server is the only writer of
+runtime-bound frames. The machine's own handshake request ids
+(`agent_session:{session}:{n}`) are not uuids and stay `None`.
  */
 export type AgentActionId = string;

@@ -29,7 +29,9 @@ use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{AgentSessionId, AgentSessionLog, Message};
 use agent_runtime_protocol::domain::ports::{TransportReceiver, TransportSender};
 
-use crate::domain::ports::{AgentConnector, AgentSessionLogWriter, AgentSessionRepo};
+use crate::domain::ports::{
+    AgentConnector, AgentSessionLogWriter, AgentSessionRepo, SessionTurnObserver,
+};
 
 use super::{CloseReason, Effect, HandshakeStatus, Input, RuntimeStatus, SessionMachine};
 
@@ -81,6 +83,9 @@ pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     /// dead. Every effect run before then hangs off it.
     handshake_span: Option<tracing::Span>,
     handshake_deadline: Instant,
+    /// Told when the machine reports a turn over, so the harness can dispatch
+    /// its next queued prompt.
+    turn_observer: std::sync::Arc<dyn SessionTurnObserver>,
 }
 
 impl<Connector, Logs> SessionActor<Connector, Logs>
@@ -100,6 +105,7 @@ where
         logs: Logs,
         commands: mpsc::Receiver<SessionCommand>,
         handshake: watch::Sender<HandshakeStatus>,
+        turn_observer: std::sync::Arc<dyn SessionTurnObserver>,
     ) -> Self {
         // Marked unseen so the first wait reports the *current* state rather
         // than only later changes: a session binding after the handshake
@@ -128,6 +134,7 @@ where
             commands,
             handshake_span: Some(handshake_span),
             handshake_deadline: Instant::now() + HANDSHAKE_TIMEOUT,
+            turn_observer,
         }
     }
 
@@ -342,6 +349,14 @@ where
                     // actor holds one.
                     let _ = self.handshake.send(HandshakeStatus::Ready(restore));
                 }
+                Effect::TurnEnded { action_id } => {
+                    tracing::info!(
+                        id = %self.machine.id(),
+                        %action_id,
+                        "agent session turn ended"
+                    );
+                    self.turn_observer.turn_ended(self.machine.id());
+                }
                 Effect::Complete { token, result } => {
                     if let Err(error) = &result {
                         token.span.record("otel.status_code", "ERROR");
@@ -470,7 +485,8 @@ where
                 Effect::Send { .. }
                 | Effect::Log { .. }
                 | Effect::PersistAcpSession { .. }
-                | Effect::Initialized { .. } => {}
+                | Effect::Initialized { .. }
+                | Effect::TurnEnded { .. } => {}
             }
         }
         if let Some(stop) = stop {

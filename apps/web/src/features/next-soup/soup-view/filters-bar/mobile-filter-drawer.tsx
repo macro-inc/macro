@@ -29,7 +29,7 @@ import { pressPulse } from '@components/app/mobile/pressPulse';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
-import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
+import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { Accordion } from '@kobalte/core/accordion';
@@ -135,13 +135,12 @@ export const MobileFilterDrawer = (props: {
     selectedIds: inboxFilter,
     setSelectedIds: setInboxFilter,
   });
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const addInbox = useAddInboxFlow();
 
-  // Mirrors the desktop InboxSelector's visibility rule so the "Add inbox"
-  // action stays discoverable with zero or one inbox connected. Also stays
+  // Mirrors the desktop InboxSelector's visibility rule so the "Connect
+  // another account" action stays discoverable with zero or one inbox
+  // connected. Also stays
   // visible while a scope is active so it can be reset even if the linked
   // inboxes drop to one.
   const showInboxSection = () =>
@@ -520,7 +519,9 @@ export const MobileFilterDrawer = (props: {
                             <span class="size-4 flex items-center justify-center shrink-0">
                               <PlusIcon class="size-4 text-ink-muted" />
                             </span>
-                            <span class="flex-1 truncate">Add inbox</span>
+                            <span class="flex-1 truncate">
+                              Connect another account
+                            </span>
                           </button>
                         </Show>
                       </Accordion.Content>

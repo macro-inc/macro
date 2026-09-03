@@ -118,6 +118,8 @@ export type ListFilterGroup<
   id: TGroupId;
   label: string;
   options: ListControlOption<TOptionId>[];
+  selectionMode?: 'single' | 'multiple';
+  defaultOptionId?: TOptionId;
   contentClass?: string;
 };
 
@@ -160,9 +162,15 @@ export function ListFilterDropdown<
           <For each={props.groups}>
             {(group) => {
               const hasSelection = () =>
-                group.options.some((option) =>
-                  props.isSelected(group.id, option.id)
+                group.options.some(
+                  (option) =>
+                    option.id !== group.defaultOptionId &&
+                    props.isSelected(group.id, option.id)
                 );
+              const selectedOptionId = () =>
+                group.options.find((option) =>
+                  props.isSelected(group.id, option.id)
+                )?.id;
 
               return (
                 <Dropdown.Sub>
@@ -178,41 +186,85 @@ export function ListFilterDropdown<
                   </Dropdown.SubTrigger>
                   <Dropdown.SubContent
                     class={cn(
-                      'max-h-72 w-65 max-w-[90vw] overflow-y-auto',
+                      'max-h-72 min-w-24 max-w-[min(16rem,calc(100vw-1rem))] overflow-y-auto',
                       group.contentClass
                     )}
                   >
                     <Dropdown.Group>
-                      <For each={group.options}>
-                        {(option) => (
-                          <Dropdown.CheckboxItem
-                            checked={props.isSelected(group.id, option.id)}
-                            closeOnSelect={false}
-                            disabled={option.disabled}
-                            onChange={(selected) =>
-                              props.onSelectionChange(
-                                group.id,
-                                option.id,
-                                selected
-                              )
-                            }
-                          >
-                            <span class="ml-1 flex min-w-0 flex-1 items-center gap-1.5">
-                              <Show when={option.icon}>
-                                <span
-                                  aria-hidden="true"
-                                  class="flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5"
-                                >
-                                  {option.icon?.()}
+                      <Show
+                        when={group.selectionMode === 'single'}
+                        fallback={
+                          <For each={group.options}>
+                            {(option) => (
+                              <Dropdown.CheckboxItem
+                                checked={props.isSelected(group.id, option.id)}
+                                closeOnSelect={false}
+                                disabled={option.disabled}
+                                onChange={(selected) =>
+                                  props.onSelectionChange(
+                                    group.id,
+                                    option.id,
+                                    selected
+                                  )
+                                }
+                              >
+                                <span class="ml-1 flex min-w-0 flex-1 items-center gap-1.5">
+                                  <Show when={option.icon}>
+                                    <span
+                                      aria-hidden="true"
+                                      class="flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5"
+                                    >
+                                      {option.icon?.()}
+                                    </span>
+                                  </Show>
+                                  <span class="flex-1 truncate">
+                                    {option.label}
+                                  </span>
                                 </span>
-                              </Show>
-                              <span class="flex-1 truncate">
-                                {option.label}
-                              </span>
-                            </span>
-                          </Dropdown.CheckboxItem>
-                        )}
-                      </For>
+                              </Dropdown.CheckboxItem>
+                            )}
+                          </For>
+                        }
+                      >
+                        <Dropdown.RadioGroup
+                          value={selectedOptionId()}
+                          onChange={(value) => {
+                            const option = group.options.find(
+                              (candidate) => candidate.id === value
+                            );
+                            if (!option) return;
+
+                            props.onSelectionChange(group.id, option.id, true);
+                          }}
+                        >
+                          <For each={group.options}>
+                            {(option) => (
+                              <Dropdown.RadioItem
+                                value={option.id}
+                                closeOnSelect={false}
+                                disabled={option.disabled}
+                              >
+                                <span class="ml-1 flex min-w-0 flex-1 items-center gap-1.5">
+                                  <Show when={option.icon}>
+                                    <span
+                                      aria-hidden="true"
+                                      class="flex size-3.5 shrink-0 items-center justify-center [&_svg]:size-3.5"
+                                    >
+                                      {option.icon?.()}
+                                    </span>
+                                  </Show>
+                                  <span class="flex-1 truncate">
+                                    {option.label}
+                                  </span>
+                                </span>
+                                <Dropdown.ItemIndicator>
+                                  <CheckIcon class="size-3.5 text-accent" />
+                                </Dropdown.ItemIndicator>
+                              </Dropdown.RadioItem>
+                            )}
+                          </For>
+                        </Dropdown.RadioGroup>
+                      </Show>
                     </Dropdown.Group>
                   </Dropdown.SubContent>
                 </Dropdown.Sub>

@@ -4,7 +4,7 @@ use agent_trigger::domain::broker_events::{
     AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata, ChannelKind,
     ExistingAgentSessionEvent, NewAgentSessionEvent,
 };
-use bot_id::MACRO_CODER_BOT_ID;
+use bot_id::{BotId, MACRO_CODER_BOT_ID};
 use channel_sender::ChannelSender;
 use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use channels::domain::models::ChannelType;
@@ -13,7 +13,22 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::*;
-use crate::domain::model::HarnessCommand;
+use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand};
+
+fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
+    Some(AgentRuntimeConfig {
+        kind,
+        model: "configured-model".to_owned(),
+        harness: match kind {
+            AgentKind::Cursor => "cursor",
+            AgentKind::InMemory => "in-memory",
+            AgentKind::SandboxedCoder => "opencode",
+            AgentKind::External => "byoa",
+        }
+        .to_owned(),
+        instructions: "configured instructions".to_owned(),
+    })
+}
 
 fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid user id")
@@ -56,7 +71,7 @@ fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
 fn a_mention_for_our_bot_opens_a_session() {
     let routed = route_agent_trigger(
         mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
-        &[BotId::TEST_A],
+        runtime(AgentKind::InMemory),
     )
     .expect("a mention for our bot should yield work");
 
@@ -64,6 +79,9 @@ fn a_mention_for_our_bot_opens_a_session() {
         panic!("a new-session event should open");
     };
     assert_eq!(open.bot_id, BotId::TEST_A);
+    assert_eq!(open.runtime.kind, AgentKind::InMemory);
+    assert_eq!(open.runtime.model, "configured-model");
+    assert_eq!(open.runtime.instructions, "configured instructions");
     assert_eq!(open.origin.message_id, Uuid::from_u128(2));
     // A top-level mention roots its own thread.
     assert_eq!(open.origin.thread_id, Uuid::from_u128(2));
@@ -84,7 +102,8 @@ fn a_threaded_mention_answers_into_its_thread() {
     ));
 
     let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
-        route_agent_trigger(event, &[BotId::TEST_A]).expect("the mention should yield work")
+        route_agent_trigger(event, runtime(AgentKind::InMemory))
+            .expect("the mention should yield work")
     else {
         panic!("a new-session event should open");
     };
@@ -96,7 +115,7 @@ fn a_foreign_bots_open_is_skipped() {
     assert_eq!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
-            &[BotId::TEST_B],
+            None,
         )
         .unwrap_err(),
         Skipped::ForeignBot
@@ -104,11 +123,11 @@ fn a_foreign_bots_open_is_skipped() {
 }
 
 #[test]
-fn another_deployments_managed_traffic_is_skipped() {
-    assert_eq!(
-        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), &[BotId::TEST_B]).unwrap_err(),
-        Skipped::ForeignBot
-    );
+fn an_unresolved_existing_session_is_treated_as_external() {
+    assert!(matches!(
+        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), None),
+        Ok(RoutedTrigger::Announce(_, _))
+    ));
 }
 
 #[test]
@@ -116,7 +135,7 @@ fn a_bot_authored_mention_is_skipped() {
     assert_eq!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_bot(BotId::TEST_B)),
-            &[BotId::TEST_A],
+            runtime(AgentKind::InMemory),
         )
         .unwrap_err(),
         Skipped::NotFromUser
@@ -124,23 +143,25 @@ fn a_bot_authored_mention_is_skipped() {
 }
 
 #[test]
-fn a_non_staff_mention_is_skipped() {
+fn any_user_mention_can_open_a_managed_agent() {
     let user = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
 
-    assert_eq!(
+    assert!(matches!(
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user)),
-            &[BotId::TEST_A],
-        )
-        .unwrap_err(),
-        Skipped::NotMacroStaff
-    );
+            runtime(AgentKind::InMemory),
+        ),
+        Ok(RoutedTrigger::Command(_, HarnessCommand::Open(_)))
+    ));
 }
 
 #[test]
 fn a_managed_channel_message_forwards_to_its_session() {
-    let routed = route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), &[MACRO_CODER_BOT_ID])
-        .expect("a channel event for our bot should yield work");
+    let routed = route_agent_trigger(
+        channel_message(MACRO_CODER_BOT_ID),
+        runtime(AgentKind::SandboxedCoder),
+    )
+    .expect("a channel event for our bot should yield work");
 
     let RoutedTrigger::Command(session_id, HarnessCommand::Deliver(deliver)) = routed else {
         panic!("a managed existing-session event should deliver");
@@ -164,7 +185,7 @@ fn a_managed_channel_message_forwards_to_its_session() {
 fn an_external_channel_message_announces_only() {
     // The external bot's own runtime delivers the prompt; this deployment
     // only posts the chip, whichever bot it manages itself.
-    let routed = route_agent_trigger(channel_message(BotId::TEST_A), &[MACRO_CODER_BOT_ID])
+    let routed = route_agent_trigger(channel_message(BotId::TEST_A), runtime(AgentKind::External))
         .expect("an external existing-session event should yield work");
 
     let RoutedTrigger::Announce(session_id, prompt) = routed else {
@@ -189,7 +210,7 @@ fn a_bot_authored_external_channel_message_is_skipped() {
         },
     ));
     assert_eq!(
-        route_agent_trigger(event, &[MACRO_CODER_BOT_ID]).unwrap_err(),
+        route_agent_trigger(event, runtime(AgentKind::External)).unwrap_err(),
         Skipped::NotFromUser
     );
 }
@@ -203,61 +224,27 @@ fn channel_message_from(bot: BotId, sender: ChannelSender<'static>) -> AgentTrig
     }))
 }
 
-/// The open gate alone does not protect an existing Cursor session: the
-/// mentioning channel can prompt it, so a non-staff follow-up must be
-/// refused there too — it is spend on Macro's Cursor account.
 #[test]
-fn a_non_staff_follow_up_to_a_cursor_session_is_skipped() {
-    let outsider = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
-    assert_eq!(
-        route_agent_trigger(
-            channel_message_from(
-                bot_id::CURSOR_BOT_ID,
-                ChannelSender::new_from_user(outsider)
-            ),
-            &[bot_id::CURSOR_BOT_ID],
-        )
-        .unwrap_err(),
-        Skipped::NotMacroStaff
-    );
-    // A sender that is not a user at all fails closed the same way.
-    assert_eq!(
-        route_agent_trigger(
-            channel_message_from(
-                bot_id::CURSOR_BOT_ID,
-                ChannelSender::new_from_bot(BotId::TEST_B)
-            ),
-            &[bot_id::CURSOR_BOT_ID],
-        )
-        .unwrap_err(),
-        Skipped::NotMacroStaff
-    );
-}
-
-/// Staff follow-ups to a Cursor session deliver like any managed session's.
-#[test]
-fn a_staff_follow_up_to_a_cursor_session_delivers() {
-    let routed = route_agent_trigger(
-        channel_message_from(bot_id::CURSOR_BOT_ID, ChannelSender::new_from_user(user())),
-        &[bot_id::CURSOR_BOT_ID],
-    )
-    .expect("staff follow-up is ours to deliver");
+fn any_user_can_follow_up_to_their_cursor_session() {
+    let user = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
     assert!(matches!(
-        routed,
-        RoutedTrigger::Command(_, HarnessCommand::Deliver(_))
+        route_agent_trigger(
+            channel_message_from(bot_id::CURSOR_BOT_ID, ChannelSender::new_from_user(user)),
+            runtime(AgentKind::Cursor),
+        ),
+        Ok(RoutedTrigger::Command(_, HarnessCommand::Deliver(_)))
     ));
 }
 
-/// Coder-bot follow-ups keep working for non-staff senders: the staff rule
-/// on existing sessions is the Cursor bot's alone.
+/// Managed sessions accept follow-ups from channel users regardless of email domain.
 #[test]
-fn a_non_staff_follow_up_to_a_coder_session_still_delivers() {
-    let outsider = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
+fn any_user_can_follow_up_to_a_coder_session() {
+    let user = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
     let routed = route_agent_trigger(
-        channel_message_from(MACRO_CODER_BOT_ID, ChannelSender::new_from_user(outsider)),
-        &[MACRO_CODER_BOT_ID],
+        channel_message_from(MACRO_CODER_BOT_ID, ChannelSender::new_from_user(user)),
+        runtime(AgentKind::SandboxedCoder),
     )
-    .expect("coder follow-ups are not staff-gated");
+    .expect("channel users may follow up");
     assert!(matches!(
         routed,
         RoutedTrigger::Command(_, HarnessCommand::Deliver(_))
@@ -271,7 +258,7 @@ fn a_bot_authored_follow_up_to_a_managed_session_still_delivers() {
             MACRO_CODER_BOT_ID,
             ChannelSender::new_from_bot(BotId::TEST_B),
         ),
-        &[MACRO_CODER_BOT_ID],
+        runtime(AgentKind::SandboxedCoder),
     )
     .expect("explicit bot mentions continue to reach managed sessions");
 

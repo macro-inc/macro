@@ -1,11 +1,18 @@
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
+import { channelThreadRootId } from '@notifications/channel-thread-root';
 import type { UnifiedNotification } from '@notifications/types';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
+  bumpSoupEntityNotifiedAt,
   hasSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
   refetchSoupEntity,
+  restoreSoupEntityToDoneFilteredQueries,
   type SoupEntityTag,
 } from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -14,6 +21,7 @@ import type { ApiUserNotification } from '@service-notification/generated/schema
 import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
 import type { NotificationUpdateOperation } from '@service-storage/graphql/generated/graphql';
 import { updateNotifications } from '@service-storage/graphql-notifications';
+import { graphqlCacheEnabled } from '@service-storage/graphql-soup';
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -216,7 +224,8 @@ export function useUserNotificationsQuery(
 ): UserNotificationsQuery {
   const queryEnabled = () => options?.().enabled !== false;
 
-  const usesGraphql = () => ENABLE_GRAPHQL_SOUP() && args().done !== true;
+  const usesGraphql = () =>
+    isFeatureEnabled(enableGraphqlSoup) && args().done !== true;
 
   const graphqlQuery = createGraphqlNotificationsQuery(args, () => ({
     enabled: queryEnabled() && usesGraphql(),
@@ -384,6 +393,12 @@ export function invalidateUserNotifications() {
   return queryClient.invalidateQueries({
     queryKey: notificationKeys.user._def,
   });
+}
+
+async function refreshSoupAfterUncachedGraphqlWrite(): Promise<void> {
+  if (isFeatureEnabled(enableGraphqlSoup) && !graphqlCacheEnabled()) {
+    await refreshActiveGraphqlSoupQueries();
+  }
 }
 
 /** Mark notifications done through the shared GraphQL mutation. Throws on failure. */
@@ -594,6 +609,10 @@ function createNotificationsMutation(
             context as NotificationsMutationContext,
             undefined as never
           );
+          // The normalized client propagates the optimistic notification row
+          // into active Soup edges. Its uncached fallback cannot, so refetch
+          // mounted Soup queries after the authoritative mutation succeeds.
+          await refreshSoupAfterUncachedGraphqlWrite();
         },
         onError: async (error, variables, context) => {
           await lifecycle.onError?.(
@@ -616,24 +635,24 @@ function createNotificationsMutation(
 
     return {
       get isPending() {
-        return ENABLE_GRAPHQL_SOUP()
+        return isFeatureEnabled(enableGraphqlSoup)
           ? graphqlMutation.isPending
           : restMutation.isPending;
       },
       get error() {
-        return ENABLE_GRAPHQL_SOUP()
+        return isFeatureEnabled(enableGraphqlSoup)
           ? graphqlMutation.error
           : (restMutation.error ?? null);
       },
       mutate(variables) {
-        if (ENABLE_GRAPHQL_SOUP()) {
+        if (isFeatureEnabled(enableGraphqlSoup)) {
           graphqlMutation.mutate(variables);
         } else {
           restMutation.mutate(variables);
         }
       },
       async mutateAsync(variables) {
-        if (!ENABLE_GRAPHQL_SOUP()) {
+        if (!isFeatureEnabled(enableGraphqlSoup)) {
           return await restMutation.mutateAsync(variables);
         }
 
@@ -1058,6 +1077,32 @@ export function optimisticInsertNotification(
     } else {
       refetchSoupEntity(notification.entity_id, soupTag);
     }
+
+    // The inbox's notified_at order moves the notified row up right away
+    // rather than on the next refetch of the page. A mention or thread reply
+    // belongs to its channel-thread row — the row the soup feed keys it on —
+    // so that is the row stamped (and fetched in, when it is not cached yet),
+    // not the channel's.
+    const threadRootId = channelThreadRootId(notification);
+    if (notification.created_at) {
+      bumpSoupEntityNotifiedAt(
+        threadRootId ?? notification.entity_id,
+        notification.created_at
+      );
+    }
+    if (threadRootId && !hasSoupEntity(threadRootId)) {
+      refetchSoupEntity(threadRootId, 'channelThread');
+    }
+
+    // A cached row may be absent from the done-filtered feeds — dropped when
+    // it was marked done, or the feed was fetched while it had nothing
+    // outstanding. The field merges above only patch rows already present,
+    // so put the row back where it is missing; otherwise this notification
+    // stays invisible in the inbox until the next refetch. No-op for rows
+    // the refetch paths above insert.
+    restoreSoupEntityToDoneFilteredQueries(
+      threadRootId ?? notification.entity_id
+    );
   }
 
   // Cache is already updated via setQueriesData above. Mark as stale without

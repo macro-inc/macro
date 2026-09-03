@@ -8,18 +8,38 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import CreateIcon from '@icon/square-pen-create.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown, Hotkey, NavRow } from '@ui';
-import { createSignal, For, onCleanup, Show } from 'solid-js';
+import {
+  createSignal,
+  For,
+  onCleanup,
+  Show,
+  type ValidComponent,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
-export const SidebarCreateMenu = (props: {
-  isSlim: () => boolean;
+export type SidebarCreateMenuProps = {
+  /** Only read by the built-in `row` variant, for its tooltip. */
+  isSlim?: () => boolean;
   variant?: 'row' | 'icon';
+  /**
+   * Your own trigger, rendered as the Kobalte `Dropdown.Trigger` via `as` — so
+   * the ref, aria wiring and open/close handlers are attached for you. Spread
+   * the props you receive onto one interactive element, and style the open
+   * state off the `data-expanded` attribute Kobalte sets on it.
+   *
+   * Takes precedence over `variant`.
+   */
+  trigger?: ValidComponent;
   onMenuOpenChange?: (open: boolean) => void;
-}) => {
+};
+
+export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
   const analytics = useAnalytics();
   const [open, setOpen] = createSignal(false);
   const [focusedIndex, setFocusedIndex] = createSignal(-1);
   const blocks = useCreateMenuBlocks();
+
+  const isSlim = () => props.isSlim?.() ?? false;
 
   const handleOpenChange = (nextOpen: boolean) => {
     if (nextOpen && !open()) {
@@ -72,54 +92,72 @@ export const SidebarCreateMenu = (props: {
       gutter={8}
     >
       <Show
-        when={props.variant === 'icon'}
+        when={props.trigger}
         fallback={
-          <Dropdown.Trigger
-            as={NavRow}
-            class="center h-8 bg-ink/4 text-[13px]"
-            fullWidth
-            tooltipPlacement="right"
-            tooltipDisabled={!props.isSlim()}
-            label="Create"
-            hotkey={TOKENS.global.createCommand}
-            onMouseDown={(e: MouseEvent) => {
-              if (e.button !== 0) return;
-              e.preventDefault();
-            }}
+          <Show
+            when={props.variant === 'icon'}
+            fallback={
+              <Dropdown.Trigger
+                as={NavRow}
+                class="center h-8 bg-ink/4 text-[13px]"
+                fullWidth
+                tooltipPlacement="right"
+                tooltipDisabled={!isSlim()}
+                label="Create"
+                hotkey={TOKENS.global.createCommand}
+                onMouseDown={(e: MouseEvent) => {
+                  if (e.button !== 0) return;
+                  e.preventDefault();
+                }}
+              >
+                <div class="size-4 shrink-0">
+                  <PlusIcon class="size-4" />
+                </div>
+                <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
+                  Create
+                </span>
+                <Show when={open()}>
+                  <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:hidden">
+                    <Hotkey
+                      token={TOKENS.global.createCommand}
+                      class="flex gap-1"
+                    />
+                  </div>
+                </Show>
+              </Dropdown.Trigger>
+            }
           >
-            <div class="size-4 shrink-0">
-              <PlusIcon class="size-4" />
-            </div>
-            <span class="whitespace-nowrap group-data-[slim=true]/sidebar:hidden">
-              Create
-            </span>
-            <Show when={open()}>
-              <div class="text-xxs text-ink-extra-muted/50 rounded-sm ml-auto border border-ink/5 px-1.5 py-px -my-1 group-data-[slim=true]/sidebar:hidden">
-                <Hotkey
-                  token={TOKENS.global.createCommand}
-                  class="flex gap-1"
-                />
-              </div>
-            </Show>
-          </Dropdown.Trigger>
+            <Dropdown.Trigger
+              as={Button}
+              variant="outline"
+              size="icon-sm"
+              depth={1}
+              class="size-[26px] rounded-full bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
+              label="Create"
+              hotkey={TOKENS.global.createCommand}
+              onMouseDown={(e: MouseEvent) => {
+                if (e.button !== 0) return;
+                e.preventDefault();
+              }}
+            >
+              <CreateIcon />
+            </Dropdown.Trigger>
+          </Show>
         }
       >
-        <Dropdown.Trigger
-          as={Button}
-          variant="outline"
-          size="icon-sm"
-          depth={1}
-          class="size-[26px] rounded-full bg-surface shadow-md shadow-drop-shadow [&_svg]:size-4!"
-          label="Create"
-          hotkey={TOKENS.global.createCommand}
-          onMouseDown={(e: MouseEvent) => {
-            if (e.button !== 0) return;
-            e.preventDefault();
-          }}
-        >
-          <CreateIcon />
-        </Dropdown.Trigger>
+        {(trigger) => (
+          <Dropdown.Trigger
+            as={trigger()}
+            // `Dropdown.Trigger` hardcodes `variant`/`size` for its default
+            // `as={Button}` and spreads props after them, so both leak into a
+            // custom trigger — and land on its element as junk attributes if it
+            // is a plain `<button>`. Blank them for callers' own elements.
+            variant={undefined}
+            size={undefined}
+          />
+        )}
       </Show>
+
       <Dropdown.Content class="min-w-52 shadow-menu">
         <Dropdown.Group>
           <For each={blocks()}>

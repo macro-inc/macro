@@ -301,3 +301,10 @@ export function pendingTargetReplyId(state: MachineState): string | undefined {
     .with({ t: 'flashing' }, () => undefined)
     .exhaustive();
 }
+
+export function hasPendingElementScroll(state: MachineState): boolean {
+  return (
+    pendingScrollTargetId(state) !== undefined ||
+    pendingTargetReplyId(state) !== undefined
+  );
+}

@@ -36,7 +36,7 @@ use models_email::service::attachment::{
 use models_email::service::message::{Message, is_inbound, is_outbound, is_spam_or_trash};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::service::thread::Thread;
-use notification::domain::models::SendNotificationRequestBuilder;
+use notification::domain::models::{SendNotificationRequest, SendNotificationRequestBuilder};
 use notification::domain::service::NotificationIngress;
 use std::collections::HashSet;
 use std::result;
@@ -678,9 +678,9 @@ async fn send_notifications(
         return Ok(());
     }
 
-    let notifiable_message = filter_notifiable_message(ctx, link, new_message_provider_id).await?;
-
-    let Some(message) = notifiable_message else {
+    let Some((message, tier)) =
+        filter_notifiable_message(ctx, link, new_message_provider_id).await?
+    else {
         return Ok(());
     };
 
@@ -732,18 +732,47 @@ async fn send_notifications(
     })?;
 
     let recipient_ids = build_notification_recipients(&link.macro_id, primaries);
+    let (staff_recipients, customer_recipients) = partition_email_push_recipients(recipient_ids);
 
-    let request = SendNotificationRequestBuilder {
-        notification_entity: EntityType::EmailThread
-            .with_entity_string(message.thread_db_id.to_string()),
-        secondary_notification_entity: None,
-        notification,
-        sender_id,
-        recipient_ids,
+    let notification_entity =
+        EntityType::EmailThread.with_entity_string(message.thread_db_id.to_string());
+
+    if !staff_recipients.is_empty() {
+        let request = SendNotificationRequestBuilder {
+            notification_entity: notification_entity.clone(),
+            secondary_notification_entity: None,
+            notification: notification.clone(),
+            sender_id: sender_id.clone(),
+            recipient_ids: staff_recipients,
+        }
+        .into_request()
+        .with_conn_gateway();
+        match tier {
+            NewEmailTier::Signal => publish_new_email_notification(ctx, request.with_apns()).await,
+            NewEmailTier::StaffInbox => publish_new_email_notification(ctx, request).await,
+        }
     }
-    .into_request()
-    .with_conn_gateway();
 
+    if !customer_recipients.is_empty() {
+        let request = SendNotificationRequestBuilder {
+            notification_entity,
+            secondary_notification_entity: None,
+            notification,
+            sender_id,
+            recipient_ids: customer_recipients,
+        }
+        .into_request()
+        .with_conn_gateway();
+        publish_new_email_notification(ctx, request).await;
+    }
+
+    Ok(())
+}
+
+async fn publish_new_email_notification<U: serde::Serialize + Send + Sync + 'static>(
+    ctx: &PubSubContext,
+    request: SendNotificationRequest<'_, NewEmailMetadata, U>,
+) {
     if let Err(e) = ctx
         .notification_ingress_service
         .send_notification(request)
@@ -751,51 +780,86 @@ async fn send_notifications(
     {
         tracing::error!(error=?e, "unable to send notification");
     }
-
-    Ok(())
 }
 
-/// Who should get an in-app / push `new_email` notification for a synced inbox
-/// message.
+/// Split recipients so only `@macro.com` users are on the APNS path.
+fn partition_email_push_recipients(
+    recipient_ids: HashSet<MacroUserIdStr<'static>>,
+) -> (
+    HashSet<MacroUserIdStr<'static>>,
+    HashSet<MacroUserIdStr<'static>>,
+) {
+    recipient_ids
+        .into_iter()
+        .partition(|id| id.is_macro_staff())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NewEmailNotifyPolicy {
-    /// Every non-sent, non-draft inbox message. Used for `@macro.com` dogfood.
-    AllInbox,
-    /// Signal-tab messages only. Default for customers.
-    SignalOnly,
+enum NewEmailTier {
+    /// Everyone gets the in-app row; staff also get APNS.
+    Signal,
+    /// Staff dogfood: in-app row only.
+    StaffInbox,
 }
 
-fn new_email_notify_policy(user_id: &MacroUserIdStr<'_>) -> NewEmailNotifyPolicy {
-    if user_id.is_macro_staff() {
-        NewEmailNotifyPolicy::AllInbox
-    } else {
-        NewEmailNotifyPolicy::SignalOnly
-    }
-}
-
-/// Inbox-view filter for a synced thread. `AllInbox` keeps the Inbox view
-/// (so spam, trash, and archive stay out) and skips only Signal predicates.
-fn new_email_preview_filter(thread_id: Uuid, policy: NewEmailNotifyPolicy) -> Expr<EmailLiteral> {
-    let thread = Expr::Literal(EmailLiteral::ThreadId(thread_id));
-    match policy {
-        NewEmailNotifyPolicy::AllInbox => thread,
-        NewEmailNotifyPolicy::SignalOnly => Expr::and(
-            thread,
-            Expr::and(
-                Expr::Literal(EmailLiteral::Importance(true)),
-                Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
-            ),
+fn signal_filter(thread_id: Uuid) -> Expr<EmailLiteral> {
+    Expr::and(
+        Expr::Literal(EmailLiteral::ThreadId(thread_id)),
+        Expr::and(
+            Expr::Literal(EmailLiteral::Importance(true)),
+            Expr::Literal(EmailLiteral::Shared(SharedEmailFilter::Exclude)),
         ),
-    }
+    )
 }
 
-// filter out messages we don't want to send notifications for
+async fn thread_in_inbox(
+    ctx: &PubSubContext,
+    link: &link::Link,
+    filter: Expr<EmailLiteral>,
+) -> result::Result<bool, ProcessingError> {
+    let query = PreviewCursorQuery {
+        view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
+        link_ids: vec![link.id],
+        limit: 1,
+        query: models_pagination::Query::Sort(
+            models_pagination::SimpleSortMethod::UpdatedAt,
+            Some(Arc::new(filter)),
+        ),
+        team_id: None,
+    };
+
+    let previews = EmailPgRepo::new(ctx.db.clone())
+        .previews_for_view_cursor(query, link.macro_id.clone())
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: anyhow::Error::new(e).context("Failed to evaluate inbox membership"),
+            })
+        })?;
+
+    Ok(!previews.is_empty())
+}
+
+async fn new_email_tier(
+    ctx: &PubSubContext,
+    link: &link::Link,
+    thread_id: Uuid,
+) -> result::Result<Option<NewEmailTier>, ProcessingError> {
+    if thread_in_inbox(ctx, link, signal_filter(thread_id)).await? {
+        return Ok(Some(NewEmailTier::Signal));
+    }
+    let staff_inbox = link.macro_id.is_macro_staff()
+        && thread_in_inbox(ctx, link, Expr::Literal(EmailLiteral::ThreadId(thread_id))).await?;
+    Ok(staff_inbox.then_some(NewEmailTier::StaffInbox))
+}
+
 #[tracing::instrument(skip(ctx, link))]
 async fn filter_notifiable_message(
     ctx: &PubSubContext,
     link: &link::Link,
     new_message_provider_id: &str,
-) -> result::Result<Option<SimpleMessage>, ProcessingError> {
+) -> result::Result<Option<(SimpleMessage, NewEmailTier)>, ProcessingError> {
     let new_message =
         email_db_client::messages::get_simple_messages::get_simple_message_by_provider_and_link(
             &ctx.db,
@@ -814,38 +878,10 @@ async fn filter_notifiable_message(
         return Ok(None);
     };
 
-    // 1. filter out sent and draft messages
     if new_message.is_sent || new_message.is_draft {
         return Ok(None);
     }
 
-    // 2. Inbox view membership, scoped to this thread. SignalOnly also
-    //    requires Importance(true) AND Shared(exclude).
-    let preview_filter = new_email_preview_filter(
-        new_message.thread_db_id,
-        new_email_notify_policy(&link.macro_id),
-    );
-
-    let query = PreviewCursorQuery {
-        view: PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox),
-        link_ids: vec![link.id],
-        limit: 1,
-        query: models_pagination::Query::Sort(
-            models_pagination::SimpleSortMethod::UpdatedAt,
-            Some(Arc::new(preview_filter)),
-        ),
-        team_id: None,
-    };
-
-    let previews = EmailPgRepo::new(ctx.db.clone())
-        .previews_for_view_cursor(query, link.macro_id.clone())
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: anyhow::Error::new(e).context("Failed to evaluate Signal tab membership"),
-            })
-        })?;
-
-    Ok((!previews.is_empty()).then_some(new_message))
+    let tier = new_email_tier(ctx, link, new_message.thread_db_id).await?;
+    Ok(tier.map(|tier| (new_message, tier)))
 }

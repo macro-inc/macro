@@ -5,7 +5,8 @@ use crate::domain::models::{
     CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, CalendarWatchRelease,
     ConferenceChange, DisconnectedGoogleCalendar, EventStatus, EventTransparency, EventType,
     EventVisibility, GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource,
-    GoogleWatchChannel, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+    GoogleWatchChannel, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, ProviderCalendar,
+    StoredGoogleCalendar, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -55,6 +56,7 @@ fn creation_target(is_read_only: bool) -> CalendarCreationTarget {
         calendar_id: Uuid::now_v7(),
         provider_calendar_id: "primary".to_string(),
         is_read_only,
+        is_primary: true,
         token_identity: token_identity(),
         actor: Some(ActorInboxes::sole("self@example.com")),
     }
@@ -129,12 +131,18 @@ fn draft() -> CalendarEventDraft {
         transparency: None,
         reminders: None,
         conference: None,
+        out_of_office: None,
     }
 }
 
 #[derive(Clone)]
 struct FakeRepo {
     mutation_target: Option<CalendarEventMutationTarget>,
+    /// Series attendees a mutation carries forward RSVP/optional state from.
+    stored_attendees: Vec<CalendarAttendee>,
+    /// Occurrence override attendees; `None` means the occurrence inherits the
+    /// series list.
+    occurrence_override_attendees: Option<Vec<CalendarAttendee>>,
     creation_target: Option<CalendarCreationTarget>,
     persisted_event_id: Option<Uuid>,
     /// What the upsert reports doing to the row. `Created` by default, since
@@ -155,6 +163,8 @@ impl Default for FakeRepo {
     fn default() -> Self {
         Self {
             mutation_target: None,
+            stored_attendees: Vec::new(),
+            occurrence_override_attendees: None,
             creation_target: None,
             persisted_event_id: None,
             write_change: CalendarEventChange::Created,
@@ -234,6 +244,15 @@ impl CalendarRepository for FakeRepo {
         unreachable!()
     }
 
+    async fn list_team_out_of_office(
+        &self,
+        _requester_id: &str,
+        _range: OccurrenceRange,
+        _limit: u16,
+    ) -> Result<Vec<crate::domain::models::TeamOutOfOffice>, rootcause::Report> {
+        unreachable!()
+    }
+
     async fn upsert_google_calendar(
         &self,
         _key: CalendarBackfillJobKey,
@@ -302,6 +321,21 @@ impl CalendarRepository for FakeRepo {
         Ok(self.mutation_target.clone())
     }
 
+    async fn get_event_attendees(
+        &self,
+        _event_id: Uuid,
+    ) -> Result<Vec<CalendarAttendee>, rootcause::Report> {
+        Ok(self.stored_attendees.clone())
+    }
+
+    async fn get_occurrence_override_attendees(
+        &self,
+        _event_id: Uuid,
+        _recurrence_id: &str,
+    ) -> Result<Option<Vec<CalendarAttendee>>, rootcause::Report> {
+        Ok(self.occurrence_override_attendees.clone())
+    }
+
     async fn get_creation_target(
         &self,
         _requester_id: &str,
@@ -365,6 +399,7 @@ struct FakeProvider {
     rsvp_self_emails: Arc<Mutex<Vec<Vec<String>>>>,
     echo_attendees: Vec<CalendarAttendee>,
     created_drafts: Arc<Mutex<Vec<CalendarEventDraft>>>,
+    updated_patches: Arc<Mutex<Vec<CalendarEventPatch>>>,
 }
 
 impl FakeProvider {
@@ -375,6 +410,7 @@ impl FakeProvider {
             rsvp_self_emails: Arc::new(Mutex::new(Vec::new())),
             echo_attendees: Vec::new(),
             created_drafts: Arc::new(Mutex::new(Vec::new())),
+            updated_patches: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -414,12 +450,13 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         _access_token: &str,
         target: &GoogleCalendarTarget,
         provider_event_id: &str,
-        _patch: &CalendarEventPatch,
+        patch: &CalendarEventPatch,
     ) -> Result<Option<CalendarEventUpsert>, GoogleProviderError> {
         self.calls
             .lock()
             .unwrap()
             .push(format!("update:{provider_event_id}"));
+        self.updated_patches.lock().unwrap().push(patch.clone());
         if let Some(error) = self.fail() {
             return Err(error);
         }
@@ -435,11 +472,12 @@ impl GoogleCalendarMutationProvider for FakeProvider {
         target: &GoogleCalendarTarget,
         master_provider_event_id: &str,
         original_start: &str,
-        _patch: &CalendarEventPatch,
+        patch: &CalendarEventPatch,
     ) -> Result<GoogleInstanceUpdateOutcome, GoogleProviderError> {
         self.calls.lock().unwrap().push(format!(
             "instance-update:{master_provider_event_id}:{original_start}"
         ));
+        self.updated_patches.lock().unwrap().push(patch.clone());
         if let Some(error) = self.fail() {
             return Err(error);
         }
@@ -1114,6 +1152,124 @@ async fn create_rejects_invalid_input_before_reaching_the_provider() {
     assert!(calls.lock().unwrap().is_empty());
 }
 
+fn out_of_office_draft() -> CalendarEventDraft {
+    CalendarEventDraft {
+        attendees: Vec::new(),
+        out_of_office: Some(OutOfOfficeProperties {
+            auto_decline_mode: OutOfOfficeAutoDeclineMode::DeclineAllConflictingInvitations,
+            decline_message: Some("Out".to_string()),
+        }),
+        ..draft()
+    }
+}
+
+#[tokio::test]
+async fn create_out_of_office_forwards_the_type_and_adds_no_organizer_guest() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let drafts = provider.created_drafts.clone();
+    let repo = FakeRepo {
+        creation_target: Some(creation_target(false)),
+        ..FakeRepo::default()
+    };
+
+    service(repo, provider, FakeTokens::ok())
+        .create_event("macro|user", None, None, out_of_office_draft())
+        .await
+        .unwrap();
+
+    let sent = drafts.lock().unwrap();
+    let sent = sent.first().expect("one create call");
+    assert!(sent.out_of_office.is_some());
+    // An out-of-office event carries no attendees, so the organizer is never
+    // injected as a guest the way a regular event's is.
+    assert!(sent.attendees.is_empty());
+}
+
+#[tokio::test]
+async fn create_out_of_office_rejects_a_non_primary_calendar_before_the_provider() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let svc = service(
+        FakeRepo {
+            creation_target: Some(CalendarCreationTarget {
+                is_primary: false,
+                ..creation_target(false)
+            }),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    );
+
+    assert!(matches!(
+        svc.create_event("macro|user", None, None, out_of_office_draft())
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn create_out_of_office_rejects_all_day_spans_and_attendees() {
+    let all_day = service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    );
+    let mut all_day_draft = out_of_office_draft();
+    all_day_draft.time = EventTime::AllDay {
+        start_date: chrono::NaiveDate::from_ymd_opt(2026, 8, 6).unwrap(),
+        end_date: chrono::NaiveDate::from_ymd_opt(2026, 8, 7).unwrap(),
+    };
+    assert!(matches!(
+        all_day
+            .create_event("macro|user", None, None, all_day_draft)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+
+    let with_guest = service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    );
+    let mut guest_draft = out_of_office_draft();
+    guest_draft.attendees = vec![CalendarAttendeeInput {
+        email: "guest@example.com".to_string(),
+        is_optional: false,
+        response_status: None,
+    }];
+    assert!(matches!(
+        with_guest
+            .create_event("macro|user", None, None, guest_draft)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+
+    let with_conference = service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    );
+    let mut conference_draft = out_of_office_draft();
+    conference_draft.conference = Some(ConferenceChange::GoogleMeet);
+    assert!(matches!(
+        with_conference
+            .create_event("macro|user", None, None, conference_draft)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+}
+
 #[tokio::test]
 async fn update_validates_lookup_policy_and_addresses_the_series_master() {
     let empty_patch = service(
@@ -1197,6 +1353,158 @@ async fn update_validates_lookup_policy_and_addresses_the_series_master() {
         calls.lock().unwrap().as_slice(),
         ["update:master-id"],
         "instance-backed targets patch their recurring master"
+    );
+}
+
+#[test]
+fn preserving_retained_attendee_state_carries_rsvp_and_optional_forward() {
+    let stored = vec![
+        CalendarAttendee {
+            email: "teo@example.com".to_string(),
+            display_name: None,
+            response_status: AttendeeResponseStatus::Accepted,
+            is_organizer: false,
+            is_optional: true,
+            is_self: false,
+            comment: None,
+        },
+        echo_attendee("ada@example.com", false),
+    ];
+    let mut attendees = vec![
+        // Retained guest resent bare: keep the stored RSVP and optional flag,
+        // matched case-insensitively.
+        CalendarAttendeeInput {
+            email: "TEO@example.com".to_string(),
+            is_optional: false,
+            response_status: None,
+        },
+        // Retained guest the caller explicitly re-answers: the caller wins.
+        CalendarAttendeeInput {
+            email: "ada@example.com".to_string(),
+            is_optional: false,
+            response_status: Some(AttendeeResponseStatus::Declined),
+        },
+        // Brand-new invite: no stored state, stays a fresh needs_action.
+        CalendarAttendeeInput {
+            email: "new@example.com".to_string(),
+            is_optional: false,
+            response_status: None,
+        },
+    ];
+
+    preserve_retained_attendee_state(&mut attendees, &stored);
+
+    assert_eq!(
+        attendees[0].response_status,
+        Some(AttendeeResponseStatus::Accepted)
+    );
+    assert!(attendees[0].is_optional);
+    assert_eq!(
+        attendees[1].response_status,
+        Some(AttendeeResponseStatus::Declined)
+    );
+    assert_eq!(attendees[2].response_status, None);
+    assert!(!attendees[2].is_optional);
+}
+
+#[tokio::test]
+async fn updating_attendees_carries_retained_guests_rsvp_through_to_the_provider() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let patches = provider.updated_patches.clone();
+    let mut accepted = echo_attendee("teo@example.com", false);
+    accepted.response_status = AttendeeResponseStatus::Accepted;
+
+    service(
+        FakeRepo {
+            mutation_target: Some(mutation_target(false)),
+            stored_attendees: vec![accepted],
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .update_event(
+        "macro|user",
+        Uuid::now_v7(),
+        CalendarEventPatch {
+            attendees: Some(vec![
+                CalendarAttendeeInput {
+                    email: "teo@example.com".to_string(),
+                    is_optional: false,
+                    response_status: None,
+                },
+                CalendarAttendeeInput {
+                    email: "ada@example.com".to_string(),
+                    is_optional: false,
+                    response_status: None,
+                },
+            ]),
+            ..CalendarEventPatch::default()
+        },
+        CalendarUpdateScope::All,
+    )
+    .await
+    .unwrap();
+
+    let sent = patches.lock().unwrap();
+    let attendees = sent[0].attendees.as_ref().expect("attendees forwarded");
+    assert_eq!(attendees[0].email, "teo@example.com");
+    assert_eq!(
+        attendees[0].response_status,
+        Some(AttendeeResponseStatus::Accepted),
+        "a retained guest keeps their RSVP instead of resetting to needs_action"
+    );
+    assert_eq!(attendees[1].email, "ada@example.com");
+    assert_eq!(
+        attendees[1].response_status, None,
+        "a newly invited guest carries no prior RSVP"
+    );
+}
+
+#[tokio::test]
+async fn occurrence_scoped_attendee_update_prefers_the_occurrence_rsvp_over_the_series() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let patches = provider.updated_patches.clone();
+
+    let mut series = echo_attendee("teo@example.com", false);
+    series.response_status = AttendeeResponseStatus::Accepted;
+    let mut occurrence = echo_attendee("teo@example.com", false);
+    occurrence.response_status = AttendeeResponseStatus::Declined;
+
+    service(
+        FakeRepo {
+            mutation_target: Some(mutation_target(false)),
+            stored_attendees: vec![series],
+            occurrence_override_attendees: Some(vec![occurrence]),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    )
+    .update_event(
+        "macro|user",
+        Uuid::now_v7(),
+        CalendarEventPatch {
+            attendees: Some(vec![CalendarAttendeeInput {
+                email: "teo@example.com".to_string(),
+                is_optional: false,
+                response_status: None,
+            }]),
+            ..CalendarEventPatch::default()
+        },
+        CalendarUpdateScope::ThisEvent {
+            recurrence_id: "2026-08-18T20:00:00+00:00".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let sent = patches.lock().unwrap();
+    let attendees = sent[0].attendees.as_ref().expect("attendees forwarded");
+    assert_eq!(
+        attendees[0].response_status,
+        Some(AttendeeResponseStatus::Declined),
+        "an occurrence-scoped edit keeps the guest's per-instance RSVP, not the series status"
     );
 }
 

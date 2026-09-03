@@ -100,7 +100,7 @@ fn event_names_match_the_wire() {
 fn channel_kinds_round_trip_in_snake_case() {
     for (kind, wire) in [
         (ChannelKind::MentionThread, "mention_thread"),
-        (ChannelKind::QuoteReply, "quote_reply"),
+        (ChannelKind::ExplicitReply, "explicit_reply"),
         (ChannelKind::Inferred, "inferred"),
     ] {
         let value = serde_json::to_value(kind).expect("serialize kind");

@@ -31,8 +31,12 @@ export interface CalendarSource {
   color: string;
   /** Connected inbox address, when the source came from a visible calendar. */
   emailAddress?: string;
+  /** Connected inbox link that syncs this calendar, for grouping by account. */
+  emailLinkId?: string;
   /** Whether this source is its connected inbox's primary calendar. */
   isPrimary?: boolean;
+  /** Whether this is a subscribed system calendar (holidays, birthdays). */
+  isSubscription?: boolean;
 }
 
 /** Calendar occurrence data, independent from FullCalendar. */

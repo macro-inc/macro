@@ -1,10 +1,11 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type {
-  AgentActionId,
   AgentSessionLogResponse,
+  AgentSessionQueueResponse,
   AgentSessionResponse,
   ControlRequest,
+  ControlResponse,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
   SandboxSize,
@@ -54,22 +55,54 @@ export const agentHarnessServiceClient = {
   },
 
   /**
-   * Returns the accepted action's id, which the fold stamps as `requestId`
-   * on the folded message the action derives — the correlation handle for
-   * watching that action's outcome.
+   * Returns the accepted action's id — which the fold stamps as `requestId`
+   * on the folded message the action derives — plus whether the action went
+   * out (`sent`) or waits in the session's queue (`queued`).
    */
   control(sessionId: string, request: ControlRequest) {
-    // The endpoint answers with a bare JSON string (`AgentActionId`), which
-    // `fetchWithToken`'s object-or-bytes constraint cannot name; the cast is
-    // the whole accommodation.
-    return fetchWithToken<Record<string, never>>(
+    return fetchWithToken<ControlResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/control`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
       }
-    ).then((result) => result.map((id) => id as unknown as AgentActionId));
+    );
+  },
+
+  /** The actions waiting to dispatch in this session, oldest first. */
+  queue(sessionId: string) {
+    return fetchWithToken<AgentSessionQueueResponse>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/queue`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * Replace a queued prompt's text before it dispatches. Answers 404
+   * (`NOT_FOUND`) once the action has dispatched, 422 if the queued action
+   * is not a prompt.
+   */
+  editQueued(sessionId: string, actionId: string, prompt: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}`,
+      {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt }),
+      }
+    ).then((result) => result.map(() => undefined));
+  },
+
+  /**
+   * Remove a queued action before it dispatches. Answers 404 (`NOT_FOUND`)
+   * once the action has dispatched — there is no un-sending.
+   */
+  removeQueued(sessionId: string, actionId: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${agentHarnessHost}/agent-sessions/${sessionId}/queue/${actionId}`,
+      { method: 'DELETE' }
+    ).then((result) => result.map(() => undefined));
   },
 
   delete(sessionId: string) {

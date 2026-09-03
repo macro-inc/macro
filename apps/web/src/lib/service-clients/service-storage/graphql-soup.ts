@@ -1,6 +1,7 @@
 import {
   ENABLE_BEARER_TOKEN_AUTH,
-  ENABLE_GRAPHQL_SOUP,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
@@ -39,7 +40,7 @@ import {
   type RequestPolicy,
   subscriptionExchange,
 } from '@urql/core';
-import { print } from 'graphql';
+import { type DocumentNode, parse, print, visit } from 'graphql';
 import {
   createClient as createGraphqlWsClient,
   type Client as GraphqlWsClient,
@@ -83,7 +84,7 @@ function mergeHeaders(...headers: Array<HeadersInit | undefined>): Headers {
   return result;
 }
 
-async function dssGraphqlFetch(
+async function authorizedDssGraphqlFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
@@ -108,6 +109,145 @@ async function dssGraphqlFetch(
 
   response = await fetchWithCredentials();
   return response;
+}
+
+let soupProjectionServerSupported = true;
+
+/** Whether this session has confirmed that the server accepts projection fields. */
+export function graphqlSoupProjectionSupported(): boolean {
+  return soupProjectionServerSupported;
+}
+
+function stripGraphqlSoupClientDirectives(
+  document: DocumentNode
+): DocumentNode {
+  return visit(document, {
+    Directive(node) {
+      return node.name.value === 'cacheOnly' ? null : undefined;
+    },
+  });
+}
+
+/** Removes client-only directives from a document before network transport. */
+export function graphqlSoupTransportDocument(query: string): string {
+  return print(stripGraphqlSoupClientDirectives(parse(query)));
+}
+
+function graphqlSoupTransportRequest(
+  init: RequestInit | undefined
+): RequestInit | undefined {
+  if (typeof init?.body !== 'string') return init;
+  try {
+    const payload: unknown = JSON.parse(init.body);
+    if (
+      payload === null ||
+      typeof payload !== 'object' ||
+      !('query' in payload) ||
+      typeof payload.query !== 'string' ||
+      !payload.query.includes('@cacheOnly')
+    ) {
+      return init;
+    }
+    return {
+      ...init,
+      body: JSON.stringify({
+        ...payload,
+        query: graphqlSoupTransportDocument(payload.query),
+      }),
+    };
+  } catch {
+    return init;
+  }
+}
+
+/** Removes only the additive cache metadata field for a legacy-server retry. */
+export function legacySoupProjectionDocument(query: string): string {
+  return print(
+    visit(parse(query), {
+      Field(node) {
+        return node.name.value === 'cacheProjection' ? null : undefined;
+      },
+    })
+  );
+}
+
+function legacyProjectionRequest(
+  init: RequestInit | undefined
+): RequestInit | undefined {
+  if (typeof init?.body !== 'string') return;
+  try {
+    const payload: unknown = JSON.parse(init.body);
+    if (
+      payload === null ||
+      typeof payload !== 'object' ||
+      !('query' in payload) ||
+      typeof payload.query !== 'string' ||
+      !payload.query.includes('cacheProjection')
+    ) {
+      return;
+    }
+    return {
+      ...init,
+      body: JSON.stringify({
+        ...payload,
+        query: legacySoupProjectionDocument(payload.query),
+      }),
+    };
+  } catch {
+    return;
+  }
+}
+
+async function isLegacyProjectionValidationError(
+  response: Response
+): Promise<boolean> {
+  try {
+    const payload: unknown = await response.clone().json();
+    if (
+      payload === null ||
+      typeof payload !== 'object' ||
+      !('errors' in payload)
+    ) {
+      return false;
+    }
+    const errors = payload.errors;
+    return (
+      Array.isArray(errors) &&
+      errors.some(
+        (error) =>
+          error !== null &&
+          typeof error === 'object' &&
+          'message' in error &&
+          typeof error.message === 'string' &&
+          /(?:Cannot query|Unknown) field ["']cacheProjection["']/.test(
+            error.message
+          )
+      )
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function dssGraphqlFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<Response> {
+  const transportInit = graphqlSoupTransportRequest(init);
+  const response = await authorizedDssGraphqlFetch(input, transportInit);
+  const legacyInit = legacyProjectionRequest(transportInit);
+  if (
+    legacyInit === undefined ||
+    !(await isLegacyProjectionValidationError(response))
+  ) {
+    return response;
+  }
+
+  // A mixed deployment remains network-correct: retry without the additive
+  // metadata field and suppress v2 local authority for this session. Backfill
+  // still refuses to checkpoint missing required Document supplements.
+  soupProjectionServerSupported = false;
+  return await authorizedDssGraphqlFetch(input, legacyInit);
 }
 
 const graphqlSoupClient = createClient({
@@ -143,7 +283,7 @@ function graphqlSoupSubscriptionExchange(websocketClient: GraphqlWsClient) {
   return subscriptionExchange({
     forwardSubscription(payload, request) {
       const graphqlWsPayload = {
-        query: print(request.query),
+        query: print(stripGraphqlSoupClientDirectives(request.query)),
         operationName: payload.operationName,
         variables: payload.variables,
         extensions: payload.extensions,
@@ -213,7 +353,7 @@ function fallbackAfterInitializationFailure(): void {
   cachedCacheCleanup = undefined;
   cachedCacheHost = undefined;
   cacheInitializationFailed = true;
-  cachedClient = ENABLE_GRAPHQL_SOUP()
+  cachedClient = isFeatureEnabled(enableGraphqlSoup)
     ? getUncachedRealtimeClient()
     : graphqlSoupClient;
   browserCacheClientActivated = false;
@@ -246,7 +386,7 @@ export function getGraphqlSoupClient(): Client {
     return cachedClient;
   const rollout = getBrowserTursoCacheRolloutDecision();
   if (!rollout.enabled) {
-    return ENABLE_GRAPHQL_SOUP()
+    return isFeatureEnabled(enableGraphqlSoup)
       ? getUncachedRealtimeClient()
       : graphqlSoupClient;
   }
@@ -326,7 +466,7 @@ export function getGraphqlSoupClient(): Client {
       cachedCacheCleanup = undefined;
       cacheInitializationFailed = true;
       console.warn('graphql cache init failed; using uncached client', error);
-      return ENABLE_GRAPHQL_SOUP()
+      return isFeatureEnabled(enableGraphqlSoup)
         ? getUncachedRealtimeClient()
         : graphqlSoupClient;
     }

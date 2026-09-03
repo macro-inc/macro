@@ -333,7 +333,33 @@ where
         _actor_org_id: Option<i64>,
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
-        let actor = require_user_actor(&actor)?;
+        let owner = require_user_actor(&actor)?;
+        self.create_owned_channel(owner.clone(), Sender::new_from_user(owner), None, req)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn create_system_channel(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        self.create_owned_channel(
+            owner.clone(),
+            Sender::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID),
+            Some(owner),
+            req,
+        )
+        .await
+    }
+
+    async fn create_owned_channel(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        activity_actor: Sender,
+        on_behalf_of: Option<MacroUserIdStr<'static>>,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         if req.auto_join_team && req.channel_type != ChannelType::Team {
             return Err(ChannelMutationErr::BadRequest(
                 "auto-join is only available for team channels".to_string(),
@@ -345,7 +371,7 @@ where
             })?;
             let has_team = self
                 .repo
-                .user_has_team(actor.as_ref().to_string(), team_id)
+                .user_has_team(owner.as_ref().to_string(), team_id)
                 .await
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
             if !has_team {
@@ -372,12 +398,13 @@ where
         let channel_name = req.name.clone();
 
         let created_channel = self
-            .create_channel_record(actor.copied(), org_id, req)
+            .create_channel_record(owner.copied(), org_id, req)
             .await?;
 
         self.events.dispatch(ChannelEvent::ChannelCreated {
             channel_id: created_channel.id,
-            actor: Sender::new_from_user(actor),
+            actor: activity_actor,
+            on_behalf_of,
             channel_type,
             channel_name,
             participant_user_ids: created_channel.participant_user_ids,
@@ -1342,6 +1369,7 @@ where
         self.events.dispatch(ChannelEvent::ChannelCreated {
             channel_id: created_channel.id,
             actor: owner_sender,
+            on_behalf_of: None,
             channel_type,
             channel_name,
             participant_user_ids: created_channel.participant_user_ids,
@@ -1845,6 +1873,14 @@ where
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         ChannelServiceImpl::create_channel(self, actor, None, req).await
+    }
+
+    async fn create_system_channel(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        ChannelServiceImpl::create_system_channel(self, owner, req).await
     }
 
     #[tracing::instrument(err, skip(self, user_id))]

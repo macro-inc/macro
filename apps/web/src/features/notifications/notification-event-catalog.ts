@@ -161,6 +161,7 @@ export const BLOCKABLE_NOTIFICATION_EVENT_TYPES: readonly string[] =
 
 export const MUTED_ENTITY_TYPE_LABELS: Record<string, string> = {
   calendar_event: 'Calendar event',
+  call: 'Call',
   channel: 'Channel',
   channel_message: 'Thread',
   chat: 'Chat',
@@ -169,6 +170,7 @@ export const MUTED_ENTITY_TYPE_LABELS: Record<string, string> = {
   email_thread: 'Email',
   foreign: 'GitHub',
   foreign_entity: 'GitHub',
+  project: 'Folder',
   reminder: 'Reminder',
   team: 'Team',
 };

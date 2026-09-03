@@ -292,6 +292,7 @@ impl DocumentService for StubDocumentService {
         _user_id: MacroUserIdStr<'static>,
         _document_id: &str,
         _request: &documents::domain::models::CreateTaskRequest,
+        _attribution: &activity::Attribution,
     ) -> Result<(), DocumentError> {
         unimplemented!()
     }

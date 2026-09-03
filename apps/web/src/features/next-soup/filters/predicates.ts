@@ -177,6 +177,14 @@ export function scheduledRemindersFilter(entity: EntityData): boolean {
   );
 }
 
+/**
+ * Reminders not yet dealt with — the scheduled ones still ahead and the fired
+ * ones waiting on their owner, together. Everything but Done.
+ */
+export function notDoneRemindersFilter(entity: EntityData): boolean {
+  return entity.type === 'reminder' && !entity.completedAt;
+}
+
 /** Reminders the owner has marked as dealt with. */
 export function doneRemindersFilter(entity: EntityData): boolean {
   return entity.type === 'reminder' && !!entity.completedAt;

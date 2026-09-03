@@ -1,9 +1,14 @@
+import { CURSOR_BOT_NAME, isCursorBotId } from '@core/constant/cursorAgent';
+import { isMacroAgentId, MACRO_AGENT_NAME } from '@core/constant/macroAgent';
+import { isMacroCoderId, MACRO_CODER_NAME } from '@core/constant/macroCoder';
+import { isMacroNewId, MACRO_NEW_NAME } from '@core/constant/macroNew';
 import type {
   ApiChannelMessage,
   ApiThreadReply,
   ChannelMessagesPage,
 } from '@service-storage/client';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
+import type { Bot } from '@service-storage/generated/schemas/bot';
 
 type WithMaybeSender<
   T extends { sender_id: string; sender: ApiMessageSender },
@@ -28,6 +33,34 @@ export function senderFromStorageId(senderId: string): ApiMessageSender {
   }
 
   return { type: 'user', id: senderId };
+}
+
+function systemBotDisplayName(id: string): string | undefined {
+  if (isMacroAgentId(id)) return MACRO_AGENT_NAME;
+  if (isMacroCoderId(id)) return MACRO_CODER_NAME;
+  if (isMacroNewId(id)) return MACRO_NEW_NAME;
+  if (isCursorBotId(id)) return CURSOR_BOT_NAME;
+  return undefined;
+}
+
+/** Resolve a channel bot sender to its display name. */
+export function getBotDisplayName(
+  senderId: string,
+  sender?: ApiMessageSender,
+  bots: readonly Pick<Bot, 'id' | 'name'>[] = []
+): string | undefined {
+  const parsed = sender ?? senderFromStorageId(senderId);
+  const systemName =
+    systemBotDisplayName(parsed.id) ?? systemBotDisplayName(senderId);
+
+  if (parsed.type !== 'bot' && !systemName) return undefined;
+
+  return (
+    parsed.name ??
+    systemName ??
+    bots.find((bot) => bot.id === parsed.id)?.name ??
+    'Bot'
+  );
 }
 
 export function isBotSenderId(senderId: string): boolean {

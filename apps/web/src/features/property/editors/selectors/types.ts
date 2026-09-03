@@ -21,4 +21,7 @@ export type EntitySelectorConfig = {
   /** Explicit pool for USER pickers (e.g. company owner → team members);
    * replaces the default quick-access people list. */
   users?: Accessor<IUser[]>;
+  /** When the query is a valid email that is not already in the pool,
+   * offer it as an "Add {email}" row (calendar guests, share sheets). */
+  allowCustomEmail?: boolean;
 };

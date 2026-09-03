@@ -15,6 +15,7 @@ import {
   activeTargetMessageId,
   activeTargetMessageReplyId,
   type Command,
+  hasPendingElementScroll,
   initialState,
   loadAroundMessageId,
   type MachineState,
@@ -133,6 +134,7 @@ export function createTargetMessageController(
     loadAroundMessageId: () => loadAroundMessageId(state()),
     pendingScrollTargetId: () => pendingScrollTargetId(state()),
     pendingTargetReplyId: () => pendingTargetReplyId(state()),
+    hasPendingElementScroll: () => hasPendingElementScroll(state()),
 
     goToMessage: (messageId: string, replyId?: string) => {
       dispatch({

@@ -130,6 +130,39 @@ export type FoldedStreamEvent =
       metadata: SessionMetadata;
     };
 
+/**
+ *  Which ACP agent produced a session's log.
+ *
+ *  ACP names none of a harness's conventions - which `_meta` keys it writes,
+ *  what it calls its tools, how it reports a subagent - so the fold has to
+ *  know who it is reading in order to read those. The agent announces itself
+ *  in the `initialize` response's `agentInfo.name`; a log that starts
+ *  mid-session (a resume) is recognized from the `_meta` namespaces its
+ *  first tool frames carry instead. Carried on the metadata so a reader can
+ *  show it and never has to infer it.
+ *
+ *  [`Self::Unknown`] is a real state, not a failure: every reader falls back
+ *  to the harness-neutral conventions, and a harness this fold has not met
+ *  still folds to the generic vocabulary.
+ */
+export type Harness =
+  /**  `@agentclientprotocol/claude-agent-acp`. */
+  | 'claude_code'
+  /**  `OpenCode`, whose ACP server is built in. */
+  | 'open_code'
+  /**  OpenAI Codex, through `codex-acp`. */
+  | 'codex'
+  /**  Cursor cloud agents, through this repository's `cursor_cloud_agents`. */
+  | 'cursor'
+  /**  Macro's own in-process agent, `agent_inmem`. */
+  | 'macro'
+  /**  Nous Research's Hermes agent. */
+  | 'hermes'
+  /**  OpenClaw. */
+  | 'open_claw'
+  /**  Not announced, or an agent this fold does not know. */
+  | 'unknown';
+
 /**  A unit of renderable content. */
 export type MessagePart =
   /**  Prose from the user or the agent. */
@@ -149,29 +182,12 @@ export type MessagePart =
       kind: 'tool_use';
       /**  The ACP `toolCallId`. */
       id: ToolUseId;
-      /**  What to show as the tool's name. */
-      label: string;
+      /**  What the harness called the tool. */
+      name: ToolName;
       /**  Where the call got to. */
       status: ToolStatus;
       /**  What the tool did, as far as the log reveals. */
       detail: ToolDetail;
-      /**
-       *  The call's input, verbatim from ACP's `rawInput`, when reported.
-       *
-       *  Carried on every call - not just [`ToolDetail::Other`] - so a
-       *  reader that knows a tool by name (the Macro toolset renders each
-       *  tool with its own component) can parse the real arguments instead
-       *  of settling for the coarse detail.
-       */
-      rawInput: unknown;
-      /**
-       *  The call's result, verbatim from ACP's `rawOutput`, when reported.
-       *
-       *  The structured counterpart to the text a detail may carry: Macro's
-       *  agent reports each tool response as JSON here, and named-tool
-       *  rendering needs that JSON whole.
-       */
-      rawOutput: unknown;
     }
   /**  The agent asking to proceed. */
   | {
@@ -308,6 +324,8 @@ export type PlanEntryStatus =
  *  Fields start absent and fill in as the log reveals them.
  */
 export type SessionMetadata = {
+  /**  The agent that produced the log. See [`Harness`]. */
+  harness: Harness;
   /**
    *  Current model per the runtime's own `configOptions` responses, so a
    *  rejected model change never moves it.
@@ -374,6 +392,40 @@ export type StopReason =
     };
 
 /**
+ *  What a subagent reported back, as far as its harness told us.
+ *
+ *  Every field is optional because every harness tells us a different
+ *  subset: Claude Code reports timings, token counts and a per-tool
+ *  breakdown; OpenCode names the child session and its model; Cursor and
+ *  Hermes give back little more than the text. A reader shows what is
+ *  there.
+ */
+export type SubagentResult = {
+  /**  The subagent's answer, as text. */
+  text: string | null;
+  /**  Why the subagent failed, when it did. */
+  error: string | null;
+  /**
+   *  The harness's id for the subagent or its session, for anyone who
+   *  wants to find it again.
+   */
+  agentId: string | null;
+  /**  The model the subagent ran on. */
+  model: string | null;
+  /**
+   *  Wall-clock time the subagent took. `u32` because the browser
+   *  contract forbids 64-bit integers; 49 days of milliseconds is plenty.
+   */
+  durationMs: number | null;
+  /**  Tokens the subagent consumed. `u32` for the same reason. */
+  tokens: number | null;
+  /**  How many tools the subagent called. */
+  toolUses: number | null;
+  /**  What kinds of tools the subagent called. */
+  stats: ToolStats | null;
+};
+
+/**
  *  What a tool call actually did.
  *
  *  Discriminated by what a reader needs in order to render it, not by ACP's
@@ -384,6 +436,11 @@ export type StopReason =
  *  has a variant here, so the fold never falls back to [`Self::Other`] for a
  *  kind ACP defines - only for `switch_mode` (nothing a reader would want
  *  rendered) and a kind this fold does not yet know about.
+ *
+ *  Two variants are chosen by *name* rather than kind: Macro's own tools
+ *  ([`Self::Macro`], [`Self::UserTool`]) arrive as ACP `other`, and what a
+ *  reader wants for them is the tool's own JSON, not a generic card. The
+ *  harness reader decides which names are Macro's.
  */
 export type ToolDetail =
   /**  A shell command. ACP's `execute`. */
@@ -464,7 +521,143 @@ export type ToolDetail =
       output: string | null;
       /**  The tool's input, when reported. */
       input: unknown;
+    }
+  /**
+   *  A Macro tool the fold knows by name - reached over Macro's MCP
+   *  server, or called in-process by Macro's own agent. Input and output
+   *  are the tool's own JSON, any MCP envelope already removed, so a
+   *  reader that knows the tool renders it without parsing the wire.
+   */
+  | {
+      kind: 'macro';
+      /**  The tool's arguments, as it defines them. */
+      input: unknown;
+      /**
+       *  The tool's result, as it defines it; absent until the call
+       *  completes.
+       */
+      output: unknown;
+      /**  The error text, when the call failed. */
+      error: string | null;
+    }
+  /**
+   *  A Macro user tool: the agent drafted it, the user finishes it after
+   *  the turn. See [`UserToolOutcome`].
+   */
+  | {
+      kind: 'user_tool';
+      /**
+       *  The draft, as the tool defines its arguments; patched as the
+       *  user edits.
+       */
+      input: unknown;
+      /**  Where the user got to with it. */
+      outcome: UserToolOutcome;
+    }
+  /**
+   *  Work the agent delegated to another agent.
+   *
+   *  ACP has no notion of this; every harness spells it as a tool call by
+   *  its own conventions (Claude Code's `Agent`, OpenCode's and Cursor's
+   *  `task`, Codex's `spawnAgent`, Hermes's `delegate_task`), and the
+   *  harness reader recognizes it. What the subagent itself did nests in
+   *  `children` when the harness attributes its calls to the parent -
+   *  only Claude Code does today - and is otherwise summarized in
+   *  `result`.
+   */
+  | {
+      kind: 'subagent';
+      /**
+       *  What to call the delegation: the harness's description when it
+       *  gave one, else the first line of the brief, else the tool's own
+       *  name. Always present, so a reader never has to pick a fallback
+       *  itself; `description` and `prompt` stay exactly what the harness
+       *  said.
+       */
+      title: string;
+      /**
+       *  Which kind of agent was delegated to (`general-purpose`,
+       *  `explore`), when the harness names one.
+       */
+      agentType: string | null;
+      /**  A short description of the task, when given. */
+      description: string | null;
+      /**  The brief the subagent was given. */
+      prompt: string | null;
+      /**
+       *  Whether the subagent was started in the background: its call
+       *  completes at once and its answer, if any, arrives some other way.
+       */
+      background: boolean;
+      /**
+       *  The subagent's own parts, in arrival order, for a harness that
+       *  attributes them to the parent call.
+       */
+      children: MessagePart[];
+      /**
+       *  What the subagent reported back, once it has.
+       *
+       *  Boxed: this is by far the widest thing a part can hold, and every
+       *  part pays for the widest variant.
+       */
+      result: SubagentResult | null;
     };
+
+/**
+ *  What a harness called a tool.
+ *
+ *  ACP has no tool-name field - a call carries a human-readable `title` and a
+ *  coarse `kind`, nothing more. The name a reader wants (`Bash`, `ReadContent`)
+ *  is a harness convention: Claude Code writes it to `_meta`, others put it
+ *  in the title, and tools reached over MCP arrive namespaced as
+ *  `mcp__<server>__<tool>`. This type is the one place that namespacing is
+ *  understood, so no reader downstream ever splits a string.
+ *
+ *  Parsing is infallible: a string that is not an MCP name is a native one,
+ *  however odd it looks. Nothing is dropped for being unrecognized.
+ */
+export type ToolName =
+  /**
+   *  A tool the harness owns: `Bash`, `Read`, `Write`, or a Macro tool
+   *  called in-process by Macro's own agent.
+   */
+  | {
+      kind: 'native';
+      /**  The name as the harness reported it. */
+      name: string;
+    }
+  /**
+   *  A tool reached over MCP, from the server the harness registered it
+   *  under.
+   */
+  | {
+      kind: 'mcp';
+      /**  The MCP server's name, as the harness registered it. */
+      server: string;
+      /**  The tool's name on that server. */
+      tool: string;
+    };
+
+/**
+ *  A subagent's tool use, by kind. Claude Code's `toolStats`, in the fold's
+ *  vocabulary.
+ */
+export type ToolStats = {
+  /**  Files read. */
+  reads: number;
+  /**  Searches run. */
+  searches: number;
+  /**  Shell commands run. */
+  commands: number;
+  /**  Files edited. */
+  edits: number;
+  /**  Lines added across those edits. */
+  linesAdded: number;
+  /**  Lines removed across those edits. */
+  linesRemoved: number;
+  /**  Anything else. */
+  other: number;
+};
 
 /**
  *  How far a tool call progressed.
@@ -485,3 +678,61 @@ export type ToolStatus =
 
 /**  A tool call within a turn, identified by its ACP `toolCallId`. */
 export type ToolUseId = string;
+
+/**
+ *  How far a user tool has got - the fold's reading of the backend's
+ *  `UserToolResponse`, restated each time the call is patched.
+ *
+ *  A user tool's call completes, from ACP's point of view, the moment the
+ *  agent invokes it: the backend answers `"PendingUserExecution"` and does
+ *  nothing. What happens next - the user editing, sending, or rejecting the
+ *  draft - reaches the log as later patches to the same call, so
+ *  [`Self::Pending`] is where every user tool starts and where one the user
+ *  never touched stays.
+ */
+export type UserToolOutcome =
+  /**  Awaiting the user. The draft is whatever the input currently holds. */
+  | { kind: 'pending' }
+  /**
+   *  The user edited the draft without finishing it; the input holds
+   *  their edits.
+   */
+  | { kind: 'edited' }
+  /**  `SendEmail`: the email went out. */
+  | {
+      kind: 'sent';
+      /**  The sent message's id. */
+      messageId: string;
+      /**  The thread the message landed in. */
+      threadId: string;
+    }
+  /**  `SendEmail`: the user saved the draft instead of sending it. */
+  | {
+      kind: 'draft';
+      /**  The saved draft's id. */
+      draftId: string;
+      /**  The thread the draft belongs to, when it is a reply. */
+      threadId: string | null;
+    }
+  /**
+   *  The user executed the tool; this is what the tool returned. The shape
+   *  is the tool's own - a calendar event for `CreateCalendarEvent`.
+   */
+  | {
+      kind: 'completed';
+      /**  The tool's result, verbatim. */
+      result: unknown;
+    }
+  /**  The user declined. */
+  | { kind: 'rejected' }
+  /**  The call itself failed before the user could act. */
+  | {
+      kind: 'failed';
+      /**  The error, as reported. */
+      message: string;
+    }
+  /**
+   *  A result arrived that this fold could not read as a user tool
+   *  response - a shape the backend added after this was written.
+   */
+  | { kind: 'unrecognized' };

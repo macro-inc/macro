@@ -57,7 +57,7 @@ fn folds_a_complete_turn() {
 
     let MessagePart::ToolUse {
         id: run_id,
-        label: run_label,
+        name: run_name,
         status: run_status,
         detail: run_detail,
         ..
@@ -65,7 +65,11 @@ fn folds_a_complete_turn() {
     else {
         panic!("second part is the terminal call: {:?}", parts[1]);
     };
-    assert_eq!(run_label, "Bash", "harness tool name outranks ACP title");
+    assert_eq!(
+        run_name.display(),
+        "Bash",
+        "harness tool name outranks ACP title"
+    );
     assert_eq!(*run_status, ToolStatus::Completed);
     let ToolDetail::Terminal {
         command,
@@ -106,7 +110,7 @@ fn folds_a_complete_turn() {
     );
 
     let MessagePart::ToolUse {
-        label,
+        name,
         status,
         detail,
         ..
@@ -114,7 +118,7 @@ fn folds_a_complete_turn() {
     else {
         panic!("fourth part is the edit: {:?}", parts[3]);
     };
-    assert_eq!(label, "Write");
+    assert_eq!(name.display(), "Write");
     assert_eq!(*status, ToolStatus::Completed);
     let ToolDetail::Edit { diffs } = detail else {
         panic!("edit folds to diffs: {detail:?}");
@@ -283,16 +287,16 @@ fn a_stop_after_the_agent_speaks_stamps_the_message_it_has() {
 #[test]
 fn a_rejected_control_reports_the_runtime_error() {
     let log = parse_log(concat!(
-        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"claude-fable-5"}}}"#,
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"claude-fable-5"}}}"#,
         "\n",
-        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","error":{"code":-32602,"message":"Invalid params: model not found: claude-fable-5"}}}"#,
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","error":{"code":-32602,"message":"Invalid params: model not found: claude-fable-5"}}}"#,
     ));
 
     let messages = fold(log);
     assert_eq!(messages.len(), 1);
     assert_eq!(
-        messages[0].request_id.as_ref().map(|id| id.as_str()),
-        Some("agent_session:m1"),
+        messages[0].request_id.as_ref().map(ToString::to_string),
+        Some("01920000-0000-7000-8000-0000000000a1".to_owned()),
         "a control-plane id is surfaced for correlation"
     );
     let [MessagePart::Control { outcome, .. }] = messages[0].parts.as_slice() else {
@@ -309,9 +313,9 @@ fn a_rejected_control_reports_the_runtime_error() {
 #[test]
 fn an_accepted_control_resolves_and_the_same_frame_moves_the_metadata() {
     let log = parse_log(concat!(
-        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","method":"session/set_config_option","params":{"sessionId":"s","configId":"model","value":"opus"}}}"#,
         "\n",
-        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"agent_session:m1","result":{"configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"opus","options":[{"value":"opus","name":"Opus"}]}]}}}"#,
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"01920000-0000-7000-8000-0000000000a1","result":{"configOptions":[{"id":"model","name":"Model","type":"select","currentValue":"opus","options":[{"value":"opus","name":"Opus"}]}]}}}"#,
     ));
 
     let messages = fold(log);

@@ -29,6 +29,10 @@ vi.mock('@app/signal/splitLayout', () => ({
   globalSplitManager: () => undefined,
 }));
 
+vi.mock('@components/app/GlobalAppState', () => ({
+  useGlobalNotificationSource: () => ({ bulkMarkAsRead: vi.fn() }),
+}));
+
 vi.mock('@core/hotkey/hotkeys', () => {
   const registration = {
     dispose: vi.fn(),

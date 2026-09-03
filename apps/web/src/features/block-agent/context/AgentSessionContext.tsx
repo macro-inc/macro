@@ -35,6 +35,10 @@ import {
   createComposerController,
 } from './create-composer-controller';
 import {
+  createQueueController,
+  type QueueController,
+} from './create-queue-controller';
+import {
   createSessionStatusController,
   isDisconnected,
   type SessionStatus,
@@ -88,6 +92,12 @@ export type AgentSessionState = {
   resuming: Accessor<boolean>;
   composer: ComposerController;
   /**
+   * The session's server-side action queue: prompts sent mid-turn wait
+   * there and dispatch one per turn end. The server is the only truth —
+   * nothing is queued client-side.
+   */
+  queue: QueueController;
+  /**
    * Quote selected transcript text into the composer as a referenced paste
    * chip. No-op until the composer editor has mounted.
    */
@@ -122,6 +132,10 @@ export function AgentSessionProvider(
   // status stream knows when the runtime disconnected without closing it.
   // Combining them here is what keeps "working" a single truth.
   const working = () => feed.working() && !isDisconnected(status.status());
+  const queue = createQueueController({
+    sessionId,
+    messages: feed.messages,
+  });
   const composer = createComposerController({
     sessionId,
     working,
@@ -141,8 +155,7 @@ export function AgentSessionProvider(
   // Anything the service can only deliver over a live transport: a prompt on
   // the wire, or a model change waiting to be seen in the fold.
   const awaitingRuntime = () =>
-    composer.sendingId() !== undefined ||
-    composer.changingModel() !== undefined;
+    composer.sending() || composer.changingModel() !== undefined;
   const resuming = () => isDisconnected(status.status()) && awaitingRuntime();
 
   return (
@@ -175,6 +188,7 @@ export function AgentSessionProvider(
           status: status.status,
           resuming,
           composer,
+          queue,
           quoteSelection,
           registerQuoteInsert,
         }}

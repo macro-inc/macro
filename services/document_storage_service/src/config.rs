@@ -62,7 +62,7 @@ maybe_env_vars! {
     pub struct LivekitTranscriptionAgentName;
     /// Shared secret for internal call endpoints (e.g. transcript ingestion from the agent).
     pub struct InternalCallSecret;
-    /// Public base URL of this service (e.g. `https://cloud-storage.macro.com`),
+    /// Public base URL of this service (e.g. `https://gateway.macro.com/dss`),
     /// used to build the ring-status URL included in VoIP push payloads.
     /// When unset, payloads omit the URL and native ring-status polling is off.
     pub struct CallRingStatusBaseUrl;

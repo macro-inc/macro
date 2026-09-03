@@ -3,6 +3,7 @@ import * as pulumi from '@pulumi/pulumi';
 import { createBucket, Queue } from '../../packages/resources';
 import {
   config,
+  DOCUMENT_STORAGE_GATEWAY_URL,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
@@ -331,7 +332,10 @@ const cloudStorageService = new CloudStorageService(
 export const cloudStorageServiceRoleArn = cloudStorageService.role.arn;
 export const cloudStorageServiceSgId = cloudStorageService.serviceSg.id;
 export const cloudStorageServiceAlbSgId = cloudStorageService.serviceAlbSg.id;
-export const cloudStorageServiceUrl = pulumi.interpolate`${cloudStorageService.domain}`;
+// Consumers call the service through the shared gateway, not the legacy
+// per-service hostname. `cloudStorageService.domain` still names the dedicated
+// ALB and stays in place until that listener is retired.
+export const cloudStorageServiceUrl = DOCUMENT_STORAGE_GATEWAY_URL;
 
 const convertServiceStack = new pulumi.StackReference('convert-service-stack', {
   name: `macro-inc/convert-service/${stack}`,
