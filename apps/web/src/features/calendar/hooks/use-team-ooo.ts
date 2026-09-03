@@ -1,10 +1,14 @@
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
-import type { CalendarOccurrenceQueryRange } from '@queries/calendar/occurrences';
+import {
+  type CalendarOccurrenceQueryRange,
+  createCalendarOccurrenceQueryRange,
+} from '@queries/calendar/occurrences';
 import { useTeamOutOfOfficeQuery } from '@queries/calendar/team-ooo';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { EventType } from '@service-storage/generated/schemas/eventType';
 import type { TeamOutOfOfficeItem } from '@service-storage/generated/schemas/teamOutOfOfficeItem';
+import { parseISO } from 'date-fns';
 import { type Accessor, createMemo } from 'solid-js';
 import type { CalendarEvent, CalendarSource } from '../types';
 import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
@@ -118,4 +122,52 @@ export function useTeamOooEvents(
   );
 
   return { events, visibleEvents, eventsById };
+}
+
+/** One teammate absence window for list surfaces. */
+export interface TeamOooWindow {
+  ownerId: string;
+  eventId: string;
+  occurrenceKey: string;
+  /** Teammate display name, resolved reactively from the shared cache. */
+  name: string;
+  /** Event title, absent when visibility withholds it. */
+  title?: string;
+  start: Date;
+  /** Exclusive end. */
+  end: Date;
+  allDay: boolean;
+}
+
+const UPCOMING_TEAM_OOO_DAYS = 90;
+
+/** Teammates' out-of-office windows from today forward, soonest first. */
+export function useUpcomingTeamOoo(): Accessor<TeamOooWindow[]> {
+  const userId = useUserId();
+  const rangeStart = new Date();
+  rangeStart.setHours(0, 0, 0, 0);
+  const rangeEnd = new Date(rangeStart);
+  rangeEnd.setDate(rangeEnd.getDate() + UPCOMING_TEAM_OOO_DAYS);
+  const range = createCalendarOccurrenceQueryRange(rangeStart, rangeEnd);
+  const query = useTeamOutOfOfficeQuery(() => ({ userId: userId(), range }));
+
+  return createMemo(() =>
+    (query.data ?? []).map((item) => {
+      const time = item.time;
+      const [start, end, allDay] =
+        time.kind === 'timed'
+          ? [new Date(time.startsAt), new Date(time.endsAt), false]
+          : [parseISO(time.startDate), parseISO(time.endDate), true];
+      return {
+        ownerId: item.ownerId,
+        eventId: item.eventId,
+        occurrenceKey: item.occurrenceKey,
+        name: getDisplayName(tryMacroId(item.ownerId)),
+        title: item.title ?? undefined,
+        start,
+        end,
+        allDay,
+      };
+    })
+  );
 }
