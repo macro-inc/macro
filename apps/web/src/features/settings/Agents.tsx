@@ -1,3 +1,5 @@
+import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
+import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
@@ -526,6 +528,13 @@ function AgentDialog(props: {
   );
   const selectedDefaultModelId = () =>
     defaultModelId() || selectedHarness()?.models[0]?.id || '';
+  const selectedHarnessUsesCatalog = () =>
+    isLargeModelCatalog(
+      (selectedHarness()?.models ?? []).map((model) => ({
+        id: model.id,
+        label: model.name,
+      }))
+    );
   const [channelMode, setChannelMode] = createSignal<ChannelMode>(
     props.agent?.channel_scope ?? 'all'
   );
@@ -757,24 +766,45 @@ function AgentDialog(props: {
                   <Show
                     when={selectedHarness()?.kind === 'macrod'}
                     fallback={
-                      <select
-                        class="settings-input w-full"
-                        value={selectedDefaultModelId()}
-                        onChange={(event) =>
-                          setDefaultModelId(event.currentTarget.value)
+                      <Show
+                        when={selectedHarnessUsesCatalog()}
+                        fallback={
+                          <select
+                            class="settings-input w-full"
+                            value={selectedDefaultModelId()}
+                            onChange={(event) =>
+                              setDefaultModelId(event.currentTarget.value)
+                            }
+                          >
+                            <For each={selectedHarness()?.models ?? []}>
+                              {(model) => (
+                                <option
+                                  value={model.id}
+                                  selected={
+                                    model.id === selectedDefaultModelId()
+                                  }
+                                >
+                                  {model.name}
+                                </option>
+                              )}
+                            </For>
+                          </select>
                         }
                       >
-                        <For each={selectedHarness()?.models ?? []}>
-                          {(model) => (
-                            <option
-                              value={model.id}
-                              selected={model.id === selectedDefaultModelId()}
-                            >
-                              {model.name}
-                            </option>
+                        <ModelCatalogPicker
+                          value={selectedDefaultModelId()}
+                          options={(selectedHarness()?.models ?? []).map(
+                            (model) => ({
+                              id: model.id,
+                              label: model.name,
+                            })
                           )}
-                        </For>
-                      </select>
+                          onSelect={setDefaultModelId}
+                          ariaLabel="Default model"
+                          triggerClass="w-full justify-between"
+                          contentClass="overflow-hidden"
+                        />
+                      </Show>
                     }
                   >
                     <input
