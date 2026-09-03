@@ -21,13 +21,14 @@ use std::sync::{Arc, Mutex, OnceLock};
 use ai_toolset::{RequestContext, SearchableTool};
 use ai_usage::{UsageContext, UsageRecorder};
 use futures::StreamExt;
-use macro_env_var::env_var;
+use macro_env_var::{env_var, maybe_env_var};
 use rig_agent::agent::{Agent, AgentBuilder, MultiTurnStreamItem};
 use rig_agent::streaming::StreamingPrompt;
 use rig_agent::tool::server::ToolServerHandle;
+use rig_core::client::CompletionClient;
 use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
-use rig_core::providers::{anthropic, openai};
+use rig_core::providers::{anthropic, gemini, openai};
 use rig_core::streaming::StreamedAssistantContent;
 
 use super::PredefinedModel;
@@ -46,10 +47,18 @@ env_var! {
     }
 }
 
+maybe_env_var! {
+    struct OptionalApiKeys {
+        GeminiApiKey,
+    }
+}
+
 /// Provider segment for native Anthropic.
 const ANTHROPIC_PROVIDER: &str = "anthropic";
 /// Provider segment the built-in OpenAI client is registered under.
 const OPENAI_PROVIDER: &str = "openai";
+/// Provider segment for Google's native Gemini GenerateContent API.
+const GOOGLE_PROVIDER: &str = "google";
 /// Provider segment Cerebras is registered under (OpenAI-compatible Chat
 /// Completions).
 const CEREBRAS_PROVIDER: &str = "cerebras";
@@ -64,6 +73,8 @@ pub(crate) enum RoutedModel<'a> {
     OpenAiChatCompletions(OpenAiChatCompletionsModel<'a>),
     /// A model on OpenAI's Responses API.
     OpenAiResponses(OpenAiResponsesModel<'a>),
+    /// A model on Google's native Gemini GenerateContent API.
+    Gemini(gemini::CompletionModel),
 }
 
 impl<'a> RoutedModel<'a> {
@@ -110,6 +121,14 @@ impl<'a> RoutedModel<'a> {
                     max_tokens,
                 ))
             }
+            RoutedModel::Gemini(model) => ProviderAgent::Gemini(build_agent(
+                model,
+                None,
+                handle,
+                system_prompt,
+                max_turns,
+                max_tokens,
+            )),
         }
     }
 }
@@ -127,6 +146,8 @@ pub(crate) enum ProviderAgent {
     OpenAiChatCompletions(Agent<openai::completion::CompletionModel>),
     /// An agent over the OpenAI Responses model.
     OpenAiResponses(Agent<openai::responses_api::ResponsesCompletionModel>),
+    /// An agent over the native Gemini GenerateContent model.
+    Gemini(Agent<gemini::CompletionModel>),
     /// A test-only agent over an arbitrary completion model (e.g. a scripted
     /// fake), type-erased so the enum itself stays non-generic.
     #[cfg(test)]
@@ -199,6 +220,22 @@ impl ProviderAgent {
                 )
                 .await
             }
+            ProviderAgent::Gemini(agent) => {
+                drive_stream(
+                    agent,
+                    prompt,
+                    history,
+                    max_turns,
+                    routing,
+                    loaded_buffer,
+                    register_loaded,
+                    recorder,
+                    usage_ctx,
+                    model,
+                    request_context.clone(),
+                )
+                .await
+            }
             #[cfg(test)]
             ProviderAgent::Test(agent) => {
                 agent
@@ -230,6 +267,7 @@ impl ProviderAgent {
 pub struct ModelRouter {
     anthropic: Arc<anthropic::Client>,
     openai: Arc<openai::Client>,
+    gemini: Option<Arc<gemini::Client>>,
     openai_compatible: HashMap<String, Arc<openai::CompletionsClient>>,
 }
 
@@ -240,6 +278,7 @@ impl ModelRouter {
         Self {
             anthropic: Arc::new(anthropic),
             openai: Arc::new(openai),
+            gemini: None,
             openai_compatible: HashMap::new(),
         }
     }
@@ -260,11 +299,21 @@ impl ModelRouter {
             .build()?;
         // Cerebras speaks the OpenAI Chat Completions API, so it rides the
         // compatible-provider registry: `cerebras/<model>` ids route to it.
-        Self::new(anthropic, openai).with_openai_provider(
+        let router = Self::new(anthropic, openai).with_openai_provider(
             CEREBRAS_PROVIDER,
             CEREBRAS_BASE_URL,
             &env.cerebras_api_key,
-        )
+        )?;
+        let Some(api_key) = OptionalApiKeys::new()
+            .gemini_api_key
+            .as_ref()
+            .and_then(|key| key.value())
+            .map(str::to_owned)
+        else {
+            return Ok(router);
+        };
+        let client = gemini::Client::builder().api_key(api_key).build()?;
+        Ok(router.with_gemini_client(client))
     }
 
     /// The process-wide full router, built from the environment on first use.
@@ -291,6 +340,13 @@ impl ModelRouter {
     ) -> Self {
         self.openai_compatible
             .insert(provider.into(), Arc::new(client));
+        self
+    }
+
+    /// Register a native Gemini GenerateContent client.
+    #[must_use]
+    pub fn with_gemini_client(mut self, client: gemini::Client) -> Self {
+        self.gemini = Some(Arc::new(client));
         self
     }
 
@@ -348,6 +404,15 @@ impl ModelRouter {
                 self.openai.clone(),
             )));
         }
+        if parsed.provider() == GOOGLE_PROVIDER {
+            let client = self
+                .gemini
+                .as_ref()
+                .ok_or_else(|| AgentError::UnknownModel(model.to_string()))?;
+            return Ok(RoutedModel::Gemini(
+                client.completion_model(parsed.name().to_owned()),
+            ));
+        }
         if let Some(client) = self.openai_compatible.get(parsed.provider()) {
             let client = Arc::clone(client);
             return Ok(RoutedModel::OpenAiChatCompletions(
@@ -373,6 +438,26 @@ impl ModelRouter {
             self.anthropic.clone(),
         ))
     }
+}
+
+/// Whether the process has a configured provider capable of routing `model`.
+///
+/// This checks local configuration only; it does not make a provider API call
+/// or guarantee that the account has access to the named model.
+#[must_use]
+pub fn model_is_configured(model: &str) -> bool {
+    ModelRouter::shared().is_ok_and(|router| router.route(model).is_ok())
+}
+
+/// Provider API id used by pricing and usage storage.
+///
+/// Routing uses `provider/model`, while the pricing table stores the model id
+/// sent on the provider wire.
+pub(crate) fn usage_model_id(model: &str) -> String {
+    Model::try_from(model).map_or_else(
+        |_| model.to_owned(),
+        |parsed| parsed.name().to_owned(),
+    )
 }
 
 /// Build a rig agent from a completion model and per-session config.
@@ -464,7 +549,7 @@ where
                             let usage = final_resp.usage;
                             // Best-effort cost logging; never fails the stream.
                             recorder.record(usage_ctx.clone().into_event(
-                                model.clone(),
+                                usage_model_id(&model),
                                 usage.input_tokens,
                                 usage.output_tokens,
                             ));

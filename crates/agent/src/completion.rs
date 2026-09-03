@@ -2,7 +2,7 @@
 //!
 //! This is the non-streaming API layer: routing only resolves a model, and the
 //! actual prompting lives here.
-use crate::model::router::{ModelRouter, RoutedModel};
+use crate::model::router::{ModelRouter, RoutedModel, usage_model_id};
 use ai_usage::{UsageContext, UsageRecorder};
 use rig_agent::agent::{AgentBuilder, PromptResponse};
 use rig_agent::completion::Prompt;
@@ -38,8 +38,9 @@ pub async fn complete<M: ToString>(
         RoutedModel::OpenAiResponses(m) => {
             prompt_once(m.completion(), system_prompt, user_message).await?
         }
+        RoutedModel::Gemini(m) => prompt_once(m, system_prompt, user_message).await?,
     };
-    record(recorder, ctx, model, &response);
+    record(recorder, ctx, usage_model_id(&model), &response);
     Ok(response.output)
 }
 
@@ -66,8 +67,9 @@ pub async fn complete_with_history<M: ToString>(
         RoutedModel::OpenAiResponses(m) => {
             prompt_with_history(m.completion(), system_prompt, messages).await?
         }
+        RoutedModel::Gemini(m) => prompt_with_history(m, system_prompt, messages).await?,
     };
-    record(recorder, ctx, model, &response);
+    record(recorder, ctx, usage_model_id(&model), &response);
     Ok(response.output)
 }
 

@@ -1,7 +1,7 @@
 use crate::model::PredefinedModel;
 use crate::model::router::*;
 use crate::model::types::Model;
-use rig_core::providers::{anthropic, openai};
+use rig_core::providers::{anthropic, gemini, openai};
 
 fn test_router() -> ModelRouter {
     let anthropic = anthropic::Client::builder()
@@ -17,8 +17,14 @@ fn test_router() -> ModelRouter {
         .base_url("http://localhost:11434/v1")
         .build()
         .unwrap();
+    let gemini = gemini::Client::builder()
+        .api_key("test-gemini-key")
+        .build()
+        .unwrap();
 
-    ModelRouter::new(anthropic, openai).with_openai_client("local", compatible)
+    ModelRouter::new(anthropic, openai)
+        .with_openai_client("local", compatible)
+        .with_gemini_client(gemini)
 }
 
 #[test]
@@ -72,4 +78,23 @@ fn registered_openai_compatible_provider_routes_to_chat_completions() {
         router.route("local/llama-3.3-70b").unwrap(),
         RoutedModel::OpenAiChatCompletions(_)
     ));
+}
+
+#[test]
+fn google_provider_routes_to_native_gemini() {
+    let router = test_router();
+
+    assert!(matches!(
+        router.route("google/gemini-3.8-flash").unwrap(),
+        RoutedModel::Gemini(_)
+    ));
+}
+
+#[test]
+fn usage_records_the_provider_wire_model_id() {
+    assert_eq!(
+        usage_model_id("google/gemini-3.8-flash"),
+        "gemini-3.8-flash"
+    );
+    assert_eq!(usage_model_id("openai/gpt-5.6"), "gpt-5.6");
 }
