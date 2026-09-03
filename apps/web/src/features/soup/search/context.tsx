@@ -1,8 +1,22 @@
 import type { EntityData } from '@entity';
-import type { EntityTypeItemMap } from '@property';
-import { type Accessor, createContext, useContext } from 'solid-js';
+import { type EntityTypeItemMap, useQuickAccessEntities } from '@property';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
+import {
+  type Accessor,
+  createContext,
+  type FlowComponent,
+  useContext,
+} from 'solid-js';
 
-type SearchEntityType = 'CHANNEL' | 'CHAT' | 'DOCUMENT' | 'PROJECT' | 'TASK';
+const SEARCH_ENTITY_TYPES = [
+  EntityType.CHANNEL,
+  EntityType.CHAT,
+  EntityType.DOCUMENT,
+  EntityType.PROJECT,
+  EntityType.TASK,
+] as const;
+
+type SearchEntityType = (typeof SEARCH_ENTITY_TYPES)[number];
 
 export type SoupSearchPoolItem = EntityTypeItemMap[SearchEntityType];
 
@@ -11,16 +25,28 @@ export type SoupSearchPoolEntry = {
   bucket?: string;
 };
 
-export interface SearchContextValue {
+interface SearchContextValue {
   entityPool: Accessor<SoupSearchPoolEntry[]>;
 }
 
-const EMPTY_POOL: SoupSearchPoolEntry[] = [];
+const SearchContext = createContext<SearchContextValue>();
 
-export const SearchContext = createContext<SearchContextValue>({
-  entityPool: () => EMPTY_POOL,
-});
-
-export const useSearchContext = () => useContext(SearchContext);
+export const useSearchContext = () => {
+  const context = useContext(SearchContext);
+  if (!context) {
+    throw new Error('useSearchContext can only be used under a SearchProvider');
+  }
+  return context;
+};
 
 export const useOptionalSearchContext = () => useContext(SearchContext);
+
+export const SearchProvider: FlowComponent = (props) => {
+  const { items } = useQuickAccessEntities(() => [...SEARCH_ENTITY_TYPES]);
+
+  return (
+    <SearchContext.Provider value={{ entityPool: items }}>
+      {props.children}
+    </SearchContext.Provider>
+  );
+};

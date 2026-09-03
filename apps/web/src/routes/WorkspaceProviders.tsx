@@ -1,8 +1,12 @@
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
+import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
+import { SearchProvider } from '@app/features/soup/search/context';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
+import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
+import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { ENABLE_ONBOARDING_V4_OVERRIDE } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
@@ -13,7 +17,6 @@ import { initAndStartEmailSync } from '@core/email-link';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
-import { devPerfLog } from '@core/util/devPerf';
 import {
   createNotificationSource,
   type UnifiedNotification,
@@ -23,55 +26,14 @@ import {
 import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { useChatRenameWebsocketSync } from '@queries/chat';
+import { SoupBackfillSideEffect } from '@queries/soup/SoupBackfillSideEffect';
 import { QuerySyncProvider } from '@queries/sync/SyncProvider';
 import { MutationUndoProvider } from '@queries/undo';
 import { useReopenTrackedEntitiesOnReconnect } from '@service-connection/client';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
-import {
-  createEffect,
-  createSignal,
-  lazy,
-  onMount,
-  type ParentProps,
-  Show,
-  Suspense,
-} from 'solid-js';
-
-const AuthenticatedCallProviders = lazy(() =>
-  import('./AuthenticatedCallProviders').then((module) => ({
-    default: module.AuthenticatedCallProviders,
-  }))
-);
-const InteractiveOnboardingModal = lazy(() =>
-  import('@app/features/onboarding/InteractiveOnboardingModal').then(
-    (module) => ({ default: module.InteractiveOnboardingModal })
-  )
-);
-const SearchProvider = lazy(() =>
-  import('@app/features/soup/search/SearchProvider').then((module) => ({
-    default: module.SearchProvider,
-  }))
-);
-const SoupBackfillSideEffect = lazy(() =>
-  import('@queries/soup/SoupBackfillSideEffect').then((module) => ({
-    default: module.SoupBackfillSideEffect,
-  }))
-);
-const WorkspaceModals = lazy(() =>
-  import('./WorkspaceModals').then((module) => ({
-    default: module.WorkspaceModals,
-  }))
-);
-const ChatAttachmentsInit = lazy(() =>
-  import('@core/component/AI/signal/globalAttachments').then((module) => ({
-    default: module.ChatAttachmentsInit,
-  }))
-);
-const ReactiveFavicon = lazy(() =>
-  import('@components/app/ReactiveFavicon').then((module) => ({
-    default: module.ReactiveFavicon,
-  }))
-);
+import { createEffect, createSignal, type ParentProps, Show } from 'solid-js';
+import { AuthenticatedCallProviders } from './AuthenticatedCallProviders';
+import { WorkspaceModals } from './WorkspaceModals';
 
 function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   const notifInterface = usePlatformNotificationState();
@@ -120,11 +82,7 @@ function SoupBackfillWhenReady() {
   const userId = useUserId();
   return (
     <Show when={userId()} keyed>
-      {(id) => (
-        <Suspense>
-          <SoupBackfillSideEffect userId={id} />
-        </Suspense>
-      )}
+      {(id) => <SoupBackfillSideEffect userId={id} />}
     </Show>
   );
 }
@@ -134,7 +92,6 @@ function InitialInteractiveOnboardingModal() {
   const onboardingV4 = useOnboardingV4Flag();
   const [open, setOpen] = createSignal(true);
   const [onboardingStarted, setOnboardingStarted] = createSignal(false);
-  let lastOnboardingState: string | undefined;
 
   const modalOpen = () =>
     open() &&
@@ -148,27 +105,6 @@ function InitialInteractiveOnboardingModal() {
     if (modalOpen()) {
       setOnboardingStarted(true);
     }
-  });
-
-  createEffect(() => {
-    const nextState = modalOpen() ? 'open' : 'skipped';
-    if (lastOnboardingState === nextState) return;
-    lastOnboardingState = nextState;
-    // #region agent log
-    devPerfLog(
-      'F',
-      'WorkspaceProviders.tsx:139',
-      'interactive onboarding state',
-      {
-        pathname: window.location.pathname,
-        state: nextState,
-        authenticated: userInfoQuery.data?.authenticated,
-        tutorialComplete: userInfoQuery.data?.tutorialComplete,
-        onboardingLoading: onboardingV4().loading,
-        onboardingEnabled: onboardingV4().enabled,
-      }
-    );
-    // #endregion
   });
 
   let emailInitForUserId: string | undefined;
@@ -205,50 +141,25 @@ function InitialInteractiveOnboardingModal() {
 }
 
 export default function WorkspaceProviders(props: ParentProps) {
-  onMount(() => {
-    // #region agent log
-    devPerfLog(
-      'E',
-      'WorkspaceProviders.tsx:183',
-      'workspace providers mounted',
-      {
-        pathname: window.location.pathname,
-      }
-    );
-    // #endregion
-  });
-
   return (
     <TeamContextProvider>
       <EmailLinksContextProvider>
-        <Suspense>
-          <WorkspaceModals />
-        </Suspense>
+        <WorkspaceModals />
         <QuerySyncProviderWithUserId />
         <SoupBackfillWhenReady />
         <ConfiguredGlobalAppStateProvider>
           <MutationUndoProvider>
             <ChannelsContextProvider>
-              <QuickAccessProvider>
-                <Suspense fallback={props.children}>
+              <AuthenticatedCallProviders>
+                <QuickAccessProvider>
                   <SearchProvider>
-                    <Suspense fallback={props.children}>
-                      <AuthenticatedCallProviders>
-                        <Suspense>
-                          <ChatAttachmentsInit />
-                        </Suspense>
-                        <Suspense>
-                          <ReactiveFavicon />
-                        </Suspense>
-                        {props.children}
-                        <Suspense>
-                          <InitialInteractiveOnboardingModal />
-                        </Suspense>
-                      </AuthenticatedCallProviders>
-                    </Suspense>
+                    <ChatAttachmentsInit />
+                    <ReactiveFavicon />
+                    {props.children}
+                    <InitialInteractiveOnboardingModal />
                   </SearchProvider>
-                </Suspense>
-              </QuickAccessProvider>
+                </QuickAccessProvider>
+              </AuthenticatedCallProviders>
             </ChannelsContextProvider>
           </MutationUndoProvider>
         </ConfiguredGlobalAppStateProvider>

@@ -71,7 +71,14 @@ function bootGraphWarmupPlugin(): Plugin {
     name: 'boot-graph-warmup',
     apply: 'serve',
     configureServer(server) {
-      const urls = ['/src/index.css', '/src/index.tsx', '/src/routes/Root.tsx'];
+      const urls = [
+        '/src/index.css',
+        '/src/index.tsx',
+        '/src/routes/Root.tsx',
+        '/src/routes/WorkspaceProviders.tsx',
+        '/src/components/app/Layout.tsx',
+        '/src/components/app/split-layout/SplitLayout.tsx',
+      ];
       let warmStartedAt = 0;
       let warmFinishedAt = 0;
       let firstAppRequestLogged = false;
