@@ -784,6 +784,34 @@ fn test_build_query_defers_user_history_join_for_updated_at_sort() {
 }
 
 #[test]
+fn test_viewed_at_filter_keeps_user_history_join_inline_for_updated_sort() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 3, 1, 0, 0, 0).unwrap();
+    let expr = Expr::Literal(EmailLiteral::ViewedAt(DateLiteral::GreaterThanOrEqual(dt)));
+    let sql = super::query::debug_build_query_sql_with_sort(
+        &view,
+        &expr,
+        models_pagination::SimpleSortMethod::UpdatedAt,
+    );
+
+    assert_eq!(
+        sql.matches("LEFT JOIN email_user_history").count(),
+        1,
+        "viewed_at filtering needs one inline history join: {sql}"
+    );
+    let uh_pos = sql.find("LEFT JOIN email_user_history").unwrap();
+    let el_pos = sql.find("JOIN email_links el").unwrap();
+    assert!(
+        uh_pos < el_pos,
+        "viewed_at filter must join history before the candidate filter: {sql}"
+    );
+    assert!(sql.contains("uh.updated_at >="));
+}
+
+#[test]
 fn test_build_query_keeps_user_history_join_inline_for_viewed_at_sort() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
@@ -1616,6 +1644,22 @@ fn test_has_thread_literals_true_when_created_at_present() {
     let dt = chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
     let expr = Expr::Literal(EmailLiteral::CreatedAt(DateLiteral::GreaterThan(dt)));
     assert!(has_thread_literals(&expr));
+}
+
+#[test]
+fn test_build_thread_email_filter_viewed_at_uses_user_history_timestamp() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 3, 1, 0, 0, 0).unwrap();
+    let expr = Expr::Literal(EmailLiteral::ViewedAt(DateLiteral::GreaterThanOrEqual(dt)));
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("uh.updated_at >="));
+    assert!(debug.contains("2024-03-01"));
+    assert!(has_thread_literals(&expr));
+    assert!(!has_message_literals(&expr));
 }
 
 #[test]

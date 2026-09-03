@@ -40,6 +40,7 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::NotificationDone(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
+            | EmailLiteral::ViewedAt(_)
             | EmailLiteral::Property(_),
         ) => true,
         filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => false,
@@ -62,6 +63,7 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::NotificationDone(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
+            | EmailLiteral::ViewedAt(_)
             | EmailLiteral::Property(_),
         ) => false,
         filter_ast::ExprFrame::Literal(_) => true,
@@ -221,6 +223,7 @@ pub(super) fn build_message_email_filter(
         filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(_)) => SqlFragment::raw("TRUE"),
+        filter_ast::ExprFrame::Literal(EmailLiteral::ViewedAt(_)) => SqlFragment::raw("TRUE"),
         filter_ast::ExprFrame::Literal(EmailLiteral::Property(_)) => SqlFragment::raw("TRUE"),
     });
 
@@ -873,6 +876,10 @@ pub(super) fn build_thread_email_filter(
 
         filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(ref lit)) => {
             date_predicate(sort_ts_field, lit)
+        }
+
+        filter_ast::ExprFrame::Literal(EmailLiteral::ViewedAt(ref lit)) => {
+            date_predicate("uh.updated_at", lit)
         }
 
         filter_ast::ExprFrame::Literal(EmailLiteral::Property(ref lit)) => {

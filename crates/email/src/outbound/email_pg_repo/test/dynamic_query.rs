@@ -2824,6 +2824,44 @@ async fn test_viewed_at_sort_orders_by_view_history(pool: Pool<Postgres>) -> any
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
 )]
+async fn test_viewed_at_filter_uses_view_history_with_updated_sort(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::ast::date::DateLiteral;
+
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let cutoff = Utc.with_ymd_and_hms(2024, 5, 15, 0, 0, 0).unwrap();
+    let viewed_7 = Utc.with_ymd_and_hms(2024, 6, 1, 0, 0, 0).unwrap();
+    let viewed_4 = Utc.with_ymd_and_hms(2024, 5, 1, 0, 0, 0).unwrap();
+    record_view(&pool, link_id, THREAD_7, viewed_7).await?;
+    record_view(&pool, link_id, THREAD_4, viewed_4).await?;
+
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+    let filter = Arc::new(Expr::Literal(EmailLiteral::ViewedAt(
+        DateLiteral::GreaterThanOrEqual(cutoff),
+    )));
+    let results = dynamic::dynamic_email_thread_cursor(
+        &pool,
+        &[link_id],
+        50,
+        &view,
+        Query::new(None, SimpleSortMethod::UpdatedAt, filter),
+        "",
+        None,
+    )
+    .await?;
+
+    let ids: Vec<String> = results.iter().map(|row| row.id.to_string()).collect();
+    assert_eq!(ids, vec![THREAD_7.to_string()]);
+    assert_eq!(results[0].viewed_at, Some(viewed_7));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
 async fn test_viewed_updated_sort_falls_back_to_view_timestamp(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
