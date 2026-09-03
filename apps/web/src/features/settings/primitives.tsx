@@ -151,7 +151,7 @@ export function SettingsRow(props: {
       class={cn(
         'flex gap-4 px-6 py-3.5 min-h-[60px]',
         props.stackOnNarrow
-          ? 'flex-col gap-1.5 @[460px]:flex-row @[460px]:justify-between @[460px]:gap-4'
+          ? 'flex-col gap-3 @[460px]:flex-row @[460px]:justify-between @[460px]:gap-4'
           : 'justify-between',
         // Cross-axis alignment only makes sense once the row is horizontal, so
         // gate it behind the container width when stacking.
