@@ -7,6 +7,8 @@ use std::time::Duration;
 
 use agent_egress::domain::service::EgressService;
 use agent_egress::inbound::axum_router::{EgressRouterState, egress_router};
+use agent_harness::domain::model_load::AgentModelsService;
+use agent_harness::inbound::model_load::{AgentModelsRouterState, agent_models_router};
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
@@ -80,11 +82,12 @@ where
 }
 
 /// Build the router and serve it until the process is asked to stop.
-pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth>(
+pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Models>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
     gateway_state: RuntimeGatewayState<Auth>,
+    model_state: AgentModelsRouterState<Models, Auth>,
     runtime_commands_ready: tokio::sync::watch::Receiver<bool>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
@@ -96,11 +99,18 @@ where
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
+    Models: AgentModelsService,
 {
-    let inner = api_router(read_state, control_state, create_state, gateway_state)
-        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
-        .merge(health_router(runtime_commands_ready))
-        .layer(macro_cors::cors_layer());
+    let inner = api_router(
+        read_state,
+        control_state,
+        create_state,
+        gateway_state,
+        model_state,
+    )
+    .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
+    .merge(health_router(runtime_commands_ready))
+    .layer(macro_cors::cors_layer());
     let app = mount_at_root_and_prefix(inner, GATEWAY_PATH_PREFIX)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .merge(SwaggerUi::new("/agent-harness/docs").url(
@@ -120,11 +130,12 @@ where
         .context("agent harness service http failed")
 }
 
-fn api_router<T, R, Opener, Bots, Access, Auth>(
+fn api_router<T, R, Opener, Bots, Access, Auth, Models>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
     gateway_state: RuntimeGatewayState<Auth>,
+    model_state: AgentModelsRouterState<Models, Auth>,
 ) -> Router
 where
     T: AgentSessionService,
@@ -133,6 +144,7 @@ where
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
+    Models: AgentModelsService,
 {
     let agent_sessions = agent_session_read_router(read_state.clone())
         .merge(agent_session_control_router(control_state))
@@ -140,6 +152,7 @@ where
     Router::new()
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(read_state))
+        .merge(agent_models_router(model_state))
         .nest("/runtime", runtime_gateway_router(gateway_state))
 }
 

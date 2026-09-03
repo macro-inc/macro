@@ -1,15 +1,23 @@
 //! The harness child process and the bridge between its stdio and the
 //! gateway channel.
 
+use std::path::Path;
+use std::time::Duration;
+
 use crate::config::Harness;
+use agent_acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Client, ConnectTo};
+use agent_fold::domain::model_selection::model_selection;
 use agent_runtime_protocol::domain::connection::{
-    ConnectionError, RuntimeChannel, RuntimeConnection,
+    ConnectionError, ModelProbeHandler, RuntimeChannel, RuntimeConnection,
 };
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
+use harnesses::domain::models::{PairingModelCatalog, PairingModelOption};
 
 #[cfg(test)]
 mod test;
+
+const MODEL_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Why the bridge ended.
 #[derive(Debug, thiserror::Error)]
@@ -23,8 +31,15 @@ pub enum BridgeError {
 }
 
 /// Spawn the harness in ACP mode and pump frames until either side ends.
-pub async fn bridge(harness: &Harness, channel: RuntimeChannel) -> Result<(), BridgeError> {
-    let (runtime, acp) = RuntimeConnection::connect(channel);
+pub async fn bridge(
+    harness: &Harness,
+    cwd: &Path,
+    channel: RuntimeChannel,
+) -> Result<(), BridgeError> {
+    let probes = HarnessModelProbes {
+        process: probe_process(harness, cwd),
+    };
+    let (runtime, acp) = RuntimeConnection::connect_with_model_probe_handler(channel, probes);
 
     let agent = AcpAgent::new(AcpAgentConfig::new(&harness.command).args(harness.args.clone()))
         // The wire tap: every ndjson line crossing the child's stdio, plus
@@ -46,4 +61,67 @@ pub async fn bridge(harness: &Harness, channel: RuntimeChannel) -> Result<(), Br
     }
 
     outcome.map_err(|error| BridgeError::Harness(error.to_string()))
+}
+
+/// Discover the configured harness's model catalog before it is registered.
+pub(crate) async fn discover_model_catalog(
+    harness: &Harness,
+    cwd: &Path,
+) -> Result<Option<PairingModelCatalog>, String> {
+    let options = probe_subprocess(&probe_process(harness, cwd), MODEL_PROBE_TIMEOUT)
+        .await
+        .map_err(safe_probe_error)?;
+    Ok(pairing_model_catalog(&options))
+}
+
+fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {
+    ProbeSubprocess {
+        command: harness.command.clone().into(),
+        args: harness.args.clone(),
+        cwd: cwd.to_owned(),
+    }
+}
+
+fn pairing_model_catalog(
+    options: &[agent_client_protocol::schema::v1::SessionConfigOption],
+) -> Option<PairingModelCatalog> {
+    model_selection(options).map(|selection| PairingModelCatalog {
+        current: selection.current,
+        options: selection
+            .options
+            .into_iter()
+            .map(|option| PairingModelOption {
+                id: option.id,
+                name: option.name,
+                description: option.description,
+            })
+            .collect(),
+    })
+}
+
+#[derive(Clone)]
+struct HarnessModelProbes {
+    process: ProbeSubprocess,
+}
+
+impl ModelProbeHandler for HarnessModelProbes {
+    async fn probe(
+        &self,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::SessionConfigOption>, String> {
+        probe_subprocess(&self.process, MODEL_PROBE_TIMEOUT)
+            .await
+            .map_err(safe_probe_error)
+    }
+}
+
+fn safe_probe_error(error: ProbeError) -> String {
+    match error {
+        ProbeError::Timeout(_) => "the ACP model probe timed out".to_owned(),
+        ProbeError::UnsupportedWorkingDirectory => {
+            "the ACP model probe cannot apply the configured working directory".to_owned()
+        }
+        ProbeError::Protocol(_) => "the ACP model probe protocol failed".to_owned(),
+        ProbeError::Process(_) => "the ACP model probe process failed".to_owned(),
+        _ => "the ACP model probe failed".to_owned(),
+    }
 }

@@ -19,6 +19,7 @@ ai_usage = { path = "../ai_usage" }
 bytes = { workspace = true }
 async-trait = { workspace = true }
 axum = { workspace = true }
+chat = { path = "../chat", default-features = false }
 dashmap = { workspace = true }
 futures = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }

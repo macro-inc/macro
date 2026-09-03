@@ -4,4 +4,6 @@
 //! is addressed to us, hand one value inward. No policy lives here.
 
 pub mod kafka;
+/// Authenticated model discovery.
+pub mod model_load;
 pub mod runtime_gateway;

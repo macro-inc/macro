@@ -8,6 +8,8 @@ pub mod event;
 
 /// Identifiers and small value types.
 pub mod model;
+/// Cursor model catalog expressed as ACP configuration.
+pub mod model_options;
 
 /// The capabilities the domain requires from the outside.
 pub mod ports;

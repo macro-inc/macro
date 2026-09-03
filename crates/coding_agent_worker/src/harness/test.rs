@@ -1,4 +1,7 @@
 use super::*;
+use agent_client_protocol::schema::v1::{
+    SessionConfigId, SessionConfigOption, SessionConfigSelectOption,
+};
 use agent_runtime_protocol::domain::channel::Channel;
 use agent_runtime_protocol::domain::connection::ServerChannel;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -8,6 +11,41 @@ fn harness(command: &str) -> Harness {
         command: command.to_owned(),
         args: Vec::new(),
     }
+}
+
+#[test]
+fn pairing_catalog_projects_raw_acp_model_options_into_harness_domain_types() {
+    let options = vec![
+        SessionConfigOption::boolean(SessionConfigId::new("thinking"), "Thinking", true),
+        SessionConfigOption::select(
+            SessionConfigId::new("model"),
+            "Model",
+            "sonnet",
+            vec![
+                SessionConfigSelectOption::new("opus", "Opus").description("Largest model"),
+                SessionConfigSelectOption::new("sonnet", "Sonnet"),
+            ],
+        ),
+    ];
+
+    let catalog = pairing_model_catalog(&options).expect("model select should project");
+
+    assert_eq!(catalog.current, "sonnet");
+    assert_eq!(
+        catalog.options,
+        vec![
+            PairingModelOption {
+                id: "opus".to_owned(),
+                name: "Opus".to_owned(),
+                description: Some("Largest model".to_owned()),
+            },
+            PairingModelOption {
+                id: "sonnet".to_owned(),
+                name: "Sonnet".to_owned(),
+                description: None,
+            },
+        ]
+    );
 }
 
 /// Drain the system events the service side observed, in order.
@@ -26,9 +64,13 @@ fn events(mut service: ServerChannel) -> Vec<SystemEvent> {
 async fn unspawnable_harness_reports_failure() {
     let (runtime, service) = Channel::duplex();
 
-    let error = bridge(&harness("macro-no-such-harness-binary"), runtime)
-        .await
-        .expect_err("a harness that cannot be spawned must not look like success");
+    let error = bridge(
+        &harness("macro-no-such-harness-binary"),
+        std::path::Path::new("/"),
+        runtime,
+    )
+    .await
+    .expect_err("a harness that cannot be spawned must not look like success");
 
     assert!(matches!(error, BridgeError::Harness(_)), "got {error:?}");
     // The service is told the transport is done even though the child never
@@ -45,7 +87,7 @@ async fn harness_that_exits_immediately_disconnects() {
 
     // `true` spawns cleanly and closes its stdio at once, which is the
     // shutdown path rather than the spawn-failure path above.
-    let _ = bridge(&harness("true"), runtime).await;
+    let _ = bridge(&harness("true"), std::path::Path::new("/"), runtime).await;
 
     assert_eq!(
         events(service),
@@ -60,9 +102,28 @@ async fn dropped_service_channel_does_not_panic_the_bridge() {
 
     // Announcing readiness into a closed channel is a failure to announce, not
     // a harness failure: nothing was ever spawned.
-    let error = bridge(&harness("true"), runtime)
+    let error = bridge(&harness("true"), std::path::Path::new("/"), runtime)
         .await
         .expect_err("announcing into a closed channel must fail");
 
     assert!(matches!(error, BridgeError::Announce(_)), "got {error:?}");
+}
+
+#[tokio::test]
+async fn model_probe_process_failures_are_safely_redacted() {
+    let probes = HarnessModelProbes {
+        process: ProbeSubprocess {
+            command: "macro-no-such-harness-binary".into(),
+            args: vec!["secret-argument".to_owned()],
+            cwd: "/".into(),
+        },
+    };
+
+    let error = probes
+        .probe()
+        .await
+        .expect_err("unspawnable probe must fail");
+
+    assert_eq!(error, "the ACP model probe process failed");
+    assert!(!error.contains("secret-argument"));
 }

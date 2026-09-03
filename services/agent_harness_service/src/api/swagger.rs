@@ -1,5 +1,8 @@
 //! OpenAPI document for the agent harness service's session routes.
 
+use agent_harness::inbound::model_load::{
+    self, AgentModelDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
+};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
@@ -27,6 +30,7 @@ use utoipa::OpenApi;
         axum_router::put_agent_session_sandbox_size_handler,
         axum_router::get_agent_sandbox_size_handler,
         axum_router::put_agent_sandbox_size_handler,
+        model_load::load_agent_models_handler,
     ),
     components(schemas(
         CreateAgentSessionRequest,
@@ -50,7 +54,13 @@ use utoipa::OpenApi;
         LogDirectionDto,
         SandboxSize,
         SandboxSizeBody,
+        LoadAgentModelsRequest,
+        LoadAgentModelsResponse,
+        AgentModelDto,
     )),
-    tags((name = "agent-sessions", description = "Agent sessions"))
+    tags(
+        (name = "agent-sessions", description = "Agent sessions"),
+        (name = "agent-models", description = "Fresh provider model discovery")
+    )
 )]
 pub struct ApiDoc;

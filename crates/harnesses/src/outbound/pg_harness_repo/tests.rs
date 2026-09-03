@@ -2,6 +2,7 @@ use chrono::Duration;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
 use super::*;
+use crate::domain::models::PairingModelOption;
 use crate::domain::tokens;
 
 const OWNER_ID: &str = "macro|harness-repo@example.com";
@@ -49,6 +50,14 @@ fn new_pairing(code: &str, secret: &str) -> NewPairing {
         requested_name: "erics-macbook".to_owned(),
         host: Some("eric@macbook / darwin".to_owned()),
         requested_scope: Some(RequestedHarnessScope::Team),
+        model_catalog: Some(PairingModelCatalog {
+            current: "claude-sonnet".to_owned(),
+            options: vec![PairingModelOption {
+                id: "claude-sonnet".to_owned(),
+                name: "Claude Sonnet".to_owned(),
+                description: None,
+            }],
+        }),
         expires_at: Utc::now() + Duration::minutes(15),
     }
 }
@@ -78,6 +87,10 @@ async fn pairing_walks_create_approve_claim_exactly_once(pool: PgPool) {
     assert_eq!(
         row.details.requested_scope,
         Some(RequestedHarnessScope::Team)
+    );
+    assert_eq!(
+        row.details.model_catalog, pairing.model_catalog,
+        "the pairing retains its pre-registration model catalog"
     );
 
     let harness = repo
