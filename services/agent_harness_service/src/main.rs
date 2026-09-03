@@ -332,7 +332,8 @@ async fn run() -> anyhow::Result<()> {
                 event_broker_tracker.clone(),
             )
             .await
-            .context("failed to build the in-memory agent tool context")?;
+            .context("failed to build the in-memory agent tool context")?
+            .with_actor(bot_id::MACRO_NEW_BOT_ID);
             let engine = Arc::new(RigTurnEngine::new(pool.clone(), tool_context));
             // Cold attaches (fresh spawns and post-restart resumes) rebuild
             // their model context from the same log every frame lands in.

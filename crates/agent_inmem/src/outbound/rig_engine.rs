@@ -109,6 +109,10 @@ async fn drive_turn(
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = base_context;
     tool_context.usage_context = usage_ctx.clone();
+    // Document-edit workers report their own model/token usage through this
+    // nested context. It defaults to a no-op recorder, so bind it to the same
+    // durable recorder as the parent turn.
+    tool_context.document_tool_context.recorder = tool_context.recorder.clone();
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
         .await;
