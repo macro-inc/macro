@@ -318,7 +318,7 @@ export function ChannelInput(props: ChannelInputProps) {
       mentionsTracker.onMentionRemove(mention);
     },
     onChange: (markdown) => {
-      const previous = inputState.view().value;
+      const previous = inputState.view().value ?? '';
       inputState.setValue(markdown);
       if (!acceptTyping) return;
       if (markdown.trim() === previous.trim()) return;
