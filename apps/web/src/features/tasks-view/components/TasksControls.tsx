@@ -15,7 +15,7 @@ import { PropertyValueIcon } from '@property/component/propertyValue';
 import { TagDot } from '@property/tags/TagDot';
 import { useTagSets } from '@property/tags/tag-sets-context';
 import { useContacts } from '@queries/contacts/contacts';
-import { createMemo, Show } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
 import {
   TASK_PRIORITY_OPTIONS,
@@ -36,8 +36,17 @@ export function TasksControls() {
   const contacts = useContacts();
   const currentUserId = useUserId();
   const tagSets = useTagSets();
-  let filterControl: HTMLDivElement | undefined;
-  let sortControl: HTMLDivElement | undefined;
+  const [openMenu, setOpenMenu] = createSignal<'filters' | 'sort'>();
+  let filterTrigger: HTMLButtonElement | undefined;
+  let sortTrigger: HTMLButtonElement | undefined;
+
+  const handleMenuOpenChange =
+    (menu: 'filters' | 'sort') => (open: boolean) => {
+      setOpenMenu((current) => {
+        if (open) return menu;
+        return current === menu ? undefined : current;
+      });
+    };
 
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -45,19 +54,19 @@ export function TasksControls() {
     filter: {
       description: 'Filter tasks',
       run: () => {
-        const trigger = filterControl?.querySelector('button');
-        trigger?.click();
+        if (!filterTrigger) return false;
 
-        return trigger !== null && trigger !== undefined;
+        setOpenMenu('filters');
+        return true;
       },
     },
     sort: {
       description: 'Sort tasks',
       run: () => {
-        const trigger = sortControl?.querySelector('button');
-        trigger?.click();
+        if (!sortTrigger) return false;
 
-        return trigger !== null && trigger !== undefined;
+        setOpenMenu('sort');
+        return true;
       },
     },
   });
@@ -152,27 +161,28 @@ export function TasksControls() {
 
   return (
     <div class="flex min-w-0 shrink-0 items-center justify-end gap-2 @max-[720px]/view-shell:gap-1">
-      <div ref={(element) => (sortControl = element)}>
-        <ListSortDropdown
-          label="Sort tasks"
-          value={primarySort()}
-          options={TASK_SORT_OPTIONS}
-          onChange={setPrimarySort}
-        />
-      </div>
+      <ListSortDropdown
+        label="Sort tasks"
+        value={primarySort()}
+        options={TASK_SORT_OPTIONS}
+        open={openMenu() === 'sort'}
+        onChange={setPrimarySort}
+        onOpenChange={handleMenuOpenChange('sort')}
+        triggerRef={(element) => (sortTrigger = element)}
+      />
       <ListGroupDropdown
         label="Group tasks"
         value={state.groupBy}
         options={TASK_GROUP_OPTIONS}
         onChange={(groupBy) => setState('groupBy', groupBy)}
       />
-      <div
-        ref={(element) => (filterControl = element)}
-        class="relative shrink-0"
-      >
+      <div class="relative shrink-0">
         <ListFilterDropdown
           label="Filter tasks"
           groups={filterGroups()}
+          open={openMenu() === 'filters'}
+          onOpenChange={handleMenuOpenChange('filters')}
+          triggerRef={(element) => (filterTrigger = element)}
           isSelected={(groupId, optionId) =>
             (state.facets[groupId] ?? []).includes(optionId)
           }
@@ -189,7 +199,7 @@ export function TasksControls() {
           onClear={() => setFacets({})}
         />
         <Show when={activeFilterCount() > 0}>
-          <span class="absolute -top-0.5 right-0 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
+          <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
             {activeFilterCount()}
           </span>
         </Show>
