@@ -5,7 +5,7 @@ import {
   TEAM_OOO_SOURCE_ID,
   TEAM_OOO_SOURCE_PREFIX,
   type TeamOooWindow,
-  useTeamOooSources,
+  useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
@@ -102,7 +102,7 @@ function CalendarSourcesSidePanelSection() {
 
 function CalendarTeamOooSidePanelSection() {
   const calendarView = useCalendarView();
-  const teamSources = useTeamOooSources();
+  const hasTeammates = useHasTeammates();
   const isOverlayVisible = () =>
     calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID);
   const setOverlayVisible = (visible: boolean) => {
@@ -120,7 +120,7 @@ function CalendarTeamOooSidePanelSection() {
   };
 
   return (
-    <Show when={teamSources().length > 0}>
+    <Show when={hasTeammates()}>
       <SidePanel.Section
         id="calendar-team-ooo"
         title="Team out of office"
@@ -141,19 +141,7 @@ function CalendarTeamOooSidePanelSection() {
           </span>
         }
       >
-        <div class="flex flex-col gap-0.5">
-          <Show when={isOverlayVisible()}>
-            <SourceControls
-              sources={teamSources()}
-              isVisible={calendarView.isSourceVisible}
-              onVisibilityChange={calendarView.setSourceVisibility}
-            />
-          </Show>
-          <span class="px-2 pt-2 pb-0.5 text-xs font-medium text-ink-muted">
-            Upcoming
-          </span>
-          <TeamOooUpcomingList />
-        </div>
+        <TeamOooUpcomingList />
       </SidePanel.Section>
     </Show>
   );
@@ -175,41 +163,45 @@ function TeamOooUpcomingList() {
   const windows = useUpcomingTeamOoo();
 
   return (
-    <Show
-      when={windows().length > 0}
-      fallback={
-        <span class="px-2 py-1 text-xs text-ink-muted">
-          No time off in the next 90 days
-        </span>
-      }
-    >
-      <For each={windows().slice(0, UPCOMING_SHOWN_MAX)}>
-        {(window) => (
-          <button
-            type="button"
-            class="flex w-full flex-col rounded-lg px-2 py-1.5 text-left text-xs hover:bg-hover"
-            onClick={() => calendarPager.gotoDate(window.start)}
-          >
-            <span class="flex w-full items-baseline gap-2">
-              <span class="min-w-0 flex-1 truncate text-ink">
-                {window.name}
+    <div class="flex flex-col gap-0.5">
+      <Show
+        when={windows().length > 0}
+        fallback={
+          <span class="px-2 py-1 text-xs text-ink-muted">
+            No time off in the next 90 days
+          </span>
+        }
+      >
+        <For each={windows().slice(0, UPCOMING_SHOWN_MAX)}>
+          {(window) => (
+            <button
+              type="button"
+              class="flex w-full flex-col rounded-lg px-2 py-1.5 text-left text-xs hover:bg-hover"
+              onClick={() => calendarPager.gotoDate(window.start)}
+            >
+              <span class="flex w-full items-baseline gap-2">
+                <span class="min-w-0 flex-1 truncate text-ink">
+                  {window.name}
+                </span>
+                <span class="shrink-0 text-ink-muted">
+                  {windowDateLabel(window)}
+                </span>
               </span>
-              <span class="shrink-0 text-ink-muted">
-                {windowDateLabel(window)}
-              </span>
-            </span>
-            <Show when={window.title}>
-              <span class="w-full truncate text-ink-muted">{window.title}</span>
-            </Show>
-          </button>
-        )}
-      </For>
-      <Show when={windows().length > UPCOMING_SHOWN_MAX}>
-        <span class="px-2 py-1 text-xs text-ink-muted">
-          +{windows().length - UPCOMING_SHOWN_MAX} more
-        </span>
+              <Show when={window.title}>
+                <span class="w-full truncate text-ink-muted">
+                  {window.title}
+                </span>
+              </Show>
+            </button>
+          )}
+        </For>
+        <Show when={windows().length > UPCOMING_SHOWN_MAX}>
+          <span class="px-2 py-1 text-xs text-ink-muted">
+            +{windows().length - UPCOMING_SHOWN_MAX} more
+          </span>
+        </Show>
       </Show>
-    </Show>
+    </div>
   );
 }
 

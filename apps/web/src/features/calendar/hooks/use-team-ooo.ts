@@ -10,7 +10,7 @@ import { EventType } from '@service-storage/generated/schemas/eventType';
 import type { TeamOutOfOfficeItem } from '@service-storage/generated/schemas/teamOutOfOfficeItem';
 import { parseISO } from 'date-fns';
 import { type Accessor, createMemo } from 'solid-js';
-import type { CalendarEvent, CalendarSource } from '../types';
+import type { CalendarEvent } from '../types';
 import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
 
 /** Visibility-source id gating the whole team out-of-office overlay. */
@@ -27,25 +27,16 @@ export function teamOooSourceId(ownerId: string) {
   return `${TEAM_OOO_SOURCE_PREFIX}${ownerId}`;
 }
 
-/** Per-teammate visibility sources for the team out-of-office overlay. */
-export function useTeamOooSources(): Accessor<CalendarSource[]> {
+/** Whether the current user's team has other members. */
+export function useHasTeammates(): Accessor<boolean> {
   const userId = useUserId();
   const teamQuery = useCurrentTeamQuery();
 
-  return createMemo(() => {
+  return () => {
     const team = teamQuery.isSuccess ? teamQuery.data : undefined;
     const self = userId();
-    if (!team) return [];
-
-    return team.members
-      .filter((member) => member.user_id !== self)
-      .map((member) => ({
-        id: teamOooSourceId(member.user_id),
-        name: getDisplayName(tryMacroId(member.user_id)),
-        color: TEAM_OOO_COLOR,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  });
+    return (team?.members ?? []).some((member) => member.user_id !== self);
+  };
 }
 
 function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
@@ -111,12 +102,7 @@ export function useTeamOooEvents(
     if (!isRangeSupported()) return [];
     return (query.data ?? []).map(mapTeamOooItem);
   });
-  const visibleEvents = createMemo(() => {
-    if (!isOverlayVisible()) return [];
-    return events().filter(
-      (event) => options.isSourceVisible?.(event.calendar.id) !== false
-    );
-  });
+  const visibleEvents = createMemo(() => (isOverlayVisible() ? events() : []));
   const eventsById = createMemo(
     () => new Map(events().map((event) => [event.id, event]))
   );
