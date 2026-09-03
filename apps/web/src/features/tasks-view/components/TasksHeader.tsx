@@ -2,10 +2,11 @@ import { SearchBar, useViewControlHotkeys } from '@app/components/view-shell';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import MenuIcon from '@phosphor/list.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal } from 'solid-js';
+import { TASK_TABS } from '../constants';
 import { useTasksView } from '../tasks-view-context';
 import { TasksControls } from './TasksControls';
 import { TasksNavigation } from './TasksSidebar';
@@ -34,9 +35,12 @@ export function TasksHeader() {
     layout.popoverSplit({ type: 'component', id: 'task-compose' });
   };
 
+  const selectedTabLabel = () =>
+    TASK_TABS.find((tab) => tab.id === state.tab)?.label;
+
   return (
     <div class="flex min-w-0 flex-col">
-      <SplitPanel.ControlGroup class="hidden px-2 pb-2 @max-[720px]/view-shell:flex">
+      <SplitPanel.ControlGroup class="hidden pb-2 @max-[720px]/view-shell:flex">
         <SplitPanel.CloseButton />
         <SplitPanel.BackButton />
         <SplitPanel.ForwardButton />
@@ -48,24 +52,23 @@ export function TasksHeader() {
           onOpenChange={setNavigationOpen}
           placement="bottom-start"
         >
-          <Dropdown.Trigger
-            variant="ghost"
-            size="sm"
-            square
-            class="size-8 shrink-0 rounded-full"
-            aria-label="Open Tasks navigation"
-          >
-            <MenuIcon class="size-4" />
-          </Dropdown.Trigger>
+          <h1 class="min-w-0">
+            <Dropdown.Trigger
+              variant="ghost"
+              size="sm"
+              class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
+              aria-label={`Select task view: ${selectedTabLabel()}`}
+            >
+              <span class="truncate">{selectedTabLabel()}</span>
+              <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
+            </Dropdown.Trigger>
+          </h1>
           <Dropdown.Content class="w-72 rounded-2xl p-2">
             <div class="rounded-xl bg-menu">
               <TasksNavigation onNavigate={() => setNavigationOpen(false)} />
             </div>
           </Dropdown.Content>
         </Dropdown>
-        <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
-          Tasks
-        </h1>
         <Button
           type="button"
           variant="cta"
