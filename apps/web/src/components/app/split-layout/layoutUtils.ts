@@ -1,4 +1,8 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import {
+  CONNECTIONS_TAB_SLUG,
+  isConnectionsRestToken,
+} from '@core/constant/settingsConnectionsUrl';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
@@ -32,7 +36,14 @@ export function decodePairs(segments: string[]): SplitContent[] {
       // reactively from the URL by SettingsPanelComponentWrapper, so it isn't
       // threaded through content params. See `contentUrlSegments` in
       // layoutManager for the matching encode.
+      // Connections may add one rest token (`discover` or a provider slug).
       pairs.push({ type: 'component', id: 'settings' });
+      if (
+        id === CONNECTIONS_TAB_SLUG &&
+        isConnectionsRestToken(segments[i + 2] ?? '')
+      ) {
+        i += 1;
+      }
     } else if (type === 'component') {
       pairs.push({ type: 'component', id });
     } else {

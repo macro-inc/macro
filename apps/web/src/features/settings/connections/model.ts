@@ -1,3 +1,4 @@
+import type { ConnectionsProviderSlug } from '@core/constant/settingsConnectionsUrl';
 import type { GithubLink } from '@queries/auth';
 import type { PipedreamConnectionResponse } from '@service-cognition/client';
 import type { ServerResponse } from '@service-cognition/generated/schemas';
@@ -18,14 +19,7 @@ export type CapabilityMechanism =
   | 'github-app'
   | 'cursor-key';
 
-export type ProviderId =
-  | 'google'
-  | 'github'
-  | 'linear'
-  | 'notion'
-  | 'slack'
-  | 'cursor'
-  | 'other';
+export type ProviderId = ConnectionsProviderSlug;
 
 export type CuratedAiProvider = 'github' | 'linear' | 'notion' | 'slack';
 

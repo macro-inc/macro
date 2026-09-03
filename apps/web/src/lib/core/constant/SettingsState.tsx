@@ -4,6 +4,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { connectionsRest, setConnectionsRest } from '@core/signal/connectionsRest';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createMemo, createSignal } from 'solid-js';
@@ -169,6 +170,7 @@ export const useSettingsState = () => {
   // explicit navigation needed, whether settings is solo or docked alongside
   // other splits.
   const selectTab = (tab: SettingsTab) => {
+    if (tab !== 'Connected') setConnectionsRest(null);
     setActiveTabId(tab);
   };
 
@@ -220,7 +222,11 @@ export const useSettingsState = () => {
       settingsReturnTo() ?? DEFAULT_ROUTE
     );
     navigate(
-      appendSettingsSplitToUrl(returnTo, settingsTabToSlug(activeTabId()))
+      appendSettingsSplitToUrl(
+        returnTo,
+        settingsTabToSlug(activeTabId()),
+        connectionsRest()
+      )
     );
   };
 

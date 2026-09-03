@@ -14,11 +14,13 @@ import {
   settingsTabFromSplitPath,
   useSettingsState,
 } from '@core/constant/SettingsState';
+import { connectionsRestFromPath } from '@core/constant/settingsConnectionsUrl';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { connectionsRest, setConnectionsRest } from '@core/signal/connectionsRest';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
@@ -74,6 +76,8 @@ export function SettingsPanelComponentWrapper() {
   createRenderEffect(() => {
     const tab = settingsTabFromSplitPath(location.pathname);
     if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
+    const rest = connectionsRestFromPath(location.pathname);
+    if (untrack(connectionsRest) !== rest) setConnectionsRest(rest);
   });
   return <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />;
 }

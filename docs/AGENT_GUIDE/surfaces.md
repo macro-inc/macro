@@ -73,9 +73,11 @@ Slack, Cursor. `Discover` searches the Pipedream catalog; featured cards are
 Google, GitHub, Linear, Slack, Cursor. Click a provider for its page: Google
 (Gmail + Calendar per inbox, no Docs), GitHub (account, team install, AI),
 Linear / Notion / Slack (Pipedream AI, Off is enable/disable), Cursor (API key
-+ default model). Mode and provider are local page state, not extra Settings
-tabs or `/settings/connections/github` routes. Harness only signposts Cursor
-here.
++ default model). Discover is `/app/settings/connections/discover`. A provider
+is `/app/settings/connections/<provider>` (`github`, `google`, `cursor`, …).
+Those are path tokens under the Connections tab, not extra Settings tabs.
+`/app/settings/github` is a leftover unused tab slug, not the GitHub provider
+page. Harness only signposts Cursor here.
 
 ## Notifications
 
