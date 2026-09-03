@@ -415,10 +415,10 @@ fn apply_one(
     patch: &OptimisticLinkPatch,
 ) -> Result<(), LinkPatchError> {
     let resolved = resolve_target(effective, patch)?;
-    if let Some(inserted) = patch.operation.inserted_entity_key() {
-        if !effective.contains_key(inserted) {
-            return Err(LinkPatchError::MissingLinkedRecord(inserted.clone()));
-        }
+    if let Some(inserted) = patch.operation.inserted_entity_key()
+        && !effective.contains_key(inserted)
+    {
+        return Err(LinkPatchError::MissingLinkedRecord(inserted.clone()));
     }
     let record = effective
         .get_mut(&resolved.parent_entity_key)
@@ -1380,7 +1380,6 @@ mod tests {
 
         // Removing a record-less reference stays a natural no-op: a delete
         // must never require its target to still exist.
-        let mut effective = effective;
         let mut updates = RecordUpdates::new();
         apply_link_patches(
             &mut effective,

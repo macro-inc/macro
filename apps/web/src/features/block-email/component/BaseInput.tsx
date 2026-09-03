@@ -37,6 +37,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { trackMention } from '@core/signal/mention';
+import { deviceLooksOffline } from '@core/util/connectivity';
 import { plural } from '@core/util/string';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
@@ -102,6 +103,7 @@ import {
   createMemo,
   createSignal,
   For,
+  getOwner,
   type JSX,
   Match,
   on,
@@ -117,6 +119,7 @@ import { decodeBase64Utf8 } from '../util/decodeBase64';
 import { isPersonalMessage } from '../util/isPersonalMessage';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import { getFirstName } from '../util/name';
+import { ensureOnlineToAttach } from '../util/offlineAttachmentWarning';
 import {
   clearEmailBody,
   hasDraftContent,
@@ -863,9 +866,10 @@ export function BaseInput(props: {
     // persist locally and replay on reconnect as idempotent upserts keyed by
     // the client-generated draft id. (Compose has its own queued path, in
     // Compose.tsx.) Drafts with no reply target, and any session whose cache
-    // fell back to the uncached client — which has no queue — stay on REST;
-    // both transports accept the same draft id, so a mid-session transport
-    // flip still converges on one server draft.
+    // fell back to the uncached client — which has no queue — stay on REST.
+    // REST resolves only server-minted ids: ids adopted from committed saves
+    // carry over, while a handle from a queued-only session fails on REST
+    // until its queued save commits.
     //
     // The transport gate matters: the save must ride the SAME transport the
     // thread read used. A GraphQL-queued save against a REST-read thread
@@ -1631,7 +1635,8 @@ export function BaseInput(props: {
     });
   });
 
-  const handleAddAttachments = (files: File[]) => {
+  const attachDialogOwner = getOwner();
+  const handleAddAttachments = async (files: File[]) => {
     const currentAttachments = form().attachments.list();
 
     const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
@@ -1655,6 +1660,8 @@ export function BaseInput(props: {
       });
       return;
     }
+
+    if (!(await ensureOnlineToAttach(attachDialogOwner))) return;
 
     for (const file of files) {
       form().attachments.add({
@@ -1721,33 +1728,52 @@ export function BaseInput(props: {
       return;
     }
 
+    // Scheduling and archiving are REST calls that resolve server ids only,
+    // and the schedule endpoint is never queued — so refuse offline outright
+    // instead of leaving a scheduled-looking draft the server never saw.
+    if (date && deviceLooksOffline()) {
+      toast.failure('Failed to schedule message', {
+        subtext: "You're offline",
+      });
+      return;
+    }
+
     form().setSendTime(date);
 
     if (date) {
-      // Ensure draft is saved before scheduling
-      const draftID = currentDraft ?? (await executeSaveDraft());
+      // Always save fresh: a committed save adopts the server-minted draft
+      // id, replacing any local handle left by a queued offline save —
+      // which the schedule endpoint below cannot resolve.
+      const draftID = await executeSaveDraft();
       if (!draftID) {
+        form().setSendTime(null);
         toast.failure('Failed to schedule message', {
           subtext: 'Draft required',
         });
         return;
       }
 
-      await emailClient.scheduleMessage(
-        {
-          draftID,
-          send_time: date.toISOString(),
-        },
-        headerLinkId()
-      );
-
-      // Mark the thread as done
-      const threadID = ctx.thread()?.db_id;
-      if (threadID) {
-        await emailClient.flagArchived(
-          { id: threadID, value: true },
+      try {
+        await emailClient.scheduleMessage(
+          {
+            draftID,
+            send_time: date.toISOString(),
+          },
           headerLinkId()
         );
+      } catch {
+        form().setSendTime(null);
+        toast.failure('Failed to schedule message');
+        return;
+      }
+
+      // Mark the thread as done. Best-effort bookkeeping: the message is
+      // scheduled either way.
+      const threadID = ctx.thread()?.db_id;
+      if (threadID) {
+        await emailClient
+          .flagArchived({ id: threadID, value: true }, headerLinkId())
+          .catch(() => {});
       }
     }
   };

@@ -10,6 +10,7 @@ import {
 } from '@block-email/component/EmailContext';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
+import { ensureOnlineToAttach } from '@block-email/util/offlineAttachmentWarning';
 import { plainTextToHtml } from '@block-email/util/plainTextToHtml';
 import {
   clearEmailBody,
@@ -50,6 +51,7 @@ import {
   tryMacroId,
   type WithCustomUserInput,
 } from '@core/user';
+import { deviceLooksOffline } from '@core/util/connectivity';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import {
   $appendWatermarkNodeToLast,
@@ -104,6 +106,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  getOwner,
   on,
   Show,
   useContext,
@@ -321,8 +324,10 @@ export function EmailCompose(props: EmailComposeProps) {
     // Compose drafts go through the durable GraphQL queue too: draft AND
     // thread identity are client-minted handles, so offline saves replay as
     // idempotent upserts against server-minted rows. The uncached fallback
-    // client has no queue, so REST remains the fallback; both transports
-    // accept the same handles.
+    // client has no queue, so REST remains the fallback — but REST resolves
+    // only server-minted ids: ids adopted from committed saves carry over,
+    // while a handle from a queued-only session fails on REST until its
+    // queued save commits.
     //
     // The flag gate keeps the mutation on the same transport as the email
     // reads: queueing GraphQL saves while the rest of email reads REST
@@ -406,14 +411,43 @@ export function EmailCompose(props: EmailComposeProps) {
     }
     setCurrentThreadID(outcome.threadId);
     await uploadComposeAttachments(outcome.draftId);
+    // Keep the REST-facade caches honest during the transport rollout,
+    // matching useSaveDraftMutation's onSuccess effects.
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    refetchSoupEntity(outcome.threadId, 'emailThread');
+    queryClient.invalidateQueries({
+      queryKey: emailKeys.threadMessages(outcome.threadId).queryKey,
+    });
     return outcome.draftId;
   }
 
+  // Sent from another device: the server outcome supersedes the local
+  // draft. Drop it — thread handle included, so the next compose session
+  // can't attach a new draft to the sent thread — and refresh the caches
+  // that still show it as a draft.
+  function handleDraftAlreadySent() {
+    toast.alert('This email was already sent');
+    const threadID = currentThreadID();
+    resetState();
+    setCurrentThreadID(undefined);
+    queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+    if (threadID) {
+      invalidateSoupEntity(threadID);
+      refetchSoupEntity(threadID, 'emailThread');
+    }
+  }
+
   function handleQueuedSaveFailure(code: SaveEmailDraftFailureCode) {
-    // Permanent failure: keep the content in the editor, but never
-    // auto-re-dispatch — a failing save replayed forever would block every
-    // queued mutation in the app behind it.
-    autosaveDisabled = true;
+    if (code === 'DRAFT_ALREADY_SENT') {
+      handleDraftAlreadySent();
+      return;
+    }
+    if (code !== 'NETWORK') {
+      // Deterministic failure: keep the content in the editor, but never
+      // auto-re-dispatch — a failing save replayed forever would block every
+      // queued mutation in the app behind it.
+      autosaveDisabled = true;
+    }
     console.error('Failed to save draft', code);
     toast.failure('Failed to save draft');
   }
@@ -434,6 +468,11 @@ export function EmailCompose(props: EmailComposeProps) {
     );
     if (outcome.kind === 'queued') return true;
     if (outcome.kind === 'failed') {
+      if (outcome.code === 'DRAFT_ALREADY_SENT') {
+        // No longer a draft to discard; the handler already reset.
+        handleDraftAlreadySent();
+        return false;
+      }
       console.error('Failed to delete draft', outcome.code);
       toast.failure('Failed to delete draft');
       return false;
@@ -501,7 +540,9 @@ export function EmailCompose(props: EmailComposeProps) {
   const removeForwardedAttachmentMutation =
     useRemoveForwardedAttachmentMutation();
 
-  const handleAddAttachments = (attachments: DraftFormAttachment[]) => {
+  const attachDialogOwner = getOwner();
+  const handleAddAttachments = async (attachments: DraftFormAttachment[]) => {
+    if (!(await ensureOnlineToAttach(attachDialogOwner))) return;
     for (const attachment of attachments) {
       form.attachments.add(attachment);
     }
@@ -791,31 +832,51 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
+    // Scheduling and archiving are REST calls that resolve server ids only,
+    // and the schedule endpoint is never queued — so refuse offline outright
+    // instead of leaving a scheduled-looking draft the server never saw.
+    if (date && deviceLooksOffline()) {
+      toast.failure('Failed to schedule message', {
+        subtext: "You're offline",
+      });
+      return;
+    }
+
     form.setSendTime(date);
 
     if (date) {
-      const draftID = currentDraft ?? (await executeSaveDraft());
+      // Always save fresh: a committed save adopts server-minted draft and
+      // thread ids, replacing any local handle left by a queued offline
+      // save — which the REST endpoints below cannot resolve.
+      const draftID = await executeSaveDraft();
       if (!draftID) {
+        form.setSendTime(null);
         toast.failure('Failed to schedule message', {
           subtext: 'Draft required',
         });
         return;
       }
 
-      await emailClient.scheduleMessage(
-        {
-          draftID,
-          send_time: date.toISOString(),
-        },
-        headerLinkId()
-      );
+      try {
+        await emailClient.scheduleMessage(
+          {
+            draftID,
+            send_time: date.toISOString(),
+          },
+          headerLinkId()
+        );
+      } catch {
+        form.setSendTime(null);
+        toast.failure('Failed to schedule message');
+        return;
+      }
 
       const threadID = currentThreadID();
       if (threadID) {
-        await emailClient.flagArchived(
-          { id: threadID, value: true },
-          headerLinkId()
-        );
+        // Best-effort bookkeeping: the message is scheduled either way.
+        await emailClient
+          .flagArchived({ id: threadID, value: true }, headerLinkId())
+          .catch(() => {});
       }
     }
   };
