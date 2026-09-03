@@ -16,8 +16,6 @@ pub(crate) mod swagger;
 #[cfg(test)]
 mod test;
 
-/// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
-/// alongside `/` so the dedicated ALB keeps working during cutover.
 const GATEWAY_PATH_PREFIX: &str = "/connection-gateway";
 
 pub fn router(state: AppState) -> Router {

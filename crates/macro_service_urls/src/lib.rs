@@ -530,8 +530,7 @@ service_url! {
             dev: "https://dev-gateway.macro.com/connection-gateway",
             prod: "https://gateway.macro.com/connection-gateway",
         },
-        /// Connection gateway WebSocket URL. Keep this in lockstep with
-        /// [`ConnectionGatewayUrl`]. Both hosts move in the same release.
+        /// Connection gateway WebSocket URL.
         pub ConnectionGatewayWebsocketUrl {
             local: "ws://localhost:8082",
             dev: "wss://dev-gateway.macro.com/connection-gateway",

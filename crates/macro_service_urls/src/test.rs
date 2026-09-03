@@ -104,6 +104,20 @@ fn connection_gateway_websocket_url_has_no_trailing_slash() {
 }
 
 #[test]
+fn connection_gateway_websocket_url_is_the_ws_form_of_the_http_url() {
+    for environment in ENVS {
+        let http = ConnectionGatewayUrl::default_for_environment(environment);
+        let websocket = ConnectionGatewayWebsocketUrl::default_for_environment(environment);
+        let expected = http.as_ref().replacen("http", "ws", 1);
+        assert_eq!(
+            websocket.as_ref(),
+            expected,
+            "{environment:?}: websocket URL must be the http URL with the scheme swapped to ws"
+        );
+    }
+}
+
+#[test]
 fn document_cognition_service_url_parses() {
     assert_parses_for_all_environments(DocumentCognitionServiceUrl::default_for_environment);
 }
