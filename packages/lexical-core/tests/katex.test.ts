@@ -57,50 +57,12 @@ describe('equation markdown import', () => {
     });
   });
 
-  it('parses TeX-style inline math from coding-agent replies', async () => {
-    const editor = await importMarkdown('The result is \\( a + b \\).');
-    editor.getEditorState().read(() => {
-      const node = firstEquation();
-      expect(node.getEquation().trim()).toBe('a + b');
-      expect(node.getInline()).toBe(true);
-    });
-  });
-
-  it('parses TeX-style display math from coding-agent replies', async () => {
-    const editor = await importMarkdown('\\[ E = mc^2 \\]');
-    editor.getEditorState().read(() => {
-      const node = firstEquation();
-      expect(node.getEquation().trim()).toBe('E = mc^2');
-      expect(node.getInline()).toBe(false);
-    });
-  });
-
   it('parses multiline $$ blocks as display math', async () => {
     const editor = await importMarkdown('$$\nE = mc^2\n$$');
     editor.getEditorState().read(() => {
       const node = firstEquation();
       expect(node.getEquation()).toBe('E = mc^2');
       expect(node.getInline()).toBe(false);
-    });
-  });
-
-  it('parses multiline \\[ \\] blocks as display math', async () => {
-    const editor = await importMarkdown('\\[\nE = mc^2\n\\]');
-    editor.getEditorState().read(() => {
-      const node = firstEquation();
-      expect(node.getEquation()).toBe('E = mc^2');
-      expect(node.getInline()).toBe(false);
-    });
-  });
-
-  it('still imports internal katex XML tags', async () => {
-    const editor = await importMarkdown(
-      '<m-katex-equation>{"equation":"E = mc^2","inline":true}</m-katex-equation>'
-    );
-    editor.getEditorState().read(() => {
-      const node = firstEquation();
-      expect(node.getEquation()).toBe('E = mc^2');
-      expect(node.getInline()).toBe(true);
     });
   });
 });

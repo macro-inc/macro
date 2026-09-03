@@ -2,7 +2,7 @@ import type {
   MultilineElementTransformer,
   TextMatchTransformer,
 } from '@lexical/markdown';
-import type { ElementNode, LexicalNode, TextNode } from 'lexical';
+import type { TextNode } from 'lexical';
 import {
   $createEquationNode,
   $isEquationNode,
@@ -50,67 +50,7 @@ export const I_EQUATION_NODE: TextMatchTransformer = {
   },
 };
 
-function replaceInlineEquation(
-  node: TextNode,
-  match: RegExpMatchArray,
-  strip: RegExp
-) {
-  try {
-    const equation = match[0].replace(strip, '');
-    node.replace($createEquationNode(equation, true));
-  } catch (e) {
-    console.error('Error creating equation node:', e);
-  }
-}
-
-function replaceBlockEquation(
-  node: TextNode,
-  match: RegExpMatchArray,
-  strip: RegExp
-) {
-  try {
-    const equation = match[0].replace(strip, '');
-    node.replace($createEquationNode(equation, false));
-  } catch (e) {
-    console.error('Error creating equation node:', e);
-  }
-}
-
-function replaceMultilineEquationBlock(
-  rootNode: ElementNode,
-  children: Array<LexicalNode> | null,
-  startMatch: Array<string>,
-  endMatch: Array<string> | null,
-  linesInBetween: Array<string> | null,
-  forbidden: string
-): boolean | void {
-  if ((children?.length ?? 0) > 0) {
-    return false;
-  }
-
-  const latexString =
-    linesInBetween?.join('\n')?.trim().replaceAll('{align}', '{align*}') ?? '';
-  const hasTextBeforeStart = startMatch?.[1]?.trim() !== '';
-  const hasTextAfterEnd = endMatch?.[2]?.trim() !== '';
-  if (
-    !latexString ||
-    latexString.includes(forbidden) ||
-    hasTextBeforeStart ||
-    hasTextAfterEnd
-  ) {
-    console.warn('Invalid multiline equation block — skipping node creation.');
-    return false;
-  }
-
-  try {
-    rootNode.append($createEquationNode(latexString, false));
-  } catch (e) {
-    console.error('Error creating multiline equation node:', e);
-    return false;
-  }
-}
-
-// External Inline Equation Node (`$...$`)
+// External Inline Equation Node
 
 export const E_INLINE_EQUATION_NODE: TextMatchTransformer = {
   dependencies: [EquationNode],
@@ -128,21 +68,19 @@ export const E_INLINE_EQUATION_NODE: TextMatchTransformer = {
     }
     return null;
   },
-  replace: (node, match) => replaceInlineEquation(node, match, /^\$|\$$/g),
+  replace: (node, match) => {
+    try {
+      const [equationMatch] = match;
+      const equation = equationMatch.replace(/^\$|\$$/g, '');
+      const equationNode = $createEquationNode(equation, true);
+      node.replace(equationNode);
+    } catch (e) {
+      console.error('Error creating equation node:', e);
+    }
+  },
 };
 
-// TeX-style inline math (`\( ... \)`), common in coding-agent replies.
-
-export const E_LATEX_PAREN_INLINE: TextMatchTransformer = {
-  dependencies: [EquationNode],
-  type: 'text-match',
-  regExp: /\\\((.+?)\\\)/,
-  importRegExp: /\\\((.+?)\\\)/,
-  export: () => null,
-  replace: (node, match) => replaceInlineEquation(node, match, /^\\\(|\\\)$/g),
-};
-
-// External Block Equation Node (`$$...$$`)
+// External Block Equation Node
 
 export const E_BLOCK_EQUATION_NODE: TextMatchTransformer = {
   dependencies: [EquationNode],
@@ -158,21 +96,19 @@ export const E_BLOCK_EQUATION_NODE: TextMatchTransformer = {
     }
     return null;
   },
-  replace: (node, match) => replaceBlockEquation(node, match, /^\$\$|\$\$$/g),
+  replace: (node, match) => {
+    try {
+      const [equationMatch] = match;
+      const equation = equationMatch.replace(/^\$\$|\$\$$/g, '');
+      const equationNode = $createEquationNode(equation, false);
+      node.replace(equationNode);
+    } catch (e) {
+      console.error('Error creating equation node:', e);
+    }
+  },
 };
 
-// TeX-style display math (`\[ ... \]`) on one line.
-
-export const E_LATEX_BRACKET_BLOCK: TextMatchTransformer = {
-  dependencies: [EquationNode],
-  type: 'text-match',
-  regExp: /\\\[(.+?)\\\]/,
-  importRegExp: /\\\[(.+?)\\\]/,
-  export: () => null,
-  replace: (node, match) => replaceBlockEquation(node, match, /^\\\[|\\\]$/g),
-};
-
-// External Multiline Block Equation Node (`$$\n...\n$$`)
+// External Multiline Block Equation Node
 
 export const E_MULTILINE_BLOCK_EQUATION_NODE: MultilineElementTransformer = {
   dependencies: [EquationNode],
@@ -189,41 +125,34 @@ export const E_MULTILINE_BLOCK_EQUATION_NODE: MultilineElementTransformer = {
     endMatch,
     linesInBetween,
     _isImport
-  ) =>
-    replaceMultilineEquationBlock(
-      rootNode,
-      children,
-      startMatch,
-      endMatch,
-      linesInBetween,
-      '$$'
-    ),
-};
+  ) => {
+    if ((children?.length ?? 0) > 0) {
+      return false;
+    }
 
-// TeX-style multiline display math (`\[\n...\n\]`)
+    const latexString =
+      linesInBetween?.join('\n')?.trim().replaceAll('{align}', '{align*}') ??
+      '';
+    const hasTextBeforeStart = startMatch?.[1]?.trim() !== '';
+    const hasTextAfterEnd = endMatch?.[2]?.trim() !== '';
+    if (
+      !latexString ||
+      latexString.includes('$$') ||
+      hasTextBeforeStart ||
+      hasTextAfterEnd
+    ) {
+      console.warn(
+        'Invalid multiline equation block — skipping node creation.'
+      );
+      return false;
+    }
 
-export const E_MULTILINE_LATEX_BRACKET_BLOCK: MultilineElementTransformer = {
-  dependencies: [EquationNode],
-  type: 'multiline-element',
-  regExpStart: /^(.*)\\\[[ \t]*$/,
-  regExpEnd: /^(.*\\\])(.*)$/,
-  export: (_node) => {
-    return null;
+    try {
+      const equationNode = $createEquationNode(latexString, false);
+      rootNode.append(equationNode);
+    } catch (e) {
+      console.error('Error creating multiline equation node:', e);
+      return false;
+    }
   },
-  replace: (
-    rootNode,
-    children,
-    startMatch,
-    endMatch,
-    linesInBetween,
-    _isImport
-  ) =>
-    replaceMultilineEquationBlock(
-      rootNode,
-      children,
-      startMatch,
-      endMatch,
-      linesInBetween,
-      '\\['
-    ),
 };

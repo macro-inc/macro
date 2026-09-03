@@ -1073,8 +1073,7 @@ input[type="number"] {
 
 .chat-markdown-container .table-container,
 .chat-markdown-container .katex-display,
-.chat-markdown-container pre,
-.markdown-content .katex-display {
+.chat-markdown-container pre {
   overflow-x: auto;
   overflow-y: hidden;
 }
