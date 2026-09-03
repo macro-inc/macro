@@ -674,6 +674,16 @@ pub trait GoogleCalendarSyncRepository: Send + Sync + 'static {
         &self,
         due_before: DateTime<Utc>,
     ) -> impl Future<Output = Result<usize, Report>> + Send;
+
+    /// Re-arm current-grant jobs stranded off the queue: `pending` jobs whose
+    /// outbox row is already published yet went untouched since `stalled_before`
+    /// (a deterministic delivery that dead-lettered), and `running` jobs whose
+    /// lease expired before `stalled_before` (a worker that died mid-run).
+    /// Republishing the outbox row lets the drain redeliver them.
+    fn reap_wedged_google_syncs(
+        &self,
+        stalled_before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<usize, Report>> + Send;
 }
 
 /// Durable lifecycle and lease operations for calendar backfill jobs.

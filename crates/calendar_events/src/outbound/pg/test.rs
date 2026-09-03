@@ -336,6 +336,147 @@ async fn calendar_capability_transition_schedules_once_and_failed_jobs_can_retry
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reaper_rearms_a_dead_lettered_pending_job(pool: PgPool) {
+    let owner_id = "macro|calendar-wedged-pending@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job_id = enabled.jobs[0].id;
+
+    // The drain published the delivery; the deterministic failure then sat the
+    // job back to pending without touching the outbox — exactly the wedge.
+    sqlx::query!(
+        "UPDATE calendar_sync_outbox SET published_at = now() WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A job still inside its SQS retry budget keeps getting touched, so the
+    // reaper leaves it alone.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+
+    // Once the delivery dead-letters, nothing touches the job again.
+    sqlx::query!(
+        "UPDATE calendar_backfill_jobs SET updated_at = now() - interval '20 minutes' WHERE id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        1
+    );
+    let published_at = sqlx::query_scalar!(
+        "SELECT published_at FROM calendar_sync_outbox WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        published_at.is_none(),
+        "the reaper republishes the outbox row"
+    );
+
+    // Republished rows are no longer published, so a second pass is a no-op.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reaper_rearms_a_running_job_behind_a_dead_lease(pool: PgPool) {
+    let owner_id = "macro|calendar-wedged-running@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job_id = enabled.jobs[0].id;
+    let key = CalendarBackfillJobKey {
+        job_id,
+        email_link_id: link_id,
+    };
+
+    let CalendarBackfillClaim::Claimed { .. } = repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the freshly granted job should be claimable");
+    };
+    sqlx::query!(
+        "UPDATE calendar_sync_outbox SET published_at = now() WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // A live lease means a worker is on it, so the reaper leaves it alone.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+
+    // The worker died: its lease expired long ago and no longer renews.
+    sqlx::query!(
+        "UPDATE calendar_backfill_jobs SET lease_expires_at = now() - interval '20 minutes' WHERE id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        1
+    );
+    let row = sqlx::query!(
+        r#"
+        SELECT job.status, job.lease_token, outbox.published_at
+        FROM calendar_backfill_jobs job
+        JOIN calendar_sync_outbox outbox ON outbox.backfill_job_id = job.id
+        WHERE job.id = $1
+        "#,
+        job_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.status, "pending");
+    assert!(row.lease_token.is_none());
+    assert!(row.published_at.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn removing_calendar_scope_disables_sources_and_fences_the_running_job(pool: PgPool) {
     let owner_id = "macro|calendar-downgrade@example.com";
     let link_id = insert_link(&pool, owner_id).await;

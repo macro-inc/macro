@@ -216,6 +216,12 @@ pub struct GoogleCalendarSyncScheduler<R> {
     repository: R,
 }
 
+/// How long a backfill job may sit off the queue — pending after a delivery
+/// dead-lettered, or running behind a dead worker's lease — before the reaper
+/// republishes it. Comfortably past the SQS retry budget so an actively
+/// retrying delivery is never duplicated.
+const WEDGED_SYNC_STALL_THRESHOLD: chrono::Duration = chrono::Duration::minutes(15);
+
 impl<R> GoogleCalendarSyncScheduler<R>
 where
     R: GoogleCalendarSyncRepository,
@@ -230,6 +236,15 @@ where
     pub async fn run_once(&self, now: chrono::DateTime<Utc>) -> Result<usize, Report> {
         self.repository
             .schedule_due_google_syncs(now - chrono::Duration::minutes(5))
+            .await
+    }
+
+    /// Re-arm jobs stranded off the queue by a dead-lettered delivery or a
+    /// dead worker's lease, so they recover without a grant change.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn reap_once(&self, now: chrono::DateTime<Utc>) -> Result<usize, Report> {
+        self.repository
+            .reap_wedged_google_syncs(now - WEDGED_SYNC_STALL_THRESHOLD)
             .await
     }
 }

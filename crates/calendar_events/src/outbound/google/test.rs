@@ -185,6 +185,97 @@ fn malformed_recurring_instance_does_not_overstate_snapshot_coverage() {
     assert!(upsert.occurrences.is_empty());
 }
 
+/// Google's `instances` feed can return two entries that resolve to the same
+/// occurrence key — a moved exception whose original start still lands on the
+/// series slot, a pagination overlap, a DST boundary. Both would collide on
+/// the `(event_id, occurrence_key)` primary key and wedge the whole backfill,
+/// so the mapper collapses them and keeps the live instance over a cancelled
+/// tombstone.
+#[test]
+fn duplicate_instances_collapse_to_one_live_occurrence() {
+    let master: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-master",
+        "iCalUID": "recurring@example.com",
+        "summary": "Recurring calendar event",
+        "start": {"dateTime": "2026-07-24T14:00:00Z", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-07-24T15:00:00Z", "timeZone": "UTC"},
+        "recurrence": ["RRULE:FREQ=DAILY"],
+        "created": "2026-07-20T14:00:00Z",
+        "updated": "2026-07-21T14:00:00Z"
+    }))
+    .unwrap();
+    let cancelled_instance: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-master_20260724T140000Z",
+        "iCalUID": "recurring@example.com",
+        "recurringEventId": "provider-master",
+        "originalStartTime": {"dateTime": "2026-07-24T14:00:00Z", "timeZone": "UTC"},
+        "start": {"dateTime": "2026-07-24T14:00:00Z", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-07-24T15:00:00Z", "timeZone": "UTC"},
+        "status": "cancelled"
+    }))
+    .unwrap();
+    let moved_instance: GoogleEvent = serde_json::from_value(serde_json::json!({
+        "id": "provider-master_20260724T140000Z",
+        "iCalUID": "recurring@example.com",
+        "recurringEventId": "provider-master",
+        "originalStartTime": {"dateTime": "2026-07-24T14:00:00Z", "timeZone": "UTC"},
+        "start": {"dateTime": "2026-07-24T16:00:00Z", "timeZone": "UTC"},
+        "end": {"dateTime": "2026-07-24T17:00:00Z", "timeZone": "UTC"},
+        "status": "confirmed"
+    }))
+    .unwrap();
+    let range = OccurrenceRange {
+        starts_at: DateTime::parse_from_rfc3339("2026-07-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        ends_at: DateTime::parse_from_rfc3339("2026-08-01T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc),
+        start_date: NaiveDate::from_ymd_opt(2026, 7, 1).unwrap(),
+        end_date: NaiveDate::from_ymd_opt(2026, 8, 1).unwrap(),
+    };
+    let target = GoogleCalendarTarget {
+        owner_id: "macro|recurring@example.com".to_string(),
+        email_link_id: Uuid::now_v7(),
+        account_id: Uuid::now_v7(),
+        calendar_id: Uuid::now_v7(),
+        provider_calendar_id: "primary".to_string(),
+        is_read_only: false,
+        range,
+    };
+
+    // The tombstone is fed first so the live instance must win by replacement,
+    // not merely by arriving first.
+    let upsert = map_upsert(
+        &target,
+        master,
+        Vec::new(),
+        vec![cancelled_instance, moved_instance],
+    )
+    .unwrap();
+
+    assert_eq!(upsert.occurrences.len(), 1);
+    let occurrence = &upsert.occurrences[0];
+    assert_eq!(occurrence.occurrence_key, "2026-07-24T14:00:00+00:00");
+    assert!(
+        !occurrence.is_cancelled,
+        "the live instance must survive the collapse"
+    );
+    assert_eq!(
+        occurrence.time,
+        EventTime::Timed {
+            starts_at: DateTime::parse_from_rfc3339("2026-07-24T16:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            ends_at: DateTime::parse_from_rfc3339("2026-07-24T17:00:00Z")
+                .unwrap()
+                .with_timezone(&Utc),
+            time_zone: Some("UTC".to_string()),
+        },
+        "the surviving row keeps the live instance's own time"
+    );
+}
+
 #[test]
 fn malformed_master_is_quarantined_without_deleting_its_provider_identity() {
     let valid: GoogleEvent = serde_json::from_value(serde_json::json!({
