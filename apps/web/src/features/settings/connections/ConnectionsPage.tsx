@@ -1,6 +1,6 @@
 import { TabsInset } from '@core/component/TabsInset';
 import { Button } from '@ui';
-import { Match, Show, Suspense, Switch } from 'solid-js';
+import { Match, Show, Switch } from 'solid-js';
 import { SettingsPage } from '../primitives';
 import { ConnectedView } from './ConnectedView';
 import { CursorProvider } from './CursorProvider';
@@ -9,7 +9,6 @@ import { GitHubProvider } from './GitHubProvider';
 import { GoogleProvider } from './GoogleProvider';
 import { OtherView } from './OtherView';
 import { PipedreamAiProvider } from './PipedreamAiProvider';
-import { ConnectionsPageSkeleton } from './loading';
 import { useConnectionsModel } from './use-connections-model';
 import {
   closeConnectionsProvider,
@@ -91,17 +90,7 @@ export function ConnectionsPage() {
         <PipedreamAiProvider model={model()} provider="slack" />
       </Match>
       <Match when={provider() === 'cursor'}>
-        <Suspense
-          fallback={
-            <ConnectionsPageSkeleton
-              title="Cursor"
-              description="Use your Cursor account to run agent sessions in Macro."
-              onBack={closeConnectionsProvider}
-            />
-          }
-        >
-          <CursorProvider />
-        </Suspense>
+        <CursorProvider />
       </Match>
       <Match when={provider() === 'other'}>
         <OtherView leftovers={model().leftovers} />

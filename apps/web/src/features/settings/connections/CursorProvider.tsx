@@ -21,7 +21,6 @@ import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
-import { ConnectionsCardSkeleton } from './loading';
 import { closeConnectionsProvider } from './view-state';
 
 const CURSOR_KEY_PREFIX = 'crsr_';
@@ -94,16 +93,18 @@ export function CursorProvider() {
     >
       <SettingsSection title="Your Connections">
         <SettingsCard>
-          <Show
-            when={!cursorStatus.isPlaceholderData}
-            fallback={
-              <ConnectionsCardSkeleton label="Loading Cursor connection" />
+          <CapabilityRow
+            title="Cursor"
+            outcome="Use your Cursor account to run agent sessions in Macro. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
+            status={
+              !cursorStatus.isPlaceholderData && cursorRegistered()
+                ? 'connected'
+                : undefined
             }
           >
-            <CapabilityRow
-              title="Cursor"
-              outcome="Use your Cursor account to run agent sessions in Macro. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
-              status={cursorRegistered() ? 'connected' : undefined}
+            <Show
+              when={!cursorStatus.isPlaceholderData}
+              fallback={<span class="text-xs text-ink-muted">Loading…</span>}
             >
               <Show when={cursorRegistered()}>
                 <DisconnectAction
@@ -117,7 +118,9 @@ export function CursorProvider() {
                   }
                 />
               </Show>
-            </CapabilityRow>
+            </Show>
+          </CapabilityRow>
+          <Show when={!cursorStatus.isPlaceholderData}>
             <Show
               when={cursorRegistered()}
               fallback={
