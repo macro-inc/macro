@@ -307,7 +307,7 @@ function cursorCapabilities(input: ConnectionsInput): Capability[] {
       provider: 'cursor',
       title: 'Cursor',
       outcome: 'Use your Cursor account to run agent sessions in Macro.',
-      account: 'Personal',
+      account: '',
       scope: 'personal',
       status: 'connected',
       mechanism: 'cursor-key',

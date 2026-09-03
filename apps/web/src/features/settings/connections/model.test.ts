@@ -214,5 +214,6 @@ describe('toConnectionsModel', () => {
       cursorRegistered: true,
     });
     expect(model.providers.map((row) => row.id)).toEqual(['cursor']);
+    expect(model.providers[0]?.accounts).toBe('');
   });
 });
