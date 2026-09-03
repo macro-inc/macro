@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            event.status,\n            event.event_type,\n            event.reminders_use_default,\n            event.reminder_overrides,\n            COALESCE(\n                (\n                    SELECT source.calendar_id\n                    FROM calendar_event_sources source\n                    JOIN calendars calendar ON calendar.id = source.calendar_id\n                    JOIN calendar_accounts account ON account.id = source.account_id\n                    WHERE source.event_id = event.id\n                      AND calendar.is_primary\n                      AND NOT calendar.is_deleted\n                      AND account.sync_status <> 'disabled'\n                    ORDER BY\n                        source.source_sequence DESC,\n                        source.source_updated_at DESC,\n                        source.last_seen_at DESC,\n                        source.id DESC\n                    LIMIT 1\n                ),\n                $2\n            ) AS \"reminder_calendar_id!\"\n        FROM calendar_events event\n        WHERE event.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "reminders_use_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "reminder_overrides",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "reminder_calendar_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "6cb65f6773806155c0b25b372caef16563cdd27de29e0b6acc5b677d07f72444"
+}

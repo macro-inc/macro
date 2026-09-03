@@ -707,11 +707,15 @@ impl CalendarRepository for PgCalendarRepository {
         let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&upsert.event.time);
         let proposed_id = upsert.event.id;
 
-        // Google forbids status event types (out-of-office, focus-time,
-        // working-location) anywhere but a primary calendar, so a shared
-        // calendar that re-imports a member's out-of-office event carries it as
-        // `default`. The primary calendar is the authority for the type, so
-        // whether this source is a primary calendar decides if it may set it.
+        // Some fields Google only lets a primary calendar carry (status event
+        // types) or that belong to whoever owns the event rather than a viewer
+        // (read-only access, availability, visibility, reminders): a shared
+        // calendar re-importing a member's event, or a teammate's reader-access
+        // copy, arrives with those flattened or set from the viewer's side. The
+        // event's primary-calendar source is their authority, so a non-primary
+        // source must not overwrite them. These two flags gate that: whether the
+        // incoming source is itself a primary calendar, and whether the event
+        // already holds a primary source that owns those fields.
         let incoming_is_primary = sqlx::query_scalar!(
             "SELECT is_primary FROM calendars WHERE id = $1",
             source.calendar_id,
@@ -720,6 +724,29 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?
         .unwrap_or(false);
+        let event_has_primary_source = sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM calendar_events event
+                JOIN calendar_event_sources source ON source.event_id = event.id
+                JOIN calendars calendar ON calendar.id = source.calendar_id
+                JOIN calendar_accounts account ON account.id = source.account_id
+                WHERE event.owner_id = $1
+                  AND event.source_link_id = $2
+                  AND event.ical_uid = $3
+                  AND calendar.is_primary
+                  AND NOT calendar.is_deleted
+                  AND account.sync_status <> 'disabled'
+            ) AS "exists!"
+            "#,
+            &upsert.event.owner_id,
+            source_link_id,
+            &upsert.event.ical_uid,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(report)?;
 
         // Google is the authoritative source when the same RFC UID was first
         // discovered in email. Email can still create/update entities that do
@@ -753,14 +780,23 @@ impl CalendarRepository for PgCalendarRepository {
                 description = EXCLUDED.description,
                 location = EXCLUDED.location,
                 status = EXCLUDED.status,
-                visibility = EXCLUDED.visibility,
-                transparency = EXCLUDED.transparency,
-                -- A non-primary source (a shared calendar's copy) must never
-                -- downgrade a status type to `default`: take the incoming type
-                -- only from a primary calendar, or when nothing typed it yet.
+                -- Fields the event's primary calendar owns. A non-primary
+                -- source (a shared calendar's copy, or a teammate's reader
+                -- access) must not overwrite the member's own event type,
+                -- availability, visibility, read-only access, or reminders:
+                -- Google flattens or reframes those on a copy. Take the incoming
+                -- values only from a primary source ($31), or when the event has
+                -- no primary source to defer to (NOT $32).
+                visibility = CASE
+                    WHEN $31 OR NOT $32 THEN EXCLUDED.visibility
+                    ELSE calendar_events.visibility
+                END,
+                transparency = CASE
+                    WHEN $31 OR NOT $32 THEN EXCLUDED.transparency
+                    ELSE calendar_events.transparency
+                END,
                 event_type = CASE
-                    WHEN $31 OR calendar_events.event_type = 'default'
-                        THEN EXCLUDED.event_type
+                    WHEN $31 OR NOT $32 THEN EXCLUDED.event_type
                     ELSE calendar_events.event_type
                 END,
                 starts_at = EXCLUDED.starts_at,
@@ -776,11 +812,20 @@ impl CalendarRepository for PgCalendarRepository {
                 conference_url = EXCLUDED.conference_url,
                 conference_provider = EXCLUDED.conference_provider,
                 sequence = EXCLUDED.sequence,
-                is_read_only = EXCLUDED.is_read_only,
+                is_read_only = CASE
+                    WHEN $31 OR NOT $32 THEN EXCLUDED.is_read_only
+                    ELSE calendar_events.is_read_only
+                END,
                 canonical_source_kind = EXCLUDED.canonical_source_kind,
                 canonical_source_updated_at = EXCLUDED.canonical_source_updated_at,
-                reminders_use_default = EXCLUDED.reminders_use_default,
-                reminder_overrides = EXCLUDED.reminder_overrides,
+                reminders_use_default = CASE
+                    WHEN $31 OR NOT $32 THEN EXCLUDED.reminders_use_default
+                    ELSE calendar_events.reminders_use_default
+                END,
+                reminder_overrides = CASE
+                    WHEN $31 OR NOT $32 THEN EXCLUDED.reminder_overrides
+                    ELSE calendar_events.reminder_overrides
+                END,
                 updated_at = GREATEST(calendar_events.updated_at, EXCLUDED.updated_at)
             WHERE
                 EXCLUDED.sequence > calendar_events.sequence
@@ -827,6 +872,7 @@ impl CalendarRepository for PgCalendarRepository {
             upsert.event.creator_name.as_deref(),
             upsert.event.event_type.as_str(),
             incoming_is_primary,
+            event_has_primary_source,
         )
         .fetch_optional(&mut *tx)
         .await
@@ -863,23 +909,47 @@ impl CalendarRepository for PgCalendarRepository {
         // A shared calendar's copy usually wins the canonical projection because
         // it is re-imported (and so re-stamped) more recently than the member's
         // own event, which parks the primary sync in the rejected branch above.
-        // The primary is still the authority for the event type, so reconcile it
-        // directly here even when its projection lost — this is the only path
-        // that lifts a status type back out of the copy's `default`.
-        if incoming_is_primary && applied.is_none() {
-            let corrected = sqlx::query!(
-                "UPDATE calendar_events SET event_type = $2 \
-                 WHERE id = $1 AND event_type IS DISTINCT FROM $2",
+        // The primary still owns the fields protected in the upsert, so when its
+        // projection lost reconcile them directly here — the only path that lifts
+        // them back out of the copy's flattened values.
+        let corrected_primary = if incoming_is_primary && applied.is_none() {
+            sqlx::query!(
+                r#"
+                UPDATE calendar_events SET
+                    event_type = $2,
+                    is_read_only = $3,
+                    transparency = $4,
+                    visibility = $5,
+                    reminders_use_default = $6,
+                    reminder_overrides = $7
+                WHERE id = $1
+                  AND (
+                        event_type IS DISTINCT FROM $2
+                        OR is_read_only IS DISTINCT FROM $3
+                        OR transparency IS DISTINCT FROM $4
+                        OR visibility IS DISTINCT FROM $5
+                        OR reminders_use_default IS DISTINCT FROM $6
+                        OR reminder_overrides IS DISTINCT FROM $7
+                  )
+                "#,
                 event_id,
                 upsert.event.event_type.as_str(),
+                upsert.event.is_read_only,
+                upsert.event.transparency.as_str(),
+                upsert.event.visibility.as_str(),
+                upsert.event.reminders.use_default,
+                serde_json::to_value(&upsert.event.reminders.overrides).map_err(report)?,
             )
             .execute(&mut *tx)
             .await
             .map_err(report)?
-            .rows_affected();
-            if corrected > 0 {
-                change = CalendarEventChange::Updated;
-            }
+            .rows_affected()
+                > 0
+        } else {
+            false
+        };
+        if corrected_primary {
+            change = CalendarEventChange::Updated;
         }
 
         // Only the source selected as canonical replaces projections and
@@ -894,17 +964,16 @@ impl CalendarRepository for PgCalendarRepository {
                 &upsert.occurrences,
             )
             .await?;
-            let calendar =
-                fetch_calendar_reminder_context(&mut tx, Some(source.calendar_id)).await?;
-            rebuild_event_reminder_firings(
-                &mut tx,
-                event_id,
-                upsert.event.status,
-                upsert.event.event_type,
-                &upsert.event.reminders,
-                calendar.as_ref(),
-            )
-            .await?;
+        }
+
+        // Rebuild the firing schedule from the settled row and the calendar the
+        // reminder settings belong to — the primary source's when the event has
+        // one — so a shared copy winning the projection cannot replace the
+        // member's reminders with its own or the shared calendar's empty
+        // defaults. Skipped only when nothing above touched the event.
+        if applied.is_some() || corrected_primary {
+            rebuild_event_reminder_firings_from_owner(&mut tx, event_id, source.calendar_id)
+                .await?;
         }
 
         tx.commit().await.map_err(report)?;
@@ -3274,6 +3343,74 @@ async fn rebuild_event_reminder_firings(
     .execute(&mut **tx)
     .await
     .map_err(report)?;
+    Ok(())
+}
+
+/// Rebuild one event's firing schedule from its settled canonical row and the
+/// calendar whose reminder defaults and time zone apply: the event's primary
+/// source's calendar when it has one — the source that owns the reminder
+/// settings — otherwise `fallback_calendar_id`, the calendar this write came
+/// from. Reading the stored row (rather than the incoming projection) is what
+/// keeps a non-primary copy from swapping in its own reminders or a shared
+/// calendar's empty defaults after it wins the canonical projection.
+async fn rebuild_event_reminder_firings_from_owner(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    fallback_calendar_id: Uuid,
+) -> Result<(), Report> {
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            event.status,
+            event.event_type,
+            event.reminders_use_default,
+            event.reminder_overrides,
+            COALESCE(
+                (
+                    SELECT source.calendar_id
+                    FROM calendar_event_sources source
+                    JOIN calendars calendar ON calendar.id = source.calendar_id
+                    JOIN calendar_accounts account ON account.id = source.account_id
+                    WHERE source.event_id = event.id
+                      AND calendar.is_primary
+                      AND NOT calendar.is_deleted
+                      AND account.sync_status <> 'disabled'
+                    ORDER BY
+                        source.source_sequence DESC,
+                        source.source_updated_at DESC,
+                        source.last_seen_at DESC,
+                        source.id DESC
+                    LIMIT 1
+                ),
+                $2
+            ) AS "reminder_calendar_id!"
+        FROM calendar_events event
+        WHERE event.id = $1
+        "#,
+        event_id,
+        fallback_calendar_id,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)?;
+    let reminders = EventReminders {
+        use_default: row.reminders_use_default,
+        overrides: serde_json::from_value(row.reminder_overrides)
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, %event_id, "malformed event reminder_overrides json");
+            })
+            .unwrap_or_default(),
+    };
+    let calendar = fetch_calendar_reminder_context(tx, Some(row.reminder_calendar_id)).await?;
+    rebuild_event_reminder_firings(
+        tx,
+        event_id,
+        event_status(&row.status),
+        event_type(&row.event_type),
+        &reminders,
+        calendar.as_ref(),
+    )
+    .await?;
     Ok(())
 }
 

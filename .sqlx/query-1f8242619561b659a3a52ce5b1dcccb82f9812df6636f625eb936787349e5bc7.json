@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE calendar_events SET\n                    event_type = $2,\n                    is_read_only = $3,\n                    transparency = $4,\n                    visibility = $5,\n                    reminders_use_default = $6,\n                    reminder_overrides = $7\n                WHERE id = $1\n                  AND (\n                        event_type IS DISTINCT FROM $2\n                        OR is_read_only IS DISTINCT FROM $3\n                        OR transparency IS DISTINCT FROM $4\n                        OR visibility IS DISTINCT FROM $5\n                        OR reminders_use_default IS DISTINCT FROM $6\n                        OR reminder_overrides IS DISTINCT FROM $7\n                  )\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Bool",
+        "Text",
+        "Text",
+        "Bool",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1f8242619561b659a3a52ce5b1dcccb82f9812df6636f625eb936787349e5bc7"
+}
