@@ -64,9 +64,10 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
         // The health router is attached here so we don't attach the logging middleware to it
         .merge(health::router())
         .layer(cors)
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .layer(CompressionLayer::new());
-    let app = mount_at_root_and_prefix(app);
+    // Swagger sits outside the dual-mount. Nested under `/auth`, the absolute
+    // `/api-doc/openapi.json` URL in the UI would 404 on the gateway.
+    let app = mount_at_root_and_prefix(app).merge(swagger_ui());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -89,6 +90,15 @@ fn mount_at_root_and_prefix(inner: Router) -> Router {
     Router::new()
         .merge(inner.clone())
         .nest(GATEWAY_PATH_PREFIX, inner)
+}
+
+fn swagger_ui() -> Router {
+    Router::new()
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(
+            SwaggerUi::new("/auth/docs")
+                .url("/auth/api-doc/openapi.json", swagger::ApiDoc::openapi()),
+        )
 }
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {

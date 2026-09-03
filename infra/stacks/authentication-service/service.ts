@@ -526,7 +526,10 @@ export class AuthenticationService extends pulumi.ComponentResource {
 
     this.service = service;
 
-    this.setupAutoScaling();
+    this.setupAutoScaling({
+      gatewayAlbArnSuffix: gatewayLoadBalancer.albArnSuffix,
+      gatewayTargetGroup: gatewayTargetGroup.target_group,
+    });
 
     this.setupServiceAlarms();
 
@@ -652,7 +655,13 @@ export class AuthenticationService extends pulumi.ComponentResource {
     return { serviceAlbSg, serviceSg };
   }
 
-  setupAutoScaling() {
+  setupAutoScaling({
+    gatewayAlbArnSuffix,
+    gatewayTargetGroup,
+  }: {
+    gatewayAlbArnSuffix: pulumi.Output<string>;
+    gatewayTargetGroup: aws.lb.TargetGroup;
+  }) {
     if (!this.service) return;
 
     const serviceScalableTarget = new aws.appautoscaling.Target(
@@ -668,19 +677,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const lbPortion: pulumi.Output<string> = this.lb.arn.apply((arn) => {
-      const parts = arn.split(':loadbalancer/');
-      return parts[1];
-    });
-
-    const tgPortion: pulumi.Output<string> = this.targetGroup.arn.apply(
-      (arn) => {
-        const parts = arn.split(':');
-        return parts[parts.length - 1];
-      }
-    );
-
-    const resourceLabel = pulumi.interpolate`${lbPortion}/${tgPortion}`;
+    const resourceLabel = pulumi.interpolate`${gatewayAlbArnSuffix}/${gatewayTargetGroup.arnSuffix}`;
 
     // Create an Auto Scaling policy for request count.
     new aws.appautoscaling.Policy(
