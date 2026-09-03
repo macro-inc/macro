@@ -303,7 +303,7 @@ function GoogleInboxCapability(props: {
                 label="Signature"
                 description="Added to messages you send from this inbox."
                 align="start"
-                class="min-h-0 py-3 pl-[4.75rem] touch:pl-[4.25rem]"
+                class="min-h-0 py-3 pl-10"
               >
                 <Button
                   variant="outline"
@@ -320,7 +320,7 @@ function GoogleInboxCapability(props: {
               <Show when={showSignature()}>
                 <div
                   id={signatureSectionId()}
-                  class="pr-6 pb-5 pl-[4.75rem] touch:pl-[4.25rem]"
+                  class="pr-6 pb-5 pl-10"
                 >
                   <SignatureSection link={link()} />
                 </div>
