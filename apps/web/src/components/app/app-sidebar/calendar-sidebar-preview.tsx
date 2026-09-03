@@ -355,9 +355,21 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
                       <For each={groupCalendarSourcesByAccount(sources())}>
                         {(group) => (
                           <Dropdown.Group>
-                            <Dropdown.GroupLabel>
-                              {group.emailAddress}
-                            </Dropdown.GroupLabel>
+                            <Dropdown.CheckboxItem
+                              checked={group.calendars.every((source) =>
+                                isSourceVisible(source.id)
+                              )}
+                              closeOnSelect={false}
+                              onChange={(visible) => {
+                                for (const source of group.calendars) {
+                                  setSourceVisibility(source.id, visible);
+                                }
+                              }}
+                            >
+                              <span class="min-w-0 flex-1 truncate font-medium">
+                                {group.emailAddress}
+                              </span>
+                            </Dropdown.CheckboxItem>
                             <For each={group.calendars}>
                               {(source) => (
                                 <Dropdown.CheckboxItem

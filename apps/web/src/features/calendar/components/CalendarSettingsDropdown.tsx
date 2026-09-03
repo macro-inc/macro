@@ -16,7 +16,10 @@ import {
   useCalendarAccounts,
 } from '../hooks/use-calendar-accounts';
 import type { CalendarTimeFormat, CalendarWeekStart } from '../types';
-import { groupCalendarSourcesByAccount } from '../utils/calendar-source-groups';
+import {
+  type CalendarAccountGroup,
+  groupCalendarSourcesByAccount,
+} from '../utils/calendar-source-groups';
 import { useCalendarView } from './CalendarViewContext';
 import { MobilePeriodControls } from './PeriodSelector';
 import {
@@ -70,6 +73,22 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     calendarView.setSourceVisibility(sourceId, visible);
   };
 
+  // The account header checkbox shows or hides every calendar in the group.
+  const changeAccountVisibility = (
+    group: CalendarAccountGroup,
+    visible: boolean
+  ) => {
+    calendarView.closeEventDetails();
+    for (const source of group.calendars) {
+      calendarView.setSourceVisibility(source.id, visible);
+    }
+  };
+  const isAccountVisible = (group: CalendarAccountGroup) =>
+    group.calendars.every((source) => calendarView.isSourceVisible(source.id));
+  const isAccountPartiallyVisible = (group: CalendarAccountGroup) =>
+    !isAccountVisible(group) &&
+    group.calendars.some((source) => calendarView.isSourceVisible(source.id));
+
   const changeShowWeekends = (showWeekends: boolean) => {
     calendarView.closeEventDetails();
     calendarView.setShowWeekends(showWeekends);
@@ -119,6 +138,9 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     weekStartLabel,
     timeFormatLabel,
     changeSourceVisibility,
+    changeAccountVisibility,
+    isAccountVisible,
+    isAccountPartiallyVisible,
     changeShowWeekends,
     changeWeekStartsOn,
     changeTimeFormat,
@@ -156,7 +178,17 @@ function DesktopCalendarSettings(props: {
           <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
             {(group) => (
               <Dropdown.Group>
-                <Dropdown.GroupLabel>{group.emailAddress}</Dropdown.GroupLabel>
+                <Dropdown.CheckboxItem
+                  checked={controls.isAccountVisible(group)}
+                  closeOnSelect={false}
+                  onChange={(checked) =>
+                    controls.changeAccountVisibility(group, checked)
+                  }
+                >
+                  <span class="min-w-0 flex-1 truncate font-medium">
+                    {group.emailAddress}
+                  </span>
+                </Dropdown.CheckboxItem>
                 <For each={group.calendars}>
                   {(source) => (
                     <Dropdown.CheckboxItem
@@ -355,11 +387,21 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
           <Show when={controls.showCalendarVisibility()}>
             <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
               {(group, index) => (
-                <>
-                  <MobileDrawer.Label class={index() > 0 ? 'pt-4' : undefined}>
-                    {group.emailAddress}
-                  </MobileDrawer.Label>
+                <div class={index() > 0 ? 'pt-4' : undefined}>
                   <MobileDrawer.Section class="flex shrink-0 flex-col">
+                    <Checkbox
+                      checked={controls.isAccountVisible(group)}
+                      indeterminate={controls.isAccountPartiallyVisible(group)}
+                      onChange={(checked) =>
+                        controls.changeAccountVisibility(group, checked)
+                      }
+                      class={DRAWER_ROW_CLASS}
+                    >
+                      <Checkbox.Label class="min-w-0 flex-1 truncate font-medium">
+                        {group.emailAddress}
+                      </Checkbox.Label>
+                      <Checkbox.Control />
+                    </Checkbox>
                     <For each={group.calendars}>
                       {(source) => (
                         <Checkbox
@@ -395,7 +437,7 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
                       )}
                     </For>
                   </MobileDrawer.Section>
-                </>
+                </div>
               )}
             </For>
             <div class="mt-4" />
