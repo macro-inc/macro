@@ -1,4 +1,5 @@
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
+import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -426,6 +427,14 @@ export function runCreateAction(
     case 'agent': {
       const { openWithSplit } = useSplitLayout();
       setCreateMenuOpen(false, false);
+      // The agent block is lazy and the composer mounts after this gesture.
+      // Arm focus now so the contenteditable is selected once it appears —
+      // same as email's To field and the mobile chat input.
+      triggerFocusInput(() =>
+        document
+          .getElementById(AGENT_INPUT_TEXT_AREA_ID)
+          ?.querySelector<HTMLElement>('[contenteditable="true"]')
+      );
       openWithSplit(
         { type: 'agent', id: startPendingSession() },
         { referredFrom: 'launcher', preferNewSplit: shouldInsert }

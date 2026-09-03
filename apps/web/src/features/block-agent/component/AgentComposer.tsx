@@ -16,7 +16,14 @@ import {
   QueuedPrompts,
 } from '../ui';
 
-export function AgentComposer() {
+export function AgentComposer(props: {
+  /**
+   * When set, the split/j-k gate from the block adapter. Surfaces without
+   * that context (the debug replay) fall back to focusing a just-created
+   * pending session only.
+   */
+  autofocus?: boolean;
+}) {
   const {
     composer,
     loadFailed,
@@ -49,10 +56,10 @@ export function AgentComposer() {
       };
     });
 
-  // A session still being created was created by this user, one action ago,
-  // and has an empty transcript: the only thing to do with it is type. The
-  // wait for the sandbox is exactly when that matters most.
-  const autofocus = pending();
+  // The adapter decides (split layout + j/k, same as chat/channel). A
+  // just-created pending session is the fallback: empty transcript, the
+  // only thing to do is type.
+  const autofocus = props.autofocus ?? pending();
 
   return (
     <>

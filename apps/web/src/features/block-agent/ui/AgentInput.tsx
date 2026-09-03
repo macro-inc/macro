@@ -10,9 +10,18 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { Button, SendButton, Surface } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+
+/**
+ * Id of the agent composer's text-area wrapper. Exposed so callers (e.g. the
+ * Create menu) can arm focus on the contenteditable before the lazy block
+ * mounts.
+ */
+export const AGENT_INPUT_TEXT_AREA_ID = 'agent-input-text-area';
 
 /** Quote text into the composer as a referenced paste chip. */
 export type QuoteInsert = (text: string) => void;
@@ -131,6 +140,7 @@ export function AgentInput(props: AgentInputProps) {
             paragraphs carry my-1.5, so the row's py-1.5 is the whole frame —
             the same 44px single-line height as ChatInput. */}
           <div
+            id={AGENT_INPUT_TEXT_AREA_ID}
             ref={bodyRef}
             class="pl-1 text-sm text-ink"
             classList={{
@@ -147,7 +157,7 @@ export function AgentInput(props: AgentInputProps) {
               placeholder={
                 props.placeholder ?? 'Message the agent, @mention anything'
               }
-              autofocus={props.autofocus}
+              autofocus={!isMobile() && !isTouchDevice() && props.autofocus}
             />
           </div>
 
