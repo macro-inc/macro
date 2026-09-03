@@ -6,7 +6,7 @@ use crate::domain::model::{CreatePropertyDefinitionOutcome, PropertyDefinitionOw
 use crate::domain::ports::PropertiesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::{DataType, EntityType};
 use sqlx::{Pool, Postgres};
@@ -32,9 +32,9 @@ fn team_2() -> Uuid {
     "0e000000-0000-0000-0000-000000000002".parse().unwrap()
 }
 
-fn created(outcome: CreatePropertyDefinitionOutcome) -> PropertyDefinition {
+fn created(outcome: CreatePropertyDefinitionOutcome) -> PropertyDefinitionWithOptions {
     match outcome {
-        CreatePropertyDefinitionOutcome::Created(definition) => definition,
+        CreatePropertyDefinitionOutcome::Created(created) => created,
         CreatePropertyDefinitionOutcome::DuplicateDisplayName => {
             panic!("expected the definition to be created")
         }
@@ -241,7 +241,8 @@ async fn create_property_definition_simple(pool: Pool<Postgres>) -> anyhow::Resu
             Vec::new(),
         )
         .await?,
-    );
+    )
+    .definition;
 
     assert_eq!(property.display_name, "New Test Property");
     assert_eq!(property.data_type, DataType::String);
@@ -268,7 +269,8 @@ async fn create_property_definition_user_owned(pool: Pool<Postgres>) -> anyhow::
             Vec::new(),
         )
         .await?,
-    );
+    )
+    .definition;
 
     assert_eq!(property.display_name, "My User Property");
     assert_eq!(property.data_type, DataType::Number);
@@ -317,7 +319,7 @@ async fn create_property_definition_with_options(pool: Pool<Postgres>) -> anyhow
         new_option(1, PropertyOptionValue::String("Beta".to_string())),
     ];
 
-    let property = created(
+    let created = created(
         repo.create_property_definition(
             PropertyDefinitionOwner::Team(team_1()),
             "Select With Options",
@@ -329,13 +331,40 @@ async fn create_property_definition_with_options(pool: Pool<Postgres>) -> anyhow
         .await?,
     );
 
-    let option_count: i64 = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) as "count!" FROM property_options WHERE property_definition_id = $1"#,
-        property.id
+    // The created options come back with their persisted ids, in display order.
+    let returned: Vec<(i32, String, Uuid)> = created
+        .property_options
+        .iter()
+        .map(|o| {
+            (
+                o.display_order,
+                o.value.to_string(),
+                o.property_definition_id,
+            )
+        })
+        .collect();
+    assert_eq!(
+        returned,
+        vec![
+            (0, "Alpha".to_string(), created.definition.id),
+            (1, "Beta".to_string(), created.definition.id),
+        ]
+    );
+
+    let stored_ids: Vec<Uuid> = sqlx::query_scalar!(
+        r#"SELECT id FROM property_options WHERE property_definition_id = $1 ORDER BY display_order"#,
+        created.definition.id
     )
-    .fetch_one(&pool)
+    .fetch_all(&pool)
     .await?;
-    assert_eq!(option_count, 2);
+    assert_eq!(
+        stored_ids,
+        created
+            .property_options
+            .iter()
+            .map(|o| o.id)
+            .collect::<Vec<_>>()
+    );
 
     Ok(())
 }
@@ -357,7 +386,8 @@ async fn create_property_definition_specific_entity(pool: Pool<Postgres>) -> any
             Vec::new(),
         )
         .await?,
-    );
+    )
+    .definition;
 
     assert_eq!(property.specific_entity_type, Some(EntityType::Document));
 

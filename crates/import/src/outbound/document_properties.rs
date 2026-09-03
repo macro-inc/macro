@@ -393,7 +393,9 @@ impl<P: PropertiesService> ImportedPropertyDefinitions for P {
         user: &MacroUserIdStr<'_>,
         request: &CreatePropertyDefinitionRequest,
     ) -> Result<PropertyDefinition, Self::Error> {
-        PropertiesService::create_property_definition(self, user, None, request).await
+        PropertiesService::create_property_definition(self, user, None, request)
+            .await
+            .map(|created| created.definition)
     }
 
     async fn list_imported_definitions(

@@ -1090,7 +1090,7 @@ where
         user_id: &MacroUserIdStr<'_>,
         team: Option<&TeamReceipt>,
         request: &CreatePropertyDefinitionRequest,
-    ) -> Result<PropertyDefinition, PropertiesErr> {
+    ) -> Result<PropertyDefinitionWithOptions, PropertiesErr> {
         // Derive the owner from the authenticated caller - clients never supply owner ids.
         let owner = match request.scope {
             CreatePropertyScope::User => PropertyDefinitionOwner::User(user_id),
@@ -1142,12 +1142,13 @@ where
         };
 
         tracing::info!(
-            property_id = %property.id,
-            data_type = ?property.data_type,
+            property_id = %property.definition.id,
+            data_type = ?property.definition.data_type,
+            option_count = property.property_options.len(),
             "successfully created property definition"
         );
 
-        self.publish_property_event(Self::property_created_event(&property, user_id));
+        self.publish_property_event(Self::property_created_event(&property.definition, user_id));
 
         Ok(property)
     }

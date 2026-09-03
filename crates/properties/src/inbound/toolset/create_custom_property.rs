@@ -6,7 +6,6 @@ use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolR
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
-use models_properties::DataType;
 use models_properties::api::{
     CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType, SelectNumberOption,
     SelectStringOption,
@@ -108,9 +107,13 @@ impl ToolAnnotated for CreateCustomProperty {
 }
 
 impl CreateCustomProperty {
-    /// Map the flat agent-facing params onto the API request. Only the
-    /// cross-field shape is checked here (which params go with which type);
-    /// name length, option values, and uniqueness are validated by the domain.
+    /// Map the flat agent-facing params onto the API request, the way an axum
+    /// handler's `Json<Request>` extractor does. Only input shape is checked:
+    /// which params go with which type, and that a select has its (conditionally
+    /// required) `options` — the same completeness rule the create-property UI
+    /// applies, and not a domain invariant since import creates selects first and
+    /// fills options later. Name length, option values, uniqueness, and team
+    /// membership are all decided by the domain.
     pub(crate) fn to_create_request(
         &self,
     ) -> Result<CreatePropertyDefinitionRequest, ToolCallError> {
@@ -226,42 +229,22 @@ where
         tracing::info!("Create custom property");
 
         let request = self.to_create_request()?;
-        // The domain rejects team scope without a receipt (TeamMembershipRequired).
-        let team = match request.scope {
-            CreatePropertyScope::User => None,
-            CreatePropertyScope::Team => {
-                caller_team_receipt_opt(&service_context, &request_context).await?
-            }
-        };
-        let user_id = &request_context.user_id;
+        // Same as the HTTP route's PropertyTeamExtractor: resolve the caller's
+        // team receipt if they have one and let the domain decide what it needs.
+        let team = caller_team_receipt_opt(&service_context, &request_context).await?;
 
-        let property = service_context
+        let created = service_context
             .service
-            .create_property_definition(user_id, team.as_ref(), &request)
+            .create_property_definition(&request_context.user_id, team.as_ref(), &request)
             .await
             .map_err(map_create_error)?;
 
-        let options: Vec<ToolPropertyOption> = if matches!(
-            property.data_type,
-            DataType::SelectString | DataType::SelectNumber
-        ) {
-            service_context
-                .service
-                .get_property_options(property.id, user_id, team.as_ref())
-                .await
-                .map_err(|e| ToolCallError {
-                    description: format!(
-                        "Created the property (property_definition_id {}) but could not load its options. Do not create it again; call GetEntityProperties on an item to read it, then SetEntityProperty to assign a value.",
-                        property.id
-                    ),
-                    internal_error: e.into(),
-                })?
-                .into_iter()
-                .map(Into::into)
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let definition = created.definition;
+        let options: Vec<ToolPropertyOption> = created
+            .property_options
+            .into_iter()
+            .map(Into::into)
+            .collect();
 
         let scope_word = match self.scope {
             CreatePropertyScope::Team => "team",
@@ -269,8 +252,8 @@ where
         };
         let mut summary = format!(
             "Created the {scope_word} {} property \"{}\"",
-            data_type_name(property.data_type),
-            property.display_name
+            data_type_name(definition.data_type),
+            definition.display_name
         );
         if !options.is_empty() {
             let labels: Vec<String> = options
@@ -282,10 +265,10 @@ where
         summary.push('.');
 
         Ok(CreateCustomPropertyResponse {
-            property_definition_id: property.id,
-            display_name: property.display_name,
-            data_type: data_type_name(property.data_type).to_string(),
-            is_multi_select: property.is_multi_select,
+            property_definition_id: definition.id,
+            display_name: definition.display_name,
+            data_type: data_type_name(definition.data_type).to_string(),
+            is_multi_select: definition.is_multi_select,
             scope: self.scope,
             options,
             summary,

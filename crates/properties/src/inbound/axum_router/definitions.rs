@@ -220,7 +220,8 @@ pub async fn create_property_definition<
         .create_property_definition(&user, team.entity_access_receipt.as_ref(), &request)
         .await?;
 
-    Ok((StatusCode::CREATED, Json(property)))
+    // The response contract predates options being returned from create; keep it.
+    Ok((StatusCode::CREATED, Json(property.definition)))
 }
 
 #[derive(Debug, Error)]
