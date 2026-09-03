@@ -181,9 +181,8 @@ export function ConversationCard(props: ConversationCardProps) {
   const latestRootMessage = () => props.channel.latestRootMessage;
 
   return (
-    <button
+    <div
       id={props.id}
-      type="button"
       role="treeitem"
       tabIndex={-1}
       class={cn(
@@ -266,7 +265,7 @@ export function ConversationCard(props: ConversationCardProps) {
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
 

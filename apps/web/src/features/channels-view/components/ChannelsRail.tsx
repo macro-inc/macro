@@ -607,6 +607,21 @@ export function ChannelsRail(props: {
           </div>
         </Match>
         <Match when={props.mode === 'slim'}>
+          <div class="flex shrink-0 justify-center px-2 pb-2">
+            <SplitPanel.ControlGroup>
+              <div class="grid w-12 grid-cols-2 justify-items-center">
+                <div class="col-span-2">
+                  <SplitPanel.CloseButton size="icon-sm" />
+                </div>
+                <div>
+                  <SplitPanel.BackButton size="icon-sm" />
+                </div>
+                <div>
+                  <SplitPanel.ForwardButton size="icon-sm" />
+                </div>
+              </div>
+            </SplitPanel.ControlGroup>
+          </div>
           <div class="shrink-0 px-3">
             <Tabs
               aria-label="Chat sidebar views"
