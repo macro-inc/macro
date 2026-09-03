@@ -299,7 +299,7 @@ function GoogleInboxCapability(props: {
             <SettingsRow
               label="Signature"
               description="Added to messages you send from this inbox."
-              stackOnNarrow
+              align="start"
             >
               <Button
                 variant="outline"
