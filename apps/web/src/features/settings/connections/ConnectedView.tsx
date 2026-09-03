@@ -35,7 +35,9 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
                   <IntegrationRow
                     icon={providerIcon(provider.id)}
                     title={provider.name}
-                    description={provider.summary}
+                    description={
+                      <span class="ph-no-capture">{provider.summary}</span>
+                    }
                     facts={provider.accounts}
                   >
                     <CaretRightIcon class="size-4 text-ink-extra-muted" />

@@ -88,7 +88,7 @@ export function SettingsPage(props: {
  * can also drop a bare card straight under the title.
  */
 export function SettingsSection(props: {
-  title?: string;
+  title?: JSX.Element;
   description?: string;
   /** Right-aligned controls beside the section heading. */
   actions?: JSX.Element;
@@ -295,7 +295,9 @@ export function IntegrationRow(props: {
           </div>
         </Show>
         <Show when={props.facts}>
-          <div class="text-xs text-ink-extra-muted">{props.facts}</div>
+          <div class="ph-no-capture text-xs text-ink-extra-muted">
+            {props.facts}
+          </div>
         </Show>
       </div>
     </div>

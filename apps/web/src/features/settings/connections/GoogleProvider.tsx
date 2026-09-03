@@ -134,7 +134,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
         <For each={inboxes()}>
           {(inbox) => (
             <SettingsSection
-              title={inbox.email}
+              title={<span class="ph-no-capture truncate">{inbox.email}</span>}
               description={inbox.scope === 'shared' ? 'Shared' : 'Personal'}
             >
               <SettingsCard>
@@ -177,7 +177,10 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
         </For>
         <Show when={disabledPrimaryEmail()}>
           {(email) => (
-            <SettingsSection title={email()} description="Personal">
+            <SettingsSection
+              title={<span class="ph-no-capture truncate">{email()}</span>}
+              description="Personal"
+            >
               <SettingsCard>
                 <CapabilityRow
                   title="Gmail"
@@ -231,13 +234,18 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
                 fallback={
                   <>
                     Remove access to{' '}
-                    <span class="text-ink">{removeTarget()?.email}</span>? The
-                    inbox and its data stay with its owner.
+                    <span class="ph-no-capture text-ink">
+                      {removeTarget()?.email}
+                    </span>
+                    ? The inbox and its data stay with its owner.
                   </>
                 }
               >
-                Remove <span class="text-ink">{removeTarget()?.email}</span>?
-                This clears all of its email data from Macro and cannot be
+                Remove{' '}
+                <span class="ph-no-capture text-ink">
+                  {removeTarget()?.email}
+                </span>
+                ? This clears all of its email data from Macro and cannot be
                 undone.
               </Show>
             </Dialog.Description>
