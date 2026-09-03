@@ -427,27 +427,15 @@ export function runCreateAction(
     case 'agent': {
       const { openWithSplit } = useSplitLayout();
       setCreateMenuOpen(false, false);
-      // The agent block is lazy and the composer mounts after this gesture.
-      // Arm focus now so the contenteditable is selected once it appears —
-      // same as email's To field and the mobile chat input. Also poll: the
-      // shared helper waits for layout (`isVisible`), and a just-mounted
-      // lexical root can miss that window before the split panel steals
-      // focus.
-      const agentComposer = () =>
+      // The agent block is lazy, so the composer is not in the DOM yet. Arm
+      // focus on it the same way the email row arms its To field; the helper
+      // waits for the element to appear.
+      suppressCloseAutoFocus = true;
+      triggerFocusInput(() =>
         document
           .getElementById(AGENT_INPUT_TEXT_AREA_ID)
-          ?.querySelector<HTMLElement>('[contenteditable="true"]');
-      triggerFocusInput(agentComposer);
-      const deadline = Date.now() + 2000;
-      const poll = () => {
-        const el = agentComposer();
-        if (el) {
-          el.focus();
-          return;
-        }
-        if (Date.now() < deadline) requestAnimationFrame(poll);
-      };
-      requestAnimationFrame(poll);
+          ?.querySelector<HTMLElement>('[contenteditable="true"]')
+      );
       openWithSplit(
         { type: 'agent', id: startPendingSession() },
         { referredFrom: 'launcher', preferNewSplit: shouldInsert }
@@ -743,6 +731,13 @@ export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
   false,
   { id: 'launcher' }
 );
+
+/**
+ * A create row that focuses its own destination sets this, so Kobalte does not
+ * restore focus to the opener as the dialog unmounts. Escape and overlay
+ * clicks leave it alone and keep the normal restore.
+ */
+let suppressCloseAutoFocus = false;
 
 type LauncherMenuItemProps = {
   creatableBlock: CreatableBlock;
@@ -1145,10 +1140,8 @@ export const Launcher = (props: LauncherProps) => {
         <Dialog.Content
           class="[--color-surface:var(--color-dialog)]"
           onCloseAutoFocus={(event) => {
-            // Create actions pass shouldReturnFocus: false and focus their
-            // destination (agent composer, email To, …). Kobalte's restore
-            // otherwise lands on the previous pane after the dialog unmounts
-            // — same suppress as CommandMenu search rows.
+            if (!suppressCloseAutoFocus) return;
+            suppressCloseAutoFocus = false;
             event.preventDefault();
           }}
         >

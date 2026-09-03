@@ -16,13 +16,7 @@ import {
   QueuedPrompts,
 } from '../ui';
 
-export function AgentComposer(props: {
-  /**
-   * Split/j-k gate from the block adapter — same contract as Chat and
-   * Channel. Replay (no soup/split) passes false; it must not steal focus.
-   */
-  autofocus?: boolean;
-}) {
+export function AgentComposer() {
   const {
     composer,
     loadFailed,
@@ -55,6 +49,11 @@ export function AgentComposer(props: {
       };
     });
 
+  // A session still being created was created by this user, one action ago,
+  // and has an empty transcript: the only thing to do with it is type. The
+  // wait for the sandbox is exactly when that matters most.
+  const autofocus = pending();
+
   return (
     <>
       <Show when={queuedItems().length > 0}>
@@ -75,7 +74,7 @@ export function AgentComposer(props: {
       </Show>
       <AgentInput
         placeholder="Message the agent, @mention anything"
-        autofocus={props.autofocus}
+        autofocus={autofocus}
         busy={composer.busy()}
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed

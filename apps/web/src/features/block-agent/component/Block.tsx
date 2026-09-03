@@ -1,7 +1,5 @@
 import { SidePanel } from '@components/app/side-panel';
 import { SplitPanelContext } from '@components/app/split-layout/context';
-import { useCanAutofocusSplitContent } from '@components/app/split-layout/layoutUtils';
-import { useNavigatedFromJK } from '@components/app/useNavigatedFromJK';
 import { useBlockId } from '@core/block';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -26,8 +24,6 @@ import { Transcript } from './Transcript';
 function AgentBlockContent() {
   const { session, metadata, loadFailed, loadRetryable, pending, retryLoad } =
     useAgentSession();
-  const canAutofocusSplitContent = useCanAutofocusSplitContent();
-  const { navigatedFromJK } = useNavigatedFromJK();
 
   // Nothing loaded and no way forward: the load failed outright, or the
   // device is offline and the pending load cannot complete until
@@ -64,9 +60,7 @@ function AgentBlockContent() {
             <div class="size-full min-w-0 flex flex-col">
               <Transcript />
               <div class="shrink-0 w-full max-w-3xl mx-auto px-4 pb-4">
-                <AgentComposer
-                  autofocus={canAutofocusSplitContent && !navigatedFromJK()}
-                />
+                <AgentComposer />
               </div>
             </div>
             <Show when={sessionOriginThread(session())}>
