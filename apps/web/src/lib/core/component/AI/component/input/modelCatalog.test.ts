@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   buildModelCatalog,
   type CatalogModelOption,
+  inferModelFamily,
   isLargeModelCatalog,
   MAX_RECOMMENDED_MODELS,
   matchesModelQuery,
+  modelFamilyHint,
   moreModelFamilies,
 } from './modelCatalog';
 
@@ -59,13 +61,58 @@ describe('modelCatalog', () => {
     expect(catalog.recommended.map((option) => option.id)).toContain('opus5');
   });
 
-  it('collects a flat list into one unlabelled family', () => {
+  it('infers the same families when a harness sent none', () => {
     const flat = OPTIONS.map(({ group: _group, ...option }) => option);
-    const catalog = buildModelCatalog(flat, 'auto');
+    const inferred = buildModelCatalog(flat, 'auto');
+    const sent = buildModelCatalog(OPTIONS, 'auto');
+
+    expect(inferred.families).toEqual(
+      sent.families.map((family) => ({
+        label: family.label,
+        options: family.options.map(({ group: _group, ...option }) => option),
+      }))
+    );
+  });
+
+  it('keeps a flat list flat when no inferred family has two members', () => {
+    const catalog = buildModelCatalog(
+      [
+        { id: 'a', label: 'Auto' },
+        { id: 'b', label: 'Composer 2.5' },
+        { id: 'c', label: 'GPT-5.5' },
+      ],
+      'a'
+    );
 
     expect(catalog.families).toHaveLength(1);
     expect(catalog.families[0]?.label).toBeNull();
-    expect(catalog.families[0]?.options).toHaveLength(flat.length);
+  });
+
+  it('infers families the way the cursor agent does', () => {
+    for (const [label, family] of [
+      ['Claude Opus 4.8', 'Claude Opus'],
+      ['Cursor Grok 4.6 High Fast', 'Cursor Grok'],
+      ['GPT-5.6 Sol', 'GPT'],
+      ['GPT-5 Mini', 'GPT'],
+      ['Gemini 3.8 Flash', 'Gemini'],
+      ['Kimi K3', 'Kimi'],
+      ['Composer 2.5', 'Composer'],
+      ['Auto', 'Auto'],
+      ['o3 Pro', 'o3 Pro'],
+      ['gpt-oss', 'gpt-oss'],
+    ] as const) {
+      expect(inferModelFamily(label)).toBe(family);
+    }
+  });
+
+  it('shows a family hint unless it would repeat the label', () => {
+    expect(modelFamilyHint({ id: 'x', label: 'Claude Opus 5' })).toBe(
+      'Claude Opus'
+    );
+    expect(
+      modelFamilyHint({ id: 'x', label: 'Opus', group: 'Anthropic' })
+    ).toBe('Anthropic');
+    expect(modelFamilyHint({ id: 'x', label: 'Auto' })).toBeUndefined();
   });
 
   it('falls back to one model per heading for unfamiliar names', () => {
@@ -137,5 +184,8 @@ describe('modelCatalog', () => {
     expect(matchesModelQuery(terra, 'gpt')).toBe(true);
     expect(matchesModelQuery(terra, 'opus')).toBe(false);
     expect(matchesModelQuery({ id: 'x', label: 'Solo' }, 'gpt')).toBe(false);
+    expect(matchesModelQuery({ id: 'x', label: 'GPT-5.6 Terra' }, 'gpt')).toBe(
+      true
+    );
   });
 });

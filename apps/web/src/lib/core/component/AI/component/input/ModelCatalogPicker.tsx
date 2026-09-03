@@ -7,6 +7,7 @@ import {
   buildModelCatalog,
   type CatalogModelOption,
   matchesModelQuery,
+  modelFamilyHint,
   moreModelFamilies,
 } from './modelCatalog';
 
@@ -132,11 +133,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
                     {(option) => (
                       <ModelRow
                         option={option}
-                        hint={
-                          option.group !== option.label
-                            ? option.group
-                            : undefined
-                        }
+                        hint={modelFamilyHint(option)}
                         selected={option.id === props.value}
                         onSelect={() => props.onSelect(option.id)}
                       />
@@ -196,9 +193,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
               {(option) => (
                 <ModelRow
                   option={option}
-                  hint={
-                    option.group !== option.label ? option.group : undefined
-                  }
+                  hint={modelFamilyHint(option)}
                   selected={option.id === props.value}
                   onSelect={() => props.onSelect(option.id)}
                 />

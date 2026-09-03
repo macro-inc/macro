@@ -45,16 +45,83 @@ export function isLargeModelCatalog(options: readonly CatalogModelOption[]) {
   return options.length > 10;
 }
 
-/** Bucket options under the harness's headings, in the order it listed them. */
-function familiesOf(options: readonly CatalogModelOption[]): ModelFamily[] {
+/**
+ * A version-looking token: alphanumerics and dots with a digit first or
+ * second (`4.6`, `5`, `K3`, `o3`, `R1`), but not `GPT`, `Sol`, or `Mini`.
+ */
+function isVersionToken(token: string): boolean {
+  const [first, second] = token;
+  const startsLikeAVersion =
+    (first !== undefined && /\d/.test(first)) ||
+    (first !== undefined &&
+      second !== undefined &&
+      /[A-Za-z]/.test(first) &&
+      /\d/.test(second));
+  return startsLikeAVersion && /^[A-Za-z0-9.]+$/.test(token);
+}
+
+/**
+ * The family a display name belongs to: the words before its first
+ * version-looking token, with `GPT-5.6` split at the hyphen so the version is
+ * seen. A name with no version, or one that starts with a version (`Auto`,
+ * `o3 Pro`), is its own family.
+ *
+ * This is the same rule the Cursor ACP agent applies before it sends ACP
+ * groups (`CursorModel::family` in `crates/cursor_cloud_agents`). It runs
+ * here only for harnesses that sent no groups, so those catalogs read the
+ * same way rather than as one long flat list.
+ */
+export function inferModelFamily(label: string): string {
+  const tokens = label
+    .split(/\s+/)
+    .filter(Boolean)
+    .flatMap((token) => {
+      const hyphen = token.indexOf('-');
+      const afterHyphen = token[hyphen + 1];
+      return hyphen > 0 && afterHyphen !== undefined && /\d/.test(afterHyphen)
+        ? [token.slice(0, hyphen), token.slice(hyphen + 1)]
+        : [token];
+    });
+  const family: string[] = [];
+  for (const token of tokens) {
+    if (isVersionToken(token)) break;
+    family.push(token);
+  }
+  if (family.length === 0 || family.length === tokens.length)
+    return label.trim();
+  return family.join(' ');
+}
+
+function bucketBy(
+  options: readonly CatalogModelOption[],
+  labelOf: (option: CatalogModelOption) => string | null
+): ModelFamily[] {
   const families: ModelFamily[] = [];
   for (const option of options) {
-    const label = option.group ?? null;
+    const label = labelOf(option);
     const family = families.find((candidate) => candidate.label === label);
     if (family) family.options.push(option);
     else families.push({ label, options: [option] });
   }
   return families;
+}
+
+/**
+ * Bucket options under the harness's headings, in the order it listed them.
+ * A harness that sent no headings gets them inferred from the names; if that
+ * still finds no family with two members, the list stays one unlabelled
+ * family rather than gaining a header per model.
+ */
+function familiesOf(options: readonly CatalogModelOption[]): ModelFamily[] {
+  if (options.some((option) => option.group)) {
+    return bucketBy(options, (option) => option.group ?? null);
+  }
+  const inferred = bucketBy(options, (option) =>
+    inferModelFamily(option.label)
+  );
+  return inferred.some((family) => family.options.length > 1)
+    ? inferred
+    : [{ label: null, options: [...options] }];
 }
 
 export function buildModelCatalog(
@@ -117,10 +184,22 @@ export function moreModelFamilies(catalog: ModelCatalog): ModelFamily[] {
     .filter((family) => family.options.length > 0);
 }
 
+/**
+ * The heading to show beside a model: the harness's, or the inferred one when
+ * the harness sent none. `undefined` when it would only repeat the label.
+ */
+export function modelFamilyHint(
+  option: CatalogModelOption
+): string | undefined {
+  const family = option.group ?? inferModelFamily(option.label);
+  return family === option.label ? undefined : family;
+}
+
 /** Whether a search query hits this model by name or by its heading. */
 export function matchesModelQuery(option: CatalogModelOption, query: string) {
+  const family = option.group ?? inferModelFamily(option.label);
   return (
     option.label.toLowerCase().includes(query) ||
-    (option.group?.toLowerCase().includes(query) ?? false)
+    family.toLowerCase().includes(query)
   );
 }
