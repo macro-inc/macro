@@ -145,7 +145,7 @@ list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team`, `Tags`, `CRM`, `Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`;
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`, `Harness`;
 `Log out`.
 `Agents` lists team and private agents with `Create agent` / `Edit <name>` dialogs grouped
 Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:
@@ -158,6 +158,17 @@ saving; each teammate connects their own account. An agent session that calls a 
 but unconnected app gets a tool result saying so, and the agent's reply renders a
 `Connect <app>` chip that opens Settings → Connections for that app.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
+
+`Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
+The model list is loaded live and independently for In-memory, connected Cursor, and every
+registered macrod harness. A harness can show `Loading models…`, an unsupported message, or
+a retryable error without hiding the other harnesses. Editing preserves a saved model that
+is no longer offered and labels it `saved, unavailable`.
+
+`Harness` configures Cursor and paired macrod runtimes. Cursor's default-model picker uses
+the same live model discovery and retains its existing save action. `Enter pairing code`
+shows the model catalog macrod advertised before registration, when one was provided; no
+registered-harness request is made while only a pairing code exists.
 
 ## Notifications
 

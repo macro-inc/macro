@@ -6,7 +6,7 @@ import {
 } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button, Dialog, Panel } from '@ui';
-import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
+import { createEffect, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { ChoiceRow } from './primitives';
 
 const PAIRING_ERROR_FALLBACK =
@@ -50,9 +50,11 @@ export function HarnessPairingDialog(props: {
   const currentTeamQuery = useCurrentTeamQuery();
   const currentTeamId = () => currentTeamQuery.data?.team.id;
   const canShareWithTeam = () => currentTeamId() !== undefined;
+  const pairingData = () =>
+    pairingQuery.isSuccess ? pairingQuery.data : undefined;
 
   createEffect(() => {
-    const pairing = pairingQuery.data;
+    const pairing = pairingData();
     if (!pairing) return;
     if (!nameEdited()) setName(pairing.requested_name);
     // The daemon's config may ask for a scope; preselect it, but the person
@@ -94,7 +96,7 @@ export function HarnessPairingDialog(props: {
     (share() === 'Private' || canShareWithTeam());
 
   const approve = async () => {
-    const pairing = pairingQuery.data;
+    const pairing = pairingData();
     if (!pairing || !canApprove()) return;
 
     setApproveError(undefined);
@@ -153,7 +155,7 @@ export function HarnessPairingDialog(props: {
               )}
             </Match>
 
-            <Match when={pairingQuery.data}>
+            <Match when={pairingData()}>
               {(pairing) => (
                 <div class="flex flex-col gap-4">
                   <div class="flex flex-col gap-1.5">
@@ -181,6 +183,52 @@ export function HarnessPairingDialog(props: {
                       Expires in {expiresInMinutes(pairing().expires_at)}{' '}
                       minutes
                     </span>
+                  </div>
+
+                  <div class="rounded-lg border border-edge-muted bg-ink/[0.025] p-3">
+                    <div class="text-xs font-medium text-ink">
+                      Available models
+                    </div>
+                    <Show
+                      when={pairing().model_catalog}
+                      fallback={
+                        <p class="mt-1 text-xs text-ink-muted">
+                          This harness did not provide a model catalog during
+                          pairing.
+                        </p>
+                      }
+                    >
+                      {(catalog) => (
+                        <For
+                          each={catalog().options}
+                          fallback={
+                            <p class="mt-1 text-xs text-ink-muted">
+                              This harness does not support model selection.
+                            </p>
+                          }
+                        >
+                          {(model) => (
+                            <div class="mt-2">
+                              <div class="flex items-center gap-2 text-xs text-ink">
+                                <span>{model.name}</span>
+                                <Show when={model.id === catalog().current}>
+                                  <span class="rounded-full border border-edge-muted px-1.5 py-0.5 text-xxs uppercase text-ink-extra-muted">
+                                    Current
+                                  </span>
+                                </Show>
+                              </div>
+                              <Show when={model.description}>
+                                {(description) => (
+                                  <p class="mt-0.5 text-xs text-ink-muted">
+                                    {description()}
+                                  </p>
+                                )}
+                              </Show>
+                            </div>
+                          )}
+                        </For>
+                      )}
+                    </Show>
                   </div>
 
                   <label class="flex flex-col gap-1.5">
@@ -287,7 +335,7 @@ export function HarnessPairingDialog(props: {
                 Close
               </Button>
             </Match>
-            <Match when={pairingQuery.data}>
+            <Match when={pairingData()}>
               <Button
                 type="button"
                 variant="ghost"

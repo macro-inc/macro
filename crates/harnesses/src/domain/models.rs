@@ -89,6 +89,8 @@ pub struct PairingModelOption {
     pub name: String,
     /// Optional descriptive copy supplied by the harness.
     pub description: Option<String>,
+    /// Optional group heading supplied by the harness.
+    pub group: Option<String>,
 }
 
 impl RequestedHarnessScope {
