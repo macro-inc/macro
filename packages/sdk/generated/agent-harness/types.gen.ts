@@ -42,6 +42,10 @@ export type AgentModelDto = {
      */
     description?: string | null;
     /**
+     * Optional group heading supplied by the provider.
+     */
+    group?: string | null;
+    /**
      * Provider model id.
      */
     id: string;
@@ -50,6 +54,11 @@ export type AgentModelDto = {
      */
     name: string;
 };
+
+/**
+ * Model-selection availability returned over HTTP.
+ */
+export type AgentModelsStatusDto = 'available' | 'unsupported';
 
 /**
  * Ask the agent to work on something.
@@ -441,9 +450,9 @@ export type ExternalSessionResponse = {
  */
 export type LoadAgentModelsRequest = {
     /**
-     * `in-memory`, `cursor`, or `macrod`.
+     * Provider to probe.
      */
-    harness: string;
+    harness: ModelHarnessDto;
     /**
      * Required for macrod and forbidden for other targets.
      */
@@ -463,9 +472,9 @@ export type LoadAgentModelsResponse = {
      */
     models: Array<AgentModelDto>;
     /**
-     * `available` or `unsupported`.
+     * Model-selection availability.
      */
-    status: string;
+    status: AgentModelsStatusDto;
 };
 
 /**
@@ -495,6 +504,11 @@ export type LogFrameDto = {
      */
     direction: LogDirectionDto;
 };
+
+/**
+ * Harness names accepted by the model discovery endpoint.
+ */
+export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
 
 /**
  * One action waiting in a session's queue.
