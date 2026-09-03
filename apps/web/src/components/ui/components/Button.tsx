@@ -32,8 +32,11 @@ export const buttonVariants = createVariants(
     variant: {
       danger:
         'bg-failure-bg text-failure dark:bg-failure-bg not-disabled:hover:bg-failure/25 not-disabled:active:bg-failure/30',
+      // Tinted rather than transparent so the glass treatment has a substrate
+      // to blur: a backdrop-filter over a fully transparent button has nothing
+      // to separate the button from the surface behind it.
       outline:
-        'bg-transparent text-ink-muted border-edge-muted not-disabled:hover:bg-hover not-disabled:hover:text-ink not-disabled:active:bg-active',
+        'bg-lift/70 text-ink-muted border-edge-muted not-disabled:hover:overlay-hover not-disabled:hover:text-ink not-disabled:active:overlay-active',
       accent: 'bg-accent-bg not-disabled:hover:overlay-accent-bg text-accent',
       success:
         'bg-success-bg not-disabled:hover:overlay-success-bg text-success',
@@ -136,6 +139,42 @@ function isIconSize(size: ButtonSize): boolean {
   return size.startsWith('icon-');
 }
 
+// The glass treatment (see the `glass` utilities in index.css) — ported from
+// the marketing site's hero CTA ring. Every variant carries it; `ghost` is the
+// one exception, and only because it has no surface of its own to catch the
+// light: a persistent rim and drop shadow would put a chip around every bare
+// toolbar icon in the app. It picks the glass up on hover, where it does have
+// a scrim. The glass scales with the button: compact sizes get the subtler
+// `glass-sm` so dense toolbars don't shimmer.
+// Literal class strings only — Tailwind's scanner can't see classes built
+// from template strings, so the hover-variant map is spelled out in full.
+const glassSizeStyles: Record<ButtonSize, string> = {
+  xs: 'glass-sm',
+  'icon-xs': 'glass-sm',
+  sm: 'glass-sm',
+  'icon-sm': 'glass-sm',
+  md: 'glass',
+  'icon-md': 'glass',
+  lg: 'glass',
+  'icon-lg': 'glass',
+  xl: 'glass',
+};
+
+const ghostGlassSizeStyles: Record<ButtonSize, string> = {
+  xs: 'not-disabled:hover:glass-sm',
+  'icon-xs': 'not-disabled:hover:glass-sm',
+  sm: 'not-disabled:hover:glass-sm',
+  'icon-sm': 'not-disabled:hover:glass-sm',
+  md: 'not-disabled:hover:glass',
+  'icon-md': 'not-disabled:hover:glass',
+  lg: 'not-disabled:hover:glass',
+  'icon-lg': 'not-disabled:hover:glass',
+  xl: 'not-disabled:hover:glass',
+};
+
+const glassClass = (variant: ButtonVariant, size: ButtonSize): string =>
+  variant === 'ghost' ? ghostGlassSizeStyles[size] : glassSizeStyles[size];
+
 export const Button = (props: ButtonProps) => {
   const [local, others] = splitProps(props, [
     'tooltipPlacement',
@@ -161,14 +200,20 @@ export const Button = (props: ButtonProps) => {
   const size = () => local.size ?? group?.size ?? 'md';
 
   const cls = () =>
-    buttonClasses({
-      variant: variant(),
-      size: size(),
-      fullWidth: local.fullWidth,
-      noTouchResize: local.noTouchResize,
-      square: local.square,
-      class: local.class,
-    });
+    cn(
+      buttonClasses({
+        variant: variant(),
+        size: size(),
+        fullWidth: local.fullWidth,
+        noTouchResize: local.noTouchResize,
+        square: local.square,
+      }),
+      // Inside a ButtonGroup the group owns the frame (it strips per-button
+      // borders and rounding), so it carries the glass for the whole row —
+      // one pane of glass instead of one per segment.
+      group === undefined && glassClass(variant(), size()),
+      local.class
+    );
 
   const placement = () => local.tooltipPlacement ?? 'bottom';
 

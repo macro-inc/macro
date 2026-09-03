@@ -304,7 +304,7 @@ export const DateSelector = (props: DateSelectorProps) => {
 
       <DateSelectorPortalWrapper disabled={props.disablePortal}>
         <Combobox.Content
-          class="rounded-xl size-auto z-action-menu menu-open-animation shadow-menu w-full max-w-70 text-ink bg-menu"
+          class="rounded-xl size-auto z-action-menu menu-open-animation glass-lg w-full max-w-70 text-ink bg-menu-glass"
           as={Surface}
           depth={3}
           on:keydown={handleKeyDown}

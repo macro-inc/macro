@@ -106,7 +106,7 @@ function SelectContent(props: SelectContentProps) {
         <Layer depth={local.depth ?? 3}>
           <KobalteSelect.Content
             class={cn(
-              'z-action-menu max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu p-1.5 shadow-menu menu-open-animation',
+              'z-action-menu max-h-[var(--kb-popper-content-available-height)] min-w-[var(--kb-popper-anchor-width)] overflow-y-auto rounded-xl border border-edge bg-menu-glass p-1.5 glass-lg menu-open-animation',
               local.class
             )}
             {...rest}
