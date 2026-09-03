@@ -1,0 +1,131 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+expression: messages
+input_file: crates/agent_fold/fixtures/real/elicitation_claude_single_select.jsonl
+---
+[
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: User {
+            user_id: Some(
+                macro|eric@example.com,
+            ),
+        },
+        request_id: Some(
+            AgentActionId(
+                c4f086b1-8f75-4cdd-a772-f1ed41286d61,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "Please use your elicitation capability (elicitation/create, form mode) to ask me what the best colour is, with options: 1. red 2. blue 3. green",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "I don't have an elicitation/form capability to present interactive UI widgets — I can only reply in text or use the AskUserQuestion tool. I'll use that instead.",
+                },
+                Elicitation {
+                    request_id: Number(
+                        0,
+                    ),
+                    tool_call: Some(
+                        ToolUseId(
+                            "toolu_01JYzP4A82LetDUgqvnRXguU",
+                        ),
+                    ),
+                    message: "What is the best colour?",
+                    request: Form {
+                        schema: ElicitationSchema {
+                            title: None,
+                            description: None,
+                            properties: [
+                                ElicitationProperty {
+                                    name: "question_0",
+                                    title: Some(
+                                        "Best colour",
+                                    ),
+                                    description: None,
+                                    schema: String {
+                                        min_length: None,
+                                        max_length: None,
+                                        pattern: None,
+                                        format: None,
+                                        default: None,
+                                        options: [
+                                            ElicitationOption {
+                                                value: "Red",
+                                                title: Some(
+                                                    "Red",
+                                                ),
+                                                description: Some(
+                                                    "Red",
+                                                ),
+                                            },
+                                            ElicitationOption {
+                                                value: "Blue",
+                                                title: Some(
+                                                    "Blue",
+                                                ),
+                                                description: Some(
+                                                    "Blue",
+                                                ),
+                                            },
+                                            ElicitationOption {
+                                                value: "Green",
+                                                title: Some(
+                                                    "Green",
+                                                ),
+                                                description: Some(
+                                                    "Green",
+                                                ),
+                                            },
+                                        ],
+                                        custom_field: Some(
+                                            "question_0_custom",
+                                        ),
+                                    },
+                                },
+                            ],
+                            required: [
+                                "question_0",
+                            ],
+                        },
+                    },
+                    outcome: Accepted {
+                        content: Some(
+                            Object {
+                                "question_0": String("Red"),
+                                "question_0_custom": String("blue"),
+                            },
+                        ),
+                    },
+                    reported: Some(
+                        Object {
+                            "What is the best colour?": String("blue"),
+                        },
+                    ),
+                },
+                Text {
+                    text: "Blue it is.",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+]

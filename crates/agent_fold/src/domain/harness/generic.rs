@@ -10,6 +10,9 @@
 //! - The "Task tool" convention for subagents that Claude Code set and
 //!   OpenCode and Cursor copied: a tool named `task`/`agent` with
 //!   `{ description, prompt, subagent_type }` arguments.
+//! - The `_meta._askUserQuestionCustomAnswer` marker on an elicitation
+//!   form's free-text "Other" property, which Claude Code left un-namespaced
+//!   on purpose so other bridges could write the same one.
 
 use agent_client_protocol::schema::v1::ToolKind;
 use serde::Deserialize;
@@ -88,6 +91,50 @@ pub fn subagent_input(frame: &ToolFrame<'_>) -> SubagentInput {
         prompt: input.prompt.or(input.task),
         background: input.run_in_background.or(input.background),
     }
+}
+
+/// The shared marker on an elicitation form's "Other" property.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CustomAnswerMarker {
+    question_id: String,
+    #[serde(default)]
+    is_custom_answer: bool,
+}
+
+/// The select an elicitation form property is the free-text companion of,
+/// by the shared marker: `_meta._askUserQuestionCustomAnswer = { questionId,
+/// isCustomAnswer: true }` on the property's own schema.
+#[must_use]
+pub fn custom_answer_for(name: &str, property: &Value) -> Option<String> {
+    let _ = name;
+    let marker: CustomAnswerMarker =
+        serde_json::from_value(property.get("_meta")?.get(MARKER)?.clone()).ok()?;
+    marker.is_custom_answer.then_some(marker.question_id)
+}
+
+/// The `_meta` key of the shared companion marker.
+pub const MARKER: &str = "_askUserQuestionCustomAnswer";
+
+/// Whether an elicitation form property looks like a free-text "Other" box
+/// by naming convention alone: a free-text string titled `Other` whose name
+/// is a select's name plus `suffix`. The fallback for a recording that lost
+/// its `_meta` - so a property that still carries one, whatever it says, is
+/// read from that alone. Returns the select's name.
+#[must_use]
+pub fn custom_answer_by_suffix(name: &str, property: &Value, suffix: &str) -> Option<String> {
+    if property.get("_meta").is_some() {
+        return None;
+    }
+    let titled_other = property.get("title").and_then(Value::as_str) == Some("Other");
+    let free_text = property.get("type").and_then(Value::as_str) == Some("string")
+        && property.get("oneOf").is_none()
+        && property.get("enum").is_none();
+    (titled_other && free_text)
+        .then(|| name.strip_suffix(suffix))
+        .flatten()
+        .filter(|target| !target.is_empty())
+        .map(str::to_owned)
 }
 
 /// A bare `{ "error": … }` result, how several harnesses report a failed

@@ -57,4 +57,5 @@ SessionMetadata {
     status: Some(
         "acp_ready",
     ),
+    pending_elicitation: None,
 }
