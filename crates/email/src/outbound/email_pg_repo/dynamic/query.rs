@@ -328,7 +328,7 @@ fn push_thread_candidate_select(
     }
 
     if has_thread_literals(email_filter) {
-        build_thread_email_filter(email_filter, sort_ts_field).push_into(builder);
+        build_thread_email_filter(email_filter, sort_ts_field, &params.resolved).push_into(builder);
     }
 
     // Ensure the candidate LIMIT only counts threads that will survive the
@@ -673,7 +673,8 @@ fn build_query(
     }
 
     if has_message_literals(email_filter) {
-        build_message_email_filter(email_filter, &params.resolved).push_into(&mut builder);
+        build_message_email_filter(email_filter, &params.resolved, sort_ts_field)
+            .push_into(&mut builder);
     }
 
     builder.push(
