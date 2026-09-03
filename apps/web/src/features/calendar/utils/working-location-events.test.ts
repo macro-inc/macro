@@ -1,7 +1,10 @@
 import { EventType } from '@service-storage/generated/schemas/eventType';
 import { describe, expect, it } from 'vitest';
 import type { CalendarEvent, CalendarSource } from '../types';
-import { mergeWorkingLocationEvents } from './working-location-events';
+import {
+  type MergedCalendarEvent,
+  mergeWorkingLocationEvents,
+} from './working-location-events';
 
 const OFFICE: CalendarSource = { id: 'cal-1', name: 'Work', color: 'blue' };
 const OTHER_CAL: CalendarSource = { id: 'cal-2', name: 'Home', color: 'green' };
@@ -40,9 +43,14 @@ function event(
   };
 }
 
-/** Compact `[id, start, end]` view of the merge output for assertions. */
-function spans(events: CalendarEvent[]) {
-  return events.map((e) => [e.id, e.start, e.end]);
+/** Compact `[id, start, end]` view of each rendered bar. */
+function spans(events: MergedCalendarEvent[]) {
+  return events.map((m) => [m.event.id, m.event.start, m.event.end]);
+}
+
+/** The occurrence ids each rendered bar stands in for. */
+function occurrenceIds(events: MergedCalendarEvent[]) {
+  return events.map((m) => m.occurrenceIds);
 }
 
 describe('mergeWorkingLocationEvents', () => {
@@ -56,6 +64,10 @@ describe('mergeWorkingLocationEvents', () => {
     ]);
 
     expect(spans(result)).toEqual([['mon', '2026-08-31', '2026-09-05']]);
+    // The bar answers for every day it covers, not just the rendered Monday.
+    expect(occurrenceIds(result)).toEqual([
+      ['mon', 'tue', 'wed', 'thu', 'fri'],
+    ]);
   });
 
   it('keeps runs separated by a gap as distinct bars', () => {
@@ -71,6 +83,10 @@ describe('mergeWorkingLocationEvents', () => {
       ['mon', '2026-08-31', '2026-09-02'],
       ['thu', '2026-09-03', '2026-09-05'],
     ]);
+    expect(occurrenceIds(result)).toEqual([
+      ['mon', 'tue'],
+      ['thu', 'fri'],
+    ]);
   });
 
   it('collapses a duplicate occurrence on the same day', () => {
@@ -80,12 +96,31 @@ describe('mergeWorkingLocationEvents', () => {
     ]);
 
     expect(spans(result)).toEqual([['thu-a', '2026-09-03', '2026-09-04']]);
+    expect(occurrenceIds(result)).toEqual([['thu-a', 'thu-b']]);
   });
 
-  it('does not merge different working locations', () => {
+  it('does not merge different working-location titles', () => {
     const result = mergeWorkingLocationEvents([
       event('mon', '2026-08-31', '2026-09-01', { title: 'Office' }),
       event('tue', '2026-09-01', '2026-09-02', { title: 'Home' }),
+    ]);
+
+    expect(spans(result)).toEqual([
+      ['mon', '2026-08-31', '2026-09-01'],
+      ['tue', '2026-09-01', '2026-09-02'],
+    ]);
+  });
+
+  it('does not merge the same title across different locations', () => {
+    const result = mergeWorkingLocationEvents([
+      event('mon', '2026-08-31', '2026-09-01', {
+        title: 'Office',
+        location: 'SF',
+      }),
+      event('tue', '2026-09-01', '2026-09-02', {
+        title: 'Office',
+        location: 'NYC',
+      }),
     ]);
 
     expect(spans(result)).toEqual([
@@ -110,8 +145,8 @@ describe('mergeWorkingLocationEvents', () => {
     });
     const result = mergeWorkingLocationEvents([meeting]);
 
-    expect(result).toEqual([meeting]);
-    expect(result[0]).toBe(meeting);
+    expect(result).toEqual([{ event: meeting, occurrenceIds: ['meet'] }]);
+    expect(result[0].event).toBe(meeting);
   });
 
   it('does not merge cancelled occurrences into a run', () => {
@@ -122,8 +157,8 @@ describe('mergeWorkingLocationEvents', () => {
     ]);
 
     const officeSpans = result
-      .filter((e) => !e.isCancelled)
-      .map((e) => [e.start, e.end]);
+      .filter((m) => !m.event.isCancelled)
+      .map((m) => [m.event.start, m.event.end]);
     // Tuesday cancelled leaves a gap, so Monday and Wednesday stay separate.
     expect(officeSpans).toEqual([
       ['2026-08-31', '2026-09-01'],
@@ -139,5 +174,6 @@ describe('mergeWorkingLocationEvents', () => {
     ]);
 
     expect(spans(result)).toEqual([['mon', '2026-08-31', '2026-09-03']]);
+    expect(occurrenceIds(result)).toEqual([['mon', 'tue', 'wed']]);
   });
 });
