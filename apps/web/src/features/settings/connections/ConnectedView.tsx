@@ -1,3 +1,4 @@
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import { Button } from '@ui';
 import { For, Show } from 'solid-js';
@@ -8,8 +9,12 @@ import { EMPTY_STARTERS, providerIcon } from './provider-meta';
 import { openConnectionsProvider, showConnectionsDiscover } from './view-state';
 
 export function ConnectedView(props: { model: ConnectionsModel }) {
+  const forceEmpty = useDebugSetting(DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES);
   return (
-    <Show when={!isConnectionsEmpty(props.model)} fallback={<EmptyConnected />}>
+    <Show
+      when={!forceEmpty() && !isConnectionsEmpty(props.model)}
+      fallback={<EmptyConnected />}
+    >
       <SettingsSection>
         <SettingsCard>
           <For each={props.model.providers}>
