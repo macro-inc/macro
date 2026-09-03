@@ -91,3 +91,17 @@ fn doc_cognition_host_port_is_instance_derived() {
     );
     assert_eq!(named.port(Port::DocCognition), 31014);
 }
+
+/// New `Port` variants must be appended. Inserting mid-enum shifts named-instance
+/// offsets for every later variant (Kafka, webhooks, agent harness, …).
+#[test]
+fn appended_port_offsets_stay_stable() {
+    assert_eq!(Port::Kafka.offset(), 22);
+    assert_eq!(Port::SdkWebhookSsh.offset(), 23);
+    assert_eq!(Port::SdkWebhookHostReceiver.offset(), 24);
+    assert_eq!(Port::AgentProxy.offset(), 25);
+    assert_eq!(Port::AgentHarness.offset(), 26);
+    assert_eq!(Port::AgentHarnessEgress.offset(), 27);
+    assert_eq!(Port::ScheduledAction.offset(), 28);
+    assert_eq!(Port::ScheduledAction.fixed(), 8099);
+}

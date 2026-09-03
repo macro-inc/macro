@@ -93,7 +93,6 @@ pub enum Port {
     StaticFile = 8094,
     Unfurl = 8095,
     ImageProxy = 8097,
-    ScheduledAction = 8099,
     Kafka = 9092,
     SdkWebhookSsh = 8788,
     SdkWebhookHostReceiver = 8789,
@@ -109,6 +108,8 @@ pub enum Port {
     /// Published on every local instance - it is what the Cursor egress
     /// tunnel points at, and Cursor's cloud is outside the compose network.
     AgentHarnessEgress = 8102,
+    /// Scheduled actions API and dispatcher (default compose port 8099).
+    ScheduledAction = 8099,
 }
 
 impl Port {
