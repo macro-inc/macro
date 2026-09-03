@@ -73,7 +73,7 @@ export function TasksHeader() {
           type="button"
           variant="cta"
           size="md"
-          class="ml-auto rounded-lg px-3"
+          class="ml-auto"
           onClick={createTask}
         >
           <PlusIcon class="size-4 shrink-0" />
