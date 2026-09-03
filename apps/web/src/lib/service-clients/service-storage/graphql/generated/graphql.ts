@@ -40,8 +40,9 @@ export type ChannelSharePolicyInput = {
 /** Input for deleting an email draft. */
 export type DeleteEmailDraftInput = {
   /**
-   * Draft to delete. An ID that is already gone (or was never created —
-   * a discard can replay before its draft's first save ever committed)
+   * Draft handle to delete: a client-generated ID or a server ID, resolved
+   * like a save's. A handle that is already gone (or was never bound — a
+   * discard can replay before its draft's first save ever committed)
    * deletes nothing and still succeeds, so a delete queued offline lands
    * cleanly however late it replays.
    */
@@ -1076,10 +1077,13 @@ export type SaveEmailDraftContactInput = {
 /**
  * Input for creating or updating an email draft.
  *
- * The draft ID is client-generated so a save queued offline stays an
- * idempotent upsert when it replays later — possibly after an app restart,
- * possibly more than once. Thread identifiers are hints: the server derives
- * authoritative thread linkage from the reply target or the existing draft.
+ * The draft ID is a client-generated handle so a save queued offline stays
+ * an idempotent upsert when it replays later — possibly after an app
+ * restart, possibly more than once. Handles are untrusted input and never
+ * become primary keys: the server resolves them through a caller-scoped
+ * mapping to server-minted rows. Thread identifiers are hints: the server
+ * derives authoritative thread linkage from the reply target or the
+ * existing draft.
  */
 export type SaveEmailDraftInput = {
   /** Bcc recipients. */
@@ -1095,7 +1099,11 @@ export type SaveEmailDraftInput = {
   bodyText?: string | null | undefined;
   /** Cc recipients. */
   cc?: Array<SaveEmailDraftContactInput> | null | undefined;
-  /** Client-generated draft ID; the upsert key for this draft's lifetime. */
+  /**
+   * Draft handle: a client-generated ID, or a server ID from a fetched
+   * draft. Resolved scoped to the caller's inboxes, and bound to the
+   * server row the save settles on, so replays converge on one draft.
+   */
   draftId: string | number;
   /**
    * Sending inbox. Absent means the caller's primary inbox. Carried as a
@@ -1113,11 +1121,10 @@ export type SaveEmailDraftInput = {
   /** Draft subject line. */
   subject: string;
   /**
-   * Thread ID. For replies this is a hint the server may override. For
-   * compose drafts (no reply target) it is client-generated: an unclaimed
-   * ID creates the thread with it, so saves queued offline replay as
-   * idempotent upserts against one thread; an ID owned by another inbox
-   * is rejected.
+   * Thread handle. For replies this is a hint the server may override.
+   * For compose drafts (no reply target) it is client-generated: an
+   * unresolvable handle gets a fresh server-minted thread and is bound
+   * to it, so saves queued offline replay against one thread.
    */
   threadDbId?: string | number | null | undefined;
   /** To recipients. */

@@ -820,26 +820,7 @@ export function BaseInput(props: {
     if (!draftToSave) {
       const draftId = savedDraftId();
       if (draftId) {
-        const threadDbId = ctx.thread()?.db_id;
-        if (
-          graphqlCacheEnabled() &&
-          ctx.query.transport() === 'graphql' &&
-          threadDbId
-        ) {
-          const deleted = await executeQueuedGraphqlDelete(
-            draftId,
-            threadDbId,
-            skipSoupRefetch
-          );
-          if (!deleted) return;
-        } else {
-          await deleteDraftMutation.mutateAsync({
-            draftId,
-            threadId: ctx.thread()?.db_id,
-            linkId: headerLinkId(),
-            skipSoupRefetch,
-          });
-        }
+        if (!(await deleteDraft(draftId, skipSoupRefetch))) return;
         refetchThreadMessages();
       }
       setSavedDraftId(undefined);
@@ -973,21 +954,58 @@ export function BaseInput(props: {
     return outcome.draftId;
   }
 
+  // Sent from another device: the server outcome supersedes the local
+  // draft. Drop it and show the thread's real state.
+  function handleReplyAlreadySent() {
+    toast.alert('This reply was already sent');
+    clearDraftState();
+    ctx.query.refetch();
+  }
+
   function handleQueuedSaveFailure(code: SaveEmailDraftFailureCode) {
     if (code === 'DRAFT_ALREADY_SENT') {
-      // Sent from another device: the server outcome supersedes the local
-      // draft. Drop it and show the thread's real state.
-      toast.alert('This reply was already sent');
-      clearDraftState();
-      ctx.query.refetch();
+      handleReplyAlreadySent();
       return;
     }
-    // Permanent failure: keep the user's content in the editor, but never
-    // auto-re-dispatch — a failing save replayed forever would block every
-    // queued mutation in the app behind it.
-    autosaveDisabled = true;
+    if (code !== 'NETWORK') {
+      // Deterministic failure: keep the content in the editor, but never
+      // auto-re-dispatch — a failing save replayed forever would block every
+      // queued mutation in the app behind it. A network failure that reached
+      // here was never enqueued, so the next debounced save may retry it.
+      autosaveDisabled = true;
+    }
     console.error('Failed to save draft', code);
     toast.failure('Failed to save draft');
+  }
+
+  /**
+   * Delete the draft over the transport the thread read used. Returns
+   * whether the caller may proceed with its local reset (a REST failure
+   * throws instead).
+   */
+  async function deleteDraft(
+    draftId: string,
+    skipSoupRefetch: boolean
+  ): Promise<boolean> {
+    const threadDbId = ctx.thread()?.db_id;
+    if (
+      graphqlCacheEnabled() &&
+      ctx.query.transport() === 'graphql' &&
+      threadDbId
+    ) {
+      return await executeQueuedGraphqlDelete(
+        draftId,
+        threadDbId,
+        skipSoupRefetch
+      );
+    }
+    await deleteDraftMutation.mutateAsync({
+      draftId,
+      threadId: threadDbId,
+      linkId: headerLinkId(),
+      skipSoupRefetch,
+    });
+    return true;
   }
 
   /**
@@ -1012,10 +1030,8 @@ export function BaseInput(props: {
     }
     if (outcome.kind === 'failed') {
       if (outcome.code === 'DRAFT_ALREADY_SENT') {
-        // Sent from another device: it is no longer a draft to discard.
-        toast.alert('This reply was already sent');
-        clearDraftState();
-        ctx.query.refetch();
+        // No longer a draft to discard; the handler already reset.
+        handleReplyAlreadySent();
         return false;
       }
       console.error('Failed to delete draft', outcome.code);
@@ -1469,25 +1485,7 @@ export function BaseInput(props: {
     const draftId = savedDraftId();
     try {
       if (draftId) {
-        const threadDbId = ctx.thread()?.db_id;
-        if (
-          graphqlCacheEnabled() &&
-          ctx.query.transport() === 'graphql' &&
-          threadDbId
-        ) {
-          const deleted = await executeQueuedGraphqlDelete(
-            draftId,
-            threadDbId,
-            false
-          );
-          if (!deleted) return;
-        } else {
-          await deleteDraftMutation.mutateAsync({
-            draftId,
-            threadId: ctx.thread()?.db_id,
-            linkId: headerLinkId(),
-          });
-        }
+        if (!(await deleteDraft(draftId, false))) return;
         refetchThreadMessages();
       }
       resetState();

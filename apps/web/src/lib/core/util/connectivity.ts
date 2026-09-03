@@ -7,8 +7,11 @@ import { nativeNetworkStatus } from '@core/mobile/native-network-status';
  * surfaces its own failure.
  */
 export function deviceLooksOffline(): boolean {
-  return (
-    nativeNetworkStatus() === 'offline' ||
-    (typeof navigator !== 'undefined' && navigator.onLine === false)
-  );
+  const native = nativeNetworkStatus();
+  if (native !== 'unknown') return native === 'offline';
+  // navigator.onLine decides only when the native monitor has no answer: it
+  // reports false during native cold launches while the network is fine
+  // (see useUserInfoQuery's networkMode), so it must not override an
+  // 'online' native reading.
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
 }

@@ -297,6 +297,33 @@ export function EmailCompose(props: EmailComposeProps) {
   // any of these are pending.
   const inFlightAttachmentUploads = new Set<Promise<void>>();
 
+  // Route draft mutations through the GraphQL queue only when email reads
+  // share that transport — a queued mutation patches GraphQL pages, and
+  // against REST-read email state the optimistic patch has nothing to land
+  // on, leaving the draft durable but invisible offline. A standalone
+  // compose has no thread read, so the flag alone decides there.
+  const useGraphqlDraftQueue = () =>
+    graphqlCacheEnabled() &&
+    ENABLE_GRAPHQL_SOUP() &&
+    (!emailContext || emailContext.query.transport() === 'graphql');
+
+  /**
+   * Delete the draft over the active transport. Returns whether the caller
+   * may proceed with its local reset (a REST failure throws instead).
+   */
+  async function deleteDraft(draftId: string): Promise<boolean> {
+    const threadDbId = currentThreadID();
+    if (useGraphqlDraftQueue() && threadDbId) {
+      return await executeQueuedGraphqlDelete(draftId, threadDbId);
+    }
+    await deleteDraftMutation.mutateAsync({
+      draftId,
+      threadId: threadDbId,
+      linkId: headerLinkId(),
+    });
+    return true;
+  }
+
   async function executeSaveDraft() {
     if (sendMutation.isPending || autosaveDisabled) {
       return;
@@ -304,19 +331,7 @@ export function EmailCompose(props: EmailComposeProps) {
     const draftToSave = collectDraft();
     if (!draftToSave) {
       const draftID = currentDraftID();
-      if (draftID) {
-        const threadDbId = currentThreadID();
-        if (graphqlCacheEnabled() && ENABLE_GRAPHQL_SOUP() && threadDbId) {
-          const deleted = await executeQueuedGraphqlDelete(draftID, threadDbId);
-          if (!deleted) return;
-        } else {
-          await deleteDraftMutation.mutateAsync({
-            draftId: draftID,
-            threadId: currentThreadID(),
-            linkId: headerLinkId(),
-          });
-        }
-      }
+      if (draftID && !(await deleteDraft(draftID))) return;
       setCurrentDraftID(undefined);
       return;
     }
@@ -328,11 +343,7 @@ export function EmailCompose(props: EmailComposeProps) {
     // only server-minted ids: ids adopted from committed saves carry over,
     // while a handle from a queued-only session fails on REST until its
     // queued save commits.
-    //
-    // The flag gate keeps the mutation on the same transport as the email
-    // reads: queueing GraphQL saves while the rest of email reads REST
-    // leaves the optimistic entity invisible (no cached pages to patch).
-    if (graphqlCacheEnabled() && ENABLE_GRAPHQL_SOUP()) {
+    if (useGraphqlDraftQueue()) {
       return await executeQueuedGraphqlSave(draftToSave);
     }
 
@@ -909,19 +920,7 @@ export function EmailCompose(props: EmailComposeProps) {
 
   const deleteDraftAndReset = async () => {
     const draftId = currentDraftID();
-    if (draftId) {
-      const threadDbId = currentThreadID();
-      if (graphqlCacheEnabled() && ENABLE_GRAPHQL_SOUP() && threadDbId) {
-        const deleted = await executeQueuedGraphqlDelete(draftId, threadDbId);
-        if (!deleted) return;
-      } else {
-        await deleteDraftMutation.mutateAsync({
-          draftId,
-          threadId: currentThreadID(),
-          linkId: headerLinkId(),
-        });
-      }
-    }
+    if (draftId && !(await deleteDraft(draftId))) return;
     resetState();
   };
 

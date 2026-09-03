@@ -958,7 +958,7 @@ async fn test_client_handle_bindings_resolve_scoped_and_cascade(
         from_contact_id: None,
         recipients: vec![],
     };
-    let mut input = attack_input(draft_id, thread_id);
+    let mut input = resolved_input(draft_id, thread_id);
     input.subject = "Bound".to_string();
     input.draft_client_id = Some(draft_handle);
     input.thread_client_id = Some(thread_handle);
@@ -1003,7 +1003,7 @@ async fn test_client_handle_bindings_resolve_scoped_and_cascade(
     Ok(())
 }
 
-fn attack_input(db_id: Uuid, thread_db_id: Uuid) -> ResolvedDraftInput {
+fn resolved_input(db_id: Uuid, thread_db_id: Uuid) -> ResolvedDraftInput {
     ResolvedDraftInput {
         db_id,
         provider_id: None,
@@ -1068,7 +1068,7 @@ async fn test_upsert_guard_rejects_cross_inbox_overwrite(
     };
     let applied = repo
         .insert_message(
-            &attack_input(victim, attacker_thread),
+            &resolved_input(victim, attacker_thread),
             &contacts,
             attacker_link,
             None,
@@ -1104,7 +1104,7 @@ async fn test_upsert_guard_rejects_sent_message_overwrite(
         recipients: vec![],
     };
     let applied = repo
-        .insert_message(&attack_input(victim, thread), &contacts, link, None, true)
+        .insert_message(&resolved_input(victim, thread), &contacts, link, None, true)
         .await?;
 
     assert!(!applied, "owner guard must reject rewriting a sent message");
@@ -1130,7 +1130,7 @@ async fn test_insert_message_reports_applied_on_create(pool: Pool<Postgres>) -> 
         recipients: vec![],
     };
     let applied = repo
-        .insert_message(&attack_input(fresh_id, thread), &contacts, link, None, true)
+        .insert_message(&resolved_input(fresh_id, thread), &contacts, link, None, true)
         .await?;
 
     assert!(applied, "a fresh unclaimed id inserts normally");
