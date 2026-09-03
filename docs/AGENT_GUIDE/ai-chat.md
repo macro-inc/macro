@@ -11,7 +11,7 @@
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
-`Create` → `Coding Agent A`, or keyboard `c` then `a`. That create path focuses the
+`Create` → `Agent A`, or keyboard `c` then `a`. That create path focuses the
 agent composer so you can type immediately.
 
 ## Start a doc-scoped chat
@@ -50,7 +50,7 @@ transcript at `/app/agent/<uuid>` whose replies also stream back into the thread
 
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
-`Create` → `Coding Agent`) leaves that composer focused. Type `@` to insert the same mention chips
+`Create` → `Agent`) leaves that composer focused. Type `@` to insert the same mention chips
 used in chat and channels; they serialize as `<m-document-mention>` tags in the prompt
 the agent sees. Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread).

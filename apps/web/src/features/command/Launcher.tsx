@@ -477,7 +477,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     // The pre-agent-session chat, kept on `a` for anyone the new agent flag
-    // has not reached. Mutually exclusive with the Coding Agent entry below:
+    // has not reached. Mutually exclusive with the Agent entry below:
     // both bind `a`, and exactly one is ever enabled.
     label: 'Agent',
     icon: WideStar,
@@ -514,7 +514,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Coding Agent',
+    label: 'Agent',
     icon: Robot,
     description: 'Create agent session',
     launcherHint: 'Sandboxed coding session',
