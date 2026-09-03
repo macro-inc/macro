@@ -1112,6 +1112,42 @@ pub struct SoupPropertiesField {
 pub type SoupItemWithProperties = SoupItem<SoupPropertiesField>;
 
 impl SoupPropertiesField {
+    /// True when any property is a tag whose label would need resolving.
+    pub fn has_tags(&self) -> bool {
+        self.properties
+            .iter()
+            .any(|p| p.definition.data_type == models_properties::DataType::Tag)
+    }
+
+    /// Resolve the tag properties to labels via the caller's tag sets.
+    /// Option ids outside the caller's sets are dropped.
+    pub fn applied_tags(
+        &self,
+        tag_map: &std::collections::HashMap<Uuid, models_properties::service::tag_sets::AppliedTag>,
+    ) -> Vec<models_properties::service::tag_sets::AppliedTag> {
+        use models_properties::service::property_value::PropertyValue;
+
+        let mut tags = Vec::new();
+        for property in &self.properties {
+            if property.definition.data_type != models_properties::DataType::Tag {
+                continue;
+            }
+            let Some(PropertyValue::SelectOption(option_ids)) = &property.value else {
+                continue;
+            };
+            for option_id in option_ids {
+                if let Some(tag) = tag_map.get(option_id)
+                    && !tags.contains(tag)
+                {
+                    tags.push(tag.clone());
+                }
+            }
+        }
+        tags
+    }
+}
+
+impl SoupPropertiesField {
     /// Creates an extra field containing the supplied properties.
     pub fn new(properties: Vec<SoupProperty>) -> Self {
         Self { properties }
