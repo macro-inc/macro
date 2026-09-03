@@ -2,7 +2,7 @@
 //! `macro_config` pattern.
 
 use anyhow::Context;
-use database_env_vars::DatabaseUrl;
+use database_env_vars::{DatabaseUrl, RedisUri};
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
 
@@ -51,6 +51,8 @@ pub struct Config {
     pub kafka_brokers: KafkaBrokers,
     /// MacroDB connection string; `agent_sessions` lives here.
     pub database_url: DatabaseUrl,
+    /// Shared Redis used for cross-replica external runtime command forwarding.
+    pub redis_uri: RedisUri,
     /// Base URL of the Daytona REST API.
     #[macro_config_default(String::from("https://app.daytona.io/api"))]
     pub daytona_api_url: String,

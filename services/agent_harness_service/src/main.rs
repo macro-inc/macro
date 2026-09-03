@@ -44,7 +44,7 @@ use agent_harness::outbound::daytona::{
     DaytonaContainerManager, DaytonaSettings, Snapshot,
 };
 use agent_harness::outbound::egress::EgressProvisioner;
-use agent_harness::outbound::forward::HttpCommandForwarder;
+use agent_harness::outbound::forward::{HttpCommandForwarder, consume_runtime_commands};
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
@@ -466,6 +466,8 @@ async fn run() -> anyhow::Result<()> {
     // it and the harness takes sessions out of it. Attach/detach is mirrored
     // to the harnesses table so the settings page can show connection state.
     let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
+    let redis = redis::Client::open(config.redis_uri.as_ref())
+        .context("failed to create the runtime command Redis client")?;
     let mut defaults = HarnessDefaults::new(SessionDefaults {
         bot_id,
         model: config.harness_model.clone(),
@@ -518,13 +520,18 @@ async fn run() -> anyhow::Result<()> {
         prompt_context,
         prompt_composer,
         EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
-        HttpCommandForwarder::new(config.internal_api_key.clone())
+        HttpCommandForwarder::new(config.internal_api_key.clone(), redis.clone())
             .map_err(|error| anyhow::anyhow!("failed to build the command forwarder: {error}"))?,
         defaults,
     ));
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.
     turn_observer.bind(harness.clone());
+    let runtime_commands = tokio::spawn(consume_runtime_commands(
+        redis,
+        Arc::clone(&runtimes),
+        harness.clone(),
+    ));
 
     // The complete session API is served from this process because it owns the
     // live sessions. Spawned rather than awaited: the Kafka loop below owns the
@@ -837,6 +844,7 @@ async fn run() -> anyhow::Result<()> {
     trigger.abort();
     egress_http.abort();
     heartbeat.abort();
+    runtime_commands.abort();
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
         tracing::error!(stop_failures, "some sandboxes failed to stop");

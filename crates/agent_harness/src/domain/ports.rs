@@ -36,6 +36,14 @@ pub trait CommandForwarder: Send + Sync + 'static {
         session: AgentSessionId,
         command: HarnessCommand,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send;
+
+    /// Broadcast a command to whichever replica holds `harness`'s runtime socket.
+    fn forward_to_runtime(
+        &self,
+        harness: HarnessId,
+        session: AgentSessionId,
+        command: HarnessCommand,
+    ) -> impl Future<Output = Result<CommandOutcome>> + Send;
 }
 
 /// A forwarder for deployments with exactly one replica, where a live peer
@@ -54,6 +62,15 @@ impl CommandForwarder for NoPeers {
         Err(HarnessError::Forward(rootcause::report!(
             "this deployment has no command forwarding, yet {target} manages session {session}"
         )))
+    }
+
+    async fn forward_to_runtime(
+        &self,
+        _harness: HarnessId,
+        session: AgentSessionId,
+        _command: HarnessCommand,
+    ) -> Result<CommandOutcome> {
+        Err(HarnessError::Disconnected(session))
     }
 }
 

@@ -2166,6 +2166,19 @@ impl crate::domain::ports::CommandForwarder for RecordingForwarder {
             .push((target.as_str().to_owned(), session));
         Ok(CommandOutcome::Completed)
     }
+
+    async fn forward_to_runtime(
+        &self,
+        _harness: harness_id::HarnessId,
+        session: AgentSessionId,
+        _command: HarnessCommand,
+    ) -> crate::domain::error::Result<CommandOutcome> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(("redis".to_owned(), session));
+        Ok(CommandOutcome::Completed)
+    }
 }
 
 /// A forwarder standing in for a peer that died mid-forward: the call fails,
@@ -2188,6 +2201,15 @@ impl crate::domain::ports::CommandForwarder for DyingPeerForwarder {
         Err(HarnessError::Forward(rootcause::report!(
             "the peer went away"
         )))
+    }
+
+    async fn forward_to_runtime(
+        &self,
+        _harness: harness_id::HarnessId,
+        session: AgentSessionId,
+        _command: HarnessCommand,
+    ) -> crate::domain::error::Result<CommandOutcome> {
+        Err(HarnessError::Disconnected(session))
     }
 }
 

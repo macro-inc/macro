@@ -35,6 +35,7 @@ macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 reqwest = { workspace = true }
+redis = { workspace = true, features = ["aio", "tokio-comp"] }
 rootcause = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }

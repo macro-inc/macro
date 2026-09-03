@@ -63,6 +63,13 @@ trait ErasedForwarder: Send + Sync + 'static {
         session: AgentSessionId,
         command: HarnessCommand,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>>;
+
+    fn forward_to_runtime(
+        &self,
+        harness: harness_id::HarnessId,
+        session: AgentSessionId,
+        command: HarnessCommand,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + '_>>;
 }
 
 impl<F: CommandForwarder> ErasedForwarder for F {
@@ -73,6 +80,17 @@ impl<F: CommandForwarder> ErasedForwarder for F {
         command: HarnessCommand,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>> {
         Box::pin(CommandForwarder::forward(self, target, session, command))
+    }
+
+    fn forward_to_runtime(
+        &self,
+        harness: harness_id::HarnessId,
+        session: AgentSessionId,
+        command: HarnessCommand,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + '_>> {
+        Box::pin(CommandForwarder::forward_to_runtime(
+            self, harness, session, command,
+        ))
     }
 }
 
@@ -824,7 +842,30 @@ where
             SessionManagement::Unmanaged => {
                 span.record("agent.session.management", "unmanaged");
                 span.record("agent.command.forwarded", false);
-                return self.execute(session_id, command).await;
+                let result = self.execute(session_id, command.clone()).await;
+                if !matches!(
+                    result,
+                    Err(HarnessError::Session(AgentSessionError::Disconnected(_)))
+                ) {
+                    return result;
+                }
+                let session = self.sessions.get_session(session_id).await?;
+                if AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External {
+                    return result;
+                }
+                let Some(harness) = self
+                    .runtimes
+                    .bound_harness(session.bot_id)
+                    .await
+                    .map_err(AgentSessionError::Unknown)?
+                else {
+                    return result;
+                };
+                span.record("agent.command.forwarded", true);
+                return self
+                    .forwarder
+                    .forward_to_runtime(harness, session_id, command)
+                    .await;
             }
             SessionManagement::Ours => {
                 span.record("agent.session.management", "ours");
