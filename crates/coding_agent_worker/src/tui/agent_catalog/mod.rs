@@ -1,5 +1,11 @@
 //! Supported ACP agents and the local commands needed to launch them.
 
+mod claude_code;
+mod codex;
+mod hermes;
+mod open_claw;
+mod open_code;
+
 use std::path::{Path, PathBuf};
 
 use crate::config::Harness;
@@ -13,8 +19,13 @@ mod environment {
     }
 }
 
-const CLAUDE_ADAPTER: &str = "@agentclientprotocol/claude-agent-acp@0.73.0";
-const CODEX_ADAPTER: &str = "@agentclientprotocol/codex-acp@1.8.0";
+static PRESETS: &[&dyn AgentPreset] = &[
+    &hermes::Hermes,
+    &claude_code::ClaudeCode,
+    &codex::Codex,
+    &open_claw::OpenClaw,
+    &open_code::OpenCode,
+];
 
 /// A command and arguments that start an ACP agent.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -152,20 +163,6 @@ pub trait AgentPreset: Sync {
     fn recognizes(&self, harness: &Harness) -> bool;
 }
 
-struct Hermes;
-struct ClaudeCode;
-struct Codex;
-struct OpenClaw;
-struct OpenCode;
-
-static HERMES: Hermes = Hermes;
-static CLAUDE_CODE: ClaudeCode = ClaudeCode;
-static CODEX: Codex = Codex;
-static OPENCLAW: OpenClaw = OpenClaw;
-static OPENCODE: OpenCode = OpenCode;
-
-static PRESETS: &[&dyn AgentPreset] = &[&HERMES, &CLAUDE_CODE, &CODEX, &OPENCLAW, &OPENCODE];
-
 fn direct(
     preset: &dyn AgentPreset,
     commands: &dyn CommandLookup,
@@ -213,100 +210,6 @@ fn is_launch(harness: &Harness, command: &str, args: &[&str]) -> bool {
             .iter()
             .map(String::as_str)
             .eq(args.iter().copied())
-}
-
-impl AgentPreset for Hermes {
-    fn kind(&self) -> AgentKind {
-        AgentKind::Hermes
-    }
-
-    fn name(&self) -> &'static str {
-        "Hermes Agent"
-    }
-
-    fn detect(&self, commands: &dyn CommandLookup) -> Availability {
-        if commands.resolve("hermes").is_some() {
-            direct(self, commands, "hermes", ["acp"])
-        } else {
-            direct(self, commands, "hermes-acp", [])
-        }
-    }
-
-    fn recognizes(&self, harness: &Harness) -> bool {
-        is_launch(harness, "hermes", &["acp"]) || is_launch(harness, "hermes-acp", &[])
-    }
-}
-
-impl AgentPreset for ClaudeCode {
-    fn kind(&self) -> AgentKind {
-        AgentKind::ClaudeCode
-    }
-
-    fn name(&self) -> &'static str {
-        "Claude Code"
-    }
-
-    fn detect(&self, commands: &dyn CommandLookup) -> Availability {
-        npm_adapter(self, commands, "claude", CLAUDE_ADAPTER)
-    }
-
-    fn recognizes(&self, harness: &Harness) -> bool {
-        is_launch(harness, "npx", &["-y", CLAUDE_ADAPTER])
-    }
-}
-
-impl AgentPreset for Codex {
-    fn kind(&self) -> AgentKind {
-        AgentKind::Codex
-    }
-
-    fn name(&self) -> &'static str {
-        "Codex CLI"
-    }
-
-    fn detect(&self, commands: &dyn CommandLookup) -> Availability {
-        npm_adapter(self, commands, "codex", CODEX_ADAPTER)
-    }
-
-    fn recognizes(&self, harness: &Harness) -> bool {
-        is_launch(harness, "npx", &["-y", CODEX_ADAPTER])
-    }
-}
-
-impl AgentPreset for OpenClaw {
-    fn kind(&self) -> AgentKind {
-        AgentKind::OpenClaw
-    }
-
-    fn name(&self) -> &'static str {
-        "OpenClaw"
-    }
-
-    fn detect(&self, commands: &dyn CommandLookup) -> Availability {
-        direct(self, commands, "openclaw", ["acp"])
-    }
-
-    fn recognizes(&self, harness: &Harness) -> bool {
-        is_launch(harness, "openclaw", &["acp"])
-    }
-}
-
-impl AgentPreset for OpenCode {
-    fn kind(&self) -> AgentKind {
-        AgentKind::OpenCode
-    }
-
-    fn name(&self) -> &'static str {
-        "OpenCode"
-    }
-
-    fn detect(&self, commands: &dyn CommandLookup) -> Availability {
-        direct(self, commands, "opencode", ["acp"])
-    }
-
-    fn recognizes(&self, harness: &Harness) -> bool {
-        is_launch(harness, "opencode", &["acp"])
-    }
 }
 
 /// Return installed agents in product-preference order.
