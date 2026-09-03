@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
@@ -11,11 +12,13 @@ import {
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
-import { isCursorBotId } from '@core/constant/cursorAgent';
+import { isCursorBotId, isMacroStaffEmail } from '@core/constant/cursorAgent';
 import {
   enableChatV3Agents,
+  enableCursorAgents,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { useEmail } from '@core/context/user';
 import { useCursorAgentsAccess } from '@core/cursor/flag';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -106,6 +109,24 @@ export type ChannelInputProps = InputCallbacks & {
   renderContent?: (messageFace: JSX.Element) => JSX.Element;
 };
 
+function agentDebugLog(
+  hypothesisId: string,
+  location: string,
+  message: string,
+  data: Record<string, unknown>
+) {
+  void fetch('/__agent-debug-log', {
+    method: 'POST',
+    body: JSON.stringify({
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    }),
+  });
+}
+
 function WebDefaultActions(props: { input: InputData }) {
   return (
     <Input.Actions>
@@ -189,6 +210,19 @@ export function ChannelInput(props: ChannelInputProps) {
     callbacks: {
       onChange: props.onChange,
       onSend: (snapshot) => {
+        // #region agent log
+        agentDebugLog('D', 'ChannelInput.tsx:onSend', 'composer snapshot', {
+          mentionCount: snapshot.mentions.length,
+          hasCursorMention: snapshot.mentions.some(
+            (mention) =>
+              mention.itemType === 'user' && isCursorBotId(mention.itemId)
+          ),
+          valueStartsWithCursorText: snapshot.value
+            .trimStart()
+            .toLowerCase()
+            .startsWith('@cursor'),
+        });
+        // #endregion
         typingTracker.stop();
         return props.onSend?.(snapshot);
       },
@@ -263,6 +297,8 @@ export function ChannelInput(props: ChannelInputProps) {
 
   const canUseCursor = useCursorAgentsAccess();
   const cursorApiKey = useCursorApiKeyStatusQuery();
+  const cursorFlag = useFeatureFlag(enableCursorAgents);
+  const email = useEmail();
 
   // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
   // and any bot added to the channel is mentionable too. All are surfaced
@@ -271,6 +307,18 @@ export function ChannelInput(props: ChannelInputProps) {
   const mentionUsers: Accessor<IUser[]> = () => {
     const cursorEnabled =
       canUseCursor() && (cursorApiKey.data?.registered ?? false);
+    // #region agent log
+    agentDebugLog('A,B,C', 'ChannelInput.tsx:mentionUsers', 'cursor gates', {
+      flagEnabled: cursorFlag().enabled,
+      flagLoading: cursorFlag().loading,
+      staffEmail: isMacroStaffEmail(email()),
+      accessEnabled: canUseCursor(),
+      keyRegistered: cursorApiKey.data?.registered ?? false,
+      keyPlaceholder: cursorApiKey.isPlaceholderData,
+      keyFetching: cursorApiKey.isFetching,
+      keyError: cursorApiKey.isError,
+    });
+    // #endregion
     const base = [
       ...(props.participants?.() ?? []),
       ...(props.bots?.() ?? []),
@@ -298,7 +346,21 @@ export function ChannelInput(props: ChannelInputProps) {
     if (!base.some((user) => isMacroAiId(user.id))) {
       base.unshift(macroAiMentionUser());
     }
-    return uniqueByKey(base, (user) => user.id);
+    const result = uniqueByKey(base, (user) => user.id);
+    // #region agent log
+    agentDebugLog(
+      'C,D',
+      'ChannelInput.tsx:mentionUsers',
+      'mention users built',
+      {
+        participantCount: props.participants?.().length ?? 0,
+        botCount: props.bots?.().length ?? 0,
+        resultCount: result.length,
+        hasCursor: result.some((user) => isCursorBotId(user.id)),
+      }
+    );
+    // #endregion
+    return result;
   };
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
@@ -307,6 +369,18 @@ export function ChannelInput(props: ChannelInputProps) {
     users: mentionUsers,
     scrollContainer,
     onMentionCreate: (mention) => {
+      // #region agent log
+      agentDebugLog(
+        'D',
+        'ChannelInput.tsx:onMentionCreate',
+        'mention selected',
+        {
+          itemType: mention.itemType,
+          isCursor:
+            mention.itemType === 'user' && isCursorBotId(mention.itemId),
+        }
+      );
+      // #endregion
       mentionsTracker.onMentionCreate(mention);
     },
     onMentionRemove: (mention) => {

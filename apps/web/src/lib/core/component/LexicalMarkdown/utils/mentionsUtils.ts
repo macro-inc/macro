@@ -157,6 +157,23 @@ export async function handleUserMention(
 ) {
   const { editor, blockName, blockId, onUserMention, disableMentionTracking } =
     dependencies;
+  // #region agent log
+  void fetch('/__agent-debug-log', {
+    method: 'POST',
+    body: JSON.stringify({
+      hypothesisId: 'E,F,H',
+      location: 'mentionsUtils.ts:handleUserMention',
+      message: 'user selection handler entry',
+      data: {
+        blockName,
+        hasBlockId: Boolean(blockId),
+        hasCallback: Boolean(onUserMention),
+        botPrincipal: user.id.startsWith('bot|'),
+      },
+      timestamp: Date.now(),
+    }),
+  });
+  // #endregion
   let mentionId: string | undefined;
 
   if (blockName !== 'channel') {
@@ -176,12 +193,24 @@ export async function handleUserMention(
     }
   }
 
-  editor.dispatchCommand(INSERT_USER_MENTION_COMMAND, {
+  const dispatched = editor.dispatchCommand(INSERT_USER_MENTION_COMMAND, {
     userId: user.id,
     email: user.email,
     displayName: getUserMentionDisplayName(user),
     mentionUuid: mentionId,
   });
+  // #region agent log
+  void fetch('/__agent-debug-log', {
+    method: 'POST',
+    body: JSON.stringify({
+      hypothesisId: 'E,F',
+      location: 'mentionsUtils.ts:handleUserMention',
+      message: 'user mention command dispatched',
+      data: { dispatched },
+      timestamp: Date.now(),
+    }),
+  });
+  // #endregion
 }
 
 /**
