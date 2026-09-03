@@ -1,9 +1,13 @@
 import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
-import { useTeamOooSources } from '@app/features/calendar/hooks/use-team-ooo';
+import {
+  TEAM_OOO_SOURCE_ID,
+  TEAM_OOO_SOURCE_PREFIX,
+  useTeamOooSources,
+} from '@app/features/calendar/hooks/use-team-ooo';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
-import { Calendar as MiniCalendar } from '@ui';
+import { Checkbox, Calendar as MiniCalendar } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
 function CalendarMiniCalendarSidePanelSection() {
@@ -89,6 +93,21 @@ function CalendarSourcesSidePanelSection() {
 function CalendarTeamOooSidePanelSection() {
   const calendarView = useCalendarView();
   const teamSources = useTeamOooSources();
+  const isOverlayVisible = () =>
+    calendarView.isSourceVisible(TEAM_OOO_SOURCE_ID);
+  const setOverlayVisible = (visible: boolean) => {
+    calendarView.setSourceVisibility(TEAM_OOO_SOURCE_ID, visible);
+    // Hiding the whole overlay closes a teammate event's open details, which
+    // the per-source close in setSourceVisibility only does for exact ids.
+    if (
+      !visible &&
+      calendarView
+        .selectedEvent()
+        ?.calendar.id.startsWith(TEAM_OOO_SOURCE_PREFIX)
+    ) {
+      calendarView.closeEventDetails();
+    }
+  };
 
   return (
     <Show when={teamSources().length > 0}>
@@ -98,11 +117,27 @@ function CalendarTeamOooSidePanelSection() {
         order={30}
         defaultOpen
       >
-        <SourceControls
-          sources={teamSources()}
-          isVisible={calendarView.isSourceVisible}
-          onVisibilityChange={calendarView.setSourceVisibility}
-        />
+        <div class="flex flex-col gap-0.5">
+          <Checkbox
+            checked={isOverlayVisible()}
+            onChange={setOverlayVisible}
+            class="flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-ink hover:bg-hover"
+          >
+            <Checkbox.Label class="min-w-0 flex-1 truncate">
+              Show on calendar
+            </Checkbox.Label>
+            <Checkbox.Control />
+          </Checkbox>
+          <Show when={isOverlayVisible()}>
+            <div class="pl-2">
+              <SourceControls
+                sources={teamSources()}
+                isVisible={calendarView.isSourceVisible}
+                onVisibilityChange={calendarView.setSourceVisibility}
+              />
+            </div>
+          </Show>
+        </div>
       </SidePanel.Section>
     </Show>
   );

@@ -36,8 +36,9 @@ section listing each connected account with a per-account `Enable` (grant calend
 (email + calendar).
 
 Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
-`<name>: <event title>`. The side panel's `Team out of office` section lists each teammate
-with a visibility checkbox (shown only when the user belongs to a team with other members).
+`<name>: <event title>`. The side panel's `Team out of office` section (shown only when the
+user belongs to a team with other members) has a master `Show on calendar` toggle for the
+whole overlay, with a visibility checkbox per teammate beneath it while the toggle is on.
 Coverage depends on each teammate having connected their own calendar and using Google's
 out-of-office event type.
 
