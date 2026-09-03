@@ -1,0 +1,59 @@
+query ItemPreview($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				...ItemPreviewFields
+			}
+		}
+	}
+}
+
+fragment ItemPreviewFields on GraphqlSoupEntity {
+	__typename
+	id
+	displayName
+	... on GraphqlSoupDocument {
+		documentName: name
+		ownerId
+		fileType
+		updatedAt
+		subType {
+			__typename
+			... on GraphqlTaskSubType {
+				isCompleted
+			}
+		}
+	}
+	... on GraphqlSoupChat {
+		chatName: name
+		ownerId
+		updatedAt
+	}
+	... on GraphqlSoupProject {
+		projectName: name
+		ownerId
+		updatedAt
+	}
+	... on GraphqlSoupEmailThread {
+		emailName: name
+		ownerId
+		senderEmail
+		senderName
+		updatedAt
+	}
+	... on GraphqlSoupChannel {
+		channelDisplayName: name
+		channelType
+	}
+	... on GraphqlSoupCall {
+		customName
+		channelName
+		startedAt
+	}
+	... on GraphqlSoupCrmCompany {
+		companyName: name
+		domains
+		updatedAt
+	}
+}
