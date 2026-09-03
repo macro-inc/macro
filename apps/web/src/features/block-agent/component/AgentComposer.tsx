@@ -18,9 +18,8 @@ import {
 
 export function AgentComposer(props: {
   /**
-   * When set, the split/j-k gate from the block adapter. Surfaces without
-   * that context (the debug replay) fall back to focusing a just-created
-   * pending session only.
+   * Split/j-k gate from the block adapter — same contract as Chat and
+   * Channel. Replay (no soup/split) passes false; it must not steal focus.
    */
   autofocus?: boolean;
 }) {
@@ -56,11 +55,6 @@ export function AgentComposer(props: {
       };
     });
 
-  // The adapter decides (split layout + j/k, same as chat/channel). A
-  // just-created pending session is the fallback: empty transcript, the
-  // only thing to do is type.
-  const autofocus = props.autofocus ?? pending();
-
   return (
     <>
       <Show when={queuedItems().length > 0}>
@@ -81,7 +75,7 @@ export function AgentComposer(props: {
       </Show>
       <AgentInput
         placeholder="Message the agent, @mention anything"
-        autofocus={autofocus}
+        autofocus={props.autofocus}
         busy={composer.busy()}
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed

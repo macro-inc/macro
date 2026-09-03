@@ -261,7 +261,7 @@ export default function AgentReplay() {
                 <SessionChrome />
                 <Transcript />
                 <div class="shrink-0 w-full max-w-3xl mx-auto px-4 pb-4">
-                  <AgentComposer />
+                  <AgentComposer autofocus={false} />
                 </div>
               </div>
             </StaticMarkdownContext>
