@@ -14,14 +14,17 @@ export function buildAgentModelTargets(
   cursorRegistered: boolean,
   harnesses: readonly Pick<Harness, 'id'>[]
 ): AgentModelTarget[] {
-  return [
-    { harness: 'in-memory' },
-    ...(cursorRegistered ? [{ harness: 'cursor' }] : []),
-    ...harnesses.map((harness) => ({
-      harness: 'macrod',
-      harnessId: harness.id,
-    })),
-  ];
+  const targets: AgentModelTarget[] = [{ harness: 'in-memory' }];
+  if (cursorRegistered) targets.push({ harness: 'cursor' });
+  targets.push(
+    ...harnesses.map(
+      (harness): AgentModelTarget => ({
+        harness: 'macrod',
+        harnessId: harness.id,
+      })
+    )
+  );
+  return targets;
 }
 
 export function agentModelsQueryOptions(target: AgentModelTarget) {

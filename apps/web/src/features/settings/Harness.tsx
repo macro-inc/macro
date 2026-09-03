@@ -105,7 +105,7 @@ export function Harness() {
       id: model.id,
       label: model.name,
       description: model.description ?? undefined,
-      group: model.group,
+      group: model.group ?? undefined,
     }));
   const selectedCursorModelId = () =>
     (cursorStatus.isSuccess ? cursorStatus.data.defaultModelId : null) ??
