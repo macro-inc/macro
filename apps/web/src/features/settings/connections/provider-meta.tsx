@@ -46,33 +46,7 @@ export const EMPTY_STARTERS: FeaturedStarter[] = [
   },
 ];
 
-export const FEATURED_DISCOVER: FeaturedStarter[] = [
-  {
-    id: 'google',
-    name: 'Google',
-    note: 'Read, organize, and act on your email.',
-  },
-  {
-    id: 'github',
-    name: 'GitHub',
-    note: 'Bring your repos into your unified workspace.',
-  },
-  {
-    id: 'linear',
-    name: 'Linear',
-    note: 'Bring your issues into your unified workspace.',
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    note: 'Bring your conversations into your unified workspace.',
-  },
-  {
-    id: 'cursor',
-    name: 'Cursor',
-    note: 'Use your Cursor account to run agent sessions in Macro.',
-  },
-];
+export const FEATURED_DISCOVER = EMPTY_STARTERS;
 
 export function providerIcon(id: Exclude<ProviderId, 'other'>): JSX.Element {
   switch (id) {

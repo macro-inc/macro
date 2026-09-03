@@ -76,7 +76,7 @@ light. Off keeps the muted dot. Unmatched
 Pipedream leftovers stay with the providers.
 Empty state offers Google first, then GitHub, Linear, Notion,
 Slack, Cursor. `Discover` searches the Pipedream catalog; featured cards are
-Google, GitHub, Linear, Slack, Cursor. Click a provider for its page: Google
+Google, GitHub, Linear, Notion, Slack, Cursor. Click a provider for its page: Google
 (Gmail + Calendar per inbox, no Docs; Gmail shows dest sync status. Signature
 nests under Gmail for an owned inbox), GitHub (account, Configure app for
 repos, AI),
