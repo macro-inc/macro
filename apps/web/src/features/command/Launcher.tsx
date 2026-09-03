@@ -429,12 +429,25 @@ export function runCreateAction(
       setCreateMenuOpen(false, false);
       // The agent block is lazy and the composer mounts after this gesture.
       // Arm focus now so the contenteditable is selected once it appears —
-      // same as email's To field and the mobile chat input.
-      triggerFocusInput(() =>
+      // same as email's To field and the mobile chat input. Also poll: the
+      // shared helper waits for layout (`isVisible`), and a just-mounted
+      // lexical root can miss that window before the split panel steals
+      // focus.
+      const agentComposer = () =>
         document
           .getElementById(AGENT_INPUT_TEXT_AREA_ID)
-          ?.querySelector<HTMLElement>('[contenteditable="true"]')
-      );
+          ?.querySelector<HTMLElement>('[contenteditable="true"]');
+      triggerFocusInput(agentComposer);
+      const deadline = Date.now() + 2000;
+      const poll = () => {
+        const el = agentComposer();
+        if (el) {
+          el.focus();
+          return;
+        }
+        if (Date.now() < deadline) requestAnimationFrame(poll);
+      };
+      requestAnimationFrame(poll);
       openWithSplit(
         { type: 'agent', id: startPendingSession() },
         { referredFrom: 'launcher', preferNewSplit: shouldInsert }

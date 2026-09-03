@@ -116,6 +116,18 @@ export function AgentInput(props: AgentInputProps) {
   onMount(() => {
     props.registerFocus?.(() => editor.controls.focus());
     onCleanup(() => props.registerFocus?.(undefined));
+    // The split panel claims focus ~40ms after a new pane mounts. A single
+    // connect-time autofocus loses that race; retry past it so `c` then `a`
+    // leaves the caret in the composer.
+    if (props.autofocus && !isMobile()) {
+      const focus = () => editor.controls.focus();
+      const t0 = window.setTimeout(focus, 0);
+      const t1 = window.setTimeout(focus, 60);
+      onCleanup(() => {
+        clearTimeout(t0);
+        clearTimeout(t1);
+      });
+    }
     props.registerQuoteInsert?.((text) => {
       // Discrete so the chip is committed to the DOM before focus moves in.
       editor.lexical.update(() => $insertReferencedPaste(text), {
