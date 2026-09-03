@@ -7,7 +7,6 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GearIcon from '@phosphor/gear.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import RssIcon from '@phosphor/rss.svg';
 import { Button, Checkbox, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -68,12 +67,7 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
       )?.label ?? '12-hour'
   );
 
-  const changeSourceVisibility = (sourceId: string, visible: boolean) => {
-    calendarView.closeEventDetails();
-    calendarView.setSourceVisibility(sourceId, visible);
-  };
-
-  // The account header checkbox shows or hides every calendar in the group.
+  // The account row checkbox shows or hides every calendar in the group.
   const changeAccountVisibility = (
     group: CalendarAccountGroup,
     visible: boolean
@@ -137,7 +131,6 @@ function createCalendarSettingsControls(isNarrow: () => boolean) {
     showCalendarVisibility,
     weekStartLabel,
     timeFormatLabel,
-    changeSourceVisibility,
     changeAccountVisibility,
     isAccountVisible,
     isAccountPartiallyVisible,
@@ -175,9 +168,10 @@ function DesktopCalendarSettings(props: {
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)]">
         <Show when={controls.showCalendarVisibility()}>
-          <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
-            {(group) => (
-              <Dropdown.Group>
+          <Dropdown.Group>
+            <Dropdown.GroupLabel>Calendars</Dropdown.GroupLabel>
+            <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
+              {(group) => (
                 <Dropdown.CheckboxItem
                   checked={controls.isAccountVisible(group)}
                   closeOnSelect={false}
@@ -185,42 +179,13 @@ function DesktopCalendarSettings(props: {
                     controls.changeAccountVisibility(group, checked)
                   }
                 >
-                  <span class="min-w-0 flex-1 truncate font-medium">
+                  <span class="min-w-0 flex-1 truncate">
                     {group.emailAddress}
                   </span>
                 </Dropdown.CheckboxItem>
-                <For each={group.calendars}>
-                  {(source) => (
-                    <Dropdown.CheckboxItem
-                      checked={calendarView.isSourceVisible(source.id)}
-                      closeOnSelect={false}
-                      onChange={(checked) =>
-                        controls.changeSourceVisibility(source.id, checked)
-                      }
-                    >
-                      <span
-                        aria-hidden="true"
-                        class="size-2.5 shrink-0 rounded-sm"
-                        style={{ 'background-color': source.color }}
-                      />
-                      <span class="min-w-0 flex-1 truncate">{source.name}</span>
-                      <Show when={source.isSubscription}>
-                        <span
-                          title="Subscription calendar"
-                          class="flex shrink-0 text-ink-muted"
-                        >
-                          <RssIcon
-                            class="size-3"
-                            aria-label="Subscription calendar"
-                          />
-                        </span>
-                      </Show>
-                    </Dropdown.CheckboxItem>
-                  )}
-                </For>
-              </Dropdown.Group>
-            )}
-          </For>
+              )}
+            </For>
+          </Dropdown.Group>
         </Show>
 
         <Dropdown.Group>
@@ -385,61 +350,26 @@ function MobileCalendarSettings(props: { controls: CalendarSettingsControls }) {
           <MobilePeriodControls onSelect={() => setOpen(false)} />
 
           <Show when={controls.showCalendarVisibility()}>
-            <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
-              {(group, index) => (
-                <div class={index() > 0 ? 'pt-4' : undefined}>
-                  <MobileDrawer.Section class="flex shrink-0 flex-col">
-                    <Checkbox
-                      checked={controls.isAccountVisible(group)}
-                      indeterminate={controls.isAccountPartiallyVisible(group)}
-                      onChange={(checked) =>
-                        controls.changeAccountVisibility(group, checked)
-                      }
-                      class={DRAWER_ROW_CLASS}
-                    >
-                      <Checkbox.Label class="min-w-0 flex-1 truncate font-medium">
-                        {group.emailAddress}
-                      </Checkbox.Label>
-                      <Checkbox.Control />
-                    </Checkbox>
-                    <For each={group.calendars}>
-                      {(source) => (
-                        <Checkbox
-                          checked={calendarView.isSourceVisible(source.id)}
-                          onChange={(checked) =>
-                            controls.changeSourceVisibility(source.id, checked)
-                          }
-                          class={DRAWER_ROW_CLASS}
-                        >
-                          <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
-                            <span
-                              aria-hidden="true"
-                              class="size-2.5 shrink-0 rounded-sm"
-                              style={{ 'background-color': source.color }}
-                            />
-                            <span class="min-w-0 flex-1 truncate">
-                              {source.name}
-                            </span>
-                            <Show when={source.isSubscription}>
-                              <span
-                                title="Subscription calendar"
-                                class="flex shrink-0 text-ink-muted"
-                              >
-                                <RssIcon
-                                  class="size-4"
-                                  aria-label="Subscription calendar"
-                                />
-                              </span>
-                            </Show>
-                          </Checkbox.Label>
-                          <Checkbox.Control />
-                        </Checkbox>
-                      )}
-                    </For>
-                  </MobileDrawer.Section>
-                </div>
-              )}
-            </For>
+            <MobileDrawer.Label>Calendars</MobileDrawer.Label>
+            <MobileDrawer.Section class="flex shrink-0 flex-col">
+              <For each={groupCalendarSourcesByAccount(calendarView.sources())}>
+                {(group) => (
+                  <Checkbox
+                    checked={controls.isAccountVisible(group)}
+                    indeterminate={controls.isAccountPartiallyVisible(group)}
+                    onChange={(checked) =>
+                      controls.changeAccountVisibility(group, checked)
+                    }
+                    class={DRAWER_ROW_CLASS}
+                  >
+                    <Checkbox.Label class="min-w-0 flex-1 truncate">
+                      {group.emailAddress}
+                    </Checkbox.Label>
+                    <Checkbox.Control />
+                  </Checkbox>
+                )}
+              </For>
+            </MobileDrawer.Section>
             <div class="mt-4" />
           </Show>
 
