@@ -264,6 +264,7 @@ describe('coordinator runtime protocol', () => {
     },
     { ...version, kind: 'engine-replaced', ownerEpoch: 2 },
     { ...version, kind: 'protocol-error', error: 'bad envelope' },
+    { ...version, kind: 'terminal-error', error: 'recovery exhausted' },
   ])('accepts coordinator-to-tab envelope $kind', (message) => {
     expect(validateCoordinatorToTabEnvelope(message).ok).toBe(true);
   });

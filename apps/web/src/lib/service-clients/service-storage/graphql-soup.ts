@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_BEARER_TOKEN_AUTH,
   enableGraphqlSoup,
@@ -408,6 +409,9 @@ export function getGraphqlSoupClient(): Client {
     const onInitializationError = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
       fallbackAfterInitializationFailure();
+      toast.failure('Local cache unavailable', {
+        subtext: 'Macro will continue without local caching for this session.',
+      });
       console.warn(
         'graphql cache async init failed; using uncached client',
         error
