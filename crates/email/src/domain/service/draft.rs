@@ -66,8 +66,12 @@ where
     /// name an accessible row is treated as a server ID from a fetched draft
     /// and bound to itself; anything else stays unresolved and gets a
     /// server-minted row, with the binding recorded in the same transaction
-    /// as the insert. Resolution reads are advisory — the mapping upsert and
-    /// the insert's owner guard are the race-proof enforcement.
+    /// as the insert. Resolution reads are advisory — they run outside that
+    /// transaction and cannot see a concurrent first save's pending binding.
+    /// The race-proof enforcement is inside it: the per-handle lock and the
+    /// re-read it guards converge concurrent first saves on one row, and the
+    /// upsert's owner guard rejects a write the resolution shouldn't have
+    /// reached.
     async fn resolve_client_handles(
         &self,
         input: &mut CreateDraftInput,
@@ -176,18 +180,30 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        // `None` means the guarded delete matched nothing: the draft was
-        // concurrently deleted or sent. The row is gone from the caller's
-        // perspective either way, so report the raced case as the no-op.
-        Ok(match deletion {
-            Some(deletion) => DeletedUserDraft {
-                deleted: true,
-                thread_deleted: deletion.thread_deleted,
-            },
-            None => DeletedUserDraft {
+        let Some(deletion) = deletion else {
+            // The guarded delete matched nothing: between the read above and
+            // the DELETE, the draft was removed or sent. Re-read to tell those
+            // apart — a discard that raced a send reports the same
+            // `MessageAlreadySent` the unraced path does, while a row that is
+            // gone stays the idempotent no-op an offline-queued discard
+            // relies on when it replays after the draft is already deleted.
+            let raced = self
+                .email_repo
+                .get_simple_message(msg.db_id, &accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?;
+            if raced.is_some_and(|m| m.is_sent || !m.is_draft) {
+                return Err(EmailErr::MessageAlreadySent(draft_id));
+            }
+            return Ok(DeletedUserDraft {
                 deleted: false,
                 thread_deleted: false,
-            },
+            });
+        };
+
+        Ok(DeletedUserDraft {
+            deleted: true,
+            thread_deleted: deletion.thread_deleted,
         })
     }
 
@@ -268,24 +284,28 @@ where
             thread_client_id: input.thread_client_binding,
         };
 
-        let applied = self
+        // The insert reports the IDs it settled on rather than echoing the
+        // candidates above: a save whose client handle raced a concurrent
+        // first save adopts that save's row, and the client must hear about
+        // the row that actually exists.
+        let Some(settled) = self
             .email_repo
             .insert_message(&resolved, &contacts, link_id, new_thread, is_draft)
             .await
-            .map_err(anyhow::Error::from)?;
-        if !applied {
+            .map_err(anyhow::Error::from)?
+        else {
             // The upsert's owner guard rejected the write: the ID exists under
             // another inbox or stopped being an unsent draft since validation.
             // Opaque not-found, matching the validation read's failure mode.
             return Err(EmailErr::MessageNotFound(resolved.db_id));
-        }
+        };
 
         Ok(CreatedDraft {
-            db_id: resolved.db_id,
+            db_id: settled.message_db_id,
             provider_id: resolved.provider_id,
             replying_to_id: resolved.replying_to_id,
             provider_thread_id: resolved.provider_thread_id,
-            thread_db_id: resolved.thread_db_id,
+            thread_db_id: settled.thread_db_id,
             link_id,
             subject: resolved.subject,
             to: resolved.to,

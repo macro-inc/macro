@@ -927,9 +927,15 @@ export function BaseInput(props: {
     });
 
     if (outcome.kind === 'queued') {
-      // Durably accepted locally. Attachments and cache refetches wait for a
-      // committed save — offline neither could succeed anyway, and the
-      // queue's persisted revalidation reconciles the thread on commit.
+      // Durably accepted locally. Cache refetches wait for a committed save,
+      // whose persisted revalidation reconciles the thread; forwarded
+      // attachments re-sync on it too. Local attachments are not on the
+      // durable queue yet (a later change moves them there), so they upload
+      // over REST right away — offline, or against a handle the server has
+      // not seen, that fails out the way an offline attachment does today:
+      // the upload mutation's toast, with the file kept on the form for the
+      // next save to retry.
+      await uploadPendingAttachments(draftId, { syncForwarded: false });
       return draftId;
     }
     if (outcome.kind === 'failed') {
@@ -1046,7 +1052,10 @@ export function BaseInput(props: {
     return true;
   }
 
-  async function uploadPendingAttachments(draftId: string) {
+  async function uploadPendingAttachments(
+    draftId: string,
+    { syncForwarded = true }: { syncForwarded?: boolean } = {}
+  ) {
     // Grab only the attachments that haven't been uploaded yet.
     const attachments = form()
       .attachments.list()
@@ -1081,6 +1090,7 @@ export function BaseInput(props: {
     }
     // Settled by the drain above, this only rethrows this save's own failure
     if (uploadRun) await uploadRun;
+    if (!syncForwarded) return;
 
     // Sync forwarded attachments
     const forwardedAttachments = form()
@@ -1342,6 +1352,16 @@ export function BaseInput(props: {
     }
 
     const currentEditor = editor();
+
+    // Sending is a REST call that resolves server ids only and is never
+    // queued (email send moves onto the durable queue in a later change).
+    // Offline, the pre-send save below can only queue, leaving a client
+    // handle the send cannot resolve — and the editor is cleared before the
+    // send's answer arrives. Refuse outright while the content is still here.
+    if (deviceLooksOffline()) {
+      toast.failure('Failed to send email', { subtext: "You're offline" });
+      return;
+    }
 
     // Sending a reply marks the thread done. Gated on inbox_visible because
     // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
@@ -1750,13 +1770,18 @@ export function BaseInput(props: {
       }
 
       try {
-        await emailClient.scheduleMessage(
+        const result = await emailClient.scheduleMessage(
           {
             draftID,
             send_time: date.toISOString(),
           },
           headerLinkId()
         );
+        if (result.isErr()) {
+          form().setSendTime(null);
+          toast.failure('Failed to schedule message');
+          return;
+        }
       } catch {
         form().setSendTime(null);
         toast.failure('Failed to schedule message');

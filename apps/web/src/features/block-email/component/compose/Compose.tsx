@@ -748,6 +748,15 @@ export function EmailCompose(props: EmailComposeProps) {
       return;
     }
 
+    // Sending is a REST call that resolves server ids only and is never
+    // queued (email send moves onto the durable queue in a later change).
+    // Offline, the pre-send save below can only queue, leaving a client
+    // handle the send cannot resolve — refuse outright with a clear reason.
+    if (deviceLooksOffline()) {
+      toast.failure('Failed to send email', { subtext: "You're offline" });
+      return;
+    }
+
     // Ensure the draft is saved before sending so undo-send always has a
     // draft id to snapshot and restore (the send reuses the draft's db_id).
     scheduleDraftSave.clear();
@@ -868,13 +877,18 @@ export function EmailCompose(props: EmailComposeProps) {
       }
 
       try {
-        await emailClient.scheduleMessage(
+        const result = await emailClient.scheduleMessage(
           {
             draftID,
             send_time: date.toISOString(),
           },
           headerLinkId()
         );
+        if (result.isErr()) {
+          form.setSendTime(null);
+          toast.failure('Failed to schedule message');
+          return;
+        }
       } catch {
         form.setSendTime(null);
         toast.failure('Failed to schedule message');

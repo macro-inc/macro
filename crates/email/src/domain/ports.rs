@@ -4,8 +4,8 @@ use crate::domain::models::{
     EmailThreadMetadata, EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label,
     Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
     ParsedMessage, ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput,
-    SavedUserDraft, SenderPolicy, SimpleMessage, SimpleMessageInfo, Thread, ThreadRow,
-    UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
+    SavedUserDraft, SenderPolicy, SettledDraftIds, SimpleMessage, SimpleMessageInfo, Thread,
+    ThreadRow, UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
     UserProvider,
 };
 use chrono::{DateTime, Utc};
@@ -280,7 +280,13 @@ pub trait EmailRepo: Send + Sync + 'static {
     /// history, and any client-handle bindings the input carries (upserted so
     /// replayed offline saves converge on the final row).
     ///
-    /// Returns `false` (rolling the transaction back) when the upsert's owner
+    /// A draft client handle is locked for the transaction and its binding
+    /// re-read under that lock, so concurrent first saves of one handle settle
+    /// on a single message and thread instead of each minting their own. The
+    /// returned IDs are therefore the authoritative ones — a save that adopted
+    /// a concurrent winner's row settled on IDs its own input never named.
+    ///
+    /// Returns `None` (rolling the transaction back) when the upsert's owner
     /// guard rejected the write: the message ID already exists but belongs to
     /// another inbox or is no longer an unsent draft. Defense-in-depth behind
     /// the handle resolution — validation reads can be raced, the guarded
@@ -292,7 +298,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<SettledDraftIds>, Self::Err>> + Send;
 
     /// Fetch a label by its database ID and link ID.
     fn get_label_by_id(

@@ -965,6 +965,7 @@ async fn test_client_handle_bindings_resolve_scoped_and_cascade(
     assert!(
         repo.insert_message(&input, &contacts, link, None, true)
             .await?
+            .is_some()
     );
 
     // Lookups are scoped to the caller's inboxes: the owner resolves, and an
@@ -998,6 +999,234 @@ async fn test_client_handle_bindings_resolve_scoped_and_cascade(
         repo.message_id_for_client_draft_id(draft_handle, &[link])
             .await?,
         None
+    );
+
+    Ok(())
+}
+
+/// Build the input + new thread a first save of `handle` hands the repo: its
+/// own freshly minted message and thread, because its resolution read saw no
+/// binding for the handle.
+fn first_save_of(
+    handle: Uuid,
+    link_id: Uuid,
+    subject: &str,
+) -> (ResolvedDraftInput, ThreadRow, Uuid) {
+    let message_db_id = macro_uuid::generate_uuid_v7();
+    let thread_db_id = macro_uuid::generate_uuid_v7();
+    let mut input = resolved_input(message_db_id, thread_db_id);
+    input.subject = subject.to_string();
+    input.draft_client_id = Some(handle);
+    let thread = ThreadRow {
+        db_id: thread_db_id,
+        provider_id: None,
+        link_id,
+        inbox_visible: true,
+        is_read: true,
+        latest_inbound_message_ts: None,
+        latest_outbound_message_ts: None,
+        latest_non_spam_message_ts: None,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        project_id: None,
+    };
+    (input, thread, message_db_id)
+}
+
+async fn message_exists(pool: &Pool<Postgres>, id: Uuid) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM email_messages WHERE id = $1) AS "exists!""#,
+        id
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+async fn thread_exists(pool: &Pool<Postgres>, id: Uuid) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM email_threads WHERE id = $1) AS "exists!""#,
+        id
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_concurrent_first_saves_of_one_handle_settle_on_one_row(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let handle = Uuid::parse_str("c11e0003-0000-0000-0000-000000000003")?;
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+
+    // Two saves of one client handle in flight at once, each having missed the
+    // other's uncommitted binding and minted a full message + thread of its
+    // own. The handle lock decides one winner; the loser adopts its row.
+    let (input_a, thread_a, message_a) = first_save_of(handle, link, "save a");
+    let (input_b, thread_b, message_b) = first_save_of(handle, link, "save b");
+    let (a, b) = futures::future::join(
+        repo.insert_message(&input_a, &contacts, link, Some(thread_a.clone()), true),
+        repo.insert_message(&input_b, &contacts, link, Some(thread_b.clone()), true),
+    )
+    .await;
+
+    let a = a?.expect("the first save should apply");
+    let b = b?.expect("the second save should apply");
+    assert_eq!(
+        a, b,
+        "concurrent saves of one handle must settle on one message and thread"
+    );
+
+    // Only the settled row set exists: the loser never created a duplicate.
+    let (winner_message, loser_message) = if a.message_db_id == message_a {
+        (message_a, message_b)
+    } else {
+        (message_b, message_a)
+    };
+    let (winner_thread, loser_thread) = if a.thread_db_id == thread_a.db_id {
+        (thread_a.db_id, thread_b.db_id)
+    } else {
+        (thread_b.db_id, thread_a.db_id)
+    };
+    assert_eq!(a.message_db_id, winner_message);
+    assert_eq!(a.thread_db_id, winner_thread);
+    assert!(
+        !message_exists(&pool, loser_message).await?,
+        "the losing save must not leave an orphaned message"
+    );
+    assert!(
+        !thread_exists(&pool, loser_thread).await?,
+        "the losing save must not leave an orphaned thread"
+    );
+
+    // The handle names the settled row, so later saves keep converging on it.
+    assert_eq!(
+        repo.message_id_for_client_draft_id(handle, &[link]).await?,
+        Some(winner_message)
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_save_racing_a_committed_binding_adopts_it(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let handle = Uuid::parse_str("c11e0004-0000-0000-0000-000000000004")?;
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+
+    let (input_a, thread_a, message_a) = first_save_of(handle, link, "winner");
+    let a = repo
+        .insert_message(&input_a, &contacts, link, Some(thread_a.clone()), true)
+        .await?
+        .expect("the winning save should apply");
+
+    // A save whose resolution read predates that commit still carries its own
+    // minted ids. The in-transaction re-read redirects it onto the bound row.
+    let (input_b, thread_b, _) = first_save_of(handle, link, "adopter");
+    let b = repo
+        .insert_message(&input_b, &contacts, link, Some(thread_b.clone()), true)
+        .await?
+        .expect("the adopting save should apply");
+
+    assert_eq!(a, b, "the later save must adopt the bound row");
+    assert!(
+        !thread_exists(&pool, thread_b.db_id).await?,
+        "the adopted save's own thread must never be created"
+    );
+
+    // It updated the bound row rather than inserting alongside it.
+    let subject = sqlx::query_scalar!(
+        "SELECT subject FROM email_messages WHERE id = $1",
+        message_a
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(subject.as_deref(), Some("adopter"));
+
+    Ok(())
+}
+
+// A handle can name a binding under more than one accessible inbox when a
+// move's cascade did not land, and the lookup breaks that tie by recency. A
+// rebind has to count as the newest binding, or the handle keeps resolving to
+// the inbox the draft was moved away from.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_rebinding_a_handle_wins_the_cross_inbox_recency_tie(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    let link_a = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let link_b = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc")?;
+    let both = [link_a, link_b];
+    let draft_handle = Uuid::parse_str("c11e0005-0000-0000-0000-000000000005")?;
+    let thread_handle = Uuid::parse_str("c11e0006-0000-0000-0000-000000000006")?;
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+
+    let save = async |link_id: Uuid, subject: &str| {
+        let (mut input, thread, _) = first_save_of(draft_handle, link_id, subject);
+        input.thread_client_id = Some(thread_handle);
+        repo.insert_message(&input, &contacts, link_id, Some(thread), true)
+            .await
+    };
+
+    // Bound under B, then under A: A is the newer binding, so it wins.
+    let b = save(link_b, "in b")
+        .await?
+        .expect("the B save should apply");
+    let a = save(link_a, "in a")
+        .await?
+        .expect("the A save should apply");
+    assert_eq!(
+        repo.message_id_for_client_draft_id(draft_handle, &both)
+            .await?,
+        Some(a.message_db_id)
+    );
+
+    // Bound back under B. This re-points the existing B row rather than
+    // inserting one, so its recency has to be refreshed for B to win again.
+    let b_again = save(link_b, "back in b")
+        .await?
+        .expect("the rebind applies");
+    assert_eq!(
+        b_again, b,
+        "the rebind should settle on B's existing row, not a third one"
+    );
+    assert_eq!(
+        repo.message_id_for_client_draft_id(draft_handle, &both)
+            .await?,
+        Some(b.message_db_id),
+        "the rebind must outrank the older binding under A"
+    );
+    assert_eq!(
+        repo.thread_id_for_client_thread_id(thread_handle, &both)
+            .await?,
+        Some(b.thread_db_id),
+        "the thread mapping breaks the tie the same way"
     );
 
     Ok(())
@@ -1076,7 +1305,10 @@ async fn test_upsert_guard_rejects_cross_inbox_overwrite(
         )
         .await?;
 
-    assert!(!applied, "owner guard must reject a cross-inbox overwrite");
+    assert!(
+        applied.is_none(),
+        "owner guard must reject a cross-inbox overwrite"
+    );
     let after = message_snapshot(&pool, victim).await?;
     assert_eq!(before, after, "victim row must be untouched");
 
@@ -1107,7 +1339,10 @@ async fn test_upsert_guard_rejects_sent_message_overwrite(
         .insert_message(&resolved_input(victim, thread), &contacts, link, None, true)
         .await?;
 
-    assert!(!applied, "owner guard must reject rewriting a sent message");
+    assert!(
+        applied.is_none(),
+        "owner guard must reject rewriting a sent message"
+    );
     let after = message_snapshot(&pool, victim).await?;
     assert_eq!(before, after, "sent message must be untouched");
 
@@ -1139,7 +1374,7 @@ async fn test_insert_message_reports_applied_on_create(pool: Pool<Postgres>) -> 
         )
         .await?;
 
-    assert!(applied, "a fresh unclaimed id inserts normally");
+    assert!(applied.is_some(), "a fresh unclaimed id inserts normally");
 
     Ok(())
 }

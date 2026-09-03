@@ -99,6 +99,20 @@ pub struct ResolvedDraftInput {
     pub thread_client_id: Option<Uuid>,
 }
 
+/// The row IDs a save actually settled on, reported back by the insert.
+///
+/// Usually these are the IDs the caller resolved, but a save carrying a
+/// client draft handle can adopt a row a concurrent first save minted for
+/// the same handle, so the caller must echo these — not its own candidates —
+/// back to the client.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SettledDraftIds {
+    /// The message row the save wrote.
+    pub message_db_id: Uuid,
+    /// The thread that message belongs to.
+    pub thread_db_id: Uuid,
+}
+
 /// Simplified message info used for validation queries.
 #[derive(Debug, Clone)]
 pub struct SimpleMessageInfo {

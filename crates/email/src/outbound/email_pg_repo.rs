@@ -3,8 +3,8 @@ use crate::domain::{
         Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, DraftDeletion,
         EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMetadata, EmailThreadPreview, Label,
         Link, LinkLabel, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
-        PreviewCursorQuery, ResolvedDraftInput, SimpleMessage, SimpleMessageInfo, ThreadRow,
-        UpsertEmailFilterInput, UpsertedContacts, UserProvider,
+        PreviewCursorQuery, ResolvedDraftInput, SettledDraftIds, SimpleMessage, SimpleMessageInfo,
+        ThreadRow, UpsertEmailFilterInput, UpsertedContacts, UserProvider,
     },
     ports::{EmailRepo, EmailUserRepo, LinkEmailSettings, RecipientsByMessageId},
 };
@@ -290,7 +290,7 @@ impl EmailRepo for EmailPgRepo {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> Result<bool, Self::Err> {
+    ) -> Result<Option<SettledDraftIds>, Self::Err> {
         draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 

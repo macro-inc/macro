@@ -1,5 +1,5 @@
 use super::{client_id_mapping, message, thread};
-use crate::domain::models::{ResolvedDraftInput, ThreadRow, UpsertedContacts};
+use crate::domain::models::{ResolvedDraftInput, SettledDraftIds, ThreadRow, UpsertedContacts};
 use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -7,9 +7,9 @@ use uuid::Uuid;
 /// Insert a draft message within a transaction.
 /// Includes: thread insert (if new), message upsert, scheduled message, recipients,
 /// thread metadata update, and user history.
-/// Returns `false` (rolling everything back) when the upsert's owner guard
-/// rejected the write — the message ID exists under another inbox or is no
-/// longer an unsent draft.
+/// Returns the IDs the save settled on, or `None` (rolling everything back)
+/// when the upsert's owner guard rejected the write — the message ID exists
+/// under another inbox or is no longer an unsent draft.
 #[tracing::instrument(skip(pool, input, contacts, new_thread), err)]
 pub(crate) async fn insert_message(
     pool: &PgPool,
@@ -18,11 +18,36 @@ pub(crate) async fn insert_message(
     link_id: Uuid,
     new_thread: Option<ThreadRow>,
     is_draft: bool,
-) -> Result<bool, sqlx::Error> {
+) -> Result<Option<SettledDraftIds>, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
-    let message_db_id = input.db_id;
-    let thread_db_id = input.thread_db_id;
+    let mut settled = SettledDraftIds {
+        message_db_id: input.db_id,
+        thread_db_id: input.thread_db_id,
+    };
+    let mut new_thread = new_thread;
+
+    // The caller resolved this handle on its own connection, where a
+    // concurrent first save's binding is invisible until it commits — so two
+    // first saves of one draft would each mint a message and a thread, and the
+    // losing binding upsert would orphan a full row set. Serialize on the
+    // handle and re-read the binding under the lock: the loser adopts the row
+    // the winner settled on and updates it instead.
+    if let Some(client_id) = input.draft_client_id {
+        client_id_mapping::lock_draft_client_id(&mut tx, client_id, link_id).await?;
+        if let Some(bound) = client_id_mapping::bound_draft_row(&mut tx, client_id, link_id).await?
+            && bound.message_db_id != settled.message_db_id
+        {
+            settled = bound;
+            // Our thread would have no messages left to hold.
+            new_thread = None;
+        }
+    }
+
+    let SettledDraftIds {
+        message_db_id,
+        thread_db_id,
+    } = settled;
 
     if let Some(thread) = new_thread {
         thread::insert_thread(&mut tx, &thread, link_id).await?;
@@ -40,7 +65,7 @@ pub(crate) async fn insert_message(
     .await?;
     if !applied {
         tx.rollback().await?;
-        return Ok(false);
+        return Ok(None);
     }
 
     // Only touch scheduling if send_time is explicitly provided.
@@ -72,7 +97,7 @@ pub(crate) async fn insert_message(
     }
 
     tx.commit().await?;
-    Ok(true)
+    Ok(Some(settled))
 }
 
 /// Upsert a draft message row.
