@@ -11,9 +11,10 @@
 //! Its own tools run in-process, not over MCP, so their output is the tool's
 //! own JSON with no envelope around it.
 
-use agent_client_protocol::schema::v1::Meta;
+use agent_client_protocol::schema::v1::{Meta, ToolKind};
+use serde::Deserialize;
 
-use super::{HarnessReader, namespace};
+use super::{HarnessReader, generic, namespaced, raw};
 use crate::domain::model::ToolName;
 
 /// The `_meta` namespace `agent_inmem` writes under.
@@ -22,15 +23,35 @@ pub const NAMESPACE: &str = "macro";
 /// Reader for the in-process agent's conventions.
 pub struct MacroInmem;
 
+/// `_meta.macro`, as far as the fold reads it.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MacroMeta {
+    tool_name: Option<String>,
+    #[serde(default)]
+    subagent: bool,
+}
+
+fn meta_of(meta: Option<&Meta>) -> MacroMeta {
+    namespaced(meta, NAMESPACE).unwrap_or_default()
+}
+
+/// How a failed in-process tool reports: `{ "error": <description> }` and
+/// nothing else.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ErrorOutput {
+    error: String,
+}
+
 impl HarnessReader for MacroInmem {
     fn meta_namespace(&self) -> Option<&'static str> {
         Some(NAMESPACE)
     }
 
     fn harness_tool_name(&self, meta: Option<&Meta>, _title: &str) -> Option<ToolName> {
-        namespace(meta, NAMESPACE)?
-            .get("toolName")?
-            .as_str()
+        meta_of(meta)
+            .tool_name
             .map(|name| name.parse().unwrap_or_else(|never| match never {}))
     }
 
@@ -43,15 +64,18 @@ impl HarnessReader for MacroInmem {
         }
     }
 
-    /// Tool output arrives bare. A failed call reports
-    /// `{ "error": <description> }` and nothing else.
-    fn unwrap_tool_output(&self, raw: &serde_json::Value) -> (serde_json::Value, Option<String>) {
-        if let Some(map) = raw.as_object()
-            && map.len() == 1
-            && let Some(error) = map.get("error").and_then(serde_json::Value::as_str)
-        {
-            return (serde_json::Value::Null, Some(error.to_owned()));
+    /// Tool output arrives bare.
+    fn unwrap_tool_output(
+        &self,
+        raw_output: &serde_json::Value,
+    ) -> (serde_json::Value, Option<String>) {
+        match raw::<ErrorOutput>(Some(raw_output)) {
+            Some(ErrorOutput { error }) => (serde_json::Value::Null, Some(error)),
+            None => (raw_output.clone(), None),
         }
-        (raw.clone(), None)
+    }
+
+    fn is_subagent(&self, name: &ToolName, kind: ToolKind, meta: Option<&Meta>) -> bool {
+        meta_of(meta).subagent || generic::is_subagent(name, kind)
     }
 }

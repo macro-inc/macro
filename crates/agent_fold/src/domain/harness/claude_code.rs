@@ -1,6 +1,6 @@
 //! The Claude Code harness, `@agentclientprotocol/claude-agent-acp`.
 //!
-//! Writes its own keys under `_meta.claudeCode`:
+//! Writes its own keys under `_meta.claudeCode`, read as [`ClaudeCodeMeta`]:
 //!
 //! - `toolName` - the harness's name for the tool (`Bash`, `Read`, `Write`,
 //!   or `mcp__<server>__<tool>` for an MCP tool).
@@ -8,13 +8,15 @@
 //! - `parentToolUseId` - on a call the subagent made, naming the `Agent`
 //!   call it belongs to. Present on the opening frame; not on every patch.
 //! - `toolResponse` - the tool's own result object, richer than the text
-//!   blocks `rawOutput` later carries. For `Agent` it holds the subagent's
-//!   answer, id, model, timings, token count and per-tool statistics.
+//!   blocks `rawOutput` later carries. For `Agent` it is an
+//!   [`AgentResponse`]: the subagent's answer, id, model, timings, token
+//!   count and per-tool statistics.
 
-use agent_client_protocol::schema::v1::{Meta, ToolKind};
+use agent_client_protocol::schema::v1::{ContentBlock, Meta, ToolKind};
+use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, generic, namespace};
+use super::{HarnessReader, SubagentInput, generic, namespaced, raw};
 use crate::domain::model::{SubagentResult, ToolName, ToolStats, ToolUseId};
 
 /// The `_meta` namespace Claude Code writes under.
@@ -22,6 +24,100 @@ pub const NAMESPACE: &str = "claudeCode";
 
 /// Reader for Claude Code's conventions.
 pub struct ClaudeCode;
+
+/// `_meta.claudeCode`, as far as the fold reads it.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ClaudeCodeMeta {
+    tool_name: Option<String>,
+    #[serde(default)]
+    subagent: bool,
+    parent_tool_use_id: Option<String>,
+    tool_response: Option<Value>,
+}
+
+fn meta_of(meta: Option<&Meta>) -> ClaudeCodeMeta {
+    namespaced(meta, NAMESPACE).unwrap_or_default()
+}
+
+/// The `Agent` tool's `toolResponse`.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentResponse {
+    status: Option<String>,
+    error: Option<String>,
+    #[serde(default)]
+    content: Vec<ContentBlock>,
+    agent_id: Option<String>,
+    resolved_model: Option<String>,
+    total_duration_ms: Option<u32>,
+    total_tokens: Option<u32>,
+    total_tool_use_count: Option<u32>,
+    tool_stats: Option<AgentToolStats>,
+}
+
+/// The `Agent` tool's `toolStats`, in Claude Code's names.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentToolStats {
+    #[serde(default)]
+    read_count: u32,
+    #[serde(default)]
+    search_count: u32,
+    #[serde(default)]
+    bash_count: u32,
+    #[serde(default)]
+    edit_file_count: u32,
+    #[serde(default)]
+    lines_added: u32,
+    #[serde(default)]
+    lines_removed: u32,
+    #[serde(default)]
+    other_tool_count: u32,
+}
+
+impl From<AgentToolStats> for ToolStats {
+    fn from(stats: AgentToolStats) -> Self {
+        Self {
+            reads: stats.read_count,
+            searches: stats.search_count,
+            commands: stats.bash_count,
+            edits: stats.edit_file_count,
+            lines_added: stats.lines_added,
+            lines_removed: stats.lines_removed,
+            other: stats.other_tool_count,
+        }
+    }
+}
+
+impl From<AgentResponse> for SubagentResult {
+    fn from(response: AgentResponse) -> Self {
+        let text = response
+            .content
+            .iter()
+            .filter_map(|block| match block {
+                ContentBlock::Text(text) => Some(text.text.as_str()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let failed = response.status.as_deref() == Some("failed");
+        Self {
+            text: (!text.is_empty()).then_some(text),
+            error: failed.then(|| {
+                response
+                    .error
+                    .unwrap_or_else(|| "subagent failed".to_owned())
+            }),
+            agent_id: response.agent_id,
+            model: response.resolved_model,
+            duration_ms: response.total_duration_ms,
+            tokens: response.total_tokens,
+            tool_uses: response.total_tool_use_count,
+            stats: response.tool_stats.map(ToolStats::from),
+        }
+    }
+}
 
 impl HarnessReader for ClaudeCode {
     fn meta_namespace(&self) -> Option<&'static str> {
@@ -33,18 +129,11 @@ impl HarnessReader for ClaudeCode {
     }
 
     fn is_subagent(&self, name: &ToolName, kind: ToolKind, meta: Option<&Meta>) -> bool {
-        namespace(meta, NAMESPACE)
-            .and_then(|meta| meta.get("subagent"))
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-            || generic::is_subagent(name, kind)
+        meta_of(meta).subagent || generic::is_subagent(name, kind)
     }
 
     fn parent_tool_call(&self, meta: Option<&Meta>) -> Option<ToolUseId> {
-        namespace(meta, NAMESPACE)?
-            .get("parentToolUseId")?
-            .as_str()
-            .map(|id| ToolUseId(id.to_owned()))
+        meta_of(meta).parent_tool_use_id.map(ToolUseId)
     }
 
     fn subagent_input(&self, raw_input: Option<&Value>, _title: &str) -> SubagentInput {
@@ -58,21 +147,26 @@ impl HarnessReader for ClaudeCode {
         raw_output: Option<&Value>,
         content_text: Option<&str>,
     ) -> Option<SubagentResult> {
-        if let Some(response) = namespace(meta, NAMESPACE).and_then(|meta| meta.get("toolResponse"))
-        {
-            return Some(agent_result(response));
+        if let Some(response) = meta_of(meta).tool_response {
+            // The response object is what the harness says about the run;
+            // one that does not read as an `AgentResponse` still says nothing
+            // the generic path would not.
+            if let Ok(response) = serde_json::from_value::<AgentResponse>(response) {
+                return Some(response.into());
+            }
         }
-        // The final frame copies the answer into `rawOutput` as text blocks,
-        // the second of which is an "agentId: ... <usage>" boilerplate the
-        // response object already said better. Keep the first.
-        let text = raw_output
-            .and_then(Value::as_array)
-            .and_then(|blocks| blocks.first())
-            .and_then(|block| block.get("text"))
-            .and_then(Value::as_str);
-        match text {
+        // The final frame copies the answer into `rawOutput` as content
+        // blocks, the second of which is an "agentId: ... <usage>" boilerplate
+        // the response object already said better. Keep the first.
+        let first_text = raw::<Vec<ContentBlock>>(raw_output).and_then(|blocks| {
+            blocks.into_iter().find_map(|block| match block {
+                ContentBlock::Text(text) => Some(text.text),
+                _ => None,
+            })
+        });
+        match first_text {
             Some(text) => Some(SubagentResult {
-                text: Some(text.to_owned()),
+                text: Some(text),
                 ..SubagentResult::default()
             }),
             None => generic::subagent_result(raw_output, content_text),
@@ -85,65 +179,5 @@ impl HarnessReader for ClaudeCode {
 /// Reads `_meta.claudeCode.toolName`.
 #[must_use]
 pub fn tool_name(meta: Option<&Meta>) -> Option<String> {
-    namespace(meta, NAMESPACE)?
-        .get("toolName")?
-        .as_str()
-        .map(ToOwned::to_owned)
-}
-
-/// The `Agent` tool's response object, in the fold's vocabulary.
-fn agent_result(response: &Value) -> SubagentResult {
-    let text = response
-        .get("content")
-        .and_then(Value::as_array)
-        .map(|blocks| {
-            blocks
-                .iter()
-                .filter_map(|block| block.get("text").and_then(Value::as_str))
-                .collect::<Vec<_>>()
-                .join("\n")
-        })
-        .filter(|text| !text.is_empty());
-    let string = |key: &str| {
-        response
-            .get(key)
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned)
-    };
-    let u32_at = |key: &str| {
-        response
-            .get(key)
-            .and_then(Value::as_u64)
-            .and_then(|count| u32::try_from(count).ok())
-    };
-    SubagentResult {
-        text,
-        error: (response.get("status").and_then(Value::as_str) == Some("failed"))
-            .then(|| string("error").unwrap_or_else(|| "subagent failed".to_owned())),
-        agent_id: string("agentId"),
-        model: string("resolvedModel"),
-        duration_ms: u32_at("totalDurationMs"),
-        tokens: u32_at("totalTokens"),
-        tool_uses: u32_at("totalToolUseCount"),
-        stats: response.get("toolStats").map(tool_stats),
-    }
-}
-
-fn tool_stats(stats: &Value) -> ToolStats {
-    let count = |key: &str| {
-        stats
-            .get(key)
-            .and_then(Value::as_u64)
-            .and_then(|count| u32::try_from(count).ok())
-            .unwrap_or(0)
-    };
-    ToolStats {
-        reads: count("readCount"),
-        searches: count("searchCount"),
-        commands: count("bashCount"),
-        edits: count("editFileCount"),
-        lines_added: count("linesAdded"),
-        lines_removed: count("linesRemoved"),
-        other: count("otherToolCount"),
-    }
+    meta_of(meta).tool_name
 }

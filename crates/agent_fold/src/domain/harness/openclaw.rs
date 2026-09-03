@@ -2,7 +2,7 @@
 //!
 //! Writes no `_meta` on tool frames. Every tool call is titled
 //! `<tool>: key: value, key: value…` with the arguments in `rawInput`. Its
-//! delegation tool is `sessions_spawn`, kind `other`:
+//! delegation tool is `sessions_spawn`, kind `other` ([`SpawnArgs`]):
 //!
 //! ```json
 //! { "task": "…", "label": "…", "agentId": "…", "runtime": "subagent" }
@@ -10,7 +10,7 @@
 //!
 //! Completion means the spawn was *accepted*, not that the subagent
 //! finished; the answer arrives later as a message. The result names the
-//! child session:
+//! child session ([`SpawnDetails`]):
 //!
 //! ```json
 //! { "content": [{ "type": "text", "text": "{…}" }],
@@ -19,13 +19,40 @@
 
 use agent_client_protocol::schema::v1::{Meta, ToolKind};
 use lazy_regex::regex_captures;
+use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, generic};
+use super::{HarnessReader, SubagentInput, generic, mcp, raw};
 use crate::domain::model::{SubagentResult, ToolName};
 
 /// Reader for OpenClaw's conventions.
 pub struct OpenClaw;
+
+/// `sessions_spawn`'s arguments, beyond the Task-tool ones the generic
+/// reader takes (`task` as the prompt).
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SpawnArgs {
+    label: Option<String>,
+    agent_id: Option<String>,
+    runtime: Option<String>,
+}
+
+/// `sessions_spawn`'s result, wherever it sits: the `details` object, or the
+/// same JSON as the text block's content.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SpawnDetails {
+    child_session_key: Option<String>,
+    run_id: Option<String>,
+    error: Option<String>,
+}
+
+/// A `rawOutput` that carries `details` beside its content blocks.
+#[derive(Debug, Deserialize)]
+struct DetailedOutput {
+    details: SpawnDetails,
+}
 
 impl HarnessReader for OpenClaw {
     /// `<tool>: key: value…` - the tool is what comes before the first colon.
@@ -39,12 +66,12 @@ impl HarnessReader for OpenClaw {
 
     fn subagent_input(&self, raw_input: Option<&Value>, _title: &str) -> SubagentInput {
         let mut input = generic::subagent_input(raw_input);
-        let string = |key: &str| raw_input?.get(key)?.as_str().map(ToOwned::to_owned);
+        let args: SpawnArgs = raw(raw_input).unwrap_or_default();
         if input.description.is_none() {
-            input.description = string("label");
+            input.description = args.label;
         }
         if input.agent_type.is_none() {
-            input.agent_type = string("agentId").or_else(|| string("runtime"));
+            input.agent_type = args.agent_id.or(args.runtime);
         }
         input
     }
@@ -56,19 +83,20 @@ impl HarnessReader for OpenClaw {
         raw_output: Option<&Value>,
         content_text: Option<&str>,
     ) -> Option<SubagentResult> {
-        let Some(raw) = raw_output else {
+        let Some(raw_output) = raw_output else {
             return generic::subagent_result(None, content_text);
         };
-        let details = raw.get("details").cloned().unwrap_or_else(|| {
-            generic::subagent_result(Some(raw), None)
-                .and_then(|result| result.text)
-                .and_then(|text| serde_json::from_str::<Value>(&text).ok())
-                .unwrap_or(Value::Null)
-        });
-        let string = |key: &str| details.get(key)?.as_str().map(ToOwned::to_owned);
+        let details = match raw::<DetailedOutput>(Some(raw_output)) {
+            Some(output) => output.details,
+            // Without `details`, the text block's JSON says the same.
+            None => match mcp::unwrap_call_result(raw_output).0 {
+                Value::String(text) => serde_json::from_str(&text).unwrap_or_default(),
+                value => serde_json::from_value(value).unwrap_or_default(),
+            },
+        };
         let result = SubagentResult {
-            agent_id: string("childSessionKey").or_else(|| string("runId")),
-            error: string("error"),
+            agent_id: details.child_session_key.or(details.run_id),
+            error: details.error,
             // An accepted spawn has no answer yet; that arrives as a message.
             text: None,
             ..SubagentResult::default()

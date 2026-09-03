@@ -3,7 +3,7 @@
 //! Writes no `_meta` on tool frames. Its subagent tool is `task`, kind
 //! `think`, with the Task-tool arguments; the child runs as a separate
 //! OpenCode session whose activity is never streamed into the parent. What
-//! the parent sees is the completion:
+//! the parent sees is the completion, read as [`TaskOutput`]:
 //!
 //! ```json
 //! { "output": "<task id=\"ses_…\" state=\"completed\">\n<task_result>\n…\n</task_result>\n</task>",
@@ -13,43 +13,61 @@
 //!
 //! or, on failure, `{ "error": "…", "metadata": { … } }`.
 
+use agent_client_protocol::schema::v1::Meta;
 use lazy_regex::regex_captures;
+use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, generic};
+use super::{HarnessReader, generic, raw};
 use crate::domain::model::SubagentResult;
 
 /// Reader for OpenCode's conventions.
 pub struct OpenCode;
 
+/// The `task` tool's `rawOutput`.
+#[derive(Debug, Deserialize)]
+struct TaskOutput {
+    output: Option<String>,
+    error: Option<String>,
+    metadata: Option<TaskMetadata>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TaskMetadata {
+    session_id: Option<String>,
+    model: Option<TaskModel>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskModel {
+    #[serde(rename = "providerID")]
+    provider_id: String,
+    #[serde(rename = "modelID")]
+    model_id: String,
+}
+
 impl HarnessReader for OpenCode {
     fn subagent_result(
         &self,
-        _meta: Option<&agent_client_protocol::schema::v1::Meta>,
+        _meta: Option<&Meta>,
         _raw_input: Option<&Value>,
         raw_output: Option<&Value>,
         content_text: Option<&str>,
     ) -> Option<SubagentResult> {
-        let Some(raw) = raw_output.and_then(Value::as_object) else {
+        let Some(output) =
+            raw::<TaskOutput>(raw_output).filter(|_| raw_output.is_some_and(Value::is_object))
+        else {
             return generic::subagent_result(raw_output, content_text);
         };
-        let metadata = raw.get("metadata");
-        let string_at =
-            |value: Option<&Value>, key: &str| value?.get(key)?.as_str().map(ToOwned::to_owned);
+        let metadata = output.metadata;
         let result = SubagentResult {
-            text: raw
-                .get("output")
-                .and_then(Value::as_str)
-                .map(task_result_text),
-            error: string_at(Some(&Value::Object(raw.clone())), "error"),
-            agent_id: string_at(metadata, "sessionId"),
+            text: output.output.as_deref().map(task_result_text),
+            error: output.error,
+            agent_id: metadata.as_ref().and_then(|meta| meta.session_id.clone()),
             model: metadata
-                .and_then(|metadata| metadata.get("model"))
-                .and_then(|model| {
-                    let provider = model.get("providerID")?.as_str()?;
-                    let id = model.get("modelID")?.as_str()?;
-                    Some(format!("{provider}/{id}"))
-                }),
+                .and_then(|meta| meta.model)
+                .map(|model| format!("{}/{}", model.provider_id, model.model_id)),
             ..SubagentResult::default()
         };
         (!result.is_empty()).then_some(result)

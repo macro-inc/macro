@@ -46,6 +46,8 @@ pub mod opencode;
 use crate::domain::model::{Harness, SubagentResult, ToolName, ToolUseId};
 use agent_client_protocol::schema::v1::{Meta, ToolKind};
 use lazy_regex::regex_is_match;
+use serde::Deserialize;
+use serde::de::DeserializeOwned;
 
 /// What a harness's conventions let the fold read off a tool frame.
 ///
@@ -239,16 +241,25 @@ pub fn tool_name(reader: &dyn HarnessReader, meta: Option<&Meta>, title: &str) -
         .unwrap_or_else(|| title.parse().unwrap_or_else(|never| match never {}))
 }
 
-/// The value at `_meta.<namespace>`, when it is an object.
+/// The object at `_meta.<namespace>`, read as `T`.
 ///
 /// The shape every namespaced harness shares: its keys live under one
-/// top-level object named for the harness.
+/// top-level object named for the harness. `None` when the key is absent,
+/// not an object, or does not deserialize - all "no information".
 #[must_use]
-pub(crate) fn namespace<'meta>(
-    meta: Option<&'meta Meta>,
-    namespace: &str,
-) -> Option<&'meta serde_json::Map<String, serde_json::Value>> {
-    meta?.get(namespace)?.as_object()
+pub(crate) fn namespaced<T: DeserializeOwned>(meta: Option<&Meta>, namespace: &str) -> Option<T> {
+    let value = meta?.get(namespace)?;
+    value
+        .is_object()
+        .then(|| serde_json::from_value(value.clone()).ok())
+        .flatten()
+}
+
+/// `raw_input` or `raw_output`, read as `T`. `None` when absent or not that
+/// shape.
+#[must_use]
+pub(crate) fn raw<T: DeserializeOwned>(value: Option<&serde_json::Value>) -> Option<T> {
+    serde_json::from_value(value?.clone()).ok()
 }
 
 /// The command line behind an `execute` tool call.
@@ -258,7 +269,11 @@ pub(crate) fn namespace<'meta>(
 /// does not specify.
 #[must_use]
 pub fn command_from_raw_input(raw_input: Option<&serde_json::Value>) -> Option<String> {
-    raw_input?.get("command")?.as_str().map(ToOwned::to_owned)
+    #[derive(Deserialize)]
+    struct Input {
+        command: Option<String>,
+    }
+    raw::<Input>(raw_input)?.command
 }
 
 /// The whole-file edit an edit tool's raw input describes, as
@@ -271,8 +286,12 @@ pub fn command_from_raw_input(raw_input: Option<&serde_json::Value>) -> Option<S
 /// new.
 #[must_use]
 pub fn file_edit_from_raw_input(raw_input: Option<&serde_json::Value>) -> Option<(String, String)> {
-    let input = raw_input?;
-    let path = input.get("filePath")?.as_str()?;
-    let content = input.get("content")?.as_str()?;
-    Some((path.to_owned(), content.to_owned()))
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct Input {
+        file_path: String,
+        content: String,
+    }
+    let input: Input = raw(raw_input)?;
+    Some((input.file_path, input.content))
 }

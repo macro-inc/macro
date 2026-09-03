@@ -12,15 +12,28 @@
 //!   `{ description, prompt, subagent_type }` arguments.
 
 use agent_client_protocol::schema::v1::{Meta, ToolKind};
+use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, mcp};
+use super::{HarnessReader, SubagentInput, mcp, namespaced, raw};
 use crate::domain::model::{SubagentResult, ToolName};
 
 /// A harness this fold knows nothing specific about.
 pub struct Generic;
 
 impl HarnessReader for Generic {}
+
+/// `_meta.terminal_output`: the output accumulated so far.
+#[derive(Deserialize)]
+struct TerminalOutput {
+    data: String,
+}
+
+/// `_meta.terminal_exit`: how the command ended.
+#[derive(Deserialize)]
+struct TerminalExit {
+    exit_code: Option<i64>,
+}
 
 /// A chunk of terminal output carried on a `tool_call_update`.
 ///
@@ -29,11 +42,7 @@ impl HarnessReader for Generic {}
 /// replace rather than append.
 #[must_use]
 pub fn terminal_output(meta: Option<&Meta>) -> Option<String> {
-    meta?
-        .get("terminal_output")?
-        .get("data")?
-        .as_str()
-        .map(ToOwned::to_owned)
+    namespaced::<TerminalOutput>(meta, "terminal_output").map(|output| output.data)
 }
 
 /// The exit code reported when a terminal-backed tool call finished.
@@ -41,7 +50,7 @@ pub fn terminal_output(meta: Option<&Meta>) -> Option<String> {
 /// Reads `_meta.terminal_exit.exit_code`.
 #[must_use]
 pub fn terminal_exit_code(meta: Option<&Meta>) -> Option<i32> {
-    let code = meta?.get("terminal_exit")?.get("exit_code")?.as_i64()?;
+    let code = namespaced::<TerminalExit>(meta, "terminal_exit")?.exit_code?;
     i32::try_from(code).ok()
 }
 
@@ -56,33 +65,40 @@ pub fn is_subagent(name: &ToolName, kind: ToolKind) -> bool {
         )
 }
 
-/// The Task-tool argument shape, plus the aliases the harnesses that copied
-/// it use: `task` for the prompt (Macro's own `Subagent`), `background` for
-/// `run_in_background` (OpenCode).
+/// The Task-tool arguments, plus the aliases the harnesses that copied the
+/// convention use: `task` for the prompt (Macro's own `Subagent`),
+/// `background` for `run_in_background` (OpenCode).
+#[derive(Deserialize, Default)]
+struct TaskInput {
+    subagent_type: Option<String>,
+    description: Option<String>,
+    prompt: Option<String>,
+    task: Option<String>,
+    run_in_background: Option<bool>,
+    background: Option<bool>,
+}
+
+/// The Task-tool argument shape, read off a call's raw input.
 #[must_use]
 pub fn subagent_input(raw_input: Option<&Value>) -> SubagentInput {
-    let Some(input) = raw_input.and_then(Value::as_object) else {
-        return SubagentInput::default();
-    };
-    let string = |key: &str| {
-        input
-            .get(key)
-            .and_then(Value::as_str)
-            .map(ToOwned::to_owned)
-    };
+    let input: TaskInput = raw(raw_input).unwrap_or_default();
     SubagentInput {
-        agent_type: string("subagent_type"),
-        description: string("description"),
-        prompt: string("prompt").or_else(|| string("task")),
-        background: input
-            .get("run_in_background")
-            .or_else(|| input.get("background"))
-            .and_then(Value::as_bool),
+        agent_type: input.subagent_type,
+        description: input.description,
+        prompt: input.prompt.or(input.task),
+        background: input.run_in_background.or(input.background),
     }
 }
 
+/// A bare `{ "error": … }` result, how several harnesses report a failed
+/// call's output.
+#[derive(Deserialize)]
+struct ErrorOutput {
+    error: String,
+}
+
 /// A subagent's result when the harness reports nothing structured: the
-/// raw output as text, else the content blocks' text; a `{ "error" }`
+/// raw output as text, else the content blocks' text; an `{ "error" }`
 /// object is a failure.
 #[must_use]
 pub fn subagent_result(
@@ -90,11 +106,11 @@ pub fn subagent_result(
     content_text: Option<&str>,
 ) -> Option<SubagentResult> {
     let mut result = SubagentResult::default();
-    if let Some(raw) = raw_output {
-        if let Some(error) = raw.get("error").and_then(Value::as_str) {
-            result.error = Some(error.to_owned());
+    if let Some(raw_value) = raw_output {
+        if let Some(ErrorOutput { error }) = raw(Some(raw_value)) {
+            result.error = Some(error);
         } else {
-            let (value, error) = mcp::unwrap_call_result(raw);
+            let (value, error) = mcp::unwrap_call_result(raw_value);
             result.error = error;
             result.text = match value {
                 Value::String(text) => Some(text),

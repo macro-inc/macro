@@ -4,16 +4,22 @@
 //! and it wraps every result the same way whoever the harness is. Two of its
 //! shapes matter here:
 //!
-//! - `CallToolResult` - `{ content: [blocks], structuredContent?, isError? }`.
+//! - [`CallToolResult`] - `{ content: [blocks], structuredContent?, isError? }`.
 //!   A harness may copy that whole envelope into ACP's `rawOutput` rather
-//!   than the tool's own JSON, so the fold unwraps it before reading.
-//! - `UserToolResponse<T>` - what Macro's *user tools* (`SendEmail`,
+//!   than the tool's own JSON, so the fold unwraps it before reading. Its
+//!   content blocks are the same shape as ACP's [`ContentBlock`], which is
+//!   what they deserialize as.
+//! - [`UserToolResponse`] - what Macro's *user tools* (`SendEmail`,
 //!   `CreateCalendarEvent`) return: `"PendingUserExecution"` until the user
-//!   acts, then `"Rejected"` or `{ "UserAction": T }`.
+//!   acts, then `"Rejected"` or `{ "UserAction": T }`. Mirrors
+//!   `ai_toolset::UserToolResponse`, restated here so the wasm fold does not
+//!   depend on the toolset crate.
 //!
 //! Macro's own in-process agent calls its tools directly, so its output
 //! arrives bare; [`unwrap_call_result`] leaves a bare value alone.
 
+use agent_client_protocol::schema::v1::ContentBlock;
+use serde::Deserialize;
 use serde_json::Value;
 
 use crate::domain::model::UserToolOutcome;
@@ -33,39 +39,73 @@ pub fn is_user_tool(tool: &str) -> bool {
     USER_TOOLS.contains(&tool)
 }
 
-/// A tool's own result, with any MCP `CallToolResult` envelope removed, and
-/// the error text when the envelope marked the call failed.
+/// MCP's `CallToolResult`, as far as the fold reads it.
+///
+/// Deserializing an object into this is how an envelope is recognized: a
+/// tool's own JSON may well have a `content` field (`ReadContent` returns
+/// `{ content: { text }, comments }`), but only an array of typed blocks
+/// deserializes as one, and an object with neither `content` nor
+/// `structuredContent` is no envelope at all.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CallToolResult {
+    content: Option<Vec<ContentBlock>>,
+    structured_content: Option<Value>,
+    #[serde(default)]
+    is_error: bool,
+}
+
+impl CallToolResult {
+    /// The envelope `raw` is, if it is one.
+    fn recognize(raw: &Value) -> Option<Self> {
+        match raw {
+            Value::Object(_) => {
+                let result: Self = serde_json::from_value(raw.clone()).ok()?;
+                (result.content.is_some() || result.structured_content.is_some()).then_some(result)
+            }
+            // How Claude Code copies `content` into `rawOutput`: the blocks
+            // alone, no envelope around them.
+            Value::Array(items) if !items.is_empty() => {
+                let content: Vec<ContentBlock> = serde_json::from_value(raw.clone()).ok()?;
+                Some(Self {
+                    content: Some(content),
+                    structured_content: None,
+                    is_error: false,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// The text blocks' text, in order.
+    fn texts(&self) -> Vec<&str> {
+        self.content
+            .iter()
+            .flatten()
+            .filter_map(|block| match block {
+                ContentBlock::Text(text) => Some(text.text.as_str()),
+                _ => None,
+            })
+            .collect()
+    }
+}
+
+/// A tool's own result, with any MCP [`CallToolResult`] envelope removed,
+/// and the error text when the envelope marked the call failed.
 ///
 /// Preference order for the payload: `structuredContent`; else the first
-/// `text` content block that parses as JSON; else the text blocks joined as
-/// a string; else the value untouched. A bare array of content blocks (how
-/// Claude Code copies `content` into `rawOutput`) is read the same way.
+/// text block that parses as JSON; else the text blocks joined as a string;
+/// else `null`. A value that is not an envelope is returned untouched.
 #[must_use]
 pub fn unwrap_call_result(raw: &Value) -> (Value, Option<String>) {
-    // An envelope is recognized by shape, not by key: a tool's own JSON may
-    // well have a `content` field (`ReadContent` returns `{ content: { text },
-    // comments }`), and only an array of typed blocks is MCP's.
-    let (blocks, structured, is_error) = match raw {
-        Value::Object(map) if is_envelope(map) => (
-            map.get("content").and_then(Value::as_array),
-            map.get("structuredContent"),
-            map.get("isError").and_then(Value::as_bool).unwrap_or(false),
-        ),
-        Value::Array(items) if !items.is_empty() && items.iter().all(is_content_block) => {
-            (Some(items), None, false)
-        }
-        _ => return (raw.clone(), None),
+    let Some(result) = CallToolResult::recognize(raw) else {
+        return (raw.clone(), None);
     };
+    let texts = result.texts();
+    let error = result.is_error.then(|| texts.join("\n"));
 
-    let texts: Vec<&str> = blocks
-        .into_iter()
-        .flatten()
-        .filter_map(block_text)
-        .collect();
-    let error = is_error.then(|| texts.join("\n"));
-
-    if let Some(structured) = structured {
-        return (structured.clone(), error);
+    if let Some(structured) = result.structured_content {
+        return (structured, error);
     }
     if let Some(parsed) = texts
         .iter()
@@ -79,31 +119,29 @@ pub fn unwrap_call_result(raw: &Value) -> (Value, Option<String>) {
     (Value::String(texts.join("\n")), error)
 }
 
-/// Whether an object is a `CallToolResult`: it carries `structuredContent`,
-/// or its `content` is an array of typed blocks.
-fn is_envelope(map: &serde_json::Map<String, Value>) -> bool {
-    if map.contains_key("structuredContent") {
-        return true;
-    }
-    map.get("content")
-        .and_then(Value::as_array)
-        .is_some_and(|blocks| blocks.iter().all(is_content_block))
+/// The backend's `UserToolResponse<T>`, with the action left as JSON: each
+/// user tool defines its own.
+#[derive(Debug, Deserialize)]
+enum UserToolResponse {
+    PendingUserExecution,
+    Rejected,
+    UserAction(Value),
 }
 
-fn is_content_block(value: &Value) -> bool {
-    value
-        .as_object()
-        .and_then(|block| block.get("type"))
-        .and_then(Value::as_str)
-        .is_some()
-}
-
-fn block_text(block: &Value) -> Option<&str> {
-    let block = block.as_object()?;
-    if block.get("type")?.as_str()? != "text" {
-        return None;
-    }
-    block.get("text")?.as_str()
+/// `SendEmail`'s action, mirroring `email::SendEmailResponse`.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum SendEmailAction {
+    Sent {
+        message_id: String,
+        thread_id: String,
+    },
+    ConvertedToDraft {
+        draft_id: String,
+        #[serde(default)]
+        thread_id: Option<String>,
+    },
+    UserEdited,
 }
 
 /// Read a `UserToolResponse<T>` value into an outcome.
@@ -113,48 +151,43 @@ fn block_text(block: &Value) -> Option<&str> {
 /// anything else reports the action's payload whole.
 #[must_use]
 pub fn user_tool_outcome(tool: &str, value: &Value) -> UserToolOutcome {
-    match value {
-        Value::Null => UserToolOutcome::Pending,
-        Value::String(word) if word == "PendingUserExecution" => UserToolOutcome::Pending,
-        Value::String(word) if word == "Rejected" => UserToolOutcome::Rejected,
-        Value::Object(map) if map.len() == 1 => match map.get("UserAction") {
-            Some(action) => user_action_outcome(tool, action),
-            None => UserToolOutcome::Unrecognized,
-        },
-        _ => UserToolOutcome::Unrecognized,
+    if value.is_null() {
+        return UserToolOutcome::Pending;
+    }
+    let Ok(response) = serde_json::from_value::<UserToolResponse>(value.clone()) else {
+        return UserToolOutcome::Unrecognized;
+    };
+    match response {
+        UserToolResponse::PendingUserExecution => UserToolOutcome::Pending,
+        UserToolResponse::Rejected => UserToolOutcome::Rejected,
+        UserToolResponse::UserAction(action) => user_action_outcome(tool, action),
     }
 }
 
-fn user_action_outcome(tool: &str, action: &Value) -> UserToolOutcome {
+fn user_action_outcome(tool: &str, action: Value) -> UserToolOutcome {
+    // Every user tool's composer reports an edit the same way.
     if action.as_str() == Some("userEdited") {
         return UserToolOutcome::Edited;
     }
     if tool == "SendEmail" {
-        if let Some(sent) = action.get("sent")
-            && let (Some(message_id), Some(thread_id)) = (
-                sent.get("message_id").and_then(Value::as_str),
-                sent.get("thread_id").and_then(Value::as_str),
-            )
-        {
-            return UserToolOutcome::Sent {
-                message_id: message_id.to_owned(),
-                thread_id: thread_id.to_owned(),
-            };
-        }
-        if let Some(draft) = action.get("convertedToDraft")
-            && let Some(draft_id) = draft.get("draft_id").and_then(Value::as_str)
-        {
-            return UserToolOutcome::Draft {
-                draft_id: draft_id.to_owned(),
-                thread_id: draft
-                    .get("thread_id")
-                    .and_then(Value::as_str)
-                    .map(ToOwned::to_owned),
-            };
-        }
-        return UserToolOutcome::Unrecognized;
+        return match serde_json::from_value::<SendEmailAction>(action) {
+            Ok(SendEmailAction::Sent {
+                message_id,
+                thread_id,
+            }) => UserToolOutcome::Sent {
+                message_id,
+                thread_id,
+            },
+            Ok(SendEmailAction::ConvertedToDraft {
+                draft_id,
+                thread_id,
+            }) => UserToolOutcome::Draft {
+                draft_id,
+                thread_id,
+            },
+            Ok(SendEmailAction::UserEdited) => UserToolOutcome::Edited,
+            Err(_) => UserToolOutcome::Unrecognized,
+        };
     }
-    UserToolOutcome::Completed {
-        result: action.clone(),
-    }
+    UserToolOutcome::Completed { result: action }
 }
