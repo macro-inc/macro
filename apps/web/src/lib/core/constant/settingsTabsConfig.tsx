@@ -6,11 +6,9 @@ import BuildingsIcon from '@phosphor/buildings.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import KeyIcon from '@phosphor/key.svg';
 import KeyboardIcon from '@phosphor/keyboard.svg';
 import PlugIcon from '@phosphor/plug.svg';
-import RobotIcon from '@phosphor/robot.svg';
 import SwatchesIcon from '@phosphor/swatches.svg';
 import TagIcon from '@phosphor/tag-simple.svg';
 import UserIconPhosphor from '@phosphor/user.svg';
@@ -24,8 +22,6 @@ import {
   BOT_MANAGEMENT_OVERRIDE,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
-  ENABLE_CHAT_V3_AGENTS_FLAG,
-  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
   ENABLE_CRM_FLAG,
   ENABLE_CRM_OVERRIDE,
   ENABLE_NOTIFICATION_SETTINGS_FLAG,
@@ -77,15 +73,8 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         label: 'Connections',
         icon: CpuIcon,
       },
-      { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
+      { tab: 'Agent', label: 'Macro MCP', icon: PlugIcon },
       { tab: 'Bots', label: 'Bots', icon: BotIcon },
-    ],
-  },
-  {
-    label: 'Agents',
-    items: [
-      { tab: 'Agents', label: 'Agents', icon: RobotIcon },
-      { tab: 'Harness', label: 'Harness', icon: HardDrivesIcon },
     ],
   },
   {
@@ -165,9 +154,6 @@ export const useSettingsTabAvailable = () => {
   const botManagementFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
     enabledOverride: BOT_MANAGEMENT_OVERRIDE,
   });
-  const chatV3AgentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
-    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
-  });
   const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
     enabledOverride: ENABLE_CRM_OVERRIDE,
   });
@@ -204,12 +190,9 @@ export const useSettingsTabAvailable = () => {
         return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
       case 'Agent':
         return !isNativeMobilePlatform();
-      // Configurable agents are still rolling out; keep both tabs behind the
-      // same enable-chat-v3-agents gate as the channel mention surfaces, so
-      // settings never advertises agents to a user who cannot mention one.
       case 'Harness':
       case 'Agents':
-        return chatV3AgentsFlag().enabled;
+        return false;
       case 'Bots':
         return botManagementFlag().enabled;
       case 'Mobile':

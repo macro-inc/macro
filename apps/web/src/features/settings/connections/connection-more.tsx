@@ -1,14 +1,60 @@
+import ArrowsClockwiseIcon from '@phosphor/arrows-clockwise.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import LinkBreakIcon from '@phosphor/link-break.svg';
+import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
+import PowerIcon from '@phosphor/power.svg';
 import { Dropdown } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
+import { For, type JSX, Match, Show, Switch } from 'solid-js';
+
+export type ConnectionMenuIcon =
+  | 'disable'
+  | 'rename'
+  | 'reconnect'
+  | 'disconnect';
 
 export type ConnectionMenuItem = {
   label: string;
   onSelect: () => void;
   disabled?: boolean;
   danger?: boolean;
+  icon?: ConnectionMenuIcon;
 };
+
+function MenuItemIcon(props: { item: ConnectionMenuItem }): JSX.Element {
+  const kind = (): ConnectionMenuIcon | undefined => {
+    if (props.item.icon) return props.item.icon;
+    if (props.item.danger) return 'disconnect';
+    switch (props.item.label) {
+      case 'Disable':
+        return 'disable';
+      case 'Rename':
+        return 'rename';
+      case 'Reconnect':
+        return 'reconnect';
+      case 'Disconnect':
+        return 'disconnect';
+      default:
+        return undefined;
+    }
+  };
+
+  return (
+    <Switch>
+      <Match when={kind() === 'disable'}>
+        <PowerIcon class="size-4" />
+      </Match>
+      <Match when={kind() === 'rename'}>
+        <PencilSimpleIcon class="size-4" />
+      </Match>
+      <Match when={kind() === 'reconnect'}>
+        <ArrowsClockwiseIcon class="size-4" />
+      </Match>
+      <Match when={kind() === 'disconnect'}>
+        <LinkBreakIcon class="size-4" />
+      </Match>
+    </Switch>
+  );
+}
 
 export function ConnectionMore(props: {
   items: ConnectionMenuItem[];
@@ -27,13 +73,15 @@ export function ConnectionMore(props: {
             <For each={props.items}>
               {(item) => (
                 <Dropdown.Item
-                  class={item.danger ? 'text-failure' : undefined}
+                  class={
+                    item.danger
+                      ? 'text-failure data-highlighted:bg-failure-bg'
+                      : undefined
+                  }
                   disabled={item.disabled}
                   onSelect={item.onSelect}
                 >
-                  <Show when={item.danger}>
-                    <LinkBreakIcon class="size-4" />
-                  </Show>
+                  <MenuItemIcon item={item} />
                   {item.label}
                 </Dropdown.Item>
               )}

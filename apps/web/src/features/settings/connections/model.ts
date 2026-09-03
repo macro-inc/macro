@@ -115,6 +115,9 @@ const NATIVE_CURATED: {
   { provider: 'slack', url: 'https://mcp.slack.com/mcp' },
 ];
 
+/** Shared Discover + Connected overview line for Google. */
+export const GOOGLE_PROVIDER_NOTE = 'Connect Gmail and Calendar to Macro.';
+
 const PROVIDER_NAMES: Record<Exclude<ProviderId, 'other'>, string> = {
   google: 'Google',
   github: 'GitHub',
@@ -341,7 +344,10 @@ function providerSummary(
   const accounts = [
     ...new Set(
       counted
-        .filter((row) => row.status !== 'not-connected')
+        .filter(
+          (row) =>
+            row.status !== 'not-connected' && row.mechanism !== 'pipedream'
+        )
         .map((row) => row.account)
     ),
   ].join(' · ');
@@ -361,6 +367,8 @@ function providerSummary(
     summary = inbox
       ? `Calendar needs a grant for ${inbox}`
       : 'Calendar needs a grant';
+  } else if (id === 'google' && readyRows[0]) {
+    summary = GOOGLE_PROVIDER_NOTE;
   } else if (readyRows[0]) {
     summary = readyRows[0].outcome;
   }

@@ -1,4 +1,5 @@
 import { TabsInset } from '@core/component/TabsInset';
+import { useSettingsState } from '@core/constant/SettingsState';
 import type { ConnectionsProviderSlug } from '@core/constant/settingsConnectionsUrl';
 import { Button } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
@@ -20,10 +21,26 @@ import {
 } from './view-state';
 
 const CONNECTIONS_DESCRIPTION =
-  'Connect your accounts so Macro can work across the tools you already use.';
+  'Macro can work across the tools you already use.';
 
 const providerTitle = (id: Exclude<ConnectionsProviderSlug, 'other'>): string =>
   EMPTY_STARTERS.find((starter) => starter.id === id)?.name ?? id;
+
+function MacroMcpSignpost() {
+  const { selectTab } = useSettingsState();
+  return (
+    <p class="text-xs text-ink-muted text-balance">
+      Looking to use Macro inside ChatGPT, Claude, or Cursor?{' '}
+      <button
+        type="button"
+        class="text-link outline-none hover:text-link-hover hover:underline focus-visible:underline"
+        onClick={() => selectTab('Agent')}
+      >
+        Macro MCP
+      </button>
+    </p>
+  );
+}
 
 export function ConnectionsPage() {
   const { model, ready, error, retry } = useConnectionsModel();
@@ -53,6 +70,7 @@ export function ConnectionsPage() {
           <SettingsPage
             title="Connections"
             description={CONNECTIONS_DESCRIPTION}
+            signpost={<MacroMcpSignpost />}
           >
             <TabsInset
               fullWidth

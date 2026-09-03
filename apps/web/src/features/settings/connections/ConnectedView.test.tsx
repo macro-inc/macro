@@ -90,7 +90,7 @@ describe('ConnectedView', () => {
     expect(screen.queryByText('Disabled')).toBeNull();
     expect(screen.queryByRole('switch')).toBeNull();
     expect(screen.getByRole('button', { name: 'More' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: 'Turn off' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Disable' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Reconnect' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Disconnect' })).toBeTruthy();
@@ -163,7 +163,7 @@ describe('ConnectedView', () => {
     expect(screen.getByRole('menuitem', { name: 'Disconnect' })).toBeTruthy();
   });
 
-  it('shows Turn on and Off for a paused custom MCP', () => {
+  it('shows Enable for a paused custom MCP', () => {
     const paused = toConnectionsModel({
       userId: 'macro|self',
       emailEnabled: true,
@@ -190,10 +190,10 @@ describe('ConnectedView', () => {
       </QueryClientProvider>
     ));
     expect(screen.queryByRole('switch')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Turn on' })).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Off' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Enable' })).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Off' })).toBeNull();
     expect(screen.getByRole('button', { name: 'More' })).toBeTruthy();
-    expect(screen.queryByRole('menuitem', { name: 'Turn off' })).toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Disable' })).toBeNull();
     expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Reconnect' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Disconnect' })).toBeTruthy();

@@ -107,7 +107,7 @@ describe('toConnectionsModel', () => {
       model.capabilities.find((row) => row.id === 'calendar:cam')?.status
     ).toBe('off');
     expect(model.providers.find((row) => row.id === 'google')?.summary).toBe(
-      'Read, organize, and act on your email.'
+      'Connect Gmail and Calendar to Macro.'
     );
   });
 
@@ -185,6 +185,9 @@ describe('toConnectionsModel', () => {
       mechanism: 'pipedream',
     });
     expect(model.providers.find((row) => row.id === 'linear')?.ready).toBe(0);
+    expect(model.providers.find((row) => row.id === 'linear')?.accounts).toBe(
+      ''
+    );
   });
 
   it('keeps a leftover native GitHub MCP when Pipedream GitHub already maps', () => {

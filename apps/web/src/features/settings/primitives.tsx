@@ -26,6 +26,8 @@ export function SettingsPage(props: {
   title: string;
   /** Optional one-line subtitle; accepts text or inline markup (e.g. a link). */
   description?: JSX.Element;
+  /** Quiet line under the description (e.g. a cross-tab signpost). */
+  signpost?: JSX.Element;
   /** Brand mark left of the title. Same slot as IntegrationRow. */
   icon?: JSX.Element;
   /** Right-aligned controls beside the title (e.g. a global toggle). */
@@ -71,6 +73,7 @@ export function SettingsPage(props: {
               {props.description}
             </p>
           </Show>
+          <Show when={props.signpost}>{props.signpost}</Show>
         </header>
         <div class="mt-9 flex flex-col gap-10">{props.children}</div>
       </div>
@@ -155,6 +158,8 @@ export function SettingsRow(props: {
    * Requires an ancestor carrying `@container`.
    */
   stackOnNarrow?: boolean;
+  /** Soften the label when the row is paused / disabled. */
+  muted?: boolean;
   class?: string;
 }) {
   return (
@@ -177,7 +182,14 @@ export function SettingsRow(props: {
       )}
     >
       <div class="flex flex-col gap-0.5 min-w-0">
-        <div class="text-sm text-ink">{props.label}</div>
+        <div
+          class={cn(
+            'text-sm font-medium truncate',
+            props.muted ? 'text-ink-muted' : 'text-ink'
+          )}
+        >
+          {props.label}
+        </div>
         <Show when={props.description}>
           <div
             class={cn(
@@ -262,20 +274,32 @@ export function IntegrationRow(props: {
   facts?: JSX.Element;
   /** Optional indicator shown right after the title (e.g. a connection dot). */
   status?: JSX.Element;
+  /** Soften title and icon when the row is paused / disabled. */
+  muted?: boolean;
   children?: JSX.Element;
   class?: string;
 }) {
   return (
     <div class={cn('flex items-start gap-4 px-6 py-5 touch:px-4', props.class)}>
       <Show when={props.icon}>
-        <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-8 [&_img]:size-8">
+        <div
+          class={cn(
+            'flex size-9 shrink-0 items-center justify-center [&_svg]:size-8 [&_img]:size-8',
+            props.muted && 'opacity-50'
+          )}
+        >
           {props.icon}
         </div>
       </Show>
       <div class="min-w-0 flex-1 flex flex-col gap-1">
         <div class="flex min-w-0 items-center gap-3">
           <div class="flex min-w-0 flex-1 items-center gap-2">
-            <div class="text-sm font-medium text-ink truncate">
+            <div
+              class={cn(
+                'text-sm font-medium truncate',
+                props.muted ? 'text-ink-muted' : 'text-ink'
+              )}
+            >
               {props.title}
             </div>
             <Show when={props.status}>{props.status}</Show>
@@ -290,7 +314,7 @@ export function IntegrationRow(props: {
           </div>
         </Show>
         <Show when={props.facts}>
-          <div class="ph-no-capture text-xs text-ink-extra-muted">
+          <div class="ph-no-capture text-xs text-ink-extra-muted text-balance">
             {props.facts}
           </div>
         </Show>

@@ -96,7 +96,6 @@ export function CursorProvider() {
   return (
     <SettingsPage
       title="Cursor"
-      description="Use your Cursor account to run agent sessions in Macro."
       icon={providerIcon('cursor')}
       onBack={closeConnectionsProvider}
     >
@@ -104,12 +103,8 @@ export function CursorProvider() {
         <SettingsCard>
           <CapabilityRow
             title="Cursor"
-            outcome="Use your Cursor account to run agent sessions in Macro. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
-            status={
-              !cursorStatus.isPlaceholderData && cursorRegistered()
-                ? 'connected'
-                : undefined
-            }
+            outcome="Use your Cursor account to run agent sessions in Macro."
+            facts="Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
           >
             <Show
               when={!cursorStatus.isPlaceholderData}
@@ -236,7 +231,7 @@ export function CursorProvider() {
                     </Select>
                   }
                 >
-                  <div class="flex w-full items-center gap-2 @[460px]:w-56">
+                  <div class="flex items-center gap-2">
                     <span class="text-sm text-ink-muted">
                       Couldn't load models.
                     </span>

@@ -33,7 +33,7 @@ import {
   SignatureSection,
   toggleSignatureExpanded,
 } from '../SignatureSection';
-import { CapabilityRow, capabilityFacts } from './capability-row';
+import { CapabilityRow } from './capability-row';
 import { ConnectionRowActions } from './connection-more';
 import {
   type Capability,
@@ -134,7 +134,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
           {(inbox) => (
             <SettingsSection
               title={<span class="ph-no-capture truncate">{inbox.email}</span>}
-              description={inbox.scope === 'shared' ? 'Shared' : 'Personal'}
+              description={inbox.scope === 'shared' ? 'Shared' : undefined}
             >
               <SettingsCard>
                 <For each={inbox.caps}>
@@ -178,7 +178,6 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
           {(email) => (
             <SettingsSection
               title={<span class="ph-no-capture truncate">{email()}</span>}
-              description="Personal"
             >
               <SettingsCard>
                 <CapabilityRow
@@ -309,11 +308,9 @@ function GoogleInboxCapability(props: {
       facts={
         isGmail() && props.link ? (
           <InboxSyncStatus link={props.link} />
-        ) : (
-          capabilityFacts(props.row)
-        )
+        ) : undefined
       }
-      status={props.row.status}
+      muted={props.row.status === 'off'}
     >
       <GoogleCapabilityActions
         row={props.row}
@@ -425,7 +422,7 @@ function GoogleCapabilityActions(props: {
           primary={
             isOwn() && isCalendar() ? (
               <ConnectAction
-                label="Turn on"
+                label="Enable"
                 onClick={props.onConnect}
                 disabled={props.pending}
               />

@@ -13,7 +13,7 @@ import {
 } from '@queries/pipedream-connectors';
 import { Button, Dialog, Panel } from '@ui';
 import { createEffect, createSignal, type JSX, Show } from 'solid-js';
-import { ConnectAction, StatusDot } from '../integration-ui';
+import { ConnectAction } from '../integration-ui';
 import {
   readMcpAuthAttempted,
   writeMcpAuthAttempted,
@@ -29,7 +29,7 @@ import {
 } from './disconnect-confirm';
 import type { Leftover } from './model';
 
-function leftoverOff(leftover: Leftover): boolean {
+function leftoverDisabled(leftover: Leftover): boolean {
   switch (leftover.kind) {
     case 'native-mcp':
       return leftover.authenticated && !leftover.enabled;
@@ -253,9 +253,10 @@ export function LeftoverRow(props: { leftover: Leftover }) {
             <ConnectionRowActions
               items={[
                 {
-                  label: 'Turn off',
+                  label: 'Disable',
                   onSelect: toggle,
                   disabled: busy(),
+                  icon: 'disable',
                 },
                 renameItem(),
                 reconnectItem(),
@@ -268,7 +269,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
           <ConnectionRowActions
             primary={
               <ConnectAction
-                label="Turn on"
+                label="Enable"
                 variant="neutral"
                 onClick={toggle}
                 disabled={busy()}
@@ -284,9 +285,10 @@ export function LeftoverRow(props: { leftover: Leftover }) {
             <ConnectionRowActions
               items={[
                 {
-                  label: 'Turn off',
+                  label: 'Disable',
                   onSelect: toggle,
                   disabled: busy(),
+                  icon: 'disable',
                 },
                 reconnectItem(),
                 disconnectItem(),
@@ -298,7 +300,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
           <ConnectionRowActions
             primary={
               <ConnectAction
-                label="Turn on"
+                label="Enable"
                 variant="neutral"
                 onClick={toggle}
                 disabled={busy()}
@@ -314,28 +316,16 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     }
   };
 
-  const offDot = () =>
-    leftoverOff(props.leftover) ? (
-      <StatusDot state="off" label="Off" />
-    ) : undefined;
-
   const row = (): JSX.Element => {
     const leftover = props.leftover;
+    const muted = leftoverDisabled(leftover);
     switch (leftover.kind) {
       case 'native-mcp':
         return (
           <SettingsRow
-            label={
-              leftoverOff(leftover) ? (
-                <span class="inline-flex items-center gap-2">
-                  {leftover.title}
-                  {offDot()}
-                </span>
-              ) : (
-                leftover.title
-              )
-            }
+            label={leftover.title}
             description={leftover.subtitle}
+            muted={muted}
           >
             {actions()}
           </SettingsRow>
@@ -351,7 +341,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
             }
             title={leftover.title}
             description={leftover.subtitle}
-            status={offDot()}
+            muted={muted}
           >
             {actions()}
           </IntegrationRow>

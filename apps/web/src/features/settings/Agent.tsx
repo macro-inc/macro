@@ -20,7 +20,7 @@ export function Agent() {
 
   return (
     <SettingsPage
-      title="Macro MCP server"
+      title="Macro MCP"
       description="Point Claude Code, Codex, ChatGPT, or your IDE at this workspace."
     >
       <SettingsCard>

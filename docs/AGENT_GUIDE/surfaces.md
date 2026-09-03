@@ -61,18 +61,19 @@ Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
-Workspace → `Team`, `Tags`, `CRM`, `Connections` (Connected / Discover), `MCP server`
+Workspace → `Team`, `Tags`, `CRM`, `Connections` (Connected / Discover), `Macro MCP`
 (setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE; signposts
-inbound connectors to Connections Discover), `Bots`; `Log out`.
+inbound connectors to Connections Discover). Connections signposts outbound
+Macro MCP to `Macro MCP`. `Bots`; `Log out`.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
 ## Settings — Connections — `/app/settings/connections`
 
 `Connected` lists mapped providers (ready-of-total). Custom MCP grants sit in
-a second section. More holds Turn off, Rename, Reconnect, Disconnect.
-Connect and Turn on stay on the row when that is the job. Reconnect also
-sits on the row when auth is broken. Healthy rows have no status
-light. Off keeps the muted dot. Unmatched
+a second section. More holds Disable, Rename, Reconnect, Disconnect.
+Connect and Enable stay on the row when that is the job. Reconnect also
+sits on the row when auth is broken. No status lights on rows. Off is
+shown by Enable, not a muted dot. Unmatched
 Pipedream leftovers stay with the providers.
 Empty state offers Google first, then GitHub, Linear, Notion,
 Slack, Cursor. `Discover` searches the Pipedream catalog; featured cards are
@@ -85,7 +86,8 @@ Linear / Notion / Slack (Pipedream AI, Off is enable/disable), Cursor (API key
 is `/app/settings/connections/<provider>` (`github`, `google`, `cursor`, …).
 Those are path tokens under the Connections tab, not extra Settings tabs.
 `/app/settings/github` is a leftover unused tab slug, not the GitHub provider
-page. Harness only signposts Cursor here. MCP server signposts inbound
+page. Connections signposts Macro MCP to
+the `Macro MCP` tab (`/app/settings/mcp-server`). That tab signposts inbound
 connectors to Discover.
 
 ## Notifications

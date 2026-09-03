@@ -269,9 +269,10 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
           <ConnectionRowActions
             items={[
               {
-                label: 'Turn off',
+                label: 'Disable',
                 onSelect: () => setAiEnabled(false),
                 disabled: native.update.isPending || updatePipedream.isPending,
+                icon: 'disable',
               },
               aiReconnectItem(),
               aiDisconnectItem(),
@@ -283,7 +284,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
           <ConnectionRowActions
             primary={
               <ConnectAction
-                label="Turn on"
+                label="Enable"
                 variant="neutral"
                 onClick={() => setAiEnabled(true)}
                 disabled={native.update.isPending || updatePipedream.isPending}
@@ -314,7 +315,6 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                 title={row().title}
                 outcome={row().outcome}
                 facts={capabilityFacts(row())}
-                status={row().status}
               >
                 {accountActions(row().status)}
               </CapabilityRow>
@@ -327,7 +327,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
               <CapabilityRow
                 title={CURATED_AI.github.title}
                 outcome={CURATED_AI.github.outcome}
-                facts="Personal · Powered by Pipedream"
+                facts="Powered by Pipedream"
               >
                 <ConnectionRowActions
                   primary={
@@ -347,7 +347,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                 title={row().title}
                 outcome={row().outcome}
                 facts={capabilityFacts(row())}
-                status={row().status}
+                muted={row().status === 'off'}
               >
                 {aiActions(row().status)}
               </CapabilityRow>

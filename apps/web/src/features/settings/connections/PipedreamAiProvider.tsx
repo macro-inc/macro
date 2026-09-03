@@ -28,31 +28,22 @@ import { closeConnectionsProvider } from './view-state';
 
 const COPY: Record<
   Exclude<CuratedAiProvider, 'github'>,
-  { title: string; name: string; page: string; outcome: string; later: string }
+  { title: string; name: string; outcome: string }
 > = {
   linear: {
     title: 'Linear',
     name: 'Linear',
-    page: 'Bring your issues into your unified workspace.',
     outcome: CURATED_AI.linear.outcome,
-    later:
-      'Macro can also import recent issues as tasks later. That is not a separate connection.',
   },
   notion: {
     title: 'Notion',
     name: 'Notion',
-    page: 'Bring your docs and wikis into your unified workspace.',
     outcome: CURATED_AI.notion.outcome,
-    later:
-      'Macro can also import pages as docs later. That is not continuous sync, and it is not a separate connection.',
   },
   slack: {
     title: 'Slack',
     name: 'Slack',
-    page: 'Bring your conversations into your unified workspace.',
     outcome: CURATED_AI.slack.outcome,
-    later:
-      'Macro can also create channels from Slack later. That is not a second connection.',
   },
 };
 
@@ -193,9 +184,10 @@ export function PipedreamAiProvider(props: {
           <ConnectionRowActions
             items={[
               {
-                label: 'Turn off',
+                label: 'Disable',
                 onSelect: () => setEnabled(false),
                 disabled: native.update.isPending || update.isPending,
+                icon: 'disable',
               },
               reconnectItem(),
               disconnectItem(),
@@ -207,7 +199,7 @@ export function PipedreamAiProvider(props: {
           <ConnectionRowActions
             primary={
               <ConnectAction
-                label="Turn on"
+                label="Enable"
                 variant="neutral"
                 onClick={() => setEnabled(true)}
                 disabled={native.update.isPending || update.isPending}
@@ -226,7 +218,6 @@ export function PipedreamAiProvider(props: {
   return (
     <SettingsPage
       title={copy.title}
-      description={copy.page}
       icon={providerIcon(props.provider)}
       onBack={closeConnectionsProvider}
     >
@@ -236,16 +227,13 @@ export function PipedreamAiProvider(props: {
             title={copy.title}
             outcome={copy.outcome}
             facts={
-              row()
-                ? capabilityFacts(row()!)
-                : 'Personal · Powered by Pipedream'
+              row() ? capabilityFacts(row()!) : 'Powered by Pipedream'
             }
-            status={row()?.status}
+            muted={row()?.status === 'off'}
           >
             {actions()}
           </CapabilityRow>
         </SettingsCard>
-        <p class="text-xs text-ink-extra-muted">{copy.later}</p>
       </SettingsSection>
       <DisconnectConfirmDialog
         request={disconnect()}

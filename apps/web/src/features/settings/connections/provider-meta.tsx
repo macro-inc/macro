@@ -5,7 +5,7 @@ import NotionIcon from '@icon/mcp-notion.svg';
 import SlackIcon from '@icon/mcp-slack.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import type { JSX } from 'solid-js';
-import type { ProviderId } from './model';
+import { GOOGLE_PROVIDER_NOTE, type ProviderId } from './model';
 
 export type FeaturedStarter = {
   id: Exclude<ProviderId, 'other'>;
@@ -17,32 +17,32 @@ export const EMPTY_STARTERS: FeaturedStarter[] = [
   {
     id: 'google',
     name: 'Google',
-    note: 'Connect Gmail and Calendar to Macro.',
+    note: GOOGLE_PROVIDER_NOTE,
   },
   {
     id: 'github',
     name: 'GitHub',
-    note: 'Bring your repos into your unified workspace.',
+    note: 'Account, team, and AI',
   },
   {
     id: 'linear',
     name: 'Linear',
-    note: 'Bring your issues into your unified workspace.',
+    note: 'Issues for Macro AI',
   },
   {
     id: 'notion',
     name: 'Notion',
-    note: 'Bring your docs and wikis into your unified workspace.',
+    note: 'Search pages with Macro AI',
   },
   {
     id: 'slack',
     name: 'Slack',
-    note: 'Bring your conversations into your unified workspace.',
+    note: 'Conversations for Macro AI',
   },
   {
     id: 'cursor',
     name: 'Cursor',
-    note: 'Use your Cursor account to run agent sessions in Macro.',
+    note: 'Run @cursor sessions on your Cursor account',
   },
 ];
 
