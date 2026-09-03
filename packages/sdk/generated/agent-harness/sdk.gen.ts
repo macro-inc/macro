@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses } from './types.gen';
+import type { ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -55,6 +55,20 @@ export class Sdk extends HeyApiClient {
     }) {
         super(args);
         Sdk.__registry.set(this, args?.key);
+    }
+    
+    /**
+     * Probe one provider's model catalog without creating an agent session.
+     */
+    public loadAgentModelsHandler<ThrowOnError extends boolean = false>(options: Options<LoadAgentModelsHandlerData, ThrowOnError>): RequestResult<LoadAgentModelsHandlerResponses, LoadAgentModelsHandlerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<LoadAgentModelsHandlerResponses, LoadAgentModelsHandlerErrors, ThrowOnError>({
+            url: '/agent-models/load',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
