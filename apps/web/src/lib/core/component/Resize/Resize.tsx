@@ -6,7 +6,6 @@ import {
   createMemo,
   createSignal,
   Index,
-  on,
   onCleanup,
   type ParentProps,
   Show,
@@ -276,82 +275,39 @@ function Panel(props: ParentProps<PanelProps>) {
     return props.target;
   };
 
-  let registered = false;
-  createEffect(
-    on(ctx.size, (size) => {
-      if (size <= 0 || registered || props.collapsed?.() === false) return;
-
-      registered = true;
-
-      ctx.register(
-        {
-          id: props.id,
-          minSize: props.minSize,
-          maxSize: props.maxSize ?? Infinity,
-          redistributionPreferredSize: props.redistributionPreferredSize,
-          shareGroup: props.shareGroup,
-          target: getTarget(),
-        },
-        props.index
-      );
-    })
-  );
-
-  createEffect(() => {
-    ctx.update(props.id, {
-      minSize: props.minSize,
-      maxSize: props.maxSize ?? Infinity,
-      redistributionPreferredSize: props.redistributionPreferredSize,
-      shareGroup: props.shareGroup,
-    });
+  const config = (): PanelConfig => ({
+    id: props.id,
+    minSize: props.minSize,
+    maxSize: props.maxSize ?? Infinity,
+    redistributionPreferredSize: props.redistributionPreferredSize,
+    shareGroup: props.shareGroup,
+    target: getTarget(),
   });
 
   createEffect(() => {
-    const collapsed = props.collapsed?.();
-    if (collapsed === undefined) return;
-    if (collapsed) {
-      ctx.unregister(props.id);
-    } else {
-      ctx.register(
-        {
-          id: props.id,
-          minSize: props.minSize,
-          maxSize: props.maxSize ?? Infinity,
-          redistributionPreferredSize: props.redistributionPreferredSize,
-          shareGroup: props.shareGroup,
-          target: getTarget(),
-        },
-        props.index
-      );
+    const next = config();
+    const collapsed = props.collapsed?.() ?? false;
+    const hidden = props.hidden?.() ?? false;
+
+    if (collapsed || (hidden && !props.persistent)) {
+      ctx.unregister(next.id);
+      return;
     }
-  });
 
-  createEffect(() => {
-    const hidden = props.hidden?.();
-    if (hidden === undefined) return;
+    if (ctx.size() <= 0) return;
 
-    if (props.persistent) {
-      if (hidden) {
-        ctx.hide(props.id);
-      } else {
-        ctx.show(props.id);
-      }
+    ctx.register(next, props.index);
+    ctx.update(next.id, {
+      minSize: next.minSize,
+      maxSize: next.maxSize,
+      redistributionPreferredSize: next.redistributionPreferredSize,
+      shareGroup: next.shareGroup,
+    });
+
+    if (hidden) {
+      ctx.hide(next.id);
     } else {
-      if (hidden) {
-        ctx.unregister(props.id);
-      } else {
-        ctx.register(
-          {
-            id: props.id,
-            minSize: props.minSize,
-            maxSize: props.maxSize ?? Infinity,
-            redistributionPreferredSize: props.redistributionPreferredSize,
-            shareGroup: props.shareGroup,
-            target: getTarget(),
-          },
-          props.index
-        );
-      }
+      ctx.show(next.id);
     }
   });
 
