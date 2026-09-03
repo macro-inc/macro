@@ -113,11 +113,15 @@ export function moreModelFamilies(catalog: ModelCatalog): ModelFamily[] {
   const recommendedIds = new Set(
     catalog.recommended.map((option) => option.id)
   );
+  const recommendedLabels = new Set(
+    catalog.recommended.map((option) => option.label)
+  );
   return catalog.families
     .map((family) => ({
       label: family.label,
       options: family.options.filter(
-        (option) => !recommendedIds.has(option.id)
+        (option) =>
+          !recommendedIds.has(option.id) && !recommendedLabels.has(option.label)
       ),
     }))
     .filter((family) => family.options.length > 0);

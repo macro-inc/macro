@@ -67,4 +67,17 @@ describe('modelCatalog', () => {
       expect(extraIds).not.toContain(recommended.id);
     }
   });
+
+  it('hides leftover rows that reuse a recommended display name', () => {
+    const catalog = buildModelCatalog(
+      [...OPTIONS, { id: 'auto-alias', label: 'Auto' }],
+      'auto'
+    );
+    const extraIds = moreModelFamilies(catalog).flatMap((family) =>
+      family.options.map((option) => option.id)
+    );
+
+    expect(extraIds).not.toContain('auto');
+    expect(extraIds).not.toContain('auto-alias');
+  });
 });
