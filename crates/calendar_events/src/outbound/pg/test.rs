@@ -3981,3 +3981,87 @@ async fn team_out_of_office_masks_private_titles_and_collapses_duplicate_inboxes
     keys.dedup();
     assert_eq!(keys.len(), 2);
 }
+
+fn shift_upsert_days(upsert: &mut CalendarEventUpsert, days: i64) {
+    let delta = Duration::days(days);
+    if let EventTime::Timed {
+        starts_at, ends_at, ..
+    } = &mut upsert.event.time
+    {
+        *starts_at += delta;
+        *ends_at += delta;
+    }
+    for occurrence in &mut upsert.occurrences {
+        if let EventTime::Timed {
+            starts_at, ends_at, ..
+        } = &mut occurrence.time
+        {
+            *starts_at += delta;
+            *ends_at += delta;
+        }
+        occurrence.occurrence_key = occurrence.time.occurrence_key();
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_deduplicates_before_the_limit(pool: PgPool) {
+    let requester = "macro|limit-viewer@example.com";
+    let teammate = "macro|limit-double@example.com";
+    insert_team(&pool, requester, &[requester, teammate]).await;
+    let first_link = insert_link(&pool, teammate).await;
+    let second_link = insert_link(&pool, teammate).await;
+    let repo = PgCalendarRepository::new(pool);
+    let first_provider = provider_ids(&repo, first_link).await;
+    let second_provider = provider_ids(&repo, second_link).await;
+
+    // The earliest event exists on both of the teammate's inboxes, so its
+    // occurrences arrive first and duplicated.
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        first_link,
+        first_provider,
+        "dup-ooo@example.com",
+        "Duplicated",
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        second_link,
+        second_provider,
+        "dup-ooo@example.com",
+        "Duplicated",
+    ))
+    .await
+    .unwrap();
+    let mut later = ooo_upsert(
+        teammate,
+        first_link,
+        first_provider,
+        "later-ooo@example.com",
+        "Later",
+    );
+    shift_upsert_days(&mut later, 1);
+    repo.upsert_event_fixture(later).await.unwrap();
+
+    let rows = repo
+        .list_team_out_of_office(requester, july_2026_range(), 3)
+        .await
+        .unwrap();
+
+    // Duplicates collapse before the limit: the page fills with distinct
+    // occurrences and the later unique event still claims a slot, so a
+    // full page keeps signalling truncation accurately.
+    assert_eq!(rows.len(), 3);
+    let mut identities: Vec<_> = rows
+        .iter()
+        .map(|row| (row.ical_uid.as_str(), row.occurrence_key.as_str()))
+        .collect();
+    identities.sort_unstable();
+    identities.dedup();
+    assert_eq!(identities.len(), 3);
+    assert!(
+        rows.iter()
+            .any(|row| row.ical_uid == "later-ooo@example.com")
+    );
+}

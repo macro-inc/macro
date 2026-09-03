@@ -129,16 +129,8 @@ where
             .repository
             .list_team_out_of_office(requester_id, range, limit)
             .await?;
-        let mut seen = std::collections::HashSet::new();
         Ok(rows
             .into_iter()
-            .filter(|row| {
-                seen.insert((
-                    row.owner_id.clone(),
-                    row.ical_uid.clone(),
-                    row.occurrence_key.clone(),
-                ))
-            })
             .map(|mut row| {
                 if matches!(
                     row.visibility,

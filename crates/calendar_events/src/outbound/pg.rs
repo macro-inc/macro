@@ -1026,49 +1026,75 @@ impl CalendarRepository for PgCalendarRepository {
     ) -> Result<Vec<TeamOutOfOffice>, Report> {
         // The primary-calendar source guard keeps this to the teammate's own
         // status: an out-of-office event on a calendar they merely subscribe
-        // to belongs to that calendar's owner, not to them.
+        // to belongs to that calendar's owner, not to them. DISTINCT ON
+        // collapses the same provider event synced through more than one of
+        // the teammate's inboxes before the limit, so duplicates never eat
+        // page slots or skew the caller's truncation detection.
         let rows = sqlx::query!(
             r#"
             SELECT
-                event.owner_id,
-                occurrence.event_id,
-                event.ical_uid,
-                occurrence.occurrence_key,
-                event.title,
-                event.visibility,
-                event.time_zone,
-                occurrence.starts_at AS "occurrence_starts_at?",
-                occurrence.ends_at AS "occurrence_ends_at?",
-                occurrence.start_date AS "occurrence_start_date?",
-                occurrence.end_date AS "occurrence_end_date?"
-            FROM calendar_event_occurrences occurrence
-            JOIN calendar_events event ON event.id = occurrence.event_id
-            WHERE occurrence.owner_id IN (
-                    SELECT teammate.user_id
-                    FROM team_user membership
-                    JOIN team_user teammate ON teammate.team_id = membership.team_id
-                    WHERE membership.user_id = $1
-                      AND teammate.user_id <> $1
-              )
-              AND event.event_type = 'out_of_office'
-              AND event.status <> 'cancelled'
-              AND NOT occurrence.is_cancelled
-              AND EXISTS (
-                    SELECT 1
-                    FROM calendar_event_sources source
-                    JOIN calendars calendar ON calendar.id = source.calendar_id
-                    JOIN calendar_accounts account ON account.id = source.account_id
-                    WHERE source.event_id = event.id
-                      AND calendar.is_primary
-                      AND NOT calendar.is_deleted
-                      AND account.sync_status <> 'disabled'
-              )
-              AND (
-                    occurrence.timed_span && tstzrange($2, $3, '[)')
-                    OR occurrence.day_span && daterange($4, $5, '[)')
-              )
+                owner_id AS "owner_id!",
+                event_id AS "event_id!",
+                ical_uid AS "ical_uid!",
+                occurrence_key AS "occurrence_key!",
+                title AS "title!",
+                visibility AS "visibility!",
+                time_zone,
+                occurrence_starts_at AS "occurrence_starts_at?",
+                occurrence_ends_at AS "occurrence_ends_at?",
+                occurrence_start_date AS "occurrence_start_date?",
+                occurrence_end_date AS "occurrence_end_date?"
+            FROM (
+                SELECT DISTINCT ON (event.owner_id, event.ical_uid, occurrence.occurrence_key)
+                    event.owner_id,
+                    occurrence.event_id,
+                    event.ical_uid,
+                    occurrence.occurrence_key,
+                    event.title,
+                    event.visibility,
+                    event.time_zone,
+                    occurrence.starts_at AS occurrence_starts_at,
+                    occurrence.ends_at AS occurrence_ends_at,
+                    occurrence.start_date AS occurrence_start_date,
+                    occurrence.end_date AS occurrence_end_date,
+                    COALESCE(
+                        occurrence.starts_at,
+                        occurrence.start_date::timestamp AT TIME ZONE 'UTC'
+                    ) AS occurrence_ordering
+                FROM calendar_event_occurrences occurrence
+                JOIN calendar_events event ON event.id = occurrence.event_id
+                WHERE occurrence.owner_id IN (
+                        SELECT teammate.user_id
+                        FROM team_user membership
+                        JOIN team_user teammate ON teammate.team_id = membership.team_id
+                        WHERE membership.user_id = $1
+                          AND teammate.user_id <> $1
+                  )
+                  AND event.event_type = 'out_of_office'
+                  AND event.status <> 'cancelled'
+                  AND NOT occurrence.is_cancelled
+                  AND EXISTS (
+                        SELECT 1
+                        FROM calendar_event_sources source
+                        JOIN calendars calendar ON calendar.id = source.calendar_id
+                        JOIN calendar_accounts account ON account.id = source.account_id
+                        WHERE source.event_id = event.id
+                          AND calendar.is_primary
+                          AND NOT calendar.is_deleted
+                          AND account.sync_status <> 'disabled'
+                  )
+                  AND (
+                        occurrence.timed_span && tstzrange($2, $3, '[)')
+                        OR occurrence.day_span && daterange($4, $5, '[)')
+                  )
+                ORDER BY
+                    event.owner_id,
+                    event.ical_uid,
+                    occurrence.occurrence_key,
+                    occurrence.event_id
+            ) occurrence
             ORDER BY
-                COALESCE(occurrence.starts_at, occurrence.start_date::timestamp AT TIME ZONE 'UTC'),
+                occurrence.occurrence_ordering,
                 occurrence.event_id,
                 occurrence.occurrence_key
             LIMIT $6

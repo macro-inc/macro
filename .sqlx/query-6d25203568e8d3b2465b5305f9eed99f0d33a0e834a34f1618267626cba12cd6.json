@@ -1,0 +1,87 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                owner_id AS \"owner_id!\",\n                event_id AS \"event_id!\",\n                ical_uid AS \"ical_uid!\",\n                occurrence_key AS \"occurrence_key!\",\n                title AS \"title!\",\n                visibility AS \"visibility!\",\n                time_zone,\n                occurrence_starts_at AS \"occurrence_starts_at?\",\n                occurrence_ends_at AS \"occurrence_ends_at?\",\n                occurrence_start_date AS \"occurrence_start_date?\",\n                occurrence_end_date AS \"occurrence_end_date?\"\n            FROM (\n                SELECT DISTINCT ON (event.owner_id, event.ical_uid, occurrence.occurrence_key)\n                    event.owner_id,\n                    occurrence.event_id,\n                    event.ical_uid,\n                    occurrence.occurrence_key,\n                    event.title,\n                    event.visibility,\n                    event.time_zone,\n                    occurrence.starts_at AS occurrence_starts_at,\n                    occurrence.ends_at AS occurrence_ends_at,\n                    occurrence.start_date AS occurrence_start_date,\n                    occurrence.end_date AS occurrence_end_date,\n                    COALESCE(\n                        occurrence.starts_at,\n                        occurrence.start_date::timestamp AT TIME ZONE 'UTC'\n                    ) AS occurrence_ordering\n                FROM calendar_event_occurrences occurrence\n                JOIN calendar_events event ON event.id = occurrence.event_id\n                WHERE occurrence.owner_id IN (\n                        SELECT teammate.user_id\n                        FROM team_user membership\n                        JOIN team_user teammate ON teammate.team_id = membership.team_id\n                        WHERE membership.user_id = $1\n                          AND teammate.user_id <> $1\n                  )\n                  AND event.event_type = 'out_of_office'\n                  AND event.status <> 'cancelled'\n                  AND NOT occurrence.is_cancelled\n                  AND EXISTS (\n                        SELECT 1\n                        FROM calendar_event_sources source\n                        JOIN calendars calendar ON calendar.id = source.calendar_id\n                        JOIN calendar_accounts account ON account.id = source.account_id\n                        WHERE source.event_id = event.id\n                          AND calendar.is_primary\n                          AND NOT calendar.is_deleted\n                          AND account.sync_status <> 'disabled'\n                  )\n                  AND (\n                        occurrence.timed_span && tstzrange($2, $3, '[)')\n                        OR occurrence.day_span && daterange($4, $5, '[)')\n                  )\n                ORDER BY\n                    event.owner_id,\n                    event.ical_uid,\n                    occurrence.occurrence_key,\n                    occurrence.event_id\n            ) occurrence\n            ORDER BY\n                occurrence.occurrence_ordering,\n                occurrence.event_id,\n                occurrence.occurrence_key\n            LIMIT $6\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "ical_uid!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "occurrence_key!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "title!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "visibility!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "time_zone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "occurrence_starts_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "occurrence_ends_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "occurrence_start_date?",
+        "type_info": "Date"
+      },
+      {
+        "ordinal": 10,
+        "name": "occurrence_end_date?",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Date",
+        "Date",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "6d25203568e8d3b2465b5305f9eed99f0d33a0e834a34f1618267626cba12cd6"
+}

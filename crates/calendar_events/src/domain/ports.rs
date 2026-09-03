@@ -435,8 +435,10 @@ pub trait CalendarRepository: Send + Sync + 'static {
     /// Out-of-office occurrences owned by the requester's teammates — the
     /// other members of the requester's team — overlapping the viewport,
     /// soonest first, sourced from a primary calendar on an account that is
-    /// not disabled. Titles arrive unmasked; the domain service owns the
-    /// visibility policy.
+    /// not disabled. The same provider event synced through more than one of
+    /// a teammate's inboxes collapses to one row before the limit applies,
+    /// so callers can detect truncation by row count. Titles arrive
+    /// unmasked; the domain service owns the visibility policy.
     ///
     /// "Team" is singular by schema: `team_user` is unique per user, so the
     /// membership lookup cannot span teams. Relaxing that constraint would
