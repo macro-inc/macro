@@ -575,6 +575,11 @@ fn validate_out_of_office_create(
             "out-of-office events cannot have attendees".to_string(),
         ));
     }
+    if draft.conference.is_some() {
+        return Err(CalendarMutationError::InvalidInput(
+            "out-of-office events cannot have a video conference".to_string(),
+        ));
+    }
     Ok(())
 }
 

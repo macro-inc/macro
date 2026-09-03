@@ -38,9 +38,9 @@ updates or deletion. Fails if the user has no writable calendar connected.\n\
 \n\
 Set `eventType` to \"out_of_office\" to mark the user as out of office (e.g. \"mark me out \
 of office Thursday\"). Out-of-office events must land on the user's primary calendar (omit \
-`calendarId`), must be timed rather than all-day, and take no attendees; use `outOfOffice` \
-to control whether conflicting meetings are auto-declined. The type cannot be changed \
-afterward."
+`calendarId`), must be timed rather than all-day, and take no attendees or Google Meet \
+(leave `addGoogleMeet` false); use `outOfOffice` to control whether conflicting meetings \
+are auto-declined. The type cannot be changed afterward."
 )]
 pub struct CreateCalendarEvent {
     /// Display title.

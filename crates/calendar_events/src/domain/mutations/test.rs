@@ -1251,6 +1251,23 @@ async fn create_out_of_office_rejects_all_day_spans_and_attendees() {
             .await,
         Err(CalendarMutationError::InvalidInput(_))
     ));
+
+    let with_conference = service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    );
+    let mut conference_draft = out_of_office_draft();
+    conference_draft.conference = Some(ConferenceChange::GoogleMeet);
+    assert!(matches!(
+        with_conference
+            .create_event("macro|user", None, None, conference_draft)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
 }
 
 #[tokio::test]
