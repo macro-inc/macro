@@ -140,6 +140,74 @@ fn microsoft_token_kms_key_id(value: Option<&'static str>) -> MicrosoftTokenKmsK
     }
 }
 
+fn development_allowlist(value: Option<&'static str>) -> DevelopmentSignupAllowlistJson {
+    match value {
+        Some(value) => DevelopmentSignupAllowlistJson::new_testing(value),
+        None => DevelopmentSignupAllowlistJson::new_unset(),
+    }
+}
+
+#[test]
+fn develop_signup_policy_requires_configured_allowlist() {
+    for value in [None, Some(""), Some(" \t ")] {
+        let error = resolve_signup_policy(Environment::Develop, &development_allowlist(value))
+            .expect_err("Develop should require a nonblank allowlist setting");
+
+        assert!(
+            error
+                .to_string()
+                .contains("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON")
+        );
+    }
+}
+
+#[test]
+fn develop_signup_policy_uses_configured_allowlist() {
+    let policy = resolve_signup_policy(
+        Environment::Develop,
+        &development_allowlist(Some(
+            r#"["Allowed.User@example.test", "allowed.user@example.test"]"#,
+        )),
+    )
+    .expect("valid Develop allowlist should resolve");
+
+    assert_eq!(policy.allowed_email_count(), Some(1));
+    policy
+        .authorize_public_email("allowed.user@example.test")
+        .expect("configured email should be allowed");
+}
+
+#[test]
+fn develop_signup_policy_rejects_malformed_allowlist_without_leaking_value() {
+    let configured_value = "not-json-with-secret@example.test";
+    let error = resolve_signup_policy(
+        Environment::Develop,
+        &development_allowlist(Some(configured_value)),
+    )
+    .expect_err("malformed Develop allowlist should be rejected");
+    let message = error.to_string();
+
+    assert!(message.contains("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON"));
+    assert!(!message.contains(configured_value));
+    assert!(!format!("{error:?}").contains(configured_value));
+}
+
+#[test]
+fn production_and_local_signup_policy_ignore_allowlist_setting() {
+    for environment in [Environment::Production, Environment::Local] {
+        let policy = resolve_signup_policy(
+            environment,
+            &development_allowlist(Some("not-json-with-secret@example.test")),
+        )
+        .expect("non-Develop environments should not parse the allowlist setting");
+
+        assert_eq!(policy.allowed_email_count(), None);
+        policy
+            .authorize_public_email("anyone@example.test")
+            .expect("non-Develop environments should allow all public signups");
+    }
+}
+
 #[test]
 fn cursor_kms_key_from_config_field() {
     let configured = CursorApiKeyKmsKeyId::new_testing("arn:aws:kms:from-config");

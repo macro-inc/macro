@@ -258,6 +258,10 @@ The migration included comprehensive indexes:
 - New code uses `rootcause` for error handling — it's preferred over `anyhow` (see docs/STYLE_GUIDE.md CS-46)
 - In code still on anyhow: prefer `anyhow::bail!("error message")` over `Err(anyhow::anyhow!("error message"))` for early returns - it's more concise and idiomatic
 
+### Agent Guide Maintenance
+
+`docs/AGENT_GUIDE/` documents how agents drive the web app through a browser (routes, UI affordances, interaction patterns, completion signals). When you change how a part of the app works or how users/agents interact with it — routes, creation flows, editor behavior, AI surfaces, composer semantics — update the corresponding guide file in the same change.
+
 ### Documentation Requirements
 
 - Add `#![deny(missing_docs)]` to `lib.rs` in new crates to enforce documentation on all public items
@@ -318,6 +322,8 @@ don't inject it directly into the error message.
 - When making changes to a db crate you should always update tests, and run prepare
 
 ## Cursor Cloud specific instructions
+
+These apply to Cursor Cloud only. On a local dev machine the `.cursor/*.sh` scripts prompt for sudo and are the wrong entry point: to verify a frontend change, run `PORT=<free port> bun run dev` from `apps/web` against the dev backend (see `apps/web/AGENTS.md`), and only reach for the local stack for backend work.
 
 `.cursor/install.sh` prepares the durable caches, databases, test dependencies, frontend dependencies, service binaries, and stack init snapshot, then stops dockerd and nix-daemon so the Cloud bake can exit. `.cursor/start.sh` runs at boot and starts nothing beyond the nix daemon, so sessions and subagents are usable immediately. `.cursor/infra.sh` starts Docker, Postgres, and Redis on demand. `.cursor/stack.sh` starts the on-demand product: backend containers behind the proxy (8090) plus the hot-reloading frontend dev server — the app is at http://localhost:3000/app and frontend edits apply on save (idempotent; a healthy stack is left alone). `.cursor/rebuild.sh` remounts new backend binaries after Rust edits. These scripts are the only supported entry points; each re-enters the pinned nix shell itself, so run them with plain `bash` from any environment. To run the app and see your edits, follow the `run-app` skill (`.claude/skills/run-app/SKILL.md`).
 

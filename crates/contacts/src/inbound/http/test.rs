@@ -124,6 +124,7 @@ fn build_test_router(should_exceed: bool) -> (Router, FakeJwtValidator) {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        macro_authorization::NoUserApiKeyAuthorizer,
     );
     let state = ContactsRouterState {
         contacts_service: Arc::new(MockService),

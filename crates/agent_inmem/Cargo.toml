@@ -31,4 +31,5 @@ agent_fold = { path = "../agent_fold" }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 futures = { workspace = true }
+rig-agent = "0.41.0"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

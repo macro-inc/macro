@@ -290,6 +290,47 @@ describe('calendar block navigation', () => {
       expect.objectContaining({ eventId: 'event-1' })
     );
   });
+
+  it('retargets a calendar preview without activating its viewer', async () => {
+    const activate = vi.fn();
+    const openWithSplit = vi.fn();
+    const goToLocationFromParams = vi.fn();
+    const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
+    const controller = {
+      isControllerSplit: () => true,
+      viewerId: () => 'viewer-1',
+    } as unknown as SplitHandle;
+
+    setGlobalSplitManager({
+      activeSplit: vi.fn(),
+      getOrchestrator: vi.fn(() => ({ getBlockHandle })),
+      getSplitByContent: vi.fn(() => ({
+        id: 'viewer-1',
+        activate,
+      })),
+      openWithSplit,
+    } as unknown as SplitManager);
+
+    await openEntityInSplitFromUnifiedList(
+      {
+        type: 'calendar_event',
+        id: 'event-2',
+      } as unknown as EntityData,
+      { splitHandle: controller, mergeHistory: true }
+    );
+
+    expect(activate).not.toHaveBeenCalled();
+    expect(openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'calendar',
+        id: 'view',
+      }),
+      expect.objectContaining({
+        handle: controller,
+        mergeHistory: true,
+      })
+    );
+  });
 });
 
 describe('preview history source', () => {

@@ -76,3 +76,18 @@ fn port_base_override_wins() {
     assert_eq!(inst.port(Port::Postgres), 12000);
     assert_eq!(inst.port(Port::Auth), 12000 + Port::Auth.offset());
 }
+
+/// `DocCognition = 8085` is the default-instance discriminant, not a frozen
+/// host port. A named `--port-base` stack publishes DCS at base + offset.
+#[test]
+fn doc_cognition_host_port_is_instance_derived() {
+    let default = Instance::derive(None, None).unwrap();
+    assert_eq!(default.port(Port::DocCognition), 8085);
+
+    let named = Instance::derive(Some("macro-dev"), Some(31000)).unwrap();
+    assert_eq!(
+        named.port(Port::DocCognition),
+        31000 + Port::DocCognition.offset()
+    );
+    assert_eq!(named.port(Port::DocCognition), 31014);
+}

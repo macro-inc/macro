@@ -110,6 +110,35 @@ pub struct DocumentSyncContentUpdatedMetadata {
     pub file_type: FileType,
     /// Version marker for the sync snapshot, when the caller supplies one.
     pub document_version_id: Option<String>,
+    /// Who mechanically changed the content. Absent on events published
+    /// before attribution, and on human-only collab sessions.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "schema", schema(value_type = Option<String>))]
+    pub actor: Option<Actor<'static>>,
+    /// The user whose feed this edit belongs on, when different from
+    /// [`Self::actor`].
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub on_behalf_of: Option<MacroUserIdStr<'static>>,
+}
+
+impl DocumentSyncContentUpdatedMetadata {
+    /// Build metadata from extract-sync strings. Invalid actor or subject
+    /// ids are dropped so a bad payload still extracts the document.
+    pub fn from_extract(
+        document_id: String,
+        file_type: FileType,
+        document_version_id: Option<String>,
+        actor: Option<String>,
+        on_behalf_of: Option<String>,
+    ) -> Self {
+        Self {
+            document_id,
+            file_type,
+            document_version_id,
+            actor: actor.and_then(|id| Actor::try_from(id).ok()),
+            on_behalf_of: on_behalf_of.and_then(|id| MacroUserIdStr::try_from(id).ok()),
+        }
+    }
 }
 
 /// Metadata for [`DocumentTopicEvent::Purged`].

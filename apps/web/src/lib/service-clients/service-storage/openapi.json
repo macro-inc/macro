@@ -10,6 +10,185 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/agents": {
+      "get": {
+        "tags": ["agents"],
+        "summary": "Handler for `GET /agents`.",
+        "operationId": "list_agents",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Agent"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["agents"],
+        "summary": "Handler for `POST /agents`.",
+        "operationId": "create_agent",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agents/{agent_id}": {
+      "put": {
+        "tags": ["agents"],
+        "summary": "Handler for `PUT /agents/{agent_id}`.",
+        "operationId": "update_agent",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "description": "Agent bot ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/BotId"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAgentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Agent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/annotations/anchors": {
       "delete": {
         "tags": ["annotations::delete_anchor"],
@@ -8457,6 +8636,597 @@
         }
       }
     },
+    "/harness-pairings": {
+      "post": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `POST /harness-pairings`.",
+        "description": "Unauthenticated by design: the daemon has no credential yet - obtaining one\nis the point. The pairing releases nothing until a signed-in user approves\nit, and creation is throttled in the domain service.",
+        "operationId": "create_harness_pairing",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePairingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedPairing"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harness-pairings/{code}": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harness-pairings/{code}`.",
+        "operationId": "get_harness_pairing",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Pairing code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairingDetails"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harness-pairings/{code}/approve": {
+      "post": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `POST /harness-pairings/{code}/approve`.",
+        "operationId": "approve_harness_pairing",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Pairing code",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovePairingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Harness"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harness-pairings/{pairing_id}/claim": {
+      "post": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `POST /harness-pairings/{pairing_id}/claim`.",
+        "description": "Unauthenticated like pairing creation; the device secret minted alongside\nthe pairing is the credential, and the pairing id (not the short user\ncode) addresses it.",
+        "operationId": "claim_harness_pairing",
+        "parameters": [
+          {
+            "name": "pairing_id",
+            "in": "path",
+            "description": "Pairing ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimPairingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimedPairing"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PendingClaimResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses`.",
+        "operationId": "list_harnesses",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Harness"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/me": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/me`.",
+        "operationId": "get_self_harness",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Harness"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `DELETE /harnesses/me`.",
+        "description": "A daemon retiring itself: the valid credential is the authorization.",
+        "operationId": "delete_self_harness",
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/me/agents": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/me/agents`.",
+        "operationId": "list_harness_agents",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HarnessAgent"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/me/sessions": {
+      "get": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `GET /harnesses/me/sessions`.",
+        "operationId": "list_harness_sessions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/HarnessSession"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/harnesses/{harness_id}": {
+      "delete": {
+        "tags": ["harnesses"],
+        "summary": "Handler for `DELETE /harnesses/{harness_id}`.",
+        "operationId": "delete_harness",
+        "parameters": [
+          {
+            "name": "harness_id",
+            "in": "path",
+            "description": "Harness ID",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/HarnessId"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -8776,7 +9546,7 @@
           {
             "name": "sort_method",
             "in": "query",
-            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at.",
+            "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.",
             "required": false,
             "schema": {
               "$ref": "#/components/schemas/SoupApiSort"
@@ -11228,6 +11998,75 @@
         }
       }
     },
+    "/webhook/events/stream": {
+      "get": {
+        "tags": ["webhook"],
+        "summary": "Stream matching broker events to the caller over Server-Sent Events.",
+        "operationId": "stream_events",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Personal or team workspace whose webhook lifecycle events are delivered.",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/WebhookScope"
+            }
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "description": "URL-encoded JSON array of webhook filters, identical to the persisted\nwebhook `filters` field.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Server-Sent Events stream of matching broker events",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/webhook/webhooks": {
       "get": {
         "tags": ["webhook"],
@@ -11725,6 +12564,64 @@
             "description": "The type of the pin"
           }
         }
+      },
+      "Agent": {
+        "type": "object",
+        "description": "A persisted user- or team-owned AI agent.",
+        "required": [
+          "bot",
+          "instructions",
+          "harness",
+          "default_model",
+          "channel_scope",
+          "channel_ids"
+        ],
+        "properties": {
+          "bot": {
+            "$ref": "#/components/schemas/Bot",
+            "description": "The bot identity used for mentions and channel participation."
+          },
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Selected channel ids. Empty for a global agent."
+          },
+          "channel_scope": {
+            "$ref": "#/components/schemas/AgentChannelScope",
+            "description": "Whether the agent is global or channel-specific."
+          },
+          "default_model": {
+            "type": "string",
+            "description": "Model selected specifically for this agent."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Harness used to run the agent."
+          },
+          "harness_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HarnessId",
+                "description": "Registered harness the agent runs on, when `harness` is `macrod`."
+              }
+            ]
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Instructions supplied to the agent at the start of a conversation."
+          }
+        }
+      },
+      "AgentChannelScope": {
+        "type": "string",
+        "description": "Whether an agent is available everywhere or only in selected channels.",
+        "enum": ["all", "selected"]
       },
       "Anchor": {
         "oneOf": [
@@ -13007,6 +13904,21 @@
             "type": "string",
             "format": "date-time",
             "description": "When the reply was last updated."
+          }
+        }
+      },
+      "ApprovePairingRequest": {
+        "type": "object",
+        "description": "Request to approve a pairing and register the harness.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "Display name override. Defaults to the daemon's requested name."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Owning team. Omit for a private, user-owned harness."
           }
         }
       },
@@ -15291,6 +16203,32 @@
           }
         }
       },
+      "ClaimPairingRequest": {
+        "type": "object",
+        "description": "Request to claim an approved pairing's credential.\n\nThe daemon serializes this, so both derives are used.",
+        "required": ["device_secret"],
+        "properties": {
+          "device_secret": {
+            "type": "string",
+            "description": "The claim credential returned when the pairing was created."
+          }
+        }
+      },
+      "ClaimedPairing": {
+        "type": "object",
+        "description": "The credential released to the daemon when a pairing is claimed.",
+        "required": ["harness", "token"],
+        "properties": {
+          "harness": {
+            "$ref": "#/components/schemas/Harness",
+            "description": "The registered harness."
+          },
+          "token": {
+            "type": "string",
+            "description": "The raw harness bearer token. Shown only here; only its hash is stored."
+          }
+        }
+      },
       "CloudStorageItemType": {
         "type": "string",
         "enum": ["document", "chat", "project"]
@@ -15459,6 +16397,76 @@
           "error": {
             "type": "boolean",
             "description": "Indicates if an error occurred."
+          }
+        }
+      },
+      "CreateAgentRequest": {
+        "type": "object",
+        "description": "Request to create a persisted AI agent.",
+        "required": [
+          "name",
+          "handle",
+          "instructions",
+          "harness",
+          "default_model",
+          "channel_scope"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL or data URL."
+          },
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Selected channels. Must be non-empty only for `selected` scope."
+          },
+          "channel_scope": {
+            "$ref": "#/components/schemas/AgentChannelScope",
+            "description": "Whether the agent is global or channel-specific."
+          },
+          "default_model": {
+            "type": "string",
+            "description": "Model selected specifically for this agent."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable `@` handle."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Harness used to run the agent."
+          },
+          "harness_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HarnessId",
+                "description": "Registered harness to run on. Required when `harness` is `macrod`,\nforbidden otherwise."
+              }
+            ]
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team owner. Omit for a private, user-owned agent."
           }
         }
       },
@@ -15976,6 +16984,32 @@
           }
         }
       },
+      "CreatePairingRequest": {
+        "type": "object",
+        "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
+        "required": ["name"],
+        "properties": {
+          "host": {
+            "type": ["string", "null"],
+            "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
+          },
+          "name": {
+            "type": "string",
+            "description": "Requested harness display name (typically the machine's hostname)."
+          },
+          "scope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RequestedHarnessScope",
+                "description": "The scope the daemon's config asks for; the approval dialog arrives\npreselected to it."
+              }
+            ]
+          }
+        }
+      },
       "CreateProjectRequest": {
         "type": "object",
         "required": ["name"],
@@ -16385,6 +17419,43 @@
           "workspace_id": {
             "type": "string",
             "description": "Owning workspace id."
+          }
+        }
+      },
+      "CreatedPairing": {
+        "type": "object",
+        "description": "A pairing the daemon created, including its claim credential.\n\n`device_secret` is returned exactly once and never stored raw; the daemon\nkeeps it to claim the harness credential after approval.",
+        "required": [
+          "pairing_id",
+          "code",
+          "device_secret",
+          "expires_at",
+          "poll_interval_seconds"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Human-readable code the user confirms in the web app, `XXXX-XXXX`."
+          },
+          "device_secret": {
+            "type": "string",
+            "description": "Claim credential the daemon must present. Shown only here."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the pairing expires."
+          },
+          "pairing_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Pairing id used to poll for the claim."
+          },
+          "poll_interval_seconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Suggested delay between claim polls.",
+            "minimum": 0
           }
         }
       },
@@ -17747,6 +18818,10 @@
         "description": "Metadata for [`DocumentTopicEvent::SyncContentUpdated`].",
         "required": ["document_id", "file_type"],
         "properties": {
+          "actor": {
+            "type": ["string", "null"],
+            "description": "Who mechanically changed the content. Absent on events published\nbefore attribution, and on human-only collab sessions."
+          },
           "document_id": {
             "type": "string",
             "description": "The id of the live-collab document whose content changed."
@@ -17758,6 +18833,17 @@
           "file_type": {
             "$ref": "#/components/schemas/FileType",
             "description": "File type of the sync document (markdown today)."
+          },
+          "on_behalf_of": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MacroUserIdStr",
+                "description": "The user whose feed this edit belongs on, when different from\n[`Self::actor`]."
+              }
+            ]
           }
         }
       },
@@ -20352,6 +21438,180 @@
         "description": "Sort method for grouped queries (frecency not supported).",
         "enum": ["viewed_at", "created_at", "updated_at", "viewed_updated"]
       },
+      "Harness": {
+        "type": "object",
+        "description": "A registered user-run harness.\n\nClients deserialize this, so both derives are used.",
+        "required": [
+          "id",
+          "kind",
+          "name",
+          "owner",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "connected"
+        ],
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "description": "Whether the daemon currently holds a runtime connection."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "created_by": {
+            "type": "string",
+            "description": "User that registered this harness."
+          },
+          "id": {
+            "$ref": "#/components/schemas/HarnessId",
+            "description": "Harness id."
+          },
+          "kind": {
+            "type": "string",
+            "description": "Runtime kind. Currently always `macrod`."
+          },
+          "last_connected_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the daemon last attached a runtime connection."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "owner": {
+            "$ref": "#/components/schemas/HarnessOwner",
+            "description": "Owner."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Update timestamp."
+          }
+        }
+      },
+      "HarnessAgent": {
+        "type": "object",
+        "description": "An agent bound to a harness, as listed for the daemon.",
+        "required": ["bot_id", "name", "handle"],
+        "properties": {
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The agent's bot id."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable `@` handle."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          }
+        }
+      },
+      "HarnessId": {
+        "type": "string"
+      },
+      "HarnessOwner": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "User-owned (private) harness.",
+            "required": ["user_id", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["user"]
+              },
+              "user_id": {
+                "type": "string",
+                "description": "Owner user id."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Team-owned harness, usable by every team member.",
+            "required": ["team_id", "type"],
+            "properties": {
+              "team_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Owner team id."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["team"]
+              }
+            }
+          }
+        ],
+        "description": "Harness owner.\n\nExactly one of a user or a team, mirroring the bots owner pattern. There\nare no system harnesses."
+      },
+      "HarnessSession": {
+        "type": "object",
+        "description": "An agent session running on a harness, as listed for the daemon's UI.",
+        "required": [
+          "session_id",
+          "bot_id",
+          "bot_name",
+          "bot_handle",
+          "name",
+          "status",
+          "model",
+          "owner_id",
+          "created_at",
+          "modified_at"
+        ],
+        "properties": {
+          "bot_handle": {
+            "type": "string",
+            "description": "The agent's `@` handle."
+          },
+          "bot_id": {
+            "$ref": "#/components/schemas/BotId",
+            "description": "The agent the session runs for."
+          },
+          "bot_name": {
+            "type": "string",
+            "description": "The agent's display name."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation timestamp."
+          },
+          "model": {
+            "type": "string",
+            "description": "Model the session was opened with."
+          },
+          "modified_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last-activity timestamp."
+          },
+          "name": {
+            "type": "string",
+            "description": "The session's display name."
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "The user the session belongs to."
+          },
+          "session_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session id."
+          },
+          "status": {
+            "type": "string",
+            "description": "Session lifecycle status, e.g. `no_messages`, `active`."
+          }
+        }
+      },
       "HashMap": {
         "type": "object",
         "additionalProperties": {
@@ -20655,6 +21915,46 @@
           }
         }
       },
+      "PairingDetails": {
+        "type": "object",
+        "description": "A pending pairing, as shown to the approving user.",
+        "required": ["code", "requested_name", "created_at", "expires_at"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "The pairing code, normalized to `XXXX-XXXX`."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the pairing was created."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the pairing expires."
+          },
+          "host": {
+            "type": ["string", "null"],
+            "description": "Display-only description of the machine."
+          },
+          "requested_name": {
+            "type": "string",
+            "description": "Harness display name the daemon asked for."
+          },
+          "requested_scope": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RequestedHarnessScope",
+                "description": "The scope the daemon's config asked for, when it named one."
+              }
+            ]
+          }
+        }
+      },
       "Params": {
         "type": "object",
         "description": "Query parameters shared by soup endpoints.",
@@ -20687,7 +21987,7 @@
               },
               {
                 "$ref": "#/components/schemas/SoupApiSort",
-                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at."
+                "description": "Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at."
               }
             ]
           }
@@ -21327,6 +22627,17 @@
           "yPct": {
             "type": "number",
             "format": "double"
+          }
+        }
+      },
+      "PendingClaimResponse": {
+        "type": "object",
+        "description": "Body returned while a claim is still waiting for approval.",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "type": "string",
+            "description": "Always `pending`."
           }
         }
       },
@@ -22328,6 +23639,11 @@
           }
         }
       },
+      "RequestedHarnessScope": {
+        "type": "string",
+        "description": "The ownership scope a daemon's config asks for.\n\nAdvisory, not binding: the approving user confirms it in the dialog, which\narrives preselected to this. Approval is what actually sets ownership.",
+        "enum": ["private", "team"]
+      },
       "RingStatus": {
         "type": "string",
         "description": "Per-user status of an incoming-call ring, as reported by the\nring-status endpoint while a native client is ringing.",
@@ -22732,6 +24048,11 @@
                 "type": "boolean",
                 "description": "Whether the requesting user has favorited this entity."
               },
+              "notified_at": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value."
+              },
               "touched_at": {
                 "type": ["string", "null"],
                 "format": "date-time",
@@ -22751,7 +24072,8 @@
           "updated_at",
           "viewed_updated",
           "frecency",
-          "touched_by_me"
+          "touched_by_me",
+          "notified_at"
         ]
       },
       "SoupApiSortDirection": {
@@ -22914,6 +24236,11 @@
           "isReadOnly": {
             "type": "boolean",
             "description": "Whether the selected canonical source is read-only."
+          },
+          "lastReminderFiredAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When this event's most recent reminder notification was delivered."
           },
           "location": {
             "type": ["string", "null"],
@@ -24689,6 +26016,76 @@
           }
         ]
       },
+      "UpdateAgentRequest": {
+        "type": "object",
+        "description": "Request to replace the editable configuration of a persisted AI agent.",
+        "required": [
+          "name",
+          "handle",
+          "instructions",
+          "harness",
+          "default_model",
+          "channel_scope"
+        ],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Optional avatar URL or data URL."
+          },
+          "channel_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Selected channels. Must be non-empty only for `selected` scope."
+          },
+          "channel_scope": {
+            "$ref": "#/components/schemas/AgentChannelScope",
+            "description": "Whether the agent is global or channel-specific."
+          },
+          "default_model": {
+            "type": "string",
+            "description": "Model selected specifically for this agent."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable `@` handle."
+          },
+          "harness": {
+            "type": "string",
+            "description": "Harness used to run the agent."
+          },
+          "harness_id": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/HarnessId",
+                "description": "Registered harness to run on. Required when `harness` is `macrod`,\nforbidden otherwise."
+              }
+            ]
+          },
+          "instructions": {
+            "type": "string",
+            "description": "Instructions supplied to the agent at the start of a conversation."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "team_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team owner. Omit to make the agent private to the caller."
+          }
+        }
+      },
       "UpdateChannelSharePermission": {
         "type": "object",
         "required": ["operation", "channelId"],
@@ -25221,7 +26618,7 @@
       },
       "WebhookScope": {
         "type": "string",
-        "description": "Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.",
+        "description": "Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used. `Display`/`FromStr`\nspell the same names as serde, for query strings and config values.",
         "enum": ["user", "team"]
       },
       "WebhookStatus": {

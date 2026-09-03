@@ -22,15 +22,16 @@ jobs:
     runs-on: namespace-profile-linux-small
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
-      nextest_filter: ${{ steps.nextest-filter.outputs.nextest_filter }}
+      rust_packages: ${{ steps.nextest-filter.outputs.rust_packages }}
+      skip_tests: ${{ steps.nextest-filter.outputs.skip_tests }}
       doppler_config_bins: ${{ steps.doppler-bins.outputs.doppler_config_bins }}
     steps:
     - name: Checkout
       uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       with:
         clean: 'false'
-        fetch-depth: '0'
         persist-credentials: 'false'
+        fetch-depth: '2'
     - name: Setup Rust
       uses: './.github/actions/setup-rust'
       with:
@@ -55,20 +56,22 @@ jobs:
             - 'services/**'
             - 'tooling/xtask/**'
             - 'static_assets/**'
+            - 'nix/**'
             - 'flake.nix'
             - 'flake.lock'
             - '.github/actions/setup-nix/**'
             - '.github/actions/setup-nix-dev-shell/**'
             - '.github/actions/teardown-nix/**'
             - '.github/actions/setup-sccache/**'
-            - '.github/services-config.json'
-            - '.github/scripts/build-cloud-storage-lambdas.sh'
-            - '.github/scripts/build-cloud-storage-lambdas-nix.sh'
             - .github/workflows/code_check_cloud_storage.yml
     - name: compute changed files
       if: steps.filter.outputs.should_run == 'true'
       run: |
         set -euo pipefail
+
+        # Compare against the merge-base so a deleted file still appears. `--no-renames`
+        # turns a rename into a delete+add pair so the old path is attributed to its
+        # package (otherwise git reports only the new name).
 
         if [ -z "${GITHUB_BASE_REF:-}" ]; then
           compare_rev="$(git rev-parse HEAD~1)"
@@ -81,7 +84,8 @@ jobs:
           fi
         fi
 
-        git diff --name-only "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
+        printf '%s\n' "$compare_rev" > /tmp/base-revision
+        git diff --name-only --no-renames "$compare_rev" "$GITHUB_SHA" > /tmp/changed-files
       shell: bash
     - id: doppler-bins
       name: compute affected Doppler config bins
@@ -104,35 +108,54 @@ jobs:
       run: |
         set -euo pipefail
 
-        # Root cargo/toolchain/CI changes can affect the whole workspace, so run all tests.
-        # `.sqlx/` is deliberately not in this list: the test job compiles queries against
-        # live Postgres (SQLX_OFFLINE is unset there), so `.sqlx` contents cannot change
-        # test outcomes, and a query change always comes with a source change in the
-        # owning crate, which the package filter below already maps.
-        if grep -qE '^(Cargo\.(toml|lock)|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*|flake\.nix|flake\.lock|\.github/actions/(setup-rust|setup-nix|setup-nix-dev-shell|setup-sccache)/.*|\.github/workflows/code_check_cloud_storage\.yml)$' /tmp/changed-files; then
-          echo "Workspace-level change detected; running all tests"
-          echo "nextest_filter=" >> "$GITHUB_OUTPUT"
+        # Writes `rust_packages` for the check/test jobs:
+        #   all  — compile and run the whole workspace
+        #   none — no Rust packages to lint/test (Nix-only, top-level JSON, docs, …)
+        #   <names> — space-separated workspace packages (changed + reverse deps)
+        #
+        # `skip_tests=true` keeps clippy on a package set while the live-Postgres
+        # test job stays skipped (used for `.sqlx`-only diffs).
+        #
+        # Root Cargo/toolchain/config edits force `all`. Cargo.lock is handled by
+        # determinator's old/new graph comparison. flake.nix, the Nix shell action,
+        # and this workflow file used to live on the full-suite list and turned every
+        # dev-shell tweak into a full-suite rebuild.
+
+        echo "skip_tests=false" >> "$GITHUB_OUTPUT"
+
+        if [ ! -s /tmp/changed-files ]; then
+          echo "Unknown or empty change set; running all tests"
+          echo "rust_packages=all" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        # A diff touching only `.sqlx/` needs no tests at all — without this it would
-        # fall through to the empty-filter "run everything" fallback below. `none()`
-        # selects zero tests, which `--no-tests=pass` treats as success. The `-s` guard
-        # keeps an empty changed-files list (unknown merge-base) on the full-suite path.
-        if [ -s /tmp/changed-files ] && ! grep -qvE '^\.sqlx/' /tmp/changed-files; then
-          echo "Only .sqlx changes detected; running no tests"
-          echo "nextest_filter=none()" >> "$GITHUB_OUTPUT"
+        if grep -qE '^(Cargo\.toml|rust-toolchain\.toml|Cross\.toml|clippy\.toml|deny\.toml|\.cargo/.*|\.config/.*)$' /tmp/changed-files; then
+          echo "Workspace-level Cargo/toolchain change detected; running all tests"
+          echo "rust_packages=all" >> "$GITHUB_OUTPUT"
           exit 0
         fi
 
-        filterset="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- nextest-filter /tmp/changed-files)"
-
-        if [ -z "$filterset" ]; then
-          echo "No package-specific Rust changes detected; running all tests"
-        else
-          echo "nextest filter: $filterset"
+        # The test job compiles queries against live Postgres (SQLX_OFFLINE is unset
+        # there), so `.sqlx` contents cannot change test outcomes. Clippy is the
+        # offline SQLx check (`SQLX_OFFLINE=true`), so a snapshot-only diff must
+        # still compile against the cache rather than skip the check job.
+        if ! grep -qvE '^\.sqlx/' /tmp/changed-files; then
+          echo "Only .sqlx changes detected; clippy all, skip live-Postgres tests"
+          echo "rust_packages=all" >> "$GITHUB_OUTPUT"
+          echo "skip_tests=true" >> "$GITHUB_OUTPUT"
+          exit 0
         fi
-        echo "nextest_filter=$filterset" >> "$GITHUB_OUTPUT"
+
+        packages="$(cargo run --manifest-path tooling/xtask/Cargo.toml -- nextest-filter /tmp/changed-files "$(< /tmp/base-revision)")"
+
+        if [ -z "$packages" ] || [ "$packages" = "none" ]; then
+          echo "No package-specific Rust changes detected; running no tests"
+          echo "rust_packages=none" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        echo "rust packages: $packages"
+        echo "rust_packages=$packages" >> "$GITHUB_OUTPUT"
       shell: bash
   check:
     needs:
@@ -232,14 +255,50 @@ jobs:
       run: cargo fmt --check
     - name: clippy
       run: |
-        cargo clippy --workspace --all-features \
-          --exclude sync_service
-        # sync-service has mutually exclusive storage features, so lint its
-        # supported default feature set separately. These two existing lints
-        # predate its inclusion in the root workspace.
-        cargo clippy -p sync_service -- \
-          -A clippy::unnecessary_map_or \
-          -A clippy::collapsible_if
+        set -euo pipefail
+
+        # Mirrors run_tests.sh package selection so clippy only lints the crates this
+        # PR can actually affect. `all` keeps the historical workspace invocation,
+        # including sync_service's special-cased feature set.
+
+        packages="${RUST_PACKAGES:-}"
+
+        clippy_sync_service() {
+          cargo clippy -p sync_service -- \
+            -A clippy::unnecessary_map_or \
+            -A clippy::collapsible_if
+        }
+
+        if [ -z "$packages" ] || [ "$packages" = "all" ]; then
+          cargo clippy --workspace --all-features --exclude sync_service
+          clippy_sync_service
+          exit 0
+        fi
+
+        if [ "$packages" = "none" ]; then
+          echo "No Rust packages to lint"
+          exit 0
+        fi
+
+        sync=false
+        pkg_args=()
+        for p in $packages; do
+          if [ "$p" = "sync_service" ]; then
+            sync=true
+          else
+            pkg_args+=(-p "$p")
+          fi
+        done
+
+        if [ "${#pkg_args[@]}" -gt 0 ]; then
+          cargo clippy --all-features "${pkg_args[@]}"
+        fi
+
+        if [ "$sync" = true ]; then
+          clippy_sync_service
+        fi
+      env:
+        RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true
@@ -249,10 +308,10 @@ jobs:
   test:
     needs:
     - path-check
-    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.rust_packages != 'none' && needs.path-check.outputs.skip_tests != 'true'
     runs-on: namespace-profile-linux-rust-ci;overrides.cache-tag=sccache-ci
     env:
-      NEXTEST_FILTER: ${{ needs.path-check.outputs.nextest_filter }}
+      RUST_PACKAGES: ${{ needs.path-check.outputs.rust_packages }}
       NEXTEST_TEST_THREADS: '32'
       RUSTFLAGS: '-Dwarnings -C link-arg=-fuse-ld=mold'
     services:
@@ -340,15 +399,41 @@ jobs:
       run: just setup_test_envs && just initialize_dbs
     - name: run tests
       run: |
-        # --no-tests=pass: a package filter (e.g. an xtask/tooling-only PR -> rdeps(=xtask))
-        # can legitimately select zero tests; treat that as success, not nextest's default error.
-        # sync-service was not part of this suite before it joined the root workspace,
-        # and its storage backends are mutually exclusive under --all-features.
-        args=(--workspace --exclude sync_service --all-features --lib --bins --tests --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
-        if [ -n "$NEXTEST_FILTER" ]; then
-          args+=(-E "$NEXTEST_FILTER")
+        set -euo pipefail
+
+        # --no-tests=pass: a package filter can legitimately select a crate with no
+        # tests; treat that as success, not nextest's default error.
+        # sync-service is not part of this suite, and its storage backends are mutually
+        # exclusive under --all-features.
+        #
+        # Package selection uses `cargo nextest run -p`, not `--workspace -E rdeps(...)`.
+        # The filterset only decides which tests *run* after a workspace build; `-p`
+        # is what keeps an unrelated crate's test binary from being compiled.
+        #
+        # `--lib --bins --tests` is safe with `--workspace` (cargo skips packages that
+        # lack a given target type) but fails with `-p` when any selected package has
+        # no lib — xtask binaries such as xtask_nextest_filter / xtask_workflows.
+        # Unconstrained `-p` still runs that package's tests.
+
+        : "${RUST_PACKAGES:?RUST_PACKAGES is required}"
+        common=(--all-features --no-tests=pass --test-threads "$NEXTEST_TEST_THREADS")
+
+        if [ "$RUST_PACKAGES" = "all" ]; then
+          cargo nextest run --workspace --exclude sync_service --lib --bins --tests "${common[@]}"
+          exit 0
         fi
-        cargo nextest run "${args[@]}"
+
+        pkg_args=()
+        for package in $RUST_PACKAGES; do
+          [ "$package" = "sync_service" ] || pkg_args+=(-p "$package")
+        done
+
+        if [ "${#pkg_args[@]}" -eq 0 ]; then
+          echo "No packages in the test suite were affected"
+          exit 0
+        fi
+
+        cargo nextest run "${common[@]}" "${pkg_args[@]}"
     - name: show sccache stats
       if: always()
       run: sccache --show-stats || true

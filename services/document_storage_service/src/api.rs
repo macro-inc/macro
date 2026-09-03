@@ -216,6 +216,9 @@ fn api_router(state: ApiContext) -> Router {
         .merge(bots::inbound::axum_router::bots_router(
             state.bots_state.clone(),
         ))
+        .merge(harnesses::inbound::axum_router::harnesses_router(
+            state.harnesses_state.clone(),
+        ))
         .merge(
             bots::inbound::channel_webhook_router::channel_scoped_bot_router(
                 state.channel_bot_webhook_state.clone(),
@@ -253,7 +256,11 @@ fn api_router(state: ApiContext) -> Router {
         )
         .nest(
             "/webhook",
-            webhook::inbound::axum_router::webhook_router(state.webhook_state.clone()),
+            webhook::inbound::axum_router::webhook_router(state.webhook_state.clone()).merge(
+                webhook::inbound::stream_router::webhook_stream_router(
+                    state.sse_stream_state.clone(),
+                ),
+            ),
         )
         .nest(
             "/crm",

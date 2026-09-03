@@ -106,6 +106,48 @@ async fn promote_dedups_to_single_link_with_two_edges(pool: Pool<Postgres>) -> a
 }
 
 #[sqlx::test]
+async fn promote_normalizes_mailbox_email_for_fusionauth_webhook(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER, "alice@company.test").await;
+    insert_user(&pool, CONNECTOR, "bob@company.test").await;
+    let mixed_case_mailbox = "Support@External.Test";
+    let link_id = insert_data_source_link(&pool, OWNER, mixed_case_mailbox).await;
+
+    let mut conn = pool.acquire().await?;
+    let result = promote_link_to_shared(
+        &mut conn,
+        link_id,
+        OWNER,
+        CONNECTOR,
+        mixed_case_mailbox,
+        None,
+    )
+    .await?;
+
+    assert_eq!(result.mailbox_macro_id, "macro|support@external.test");
+
+    let mailbox_user = sqlx::query!(
+        r#"SELECT email, macro_user_id FROM "User" WHERE id = $1"#,
+        result.mailbox_macro_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(mailbox_user.email, "support@external.test");
+    assert_eq!(mailbox_user.macro_user_id, result.mailbox_fusion_id);
+
+    let link = sqlx::query!(
+        r#"SELECT email_address FROM email_links WHERE id = $1"#,
+        link_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(link.email_address, "support@external.test");
+
+    Ok(())
+}
+
+#[sqlx::test]
 async fn promote_is_atomic_on_rollback(pool: Pool<Postgres>) -> anyhow::Result<()> {
     insert_user(&pool, OWNER, "alice@company.test").await;
     insert_user(&pool, CONNECTOR, "bob@company.test").await;

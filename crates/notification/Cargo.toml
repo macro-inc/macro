@@ -78,7 +78,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
-model_notifications = { path = "../model_notifications" }
 rate_limit = { path = "../rate_limit", features = ["testing"] }
 tokio = { workspace = true, features = ["macros", "rt", "test-util"] }
 tower = { workspace = true }

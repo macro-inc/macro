@@ -68,6 +68,59 @@ fn read(handle: &EngineHandle, op_id: Option<&str>) -> ReadResultWire {
     .unwrap()
 }
 
+fn empty_write_result() -> WriteResultWire {
+    WriteResultWire {
+        revision: "0".to_string(),
+        revision_advanced: false,
+        changed: Vec::new(),
+        affected_ops: Vec::new(),
+        reset: false,
+        revalidations: Vec::new(),
+    }
+}
+
+#[test]
+fn tagged_wire_enum_fields_are_camel_case() {
+    assert_eq!(
+        serde_json::to_value(MutationUpsertKindWire::ReplacedPending {
+            removed_transaction_id: "1".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "replaced-pending", "removedTransactionId": "1"})
+    );
+    assert_eq!(
+        serde_json::to_value(MutationUpsertKindWire::AppendedAfterActive {
+            active_transaction_id: "2".to_string(),
+        })
+        .unwrap(),
+        serde_json::json!({"kind": "appended-after-active", "activeTransactionId": "2"})
+    );
+    assert_eq!(
+        serde_json::to_value(DeferOptimisticWriteResultWire::DiscardedSuperseded {
+            replacement_transaction_id: "3".to_string(),
+            result: empty_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "3"
+    );
+    assert_eq!(
+        serde_json::to_value(CommitOptimisticWriteResultWire::CommittedSuperseded {
+            replacement_transaction_id: "4".to_string(),
+            result: empty_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "4"
+    );
+    assert_eq!(
+        serde_json::to_value(RollbackOptimisticWriteResultWire::DiscardedSuperseded {
+            replacement_transaction_id: "5".to_string(),
+            result: empty_write_result(),
+        })
+        .unwrap()["replacementTransactionId"],
+        "5"
+    );
+}
+
 #[test]
 fn write_then_read_round_trips() {
     let handle = spawn_handle();
@@ -368,6 +421,7 @@ fn optimistic_layer_commits_durably() {
 
     let optimistic = block_on(handle.enqueue_optimistic_mutation(
         Some("client:2".to_string()),
+        "00000000-0000-4000-8000-000000000001".to_string(),
         QUERY.to_string(),
         Some("Soup".to_string()),
         variables(),
@@ -382,6 +436,7 @@ fn optimistic_layer_commits_durably() {
     .unwrap();
     assert_eq!(optimistic.result.affected_ops, vec!["client:1".to_string()]);
     let serialized = serde_json::to_value(&optimistic).unwrap();
+    assert_eq!(serialized["upsertKind"]["kind"], "inserted");
     assert_eq!(serialized["initialClaim"]["kind"], "claimed");
     assert_eq!(
         serialized["initialClaim"]["mutation"]["transactionId"],
@@ -391,6 +446,8 @@ fn optimistic_layer_commits_durably() {
         panic!("new queue head should be claimed")
     };
     assert_eq!(claimed.transaction_id, optimistic.transaction_id);
+    assert_eq!(claimed.uuid, "00000000-0000-4000-8000-000000000001");
+    assert!(!claimed.superseded);
 
     // The optimistic view answers reads.
     let ReadResultWire::Hit { data } = read(&handle, None) else {
@@ -408,6 +465,9 @@ fn optimistic_layer_commits_durably() {
         soup_data(true),
     ))
     .unwrap();
+    let CommitOptimisticWriteResultWire::Committed { result: committed } = committed else {
+        panic!("current transaction was reported as superseded")
+    };
     assert!(!committed.changed.is_empty());
 
     let ReadResultWire::Hit { data } = read(&handle, None) else {
@@ -423,6 +483,7 @@ fn rollback_drops_optimistic_contribution() {
 
     let optimistic = block_on(handle.enqueue_optimistic_mutation(
         None,
+        "00000000-0000-4000-8000-000000000002".to_string(),
         QUERY.to_string(),
         Some("Soup".to_string()),
         variables(),

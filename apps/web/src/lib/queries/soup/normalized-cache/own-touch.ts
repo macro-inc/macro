@@ -4,10 +4,7 @@
  * `touched_at` is the viewer's latest own mutation as recorded by the
  * activity log, which lands through an async consumer. A touched-mode
  * refetch triggered right after a mutation can therefore return the OLD
- * server value, and the normalized cache's field-merge would let it
- * overwrite a fresher optimistic stamp. Instead of racing the consumer,
- * stamps are recorded here and reads resolve to max(server, floor); an
- * entry clears itself the moment the server value catches up.
+ * server value — see `stamp-floors.ts` for how the floor guards against it.
  *
  * Only mutations whose server side records an activity (the domain
  * `ActivitySource` impls: create, rename, file-type change, project move,
@@ -15,13 +12,11 @@
  * unattributed action would reorder the Recent feed only to snap back once
  * the server truth arrives. Doc content edits are NOT attributed yet
  * (`SyncContentUpdated` carries no actor), so typing must not stamp.
- *
- * This module is import-free on purpose: it sits below the normalized
- * cache, the entity mappers, and the list-view gates, which would
- * otherwise form an import cycle.
  */
 
-const ownTouchFloors = new Map<string, string>();
+import { createStampFloors } from './stamp-floors';
+
+const ownTouchFloors = createStampFloors();
 
 /**
  * Record and return a fresh own-touch stamp for the entity. Every optimistic
@@ -29,7 +24,7 @@ const ownTouchFloors = new Map<string, string>();
  */
 export function ownTouchStamp(entityId: string): string {
   const stamp = new Date().toISOString();
-  ownTouchFloors.set(entityId, stamp);
+  ownTouchFloors.raise(entityId, stamp);
   return stamp;
 }
 
@@ -42,16 +37,7 @@ export function resolveOwnTouch(
   entityId: string,
   serverTouchedAt: string | null | undefined
 ): string | null | undefined {
-  const floor = ownTouchFloors.get(entityId);
-  if (floor === undefined) return serverTouchedAt;
-  if (
-    serverTouchedAt &&
-    new Date(serverTouchedAt).getTime() >= new Date(floor).getTime()
-  ) {
-    ownTouchFloors.delete(entityId);
-    return serverTouchedAt;
-  }
-  return floor;
+  return ownTouchFloors.resolve(entityId, serverTouchedAt);
 }
 
 /** Whether the viewer has an outstanding optimistic touch for the entity. */

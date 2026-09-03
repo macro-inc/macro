@@ -1,9 +1,11 @@
 import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
 import type { Maybe } from '@core/types';
 import { throwOnErr } from '@core/util/result';
+import { channelThreadRootId } from '@notifications/channel-thread-root';
 import type { UnifiedNotification } from '@notifications/types';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
+  bumpSoupEntityNotifiedAt,
   hasSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
   refetchSoupEntity,
@@ -1069,6 +1071,22 @@ export function optimisticInsertNotification(
       }
     } else {
       refetchSoupEntity(notification.entity_id, soupTag);
+    }
+
+    // The inbox's notified_at order moves the notified row up right away
+    // rather than on the next refetch of the page. A mention or thread reply
+    // belongs to its channel-thread row — the row the soup feed keys it on —
+    // so that is the row stamped (and fetched in, when it is not cached yet),
+    // not the channel's.
+    const threadRootId = channelThreadRootId(notification);
+    if (notification.created_at) {
+      bumpSoupEntityNotifiedAt(
+        threadRootId ?? notification.entity_id,
+        notification.created_at
+      );
+    }
+    if (threadRootId && !hasSoupEntity(threadRootId)) {
+      refetchSoupEntity(threadRootId, 'channelThread');
     }
   }
 

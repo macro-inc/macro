@@ -35,6 +35,7 @@ mod oauth2;
 mod permissions;
 mod permissions_extractor;
 mod session;
+pub(crate) mod signup_policy;
 mod user;
 mod webhooks;
 

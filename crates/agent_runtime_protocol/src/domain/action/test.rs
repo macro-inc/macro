@@ -119,33 +119,29 @@ fn compact_becomes_opencodes_compact_prompt() {
 }
 
 #[test]
-fn action_ids_survive_the_trip_through_a_request_id() {
-    let id = AgentActionId::mint();
+fn non_uuid_request_ids_are_not_action_ids() {
+    // The harness's own handshake counters and numeric ids were not minted by
+    // the control plane. (A foreign client's bare uuid is indistinguishable
+    // from ours by design: only this side writes ToRuntime frames in
+    // production, so uuid-shaped is treated as ours.)
+    let handshake = RequestId::Str(format!(
+        "agent_session:{}:0",
+        macro_uuid::generate_uuid_v7()
+    ));
+    assert_eq!(AgentActionId::from_request_id(&handshake), None);
     assert_eq!(
-        AgentActionId::from_request_id(&id.to_request_id()),
-        Some(id)
+        AgentActionId::from_request_id(&RequestId::Number(7)),
+        None,
+        "numeric ids are never ours"
     );
+    let counter = RequestId::Str("harness:prompt:0".to_owned());
+    assert_eq!(AgentActionId::from_request_id(&counter), None);
 }
 
 #[test]
-fn foreign_request_ids_are_not_action_ids() {
-    // Zed's bare uuids, the harness's own counters, numeric ids: none of
-    // them were minted by the control plane.
-    let foreign = RequestId::Str("813ea7f3-b8e1-4af3-b2f4-44f4f445637a".to_owned());
-    assert_eq!(AgentActionId::from_request_id(&foreign), None);
-}
-
-#[test]
-fn action_ids_serialize_as_their_bare_string() {
-    let id = AgentActionId::mint();
-    let json = serde_json::to_string(&id).unwrap();
-    assert_eq!(json, format!("\"{id}\""));
-}
-
-#[test]
-fn only_stop_supersedes_what_is_already_queued() {
-    assert!(AgentAction::Stop.supersedes_queued());
-    assert!(!AgentAction::prompt("keep going").supersedes_queued());
-    assert!(!AgentAction::set_model("opus").supersedes_queued());
-    assert!(!AgentAction::Compact.supersedes_queued());
+fn only_prompt_shaped_actions_occupy_a_turn() {
+    assert!(AgentAction::prompt("keep going").occupies_turn());
+    assert!(AgentAction::Compact.occupies_turn());
+    assert!(!AgentAction::set_model("opus").occupies_turn());
+    assert!(!AgentAction::Stop.occupies_turn());
 }

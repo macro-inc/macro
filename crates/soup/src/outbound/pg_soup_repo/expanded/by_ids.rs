@@ -40,6 +40,7 @@ async fn expanded_soup_by_ids_hydrated<'a>(
     }
 
     let status_property_id = SystemPropertyKey::STATUS_UUID;
+    let assignees_property_id = SystemPropertyKey::ASSIGNEES_UUID;
     let completed_option_id = StatusOption::COMPLETED_UUID.to_string();
 
     let items: Vec<SoupProjectionHydration> = sqlx::query!(
@@ -82,6 +83,29 @@ async fn expanded_soup_by_ids_hydrated<'a>(
                     FROM document_email de
                     WHERE de.document_id = d.id
                 ) as "is_email_attachment!",
+                (
+                    dt.sub_type IS DISTINCT FROM 'task'
+                    OR EXISTS (
+                        SELECT 1
+                        FROM entity_properties ep_assignees
+                        WHERE ep_assignees.entity_id = d.id
+                            AND ep_assignees.entity_type = 'TASK'
+                            AND ep_assignees.property_definition_id = $6
+                            AND ep_assignees.values->'value' @> jsonb_build_array(
+                                jsonb_build_object('entity_id', $1)
+                            )
+                    )
+                ) as "is_important!",
+                ARRAY(
+                    SELECT status_option_id::uuid
+                    FROM jsonb_array_elements_text(
+                        CASE
+                            WHEN jsonb_typeof(ep_status.values->'value') = 'array'
+                            THEN ep_status.values->'value'
+                            ELSE '[]'::jsonb
+                        END
+                    ) AS status_option_id
+                ) as "status_option_ids!: Vec<Uuid>",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE
                     WHEN dt.sub_type = 'task'
@@ -142,6 +166,8 @@ async fn expanded_soup_by_ids_hydrated<'a>(
                 NULL as "sha",
                 NULL as "sub_type",
                 false as "is_email_attachment!",
+                true as "is_important!",
+                ARRAY[]::uuid[] as "status_option_ids!: Vec<Uuid>",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 NULL as "is_completed",
                 c."deletedAt"::timestamptz as "deleted_at"
@@ -164,6 +190,7 @@ async fn expanded_soup_by_ids_hydrated<'a>(
         chat_ids.as_slice(),     // $3
         completed_option_id,     // $4
         status_property_id,      // $5
+        assignees_property_id,   // $6
     )
     .try_map(map_soup_projection_hydration!())
     .fetch_all(db)

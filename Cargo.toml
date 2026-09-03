@@ -45,6 +45,9 @@ members = [
   "crates/graphql_properties",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/harness_id",
+  "crates/harness_token",
+  "crates/harnesses",
   "crates/import",
   "crates/item_filter_index",
   "crates/integration_tests/local_e2e",
@@ -172,14 +175,17 @@ chrono-tz = { version = "0.10.4", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 constant_time_eq = "0.3.1"
+crossterm = "0.28"
 cookie = "0.18.1"
 cron = "0.16.0"
 csv = "1"
 dashmap = "6.1.0"
 dateparser = "0.2.1"
+determinator = "0.12.0"
 dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
+eventsource-stream = "0.2.3"
 futures = "0.3.31"
 getrandom = "0.3"
 glob = "0.3.3"
@@ -196,6 +202,7 @@ http-body-util = "0.1.2"
 httpdate = "1"
 image = "0.25"
 indexmap = "2"
+indoc = "2"
 inquire = "0.7"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
@@ -216,6 +223,7 @@ lru = "0.16"
 mockall = "0.13"
 nom = "8"
 opentelemetry = { version = "0.31.0", default-features = false }
+opentelemetry-appender-tracing = { version = "0.31.1", default-features = false }
 opentelemetry-http = { version = "0.31.0", default-features = false }
 opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
   "grpc-tonic",
@@ -236,6 +244,7 @@ postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
 quote = "1"
 rand = "0.9.0"
+ratatui = "0.29"
 # uses vendored to fix lambda builds failing.
 rdkafka = { version = "0.37", default-features = false, features = [
   "cmake-build",
@@ -278,6 +287,7 @@ sqlx = { version = "0.8.6", features = [
 ] }
 sqlx-core = { version = "0.8.6" }
 strum = { version = "0.27.1", features = ["derive"] }
+tempfile = "3"
 thiserror = "2.0.0"
 time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
@@ -295,6 +305,7 @@ tower-http = { version = "0.6.1", features = [
   "trace",
 ] }
 toml = "0.8"
+toml_edit = "0.22"
 tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }

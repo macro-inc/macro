@@ -1,3 +1,4 @@
+import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
@@ -181,7 +182,8 @@ function DropdownContent(props: DropdownContentProps) {
   ]);
   const handleOpenAutoFocus = (event: Event) => {
     local.onOpenAutoFocus?.(event);
-    if (!event.defaultPrevented && contentRef) {
+    // A tap-opened menu shouldn't start with a hover-like highlight
+    if (!event.defaultPrevented && contentRef && !isModality('touch')) {
       highlightFirstMenuItemOnOpen(contentRef);
     }
   };

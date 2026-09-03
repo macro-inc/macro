@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 258
 expression: messages
 input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
 ---
@@ -343,7 +342,11 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                fbefdda8-5491-4637-b779-7a1306244dd5,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {
@@ -379,7 +382,11 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                ff0bdaa9-c499-4c83-bb76-8c8091a70cbf,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {
@@ -472,7 +479,11 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                aa3ba9dc-3357-4814-9f46-3e3f2cd48ee7,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {

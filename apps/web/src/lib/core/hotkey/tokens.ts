@@ -60,6 +60,7 @@ export const TOKENS = {
       copyBranchName: 'entity.action.copyBranchName',
       copyEntityId: 'entity.action.copyEntityId',
       favorite: 'entity.action.favorite',
+      mute: 'entity.action.mute',
       createReminder: 'entity.action.createReminder',
       properties: 'entity.action.properties',
       tags: 'entity.action.tags',

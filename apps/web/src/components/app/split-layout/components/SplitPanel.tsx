@@ -36,6 +36,7 @@ import { useSplitLayout } from '../layout';
 import type { SplitHandle, SplitState } from '../layoutManager';
 import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
+import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
@@ -74,8 +75,13 @@ export function SplitPanel(props: SplitPanelProps) {
   const layoutRefs: SplitPanelContextType['layoutRefs'] = {};
   const headerCollapseController = createPriorityCollapseController();
   const toolbarCollapseController = createPriorityCollapseController();
+  const ownedSlots = createOwnedSlots();
 
   const splitLayoutHelpers = useSplitLayout();
+  const isNotUnifiedList = () => {
+    const content = props.handle.content();
+    return content.type !== 'component' || !isListViewID(content.id);
+  };
 
   registerSplitHotkeys({
     // Leaving a piece of content should return you to the list you reached it
@@ -91,10 +97,7 @@ export function SplitPanel(props: SplitPanelProps) {
         referredFrom: 'hotkey',
       });
     },
-    isNotUnifiedList: () => {
-      const content = props.handle.content();
-      return !isListViewID(content.id);
-    },
+    isNotUnifiedList,
     isViewerSplit: () => props.handle.isViewerSplit(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
@@ -288,6 +291,7 @@ export function SplitPanel(props: SplitPanelProps) {
           setTitleFileMenuTrigger,
           titleFileMenuActions,
           setTitleFileMenuActions,
+          replaceOwnedSlot: ownedSlots.replace,
           panelSize,
           panelRef,
         }}

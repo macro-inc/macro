@@ -2,17 +2,17 @@
 //! strict ordering, and lifecycle resets.
 
 use cache_core::engine::{
-    BeginOptimisticWrite, Engine, EngineError, InitialClaimOutcome, ReadResult,
+    BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
+    EngineError, InitialClaimOutcome, ReadResult,
 };
-use cache_core::predicate::ProjectionMutation;
+use cache_core::predicate::{OptimisticUpsertReconciliation, ProjectionMutation};
 use cache_core::queue::{
-    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
-    QueuedMutation,
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationUpsertResult,
+    NewQueuedMutation, QueuedMutation,
 };
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{CacheValue, EntityKey, Record};
 use pollster::block_on;
-use predicate_index::PendingOptimisticProjection;
 use serde_json::{Value as Json, json};
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -117,14 +117,15 @@ impl Storage for ClaimFailingStorage {
         Ok(())
     }
 
-    async fn enqueue_mutation_with_shadow(
+    async fn upsert_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,
-        projections: Vec<PendingOptimisticProjection>,
-    ) -> Result<MutationId, Self::Error> {
+        now_ms: i64,
+        reconciliation: OptimisticUpsertReconciliation,
+    ) -> Result<MutationUpsertResult, Self::Error> {
         Ok(self
             .inner
-            .enqueue_mutation_with_shadow(entry, projections)
+            .upsert_mutation_with_shadow(entry, now_ms, reconciliation)
             .await
             .unwrap())
     }
@@ -297,6 +298,7 @@ async fn reconciliation_engine() -> (Engine<ClaimFailingStorage>, MutationId) {
         .begin_optimistic_write(
             None,
             BeginOptimisticWrite {
+                uuid: "00000000-0000-4000-8000-000000000005",
                 query: MUTATION,
                 operation_name: Some("SetEntityProperty"),
                 variables: &mutation_vars("doing"),
@@ -362,6 +364,33 @@ async fn claim_head(
     )
 }
 
+async fn begin_value(
+    engine: &mut Engine<InMemoryStorage>,
+    uuid: &str,
+    value: &str,
+    created_at_ms: i64,
+) -> MutationId {
+    let variables = mutation_vars(value);
+    let data = mutation_response("Status", value);
+    engine
+        .begin_optimistic_write(
+            None,
+            BeginOptimisticWrite {
+                uuid,
+                query: MUTATION,
+                operation_name: Some("SetEntityProperty"),
+                variables: &variables,
+                data: &data,
+                link_patches: &[],
+                revalidations: &[],
+                created_at_ms,
+            },
+        )
+        .await
+        .unwrap()
+        .0
+}
+
 async fn durable_value(engine: &Engine<InMemoryStorage>) -> Option<String> {
     let records = engine
         .storage()
@@ -387,6 +416,7 @@ fn begin_persists_mutation_and_optimistic_layer() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000006",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("doing"),
@@ -423,6 +453,7 @@ fn enqueue_claims_new_mutation_when_queue_was_empty() {
             .enqueue_optimistic_mutation(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000007",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("doing"),
@@ -456,6 +487,7 @@ fn enqueue_claims_older_strict_head() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000008",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("older"),
@@ -471,6 +503,7 @@ fn enqueue_claims_older_strict_head() {
             .enqueue_optimistic_mutation(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000009",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("new"),
@@ -505,6 +538,7 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
                 .begin_optimistic_write(
                     None,
                     BeginOptimisticWrite {
+                        uuid: "00000000-0000-4000-8000-000000000010",
                         query: MUTATION,
                         operation_name: Some("SetEntityProperty"),
                         variables: &mutation_vars("older"),
@@ -528,6 +562,7 @@ fn enqueue_does_not_skip_a_leased_or_deferred_head() {
                 .enqueue_optimistic_mutation(
                     None,
                     BeginOptimisticWrite {
+                        uuid: "00000000-0000-4000-8000-000000000011",
                         query: MUTATION,
                         operation_name: Some("SetEntityProperty"),
                         variables: &mutation_vars("new"),
@@ -585,6 +620,7 @@ fn claim_failure_after_enqueue_preserves_one_durable_visible_mutation() {
             .enqueue_optimistic_mutation(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000012",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("doing"),
@@ -694,6 +730,7 @@ fn claimed_success_atomically_commits_real_response() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000013",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("doing"),
@@ -745,6 +782,7 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000014",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("a"),
@@ -760,6 +798,7 @@ fn retryable_failure_keeps_optimistic_layer_and_blocks_later_mutations() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000015",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("b"),
@@ -806,6 +845,7 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000016",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("a"),
@@ -821,6 +861,7 @@ fn permanent_failure_rolls_back_only_the_claimed_head() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000017",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("b"),
@@ -856,6 +897,7 @@ fn stale_claim_cannot_settle_mutation() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000018",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("doing"),
@@ -888,6 +930,222 @@ fn stale_claim_cannot_settle_mutation() {
 }
 
 #[test]
+fn pending_uuid_replacement_moves_to_tail_and_keeps_only_latest_layer() {
+    block_on(async {
+        const X: &str = "13e0b56d-772d-4cc6-920d-358de3235849";
+        const Y: &str = "34736e0a-cd21-418b-9f34-67362bc213cd";
+        let mut engine = engine_with_base("Status", "todo").await;
+        let first = begin_value(&mut engine, X, "a", 1).await;
+        let intervening = begin_value(&mut engine, Y, "c", 2).await;
+        let replacement = begin_value(&mut engine, X, "b", 3).await;
+
+        assert!(replacement > intervening && intervening > first);
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(
+            queued.iter().map(|row| row.id).collect::<Vec<_>>(),
+            [intervening, replacement]
+        );
+        assert_eq!(
+            queued.iter().map(|row| row.uuid).collect::<Vec<_>>(),
+            [
+                uuid::Uuid::parse_str(Y).unwrap(),
+                uuid::Uuid::parse_str(X).unwrap(),
+            ]
+        );
+        let data = read_hit(&mut engine, None).await;
+        assert_eq!(property_of(&data)["value"]["stringValue"], json!("b"));
+    });
+}
+
+#[test]
+fn pending_replacement_restores_fields_omitted_by_the_new_intent() {
+    block_on(async {
+        const X: &str = "5470d1c4-e5d8-45d7-a165-afca1331954c";
+        let mut engine = engine_with_base("Status", "todo").await;
+        let variables = mutation_vars("a");
+        let first_data = mutation_response("Transient", "a");
+        engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    uuid: X,
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &variables,
+                    data: &first_data,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
+            )
+            .await
+            .unwrap();
+        let variables = mutation_vars("b");
+        let replacement_data = json!({
+            "setEntityProperty": {
+                "id": "prop-1",
+                "value": {
+                    "__typename": "GraphqlStringPropertyValue",
+                    "stringValue": "b"
+                }
+            }
+        });
+        engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    uuid: X,
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &variables,
+                    data: &replacement_data,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 2,
+                },
+            )
+            .await
+            .unwrap();
+
+        let data = read_hit(&mut engine, None).await;
+        assert_eq!(property_of(&data)["displayName"], json!("Status"));
+        assert_eq!(property_of(&data)["value"]["stringValue"], json!("b"));
+    });
+}
+
+#[test]
+fn active_uuid_replacement_is_superseded_and_failed_attempt_is_discarded() {
+    block_on(async {
+        const X: &str = "6483ff81-262e-47cc-a56b-3c6bed971fbe";
+        let mut engine = engine_with_base("Status", "todo").await;
+        let active = begin_value(&mut engine, X, "a", 1).await;
+        let claimed = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 10,
+                lease_expires_at_ms: 20,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(claimed.queued.id, active);
+        let replacement = begin_value(&mut engine, X, "b", 11).await;
+
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(queued.len(), 2);
+        assert!(queued[0].superseded);
+        assert!(!queued[1].superseded);
+        assert_eq!(queued[1].id, replacement);
+        assert!(
+            engine
+                .claim_next_mutation(MutationClaimRequest {
+                    owner: "other".into(),
+                    now_ms: 12,
+                    lease_expires_at_ms: 100,
+                })
+                .await
+                .unwrap()
+                .is_none()
+        );
+
+        let recovered = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "recovery".into(),
+                now_ms: 20,
+                lease_expires_at_ms: 100,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(recovered.queued.superseded);
+        let deferred = engine
+            .defer_optimistic_write(
+                active,
+                MutationClaimToken {
+                    owner: "recovery".into(),
+                    generation: recovered.lease_generation,
+                },
+                500,
+                "superseded".into(),
+            )
+            .await
+            .unwrap();
+        let DeferOptimisticWriteResult::DiscardedSuperseded(discarded) = deferred else {
+            panic!("superseded attempt was retained")
+        };
+        assert_eq!(discarded.replacement_transaction_id, replacement);
+        let queued = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].id, replacement);
+        let data = read_hit(&mut engine, None).await;
+        assert_eq!(property_of(&data)["value"]["stringValue"], json!("b"));
+    });
+}
+
+#[test]
+fn successful_superseded_attempt_commits_beneath_the_replacement_without_flicker() {
+    block_on(async {
+        const X: &str = "e1fe0a96-37f7-4534-a8fe-613bba700c13";
+        let mut engine = engine_with_base("Status", "todo").await;
+        let active = begin_value(&mut engine, X, "a", 1).await;
+        let (claimed, claim) = claim_head(&mut engine, "runner", 10).await;
+        assert_eq!(claimed, active);
+        let replacement = begin_value(&mut engine, X, "b", 11).await;
+
+        let outcome = engine
+            .commit_optimistic_write_with_outcome(
+                active,
+                claim,
+                MUTATION,
+                Some("SetEntityProperty"),
+                &mutation_vars("a"),
+                &mutation_response("Status", "server-a"),
+            )
+            .await
+            .unwrap();
+        let CommitOptimisticWriteResult::CommittedSuperseded(outcome) = outcome else {
+            panic!("stale response was reported as a current commit")
+        };
+        assert_eq!(outcome.replacement_transaction_id, replacement);
+
+        let queue = engine.storage().load_mutation_queue().await.unwrap();
+        assert_eq!(queue.len(), 1);
+        assert_eq!(queue[0].id, replacement);
+        let data = read_hit(&mut engine, None).await;
+        assert_eq!(property_of(&data)["value"]["stringValue"], json!("b"));
+        assert_eq!(durable_value(&engine).await.as_deref(), Some("server-a"));
+    });
+}
+
+#[test]
+fn invalid_uuid_is_rejected_before_queue_hydration() {
+    block_on(async {
+        let mut engine = engine_with_base("Status", "todo").await;
+        let variables = mutation_vars("doing");
+        let data = mutation_response("Status", "doing");
+        let queue_loads = engine.storage().mutation_queue_load_count();
+        let error = engine
+            .begin_optimistic_write(
+                None,
+                BeginOptimisticWrite {
+                    uuid: "not-a-uuid",
+                    query: MUTATION,
+                    operation_name: Some("SetEntityProperty"),
+                    variables: &variables,
+                    data: &data,
+                    link_patches: &[],
+                    revalidations: &[],
+                    created_at_ms: 1,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, EngineError::InvalidMutationUuid(_)));
+        assert_eq!(engine.storage().mutation_queue_load_count(), queue_loads);
+    });
+}
+
+#[test]
 fn clear_and_identity_reset_drop_durable_queue() {
     block_on(async {
         let mut engine = engine_with_base("Status", "todo").await;
@@ -906,6 +1164,7 @@ fn clear_and_identity_reset_drop_durable_queue() {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000019",
                     query: MUTATION,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_vars("doing"),

@@ -156,6 +156,7 @@ body.tauri-ios {
   --color-surface: var(--theme-surface, var(--layer-surface));
   --color-inset: var(--theme-inset, var(--layer-inset));
   --color-lift: var(--theme-lift, var(--layer-lift));
+  --color-message: var(--color-lift);
 }
 
 [data-layer][data-depth='0'] {
@@ -537,6 +538,15 @@ html[data-theme-light='false'] {
 
   :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
     user-select: text;
+  }
+
+  /* iOS answers a long-press on an image with its own callout ("Share", "Save
+     to Photos", "Copy"), which preempts the app's own long-press affordances
+     (e.g. the channel message action drawer). Suppress it everywhere; the
+     zero-specificity selector lets a component opt back in if it ever needs
+     the native menu. */
+  :where(img) {
+    -webkit-touch-callout: none;
   }
 
   :where(*) {
@@ -927,7 +937,6 @@ a {
 
 @utility macro-message-padding {
   @container (width < 936px) { padding-inline: calc(var(--spacing) * 4); }
-  @container (width < 640px) { padding-inline: calc(var(--spacing) * 2); }
 }
 
 @utility macro-message-margin {

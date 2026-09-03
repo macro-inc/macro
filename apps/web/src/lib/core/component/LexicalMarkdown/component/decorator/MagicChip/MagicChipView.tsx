@@ -28,6 +28,9 @@ const ActivityLine: Component<{
     type="button"
     class="flex h-6 w-full min-w-0 items-center gap-2 text-left"
     data-magic-chip={props.agentSessionId}
+    data-message-reply-preview={`${props.activity.label}${
+      props.activity.detail ? ` ${props.activity.detail}` : ''
+    }`}
     disabled={!props.onOpen}
     onMouseDown={(event) => event.preventDefault()}
     onClick={props.onOpen}
@@ -54,7 +57,10 @@ const ActivityLine: Component<{
 
 /** The response, quoted as if the agent had answered inline. */
 const AnswerBody: Component<{ markdown: string }> = (props) => (
-  <div class="w-full border-l-2 border-accent pl-3 text-left text-sm leading-6">
+  <div
+    class="w-full border-l-2 border-accent pl-3 text-left text-sm leading-6"
+    data-message-reply-preview
+  >
     <StaticMarkdownContext theme={channelTheme}>
       <StaticMarkdown markdown={props.markdown} target="external" />
     </StaticMarkdownContext>

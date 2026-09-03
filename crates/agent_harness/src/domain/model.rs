@@ -9,7 +9,7 @@ use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 /// Where a mention happened.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
     /// Channel the mentioning message was posted in.
     pub channel_id: Uuid,
@@ -30,10 +30,12 @@ pub struct MentionOrigin {
 /// [`agent_session::domain::ports::SessionOpener`] instead: they
 /// need no provisioning, no announcement, and no first prompt, so they are
 /// a plain create rather than a harness command.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct OpenSession {
     /// The bot that was mentioned.
     pub bot_id: BotId,
+    /// Runtime configuration resolved for this bot when the trigger arrived.
+    pub runtime: AgentRuntimeConfig,
     /// The mention itself.
     pub origin: MentionOrigin,
 }
@@ -41,13 +43,9 @@ pub struct OpenSession {
 /// How a bot's sessions get a runtime — the closed set of first-party
 /// providers, one name per member.
 ///
-/// Derived from the bot rather than stored anywhere: the bot id is the
-/// durable fact (on trigger events and session rows), and the kind is a pure
-/// function of it, so deriving at each decision site is what keeps the two
-/// from drifting. Matching on it is exhaustive on purpose — a new
-/// provider becomes a compile error at every decision site instead of a
-/// silently wrong `else`. This becomes a bot attribute the day the set
-/// stops being closed.
+/// Legacy system bots derive this from their stable IDs. User and team agents
+/// derive it from their persisted harness slug, which is also copied onto each
+/// session so resume and teardown keep routing correctly after a restart.
 ///
 /// A session's instructions are stored on its row whichever kind serves it,
 /// but only [`Self::InMemory`] reads them today - it builds its system prompt
@@ -58,7 +56,7 @@ pub struct OpenSession {
 /// [`Self::External`] `_meta` on `session/new` for macrod to translate, and
 /// [`Self::Cursor`] - whose API takes a prompt and nothing more - has to fold
 /// them into the prompt body's hidden agent-context node.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AgentKind {
     /// A sandbox this deployment provisions (Daytona, or local Docker when
     /// a developer has opted in).
@@ -87,6 +85,29 @@ impl AgentKind {
         }
     }
 
+    /// Resolve a database-backed agent's runtime from its persisted harness.
+    #[must_use]
+    pub fn from_harness(harness: &str) -> Self {
+        match harness {
+            "cursor" => Self::Cursor,
+            "in-memory" | "macro-inmem" => Self::InMemory,
+            // Registered macrod harnesses are the deliberate external case:
+            // the agent's `harness_id` names whose daemon serves it.
+            harness_id::MACROD_HARNESS_SLUG => Self::External,
+            _ => Self::External,
+        }
+    }
+
+    /// Resolve a persisted session's runtime without losing fixed system-bot
+    /// identities that predate per-agent harness configuration.
+    #[must_use]
+    pub fn for_session(bot: BotId, harness: &str) -> Self {
+        match Self::of(bot) {
+            Self::External => Self::from_harness(harness),
+            fixed => fixed,
+        }
+    }
+
     /// Whether a deployment provisions this kind's runtimes itself.
     ///
     /// Membership is about who provisions, not whether *this* deployment is
@@ -98,6 +119,19 @@ impl AgentKind {
     }
 }
 
+/// Runtime settings used to open one database-backed or fixed agent.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct AgentRuntimeConfig {
+    /// Which runtime implementation serves the agent.
+    pub kind: AgentKind,
+    /// Model stamped onto the new session.
+    pub model: String,
+    /// Harness slug stamped onto the new session.
+    pub harness: String,
+    /// Configured agent instructions, reserved for a dedicated runtime transport.
+    pub instructions: String,
+}
+
 /// Whether a user belongs to the Macro staff domain - the egress crate's
 /// predicate, reused so the harness's staff gates and the proxy's can never
 /// disagree about who staff is.
@@ -105,7 +139,7 @@ pub(crate) use agent_egress::domain::model::is_macro_staff;
 
 /// Where a prompt came from, when it came from somewhere the session should
 /// answer back into.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AnnounceOrigin {
     /// Channel the prompt was posted in.
     pub channel_id: Uuid,
@@ -125,7 +159,7 @@ pub struct PriorChannelMessage {
 }
 
 /// Do something in a session that already exists.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DeliverAction {
     /// The id the action carries onto the wire, minted when it was accepted.
     /// A reconnect-and-retry resends under the same id.
@@ -151,16 +185,53 @@ pub struct DeliverAction {
 /// commands - whether to reconnect a dead session, whether to announce - are
 /// properties of the action and its origin, not of the request that carried
 /// it.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub enum HarnessCommand {
     /// Open a new session.
     Open(OpenSession),
     /// Act on a session that already exists.
     Deliver(DeliverAction),
+    /// Replace a queued prompt's text before it dispatches.
+    EditQueued {
+        /// The queue entry to edit.
+        action_id: AgentActionId,
+        /// The new raw prompt text.
+        prompt: String,
+        /// The user responsible, judged by the same gates as sending: whoever
+        /// may not prompt a session may not rewrite what it is about to be
+        /// prompted with.
+        actor: Option<MacroUserIdStr<'static>>,
+    },
+    /// Remove a queued action before it dispatches.
+    RemoveQueued {
+        /// The queue entry to remove.
+        action_id: AgentActionId,
+        /// The user responsible, as on [`Self::EditQueued`].
+        actor: Option<MacroUserIdStr<'static>>,
+    },
+    /// The session's runtime answered its in-flight turn: clear the busy
+    /// mark and dispatch the next queued action. Internal - enqueued by the
+    /// turn observer on the managing replica, never forwarded.
+    TurnEnded,
+    /// The session's live actor stopped: clear the busy mark and nothing
+    /// more - resuming a dead runtime stays the next user action's job.
+    /// Internal, like [`Self::TurnEnded`].
+    SessionStopped,
     /// Change the session's sandbox size and the owner's default.
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
     Delete,
+}
+
+/// What executing a command did with it, beyond succeeding.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandOutcome {
+    /// The command ran to completion - for a deliver, the action reached the
+    /// runtime.
+    Completed,
+    /// The action waits in the session's queue for the running turn to end.
+    Queued,
 }
 
 impl DeliverAction {
@@ -206,7 +277,7 @@ pub struct AnnouncePrompt {
     pub bot_id: BotId,
     /// Where the mention was posted.
     pub origin: AnnounceOrigin,
-    /// The mention's text, quoted in the announcement.
+    /// The mention's text, shown in the announcement's reply target.
     pub content: String,
     /// Who mentioned the bot.
     pub sender: MacroUserIdStr<'static>,
@@ -223,9 +294,11 @@ pub struct SessionAnnouncement {
     pub origin_channel_id: Uuid,
     /// Thread where the announcement should be posted.
     pub origin_thread_id: Uuid,
+    /// Channel message targeted by the announcement.
+    pub origin_message_id: Uuid,
     /// Folded user message that prompts the anchored agent response.
     pub prompted_message_id: MessageId,
-    /// Text of the prompting message, quoted back in the announcement.
+    /// Text of the prompting message, shown in the reply target.
     pub prompted_content: String,
     /// User whose mention triggered the announcement.
     pub triggered_by: MacroUserIdStr<'static>,

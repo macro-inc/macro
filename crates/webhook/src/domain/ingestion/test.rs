@@ -236,6 +236,13 @@ impl WebhookWorkspaceResolver for MockRepository {
         }
         Ok(state.resolved_workspace_ids.clone())
     }
+
+    async fn get_user_team_workspace_id(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+    ) -> Result<Option<String>, Self::Err> {
+        Ok(None)
+    }
 }
 
 impl WebhookRepo for MockRepository {
@@ -537,6 +544,8 @@ fn search_only_document_event_cases() -> Vec<(&'static str, Event<DocumentTopicE
                     document_id: DOCUMENT_ID.to_string(),
                     file_type: "md".parse().expect("valid file type"),
                     document_version_id: None,
+                    actor: None,
+                    on_behalf_of: None,
                 },
             )),
         ),

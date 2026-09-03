@@ -293,6 +293,7 @@
       "post": {
         "tags": ["agent-sessions"],
         "summary": "Perform a control operation on a live agent session.",
+        "description": "Edit access suffices: whoever can prompt the bot through its thread can\nprompt it here.",
         "operationId": "control_agent_session",
         "parameters": [
           {
@@ -318,11 +319,11 @@
         },
         "responses": {
           "200": {
-            "description": "Accepted; matches `requestId` on the folded message this action derives",
+            "description": "Accepted. `sent` reached the runtime; `queued` waits for the running turn to end and can be edited or removed meanwhile.",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/AgentActionId"
+                  "$ref": "#/components/schemas/ControlResponse"
                 }
               }
             }
@@ -338,6 +339,16 @@
             }
           },
           "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
             "description": "",
             "content": {
               "text/plain": {
@@ -475,6 +486,233 @@
           },
           "403": {
             "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/queue": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "The actions waiting to dispatch in this session, oldest first.",
+        "operationId": "get_agent_session_queue",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionQueueResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/queue/{action_id}": {
+      "put": {
+        "tags": ["agent-sessions"],
+        "summary": "Replace a queued prompt's text before it dispatches.",
+        "operationId": "edit_queued_action",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "action_id",
+            "in": "path",
+            "description": "ID the action was accepted under",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditQueuedActionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Already dispatched or never queued",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The queued action carries no text",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["agent-sessions"],
+        "summary": "Remove a queued action before it dispatches. There is no un-sending: an\naction that already went out answers 404.",
+        "operationId": "remove_queued_action",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "action_id",
+            "in": "path",
+            "description": "ID the action was accepted under",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Already dispatched or never queued",
             "content": {
               "text/plain": {
                 "schema": {
@@ -637,7 +875,8 @@
       },
       "AgentActionId": {
         "type": "string",
-        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives. Correlation is string equality; the value is opaque.\n\nMinted only by the server at accept time, as `agent_session:{uuid}` - the\nprefix is what lets [`Self::from_request_id`] tell our ids from ones other\nclients picked."
+        "format": "uuid",
+        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nMinted only by the server at accept time, as a v7 uuid so ids sort by mint\ntime. On the wire and in JSON it is the bare uuid, and a uuid-shaped\nrequest id is the whole ownership test: the server is the only writer of\nruntime-bound frames. The machine's own handshake request ids\n(`agent_session:{session}:{n}`) are not uuids and stay `None`."
       },
       "AgentPromptAction": {
         "type": "object",
@@ -689,6 +928,20 @@
               "$ref": "#/components/schemas/AgentSessionLogEntryDto"
             },
             "description": "Every logged frame, oldest first. Folding depends on this order."
+          }
+        }
+      },
+      "AgentSessionQueueResponse": {
+        "type": "object",
+        "description": "Response body for a session's queue: everything waiting, oldest first.\n\nA wrapper rather than a bare array so that anything which is about the\nresponse rather than about an entry has somewhere to go later without\nbreaking every client.",
+        "required": ["entries"],
+        "properties": {
+          "entries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/QueuedActionDto"
+            },
+            "description": "The waiting actions, in dispatch order."
           }
         }
       },
@@ -820,6 +1073,26 @@
         ],
         "description": "Request body for a control operation on a live session.\n\nA wrapper around the operation rather than the bare enum so that fields\nwhich are about the request rather than the operation have somewhere to go.\nThe acting user is deliberately not one of them: it comes from the caller's\ncredentials, so that a caller cannot attribute an operation to someone else.\n\nClients serialize this, so both derives are used."
       },
+      "ControlResponse": {
+        "type": "object",
+        "description": "Response body for a control operation.\n\nClients deserialize this, so both derives are used.",
+        "required": ["actionId", "status"],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "Matches `requestId` on the folded message this action derives once it\ndispatches, and names the queue entry until then."
+          },
+          "status": {
+            "$ref": "#/components/schemas/ControlStatusDto",
+            "description": "Whether the action went out or waits in the queue."
+          }
+        }
+      },
+      "ControlStatusDto": {
+        "type": "string",
+        "description": "What accepting a control operation did with it, on the wire.",
+        "enum": ["sent", "queued"]
+      },
       "CreateAgentSessionRequest": {
         "type": "object",
         "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose sandbox this deployment provisions from its\nown configuration - which is why the fields describing someone else's\nruntime must be omitted along with it rather than quietly ignored. Mixing\nthe two is refused rather than guessed at, so that no request can reach the\nmanaged path carrying a bot the caller was never entitled to name.\n\nClients serialize this, so both derives are used.",
@@ -835,7 +1108,7 @@
           },
           "owner": {
             "type": ["string", "null"],
-            "description": "The user who owns the session. Ignored for user callers, who always\nown their own sessions; required for bot callers without verified\nacting-user claims.\n\nFor bot callers this is a claim, not a verified fact: it is scoped to\nthe bot's own sessions, but the named user owns the session on the\nbot's say-so."
+            "description": "The user who owns the session. Ignored for user callers, who always\nown their own sessions, and for harness callers, whose verified acting\nuser (owner or confirmed team member) owns the session instead;\nrequired for bot callers without verified acting-user claims.\n\nFor bot callers this is a claim, not a verified fact: it is scoped to\nthe bot's own sessions, but the named user owns the session on the\nbot's say-so."
           },
           "prompt": {
             "type": ["string", "null"],
@@ -899,6 +1172,18 @@
           }
         }
       },
+      "EditQueuedActionRequest": {
+        "type": "object",
+        "description": "Request body for editing a queued prompt.",
+        "required": ["prompt"],
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "The new raw prompt text, replacing the old wholesale. Never blank: a\nprompt with nothing to say is a removal, and there is an endpoint for\nthat.",
+            "minLength": 1
+          }
+        }
+      },
       "ExternalSessionResponse": {
         "type": "object",
         "description": "The provider-side identity of an externally-served session.",
@@ -935,6 +1220,34 @@
           "direction": {
             "$ref": "#/components/schemas/LogDirectionDto",
             "description": "Which way the frame travelled."
+          }
+        }
+      },
+      "QueuedActionDto": {
+        "type": "object",
+        "description": "One action waiting in a session's queue.\n\nClients deserialize this, so both derives are used.",
+        "required": ["actionId", "kind", "createdAt"],
+        "properties": {
+          "actionId": {
+            "$ref": "#/components/schemas/AgentActionId",
+            "description": "The id the action was accepted under."
+          },
+          "actorUserId": {
+            "type": ["string", "null"],
+            "description": "The user who queued it, absent when a bot acted on nobody's behalf."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it was accepted."
+          },
+          "kind": {
+            "type": "string",
+            "description": "What kind of action waits - `prompt` or `compact`; only\nturn-occupying actions are ever queued."
+          },
+          "prompt": {
+            "type": ["string", "null"],
+            "description": "The prompt's raw text, present for prompts only. What an edit\nreplaces."
           }
         }
       },

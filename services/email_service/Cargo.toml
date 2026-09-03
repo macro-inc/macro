@@ -113,7 +113,9 @@ infer = "0.19.0"
 item_filters = { path = "../../crates/item_filters" }
 lol_html = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
 macro_db_client = { path = "../../crates/macro_db_client" }

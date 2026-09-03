@@ -2,8 +2,11 @@
 //!
 //! Every route authenticates its caller and then authorizes them with
 //! [`AgentSessionAccessLevelExtractor`], checked before the handler body
-//! runs: viewing a session or its log needs `View`; renaming, controlling, or
-//! deleting one needs `Owner`. Permission comes from the session's own `entity_access`
+//! runs: viewing a session, its log, or its queue needs `View`; controlling
+//! it - sending, and editing or removing what is queued - needs `Edit`, which
+//! the mention's channel holds, so whoever can prompt the bot through the
+//! thread can prompt it here too; renaming, resizing, or deleting the session
+//! needs `Owner`. Permission comes from the session's own `entity_access`
 //! rows - the owner with owner access, the mention's channel as editor - never
 //! from any channel the session was once rendered in. Handlers only map
 //! transport DTOs to domain types and call the [`AgentSessionService`]; they
@@ -28,12 +31,12 @@ use axum::{
 };
 use chrono::DateTime;
 use chrono::Utc;
-use entity_access::domain::models::{OwnerAccessLevel, ViewAccessLevel};
+use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::AgentSessionAccessLevelExtractor;
 use macro_authorization::{
     ActingUser, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
-    UserOrBot, UserOrBotAuthorization,
+    UserBotOrHarness, UserBotOrHarnessAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -46,7 +49,7 @@ use crate::domain::model::{
     StoredAgentSessionLog,
 };
 use crate::domain::ports::{
-    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlEvent,
+    AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
     OpenExternalAgentSession, OpenManagedSession, SessionOpener, SessionThread,
 };
 use crate::domain::service::AgentSessionService;
@@ -207,6 +210,15 @@ where
             post(control_agent_session_handler::<R, Access, Auth>),
         )
         .route(
+            "/{session_id}/queue",
+            get(get_agent_session_queue_handler::<R, Access, Auth>),
+        )
+        .route(
+            "/{session_id}/queue/{action_id}",
+            put(edit_queued_action_handler::<R, Access, Auth>)
+                .delete(remove_queued_action_handler::<R, Access, Auth>),
+        )
+        .route(
             "/{session_id}/sandbox-size",
             put(put_agent_session_sandbox_size_handler::<R, Access, Auth>),
         )
@@ -264,6 +276,18 @@ impl IntoResponse for AgentSessionApiError {
             }
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
+            }
+            // Already dispatched, removed, or never queued: the caller's
+            // entry is not waiting anymore, and there is no un-sending it.
+            Self::Domain(error @ AgentSessionError::QueuedControlNotFound) => {
+                (StatusCode::NOT_FOUND, error.to_string()).into_response()
+            }
+            Self::Domain(
+                error @ (AgentSessionError::QueuedControlNotEditable
+                | AgentSessionError::EmptyQueuedPrompt),
+            ) => (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response(),
+            Self::Domain(error @ AgentSessionError::ControlQueueFull(_)) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
             }
             Self::Domain(error) => {
                 if let AgentSessionError::InvalidName(message) = error {
@@ -333,6 +357,68 @@ pub struct ControlRequest {
     /// The operation to perform.
     #[serde(flatten)]
     pub action: AgentAction,
+}
+
+/// What accepting a control operation did with it, on the wire.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ControlStatusDto {
+    /// The action reached the agent's runtime.
+    Sent,
+    /// A turn was running; the action waits in the session's queue and
+    /// dispatches when that turn ends. Until then `GET .../queue` lists it,
+    /// and it can be edited or removed under its action id.
+    Queued,
+}
+
+impl From<ControlDisposition> for ControlStatusDto {
+    fn from(disposition: ControlDisposition) -> Self {
+        match disposition {
+            ControlDisposition::Sent => Self::Sent,
+            ControlDisposition::Queued => Self::Queued,
+        }
+    }
+}
+
+/// Response body for a control operation.
+///
+/// Clients deserialize this, so both derives are used.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ControlResponse {
+    /// Matches `requestId` on the folded message this action derives once it
+    /// dispatches, and names the queue entry until then.
+    pub action_id: AgentActionId,
+    /// Whether the action went out or waits in the queue.
+    pub status: ControlStatusDto,
+}
+
+// The queue entry's wire shape lives in the domain (`QueuedActionDto`,
+// re-exported here) because two transports serve it byte-identically: this
+// router's GET and the realtime queue snapshot.
+pub use crate::domain::model::QueuedActionDto;
+
+/// Response body for a session's queue: everything waiting, oldest first.
+///
+/// A wrapper rather than a bare array so that anything which is about the
+/// response rather than about an entry has somewhere to go later without
+/// breaking every client.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionQueueResponse {
+    /// The waiting actions, in dispatch order.
+    pub entries: Vec<QueuedActionDto>,
+}
+
+/// Request body for editing a queued prompt.
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EditQueuedActionRequest {
+    /// The new raw prompt text, replacing the old wholesale. Never blank: a
+    /// prompt with nothing to say is a removal, and there is an endpoint for
+    /// that.
+    #[schema(min_length = 1)]
+    pub prompt: String,
 }
 
 /// Response body describing an agent session.
@@ -500,6 +586,28 @@ pub async fn rename_agent_session_handler<
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Confine a harness caller to the sessions its own daemon serves.
+///
+/// The access extractor already proved the caller owns the session, but owning
+/// it is not enough for a harness: a harness that merely acts for a user could
+/// otherwise drive, resize or delete a session a *different* harness serves
+/// for that same user (and reach managed sessions no daemon serves at all).
+/// User and bot callers are unrestricted here - their reach is the access
+/// extractor's call. A harness may act only when the session's bot binds to it.
+async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
+    caller: &UserBotOrHarnessAuthorization,
+    recipient: &R,
+    session_id: AgentSessionId,
+) -> Result<(), AgentSessionApiError> {
+    let UserBotOrHarnessAuthorization::Harness(harness) = caller else {
+        return Ok(());
+    };
+    if recipient.session_harness(session_id).await? != Some(harness.harness_id) {
+        return Err(AgentSessionError::Forbidden.into());
+    }
+    Ok(())
+}
+
 #[utoipa::path(
     post,
     path = "/agent-sessions/{session_id}/control",
@@ -510,15 +618,20 @@ pub async fn rename_agent_session_handler<
     responses(
         (
             status = 200,
-            body = AgentActionId,
-            description = "Accepted; matches `requestId` on the folded message this action derives"
+            body = ControlResponse,
+            description = "Accepted. `sent` reached the runtime; `queued` waits for the \
+                           running turn to end and can be edited or removed meanwhile."
         ),
         (status = 401, body = String),
         (status = 403, body = String),
+        (status = 422, body = String),
         (status = 500, body = String),
     )
 )]
 /// Perform a control operation on a live agent session.
+///
+/// Edit access suffices: whoever can prompt the bot through its thread can
+/// prompt it here.
 #[tracing::instrument(
     skip_all,
     fields(
@@ -533,18 +646,25 @@ pub async fn control_agent_session_handler<
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
+    _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
     Json(req): Json<ControlRequest>,
-) -> Result<Json<AgentActionId>, AgentSessionApiError> {
+) -> Result<Json<ControlResponse>, AgentSessionApiError> {
+    ensure_harness_serves_session(
+        &caller.authorization,
+        state.recipient.as_ref(),
+        AgentSessionId::new_from_uuid(session_id),
+    )
+    .await?;
+
     let actor = caller
         .authorization
         .acting_user()
         .map(|user| user.macro_user_id.clone());
 
-    let action_id = state
+    let accepted = state
         .recipient
         .control_event(
             AgentSessionId::new_from_uuid(session_id),
@@ -555,7 +675,153 @@ pub async fn control_agent_session_handler<
         )
         .await?;
 
-    Ok(Json(action_id))
+    Ok(Json(ControlResponse {
+        action_id: accepted.action_id,
+        status: accepted.disposition.into(),
+    }))
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions/{session_id}/queue",
+    tag = "agent-sessions",
+    operation_id = "get_agent_session_queue",
+    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
+    responses(
+        (status = 200, body = AgentSessionQueueResponse),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// The actions waiting to dispatch in this session, oldest first.
+#[tracing::instrument(skip_all, fields(session_id = %session_id), err(Debug))]
+pub async fn get_agent_session_queue_handler<
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<ViewAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    Path(session_id): Path<Uuid>,
+) -> Result<Json<AgentSessionQueueResponse>, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+
+    let entries = state.recipient.queued_controls(session_id).await?;
+    Ok(Json(AgentSessionQueueResponse {
+        entries: entries.into_iter().map(Into::into).collect(),
+    }))
+}
+
+#[utoipa::path(
+    put,
+    path = "/agent-sessions/{session_id}/queue/{action_id}",
+    tag = "agent-sessions",
+    operation_id = "edit_queued_action",
+    params(
+        ("session_id" = Uuid, Path, description = "ID of the agent session"),
+        ("action_id" = Uuid, Path, description = "ID the action was accepted under"),
+    ),
+    request_body = EditQueuedActionRequest,
+    responses(
+        (status = 204),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 404, body = String, description = "Already dispatched or never queued"),
+        (status = 422, body = String, description = "The queued action carries no text"),
+        (status = 500, body = String),
+    )
+)]
+/// Replace a queued prompt's text before it dispatches.
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), session_id = %session_id, %action_id),
+    err(Debug)
+)]
+pub async fn edit_queued_action_handler<
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    Path((session_id, action_id)): Path<(Uuid, Uuid)>,
+    Json(request): Json<EditQueuedActionRequest>,
+) -> Result<StatusCode, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+    if request.prompt.trim().is_empty() {
+        return Err(AgentSessionError::EmptyQueuedPrompt.into());
+    }
+
+    let actor = caller
+        .authorization
+        .acting_user()
+        .map(|user| user.macro_user_id.clone());
+    state
+        .recipient
+        .edit_queued_control(
+            session_id,
+            AgentActionId::from_uuid(action_id),
+            request.prompt,
+            actor,
+        )
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
+    delete,
+    path = "/agent-sessions/{session_id}/queue/{action_id}",
+    tag = "agent-sessions",
+    operation_id = "remove_queued_action",
+    params(
+        ("session_id" = Uuid, Path, description = "ID of the agent session"),
+        ("action_id" = Uuid, Path, description = "ID the action was accepted under"),
+    ),
+    responses(
+        (status = 204),
+        (status = 401, body = String),
+        (status = 403, body = String),
+        (status = 404, body = String, description = "Already dispatched or never queued"),
+        (status = 500, body = String),
+    )
+)]
+/// Remove a queued action before it dispatches. There is no un-sending: an
+/// action that already went out answers 404.
+#[tracing::instrument(
+    skip_all,
+    fields(actor = %caller.acting_entity(), session_id = %session_id, %action_id),
+    err(Debug)
+)]
+pub async fn remove_queued_action_handler<
+    R: AgentSessionNotificationRecipient,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    _access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
+    State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
+    Path((session_id, action_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+
+    let actor = caller
+        .authorization
+        .acting_user()
+        .map(|user| user.macro_user_id.clone());
+    state
+        .recipient
+        .remove_queued_control(session_id, AgentActionId::from_uuid(action_id), actor)
+        .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
@@ -580,12 +846,14 @@ pub async fn delete_agent_session_handler<
 >(
     _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
 ) -> Result<StatusCode, AgentSessionApiError> {
-    state
-        .recipient
-        .session_deleted(AgentSessionId::new_from_uuid(session_id))
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
         .await?;
+
+    state.recipient.session_deleted(session_id).await?;
 
     Ok(StatusCode::OK)
 }
@@ -621,12 +889,17 @@ pub async fn put_agent_session_sandbox_size_handler<
 >(
     _access: AgentSessionAccessLevelExtractor<OwnerAccessLevel, Access, Auth>,
     State(state): State<AgentSessionControlState<R, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Path(session_id): Path<Uuid>,
     Json(req): Json<SandboxSizeBody>,
 ) -> Result<Json<SandboxSizeBody>, AgentSessionApiError> {
+    let session_id = AgentSessionId::new_from_uuid(session_id);
+    ensure_harness_serves_session(&caller.authorization, state.recipient.as_ref(), session_id)
+        .await?;
+
     state
         .recipient
-        .set_sandbox_size(AgentSessionId::new_from_uuid(session_id), req.size)
+        .set_sandbox_size(session_id, req.size)
         .await?;
     Ok(Json(req))
 }
@@ -928,8 +1201,9 @@ pub struct CreateAgentSessionRequest {
     /// optional: having it cloned there is the runtime operator's job.
     pub repo_url: Option<String>,
     /// The user who owns the session. Ignored for user callers, who always
-    /// own their own sessions; required for bot callers without verified
-    /// acting-user claims.
+    /// own their own sessions, and for harness callers, whose verified acting
+    /// user (owner or confirmed team member) owns the session instead;
+    /// required for bot callers without verified acting-user claims.
     ///
     /// For bot callers this is a claim, not a verified fact: it is scoped to
     /// the bot's own sessions, but the named user owns the session on the
@@ -1121,27 +1395,38 @@ fn validate_workspace(workspace: &str) -> Result<(), CreateSessionApiError> {
 
 /// Resolve which bot the session runs for, from the principal and the body.
 fn resolve_bot(
-    caller: &UserOrBotAuthorization,
+    caller: &UserBotOrHarnessAuthorization,
     body_bot: Option<Uuid>,
 ) -> Result<BotId, CreateSessionApiError> {
     match caller {
-        UserOrBotAuthorization::Bot(bot) => match body_bot {
+        UserBotOrHarnessAuthorization::Bot(bot) => match body_bot {
             Some(named) if named != bot.bot_id.as_uuid() => Err(CreateSessionApiError::NotYourBot),
             _ => Ok(bot.bot_id),
         },
-        UserOrBotAuthorization::User(_) => body_bot
-            .map(BotId::new_from_uuid)
-            .ok_or(CreateSessionApiError::BotRequired),
+        // A harness serves many bots, so nothing is implied by the token: the
+        // body must say which bound agent this session runs for.
+        UserBotOrHarnessAuthorization::User(_) | UserBotOrHarnessAuthorization::Harness(_) => {
+            body_bot
+                .map(BotId::new_from_uuid)
+                .ok_or(CreateSessionApiError::BotRequired)
+        }
     }
 }
 
 /// Resolve the user who owns the session.
 ///
-/// A user caller always owns their own sessions. A bot caller's verified
-/// acting user wins when present; otherwise the body's claimed owner is
-/// accepted (see [`CreateAgentSessionRequest::owner`] for the trust model).
+/// A user caller always owns their own sessions. A harness caller always has a
+/// verified acting user - the owner for a private harness, a confirmed team
+/// member for a team one (the harness authorizer checks the forwarded
+/// `x-macro-harness-for-macro-user-id` claim against ownership) - and that
+/// verified user owns the session; the body's `owner` claim is never trusted
+/// for it. This matches the control endpoint, which already acts only for that
+/// verified user: a session that could not later be prompted for its owner is
+/// one that should never have been created for that owner. A bot caller's
+/// verified acting user wins when present; otherwise the body's claimed owner
+/// is accepted (see [`CreateAgentSessionRequest::owner`] for the trust model).
 fn resolve_owner(
-    caller: &UserOrBotAuthorization,
+    caller: &UserBotOrHarnessAuthorization,
     claimed: Option<String>,
 ) -> Result<MacroUserIdStr<'static>, CreateSessionApiError> {
     if let Some(user) = caller.acting_user() {
@@ -1180,7 +1465,7 @@ pub async fn create_agent_session_handler<
     Auth: MacroAuthorizationService,
 >(
     State(state): State<CreateSessionState<Opener, Bots, Auth>>,
-    caller: MacroAuthorizationExtractor<Auth, UserOrBot>,
+    caller: MacroAuthorizationExtractor<Auth, UserBotOrHarness>,
     Json(request): Json<CreateAgentSessionRequest>,
 ) -> Result<(StatusCode, Json<CreateAgentSessionResponse>), CreateSessionApiError> {
     // Blank instructions are "none" stated clumsily; normalized once here so
@@ -1229,6 +1514,7 @@ pub async fn create_agent_session_handler<
         has_agent,
         is_managed,
         owner_user_id,
+        harness_id,
     } = state
         .bots
         .bot_facts(bot_id)
@@ -1243,8 +1529,14 @@ pub async fn create_agent_session_handler<
     // A team-owned bot has no owner_user_id, so no user token passes this
     // check: its sessions are opened with the bot's own token until team
     // membership is modeled here.
-    if let UserOrBotAuthorization::User(user) = &caller.authorization
+    if let UserBotOrHarnessAuthorization::User(user) = &caller.authorization
         && owner_user_id.as_ref() != Some(&user.macro_user_id)
+    {
+        return Err(CreateSessionApiError::NotYourBot);
+    }
+    // A harness may open sessions only for agents currently bound to it.
+    if let UserBotOrHarnessAuthorization::Harness(harness) = &caller.authorization
+        && harness_id != Some(harness.harness_id)
     {
         return Err(CreateSessionApiError::NotYourBot);
     }

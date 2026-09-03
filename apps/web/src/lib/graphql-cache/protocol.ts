@@ -305,6 +305,8 @@ export type HydrationResult =
 export type WriteResult = {
   /** Effective-view revision installed by this logical mutation. */
   revision: CacheRevision;
+  /** Whether this write advanced `revision`. */
+  revisionAdvanced: boolean;
   /** Entity keys whose records changed. */
   changed: string[];
   /** Registered operation ids affected by the change (origin excluded). */
@@ -329,9 +331,17 @@ export type OptimisticWriteResult = WriteResult & {
   transactionId: string;
 };
 
+/** How a caller UUID changed the durable queue. */
+export type MutationUpsertKind =
+  | { kind: 'inserted' }
+  | { kind: 'replaced-pending'; removedTransactionId: string }
+  | { kind: 'appended-after-active'; activeTransactionId: string };
+
 /** Claimed strict queue head, ready to be forwarded through urql. */
 export type ClaimedMutation = {
   transactionId: string;
+  uuid: string;
+  superseded: boolean;
   leaseGeneration: string;
   query: string;
   operationName?: string;
@@ -349,6 +359,7 @@ export type InitialMutationClaim =
 
 /** Result returned after enqueue and the initial claim attempt complete. */
 export type EnqueueOptimisticMutationResult = OptimisticWriteResult & {
+  upsertKind: MutationUpsertKind;
   initialClaim: InitialMutationClaim;
 };
 
@@ -358,9 +369,38 @@ export type MutationClaim = {
   generation: string;
 };
 
+/** Result of deferring a retryable attempt. */
+export type DeferOptimisticWriteResult =
+  | { kind: 'deferred' }
+  | (WriteResult & {
+      kind: 'discarded-superseded';
+      replacementTransactionId: string;
+    });
+
+/** Result of committing a current or superseded attempt. */
+export type CommitOptimisticWriteResult =
+  | (WriteResult & { kind: 'committed' })
+  | (WriteResult & {
+      kind: 'committed-superseded';
+      replacementTransactionId: string;
+    });
+
+/** Result of rolling back a failed attempt. */
+export type RollbackOptimisticWriteResult =
+  | (WriteResult & { kind: 'rolled-back' })
+  | (WriteResult & {
+      kind: 'discarded-superseded';
+      replacementTransactionId: string;
+    });
+
 /** Final settlement of a previously queued optimistic mutation. */
 export type MutationSettlement =
   | { transactionId: string; status: 'committed' }
+  | {
+      transactionId: string;
+      status: 'superseded';
+      replacementTransactionId: string;
+    }
   | {
       transactionId: string;
       status: 'permanently-failed';
@@ -400,6 +440,7 @@ export type CacheRequest = { id: number } & (
       identity?: string;
     }
   | {
+      /** Background cache warming; ordinary writes do not publish pushes. */
       kind: 'hydrate';
       query: string;
       operationName?: string;
@@ -411,6 +452,7 @@ export type CacheRequest = { id: number } & (
   | {
       kind: 'enqueue-optimistic-mutation';
       originOpId?: string;
+      uuid: string;
       query: string;
       operationName?: string;
       variables?: Record<string, unknown>;
@@ -617,6 +659,15 @@ export function isCachePush(value: unknown): value is CachePush {
       }
       if (settlement.status === 'committed') {
         return hasOnlyWireKeys(settlement, ['transactionId', 'status']);
+      }
+      if (settlement.status === 'superseded') {
+        return (
+          hasOnlyWireKeys(settlement, [
+            'transactionId',
+            'status',
+            'replacementTransactionId',
+          ]) && typeof settlement.replacementTransactionId === 'string'
+        );
       }
       return (
         settlement.status === 'permanently-failed' &&

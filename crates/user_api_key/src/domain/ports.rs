@@ -42,7 +42,8 @@ pub trait UserApiKeysRepo: Send + Sync + 'static {
         id: UserApiKeyId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Owner of a key, for the future authenticate-by-key use case.
+    /// Owner of a key. Authenticate-by-key is implemented by
+    /// `macro_authorization`'s `PgUserApiKeyAuthorizationRepo`.
     ///
     /// Looks up by SHA-256 of the presented secret. Not exposed through
     /// [UserApiKeyService] in this slice.

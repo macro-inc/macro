@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 258
 expression: messages
 input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
 ---
@@ -4695,7 +4694,11 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         author: User {
             user_id: None,
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                482c3d39-c381-4809-874c-fe00bc757345,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Control {

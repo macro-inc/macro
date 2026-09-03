@@ -82,6 +82,37 @@ async fn insert_and_list_return_id_name_and_created_at_scoped_per_user(pool: PgP
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn user_scoped_reads_use_composite_created_at_index(pool: PgPool) {
+    let indexes: Vec<(String, String)> = sqlx::query_as(
+        r#"
+        SELECT indexname, indexdef
+        FROM pg_indexes
+        WHERE tablename = 'UserApiKey'
+        ORDER BY indexname
+        "#,
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("index catalog should load");
+
+    let composite = indexes
+        .iter()
+        .find(|(name, _)| name == "UserApiKey_user_id_created_at_id_idx");
+    let (name, definition) = composite.expect("user-scoped list/count index should exist");
+    assert_eq!(name, "UserApiKey_user_id_created_at_id_idx");
+    assert!(
+        definition.contains("(user_id, created_at DESC, id DESC)"),
+        "composite index should match list/count order: {definition}"
+    );
+    assert!(
+        indexes
+            .iter()
+            .all(|(index_name, _)| index_name != "UserApiKey_user_id_idx"),
+        "user_id-only index is redundant with the composite prefix"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn count_keys_counts_only_caller_rows(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     insert_user(&pool, USER_B).await;

@@ -6,7 +6,7 @@ use agent_session::inbound::axum_router::{CreateAgentSessionRequest, CreateSessi
 use crate::config::Workspace;
 use crate::outbound::agent_session::{ApiError, HarnessApi};
 use crate::runtime::Runtime;
-use crate::webhook::{TriggerWork, WorkExecutor};
+use crate::trigger::{TriggerWork, WorkExecutor};
 
 /// A failure doing an event's work.
 #[derive(Debug, thiserror::Error)]
@@ -41,6 +41,7 @@ impl WorkExecutor for Dispatcher {
     async fn execute(&self, work: TriggerWork) -> Result<(), DispatchError> {
         match work {
             TriggerWork::OpenAndPrompt {
+                bot,
                 sender,
                 channel_id,
                 thread_id,
@@ -48,9 +49,10 @@ impl WorkExecutor for Dispatcher {
                 content,
             } => {
                 let request = CreateAgentSessionRequest {
-                    // The bot is the one whose credentials this daemon holds,
-                    // and naming another one is refused anyway.
-                    bot_id: None,
+                    // A harness serves many agents, so the token implies no
+                    // bot: name the mentioned agent, and the service verifies
+                    // it is bound to this harness.
+                    bot_id: Some(bot.as_uuid()),
                     workspace: Some(self.workspace.path.to_string_lossy().into_owned()),
                     // External sessions carry no first prompt: this daemon is
                     // the runtime, and it delivers the mention itself through
@@ -69,7 +71,7 @@ impl WorkExecutor for Dispatcher {
                     // there is nothing to state here.
                     instructions: None,
                 };
-                let created = match self.api.create_session(&request).await {
+                let created = match self.api.create_session(&request, &sender).await {
                     Ok(created) => created,
                     // A redelivered mention: the thread's session exists.
                     // Resume serving it - the first attempt may have died
@@ -102,9 +104,9 @@ impl WorkExecutor for Dispatcher {
                 // uncovered window is the sub-millisecond gap between the
                 // websocket's 101 and the server's `on_upgrade` attach. If
                 // that race ever bites, failing the delivery is the right
-                // answer - webhook redelivery re-runs this arm, and a repeat
-                // create answers 409 with the session id, which the branch
-                // above resumes.
+                // answer. SSE has no redelivery; a later `agent_trigger.existing`
+                // or a 409 on a repeat create (session already exists) is how
+                // a follow-up lands on the same session.
                 self.api.prompt(session, &sender, &content).await?;
                 Ok(())
             }
