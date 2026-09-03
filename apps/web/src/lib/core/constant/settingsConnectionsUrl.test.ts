@@ -3,6 +3,7 @@ import {
   CONNECTIONS_DISCOVER_SLUG,
   connectionsRestFromPath,
   isConnectionsRestToken,
+  settingsSplitSegmentCount,
 } from './settingsConnectionsUrl';
 
 describe('isConnectionsRestToken', () => {
@@ -11,6 +12,16 @@ describe('isConnectionsRestToken', () => {
     expect(isConnectionsRestToken('github')).toBe(true);
     expect(isConnectionsRestToken('email')).toBe(false);
     expect(isConnectionsRestToken('component')).toBe(false);
+  });
+});
+
+describe('settingsSplitSegmentCount', () => {
+  it('counts a Connections rest token as a third segment', () => {
+    expect(settingsSplitSegmentCount('connections', 'discover')).toBe(3);
+    expect(settingsSplitSegmentCount('connections', 'github')).toBe(3);
+    expect(settingsSplitSegmentCount('connections')).toBe(2);
+    expect(settingsSplitSegmentCount('connections', 'nope')).toBe(2);
+    expect(settingsSplitSegmentCount('account', 'discover')).toBe(2);
   });
 });
 

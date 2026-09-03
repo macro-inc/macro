@@ -6,7 +6,6 @@ import {
 } from './settingsConnectionsUrl';
 import { settingsTabToSlug } from './settingsTabsConfig';
 
-/** Path segments for the settings split, including a Connections rest token. */
 export function settingsUrlSegments(): string[] {
   const slug = settingsTabToSlug(activeTabId());
   const rest = connectionsRest();

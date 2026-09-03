@@ -6,6 +6,7 @@ import {
 import {
   CONNECTIONS_TAB_SLUG,
   isConnectionsRestToken,
+  settingsSplitSegmentCount,
 } from './settingsConnectionsUrl';
 
 /**
@@ -45,10 +46,8 @@ export const stripSettingsSplitFromUrl = (urlString: string): string => {
     ) {
       removedSplitIndex = i / 2;
       const consume =
-        type === 'settings' &&
-        segments[i + 1] === CONNECTIONS_TAB_SLUG &&
-        isConnectionsRestToken(segments[i + 2] ?? '')
-          ? 3
+        type === 'settings'
+          ? settingsSplitSegmentCount(segments[i + 1] ?? '', segments[i + 2])
           : 2;
       segments.splice(i, consume);
       break;

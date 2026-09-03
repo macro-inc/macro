@@ -34,7 +34,17 @@ export function isConnectionsRestToken(
   return value === CONNECTIONS_DISCOVER_SLUG || isConnectionsProviderSlug(value);
 }
 
-/** Read a Connections rest token from a settings path, or null. */
+export function settingsSplitSegmentCount(
+  tabSlug: string,
+  nextSegment?: string
+): 2 | 3 {
+  return tabSlug === CONNECTIONS_TAB_SLUG &&
+    nextSegment !== undefined &&
+    isConnectionsRestToken(nextSegment)
+    ? 3
+    : 2;
+}
+
 export function connectionsRestFromPath(pathname: string): string | null {
   const segments = toBaseRelative(pathname).split('/').filter(Boolean);
   for (let i = 0; i + 1 < segments.length; i += 2) {
