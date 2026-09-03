@@ -257,8 +257,7 @@ export function Harness() {
                   </Show>
                   <p class="text-xs text-ink-extra-muted">
                     The model new `@cursor` sessions start on. Recommended
-                    models stay up top, and the full catalog is grouped by
-                    family so you can browse it without blind searching.
+                    models stay up top; everything else is behind More models.
                   </p>
                 </div>
 

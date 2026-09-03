@@ -1,4 +1,5 @@
 import CaretDown from '@phosphor/caret-left.svg';
+import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import { cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -6,6 +7,7 @@ import {
   buildModelCatalog,
   type CatalogModelOption,
   familyForModel,
+  moreModelFamilies,
 } from './modelCatalog';
 
 type ModelCatalogPickerProps = {
@@ -69,6 +71,10 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
   });
   const catalog = createMemo(() =>
     buildModelCatalog(props.options, props.value ?? undefined)
+  );
+  const extraFamilies = createMemo(() => moreModelFamilies(catalog()));
+  const extraCount = createMemo(() =>
+    extraFamilies().reduce((count, family) => count + family.options.length, 0)
   );
 
   return (
@@ -134,39 +140,42 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
                 </Dropdown.Group>
               </Show>
 
-              <Dropdown.Separator class="h-px border-0 bg-edge-muted" />
-
-              <Dropdown.Group>
-                <Dropdown.GroupLabel>Browse all</Dropdown.GroupLabel>
-                <For each={catalog().families}>
-                  {(family) => (
-                    <Dropdown.Sub>
-                      <Dropdown.SubTrigger>
-                        <span class="truncate">{family.label}</span>
-                        <span class="shrink-0 text-xs text-ink-extra-muted">
-                          {family.options.length}
-                        </span>
-                      </Dropdown.SubTrigger>
-                      <Dropdown.SubContent class="w-80 max-w-[min(24rem,calc(100vw-1rem))]">
-                        <Dropdown.Group class="max-h-80 overflow-y-auto overscroll-contain">
-                          <Dropdown.GroupLabel>
-                            {family.label}
-                          </Dropdown.GroupLabel>
-                          <For each={family.options}>
-                            {(option) => (
-                              <ModelRow
-                                option={option}
-                                selected={option.id === props.value}
-                                onSelect={() => props.onSelect(option.id)}
-                              />
-                            )}
-                          </For>
-                        </Dropdown.Group>
-                      </Dropdown.SubContent>
-                    </Dropdown.Sub>
-                  )}
-                </For>
-              </Dropdown.Group>
+              <Show when={extraCount() > 0}>
+                <Dropdown.Separator class="h-px border-0 bg-edge-muted" />
+                <Dropdown.Group>
+                  <Dropdown.Sub>
+                    <Dropdown.SubTrigger>
+                      <span class="truncate">More models</span>
+                      <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
+                        {extraCount()}
+                        <CaretRight class="size-3" />
+                      </span>
+                    </Dropdown.SubTrigger>
+                    <Dropdown.SubContent class="w-80 max-w-[min(24rem,calc(100vw-1rem))]">
+                      <Dropdown.Group class="max-h-80 overflow-y-auto overscroll-contain">
+                        <For each={extraFamilies()}>
+                          {(family) => (
+                            <>
+                              <Dropdown.GroupLabel>
+                                {family.label}
+                              </Dropdown.GroupLabel>
+                              <For each={family.options}>
+                                {(option) => (
+                                  <ModelRow
+                                    option={option}
+                                    selected={option.id === props.value}
+                                    onSelect={() => props.onSelect(option.id)}
+                                  />
+                                )}
+                              </For>
+                            </>
+                          )}
+                        </For>
+                      </Dropdown.Group>
+                    </Dropdown.SubContent>
+                  </Dropdown.Sub>
+                </Dropdown.Group>
+              </Show>
             </>
           }
         >

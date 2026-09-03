@@ -4,6 +4,7 @@ import {
   type CatalogModelOption,
   familyForModel,
   isLargeModelCatalog,
+  moreModelFamilies,
 } from './modelCatalog';
 
 const OPTIONS: CatalogModelOption[] = [
@@ -47,5 +48,23 @@ describe('modelCatalog', () => {
     expect(
       catalog.families.find((family) => family.label === 'Cursor Grok')?.options
     ).toHaveLength(2);
+  });
+
+  it('hides recommended models from the more-models flyout', () => {
+    const catalog = buildModelCatalog(OPTIONS, 'auto');
+    const extras = moreModelFamilies(catalog);
+    const extraIds = extras.flatMap((family) =>
+      family.options.map((option) => option.id)
+    );
+
+    expect(extras.map((family) => family.label)).toEqual(
+      expect.arrayContaining(['Cursor Grok', 'Claude Opus', 'GPT'])
+    );
+    expect(extraIds).toContain('grok45');
+    expect(extraIds).toContain('opus48');
+    expect(extraIds).toContain('terra');
+    for (const recommended of catalog.recommended) {
+      expect(extraIds).not.toContain(recommended.id);
+    }
   });
 });

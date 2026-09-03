@@ -107,3 +107,16 @@ export function buildModelCatalog(
 
   return { recommended, families };
 }
+
+/** Family buckets with the first-screen recommended shortlist removed. */
+export function moreModelFamilies(catalog: ModelCatalog): ModelFamily[] {
+  const recommendedIds = new Set(
+    catalog.recommended.map((option) => option.id)
+  );
+  return catalog.families
+    .map((family) => ({
+      label: family.label,
+      options: family.options.filter((option) => !recommendedIds.has(option.id)),
+    }))
+    .filter((family) => family.options.length > 0);
+}
