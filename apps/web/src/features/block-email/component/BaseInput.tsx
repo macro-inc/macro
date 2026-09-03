@@ -763,6 +763,14 @@ export function BaseInput(props: {
   let draftSaveTimer: number | undefined;
   let pendingDeletion = false;
   let pendingSend = false;
+  // Bumped by every resetState so a flow that yielded mid-way (the pre-send
+  // save) can tell the composer it captured is gone.
+  let resetGeneration = 0;
+  // True while the draft's latest GraphQL save is queued behind the queue
+  // head (a first save still in flight, a reconnect drain, or offline) and
+  // no later save has committed. Send is REST until it joins the queue, and
+  // a queued-only draft has no server id for it to resolve.
+  let queuedSaveOutstanding = false;
   // Per-session latch: the content stays in the editor, but a save that the
   // server rejected must never redispatch on its own — repeating a
   // known-doomed save just churns the queue and spams failures.
@@ -884,6 +892,7 @@ export function BaseInput(props: {
     if (draftId) {
       await uploadPendingAttachments(draftId);
       setSavedDraftId(draftId);
+      queuedSaveOutstanding = false;
       refetchThreadMessages();
       return draftId;
     }
@@ -936,6 +945,7 @@ export function BaseInput(props: {
       // the upload mutation's toast, with the file kept on the form for the
       // next save to retry. That miss is not the save's failure — the draft
       // is queued either way — so the handle is still returned.
+      queuedSaveOutstanding = true;
       try {
         await uploadPendingAttachments(draftId, { syncForwarded: false });
       } catch {
@@ -951,6 +961,7 @@ export function BaseInput(props: {
     // The server may converge the save onto an existing draft for the same
     // reply target (another device created one first) — adopt its id.
     if (outcome.draftId !== draftId) setSavedDraftId(outcome.draftId);
+    queuedSaveOutstanding = false;
     await uploadPendingAttachments(outcome.draftId);
     // Keep the REST-facade caches honest during the transport rollout,
     // matching useSaveDraftMutation's onSuccess effects.
@@ -1198,6 +1209,9 @@ export function BaseInput(props: {
       () => {
         if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
         pendingSend = false;
+        // A new reply target is a fresh draft context: a rejection latched
+        // against the previous one must not keep this composer from saving.
+        autosaveDisabled = false;
         // Each new reply starts with the signature included again.
         setIncludeSignature(true);
       },
@@ -1390,7 +1404,26 @@ export function BaseInput(props: {
 
     // Ensure draft is saved before sending so undo-send always has a draft to restore
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+    const generationBeforeSave = resetGeneration;
     await executeSaveDraft(willMarkDone);
+    // The save can learn the reply was already sent from another device and
+    // reset the composer. The recipients captured above would otherwise go
+    // out on an empty message, so stop here.
+    if (resetGeneration !== generationBeforeSave) {
+      pendingMarkDoneNavigationTargetId = undefined;
+      return;
+    }
+    // A queued pre-send save means the draft's server row is not guaranteed
+    // yet (a first save still in flight, or a reconnect drain). The REST
+    // send would be rejected after the editor was cleared, so ask for a
+    // retry while the content is still here.
+    if (queuedSaveOutstanding) {
+      pendingMarkDoneNavigationTargetId = undefined;
+      toast.failure('Failed to send email', {
+        subtext: 'Draft still syncing, try again',
+      });
+      return;
+    }
 
     // Snapshot editor state before watermark so undo-send can restore it.
     // Stored in undoSendSnapshot (not undoReplySnapshot) so it persists across
@@ -1495,6 +1528,11 @@ export function BaseInput(props: {
   };
 
   const resetState = () => {
+    resetGeneration += 1;
+    // A fresh draft: nothing queued belongs to it, and a rejection latched
+    // against the previous one must not keep it from saving.
+    queuedSaveOutstanding = false;
+    autosaveDisabled = false;
     clearEmailBody(editor());
     setBodyMacro('');
     setSavedDraftId(undefined);

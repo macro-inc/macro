@@ -288,6 +288,14 @@ export function EmailCompose(props: EmailComposeProps) {
   // rejected must never redispatch on its own — repeating a known-doomed
   // save just churns the queue and spams failures.
   let autosaveDisabled = false;
+  // Bumped by every resetState so a flow that yielded mid-way (the pre-send
+  // save) can tell the composer it captured is gone.
+  let resetGeneration = 0;
+  // True while the draft's latest GraphQL save is queued behind the queue
+  // head (a first save still in flight, a reconnect drain, or offline) and
+  // no later save has committed. Send is REST until it joins the queue, and
+  // a queued-only draft has no server id for it to resolve.
+  let queuedSaveOutstanding = false;
 
   // Content uploads still in flight, including ones started by earlier saves.
   // attachmentID only proves the draft record exists, and the send path treats
@@ -365,6 +373,7 @@ export function EmailCompose(props: EmailComposeProps) {
     if (draftId) {
       await uploadComposeAttachments(draftId);
       setCurrentDraftID(draftId);
+      queuedSaveOutstanding = false;
       return draftId;
     }
   }
@@ -402,8 +411,20 @@ export function EmailCompose(props: EmailComposeProps) {
     });
 
     if (outcome.kind === 'queued') {
-      // Durably accepted locally; attachments and soup bookkeeping wait for
-      // a committed save — offline neither could succeed anyway.
+      // Durably accepted locally; soup bookkeeping waits for a committed
+      // save. Local attachments are not on the durable queue yet (a later
+      // change moves them there), so they upload over REST right away —
+      // offline, or against a handle the server has not seen, that fails
+      // out the way an offline attachment does today: the upload mutation's
+      // toast, with the file kept on the form for the next save to retry.
+      // That miss is not the save's failure — the draft is queued either
+      // way — so the handle is still returned.
+      queuedSaveOutstanding = true;
+      try {
+        await uploadComposeAttachments(draftId);
+      } catch {
+        // Reported by the upload mutation's onError (toast + cleanup).
+      }
       return draftId;
     }
     if (outcome.kind === 'failed') {
@@ -414,6 +435,7 @@ export function EmailCompose(props: EmailComposeProps) {
     // The server may re-home the draft (sender switch) or converge onto
     // different IDs — adopt its answers.
     if (outcome.draftId !== draftId) setCurrentDraftID(outcome.draftId);
+    queuedSaveOutstanding = false;
     if (previousThreadID && previousThreadID !== outcome.threadId) {
       invalidateSoupEntity(previousThreadID);
       refetchSoupEntity(previousThreadID, 'emailThread');
@@ -760,10 +782,24 @@ export function EmailCompose(props: EmailComposeProps) {
     // Ensure the draft is saved before sending so undo-send always has a
     // draft id to snapshot and restore (the send reuses the draft's db_id).
     scheduleDraftSave.clear();
+    const generationBeforeSave = resetGeneration;
     try {
       await executeSaveDraft();
     } catch {
       // Draft save is best-effort; the send still works without one.
+    }
+    // The save can learn the email was already sent from another device and
+    // reset the composer. The recipients captured above would otherwise go
+    // out on an empty message, so stop here.
+    if (resetGeneration !== generationBeforeSave) return;
+    // A queued pre-send save means the draft's server row is not guaranteed
+    // yet (a first save still in flight, or a reconnect drain). Send is REST
+    // until it joins the queue, so ask for a retry.
+    if (queuedSaveOutstanding) {
+      toast.failure('Failed to send email', {
+        subtext: 'Draft still syncing, try again',
+      });
+      return;
     }
 
     // Snapshot editor state before watermark so undo-send can restore it
@@ -928,6 +964,11 @@ export function EmailCompose(props: EmailComposeProps) {
   // --- Reset / delete ---
 
   const resetState = () => {
+    resetGeneration += 1;
+    // A fresh draft: nothing queued belongs to it, and a rejection latched
+    // against the previous one must not keep it from saving.
+    queuedSaveOutstanding = false;
+    autosaveDisabled = false;
     clearEmailBody(editor());
     setContent('');
     setCurrentDraftID(undefined);
