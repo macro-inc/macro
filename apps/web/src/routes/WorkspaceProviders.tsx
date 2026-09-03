@@ -13,6 +13,7 @@ import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
 import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { ENABLE_ONBOARDING_V4_OVERRIDE } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
+import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import { QuickAccessProvider } from '@core/context/quickAccess';
 import { TeamContextProvider } from '@core/context/team';
 import { useUserId } from '@core/context/user';
@@ -205,33 +206,35 @@ export default function WorkspaceProviders(props: ParentProps) {
 
   return (
     <TeamContextProvider>
-      <BrowserNotificationModal />
-      <IosPushNotificationModal />
-      <IpadUnsupportedDialog />
-      <GlobalShareInboxConflictDialog />
-      <QuerySyncProviderWithUserId />
-      <SoupBackfillWhenReady />
-      <ConfiguredGlobalAppStateProvider>
-        <MutationUndoProvider>
-          <ChannelsContextProvider>
-            <CallProvider>
-              <CallKitSync />
-              <CallStartedNotifier />
-              <IncomingCallEvents />
-              <QuickAccessProvider>
-                <SearchProvider>
-                  <ChatAttachmentsInit />
-                  <ReactiveFavicon />
-                  {props.children}
-                  <Suspense>
-                    <InitialInteractiveOnboardingModal />
-                  </Suspense>
-                </SearchProvider>
-              </QuickAccessProvider>
-            </CallProvider>
-          </ChannelsContextProvider>
-        </MutationUndoProvider>
-      </ConfiguredGlobalAppStateProvider>
+      <EmailLinksContextProvider>
+        <BrowserNotificationModal />
+        <IosPushNotificationModal />
+        <IpadUnsupportedDialog />
+        <GlobalShareInboxConflictDialog />
+        <QuerySyncProviderWithUserId />
+        <SoupBackfillWhenReady />
+        <ConfiguredGlobalAppStateProvider>
+          <MutationUndoProvider>
+            <ChannelsContextProvider>
+              <CallProvider>
+                <CallKitSync />
+                <CallStartedNotifier />
+                <IncomingCallEvents />
+                <QuickAccessProvider>
+                  <SearchProvider>
+                    <ChatAttachmentsInit />
+                    <ReactiveFavicon />
+                    {props.children}
+                    <Suspense>
+                      <InitialInteractiveOnboardingModal />
+                    </Suspense>
+                  </SearchProvider>
+                </QuickAccessProvider>
+              </CallProvider>
+            </ChannelsContextProvider>
+          </MutationUndoProvider>
+        </ConfiguredGlobalAppStateProvider>
+      </EmailLinksContextProvider>
     </TeamContextProvider>
   );
 }

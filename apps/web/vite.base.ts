@@ -71,7 +71,16 @@ function bootGraphWarmupPlugin(): Plugin {
     name: 'boot-graph-warmup',
     apply: 'serve',
     configureServer(server) {
-      const urls = ['/src/index.css', '/src/index.tsx', '/src/routes/Root.tsx'];
+      const urls = [
+        '/src/index.css',
+        '/src/index.tsx',
+        '/src/routes/Root.tsx',
+        '/src/routes/WorkspaceProviders.tsx',
+        '/src/components/app/Layout.tsx',
+        '/src/components/app/split-layout/SplitLayoutRoute.tsx',
+        '/src/components/app/split-layout/SplitLayout.tsx',
+        '/src/components/app/split-layout/componentRegistry.tsx',
+      ];
       let warmStartedAt = 0;
       let warmFinishedAt = 0;
       let firstAppRequestLogged = false;
@@ -329,6 +338,11 @@ export const createAppViteConfig = (): UserConfigFn => {
             './src/index.tsx',
             './src/index.css',
             './src/routes/Root.tsx',
+            './src/routes/WorkspaceProviders.tsx',
+            './src/components/app/Layout.tsx',
+            './src/components/app/split-layout/SplitLayoutRoute.tsx',
+            './src/components/app/split-layout/SplitLayout.tsx',
+            './src/components/app/split-layout/componentRegistry.tsx',
           ],
         },
         watch: {

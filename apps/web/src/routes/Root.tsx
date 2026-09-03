@@ -14,7 +14,6 @@ import { LAYOUT_ROUTE } from '@components/app/split-layout/SplitLayoutRoute';
 import { publishLoginSuccess } from '@core/auth/login-events';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
-import { EmailLinksContextProvider } from '@core/context/emailLinks';
 import {
   UserContextProvider,
   useIsAuthenticated,
@@ -552,27 +551,25 @@ export function Root() {
           <PosthogProvider>
             <EntityProvider>
               <UserContextProvider>
-                <EmailLinksContextProvider>
-                  <UserInfoSideEffects />
-                  <MaybeWorkspaceShell>
-                    <Title>{tabTitle()}</Title>
-                    <Suspense>
-                      <IsomorphicRouter
-                        transformUrl={transformShortIdInUrlPathname}
-                        root={Layout}
-                        rootPreload={rootPreload}
-                        base={ROUTER_BASE}
-                      >
-                        {{
-                          path: '/',
-                          component: TauriRouteListener,
-                          children: ROUTES,
-                        }}
-                      </IsomorphicRouter>
-                    </Suspense>
-                    <ToastRegion />
-                  </MaybeWorkspaceShell>
-                </EmailLinksContextProvider>
+                <UserInfoSideEffects />
+                <MaybeWorkspaceShell>
+                  <Title>{tabTitle()}</Title>
+                  <Suspense>
+                    <IsomorphicRouter
+                      transformUrl={transformShortIdInUrlPathname}
+                      root={Layout}
+                      rootPreload={rootPreload}
+                      base={ROUTER_BASE}
+                    >
+                      {{
+                        path: '/',
+                        component: TauriRouteListener,
+                        children: ROUTES,
+                      }}
+                    </IsomorphicRouter>
+                  </Suspense>
+                  <ToastRegion />
+                </MaybeWorkspaceShell>
               </UserContextProvider>
             </EntityProvider>
           </PosthogProvider>

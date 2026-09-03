@@ -1,16 +1,11 @@
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { GettingStarted } from '@app/features/getting-started';
-import { Home } from '@app/features/home';
-import { InboxView } from '@app/features/inbox-view/inbox-view';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
-import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
-import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
@@ -46,6 +41,34 @@ import {
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
 import { previewEmptyStateForContent } from './previewController';
+
+const GettingStarted = lazy(() =>
+  import('@app/features/getting-started').then((module) => ({
+    default: module.GettingStarted,
+  }))
+);
+const Home = lazy(() =>
+  import('@app/features/home').then((module) => ({
+    default: module.Home,
+  }))
+);
+const InboxView = lazy(() =>
+  import('@app/features/inbox-view/inbox-view').then((module) => ({
+    default: module.InboxView,
+  }))
+);
+const NonMemberChannelPreview = lazy(() =>
+  import('@app/features/next-soup/soup-view/non-member-channel-preview').then(
+    (module) => ({
+      default: module.NonMemberChannelPreview,
+    })
+  )
+);
+const SoupView = lazy(() =>
+  import('@app/features/next-soup/soup-view/soup-view').then((module) => ({
+    default: module.SoupView,
+  }))
+);
 
 function usePageViewTracking(pageTitle: string) {
   const analytics = useAnalytics();
