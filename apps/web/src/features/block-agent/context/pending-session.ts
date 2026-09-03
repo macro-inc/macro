@@ -41,12 +41,11 @@ const pending = new Map<string, PendingSession>();
  * Recorded at the gesture rather than inferred from `pending()`: the create can
  * resolve before the lazy block has even mounted, leaving no wait to notice.
  *
- * Kept for as long as the placeholder lives rather than cleared on first read.
- * Opening a session into a new split re-mounts the block — the subtree is
- * detached and rebuilt, which drops any focus the composer had already taken —
- * and the rebuilt composer has to be able to claim it again. `openWithSplit`
- * only ever mints a placeholder for a session this user asked for, so the
- * window is that one create; adopting the real id ends it.
+ * Read rather than consumed, because the block can mount more than once for
+ * one create: opening into a new split rebuilds the subtree, which drops any
+ * focus the composer had already taken, and adopting the real session id
+ * renames the block underneath it. Both ids are held so the claim survives
+ * either, and each new create replaces the set.
  */
 const composerFocusWanted = new Set<string>();
 
@@ -64,6 +63,9 @@ export function startPendingSession(): string {
   const [sessionId, setSessionId] = createSignal<string>();
   const [failed, setFailed] = createSignal(false);
   pending.set(placeholder, { sessionId, failed });
+  // Only the newest create may claim the keyboard, so this never accumulates
+  // and an older block cannot pull focus out of a newer one on a re-mount.
+  composerFocusWanted.clear();
   composerFocusWanted.add(placeholder);
 
   void agentHarnessServiceClient
@@ -72,6 +74,12 @@ export function startPendingSession(): string {
       if (result.isErr()) {
         setFailed(true);
         return;
+      }
+      // Registered under the real id before the block can adopt it: the split
+      // swaps the placeholder out, and the composer must stay claimable
+      // across that rename.
+      if (composerFocusWanted.has(placeholder)) {
+        composerFocusWanted.add(result.value.session.id);
       }
       setSessionId(result.value.session.id);
     })
