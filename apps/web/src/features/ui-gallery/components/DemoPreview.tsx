@@ -1,7 +1,7 @@
 import { themeCssVars } from '@theme/utils/themeVNext';
 import type { ThemeV3 } from '@theme/types/themeTypes';
 import { cn, Layer } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import type { JSX } from 'solid-js';
 
 export type PreviewSettings = {
   /** Rendered inside the preview only; null follows the app's active theme. */
@@ -62,14 +62,5 @@ export function DemoPreview(props: {
         </div>
       </Layer>
     </div>
-  );
-}
-
-/** Small caption used under previews to name what is being shown. */
-export function PreviewCaption(props: { children: JSX.Element }) {
-  return (
-    <Show when={props.children}>
-      <p class="text-xs text-ink-subtle">{props.children}</p>
-    </Show>
   );
 }

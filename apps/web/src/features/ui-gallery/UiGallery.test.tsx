@@ -1,9 +1,8 @@
 import { MemoryRouter, Route } from '@solidjs/router';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { AUDIT } from './audit';
 import { CoveragePage } from './components/CoveragePage';
-import { DOC_ENTRIES } from './registry';
+import { coverageRows, DOC_ENTRIES } from './registry';
 import UiGallery from './UiGallery';
 
 class ResizeObserverStub {
@@ -49,25 +48,17 @@ describe('UiGallery', () => {
 });
 
 describe('CoveragePage', () => {
-  it('renders the adoption report', () => {
+  it('renders the coverage report', () => {
     render(() => <CoveragePage onSelect={() => {}} />);
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Coverage & adoption' })
+      screen.getByRole('heading', { level: 1, name: 'Coverage' })
     ).toBeTruthy();
   });
 
-  it('lists the most-used component first', () => {
+  it('lists every ui component with its documentation status', () => {
     render(() => <CoveragePage onSelect={() => {}} />);
-    const top = AUDIT.components[0]!;
-    expect(screen.getAllByText(top.name).length).toBeGreaterThan(0);
-  });
-
-  it('reports hand-rolled primitives', () => {
-    render(() => <CoveragePage onSelect={() => {}} />);
-    for (const entry of AUDIT.handRolled) {
-      expect(screen.getAllByText(`<${entry.element}>`).length).toBeGreaterThan(
-        0
-      );
+    for (const row of coverageRows()) {
+      expect(screen.getAllByText(row.name).length).toBeGreaterThan(0);
     }
   });
 });

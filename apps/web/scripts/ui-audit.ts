@@ -17,11 +17,11 @@
  * Raw Tailwind palette classes are deliberately not checked here —
  * `check-tailwind.ts` already guards those on changed lines in CI.
  *
- *   bun scripts/ui-audit.ts                  # ranked report
- *   bun scripts/ui-audit.ts --json out.json  # machine-readable artifact
- *   bun scripts/ui-audit.ts --explain        # class-token frequencies
+ *   bun run ui-audit                       # ranked report
+ *   bun run ui-audit --sites Button        # call sites for one component
+ *   bun run ui-audit --explain             # unclassified class-token frequencies
  */
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import ts from 'typescript';
 
@@ -337,124 +337,139 @@ function scan(file: string) {
 
 // --- report -----------------------------------------------------------------
 
+/** Plain text throughout: the report is meant to be piped to a file, diffed,
+ *  and pasted into a PR, so no ANSI escapes anywhere. */
+const pad = (value: string | number, width: number) =>
+  String(value).padEnd(width);
+const padStart = (value: string | number, width: number) =>
+  String(value).padStart(width);
+
+const RULE = '-'.repeat(78);
+
+/** Inline meter. The percentage is printed beside it, so the bar is a scanning
+ *  aid rather than the only reading of the number. */
+function meter(rate: number, width = 10): string {
+  const filled = Math.min(width, Math.round(rate * width));
+  return '#'.repeat(filled) + '.'.repeat(width - filled);
+}
+
+function heading(text: string): string {
+  return `\n${text}\n${RULE}`;
+}
+
+function percent(rate: number): string {
+  return `${Math.round(rate * 100)}%`;
+}
+
 if (import.meta.main) {
   const args = process.argv.slice(2);
-  const jsonIndex = args.indexOf('--json');
-  const jsonPath = jsonIndex >= 0 ? args[jsonIndex + 1] : undefined;
   const explain = args.includes('--explain');
-  const SITE_LIMIT = 25;
-  
+  const sitesIndex = args.indexOf('--sites');
+  const sitesFor = sitesIndex >= 0 ? args[sitesIndex + 1] : undefined;
+
   for (const file of collectFiles(SRC)) scan(file);
-  
+
   const ranked = [...components.values()].sort((a, b) => b.usages - a.usages);
-  const rate = (stat: ComponentStat) =>
+  const rateOf = (stat: ComponentStat) =>
     stat.usages === 0 ? 0 : stat.withOverride / stat.usages;
-  
-  const pad = (value: string, width: number) => value.padEnd(width);
-  const padStart = (value: string | number, width: number) =>
-    String(value).padStart(width);
-  
-  console.log(`\nScanned ${scannedFiles} files under apps/web/${SRC} (library itself excluded)\n`);
-  
-  console.log(pad('COMPONENT', 22) + padStart('files', 6) + padStart('uses', 6) +
-    padStart('class', 7) + padStart('over', 6) + padStart('rate', 7) + '  top overrides');
-  console.log('─'.repeat(94));
+
+  // --sites turns the report into the call-site list for one component, which
+  // is what you actually want open while fixing them.
+  if (sitesFor) {
+    const stat = components.get(sitesFor);
+    if (!stat) {
+      console.error(
+        `No usages recorded for "${sitesFor}". Run without --sites to see the list.`
+      );
+      process.exit(1);
+    }
+    console.log(
+      heading(`${sitesFor} - ${stat.sites.length} call sites overriding visuals`)
+    );
+    for (const site of stat.sites) {
+      console.log(`${relative(SRC, site.file)}:${site.line}`);
+      console.log(`  ${site.classes}`);
+    }
+    console.log();
+    process.exit(0);
+  }
+
+  const totalUsages = ranked.reduce((sum, stat) => sum + stat.usages, 0);
+  const totalOverride = ranked.reduce((sum, stat) => sum + stat.withOverride, 0);
+  const overallRate = totalOverride / Math.max(totalUsages, 1);
+
+  console.log(heading('@ui adoption'));
+  console.log(`scanned   ${scannedFiles} files under apps/web/${SRC}, library excluded`);
+  console.log(`usages    ${totalUsages} across ${ranked.length} components and slots`);
+  console.log(
+    `restyled  ${percent(overallRate)} (${totalOverride} usages carry classes that repaint or resize the component)`
+  );
+
+  console.log(heading('By component'));
+  console.log(
+    pad('COMPONENT', 24) +
+      padStart('files', 6) +
+      padStart('uses', 6) +
+      '  ' +
+      pad('RESTYLED', 12) +
+      padStart('', 5) +
+      '  TOP OVERRIDES'
+  );
+
   for (const stat of ranked) {
+    const rate = rateOf(stat);
     const top = [...stat.overrideTokens.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 3)
-      .map(([token, count]) => `${token}×${count}`)
-      .join(' ');
+      .map(([token, count]) => `${token} (${count})`)
+      .join(', ');
+
     console.log(
-      pad(stat.name, 22) +
+      pad(stat.name, 24) +
         padStart(stat.files.size, 6) +
         padStart(stat.usages, 6) +
-        padStart(stat.withClass, 7) +
-        padStart(stat.withOverride, 6) +
-        padStart(`${Math.round(rate(stat) * 100)}%`, 7) +
-        '  ' + top
+        '  ' +
+        meter(rate) +
+        padStart(percent(rate), 6) +
+        '  ' +
+        top
     );
   }
-  
-  const totalUsages = ranked.reduce((sum, stat) => sum + stat.usages, 0);
-  const totalOverride = ranked.reduce((sum, stat) => sum + stat.withOverride, 0);
-  console.log('─'.repeat(94));
-  console.log(
-    pad('TOTAL', 22) + padStart('', 6) + padStart(totalUsages, 6) +
-      padStart(ranked.reduce((s, x) => s + x.withClass, 0), 7) +
-      padStart(totalOverride, 6) +
-      padStart(`${Math.round((totalOverride / Math.max(totalUsages, 1)) * 100)}%`, 7)
-  );
-  
-  console.log('\nHAND-ROLLED PRIMITIVES\n' + '─'.repeat(94));
-  for (const stat of [...handRolled.values()].sort((a, b) => b.usages - a.usages)) {
+
+  console.log(heading('Hand-rolled primitives'));
+  for (const stat of [...handRolled.values()].sort(
+    (a, b) => b.usages - a.usages
+  )) {
+    const label = pad(`<${stat.element}>`, 24) + padStart(stat.usages, 6);
+
     if (!stat.suggested) {
       console.log(
-        pad(`<${stat.element}>`, 22) +
-          padStart(stat.usages, 6) +
-          `  across ${stat.files.size} files` +
-          '   — no library component exists yet'
+        `${label}  ${pad('', 10)}${padStart('', 6)}  no library component exists yet, ${stat.files.size} files`
       );
       continue;
     }
+
     const libraryUses = components.get(stat.suggested)?.usages ?? 0;
-    const share = Math.round(
-      (stat.usages / Math.max(stat.usages + libraryUses, 1)) * 100
-    );
+    const share = stat.usages / Math.max(stat.usages + libraryUses, 1);
     console.log(
-      pad(`<${stat.element}>`, 22) +
-        padStart(stat.usages, 6) +
-        `  vs ${padStart(libraryUses, 4)} <${stat.suggested}>` +
-        `   ${share}% hand-rolled, across ${stat.files.size} files`
+      `${label}  ${meter(share)}${padStart(percent(share), 6)}` +
+        `  hand-rolled vs ${libraryUses} <${stat.suggested}>, ${stat.files.size} files`
     );
   }
-  
+
   if (explain) {
-    console.log('\nUNCLASSIFIED CLASS TOKENS (tune OVERRIDE / LAYOUT with these)\n' + '─'.repeat(94));
+    console.log(heading('Unclassified class tokens'));
+    console.log('Neither layout nor override - tune the rule lists with these.\n');
     for (const [token, count] of [...unclassified.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 40)) {
-      console.log(pad(token, 34) + padStart(count, 5));
+      console.log(pad(token, 36) + padStart(count, 5));
     }
   }
-  
-  if (jsonPath) {
-    const report = {
-      generatedAt: new Date().toISOString(),
-      scannedFiles,
-      components: ranked.map((stat) => ({
-        name: stat.name,
-        files: stat.files.size,
-        usages: stat.usages,
-        withClass: stat.withClass,
-        withOverride: stat.withOverride,
-        overrideRate: Number(rate(stat).toFixed(3)),
-        topOverrides: [...stat.overrideTokens.entries()]
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 8)
-          .map(([token, count]) => ({ token, count })),
-        sites: stat.sites
-          .slice(0, SITE_LIMIT)
-          .map((site) => ({ ...site, file: relative(SRC, site.file) })),
-        truncatedSites: Math.max(0, stat.sites.length - SITE_LIMIT),
-      })),
-      handRolled: [...handRolled.values()]
-        .sort((a, b) => b.usages - a.usages)
-        .map((stat) => ({
-          element: stat.element,
-          suggested: stat.suggested,
-          usages: stat.usages,
-          files: stat.files.size,
-          libraryUsages: stat.suggested
-            ? (components.get(stat.suggested)?.usages ?? 0)
-            : null,
-          sites: stat.sites
-            .slice(0, SITE_LIMIT)
-            .map((site) => ({ file: relative(SRC, site.file), line: site.line })),
-          truncatedSites: Math.max(0, stat.sites.length - SITE_LIMIT),
-        })),
-    };
-    writeFileSync(jsonPath, `${JSON.stringify(report, null, 2)}\n`);
-    console.log(`\nWrote ${jsonPath}`);
-  }
+
+  console.log(
+    `\n${RULE}\n` +
+      'bun run ui-audit --sites <Component>   list the call sites for one component\n' +
+      'bun run ui-audit --explain             show unclassified class tokens\n'
+  );
 }
