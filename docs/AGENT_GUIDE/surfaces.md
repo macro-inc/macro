@@ -71,8 +71,8 @@ Workspace → `Team`, `Tags`, `CRM`, `Connections` (Connected / Discover), `MCP 
 Other Connections. Empty state offers Google first, then GitHub, Linear, Notion,
 Slack, Cursor. `Discover` searches the Pipedream catalog; featured cards are
 Google, GitHub, Linear, Slack, Cursor. Click a provider for its page: Google
-(Gmail + Calendar per inbox, no Docs; Gmail shows dest sync status and the
-signature editor for an owned inbox), GitHub (account, team install, AI),
+(Gmail + Calendar per inbox, no Docs; Gmail shows dest sync status. Signature
+is its own row under Gmail for an owned inbox), GitHub (account, team install, AI),
 Linear / Notion / Slack (Pipedream AI, Off is enable/disable), Cursor (API key
 + default model). Discover is `/app/settings/connections/discover`. A provider
 is `/app/settings/connections/<provider>` (`github`, `google`, `cursor`, …).

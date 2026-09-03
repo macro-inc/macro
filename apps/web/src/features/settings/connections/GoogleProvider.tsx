@@ -10,18 +10,22 @@ import {
   ENABLE_MULTI_INBOX_OVERRIDE,
 } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
-import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
 import {
   useEmailLinksQuery,
   useRemoveInboxMutation,
 } from '@queries/email/link';
 import type { ConsentScopes } from '@service-auth/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
-import { Button, Dialog, Panel, Tooltip } from '@ui';
+import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { InboxSyncStatus } from '../inbox-sync-status';
 import { ConnectAction } from '../integration-ui';
-import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
+import {
+  SettingsCard,
+  SettingsPage,
+  SettingsRow,
+  SettingsSection,
+} from '../primitives';
 import {
   clearSignatureState,
   isSignatureExpanded,
@@ -273,29 +277,6 @@ function GoogleInboxCapability(props: {
         }
         status={props.row.status}
       >
-        <Show
-          when={
-            isGmail() && isOwn() && signaturesFlag().enabled
-              ? props.link
-              : undefined
-          }
-        >
-          {(link) => (
-            <Tooltip label="Edit signature">
-              <Button
-                variant="outline"
-                size="icon-sm"
-                depth={3}
-                onClick={() => toggleSignatureExpanded(link().id)}
-                aria-label={`Edit signature for ${link().email_address}`}
-                aria-expanded={showSignature()}
-                aria-controls={signatureSectionId()}
-              >
-                <SignatureIcon class="size-4" />
-              </Button>
-            </Tooltip>
-          )}
-        </Show>
         <GoogleCapabilityActions
           row={props.row}
           pending={props.pending}
@@ -306,11 +287,38 @@ function GoogleInboxCapability(props: {
           onTurnOffCalendar={props.onTurnOffCalendar}
         />
       </CapabilityRow>
-      <Show when={showSignature() ? props.link : undefined}>
+      <Show
+        when={
+          isGmail() && isOwn() && signaturesFlag().enabled
+            ? props.link
+            : undefined
+        }
+      >
         {(link) => (
-          <div id={signatureSectionId()} class="px-6 pb-5">
-            <SignatureSection link={link()} />
-          </div>
+          <>
+            <SettingsRow
+              label="Signature"
+              description="Added to messages you send from this inbox."
+              stackOnNarrow
+            >
+              <Button
+                variant="outline"
+                size="sm"
+                depth={3}
+                onClick={() => toggleSignatureExpanded(link().id)}
+                aria-label={`Edit signature for ${link().email_address}`}
+                aria-expanded={showSignature()}
+                aria-controls={signatureSectionId()}
+              >
+                {showSignature() ? 'Done' : 'Edit'}
+              </Button>
+            </SettingsRow>
+            <Show when={showSignature()}>
+              <div id={signatureSectionId()} class="px-6 pb-5">
+                <SignatureSection link={link()} />
+              </div>
+            </Show>
+          </>
         )}
       </Show>
     </>
