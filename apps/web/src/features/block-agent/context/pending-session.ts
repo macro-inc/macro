@@ -34,6 +34,22 @@ export type PendingSession = {
 
 const pending = new Map<string, PendingSession>();
 
+/**
+ * Placeholders whose composer should take the keyboard, because this user just
+ * created them from the create menu.
+ *
+ * Recorded at the gesture rather than inferred from `pending()`: the create can
+ * resolve before the lazy block has even mounted, leaving no wait to notice.
+ *
+ * Kept for as long as the placeholder lives rather than cleared on first read.
+ * Opening a session into a new split re-mounts the block — the subtree is
+ * detached and rebuilt, which drops any focus the composer had already taken —
+ * and the rebuilt composer has to be able to claim it again. `openWithSplit`
+ * only ever mints a placeholder for a session this user asked for, so the
+ * window is that one create; adopting the real id ends it.
+ */
+const composerFocusWanted = new Set<string>();
+
 /** Whether `id` is a placeholder this module minted rather than a session. */
 export function isPlaceholderSessionId(id: string): boolean {
   return id.startsWith(PLACEHOLDER_PREFIX);
@@ -48,6 +64,7 @@ export function startPendingSession(): string {
   const [sessionId, setSessionId] = createSignal<string>();
   const [failed, setFailed] = createSignal(false);
   pending.set(placeholder, { sessionId, failed });
+  composerFocusWanted.add(placeholder);
 
   void agentHarnessServiceClient
     .create({})
@@ -80,4 +97,10 @@ export function pendingSession(
  */
 export function forgetPendingSession(placeholder: string): void {
   pending.delete(placeholder);
+  composerFocusWanted.delete(placeholder);
+}
+
+/** Whether this block's composer should claim focus when it mounts. */
+export function wantsComposerFocus(blockId: string): boolean {
+  return composerFocusWanted.has(blockId);
 }

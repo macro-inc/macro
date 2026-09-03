@@ -16,13 +16,6 @@ import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { Button, SendButton, Surface } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 
-/**
- * Id of the agent composer's text-area wrapper. Exposed so callers (e.g. the
- * Create menu) can arm focus on the contenteditable before the lazy block
- * mounts.
- */
-export const AGENT_INPUT_TEXT_AREA_ID = 'agent-input-text-area';
-
 /** Quote text into the composer as a referenced paste chip. */
 export type QuoteInsert = (text: string) => void;
 
@@ -140,7 +133,6 @@ export function AgentInput(props: AgentInputProps) {
             paragraphs carry my-1.5, so the row's py-1.5 is the whole frame —
             the same 44px single-line height as ChatInput. */}
           <div
-            id={AGENT_INPUT_TEXT_AREA_ID}
             ref={bodyRef}
             class="pl-1 text-sm text-ink"
             classList={{

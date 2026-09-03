@@ -1,5 +1,4 @@
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
-import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -427,14 +426,9 @@ export function runCreateAction(
     case 'agent': {
       const { openWithSplit } = useSplitLayout();
       setCreateMenuOpen(false, false);
-      // The agent block is lazy, so the composer is not in the DOM yet. Arm
-      // focus on it the same way the email row arms its To field; the helper
-      // waits for the element to appear.
-      triggerFocusInput(() =>
-        document
-          .getElementById(AGENT_INPUT_TEXT_AREA_ID)
-          ?.querySelector<HTMLElement>('[contenteditable="true"]')
-      );
+      // No focus to arm here: the block focuses its own composer while the
+      // create is in flight, which stays correct when a second session opens
+      // beside a first.
       openWithSplit(
         { type: 'agent', id: startPendingSession() },
         { referredFrom: 'launcher', preferNewSplit: shouldInsert }

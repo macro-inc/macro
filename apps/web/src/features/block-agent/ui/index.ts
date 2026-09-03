@@ -8,7 +8,6 @@
 
 export { ActionLine, type ActionLineProps } from './ActionLine';
 export {
-  AGENT_INPUT_TEXT_AREA_ID,
   AgentInput,
   type AgentInputProps,
   type QuoteInsert,

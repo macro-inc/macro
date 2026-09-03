@@ -18,6 +18,7 @@ import {
 
 export function AgentComposer() {
   const {
+    autofocus,
     composer,
     loadFailed,
     metadata,
@@ -48,11 +49,6 @@ export function AgentComposer() {
           actor && actor !== userId() ? idToDisplayName(actor) : undefined,
       };
     });
-
-  // A session still being created was created by this user, one action ago,
-  // and has an empty transcript: the only thing to do with it is type. The
-  // wait for the sandbox is exactly when that matters most.
-  const autofocus = pending();
 
   return (
     <>

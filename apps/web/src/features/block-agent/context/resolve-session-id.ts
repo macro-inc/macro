@@ -9,7 +9,11 @@
  */
 
 import { type Accessor, createMemo } from 'solid-js';
-import { isPlaceholderSessionId, pendingSession } from './pending-session';
+import {
+  isPlaceholderSessionId,
+  pendingSession,
+  wantsComposerFocus,
+} from './pending-session';
 
 export type ResolvedSessionId = {
   /** The real session id; absent while a create is still in flight. */
@@ -18,6 +22,12 @@ export type ResolvedSessionId = {
   pending: Accessor<boolean>;
   /** The create failed, or the placeholder has no create behind it. */
   failed: Accessor<boolean>;
+  /**
+   * This user just created this session, so its composer should open focused.
+   * Read at mount, and again if the block re-mounts while the create is still
+   * this user's most recent action.
+   */
+  autofocus: boolean;
 };
 
 export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
@@ -41,5 +51,6 @@ export function resolveSessionId(blockId: Accessor<string>): ResolvedSessionId {
     sessionId,
     pending: () => entry() != null && entry()?.sessionId() === undefined,
     failed: () => entry() === null || (entry()?.failed() ?? false),
+    autofocus: wantsComposerFocus(blockId()),
   };
 }
