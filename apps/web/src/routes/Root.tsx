@@ -176,14 +176,40 @@ function useSyncLoginCookie() {
 const rootPreload: RoutePreloadFunc = async (args) => {
   const started =
     typeof performance !== 'undefined' ? performance.now() : Date.now();
+  const loginCookie = hasLoginCookie();
   // #region agent log
   devPerfLog('A', 'Root.tsx:176', 'root preload start', {
     pathname: window.location.pathname,
     nextPathname: args.location.pathname,
-    hasLoginCookie: hasLoginCookie(),
+    hasLoginCookie: loginCookie,
   });
   // #endregion
-  await prefetchUserInfo();
+  if (loginCookie) {
+    const prefetchStarted =
+      typeof performance !== 'undefined' ? performance.now() : Date.now();
+    void prefetchUserInfo().finally(() => {
+      // #region agent log
+      devPerfLog('A', 'Root.tsx:189', 'prefetchUserInfo settled', {
+        pathname: window.location.pathname,
+        elapsedMs:
+          (typeof performance !== 'undefined'
+            ? performance.now()
+            : Date.now()) - prefetchStarted,
+      });
+      // #endregion
+    });
+    void import('./WorkspaceProviders').then(() => {
+      // #region agent log
+      devPerfLog('D', 'Root.tsx:199', 'workspace providers chunk prefetched', {
+        pathname: window.location.pathname,
+        elapsedMs:
+          (typeof performance !== 'undefined'
+            ? performance.now()
+            : Date.now()) - prefetchStarted,
+      });
+      // #endregion
+    });
+  }
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
   const url = new URL(window.location.href);
@@ -226,7 +252,7 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     elapsedMs:
       (typeof performance !== 'undefined' ? performance.now() : Date.now()) -
       started,
-    hasLoginCookie: hasLoginCookie(),
+    hasLoginCookie: loginCookie,
   });
   // #endregion
 };

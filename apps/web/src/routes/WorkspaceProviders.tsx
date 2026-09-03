@@ -1,16 +1,8 @@
-import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
-import { SearchProvider } from '@app/features/soup/search/context';
 import { useInvalidateQueriesOnReconnect } from '@app/lib/queries/invalidate-on-reconnect';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
-import { CallProvider } from '@channel/Call/CallContext';
-import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
-import { CallKitSync } from '@channel/Call/use-callkit';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
-import { ReactiveFavicon } from '@components/app/ReactiveFavicon';
-import { ChatAttachmentsInit } from '@core/component/AI/signal/globalAttachments';
 import { ENABLE_ONBOARDING_V4_OVERRIDE } from '@core/constant/featureFlags';
 import { ChannelsContextProvider } from '@core/context/channels';
 import { EmailLinksContextProvider } from '@core/context/emailLinks';
@@ -18,14 +10,11 @@ import { QuickAccessProvider } from '@core/context/quickAccess';
 import { TeamContextProvider } from '@core/context/team';
 import { useUserId } from '@core/context/user';
 import { initAndStartEmailSync } from '@core/email-link';
-import { IosPushNotificationModal } from '@core/mobile/IosPushNotificationModal';
-import { IpadUnsupportedDialog } from '@core/mobile/IpadUnsupportedDialog';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { devPerfLog } from '@core/util/devPerf';
 import {
-  BrowserNotificationModal,
   createNotificationSource,
   type UnifiedNotification,
   useNotificationUpdates,
@@ -48,14 +37,39 @@ import {
   Suspense,
 } from 'solid-js';
 
+const AuthenticatedCallProviders = lazy(() =>
+  import('./AuthenticatedCallProviders').then((module) => ({
+    default: module.AuthenticatedCallProviders,
+  }))
+);
 const InteractiveOnboardingModal = lazy(() =>
   import('@app/features/onboarding/InteractiveOnboardingModal').then(
     (module) => ({ default: module.InteractiveOnboardingModal })
   )
 );
+const SearchProvider = lazy(() =>
+  import('@app/features/soup/search/context').then((module) => ({
+    default: module.SearchProvider,
+  }))
+);
 const SoupBackfillSideEffect = lazy(() =>
   import('@queries/soup/SoupBackfillSideEffect').then((module) => ({
     default: module.SoupBackfillSideEffect,
+  }))
+);
+const WorkspaceModals = lazy(() =>
+  import('./WorkspaceModals').then((module) => ({
+    default: module.WorkspaceModals,
+  }))
+);
+const ChatAttachmentsInit = lazy(() =>
+  import('@core/component/AI/signal/globalAttachments').then((module) => ({
+    default: module.ChatAttachmentsInit,
+  }))
+);
+const ReactiveFavicon = lazy(() =>
+  import('@components/app/ReactiveFavicon').then((module) => ({
+    default: module.ReactiveFavicon,
   }))
 );
 
@@ -207,30 +221,34 @@ export default function WorkspaceProviders(props: ParentProps) {
   return (
     <TeamContextProvider>
       <EmailLinksContextProvider>
-        <BrowserNotificationModal />
-        <IosPushNotificationModal />
-        <IpadUnsupportedDialog />
-        <GlobalShareInboxConflictDialog />
+        <Suspense>
+          <WorkspaceModals />
+        </Suspense>
         <QuerySyncProviderWithUserId />
         <SoupBackfillWhenReady />
         <ConfiguredGlobalAppStateProvider>
           <MutationUndoProvider>
             <ChannelsContextProvider>
-              <CallProvider>
-                <CallKitSync />
-                <CallStartedNotifier />
-                <IncomingCallEvents />
-                <QuickAccessProvider>
+              <QuickAccessProvider>
+                <Suspense fallback={props.children}>
                   <SearchProvider>
-                    <ChatAttachmentsInit />
-                    <ReactiveFavicon />
-                    {props.children}
                     <Suspense>
-                      <InitialInteractiveOnboardingModal />
+                      <AuthenticatedCallProviders>
+                        <Suspense>
+                          <ChatAttachmentsInit />
+                        </Suspense>
+                        <Suspense>
+                          <ReactiveFavicon />
+                        </Suspense>
+                        {props.children}
+                        <Suspense>
+                          <InitialInteractiveOnboardingModal />
+                        </Suspense>
+                      </AuthenticatedCallProviders>
                     </Suspense>
                   </SearchProvider>
-                </QuickAccessProvider>
-              </CallProvider>
+                </Suspense>
+              </QuickAccessProvider>
             </ChannelsContextProvider>
           </MutationUndoProvider>
         </ConfiguredGlobalAppStateProvider>
