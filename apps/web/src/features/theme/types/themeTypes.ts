@@ -91,7 +91,6 @@ export type InputColorToken = (typeof inputColorTokens)[number];
 export const semanticTokens = [
   'surface',
   'inset',
-  'lift',
   'ink',
   'ink-muted',
   'ink-subtle',

@@ -33,7 +33,7 @@ function ChannelAvatar(props: { channel: ChannelEntity; size?: 'sm' | 'md' }) {
     >
       <span
         class={cn(
-          'relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-lift [&_img]:size-full [&_svg]:shrink-0',
+          'relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-2 [&_img]:size-full [&_svg]:shrink-0',
           sizeClass()
         )}
       >
@@ -48,12 +48,12 @@ function SlimChannelAvatar(props: { channel: ChannelEntity }) {
     <Show
       when={props.channel.channelType === 'direct_message'}
       fallback={
-        <span class="flex size-6 shrink-0 items-center justify-center rounded-full border border-edge bg-lift text-xxs font-semibold tracking-wide text-ink">
+        <span class="flex size-6 shrink-0 items-center justify-center rounded-full border border-edge bg-surface-2 text-xxs font-semibold tracking-wide text-ink">
           {channelInitials(props.channel.name)}
         </span>
       }
     >
-      <span class="relative flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-lift [&_img]:size-full [&_svg]:size-3.5 [&_svg]:shrink-0">
+      <span class="relative flex size-6 shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-2 [&_img]:size-full [&_svg]:size-3.5 [&_svg]:shrink-0">
         <Entity.Icon entity={props.channel} suppressClick showTooltip={false} />
       </span>
     </Show>

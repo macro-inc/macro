@@ -84,7 +84,6 @@ export function getDefaultSemanticColorTokens(
   return {
     surface: 'var(--layer-surface)',
     inset: 'var(--layer-inset)',
-    lift: 'var(--layer-lift)',
     ink: tokenReference('content-0'),
     'ink-muted': tokenReference('content-1'),
     'ink-subtle': tokenReference('content-2'),
@@ -100,8 +99,8 @@ export function getDefaultSemanticColorTokens(
     tooltip: tokenReference('surface-2'),
     toast: tokenReference('surface-2'),
     input: 'transparent',
-    'input-focus': tokenReference('lift'),
-    message: tokenReference('lift'),
+    'input-focus': tokenReference('surface-1'),
+    message: tokenReference('surface-1'),
     hover: alphaToken('content-0', 0.03),
     active: alphaToken('content-0', 0.06),
     selected: alphaToken('accent', 0.08),
@@ -124,6 +123,7 @@ export function normalizeThemeColorTokens(
   };
   delete next['surface-5'];
   delete next['edge-subtle'];
+  delete next.lift;
   return next;
 }
 

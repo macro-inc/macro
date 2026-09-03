@@ -4,12 +4,12 @@ import {
   parseThemeAssignment,
   serializeThemeAssignment,
 } from '../themeAssignments';
-import { convertThemev2v3 } from '../themeMigrations';
 import {
   getDefaultSemanticColorTokens,
   legacyThemeToVNextTokens,
   normalizeThemeColorTokens,
-} from '../themeVNext';
+} from '../themeColorTokens';
+import { convertThemev2v3 } from '../themeMigrations';
 
 const legacyTokens: ThemeV2Tokens = {
   a0: { l: 0.7, c: 0.2, h: 40 },
@@ -36,6 +36,7 @@ describe('legacyThemeToVNextTokens', () => {
         'surface-4': '#fff',
         'surface-5': '#eee',
         'edge-subtle': '#ddd',
+        lift: '#ccc',
         extension: '#000',
       },
       'dark'
@@ -52,6 +53,7 @@ describe('legacyThemeToVNextTokens', () => {
     });
     expect(result['surface-5']).toBeUndefined();
     expect(result['edge-subtle']).toBeUndefined();
+    expect(result.lift).toBeUndefined();
   });
 
   it('centralizes a default for every semantic token', () => {
@@ -61,7 +63,7 @@ describe('legacyThemeToVNextTokens', () => {
       surface: 'var(--layer-surface)',
       panel: 'var(--color-surface-1)',
       warning: 'var(--color-amber)',
-      message: 'var(--color-lift)',
+      message: 'var(--color-surface-1)',
     });
     expect(getDefaultSemanticColorTokens('light').warning).toBe(
       'var(--color-yellow)'
@@ -79,7 +81,7 @@ describe('legacyThemeToVNextTokens', () => {
     expect(result.chrome).toBe('var(--color-surface-4)');
     expect(result.surface).toBe('var(--layer-surface)');
     expect(result.inset).toBe('var(--layer-inset)');
-    expect(result.lift).toBe('var(--layer-lift)');
+    expect(result.lift).toBeUndefined();
     expect(result.panel).toBe('var(--color-surface-1)');
     expect(result.tooltip).toBe('var(--color-surface-2)');
     expect(result.toast).toBe('var(--color-surface-2)');
