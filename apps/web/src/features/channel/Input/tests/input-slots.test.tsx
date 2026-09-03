@@ -152,6 +152,9 @@ vi.mock(
       const controls = {
         clear: editorMocks.clear,
         focus: editorMocks.focus,
+        setMarkdown: (markdown: string) => {
+          editorMocks.emitChange?.(markdown);
+        },
       };
       const lexical = {
         focus: vi.fn(),
@@ -289,6 +292,32 @@ describe('Input slots', () => {
     expect(onStartTyping).not.toHaveBeenCalled();
 
     editorMocks.emitChange?.('draft plus');
+    expect(onStartTyping).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start typing when a snapshot is restored', async () => {
+    const onStartTyping = vi.fn();
+    let handle: InputHandle | undefined;
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        onReady={(nextHandle) => {
+          handle = nextHandle;
+        }}
+        onStartTyping={onStartTyping}
+      />
+    ));
+
+    await Promise.resolve();
+    handle?.restoreSnapshot({
+      value: 'restored draft',
+      mentions: [],
+      attachments: [],
+    });
+    expect(onStartTyping).not.toHaveBeenCalled();
+
+    await Promise.resolve();
+    editorMocks.emitChange?.('user typed');
     expect(onStartTyping).toHaveBeenCalledTimes(1);
   });
 
