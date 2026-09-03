@@ -29,6 +29,7 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { updateCookie } from '@core/util/cookies';
+import { devPerfLog } from '@core/util/devPerf';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -345,6 +346,12 @@ function LayoutInner(props: RouteSectionProps) {
   });
 
   onMount(() => {
+    // #region agent log
+    devPerfLog('G', 'Layout.tsx:347', 'layout mounted', {
+      pathname: window.location.pathname,
+      authenticated: isAuthenticated(),
+    });
+    // #endregion
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {
       showPaywall();
       sessionStorage.removeItem('showUpgradeModal');

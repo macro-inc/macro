@@ -7,6 +7,7 @@ import { Resize } from '@core/component/Resize';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
+import { devPerfLog } from '@core/util/devPerf';
 import { useWindowSize } from '@solid-primitives/resize-observer';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { cn } from '@ui';
@@ -16,6 +17,7 @@ import {
   createSelector,
   For,
   onCleanup,
+  onMount,
   type Setter,
   Show,
   Suspense,
@@ -65,6 +67,15 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   restorePreviewPairs(splitManager, initialLayout.previewPairs);
   const [, setTabTitle] = tabTitleSignal;
   const sidebar = useSidebarCollapse();
+
+  onMount(() => {
+    // #region agent log
+    devPerfLog('G', 'SplitLayout.tsx:68', 'split layout mounted', {
+      pathname: window.location.pathname,
+      pairCount: props.pairs.length,
+    });
+    // #endregion
+  });
 
   // Create the mobile swipe layout once on mobile devices.
   const mobileSwipeLayout: MobileSwipeLayout | undefined =

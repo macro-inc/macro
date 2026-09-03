@@ -1,5 +1,4 @@
 export {
-  SearchProvider,
   type SoupSearchPoolEntry,
   type SoupSearchPoolItem,
   useOptionalSearchContext,
@@ -13,6 +12,7 @@ export {
   type SoupSearchRequest,
   soupSearchMatchType,
 } from './create-search-state';
+export { SearchProvider } from './SearchProvider';
 export {
   createSoupFreshSearch,
   intersectEntityPools,

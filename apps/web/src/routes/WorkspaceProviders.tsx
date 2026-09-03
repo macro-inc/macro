@@ -48,7 +48,7 @@ const InteractiveOnboardingModal = lazy(() =>
   )
 );
 const SearchProvider = lazy(() =>
-  import('@app/features/soup/search/context').then((module) => ({
+  import('@app/features/soup/search/SearchProvider').then((module) => ({
     default: module.SearchProvider,
   }))
 );
@@ -232,7 +232,7 @@ export default function WorkspaceProviders(props: ParentProps) {
               <QuickAccessProvider>
                 <Suspense fallback={props.children}>
                   <SearchProvider>
-                    <Suspense>
+                    <Suspense fallback={props.children}>
                       <AuthenticatedCallProviders>
                         <Suspense>
                           <ChatAttachmentsInit />
