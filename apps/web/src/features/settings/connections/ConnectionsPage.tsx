@@ -1,4 +1,5 @@
 import { TabsInset } from '@core/component/TabsInset';
+import type { ConnectionsProviderSlug } from '@core/constant/settingsConnectionsUrl';
 import { Button } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { SettingsPage } from '../primitives';
@@ -8,6 +9,7 @@ import { DiscoverView } from './DiscoverView';
 import { GitHubProvider } from './GitHubProvider';
 import { GoogleProvider } from './GoogleProvider';
 import { PipedreamAiProvider } from './PipedreamAiProvider';
+import { EMPTY_STARTERS, providerIcon } from './provider-meta';
 import { useConnectionsModel } from './use-connections-model';
 import {
   closeConnectionsProvider,
@@ -19,6 +21,9 @@ import {
 
 const CONNECTIONS_DESCRIPTION =
   'Connect your accounts so Macro can work across the tools you already use.';
+
+const providerTitle = (id: Exclude<ConnectionsProviderSlug, 'other'>): string =>
+  EMPTY_STARTERS.find((starter) => starter.id === id)?.name ?? id;
 
 export function ConnectionsPage() {
   const { model, ready, error, retry } = useConnectionsModel();
@@ -42,7 +47,8 @@ export function ConnectionsPage() {
         </SettingsPage>
       }
     >
-      <Switch
+      <Show
+        when={provider()}
         fallback={
           <SettingsPage
             title="Connections"
@@ -76,25 +82,46 @@ export function ConnectionsPage() {
           </SettingsPage>
         }
       >
-        <Match when={provider() === 'github'}>
-          <GitHubProvider model={model()} />
-        </Match>
-        <Match when={provider() === 'google'}>
-          <GoogleProvider model={model()} />
-        </Match>
-        <Match when={provider() === 'linear'}>
-          <PipedreamAiProvider model={model()} provider="linear" />
-        </Match>
-        <Match when={provider() === 'notion'}>
-          <PipedreamAiProvider model={model()} provider="notion" />
-        </Match>
-        <Match when={provider() === 'slack'}>
-          <PipedreamAiProvider model={model()} provider="slack" />
-        </Match>
-        <Match when={provider() === 'cursor'}>
-          <CursorProvider />
-        </Match>
-      </Switch>
+        {(activeProvider) => {
+          const slug = activeProvider();
+          return (
+            <Show
+              when={slug === 'cursor' || ready()}
+              fallback={
+                <SettingsPage
+                  title={providerTitle(slug)}
+                  description={CONNECTIONS_DESCRIPTION}
+                  icon={providerIcon(slug)}
+                  onBack={closeConnectionsProvider}
+                >
+                  <p class="text-sm text-ink-muted">Loading…</p>
+                </SettingsPage>
+              }
+            >
+              <Switch>
+                <Match when={slug === 'github'}>
+                  <GitHubProvider model={model()} />
+                </Match>
+                <Match when={slug === 'google'}>
+                  <GoogleProvider model={model()} />
+                </Match>
+                <Match when={slug === 'linear'}>
+                  <PipedreamAiProvider model={model()} provider="linear" />
+                </Match>
+                <Match when={slug === 'notion'}>
+                  <PipedreamAiProvider model={model()} provider="notion" />
+                </Match>
+                <Match when={slug === 'slack'}>
+                  <PipedreamAiProvider model={model()} provider="slack" />
+                </Match>
+                <Match when={slug === 'cursor'}>
+                  <CursorProvider />
+                </Match>
+              </Switch>
+            </Show>
+          );
+        }}
+      </Show>
     </Show>
   );
 }

@@ -22,9 +22,12 @@ const mocks = vi.hoisted(() => ({
   },
   models: {
     isSuccess: true,
+    isPending: false,
+    isError: false,
     data: {
       models: [{ id: 'default-model', displayName: 'Default Model' }],
     },
+    refetch: vi.fn(),
   },
   save: vi.fn(),
   disconnect: vi.fn(),
@@ -69,6 +72,9 @@ beforeEach(() => {
     updatedAt: null,
   };
   mocks.status.isPlaceholderData = false;
+  mocks.models.isSuccess = true;
+  mocks.models.isPending = false;
+  mocks.models.isError = false;
   mocks.models.data = {
     models: [{ id: 'default-model', displayName: 'Default Model' }],
   };
@@ -166,5 +172,23 @@ describe('CursorProvider', () => {
     expect(picker?.getAttribute('aria-busy')).toBe('true');
     expect(screen.getByRole('status', { name: 'Loading models' })).toBeTruthy();
     expect(screen.queryByText('Loading models…')).toBeNull();
+  });
+
+  it('shows retry when the model roster fails to load', () => {
+    mocks.status.data = {
+      registered: true,
+      defaultModelId: null,
+      updatedAt: '2026-08-27T12:00:00Z',
+    };
+    mocks.models.isSuccess = false;
+    mocks.models.isPending = false;
+    mocks.models.isError = true;
+    mocks.models.data = { models: [] };
+
+    render(() => <CursorProvider />);
+
+    expect(screen.getByText("Couldn't load models.")).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mocks.models.refetch).toHaveBeenCalledOnce();
   });
 });

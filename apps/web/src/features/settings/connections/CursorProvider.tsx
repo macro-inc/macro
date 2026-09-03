@@ -44,6 +44,11 @@ export function CursorProvider() {
   const cursorModels = useCursorModelsQuery(cursorRegistered);
   const setCursorDefaultModel = useSetCursorDefaultModel();
   const models = () => cursorModels.data?.models ?? [];
+  const modelsLoading = () =>
+    cursorRegistered() &&
+    !cursorModels.isError &&
+    (cursorModels.isPending ||
+      (cursorModels.isSuccess && models().length === 0));
   const selectedModelId = () => {
     const id = cursorStatus.data?.defaultModelId;
     const list = models();
@@ -185,44 +190,69 @@ export function CursorProvider() {
                 stackOnNarrow
                 align="start"
               >
-                <Select<CursorModelOption>
-                  class="w-full"
-                  options={models()}
-                  optionValue="id"
-                  optionTextValue="displayName"
-                  value={
-                    models().find((model) => model.id === selectedModelId()) ??
-                    undefined
-                  }
-                  onChange={(model) => {
-                    if (model) void handleCursorModelChange(model.id);
-                  }}
-                  disabled={
-                    setCursorDefaultModel.isPending || models().length === 0
+                <Show
+                  when={cursorModels.isError}
+                  fallback={
+                    <Select<CursorModelOption>
+                      class="w-full"
+                      options={models()}
+                      optionValue="id"
+                      optionTextValue="displayName"
+                      value={
+                        models().find(
+                          (model) => model.id === selectedModelId()
+                        ) ?? undefined
+                      }
+                      onChange={(model) => {
+                        if (model) void handleCursorModelChange(model.id);
+                      }}
+                      disabled={
+                        setCursorDefaultModel.isPending || modelsLoading()
+                      }
+                    >
+                      <Select.Trigger
+                        id="cursor-default-model"
+                        class="settings-input w-full min-w-0 bg-inset disabled:opacity-100 @[460px]:w-56"
+                        aria-label="Default model"
+                        aria-busy={modelsLoading()}
+                      >
+                        <Select.Value<CursorModelOption>>
+                          {(state) =>
+                            state.selectedOption()?.displayName ?? ''
+                          }
+                        </Select.Value>
+                        <Show
+                          when={!modelsLoading()}
+                          fallback={
+                            <span role="status" aria-label="Loading models">
+                              <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
+                            </span>
+                          }
+                        >
+                          <Select.Icon />
+                        </Show>
+                      </Select.Trigger>
+                      <Select.Content>
+                        <Select.Listbox />
+                      </Select.Content>
+                    </Select>
                   }
                 >
-                  <Select.Trigger
-                    id="cursor-default-model"
-                    class="settings-input w-full min-w-0 bg-inset disabled:opacity-100 @[460px]:w-56"
-                    aria-label="Default model"
-                    aria-busy={models().length === 0}
-                  >
-                    <Select.Value<CursorModelOption>>
-                      {(state) => state.selectedOption()?.displayName ?? ''}
-                    </Select.Value>
-                    <Show
-                      when={models().length === 0}
-                      fallback={<Select.Icon />}
+                  <div class="flex w-full items-center gap-2 @[460px]:w-56">
+                    <span class="text-sm text-ink-muted">
+                      Couldn't load models.
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      depth={3}
+                      onClick={() => void cursorModels.refetch()}
                     >
-                      <span role="status" aria-label="Loading models">
-                        <SpinnerIcon class="size-4 animate-spin text-ink-muted" />
-                      </span>
-                    </Show>
-                  </Select.Trigger>
-                  <Select.Content>
-                    <Select.Listbox />
-                  </Select.Content>
-                </Select>
+                      Retry
+                    </Button>
+                  </div>
+                </Show>
               </SettingsRow>
             </Show>
           </Show>

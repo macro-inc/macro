@@ -9,6 +9,7 @@ import {
   ENABLE_EMAIL_SIGNATURES_OVERRIDE,
   ENABLE_MULTI_INBOX_OVERRIDE,
 } from '@core/constant/featureFlags';
+import { useEmail, useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import {
   useEmailLinksQuery,
@@ -43,6 +44,8 @@ import { providerIcon } from './provider-meta';
 import { closeConnectionsProvider } from './view-state';
 
 export function GoogleProvider(props: { model: ConnectionsModel }) {
+  const userId = useUserId();
+  const accountEmail = useEmail();
   const rows = () => capabilitiesFor(props.model, 'google');
   const inboxes = () => {
     const emails = [...new Set(rows().map((row) => row.account))];
@@ -90,6 +93,17 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
     capability.id.startsWith('gmail:') || capability.id.startsWith('calendar:')
       ? capability.id.slice(capability.id.indexOf(':') + 1)
       : undefined;
+
+  const disabledPrimaryEmail = () => {
+    const email = accountEmail();
+    if (!email) return undefined;
+    const links = emailLinks.data?.links ?? [];
+    const hasPrimary = links.some(
+      (link) => link.is_primary && link.macro_id === userId()
+    );
+    if (hasPrimary || links.length === 0) return undefined;
+    return email;
+  };
 
   return (
     <SettingsPage
@@ -161,6 +175,25 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
             </SettingsSection>
           )}
         </For>
+        <Show when={disabledPrimaryEmail()}>
+          {(email) => (
+            <SettingsSection title={email()} description="Personal">
+              <SettingsCard>
+                <CapabilityRow
+                  title="Gmail"
+                  outcome="Sync disabled"
+                  facts="Primary · Disabled"
+                >
+                  <ConnectAction
+                    label="Enable"
+                    onClick={() => void connect()}
+                    disabled={pending()}
+                  />
+                </CapabilityRow>
+              </SettingsCard>
+            </SettingsSection>
+          )}
+        </Show>
       </Show>
 
       <Show when={rows().length > 0 && multiInboxFlag().enabled}>
@@ -277,6 +310,7 @@ function GoogleInboxCapability(props: {
     >
       <GoogleCapabilityActions
         row={props.row}
+        link={props.link}
         pending={props.pending}
         removing={props.removing}
         onConnect={props.onConnect}
@@ -329,6 +363,7 @@ function GoogleInboxCapability(props: {
 
 function GoogleCapabilityActions(props: {
   row: Capability;
+  link: EmailLink | undefined;
   pending: boolean;
   removing: boolean;
   onConnect: () => void;
@@ -339,6 +374,18 @@ function GoogleCapabilityActions(props: {
   const isOwn = () => props.row.scope === 'personal';
   const isCalendar = () => props.row.id.startsWith('calendar:');
   const canRevoke = () => !isCalendar() || isOwn();
+  const canTurnOffCalendarWithData = () =>
+    isCalendar() &&
+    isOwn() &&
+    Boolean(
+      props.link?.has_calendar_data && props.link.needs_calendar_permission
+    );
+  const disconnectItem = {
+    label: 'Disconnect',
+    danger: true,
+    onSelect: isCalendar() ? props.onTurnOffCalendar : props.onRemoveGmail,
+    disabled: !isCalendar() && props.removing,
+  };
   const reconnectItem = {
     label: 'Reconnect',
     onSelect: props.onReconnect,
@@ -356,41 +403,13 @@ function GoogleCapabilityActions(props: {
               disabled={props.pending}
             />
           }
-          items={
-            canRevoke()
-              ? [
-                  reconnectItem,
-                  {
-                    label: 'Disconnect',
-                    danger: true,
-                    onSelect: isCalendar()
-                      ? props.onTurnOffCalendar
-                      : props.onRemoveGmail,
-                    disabled: !isCalendar() && props.removing,
-                  },
-                ]
-              : []
-          }
+          items={canRevoke() ? [reconnectItem, disconnectItem] : []}
         />
       );
     case 'connected':
       return (
         <ConnectionRowActions
-          items={
-            canRevoke()
-              ? [
-                  reconnectItem,
-                  {
-                    label: 'Disconnect',
-                    danger: true,
-                    onSelect: isCalendar()
-                      ? props.onTurnOffCalendar
-                      : props.onRemoveGmail,
-                    disabled: !isCalendar() && props.removing,
-                  },
-                ]
-              : []
-          }
+          items={canRevoke() ? [reconnectItem, disconnectItem] : []}
         />
       );
     case 'off':
@@ -405,21 +424,7 @@ function GoogleCapabilityActions(props: {
               />
             ) : undefined
           }
-          items={
-            canRevoke()
-              ? [
-                  reconnectItem,
-                  {
-                    label: 'Disconnect',
-                    danger: true,
-                    onSelect: isCalendar()
-                      ? props.onTurnOffCalendar
-                      : props.onRemoveGmail,
-                    disabled: !isCalendar() && props.removing,
-                  },
-                ]
-              : []
-          }
+          items={canRevoke() ? [reconnectItem, disconnectItem] : []}
         />
       );
     case 'not-connected':
@@ -432,7 +437,7 @@ function GoogleCapabilityActions(props: {
               disabled={props.pending}
             />
           }
-          items={[]}
+          items={canTurnOffCalendarWithData() ? [disconnectItem] : []}
         />
       );
     default: {
