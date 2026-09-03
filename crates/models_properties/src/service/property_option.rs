@@ -14,6 +14,15 @@ pub enum PropertyOptionValue {
     Number(f64),
 }
 
+impl std::fmt::Display for PropertyOptionValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PropertyOptionValue::String(s) => f.write_str(s),
+            PropertyOptionValue::Number(n) => write!(f, "{n}"),
+        }
+    }
+}
+
 impl PropertyOptionValue {
     /// Get as string if this is a string value
     pub fn as_string(&self) -> Option<&str> {

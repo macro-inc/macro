@@ -19,6 +19,7 @@ use entity_access::domain::models::{
     AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType,
 };
 use entity_access::domain::ports::EntityAccessService;
+use models_properties::DataType;
 use std::sync::Arc;
 
 pub use bulk_set_entity_property_options::{
@@ -98,6 +99,21 @@ fn team_access_error(err: AccessError) -> ToolCallError {
     ToolCallError {
         description: "Failed to verify your team membership.".to_string(),
         internal_error: err.into(),
+    }
+}
+
+/// The snake_case data type name the tools expose to the agent.
+pub(crate) fn data_type_name(data_type: DataType) -> &'static str {
+    match data_type {
+        DataType::Boolean => "boolean",
+        DataType::Date => "date",
+        DataType::Number => "number",
+        DataType::String => "string",
+        DataType::SelectNumber => "select_number",
+        DataType::SelectString => "select_string",
+        DataType::Tag => "tag",
+        DataType::Entity => "entity",
+        DataType::Link => "link",
     }
 }
 

@@ -127,7 +127,7 @@ fn test_create_custom_property_select_maps_options() {
     let tool = CreateCustomProperty {
         display_name: "  Department  ".to_string(),
         data_type: super::create_custom_property::ToolPropertyDataType::Select,
-        scope: super::create_custom_property::ToolPropertyScope::Team,
+        scope: CreatePropertyScope::Team,
         options: vec!["Engineering".into(), " Sales ".into(), "".into()],
         multi: true,
         referenced_entity_type: None,
@@ -155,7 +155,7 @@ fn test_create_custom_property_select_requires_options() {
     let tool = CreateCustomProperty {
         display_name: "Department".to_string(),
         data_type: super::create_custom_property::ToolPropertyDataType::Select,
-        scope: super::create_custom_property::ToolPropertyScope::Team,
+        scope: CreatePropertyScope::Team,
         options: vec![],
         multi: false,
         referenced_entity_type: None,
@@ -173,7 +173,7 @@ fn test_create_custom_property_rejects_options_on_string() {
     let tool = CreateCustomProperty {
         display_name: "Notes".to_string(),
         data_type: super::create_custom_property::ToolPropertyDataType::String,
-        scope: super::create_custom_property::ToolPropertyScope::User,
+        scope: CreatePropertyScope::User,
         options: vec!["nope".into()],
         multi: false,
         referenced_entity_type: None,
@@ -193,7 +193,7 @@ fn test_create_custom_property_rejects_multi_on_string() {
     let tool = CreateCustomProperty {
         display_name: "Notes".to_string(),
         data_type: super::create_custom_property::ToolPropertyDataType::String,
-        scope: super::create_custom_property::ToolPropertyScope::User,
+        scope: CreatePropertyScope::User,
         options: vec![],
         multi: true,
         referenced_entity_type: None,
@@ -207,40 +207,40 @@ fn test_create_custom_property_rejects_multi_on_string() {
 }
 
 #[test]
-fn test_create_custom_property_rejects_equivalent_select_number_options() {
+fn test_create_custom_property_select_number_parses_numeric_strings() {
     let tool = CreateCustomProperty {
         display_name: "Priority".to_string(),
         data_type: super::create_custom_property::ToolPropertyDataType::SelectNumber,
-        scope: super::create_custom_property::ToolPropertyScope::User,
-        options: vec!["1".into(), "1.0".into()],
+        scope: CreatePropertyScope::User,
+        options: vec!["1".into(), "2.5".into()],
         multi: false,
         referenced_entity_type: None,
     };
-    let err = tool
+    let request = tool
         .to_create_request()
-        .expect_err("1 and 1.0 are the same select_number option");
-    assert!(
-        err.description.contains("Duplicate select_number option"),
-        "unexpected error: {}",
-        err.description
-    );
-}
+        .expect("valid select_number request");
+    match request.data_type {
+        PropertyDataType::SelectNumber { options, .. } => {
+            assert_eq!(
+                options
+                    .iter()
+                    .map(|o| (o.display_order, o.value))
+                    .collect::<Vec<_>>(),
+                vec![(0, 1.0), (1, 2.5)]
+            );
+        }
+        other => panic!("expected select_number, got {other:?}"),
+    }
 
-#[test]
-fn test_create_custom_property_rejects_non_finite_select_number_options() {
     let tool = CreateCustomProperty {
-        display_name: "Priority".to_string(),
-        data_type: super::create_custom_property::ToolPropertyDataType::SelectNumber,
-        scope: super::create_custom_property::ToolPropertyScope::User,
-        options: vec!["NaN".into()],
-        multi: false,
-        referenced_entity_type: None,
+        options: vec!["high".into()],
+        ..tool
     };
     let err = tool
         .to_create_request()
-        .expect_err("NaN is not a finite select_number option");
+        .expect_err("non-numeric select_number option");
     assert!(
-        err.description.contains("finite numbers"),
+        err.description.contains("numeric strings"),
         "unexpected error: {}",
         err.description
     );
@@ -251,7 +251,7 @@ fn test_create_custom_property_entity_maps_referenced_type() {
     let tool = CreateCustomProperty {
         display_name: "Owner".to_string(),
         data_type: super::create_custom_property::ToolPropertyDataType::Entity,
-        scope: super::create_custom_property::ToolPropertyScope::Team,
+        scope: CreatePropertyScope::Team,
         options: vec![],
         multi: false,
         referenced_entity_type: Some(super::get_entity_properties::ToolEntityType::User),

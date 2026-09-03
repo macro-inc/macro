@@ -1,7 +1,5 @@
 //! CreateCustomProperty tool for adding a team or personal custom field.
 
-use std::collections::HashSet;
-
 use crate::domain::error::PropertiesErr;
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
@@ -13,36 +11,20 @@ use models_properties::api::{
     CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType, SelectNumberOption,
     SelectStringOption,
 };
-use models_properties::service::property_option::PropertyOptionValue;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::PropertiesToolContext;
-use super::caller_team_receipt_opt;
 use super::get_entity_properties::{ToolEntityType, ToolPropertyOption};
+use super::{PropertiesToolContext, caller_team_receipt_opt, data_type_name};
 
-fn default_scope() -> ToolPropertyScope {
-    ToolPropertyScope::Team
+fn default_scope() -> CreatePropertyScope {
+    CreatePropertyScope::Team
 }
 
-/// Who owns the new custom property.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ToolPropertyScope {
-    Team,
-    User,
-}
-
-impl From<ToolPropertyScope> for CreatePropertyScope {
-    fn from(scope: ToolPropertyScope) -> Self {
-        match scope {
-            ToolPropertyScope::Team => CreatePropertyScope::Team,
-            ToolPropertyScope::User => CreatePropertyScope::User,
-        }
-    }
-}
-
+// Deliberately flat (unlike the nested API `PropertyDataType`) so the agent
+// picks one name and passes `options` / `multi` / `referenced_entity_type`
+// alongside it; `to_create_request` folds them back together.
 /// The data type of the custom property to create.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -79,7 +61,7 @@ pub struct CreateCustomProperty {
         description = "Who owns the property: \"team\" (shared with the user's team, the default) or \"user\" (personal only). \"team\" requires the user to belong to a team."
     )]
     #[serde(default = "default_scope")]
-    pub scope: ToolPropertyScope,
+    pub scope: CreatePropertyScope,
 
     #[schemars(
         description = "For select and select_number, the choices to create with the property, in display order. For select_number each value must be a numeric string (e.g. [\"1\", \"2\", \"3\"]). Omit for other types."
@@ -113,7 +95,7 @@ pub struct CreateCustomPropertyResponse {
     /// Whether the property accepts multiple values.
     pub is_multi_select: bool,
     /// Whether the property is team-shared or personal.
-    pub scope: ToolPropertyScope,
+    pub scope: CreatePropertyScope,
     /// Select options created with the property, empty for non-select types.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub options: Vec<ToolPropertyOption>,
@@ -126,172 +108,95 @@ impl ToolAnnotated for CreateCustomProperty {
 }
 
 impl CreateCustomProperty {
-    fn trimmed_name(&self) -> &str {
-        self.display_name.trim()
-    }
-
+    /// Map the flat agent-facing params onto the API request. Only the
+    /// cross-field shape is checked here (which params go with which type);
+    /// name length, option values, and uniqueness are validated by the domain.
     pub(crate) fn to_create_request(
         &self,
     ) -> Result<CreatePropertyDefinitionRequest, ToolCallError> {
-        if self.trimmed_name().is_empty() {
+        use ToolPropertyDataType as Kind;
+
+        let kind = self.data_type;
+        let is_select = matches!(kind, Kind::Select | Kind::SelectNumber);
+        let is_scalar = matches!(
+            kind,
+            Kind::String | Kind::Number | Kind::Boolean | Kind::Date
+        );
+        let options: Vec<&str> = self
+            .options
+            .iter()
+            .map(|o| o.trim())
+            .filter(|o| !o.is_empty())
+            .collect();
+
+        if !options.is_empty() && !is_select {
             return Err(tool_error(
-                "display_name is required, e.g. \"Department\" or \"Renewal date\".",
+                "`options` is only valid for select and select_number properties.",
             ));
         }
-
-        let data_type = self.to_property_data_type()?;
-        Ok(CreatePropertyDefinitionRequest {
-            scope: self.scope.into(),
-            display_name: self.trimmed_name().to_string(),
-            data_type,
-        })
-    }
-
-    fn to_property_data_type(&self) -> Result<PropertyDataType, ToolCallError> {
-        match self.data_type {
-            ToolPropertyDataType::String => {
-                self.reject_select_fields("string")?;
-                self.reject_entity_fields("string")?;
-                self.reject_multi("string")?;
-                Ok(PropertyDataType::String)
-            }
-            ToolPropertyDataType::Number => {
-                self.reject_select_fields("number")?;
-                self.reject_entity_fields("number")?;
-                self.reject_multi("number")?;
-                Ok(PropertyDataType::Number)
-            }
-            ToolPropertyDataType::Boolean => {
-                self.reject_select_fields("boolean")?;
-                self.reject_entity_fields("boolean")?;
-                self.reject_multi("boolean")?;
-                Ok(PropertyDataType::Boolean)
-            }
-            ToolPropertyDataType::Date => {
-                self.reject_select_fields("date")?;
-                self.reject_entity_fields("date")?;
-                self.reject_multi("date")?;
-                Ok(PropertyDataType::Date)
-            }
-            ToolPropertyDataType::Select => {
-                self.reject_entity_fields("select")?;
-                Ok(PropertyDataType::SelectString {
-                    options: self.select_string_options()?,
-                    multi: self.multi,
-                })
-            }
-            ToolPropertyDataType::SelectNumber => {
-                self.reject_entity_fields("select_number")?;
-                Ok(PropertyDataType::SelectNumber {
-                    options: self.select_number_options()?,
-                    multi: self.multi,
-                })
-            }
-            ToolPropertyDataType::Entity => {
-                self.reject_select_fields("entity")?;
-                Ok(PropertyDataType::Entity {
-                    specific_type: self.referenced_entity_type.map(Into::into),
-                    multi: self.multi,
-                })
-            }
-            ToolPropertyDataType::Link => {
-                self.reject_select_fields("link")?;
-                self.reject_entity_fields("link")?;
-                Ok(PropertyDataType::Link { multi: self.multi })
-            }
-        }
-    }
-
-    fn reject_select_fields(&self, data_type: &str) -> Result<(), ToolCallError> {
-        if !self.options.iter().any(|o| !o.trim().is_empty()) {
-            return Ok(());
-        }
-        Err(tool_error(format!(
-            "`options` is only valid for select and select_number properties, not {data_type}."
-        )))
-    }
-
-    fn reject_entity_fields(&self, data_type: &str) -> Result<(), ToolCallError> {
-        if self.referenced_entity_type.is_none() {
-            return Ok(());
-        }
-        Err(tool_error(format!(
-            "`referenced_entity_type` is only valid for entity properties, not {data_type}."
-        )))
-    }
-
-    fn reject_multi(&self, data_type: &str) -> Result<(), ToolCallError> {
-        if !self.multi {
-            return Ok(());
-        }
-        Err(tool_error(format!(
-            "`multi` is only valid for select, select_number, entity, and link properties, not {data_type}."
-        )))
-    }
-
-    fn select_string_options(&self) -> Result<Vec<SelectStringOption>, ToolCallError> {
-        let values = self.trimmed_options()?;
-        Ok(values
-            .into_iter()
-            .enumerate()
-            .map(|(i, value)| SelectStringOption {
-                display_order: i as i32,
-                value,
-            })
-            .collect())
-    }
-
-    fn select_number_options(&self) -> Result<Vec<SelectNumberOption>, ToolCallError> {
-        let values = self.trimmed_options()?;
-        let mut parsed_options = Vec::with_capacity(values.len());
-        for (i, value) in values.into_iter().enumerate() {
-            let parsed = value.parse::<f64>().map_err(|_| {
-                tool_error(format!(
-                    "select_number options must be numeric strings, got \"{value}\"."
-                ))
-            })?;
-            if !parsed.is_finite() {
-                return Err(tool_error(format!(
-                    "select_number options must be finite numbers, got \"{value}\"."
-                )));
-            }
-            if parsed_options
-                .iter()
-                .any(|option: &SelectNumberOption| option.value == parsed)
-            {
-                return Err(tool_error(format!(
-                    "Duplicate select_number option \"{value}\". Each numeric choice must be unique (\"1\" and \"1.0\" are the same)."
-                )));
-            }
-            parsed_options.push(SelectNumberOption {
-                display_order: i as i32,
-                value: parsed,
-            });
-        }
-        Ok(parsed_options)
-    }
-
-    fn trimmed_options(&self) -> Result<Vec<String>, ToolCallError> {
-        let mut seen = HashSet::new();
-        let mut values = Vec::new();
-        for raw in &self.options {
-            let value = raw.trim();
-            if value.is_empty() {
-                continue;
-            }
-            if !seen.insert(value.to_lowercase()) {
-                return Err(tool_error(format!(
-                    "Duplicate option \"{value}\". Each select choice must be unique."
-                )));
-            }
-            values.push(value.to_string());
-        }
-        if values.is_empty() {
+        if is_select && options.is_empty() {
             return Err(tool_error(
                 "select properties need at least one choice in `options`, e.g. [\"Engineering\", \"Sales\"].",
             ));
         }
-        Ok(values)
+        if self.referenced_entity_type.is_some() && kind != Kind::Entity {
+            return Err(tool_error(
+                "`referenced_entity_type` is only valid for entity properties.",
+            ));
+        }
+        if self.multi && is_scalar {
+            return Err(tool_error(
+                "`multi` is only valid for select, select_number, entity, and link properties.",
+            ));
+        }
+
+        let multi = self.multi;
+        let data_type = match kind {
+            Kind::String => PropertyDataType::String,
+            Kind::Number => PropertyDataType::Number,
+            Kind::Boolean => PropertyDataType::Boolean,
+            Kind::Date => PropertyDataType::Date,
+            Kind::Select => PropertyDataType::SelectString {
+                options: options
+                    .iter()
+                    .enumerate()
+                    .map(|(i, value)| SelectStringOption {
+                        display_order: i as i32,
+                        value: value.to_string(),
+                    })
+                    .collect(),
+                multi,
+            },
+            Kind::SelectNumber => PropertyDataType::SelectNumber {
+                options: options
+                    .iter()
+                    .enumerate()
+                    .map(|(i, value)| {
+                        let parsed = value.parse::<f64>().map_err(|_| {
+                            tool_error(format!(
+                                "select_number options must be numeric strings, got \"{value}\"."
+                            ))
+                        })?;
+                        Ok(SelectNumberOption {
+                            display_order: i as i32,
+                            value: parsed,
+                        })
+                    })
+                    .collect::<Result<_, ToolCallError>>()?,
+                multi,
+            },
+            Kind::Entity => PropertyDataType::Entity {
+                specific_type: self.referenced_entity_type.map(Into::into),
+                multi,
+            },
+            Kind::Link => PropertyDataType::Link { multi },
+        };
+
+        Ok(CreatePropertyDefinitionRequest {
+            scope: self.scope,
+            display_name: self.display_name.trim().to_string(),
+            data_type,
+        })
     }
 }
 
@@ -321,87 +226,65 @@ where
         tracing::info!("Create custom property");
 
         let request = self.to_create_request()?;
-        let team = match self.scope {
-            ToolPropertyScope::User => None,
-            ToolPropertyScope::Team => Some(
-                caller_team_receipt_opt(&service_context, &request_context)
-                    .await?
-                    .ok_or_else(|| {
-                        tool_error(
-                            "You are not on a team, so you can't create a team property. Set scope to \"user\" to create a personal property.",
-                        )
-                    })?,
-            ),
+        // The domain rejects team scope without a receipt (TeamMembershipRequired).
+        let team = match request.scope {
+            CreatePropertyScope::User => None,
+            CreatePropertyScope::Team => {
+                caller_team_receipt_opt(&service_context, &request_context).await?
+            }
         };
-        let team_ref = team.as_ref();
         let user_id = &request_context.user_id;
 
         let property = service_context
             .service
-            .create_property_definition(user_id, team_ref, &request)
+            .create_property_definition(user_id, team.as_ref(), &request)
             .await
-            .map_err(|e| map_create_error(e, request.display_name.as_str()))?;
+            .map_err(map_create_error)?;
 
-        let options = if matches!(
+        let options: Vec<ToolPropertyOption> = if matches!(
             property.data_type,
             DataType::SelectString | DataType::SelectNumber
         ) {
             service_context
                 .service
-                .get_property_options(property.id, user_id, team_ref)
+                .get_property_options(property.id, user_id, team.as_ref())
                 .await
-                .map_err(|e| {
-                    tracing::error!(
-                        error=?e,
-                        property_definition_id = %property.id,
-                        "failed to load options for newly created property"
-                    );
-                    tool_error_with(
-                        format!(
-                            "Created the property definition (`{}`) but could not load its options. Do not create another property with the same name. Call GetEntityProperties to read the new definition, then SetEntityProperty to assign a value.",
-                            property.id
-                        ),
-                        e,
-                    )
+                .map_err(|e| ToolCallError {
+                    description: format!(
+                        "Created the property (property_definition_id {}) but could not load its options. Do not create it again; call GetEntityProperties on an item to read it, then SetEntityProperty to assign a value.",
+                        property.id
+                    ),
+                    internal_error: e.into(),
                 })?
                 .into_iter()
-                .map(|opt| ToolPropertyOption {
-                    id: opt.id,
-                    display_order: opt.display_order,
-                    display_value: option_display_value(&opt.value),
-                })
+                .map(Into::into)
                 .collect()
         } else {
             Vec::new()
         };
 
-        let data_type = data_type_name(property.data_type).to_string();
         let scope_word = match self.scope {
-            ToolPropertyScope::Team => "team",
-            ToolPropertyScope::User => "personal",
+            CreatePropertyScope::Team => "team",
+            CreatePropertyScope::User => "personal",
         };
-        let options_clause = if options.is_empty() {
-            String::new()
-        } else {
-            format!(
-                " with options {}.",
-                options
-                    .iter()
-                    .map(|o| format!("\"{}\"", o.display_value))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        };
-        let period = if options_clause.is_empty() { "." } else { "" };
-        let summary = format!(
-            "Created the {scope_word} {data_type} property \"{}\"{period}{options_clause}",
+        let mut summary = format!(
+            "Created the {scope_word} {} property \"{}\"",
+            data_type_name(property.data_type),
             property.display_name
         );
+        if !options.is_empty() {
+            let labels: Vec<String> = options
+                .iter()
+                .map(|o| format!("\"{}\"", o.display_value))
+                .collect();
+            summary.push_str(&format!(" with options {}", labels.join(", ")));
+        }
+        summary.push('.');
 
         Ok(CreateCustomPropertyResponse {
             property_definition_id: property.id,
             display_name: property.display_name,
-            data_type,
+            data_type: data_type_name(property.data_type).to_string(),
             is_multi_select: property.is_multi_select,
             scope: self.scope,
             options,
@@ -410,48 +293,21 @@ where
     }
 }
 
-fn data_type_name(data_type: DataType) -> &'static str {
-    match data_type {
-        DataType::Boolean => "boolean",
-        DataType::Date => "date",
-        DataType::Number => "number",
-        DataType::String => "string",
-        DataType::SelectNumber => "select_number",
-        DataType::SelectString => "select_string",
-        DataType::Tag => "tag",
-        DataType::Entity => "entity",
-        DataType::Link => "link",
+fn map_create_error(err: PropertiesErr) -> ToolCallError {
+    let description = match &err {
+        PropertiesErr::TeamMembershipRequired => {
+            "You are not on a team, so you can't create a team property. Set scope to \"user\" to create a personal property.".to_string()
+        }
+        PropertiesErr::DuplicatePropertyName => {
+            "A property with that name already exists. Find its property_definition_id with GetEntityProperties on an item, then use SetEntityProperty — don't create another.".to_string()
+        }
+        PropertiesErr::Validation(msg) => msg.clone(),
+        other => format!("Failed to create property: {other}"),
+    };
+    ToolCallError {
+        description,
+        internal_error: err.into(),
     }
-}
-
-fn option_display_value(value: &PropertyOptionValue) -> String {
-    match value {
-        PropertyOptionValue::String(s) => s.clone(),
-        PropertyOptionValue::Number(n) => n.to_string(),
-    }
-}
-
-fn map_create_error(err: PropertiesErr, display_name: &str) -> ToolCallError {
-    match &err {
-        PropertiesErr::TeamMembershipRequired => tool_error_with(
-            "You are not on a team, so you can't create a team property. Set scope to \"user\" to create a personal property.",
-            err,
-        ),
-        PropertiesErr::Validation(msg) => tool_error_with(msg.clone(), err),
-        PropertiesErr::Repo(repo_err) if is_duplicate_display_name(repo_err) => tool_error_with(
-            format!(
-                "A property named \"{display_name}\" already exists. Find its property_definition_id with GetEntityProperties on an item, then use SetEntityProperty — don't create another."
-            ),
-            err,
-        ),
-        _ => tool_error_with(format!("Failed to create property: {err}"), err),
-    }
-}
-
-fn is_duplicate_display_name(err: &anyhow::Error) -> bool {
-    let text = format!("{err:#}").to_lowercase();
-    text.contains("unique_property_definitions")
-        || (text.contains("duplicate key") && text.contains("display_name"))
 }
 
 fn tool_error(description: impl Into<String>) -> ToolCallError {
@@ -459,12 +315,5 @@ fn tool_error(description: impl Into<String>) -> ToolCallError {
     ToolCallError {
         internal_error: anyhow::anyhow!("{description}"),
         description,
-    }
-}
-
-fn tool_error_with(description: impl Into<String>, err: PropertiesErr) -> ToolCallError {
-    ToolCallError {
-        description: description.into(),
-        internal_error: err.into(),
     }
 }

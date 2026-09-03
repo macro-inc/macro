@@ -13,7 +13,7 @@ Create a new custom property — a structured field the user can attach to docum
 | --- | --- | --- | --- |
 | `display_name` | string | Yes | The property's display name, e.g. "Department" or "Renewal date". |
 | `data_type` | `"string"` \| `"number"` \| `"boolean"` \| `"date"` \| `"select"` \| `"select_number"` \| `"entity"` \| `"link"` | Yes | The data type of the custom property to create. |
-| `scope` | `"team"` \| `"user"` | No | Who owns the new custom property. |
+| `scope` | `"user"` \| `"team"` | No | Who owns a new property definition: the requesting user or their team. The owner is derived from the authenticated caller, never supplied by id; team scope requires team membership. System properties cannot be created. |
 | `options` | string[] | No | For select and select_number, the choices to create with the property, in display order. For select_number each value must be a numeric string (e.g. ["1", "2", "3"]). Omit for other types. |
 | `multi` | boolean | No | True if the property should accept multiple values. Only valid for select, select_number, entity, and link. Defaults to false. |
 | `referenced_entity_type` | `"document"` \| `"task"` \| `"project"` \| `"chat"` \| `"thread"` \| `"channel"` \| `"call"` \| `"user"` \| `"company"` | No | For entity properties, restrict links to this entity type (user, document, task, project, channel, chat, thread, call, company). Omit to allow any entity. |

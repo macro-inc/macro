@@ -1040,7 +1040,27 @@ export const CreateCustomProperty = z.object({
     'link',
   ]),
   scope: z
-    .intersection(z.enum(['team', 'user']), z.any().default('team'))
+    .intersection(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('user'), z.literal('team')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.any().default('team')
+    )
     .optional(),
   options: z.array(z.string()).optional(),
   multi: z.boolean().optional(),
@@ -1067,7 +1087,24 @@ export const CreateCustomPropertyResponse = z.object({
   displayName: z.string(),
   dataType: z.string(),
   isMultiSelect: z.boolean(),
-  scope: z.enum(['team', 'user']),
+  scope: z.any().superRefine((x, ctx) => {
+    const schemas = [z.literal('user'), z.literal('team')];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
   options: z
     .array(
       z.object({

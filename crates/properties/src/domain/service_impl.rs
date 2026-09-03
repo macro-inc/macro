@@ -39,10 +39,10 @@ use super::events::{
 };
 use super::metadata;
 use super::model::{
-    EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
-    EntityPropertyOptionUpdate, PropertyAccessReceiptExt, PropertyDefinitionOwner,
-    PropertyTargetKey, ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope,
-    TagSet, UpdatePropertyOptionOutcome, ViewReceipt,
+    CreatePropertyDefinitionOutcome, EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo,
+    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, PropertyAccessReceiptExt,
+    PropertyDefinitionOwner, PropertyTargetKey, ResolvedPropertySubject, TagPromotionOutcome,
+    TagRemapOutcome, TagScope, TagSet, UpdatePropertyOptionOutcome, ViewReceipt,
 };
 use super::ports::{NotificationService, PermissionService, PropertiesRepo};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
@@ -1122,7 +1122,7 @@ where
             _ => Vec::new(),
         };
 
-        let property = self
+        let property = match self
             .repository
             .create_property_definition(
                 owner,
@@ -1133,7 +1133,13 @@ where
                 property_options,
             )
             .await
-            .map_err(anyhow::Error::from)?;
+            .map_err(anyhow::Error::from)?
+        {
+            CreatePropertyDefinitionOutcome::Created(property) => property,
+            CreatePropertyDefinitionOutcome::DuplicateDisplayName => {
+                return Err(PropertiesErr::DuplicatePropertyName);
+            }
+        };
 
         tracing::info!(
             property_id = %property.id,

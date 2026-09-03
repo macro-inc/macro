@@ -283,6 +283,15 @@ pub enum EntityOptionUpdateOutcome {
     },
 }
 
+/// Outcome of creating a property definition.
+#[derive(Debug, Clone)]
+pub enum CreatePropertyDefinitionOutcome {
+    /// The definition (and any options) were created.
+    Created(PropertyDefinition),
+    /// The owner already has a definition with this display name.
+    DuplicateDisplayName,
+}
+
 /// Outcome of an in-place property option update.
 #[derive(Debug, Clone)]
 pub enum UpdatePropertyOptionOutcome {

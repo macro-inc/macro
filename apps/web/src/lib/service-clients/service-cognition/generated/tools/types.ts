@@ -225,9 +225,11 @@ export type ToolPropertyDataType =
   | 'entity'
   | 'link';
 /**
- * Who owns the new custom property.
+ * Who owns a new property definition: the requesting user or their team.
+ * The owner is derived from the authenticated caller, never supplied by id;
+ * team scope requires team membership. System properties cannot be created.
  */
-export type ToolPropertyScope = 'team' | 'user';
+export type CreatePropertyScope = 'user' | 'team';
 export type ToolEntityType =
   | 'document'
   | 'task'
@@ -2008,7 +2010,7 @@ export interface CreateCustomProperty {
    */
   display_name: string;
   data_type: ToolPropertyDataType;
-  scope?: ToolPropertyScope & string;
+  scope?: CreatePropertyScope & string;
   /**
    * For select and select_number, the choices to create with the property, in display order. For select_number each value must be a numeric string (e.g. ["1", "2", "3"]). Omit for other types.
    */
@@ -2042,7 +2044,7 @@ export interface CreateCustomPropertyResponse {
    * Whether the property accepts multiple values.
    */
   isMultiSelect: boolean;
-  scope: ToolPropertyScope;
+  scope: CreatePropertyScope;
   /**
    * Select options created with the property, empty for non-select types.
    */
