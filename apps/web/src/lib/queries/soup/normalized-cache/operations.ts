@@ -480,8 +480,9 @@ export function removeSoupEntitiesFromDoneFilteredQueries(
  * fetched while the entity had nothing outstanding — and the normalized
  * field merge only patches rows already present, so without this the feeds
  * would not show the entity again until their next refetch. Grouped pages
- * whose target group can't be resolved locally (e.g. date buckets)
- * invalidate instead.
+ * and expanded single-group caches (which back grouped views' rows and are
+ * cached with staleTime Infinity) are restored the same way; groups that
+ * can't be resolved locally (e.g. date buckets) invalidate instead.
  */
 export function restoreSoupEntityToDoneFilteredQueries(entityId: string): void {
   const item = getSoupEntityById(entityId);
@@ -574,6 +575,8 @@ export function restoreSoupEntityToDoneFilteredQueries(entityId: string): void {
       pages: [nextPage, ...prev.pages.slice(1)],
     });
   }
+
+  insertGroupQueries(item, entityId, soupQueryExcludesDone);
 }
 
 /** Remove entities from the soup queries whose key matches the predicate. */

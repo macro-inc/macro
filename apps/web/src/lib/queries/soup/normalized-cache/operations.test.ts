@@ -1228,6 +1228,57 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
     expect(page.groups[0].itemIds).toEqual(['t-new', 't-1']);
   });
 
+  it('restores the entity into done-filtered expanded group queries', () => {
+    const task = mockTaskItem('t-new', 'in_progress');
+    mockNormalizer.getObjectById.mockImplementation((normKey) =>
+      normKey === 'soup:t-new' ? task : null
+    );
+
+    const makeGroupQueryKey = (bodyMarker: object, suffix: string) => [
+      ...soupKeys.groupedGroup._def,
+      'in_progress',
+      STATUS_GROUP_BY,
+      bodyMarker,
+      suffix,
+    ];
+    const doneFilteredKey = makeGroupQueryKey(
+      { df: [{ l: { nd: false } }] },
+      'done-filtered'
+    );
+    const allViewKey = makeGroupQueryKey({ emailView: 'all' }, 'all-view');
+    const groupData = () => ({
+      pages: [
+        {
+          items: { 't-1': mockTaskItem('t-1', 'in_progress') },
+          group: buildGroup('in_progress', ['t-1'], 1, 0),
+        },
+      ],
+      pageParams: [null],
+    });
+    for (const key of [doneFilteredKey, allViewKey]) {
+      testQueryClient.setQueryDefaults(key, {
+        meta: { groupBy: STATUS_GROUP_BY, groupKey: 'in_progress' },
+      });
+      testQueryClient.setQueryData(key, groupData());
+    }
+
+    restoreSoupEntityToDoneFilteredQueries('t-new');
+
+    type GroupPage = { items: Record<string, SoupApiItem>; group: GroupMeta };
+    const restored =
+      testQueryClient.getQueryData<InfiniteData<GroupPage, unknown>>(
+        doneFilteredKey
+      )!.pages[0];
+    expect(restored.items['t-new']).toBeDefined();
+    expect(restored.group.itemIds).toEqual(['t-new', 't-1']);
+    // Done-inclusive expanded groups are left alone.
+    const untouched =
+      testQueryClient.getQueryData<InfiniteData<GroupPage, unknown>>(
+        allViewKey
+      )!.pages[0];
+    expect(untouched.group.itemIds).toEqual(['t-1']);
+  });
+
   it('invalidates a grouped parent whose group cannot be resolved locally', () => {
     cacheChannel('ch-1');
     // No groupBy meta mirrors groupings the client cannot bucket (e.g. date):
