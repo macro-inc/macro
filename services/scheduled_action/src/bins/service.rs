@@ -32,6 +32,9 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+#[cfg(test)]
+mod test;
+
 const EVENT_BROKER_DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const GATEWAY_PATH_PREFIX: &str = "/agent-schedule";
 
