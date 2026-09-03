@@ -62,6 +62,7 @@ export class Sdk extends HeyApiClient {
      */
     public loadAgentModelsHandler<ThrowOnError extends boolean = false>(options: Options<LoadAgentModelsHandlerData, ThrowOnError>): RequestResult<LoadAgentModelsHandlerResponses, LoadAgentModelsHandlerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<LoadAgentModelsHandlerResponses, LoadAgentModelsHandlerErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
             url: '/agent-models/load',
             ...options,
             headers: {

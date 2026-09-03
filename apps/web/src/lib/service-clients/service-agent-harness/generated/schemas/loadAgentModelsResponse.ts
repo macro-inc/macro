@@ -6,6 +6,7 @@
  */
 
 import type { AgentModelDto } from './agentModelDto';
+import type { AgentModelsStatusDto } from './agentModelsStatusDto';
 import type { LoadAgentModelsResponseCurrentModel } from './loadAgentModelsResponseCurrentModel';
 
 /**
@@ -16,6 +17,6 @@ export interface LoadAgentModelsResponse {
   currentModel?: LoadAgentModelsResponseCurrentModel;
   /** Ordered model catalog. */
   models: AgentModelDto[];
-  /** `available` or `unsupported`. */
-  status: string;
+  /** Model-selection availability. */
+  status: AgentModelsStatusDto;
 }

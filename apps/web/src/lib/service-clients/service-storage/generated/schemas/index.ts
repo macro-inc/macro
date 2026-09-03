@@ -816,6 +816,7 @@ export * from './pairingDetailsRequestedScope';
 export * from './pairingModelCatalog';
 export * from './pairingModelOption';
 export * from './pairingModelOptionDescription';
+export * from './pairingModelOptionGroup';
 export * from './params';
 export * from './paramsExpand';
 export * from './paramsLimit';

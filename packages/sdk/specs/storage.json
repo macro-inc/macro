@@ -22127,6 +22127,10 @@
             "type": ["string", "null"],
             "description": "Optional descriptive copy supplied by the harness."
           },
+          "group": {
+            "type": ["string", "null"],
+            "description": "Optional group heading supplied by the harness."
+          },
           "id": {
             "type": "string",
             "description": "The value sent back to the harness to select this model."

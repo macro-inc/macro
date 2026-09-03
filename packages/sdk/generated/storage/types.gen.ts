@@ -6189,6 +6189,10 @@ export type PairingModelOption = {
      */
     description?: string | null;
     /**
+     * Optional group heading supplied by the harness.
+     */
+    group?: string | null;
+    /**
      * The value sent back to the harness to select this model.
      */
     id: string;

@@ -8293,6 +8293,12 @@ export const createHarnessPairingBody = zod
                       .describe(
                         'Optional descriptive copy supplied by the harness.'
                       ),
+                    group: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Optional group heading supplied by the harness.'
+                      ),
                     id: zod
                       .string()
                       .describe(
@@ -8364,6 +8370,12 @@ export const getHarnessPairingResponse = zod
                       .nullish()
                       .describe(
                         'Optional descriptive copy supplied by the harness.'
+                      ),
+                    group: zod
+                      .string()
+                      .nullish()
+                      .describe(
+                        'Optional group heading supplied by the harness.'
                       ),
                     id: zod
                       .string()

@@ -4,14 +4,16 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { LoadAgentModelsRequestHarnessId } from './loadAgentModelsRequestHarnessId';
+import type { ModelHarnessDto } from './modelHarnessDto';
 
 /**
  * HTTP request selecting one provider to probe.
  */
 export interface LoadAgentModelsRequest {
-  /** `in-memory`, `cursor`, or `macrod`. */
-  harness: string;
+  /** Provider to probe. */
+  harness: ModelHarnessDto;
   /** Required for macrod and forbidden for other targets. */
   harnessId?: LoadAgentModelsRequestHarnessId;
 }

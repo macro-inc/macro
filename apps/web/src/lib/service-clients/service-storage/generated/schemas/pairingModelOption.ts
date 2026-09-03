@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PairingModelOptionDescription } from './pairingModelOptionDescription';
+import type { PairingModelOptionGroup } from './pairingModelOptionGroup';
 
 /**
  * One selectable model discovered from a harness.
@@ -12,6 +13,8 @@ import type { PairingModelOptionDescription } from './pairingModelOptionDescript
 export interface PairingModelOption {
   /** Optional descriptive copy supplied by the harness. */
   description?: PairingModelOptionDescription;
+  /** Optional group heading supplied by the harness. */
+  group?: PairingModelOptionGroup;
   /** The value sent back to the harness to select this model. */
   id: string;
   /** Human-readable model label. */

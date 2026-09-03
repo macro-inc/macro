@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { AgentModelDtoDescription } from './agentModelDtoDescription';
+import type { AgentModelDtoGroup } from './agentModelDtoGroup';
 
 /**
  * One model picker option.
@@ -12,6 +13,8 @@ import type { AgentModelDtoDescription } from './agentModelDtoDescription';
 export interface AgentModelDto {
   /** Optional provider description. */
   description?: AgentModelDtoDescription;
+  /** Optional group heading supplied by the provider. */
+  group?: AgentModelDtoGroup;
   /** Provider model id. */
   id: string;
   /** Display name. */
