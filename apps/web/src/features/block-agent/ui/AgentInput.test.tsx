@@ -83,7 +83,7 @@ describe('queued message advancement', () => {
     const sendNext = screen.getByRole('button', {
       name: 'Send next queued message',
     });
-    expect(screen.getByTestId('enter-icon')).toBeInTheDocument();
+    expect(screen.getByTestId('enter-icon')).toBeTruthy();
 
     fireEvent.click(sendNext);
     expect(onStop).toHaveBeenCalledTimes(1);
@@ -113,7 +113,7 @@ describe('queued message advancement', () => {
 
     render(() => <AgentInput busy onSend={vi.fn()} onStop={onStop} />);
 
-    expect(screen.getByRole('button', { name: 'Stop' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
     editor.enter?.();
     expect(onStop).not.toHaveBeenCalled();
   });

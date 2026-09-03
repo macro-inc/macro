@@ -198,6 +198,7 @@ export function AgentInput(props: AgentInputProps) {
                 }
               >
                 <SendButton
+                  aria-label="Send next queued message"
                   tooltip="Send next queued message"
                   shortcut="Enter"
                   onClick={sendNext}
