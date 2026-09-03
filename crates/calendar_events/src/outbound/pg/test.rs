@@ -369,9 +369,11 @@ async fn reaper_rearms_a_dead_lettered_pending_job(pool: PgPool) {
         0
     );
 
-    // Once the delivery dead-letters, nothing touches the job again.
+    // The job reached a worker once (started_at set) and a deterministic
+    // failure sat it back to pending; once the delivery dead-letters nothing
+    // touches it again.
     sqlx::query!(
-        "UPDATE calendar_backfill_jobs SET updated_at = now() - interval '20 minutes' WHERE id = $1",
+        "UPDATE calendar_backfill_jobs SET started_at = now() - interval '25 minutes', updated_at = now() - interval '20 minutes' WHERE id = $1",
         job_id,
     )
     .execute(&pool)
@@ -402,6 +404,60 @@ async fn reaper_rearms_a_dead_lettered_pending_job(pool: PgPool) {
             .await
             .unwrap(),
         0
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reaper_leaves_a_never_delivered_queued_job_alone(pool: PgPool) {
+    let owner_id = "macro|calendar-queued@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let job_id = enabled.jobs[0].id;
+
+    // The drain published the delivery, but a backed-up queue means it has not
+    // reached a worker yet: started_at is still NULL though the outbox row and
+    // the job both look old.
+    sqlx::query!(
+        "UPDATE calendar_sync_outbox SET published_at = now() - interval '30 minutes' WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "UPDATE calendar_backfill_jobs SET updated_at = now() - interval '30 minutes' WHERE id = $1",
+        job_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // Republishing would only duplicate the delivery still in flight, so the
+    // reaper leaves an un-claimed job alone.
+    assert_eq!(
+        repo.reap_wedged_google_syncs(Utc::now() - Duration::minutes(15))
+            .await
+            .unwrap(),
+        0
+    );
+    let published_at = sqlx::query_scalar!(
+        "SELECT published_at FROM calendar_sync_outbox WHERE backfill_job_id = $1",
+        job_id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        published_at.is_some(),
+        "the queued delivery stays published, not re-armed"
     );
 }
 

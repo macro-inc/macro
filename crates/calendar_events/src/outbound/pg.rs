@@ -1888,9 +1888,15 @@ impl GoogleCalendarSyncRepository for PgCalendarRepository {
                   AND scopes.granted_scopes @> $2::text[]
                   AND account.sync_status <> 'disabled'
                   AND (
-                        -- Dead-lettered: the drain published the delivery, but
-                        -- the job has sat pending and untouched ever since.
+                        -- Dead-lettered: a delivery reached a worker at least
+                        -- once (started_at is set) and failed back to pending,
+                        -- and nothing has touched the job since. started_at
+                        -- separates this from a job merely waiting its turn in a
+                        -- backed-up queue — the drain publishes that one without
+                        -- ever claiming it, so republishing would only duplicate
+                        -- the message still in flight.
                         (job.status = 'pending'
+                         AND job.started_at IS NOT NULL
                          AND outbox.published_at IS NOT NULL
                          AND job.updated_at <= $1)
                         -- Abandoned: a worker claimed the job and died without
