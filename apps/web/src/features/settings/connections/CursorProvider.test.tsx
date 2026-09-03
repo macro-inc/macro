@@ -3,30 +3,12 @@
  */
 
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CursorProvider } from './CursorProvider';
 
 vi.mock('@ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@ui')>();
-  const Dropdown = Object.assign(
-    (p: { children?: JSX.Element }) => <>{p.children}</>,
-    {
-      Trigger: (p: { 'aria-label'?: string; children?: JSX.Element }) => (
-        <button type="button" aria-label={p['aria-label']}>
-          {p.children}
-        </button>
-      ),
-      Content: (p: { children?: JSX.Element }) => <div>{p.children}</div>,
-      Group: (p: { children?: JSX.Element }) => <div>{p.children}</div>,
-      Item: (p: { children?: JSX.Element; onSelect?: () => void }) => (
-        <div role="menuitem" onClick={() => p.onSelect?.()}>
-          {p.children}
-        </div>
-      ),
-    }
-  );
-  return { ...actual, Dropdown };
+  const { mockUiWithDropdown } = await import('./mock-dropdown');
+  return mockUiWithDropdown(() => importOriginal<typeof import('@ui')>());
 });
 
 const mocks = vi.hoisted(() => ({

@@ -5,6 +5,7 @@ import {
   useStartMcpAuthMutation,
   useUpdateMcpServerMutation,
 } from '@queries/mcp-servers';
+import { writeMcpAuthAttempted } from '../mcp-auth-attempt';
 
 export function useNativeMcpActions() {
   const authorize = useStartMcpAuthMutation();
@@ -19,8 +20,14 @@ export function useNativeMcpActions() {
       authorize.mutate(
         { server_url: url, server_name: name },
         {
-          onSuccess: (result) => openExternalUrl(result.authorization_url),
-          onError: () => toast.failure('Failed to start authorization'),
+          onSuccess: (result) => {
+            openExternalUrl(result.authorization_url);
+            writeMcpAuthAttempted(url, true);
+          },
+          onError: () => {
+            writeMcpAuthAttempted(url, true);
+            toast.failure('Failed to start authorization');
+          },
         }
       );
     },
