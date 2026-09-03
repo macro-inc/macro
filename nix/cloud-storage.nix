@@ -517,12 +517,14 @@
 
       localStackDeployServiceNames = [
         "agent-harness-service"
+        "agent-schedule-service"
         "connection-gateway"
         "contacts-service"
         "document-cognition-service"
         "document-storage-service"
         "email-service"
         "image-proxy-service"
+        "mcp-server"
         "notification-service"
         "static-file-service"
         "unfurl-service"
