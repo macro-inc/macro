@@ -814,12 +814,7 @@ export function BaseInput(props: {
   const inFlightAttachmentUploads = new Set<Promise<void>>();
 
   async function executeSaveDraft(skipSoupRefetch = false) {
-    if (
-      sendMutation.isPending ||
-      pendingDeletion ||
-      pendingSend ||
-      autosaveDisabled
-    ) {
+    if (sendMutation.isPending || pendingDeletion || pendingSend) {
       return;
     }
     const draftToSave = collectDraft();
@@ -829,11 +824,17 @@ export function BaseInput(props: {
         if (!(await deleteDraft(draftId, skipSoupRefetch))) return;
         refetchThreadMessages();
       }
-      // No draft identity: nothing queued belongs to this composer now.
+      // No draft identity: nothing queued belongs to this composer now, and
+      // an emptied draft is a fresh start — a rejection latched against the
+      // old content must not keep the next content from saving.
       queuedSaveOutstanding = false;
+      autosaveDisabled = false;
       setSavedDraftId(undefined);
       return;
     }
+    // Checked after the empty branch so clearing a rejected draft still
+    // runs (and lifts the latch) — see handleQueuedSaveFailure.
+    if (autosaveDisabled) return;
     const currentThread = ctx.thread();
     const newMessage = props.newMessage ?? false;
 
@@ -1021,6 +1022,9 @@ export function BaseInput(props: {
       // queued mutation in the app behind it. A network failure that reached
       // here was never enqueued, so the next debounced save may retry it.
       autosaveDisabled = true;
+      // The latest save was rejected, not queued: a stale "still syncing"
+      // must not mask the real failure on the next send attempt.
+      queuedSaveOutstanding = false;
     }
     console.error('Failed to save draft', code);
     toast.failure('Failed to save draft');
@@ -1426,7 +1430,17 @@ export function BaseInput(props: {
     // Ensure draft is saved before sending so undo-send always has a draft to restore
     if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
     const generationBeforeSave = resetGeneration;
-    await executeSaveDraft(willMarkDone);
+    try {
+      await executeSaveDraft(willMarkDone);
+    } catch {
+      // The save (or its attachment upload) has already reported itself.
+      // Unlike Compose, this composer clears the editor before the send
+      // answers, so a draft the server may not have must not be sent: keep
+      // the content and stop.
+      pendingMarkDoneNavigationTargetId = undefined;
+      toast.failure('Failed to send email', { subtext: 'Draft not saved' });
+      return;
+    }
     // The save can learn the reply was already sent from another device and
     // reset the composer. The recipients captured above would otherwise go
     // out on an empty message, so stop here.
@@ -1854,7 +1868,14 @@ export function BaseInput(props: {
       // (REST rejection, attachment upload failure) has already reported
       // itself; treat it as "no draft" so the send time set above is rolled
       // back instead of left looking scheduled.
+      const generationBeforeSave = resetGeneration;
       const draftID = await executeSaveDraft().catch(() => undefined);
+      // Reset during the save (already sent from another device): the
+      // reset owns the form and has explained itself; nothing to schedule.
+      if (resetGeneration !== generationBeforeSave) {
+        form().setSendTime(null);
+        return;
+      }
       if (!draftID) {
         form().setSendTime(null);
         toast.failure('Failed to schedule message', {

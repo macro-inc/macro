@@ -331,18 +331,24 @@ export function EmailCompose(props: EmailComposeProps) {
   }
 
   async function executeSaveDraft() {
-    if (sendMutation.isPending || autosaveDisabled) {
+    if (sendMutation.isPending) {
       return;
     }
     const draftToSave = collectDraft();
     if (!draftToSave) {
       const draftID = currentDraftID();
       if (draftID && !(await deleteDraft(draftID))) return;
-      // No draft identity: nothing queued belongs to this composer now.
+      // No draft identity: nothing queued belongs to this composer now, and
+      // an emptied draft is a fresh start — a rejection latched against the
+      // old content must not keep the next content from saving.
       queuedSaveOutstanding = false;
+      autosaveDisabled = false;
       setCurrentDraftID(undefined);
       return;
     }
+    // Checked after the empty branch so clearing a rejected draft still
+    // runs (and lifts the latch) — see handleQueuedSaveFailure.
+    if (autosaveDisabled) return;
 
     // Compose drafts go through the durable GraphQL queue too: draft AND
     // thread identity are client-minted handles, so offline saves replay as
@@ -365,6 +371,8 @@ export function EmailCompose(props: EmailComposeProps) {
       linkId: headerLinkId(),
     });
     // Reset while the save was on the wire — see executeQueuedGraphqlSave.
+    // Checked before the upload too: it reads the live form, which after a
+    // reset may already hold the next draft's attachments.
     if (resetGeneration !== generationAtDispatch) return;
 
     const newThreadID = draftResponse.draft.thread_db_id ?? undefined;
@@ -491,6 +499,9 @@ export function EmailCompose(props: EmailComposeProps) {
       // auto-re-dispatch — a failing save replayed forever would block every
       // queued mutation in the app behind it.
       autosaveDisabled = true;
+      // The latest save was rejected, not queued: a stale "still syncing"
+      // must not mask the real failure on the next send attempt.
+      queuedSaveOutstanding = false;
     }
     console.error('Failed to save draft', code);
     toast.failure('Failed to save draft');
@@ -930,7 +941,14 @@ export function EmailCompose(props: EmailComposeProps) {
       // throws has already reported itself; treat it as "no draft" so the
       // send time set above is rolled back instead of left looking
       // scheduled.
+      const generationBeforeSave = resetGeneration;
       const draftID = await executeSaveDraft().catch(() => undefined);
+      // Reset during the save (already sent from another device): the
+      // reset owns the form and has explained itself; nothing to schedule.
+      if (resetGeneration !== generationBeforeSave) {
+        form.setSendTime(null);
+        return;
+      }
       if (!draftID) {
         form.setSendTime(null);
         toast.failure('Failed to schedule message', {
