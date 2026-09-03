@@ -153,47 +153,64 @@ function windowDateLabel(window: TeamOooWindow): string {
     : `${format(window.start, 'MMM d')} – ${format(lastDay, 'MMM d')}`;
 }
 
+function TeamOooSkeleton() {
+  return (
+    <div aria-hidden="true" class="flex flex-col gap-0.5">
+      <For each={[0, 1, 2]}>
+        {() => (
+          <div class="skeleton-shimmer h-8 w-full rounded-lg bg-skeleton" />
+        )}
+      </For>
+    </div>
+  );
+}
+
 function TeamOooUpcomingList() {
   const calendarPager = useCalendarPager();
-  const windows = useUpcomingTeamOoo();
+  const upcoming = useUpcomingTeamOoo();
+  const windows = upcoming.windows;
 
   return (
     <div class="flex flex-col gap-0.5">
-      <Show
-        when={windows().length > 0}
-        fallback={
-          <span class="px-2 py-1 text-xs text-ink-muted">
-            No time off in the next 90 days
-          </span>
-        }
-      >
-        <For each={windows().slice(0, UPCOMING_SHOWN_MAX)}>
-          {(window) => (
-            <button
-              type="button"
-              class="flex w-full flex-col rounded-lg px-2 py-1.5 text-left text-xs hover:bg-hover"
-              onClick={() => calendarPager.gotoDate(window.start)}
-            >
-              <span class="flex w-full items-baseline gap-2">
-                <span class="min-w-0 flex-1 truncate text-ink">
-                  {window.name}
+      <Show when={!upcoming.isPending()} fallback={<TeamOooSkeleton />}>
+        <Show
+          when={windows().length > 0}
+          fallback={
+            <span class="px-2 py-1 text-xs text-ink-muted">
+              {upcoming.isError()
+                ? "Couldn't load time off"
+                : 'No time off in the next 90 days'}
+            </span>
+          }
+        >
+          <For each={windows().slice(0, UPCOMING_SHOWN_MAX)}>
+            {(window) => (
+              <button
+                type="button"
+                class="flex w-full flex-col rounded-lg px-2 py-1.5 text-left text-xs hover:bg-hover"
+                onClick={() => calendarPager.gotoDate(window.start)}
+              >
+                <span class="flex w-full items-baseline gap-2">
+                  <span class="min-w-0 flex-1 truncate text-ink">
+                    {window.name}
+                  </span>
+                  <span class="shrink-0 text-ink-muted">
+                    {windowDateLabel(window)}
+                  </span>
                 </span>
-                <span class="shrink-0 text-ink-muted">
-                  {windowDateLabel(window)}
-                </span>
-              </span>
-              <Show when={window.title}>
-                <span class="w-full truncate text-ink-muted">
-                  {window.title}
-                </span>
-              </Show>
-            </button>
-          )}
-        </For>
-        <Show when={windows().length > UPCOMING_SHOWN_MAX}>
-          <span class="px-2 py-1 text-xs text-ink-muted">
-            +{windows().length - UPCOMING_SHOWN_MAX} more
-          </span>
+                <Show when={window.title}>
+                  <span class="w-full truncate text-ink-muted">
+                    {window.title}
+                  </span>
+                </Show>
+              </button>
+            )}
+          </For>
+          <Show when={windows().length > UPCOMING_SHOWN_MAX}>
+            <span class="px-2 py-1 text-xs text-ink-muted">
+              +{windows().length - UPCOMING_SHOWN_MAX} more
+            </span>
+          </Show>
         </Show>
       </Show>
     </div>
