@@ -112,6 +112,13 @@ fn recognizes_harnesses_from_their_announced_names() {
     ];
     for (name, expected) in cases {
         assert_eq!(Harness::from_agent_info(name), expected, "{name:?}");
+        if expected != Harness::Unknown {
+            assert!(expected.name_matches(name), "{expected:?} claims {name:?}");
+        }
+        assert!(
+            !Harness::Unknown.name_matches(name),
+            "Unknown is what is left, never a match"
+        );
     }
 }
 

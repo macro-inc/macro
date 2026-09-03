@@ -154,29 +154,34 @@ pub struct SubagentInput {
 
 impl Harness {
     /// Recognize a harness from the `agentInfo.name` it announced in its
-    /// `initialize` response.
+    /// `initialize` response: the first known harness whose name matches.
+    #[must_use]
+    pub fn from_agent_info(name: &str) -> Self {
+        Self::KNOWN
+            .iter()
+            .copied()
+            .find(|harness| harness.name_matches(name))
+            .unwrap_or(Self::Unknown)
+    }
+
+    /// Whether `name` - an `agentInfo.name` - is this harness announcing
+    /// itself.
     ///
     /// Matching is loose on purpose: a harness's package name, title and
     /// version format all change more often than the word that identifies
-    /// it, so each row matches that word.
+    /// it, so each harness matches that word. [`Self::Unknown`] matches
+    /// nothing; it is what is left when no harness does.
     #[must_use]
-    pub fn from_agent_info(name: &str) -> Self {
-        if regex_is_match!(r"(?i)claude", name) {
-            Self::ClaudeCode
-        } else if regex_is_match!(r"(?i)^opencode", name) {
-            Self::OpenCode
-        } else if regex_is_match!(r"(?i)codex", name) {
-            Self::Codex
-        } else if regex_is_match!(r"(?i)cursor", name) {
-            Self::Cursor
-        } else if regex_is_match!(r"(?i)^macro", name) {
-            Self::Macro
-        } else if regex_is_match!(r"(?i)hermes", name) {
-            Self::Hermes
-        } else if regex_is_match!(r"(?i)openclaw", name) {
-            Self::OpenClaw
-        } else {
-            Self::Unknown
+    pub fn name_matches(self, name: &str) -> bool {
+        match self {
+            Self::ClaudeCode => regex_is_match!(r"(?i)claude", name),
+            Self::OpenCode => regex_is_match!(r"(?i)^opencode", name),
+            Self::Codex => regex_is_match!(r"(?i)codex", name),
+            Self::Cursor => regex_is_match!(r"(?i)cursor", name),
+            Self::Macro => regex_is_match!(r"(?i)^macro", name),
+            Self::Hermes => regex_is_match!(r"(?i)hermes", name),
+            Self::OpenClaw => regex_is_match!(r"(?i)openclaw", name),
+            Self::Unknown => false,
         }
     }
 
@@ -195,10 +200,10 @@ impl Harness {
         })
     }
 
-    /// Every harness with a reader of its own, in the order a sniff tries
-    /// them. Harnesses that write no `_meta` namespace on tool frames
-    /// (OpenCode, Cursor, Hermes, OpenClaw) can only be recognized from
-    /// `initialize`.
+    /// Every harness with a reader of its own, in the order recognition
+    /// tries them - by announced name, then by `_meta` namespace. Harnesses
+    /// that write no `_meta` namespace on tool frames (OpenCode, Cursor,
+    /// Hermes, OpenClaw) can only be recognized from `initialize`.
     const KNOWN: &'static [Self] = &[
         Self::ClaudeCode,
         Self::Macro,
