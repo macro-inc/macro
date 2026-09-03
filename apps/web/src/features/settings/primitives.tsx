@@ -52,7 +52,9 @@ export function SettingsPage(props: {
           <div class="flex flex-col gap-1.5 min-w-0">
             <h1 class="text-2xl/tight font-semibold text-ink">{props.title}</h1>
             <Show when={props.description}>
-              <p class="text-sm text-ink-muted">{props.description}</p>
+              <p class="text-sm text-ink-muted text-balance">
+                {props.description}
+              </p>
             </Show>
           </div>
           <Show when={props.actions}>
@@ -86,7 +88,9 @@ export function SettingsSection(props: {
               <h2 class="text-[15px] font-semibold text-ink">{props.title}</h2>
             </Show>
             <Show when={props.description}>
-              <p class="text-sm text-ink-muted">{props.description}</p>
+              <p class="text-sm text-ink-muted text-balance">
+                {props.description}
+              </p>
             </Show>
           </div>
           <Show when={props.actions}>
