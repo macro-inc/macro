@@ -18,11 +18,13 @@ interface SourceControlsProps {
  */
 export function SourceControls(props: SourceControlsProps) {
   const groups = () => groupCalendarSourcesByAccount(props.sources);
-  const [collapsed, setCollapsed] = createSignal<ReadonlySet<string>>(
+  // Accounts start folded; expanding one only reveals its calendars, which
+  // stay visible on the grid whether or not the group is expanded.
+  const [expandedKeys, setExpandedKeys] = createSignal<ReadonlySet<string>>(
     new Set()
   );
-  const toggleCollapsed = (key: string) =>
-    setCollapsed((current) => {
+  const toggleExpanded = (key: string) =>
+    setExpandedKeys((current) => {
       const next = new Set(current);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -38,7 +40,7 @@ export function SourceControls(props: SourceControlsProps) {
               .length;
           const allVisible = () => visibleCount() === group.calendars.length;
           const someVisible = () => visibleCount() > 0 && !allVisible();
-          const expanded = () => !collapsed().has(group.key);
+          const expanded = () => expandedKeys().has(group.key);
           const setGroupVisible = (visible: boolean) => {
             for (const calendar of group.calendars) {
               props.onVisibilityChange(calendar.id, visible);
@@ -57,7 +59,7 @@ export function SourceControls(props: SourceControlsProps) {
                       : `Expand ${group.emailAddress}`
                   }
                   aria-expanded={expanded()}
-                  onClick={() => toggleCollapsed(group.key)}
+                  onClick={() => toggleExpanded(group.key)}
                 >
                   <CaretRightIcon
                     class="size-3 transition-transform duration-90"
