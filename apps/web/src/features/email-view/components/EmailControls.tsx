@@ -5,7 +5,7 @@ import {
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { createMemo, type JSX, type Ref, Show } from 'solid-js';
+import { createMemo, type JSX, Show } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_FILTER_GROUPS } from '../filters/email-facets';
 import type { EmailFilterGroupId } from '../types';
@@ -30,8 +30,9 @@ const groupFor = (groupId: EmailFilterGroupId) =>
   FILTER_GROUPS.find((group) => group.id === groupId);
 
 export type EmailControlsProps = {
-  /** The filter menu's wrapper, so the header's `f` hotkey can open it. */
-  filterRef?: Ref<HTMLDivElement>;
+  /** Controlled filter-menu state, so the header's `f` hotkey can open it. */
+  filterOpen?: boolean;
+  onFilterOpenChange?: (open: boolean) => void;
 };
 
 export function EmailControls(props: EmailControlsProps) {
@@ -83,9 +84,11 @@ export function EmailControls(props: EmailControlsProps) {
 
   return (
     <div class="flex min-w-0 shrink-0 items-center justify-end gap-2 @max-[720px]/view-shell:gap-1">
-      <div ref={props.filterRef} class="relative shrink-0">
+      <div class="relative shrink-0">
         <ListFilterDropdown
           label="Filter email"
+          open={props.filterOpen}
+          onOpenChange={props.onFilterOpenChange}
           groups={FILTER_GROUPS}
           isSelected={isSelected}
           onSelectionChange={setSelected}

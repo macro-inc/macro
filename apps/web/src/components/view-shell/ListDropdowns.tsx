@@ -13,7 +13,16 @@ export type ListControlOption<TId extends string> = {
   disabled?: boolean;
 };
 
-type SingleSelectDropdownProps<TId extends string> = {
+/**
+ * Controlled open state. Kobalte's trigger opens on pointerdown, so a hotkey
+ * that wants to open a menu sets this instead of clicking the trigger.
+ */
+type ControlledOpenProps = {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
+
+type SingleSelectDropdownProps<TId extends string> = ControlledOpenProps & {
   label: string;
   icon: JSX.Element;
   value: TId;
@@ -27,7 +36,11 @@ function SingleSelectDropdown<TId extends string>(
   props: SingleSelectDropdownProps<TId>
 ) {
   return (
-    <Dropdown placement="bottom-end">
+    <Dropdown
+      placement="bottom-end"
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+    >
       <Dropdown.Trigger
         variant="outline"
         size="md"
@@ -126,7 +139,7 @@ export type ListFilterGroup<
 export type ListFilterDropdownProps<
   TGroupId extends string,
   TOptionId extends string,
-> = {
+> = ControlledOpenProps & {
   groups: ListFilterGroup<TGroupId, TOptionId>[];
   isSelected: (groupId: TGroupId, optionId: TOptionId) => boolean;
   onSelectionChange: (
@@ -146,7 +159,11 @@ export function ListFilterDropdown<
   TOptionId extends string,
 >(props: ListFilterDropdownProps<TGroupId, TOptionId>) {
   return (
-    <Dropdown placement="bottom-end">
+    <Dropdown
+      placement="bottom-end"
+      open={props.open}
+      onOpenChange={props.onOpenChange}
+    >
       <Dropdown.Trigger
         variant="outline"
         size="md"

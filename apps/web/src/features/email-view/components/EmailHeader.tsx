@@ -20,8 +20,8 @@ export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { state, setState } = useEmailView();
   const [navigationOpen, setNavigationOpen] = createSignal(false);
+  const [filterOpen, setFilterOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
-  let filterControl: HTMLDivElement | undefined;
 
   // The view's control hotkeys are registered once, here, for the split scope.
   useViewControlHotkeys({
@@ -38,10 +38,8 @@ export function EmailHeader(props: EmailHeaderProps) {
     filter: {
       description: 'Filter email',
       run: () => {
-        const trigger = filterControl?.querySelector('button');
-        trigger?.click();
-
-        return trigger !== null && trigger !== undefined;
+        setFilterOpen(true);
+        return true;
       },
     },
   });
@@ -106,7 +104,10 @@ export function EmailHeader(props: EmailHeaderProps) {
           placeholder="Search email"
           class="max-w-md flex-1"
         />
-        <EmailControls filterRef={(element) => (filterControl = element)} />
+        <EmailControls
+          filterOpen={filterOpen()}
+          onFilterOpenChange={setFilterOpen}
+        />
       </div>
     </div>
   );
