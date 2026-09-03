@@ -69,13 +69,16 @@ inbound connectors to Connections Discover), `Bots`; `Log out`.
 ## Settings — Connections — `/app/settings/connections`
 
 `Connected` lists mapped providers (ready-of-total). Custom MCP grants sit in
-a second section. The More menu can Rename, Connect or Reconnect, and
-Disconnect. Unmatched Pipedream leftovers stay with the providers.
+a second section. More holds Turn off, Rename, Reconnect, Disconnect.
+Connect and Turn on stay on the row when that is the job. Reconnect also
+sits on the row when auth is broken. Unmatched
+Pipedream leftovers stay with the providers.
 Empty state offers Google first, then GitHub, Linear, Notion,
 Slack, Cursor. `Discover` searches the Pipedream catalog; featured cards are
 Google, GitHub, Linear, Slack, Cursor. Click a provider for its page: Google
 (Gmail + Calendar per inbox, no Docs; Gmail shows dest sync status. Signature
-nests under Gmail for an owned inbox), GitHub (account, team install, AI),
+nests under Gmail for an owned inbox), GitHub (account, Configure app for
+repos, AI),
 Linear / Notion / Slack (Pipedream AI, Off is enable/disable), Cursor (API key
 + default model). Discover is `/app/settings/connections/discover`. A provider
 is `/app/settings/connections/<provider>` (`github`, `google`, `cursor`, …).

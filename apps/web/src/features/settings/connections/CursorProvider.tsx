@@ -11,7 +11,6 @@ import type { CursorModelOption } from '@service-auth/generated/schemas';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { Button, Select } from '@ui';
 import { createSignal, Show } from 'solid-js';
-import { DisconnectAction } from '../integration-ui';
 import {
   SettingsCard,
   SettingsPage,
@@ -19,6 +18,7 @@ import {
   SettingsSection,
 } from '../primitives';
 import { CapabilityRow } from './capability-row';
+import { ConnectionRowActions } from './connection-more';
 import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
@@ -115,15 +115,20 @@ export function CursorProvider() {
               }
             >
               <Show when={cursorRegistered()}>
-                <DisconnectAction
-                  disabled={disconnectCursor.isPending}
-                  onClick={() =>
-                    setDisconnect({
-                      title: 'Disconnect from Macro',
-                      body: "Disconnect Cursor? This deletes Macro's copy of the key. It does not revoke the key in Cursor.",
-                      onConfirm: () => void handleDisconnectCursor(),
-                    })
-                  }
+                <ConnectionRowActions
+                  items={[
+                    {
+                      label: 'Disconnect',
+                      danger: true,
+                      disabled: disconnectCursor.isPending,
+                      onSelect: () =>
+                        setDisconnect({
+                          title: 'Disconnect from Macro',
+                          body: "Disconnect Cursor? This deletes Macro's copy of the key. It does not revoke the key in Cursor.",
+                          onConfirm: () => void handleDisconnectCursor(),
+                        }),
+                    },
+                  ]}
                 />
               </Show>
             </Show>

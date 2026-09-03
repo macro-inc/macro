@@ -103,8 +103,9 @@ describe('ConnectedView', () => {
     expect(screen.getByText('example.com')).toBeTruthy();
     expect(screen.queryByText('Enabled')).toBeNull();
     expect(screen.queryByText('Disabled')).toBeNull();
-    expect(screen.getByRole('switch', { name: 'Enable Unknown' })).toBeTruthy();
+    expect(screen.queryByRole('switch')).toBeNull();
     expect(screen.getByRole('button', { name: 'More' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Turn off' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Reconnect' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Disconnect' })).toBeTruthy();
@@ -143,7 +144,7 @@ describe('ConnectedView', () => {
     expect(screen.getByText('Unknown')).toBeTruthy();
   });
 
-  it('puts Connect in the More menu when a custom MCP is not authenticated', () => {
+  it('puts Connect on the row when a custom MCP is not authenticated', () => {
     const unauthenticated = toConnectionsModel({
       userId: 'macro|self',
       emailEnabled: true,
@@ -170,9 +171,46 @@ describe('ConnectedView', () => {
       </QueryClientProvider>
     ));
     expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'More' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: 'Connect' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Connect' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Disconnect' })).toBeTruthy();
+  });
+
+  it('shows Turn on and Off for a paused custom MCP', () => {
+    const paused = toConnectionsModel({
+      userId: 'macro|self',
+      emailEnabled: true,
+      calendarEnabled: true,
+      emailLinks: [],
+      github: { status: 'unlinked', username: undefined },
+      pipedream: [],
+      nativeMcp: [
+        {
+          server_name: 'Unknown',
+          url: 'https://example.com/mcp',
+          authenticated: true,
+          enabled: false,
+        },
+      ],
+      cursorRegistered: false,
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(() => (
+      <QueryClientProvider client={client}>
+        <ConnectedView model={paused} />
+      </QueryClientProvider>
+    ));
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Turn on' })).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Off' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'More' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Turn off' })).toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Reconnect' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Disconnect' })).toBeTruthy();
   });
 

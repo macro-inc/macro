@@ -4,10 +4,14 @@ import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
-import { createSignal, Show } from 'solid-js';
-import { ConnectAction, DisconnectAction } from '../integration-ui';
+import { createSignal, type JSX } from 'solid-js';
+import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
 import { CapabilityRow, capabilityFacts } from './capability-row';
+import {
+  ConnectionRowActions,
+  type ConnectionMenuItem,
+} from './connection-more';
 import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
@@ -75,8 +79,149 @@ export function PipedreamAiProvider(props: {
   const [disconnect, setDisconnect] = createSignal<DisconnectConfirm | null>(
     null
   );
-  const granted = () =>
-    row()?.status === 'connected' || row()?.status === 'off';
+
+  const setEnabled = (enabled: boolean) => {
+    const cap = row();
+    if (!cap) return;
+    if (cap.mechanism === 'native-mcp') {
+      const url = cap.sourceUrl;
+      if (!url) return;
+      native.update.mutate(
+        { url, enabled },
+        { onError: () => toast.failure('Failed to update connector') }
+      );
+      return;
+    }
+    update.mutate(
+      { app_slug: props.provider, enabled },
+      { onError: () => toast.failure('Failed to update connector') }
+    );
+  };
+
+  const askDisconnect = () => {
+    const cap = row();
+    if (!cap) return;
+    if (cap.mechanism === 'native-mcp') {
+      const url = cap.sourceUrl;
+      if (!url) return;
+      setDisconnect({
+        title: 'Disconnect from Macro',
+        body: `Disconnect ${copy.name}?`,
+        onConfirm: () =>
+          native.remove.mutate(
+            { url },
+            {
+              onSuccess: () =>
+                toast.success(`Disconnected ${copy.name} from Macro`),
+              onError: () => toast.failure('Failed to disconnect'),
+            }
+          ),
+      });
+      return;
+    }
+    setDisconnect({
+      title: 'Disconnect from Macro',
+      body: `Disconnect ${copy.name}?`,
+      onConfirm: () =>
+        remove.mutate(
+          { app_slug: props.provider },
+          {
+            onSuccess: () =>
+              toast.success(`Disconnected ${copy.name} from Macro`),
+            onError: () => toast.failure('Failed to disconnect'),
+          }
+        ),
+    });
+  };
+
+  const reconnect = () => {
+    const cap = row();
+    if (!cap) return;
+    if (cap.mechanism === 'native-mcp') {
+      const url = cap.sourceUrl;
+      if (!url) return;
+      native.startAuth(url, cap.account || copy.name);
+      return;
+    }
+    void connect();
+  };
+
+  const reconnectItem = (): ConnectionMenuItem => ({
+    label: 'Reconnect',
+    onSelect: reconnect,
+    disabled: native.authorize.isPending || busy(),
+  });
+
+  const disconnectItem = (): ConnectionMenuItem => ({
+    label: 'Disconnect',
+    danger: true,
+    onSelect: askDisconnect,
+    disabled: native.remove.isPending || remove.isPending,
+  });
+
+  const actions = (): JSX.Element => {
+    const status = row()?.status ?? 'not-connected';
+    switch (status) {
+      case 'not-connected':
+        return (
+          <ConnectionRowActions
+            primary={
+              <ConnectAction
+                label="Connect"
+                onClick={() => void connect()}
+                loading={busy()}
+              />
+            }
+            items={[]}
+          />
+        );
+      case 'action-required':
+        return (
+          <ConnectionRowActions
+            primary={
+              <ConnectAction
+                label="Reconnect"
+                onClick={reconnect}
+                disabled={native.authorize.isPending || busy()}
+              />
+            }
+            items={[reconnectItem(), disconnectItem()]}
+          />
+        );
+      case 'connected':
+        return (
+          <ConnectionRowActions
+            items={[
+              {
+                label: 'Turn off',
+                onSelect: () => setEnabled(false),
+                disabled: native.update.isPending || update.isPending,
+              },
+              reconnectItem(),
+              disconnectItem(),
+            ]}
+          />
+        );
+      case 'off':
+        return (
+          <ConnectionRowActions
+            primary={
+              <ConnectAction
+                label="Turn on"
+                variant="neutral"
+                onClick={() => setEnabled(true)}
+                disabled={native.update.isPending || update.isPending}
+              />
+            }
+            items={[reconnectItem(), disconnectItem()]}
+          />
+        );
+      default: {
+        const _exhaustive: never = status;
+        return _exhaustive;
+      }
+    }
+  };
 
   return (
     <SettingsPage
@@ -97,117 +242,7 @@ export function PipedreamAiProvider(props: {
             }
             status={row()?.status}
           >
-            <Show
-              when={row()?.status === 'action-required'}
-              fallback={
-                <Show
-                  when={granted()}
-                  fallback={
-                    <ConnectAction
-                      label="Connect"
-                      onClick={() => void connect()}
-                      loading={busy()}
-                    />
-                  }
-                >
-                  <Show
-                    when={row()?.mechanism === 'pipedream'}
-                    fallback={
-                      <>
-                        <ConnectAction
-                          label={row()?.status === 'off' ? 'Turn on' : 'Turn off'}
-                          variant="neutral"
-                          onClick={() => {
-                            const url = row()?.sourceUrl;
-                            if (!url) return;
-                            native.update.mutate(
-                              { url, enabled: row()?.status === 'off' },
-                              {
-                                onError: () =>
-                                  toast.failure('Failed to update connector'),
-                              }
-                            );
-                          }}
-                          disabled={native.update.isPending}
-                        />
-                        <DisconnectAction
-                          onClick={() => {
-                            const url = row()?.sourceUrl;
-                            if (!url) return;
-                            setDisconnect({
-                              title: 'Disconnect from Macro',
-                              body: `Disconnect ${copy.name}?`,
-                              onConfirm: () =>
-                                native.remove.mutate(
-                                  { url },
-                                  {
-                                    onSuccess: () =>
-                                      toast.success(
-                                        `Disconnected ${copy.name} from Macro`
-                                      ),
-                                    onError: () =>
-                                      toast.failure('Failed to disconnect'),
-                                  }
-                                ),
-                            });
-                          }}
-                          disabled={native.remove.isPending}
-                        />
-                      </>
-                    }
-                  >
-                    <ConnectAction
-                      label={row()?.status === 'off' ? 'Turn on' : 'Turn off'}
-                      variant="neutral"
-                      onClick={() =>
-                        update.mutate(
-                          {
-                            app_slug: props.provider,
-                            enabled: row()?.status === 'off',
-                          },
-                          {
-                            onError: () =>
-                              toast.failure('Failed to update connector'),
-                          }
-                        )
-                      }
-                      disabled={update.isPending}
-                    />
-                    <DisconnectAction
-                      onClick={() =>
-                        setDisconnect({
-                          title: 'Disconnect from Macro',
-                          body: `Disconnect ${copy.name}?`,
-                          onConfirm: () =>
-                            remove.mutate(
-                              { app_slug: props.provider },
-                              {
-                                onSuccess: () =>
-                                  toast.success(
-                                    `Disconnected ${copy.name} from Macro`
-                                  ),
-                                onError: () =>
-                                  toast.failure('Failed to disconnect'),
-                              }
-                            ),
-                        })
-                      }
-                      disabled={remove.isPending}
-                    />
-                  </Show>
-                </Show>
-              }
-            >
-              <ConnectAction
-                label="Reconnect"
-                onClick={() => {
-                  const url = row()?.sourceUrl;
-                  if (!url) return;
-                  native.startAuth(url, row()?.account ?? copy.name);
-                }}
-                disabled={native.authorize.isPending}
-              />
-            </Show>
+            {actions()}
           </CapabilityRow>
         </SettingsCard>
         <p class="text-xs text-ink-extra-muted">{copy.later}</p>

@@ -19,7 +19,7 @@ import type { Link as EmailLink } from '@service-email/generated/schemas';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { InboxSyncStatus } from '../inbox-sync-status';
-import { ConnectAction, DisconnectAction } from '../integration-ui';
+import { ConnectAction } from '../integration-ui';
 import {
   SettingsCard,
   SettingsPage,
@@ -33,6 +33,7 @@ import {
   toggleSignatureExpanded,
 } from '../SignatureSection';
 import { CapabilityRow, capabilityFacts } from './capability-row';
+import { ConnectionRowActions } from './connection-more';
 import {
   type Capability,
   type ConnectionsModel,
@@ -346,51 +347,106 @@ function GoogleCapabilityActions(props: {
 }) {
   const isOwn = () => props.row.scope === 'personal';
   const isCalendar = () => props.row.id.startsWith('calendar:');
+  const canRevoke = () => !isCalendar() || isOwn();
+  const reconnectItem = {
+    label: 'Reconnect',
+    onSelect: props.onReconnect,
+    disabled: props.pending,
+  };
 
-  return (
-    <Show
-      when={props.row.status === 'action-required'}
-      fallback={
-        <Show
-          when={
-            props.row.status === 'connected' || props.row.status === 'off'
+  switch (props.row.status) {
+    case 'action-required':
+      return (
+        <ConnectionRowActions
+          primary={
+            <ConnectAction
+              label="Reconnect"
+              onClick={props.onReconnect}
+              disabled={props.pending}
+            />
           }
-          fallback={
+          items={
+            canRevoke()
+              ? [
+                  reconnectItem,
+                  {
+                    label: 'Disconnect',
+                    danger: true,
+                    onSelect: isCalendar()
+                      ? props.onTurnOffCalendar
+                      : props.onRemoveGmail,
+                    disabled: !isCalendar() && props.removing,
+                  },
+                ]
+              : []
+          }
+        />
+      );
+    case 'connected':
+      return (
+        <ConnectionRowActions
+          items={
+            canRevoke()
+              ? [
+                  reconnectItem,
+                  {
+                    label: 'Disconnect',
+                    danger: true,
+                    onSelect: isCalendar()
+                      ? props.onTurnOffCalendar
+                      : props.onRemoveGmail,
+                    disabled: !isCalendar() && props.removing,
+                  },
+                ]
+              : []
+          }
+        />
+      );
+    case 'off':
+      return (
+        <ConnectionRowActions
+          primary={
+            isOwn() && isCalendar() ? (
+              <ConnectAction
+                label="Turn on"
+                onClick={props.onConnect}
+                disabled={props.pending}
+              />
+            ) : undefined
+          }
+          items={
+            canRevoke()
+              ? [
+                  reconnectItem,
+                  {
+                    label: 'Disconnect',
+                    danger: true,
+                    onSelect: isCalendar()
+                      ? props.onTurnOffCalendar
+                      : props.onRemoveGmail,
+                    disabled: !isCalendar() && props.removing,
+                  },
+                ]
+              : []
+          }
+        />
+      );
+    case 'not-connected':
+      return (
+        <ConnectionRowActions
+          primary={
             <ConnectAction
               label={isCalendar() ? 'Enable calendar' : 'Connect'}
               onClick={props.onConnect}
               disabled={props.pending}
             />
           }
-        >
-          <Show
-            when={isCalendar()}
-            fallback={
-              <DisconnectAction
-                onClick={props.onRemoveGmail}
-                disabled={props.removing}
-              />
-            }
-          >
-            <Show when={isOwn() && props.row.status === 'connected'}>
-              <DisconnectAction onClick={props.onTurnOffCalendar} />
-            </Show>
-            <Show when={isOwn() && props.row.status === 'off'}>
-              <ConnectAction
-                label="Turn on"
-                onClick={props.onConnect}
-                disabled={props.pending}
-              />
-            </Show>
-          </Show>
-        </Show>
-      }
-    >
-      <ConnectAction
-        label="Reconnect"
-        onClick={props.onReconnect}
-        disabled={props.pending}
-      />
-    </Show>
-  );
+          items={[]}
+        />
+      );
+    default: {
+      const _exhaustive: never = props.row.status;
+      return _exhaustive;
+    }
+  }
 }

@@ -11,15 +11,24 @@ import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
-import { createSignal, Show } from 'solid-js';
-import { ConnectAction, DisconnectAction } from '../integration-ui';
+import { createSignal, Show, type JSX } from 'solid-js';
+import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
 import { CapabilityRow, capabilityFacts } from './capability-row';
+import {
+  ConnectionRowActions,
+  type ConnectionMenuItem,
+} from './connection-more';
 import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
-import { CURATED_AI, type ConnectionsModel, capabilitiesFor } from './model';
+import {
+  CURATED_AI,
+  type CapabilityStatus,
+  type ConnectionsModel,
+  capabilitiesFor,
+} from './model';
 import { useNativeMcpActions } from './native-actions';
 import { providerIcon } from './provider-meta';
 import { closeConnectionsProvider } from './view-state';
@@ -87,6 +96,210 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
 
   const accountConnected = () => account()?.status === 'connected';
 
+  const askDisconnectAccount = () =>
+    setDisconnect({
+      title: 'Disconnect from Macro',
+      body: 'Disconnect GitHub? Pull requests will stop showing up in Macro.',
+      onConfirm: () => void disconnectAccount(),
+    });
+
+  const accountDisconnectItem = (): ConnectionMenuItem => ({
+    label: 'Disconnect',
+    danger: true,
+    onSelect: askDisconnectAccount,
+    disabled: deleteGithubLink.isPending,
+  });
+
+  const accountReconnectItem = (): ConnectionMenuItem => ({
+    label: 'Reconnect',
+    onSelect: () => void reconnectAccount(),
+    disabled: reauthenticateGithub.isPending,
+  });
+
+  const accountActions = (status: CapabilityStatus): JSX.Element => {
+    switch (status) {
+      case 'action-required':
+        return (
+          <ConnectionRowActions
+            primary={
+              <ConnectAction
+                label="Reconnect"
+                onClick={() => void reconnectAccount()}
+                disabled={reauthenticateGithub.isPending}
+              />
+            }
+            items={[accountReconnectItem(), accountDisconnectItem()]}
+          />
+        );
+      case 'connected':
+        return (
+          <ConnectionRowActions
+            items={[accountReconnectItem(), accountDisconnectItem()]}
+          />
+        );
+      case 'off':
+      case 'not-connected':
+        return (
+          <ConnectionRowActions
+            primary={
+              <ConnectAction
+                label="Connect"
+                onClick={() => void connectAccount()}
+                disabled={initGithubLink.isPending}
+              />
+            }
+            items={[]}
+          />
+        );
+      default: {
+        const _exhaustive: never = status;
+        return _exhaustive;
+      }
+    }
+  };
+
+  const setAiEnabled = (enabled: boolean) => {
+    const cap = ai();
+    if (!cap) return;
+    if (cap.mechanism === 'native-mcp') {
+      const url = cap.sourceUrl;
+      if (!url) return;
+      native.update.mutate(
+        { url, enabled },
+        { onError: () => toast.failure('Failed to update connector') }
+      );
+      return;
+    }
+    updatePipedream.mutate(
+      { app_slug: 'github', enabled },
+      { onError: () => toast.failure('Failed to update connector') }
+    );
+  };
+
+  const askDisconnectAi = () => {
+    const cap = ai();
+    if (!cap) return;
+    if (cap.mechanism === 'native-mcp') {
+      const url = cap.sourceUrl;
+      if (!url) return;
+      setDisconnect({
+        title: 'Disconnect from Macro',
+        body: 'Disconnect GitHub from Macro AI?',
+        onConfirm: () =>
+          native.remove.mutate(
+            { url },
+            {
+              onSuccess: () =>
+                toast.success('Disconnected GitHub AI from Macro'),
+              onError: () => toast.failure('Failed to disconnect'),
+            }
+          ),
+      });
+      return;
+    }
+    setDisconnect({
+      title: 'Disconnect from Macro',
+      body: 'Disconnect GitHub from Macro AI?',
+      onConfirm: () =>
+        deletePipedream.mutate(
+          { app_slug: 'github' },
+          {
+            onSuccess: () =>
+              toast.success('Disconnected GitHub AI from Macro'),
+            onError: () => toast.failure('Failed to disconnect'),
+          }
+        ),
+    });
+  };
+
+  const aiDisconnectItem = (): ConnectionMenuItem => ({
+    label: 'Disconnect',
+    danger: true,
+    onSelect: askDisconnectAi,
+    disabled: native.remove.isPending || deletePipedream.isPending,
+  });
+
+  const reconnectAi = () => {
+    const cap = ai();
+    if (!cap) return;
+    if (cap.mechanism === 'native-mcp') {
+      const url = cap.sourceUrl;
+      if (!url) return;
+      native.startAuth(url, cap.account);
+      return;
+    }
+    void connectAi();
+  };
+
+  const aiReconnectItem = (): ConnectionMenuItem => ({
+    label: 'Reconnect',
+    onSelect: reconnectAi,
+    disabled: native.authorize.isPending || aiBusy(),
+  });
+
+  const aiActions = (status: CapabilityStatus): JSX.Element => {
+    switch (status) {
+      case 'not-connected':
+        return (
+          <ConnectionRowActions
+            primary={
+              <ConnectAction
+                label="Connect"
+                onClick={() => void connectAi()}
+                loading={aiBusy()}
+              />
+            }
+            items={[]}
+          />
+        );
+      case 'action-required':
+        return (
+          <ConnectionRowActions
+            primary={
+              <ConnectAction
+                label="Reconnect"
+                onClick={reconnectAi}
+                disabled={native.authorize.isPending || aiBusy()}
+              />
+            }
+            items={[aiReconnectItem(), aiDisconnectItem()]}
+          />
+        );
+      case 'connected':
+        return (
+          <ConnectionRowActions
+            items={[
+              {
+                label: 'Turn off',
+                onSelect: () => setAiEnabled(false),
+                disabled: native.update.isPending || updatePipedream.isPending,
+              },
+              aiReconnectItem(),
+              aiDisconnectItem(),
+            ]}
+          />
+        );
+      case 'off':
+        return (
+          <ConnectionRowActions
+            primary={
+              <ConnectAction
+                label="Turn on"
+                variant="neutral"
+                onClick={() => setAiEnabled(true)}
+                disabled={native.update.isPending || updatePipedream.isPending}
+              />
+            }
+            items={[aiReconnectItem(), aiDisconnectItem()]}
+          />
+        );
+      default: {
+        const _exhaustive: never = status;
+        return _exhaustive;
+      }
+    }
+  };
+
   return (
     <SettingsPage
       title="GitHub"
@@ -104,38 +317,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                 facts={capabilityFacts(row())}
                 status={row().status}
               >
-                <Show
-                  when={row().status === 'action-required'}
-                  fallback={
-                    <Show
-                      when={row().status === 'connected'}
-                      fallback={
-                        <ConnectAction
-                          label="Connect"
-                          onClick={() => void connectAccount()}
-                          disabled={initGithubLink.isPending}
-                        />
-                      }
-                    >
-                      <DisconnectAction
-                        onClick={() =>
-                          setDisconnect({
-                            title: 'Disconnect from Macro',
-                            body: 'Disconnect GitHub? Pull requests will stop showing up in Macro.',
-                            onConfirm: () => void disconnectAccount(),
-                          })
-                        }
-                        disabled={deleteGithubLink.isPending}
-                      />
-                    </Show>
-                  }
-                >
-                  <ConnectAction
-                    label="Reconnect"
-                    onClick={() => void reconnectAccount()}
-                    disabled={reauthenticateGithub.isPending}
-                  />
-                </Show>
+                {accountActions(row().status)}
               </CapabilityRow>
             )}
           </Show>
@@ -148,10 +330,15 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                 outcome={CURATED_AI.github.outcome}
                 facts="Personal · Powered by Pipedream"
               >
-                <ConnectAction
-                  label="Connect"
-                  onClick={() => void connectAi()}
-                  loading={aiBusy()}
+                <ConnectionRowActions
+                  primary={
+                    <ConnectAction
+                      label="Connect"
+                      onClick={() => void connectAi()}
+                      loading={aiBusy()}
+                    />
+                  }
+                  items={[]}
                 />
               </CapabilityRow>
             }
@@ -163,114 +350,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                 facts={capabilityFacts(row())}
                 status={row().status}
               >
-                <Show
-                  when={row().mechanism === 'pipedream'}
-                  fallback={
-                    <Show when={row().mechanism === 'native-mcp'}>
-                      <Show
-                        when={row().status === 'action-required'}
-                        fallback={
-                          <>
-                            <ConnectAction
-                              label={
-                                row().status === 'off' ? 'Turn on' : 'Turn off'
-                              }
-                              variant="neutral"
-                              onClick={() => {
-                                const url = row().sourceUrl;
-                                if (!url) return;
-                                native.update.mutate(
-                                  { url, enabled: row().status === 'off' },
-                                  {
-                                    onError: () =>
-                                      toast.failure(
-                                        'Failed to update connector'
-                                      ),
-                                  }
-                                );
-                              }}
-                              disabled={native.update.isPending}
-                            />
-                            <DisconnectAction
-                              onClick={() => {
-                                const url = row().sourceUrl;
-                                if (!url) return;
-                                setDisconnect({
-                                  title: 'Disconnect from Macro',
-                                  body: 'Disconnect GitHub from Macro AI?',
-                                  onConfirm: () =>
-                                    native.remove.mutate(
-                                      { url },
-                                      {
-                                        onSuccess: () =>
-                                          toast.success(
-                                            'Disconnected GitHub AI from Macro'
-                                          ),
-                                        onError: () =>
-                                          toast.failure(
-                                            'Failed to disconnect'
-                                          ),
-                                      }
-                                    ),
-                                });
-                              }}
-                              disabled={native.remove.isPending}
-                            />
-                          </>
-                        }
-                      >
-                        <ConnectAction
-                          label="Reconnect"
-                          onClick={() => {
-                            const url = row().sourceUrl;
-                            if (!url) return;
-                            native.startAuth(url, row().account);
-                          }}
-                          disabled={native.authorize.isPending}
-                        />
-                      </Show>
-                    </Show>
-                  }
-                >
-                  <ConnectAction
-                    label={row().status === 'off' ? 'Turn on' : 'Turn off'}
-                    variant="neutral"
-                    onClick={() =>
-                      updatePipedream.mutate(
-                        {
-                          app_slug: 'github',
-                          enabled: row().status === 'off',
-                        },
-                        {
-                          onError: () =>
-                            toast.failure('Failed to update connector'),
-                        }
-                      )
-                    }
-                    disabled={updatePipedream.isPending}
-                  />
-                  <DisconnectAction
-                    onClick={() =>
-                      setDisconnect({
-                        title: 'Disconnect from Macro',
-                        body: 'Disconnect GitHub from Macro AI?',
-                        onConfirm: () =>
-                          deletePipedream.mutate(
-                            { app_slug: 'github' },
-                            {
-                              onSuccess: () =>
-                                toast.success(
-                                  'Disconnected GitHub AI from Macro'
-                                ),
-                              onError: () =>
-                                toast.failure('Failed to disconnect'),
-                            }
-                          ),
-                      })
-                    }
-                    disabled={deletePipedream.isPending}
-                  />
-                </Show>
+                {aiActions(row().status)}
               </CapabilityRow>
             )}
           </Show>
@@ -284,8 +364,6 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
               <CapabilityRow
                 title={row().title}
                 outcome={row().outcome}
-                facts={capabilityFacts(row())}
-                status={row().status}
               >
                 <Show
                   when={accountConnected()}
@@ -296,7 +374,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                   }
                 >
                   <ConnectAction
-                    label="Connect"
+                    label="Configure app"
                     href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
                   />
                 </Show>

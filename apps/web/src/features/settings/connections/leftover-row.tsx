@@ -1,8 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
+import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { openExternalUrl } from '@core/util/url';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
-import LinkBreakIcon from '@phosphor/link-break.svg';
 import {
   useDeleteMcpServerMutation,
   useStartMcpAuthMutation,
@@ -12,26 +11,30 @@ import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
-import { Button, Dialog, Dropdown, Panel, ToggleSwitch } from '@ui';
+import { Button, Dialog, Panel } from '@ui';
 import { createEffect, createSignal, Show, type JSX } from 'solid-js';
-import { DisconnectAction } from '../integration-ui';
+import { ConnectAction, StatusDot } from '../integration-ui';
 import {
   readMcpAuthAttempted,
   writeMcpAuthAttempted,
 } from '../mcp-auth-attempt';
 import { IntegrationRow, SettingsRow } from '../primitives';
 import {
+  ConnectionRowActions,
+  type ConnectionMenuItem,
+} from './connection-more';
+import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
 import type { Leftover } from './model';
 
-function leftoverCanToggle(leftover: Leftover): boolean {
+function leftoverOff(leftover: Leftover): boolean {
   switch (leftover.kind) {
-    case 'pipedream':
-      return true;
     case 'native-mcp':
-      return leftover.authenticated;
+      return leftover.authenticated && !leftover.enabled;
+    case 'pipedream':
+      return !leftover.enabled;
     default: {
       const _exhaustive: never = leftover;
       return _exhaustive;
@@ -55,6 +58,16 @@ export function LeftoverRow(props: { leftover: Leftover }) {
       ? readMcpAuthAttempted(props.leftover.url)
       : false
   );
+  const { connect: connectPipedream, busy: pipedreamConnectBusy } =
+    createPipedreamCatalogConnect({
+      entry: () =>
+        props.leftover.kind === 'pipedream'
+          ? {
+              app_slug: props.leftover.appSlug,
+              display_name: props.leftover.title,
+            }
+          : { app_slug: '', display_name: props.leftover.title },
+    });
 
   createEffect(() => {
     const leftover = props.leftover;
@@ -70,21 +83,14 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     deleteNative.isPending ||
     authorize.isPending ||
     updatePipedream.isPending ||
-    deletePipedream.isPending;
+    deletePipedream.isPending ||
+    pipedreamConnectBusy();
 
   const connectionFailed = () => {
     const leftover = props.leftover;
     return (
       leftover.kind === 'native-mcp' && !leftover.authenticated && attempted()
     );
-  };
-
-  const connectLabel = () => {
-    const leftover = props.leftover;
-    if (leftover.kind !== 'native-mcp') return 'Connect';
-    if (leftover.authenticated) return 'Reconnect';
-    if (connectionFailed()) return 'Try Again';
-    return 'Connect';
   };
 
   const toggle = () => {
@@ -184,81 +190,134 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     );
   };
 
-  const enableSwitch = () => (
-    <Show when={leftoverCanToggle(props.leftover)}>
-      <ToggleSwitch
-        size="md"
-        checked={props.leftover.enabled}
-        disabled={busy()}
-        onChange={toggle}
-        label={`Enable ${props.leftover.title}`}
-        labelClass="sr-only"
-      />
-    </Show>
-  );
+  const disconnectItem = (): ConnectionMenuItem => ({
+    label: 'Disconnect',
+    onSelect: askDisconnect,
+    disabled: busy(),
+    danger: true,
+  });
 
-  const moreMenu = () => (
-    <Dropdown>
-      <Dropdown.Trigger
-        aria-label="More"
-        class="relative inline-flex size-6 items-center justify-center rounded-md border-1 border-edge bg-transparent text-ink-muted outline-none hover:bg-hover hover:text-ink"
-      >
-        <DotsThreeIcon class="size-4" />
-      </Dropdown.Trigger>
-      <Dropdown.Content class="w-48">
-        <Dropdown.Group>
-          <Dropdown.Item disabled={busy()} onSelect={openRename}>
-            Rename
-          </Dropdown.Item>
-          <Dropdown.Item disabled={busy()} onSelect={startAuth}>
-            {connectLabel()}
-          </Dropdown.Item>
-          <Dropdown.Item
-            class="text-failure"
-            disabled={busy()}
-            onSelect={askDisconnect}
-          >
-            <LinkBreakIcon class="size-4" />
-            Disconnect
-          </Dropdown.Item>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
-  );
+  const renameItem = (): ConnectionMenuItem => ({
+    label: 'Rename',
+    onSelect: openRename,
+    disabled: busy(),
+  });
+
+  const reconnectItem = (): ConnectionMenuItem => ({
+    label: 'Reconnect',
+    onSelect: () => {
+      const leftover = props.leftover;
+      switch (leftover.kind) {
+        case 'native-mcp':
+          startAuth();
+          return;
+        case 'pipedream':
+          void connectPipedream();
+          return;
+        default: {
+          const _exhaustive: never = leftover;
+          return _exhaustive;
+        }
+      }
+    },
+    disabled: busy(),
+  });
 
   const actions = (): JSX.Element => {
-    switch (props.leftover.kind) {
-      case 'native-mcp':
-        return (
-          <div class="flex items-center gap-4">
-            <Show when={connectionFailed()}>
-              <span class="text-xs text-failure whitespace-nowrap">
-                Last attempt failed
-              </span>
-            </Show>
-            {enableSwitch()}
-            <Show when={leftoverCanToggle(props.leftover)}>
-              <span class="h-6 w-px shrink-0 bg-ink/10" aria-hidden="true" />
-            </Show>
-            {moreMenu()}
-          </div>
-        );
-      case 'pipedream':
-        return (
-          <>
-            <DisconnectAction
-              onClick={askDisconnect}
-              disabled={busy()}
+    const leftover = props.leftover;
+    switch (leftover.kind) {
+      case 'native-mcp': {
+        if (!leftover.authenticated) {
+          return (
+            <ConnectionRowActions
+              primary={
+                <>
+                  <Show when={connectionFailed()}>
+                    <span class="text-xs text-failure whitespace-nowrap">
+                      Last attempt failed
+                    </span>
+                  </Show>
+                  <ConnectAction
+                    label={connectionFailed() ? 'Try Again' : 'Connect'}
+                    onClick={startAuth}
+                    disabled={busy()}
+                  />
+                </>
+              }
+              items={[renameItem(), disconnectItem()]}
             />
-            {enableSwitch()}
-          </>
+          );
+        }
+        if (leftover.enabled) {
+          return (
+            <ConnectionRowActions
+              items={[
+                {
+                  label: 'Turn off',
+                  onSelect: toggle,
+                  disabled: busy(),
+                },
+                renameItem(),
+                reconnectItem(),
+                disconnectItem(),
+              ]}
+            />
+          );
+        }
+        return (
+          <ConnectionRowActions
+            primary={
+              <ConnectAction
+                label="Turn on"
+                variant="neutral"
+                onClick={toggle}
+                disabled={busy()}
+              />
+            }
+            items={[renameItem(), reconnectItem(), disconnectItem()]}
+          />
+        );
+      }
+      case 'pipedream':
+        if (leftover.enabled) {
+          return (
+            <ConnectionRowActions
+              items={[
+                {
+                  label: 'Turn off',
+                  onSelect: toggle,
+                  disabled: busy(),
+                },
+                reconnectItem(),
+                disconnectItem(),
+              ]}
+            />
+          );
+        }
+        return (
+          <ConnectionRowActions
+            primary={
+              <ConnectAction
+                label="Turn on"
+                variant="neutral"
+                onClick={toggle}
+                disabled={busy()}
+              />
+            }
+            items={[reconnectItem(), disconnectItem()]}
+          />
         );
       default: {
-        const _exhaustive: never = props.leftover;
+        const _exhaustive: never = leftover;
         return _exhaustive;
       }
     }
   };
+
+  const offDot = () =>
+    leftoverOff(props.leftover) ? (
+      <StatusDot state="off" label="Off" />
+    ) : undefined;
 
   const row = (): JSX.Element => {
     const leftover = props.leftover;
@@ -266,7 +325,16 @@ export function LeftoverRow(props: { leftover: Leftover }) {
       case 'native-mcp':
         return (
           <SettingsRow
-            label={leftover.title}
+            label={
+              leftoverOff(leftover) ? (
+                <span class="inline-flex items-center gap-2">
+                  {leftover.title}
+                  {offDot()}
+                </span>
+              ) : (
+                leftover.title
+              )
+            }
             description={leftover.subtitle}
           >
             {actions()}
@@ -283,6 +351,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
             }
             title={leftover.title}
             description={leftover.subtitle}
+            status={offDot()}
           >
             {actions()}
           </IntegrationRow>
