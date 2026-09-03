@@ -93,6 +93,7 @@ pub enum Port {
     StaticFile = 8094,
     Unfurl = 8095,
     ImageProxy = 8097,
+    ScheduledAction = 8099,
     Kafka = 9092,
     SdkWebhookSsh = 8788,
     SdkWebhookHostReceiver = 8789,

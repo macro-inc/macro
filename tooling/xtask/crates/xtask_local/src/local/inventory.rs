@@ -195,6 +195,17 @@ pub const RUST_SERVICES: &[RustService] = &[
         no_default_features: false,
     },
     RustService {
+        compose_name: "scheduled_action_service",
+        cargo_bin: "service",
+        package: "scheduled_action",
+        host_port: Some(Port::ScheduledAction),
+        path_prefix: Some("/agent-schedule"),
+        is_websocket: false,
+        modes: &[Mode::Local, Mode::Dev],
+        opt_in: false,
+        no_default_features: false,
+    },
+    RustService {
         compose_name: "static_file_service",
         cargo_bin: "static_file_service",
         package: "static_file_service",
