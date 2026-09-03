@@ -594,12 +594,14 @@ async fn run() -> anyhow::Result<()> {
     let http_port = config.port;
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
-            read_state,
-            control_state,
-            create_state,
-            gateway_state,
-            forward_state,
-            model_state,
+            api::ApiStates::new(
+                read_state,
+                control_state,
+                create_state,
+                gateway_state,
+                forward_state,
+                model_state,
+            ),
             http_port,
             shutdown_signal(),
         )

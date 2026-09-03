@@ -49,6 +49,39 @@ fn health_router() -> Router {
     Router::new().route("/health", get(health))
 }
 
+/// All route state served by the public agent-harness HTTP listener.
+pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Harness, Models> {
+    read: AgentSessionRouterState<T, Access, Auth>,
+    control: AgentSessionControlState<R, Access, Auth>,
+    create: CreateSessionState<Opener, Bots, Auth>,
+    gateway: RuntimeGatewayState<Auth>,
+    forward: ForwardGatewayState<Harness, Auth>,
+    models: AgentModelsRouterState<Models, Auth>,
+}
+
+impl<T, R, Opener, Bots, Access, Auth, Harness, Models>
+    ApiStates<T, R, Opener, Bots, Access, Auth, Harness, Models>
+{
+    /// Group the independently constructed route states for the HTTP server.
+    pub fn new(
+        read: AgentSessionRouterState<T, Access, Auth>,
+        control: AgentSessionControlState<R, Access, Auth>,
+        create: CreateSessionState<Opener, Bots, Auth>,
+        gateway: RuntimeGatewayState<Auth>,
+        forward: ForwardGatewayState<Harness, Auth>,
+        models: AgentModelsRouterState<Models, Auth>,
+    ) -> Self {
+        Self {
+            read,
+            control,
+            create,
+            gateway,
+            forward,
+            models,
+        }
+    }
+}
+
 /// Serve the sandbox-facing egress proxy on its own listener.
 ///
 /// No CORS layer and no Swagger: nothing browses this. Its only client is a
@@ -77,12 +110,7 @@ where
 
 /// Build the router and serve it until the process is asked to stop.
 pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Harness, Models>(
-    read_state: AgentSessionRouterState<T, Access, Auth>,
-    control_state: AgentSessionControlState<R, Access, Auth>,
-    create_state: CreateSessionState<Opener, Bots, Auth>,
-    gateway_state: RuntimeGatewayState<Auth>,
-    forward_state: ForwardGatewayState<Harness, Auth>,
-    model_state: AgentModelsRouterState<Models, Auth>,
+    states: ApiStates<T, R, Opener, Bots, Access, Auth, Harness, Models>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
@@ -96,17 +124,10 @@ where
     Harness: ForwardedCommands,
     Models: AgentModelsService,
 {
-    let inner = api_router(
-        read_state,
-        control_state,
-        create_state,
-        gateway_state,
-        forward_state,
-        model_state,
-    )
-    .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
-    .merge(health_router())
-    .layer(macro_cors::cors_layer());
+    let inner = api_router(states)
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
+        .merge(health_router())
+        .layer(macro_cors::cors_layer());
     let app = mount_at_root_and_prefix(inner)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .merge(SwaggerUi::new("/agent-harness/docs").url(
@@ -127,12 +148,7 @@ where
 }
 
 fn api_router<T, R, Opener, Bots, Access, Auth, Harness, Models>(
-    read_state: AgentSessionRouterState<T, Access, Auth>,
-    control_state: AgentSessionControlState<R, Access, Auth>,
-    create_state: CreateSessionState<Opener, Bots, Auth>,
-    gateway_state: RuntimeGatewayState<Auth>,
-    forward_state: ForwardGatewayState<Harness, Auth>,
-    model_state: AgentModelsRouterState<Models, Auth>,
+    states: ApiStates<T, R, Opener, Bots, Access, Auth, Harness, Models>,
 ) -> Router
 where
     T: AgentSessionService,
@@ -144,19 +160,19 @@ where
     Harness: ForwardedCommands,
     Models: AgentModelsService,
 {
-    let agent_sessions = agent_session_read_router(read_state.clone())
-        .merge(agent_session_control_router(control_state))
-        .merge(agent_session_create_router(create_state));
+    let agent_sessions = agent_session_read_router(states.read.clone())
+        .merge(agent_session_control_router(states.control))
+        .merge(agent_session_create_router(states.create));
     Router::new()
         .nest("/agent-sessions", agent_sessions)
-        .merge(agent_sandbox_size_router(read_state))
-        .merge(agent_models_router(model_state))
-        .nest("/runtime", runtime_gateway_router(gateway_state))
+        .merge(agent_sandbox_size_router(states.read))
+        .merge(agent_models_router(states.models))
+        .nest("/runtime", runtime_gateway_router(states.gateway))
         // Replica-to-replica command forwarding. Internal-key authenticated,
         // and reached over task-to-task networking rather than the load
         // balancer; mounting it on the public listener is fine because the
         // extractor refuses anything without the deployment's internal key.
-        .nest("/internal", forward_router(forward_state))
+        .nest("/internal", forward_router(states.forward))
 }
 
 async fn health() -> &'static str {
