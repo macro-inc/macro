@@ -10,7 +10,6 @@ import {
   differenceInMonths,
   differenceInWeeks,
   differenceInYears,
-  format,
 } from 'date-fns';
 import { match } from 'ts-pattern';
 
@@ -182,7 +181,7 @@ export function formatCompactRelativeTimestamp(value: string) {
   const now = new Date();
   const ageMs = Math.max(0, differenceInMilliseconds(now, date));
   const seconds = Math.floor(ageMs / 1000);
-  if (seconds < 60) return format(date, 'p');
+  if (seconds < 60) return 'now';
 
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m`;
