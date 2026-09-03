@@ -220,6 +220,7 @@ where
             .approve_pairing(
                 &code,
                 NewHarness {
+                    allow_permission_bypass: req.allow_permission_bypass,
                     id: HarnessId::new_from_uuid(Uuid::new_v4()),
                     name,
                     owner,

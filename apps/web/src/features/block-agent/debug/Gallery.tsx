@@ -245,6 +245,7 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'permission',
+      requestId: 'demo-permission-1',
       toolCall: 'demo-terminal',
       options: [
         { id: 'allow', name: 'Allow', kind: 'allow_once' },

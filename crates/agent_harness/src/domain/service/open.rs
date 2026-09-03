@@ -204,9 +204,15 @@ where
                 return Err(into_session_error(error));
             }
         };
+        let permission_policy = self.inner.permission_policy_for(session.bot_id).await;
         self.inner
             .sessions
-            .attach_session(session.id, container.mcp_servers(mcp_servers))
+            .attach_session(
+                session.id,
+                container
+                    .mcp_servers(mcp_servers)
+                    .permission_policy(permission_policy),
+            )
             .await?;
 
         // Raw, through the session's own command worker: dispatch is where a
@@ -355,8 +361,14 @@ where
                 return Err(error);
             }
         };
+        let permission_policy = self.permission_policy_for(bot_id).await;
         self.sessions
-            .attach_session(session_id, container.mcp_servers(mcp_servers))
+            .attach_session(
+                session_id,
+                container
+                    .mcp_servers(mcp_servers)
+                    .permission_policy(permission_policy),
+            )
             .await?;
         // The first prompt goes through the same door as every later one:
         // queued raw, then dispatched - which is where it is composed with

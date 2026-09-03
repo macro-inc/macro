@@ -5,7 +5,7 @@ use crate::domain::model::{
 };
 use crate::domain::ports::NoOpRealtime;
 use crate::domain::ports::{NoOpTurnObserver, NoopLifecyclePublisher};
-use crate::domain::session::HandshakeStatus;
+use crate::domain::session::{HandshakeStatus, PermissionPolicy};
 use crate::testing::{
     InMemoryAgentSessionRepo, RecordingLifecyclePublisher, RecordingRealtime, test_agent_session,
 };
@@ -827,6 +827,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         None,
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
         RecordingTransport {
             outbound: outbound_tx,
             inbound: inbound_rx,
@@ -907,6 +908,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
         None,
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
         RecordingTransport {
             outbound: outbound_tx,
             inbound: inbound_rx,
@@ -1365,6 +1367,7 @@ async fn shared_transport_copies_durable_initialization_before_load() {
         Some("first-acp".into()),
         "/workspace".into(),
         vec![],
+        PermissionPolicy::Prompt,
         RecordingTransport {
             outbound: send,
             inbound,
@@ -1417,6 +1420,7 @@ async fn shared_transport_copies_durable_initialization_before_load() {
         Some("second-acp".into()),
         "/workspace".into(),
         vec![],
+        PermissionPolicy::Prompt,
         RecordingTransport {
             outbound: send,
             inbound,
@@ -1521,6 +1525,7 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
         Some("restored-acp".into()),
         "/workspace".into(),
         vec![],
+        PermissionPolicy::Prompt,
         RecordingTransport {
             outbound: send,
             inbound,

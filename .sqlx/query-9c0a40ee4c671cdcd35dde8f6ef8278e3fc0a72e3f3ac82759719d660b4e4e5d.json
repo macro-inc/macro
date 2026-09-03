@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            id, kind, name, owner_user_id, team_id, created_by,\n            created_at, updated_at, last_connected_at, last_disconnected_at\n        FROM harnesses\n        WHERE id = $1 AND deleted_at IS NULL\n        ",
+  "query": "\n        SELECT\n            id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,\n            created_at, updated_at, last_connected_at, last_disconnected_at\n        FROM harnesses\n        WHERE id = $1 AND deleted_at IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -35,21 +35,26 @@
       },
       {
         "ordinal": 6,
+        "name": "allow_permission_bypass",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "last_connected_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "last_disconnected_at",
         "type_info": "Timestamptz"
       }
@@ -68,9 +73,10 @@
       false,
       false,
       false,
+      false,
       true,
       true
     ]
   },
-  "hash": "bb5f40af2c31290cf842e508fc7affce72ecaf1ba8b9b5d040cec43ba5c0c153"
+  "hash": "9c0a40ee4c671cdcd35dde8f6ef8278e3fc0a72e3f3ac82759719d660b4e4e5d"
 }

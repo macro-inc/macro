@@ -256,6 +256,15 @@ where
             // an edited entry is delivered later under its original identity,
             // so rewriting (or dropping) what a Daytona session is about to
             // run is the same privilege as prompting it.
+            HarnessCommand::Deliver(DeliverAction {
+                actor,
+                action: AgentAction::RespondToPermission(_),
+                ..
+            }) => {
+                if actor.is_none() {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
+            }
             HarnessCommand::Deliver(DeliverAction { actor, .. })
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {

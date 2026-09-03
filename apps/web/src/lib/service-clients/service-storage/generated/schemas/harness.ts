@@ -14,6 +14,8 @@ import type { HarnessOwner } from './harnessOwner';
 Clients deserialize this, so both derives are used.
  */
 export interface Harness {
+  /** Whether personas may bypass ACP permission requests on this harness. */
+  allow_permission_bypass?: boolean;
   /** Whether the daemon currently holds a runtime connection. */
   connected: boolean;
   /** Creation timestamp. */

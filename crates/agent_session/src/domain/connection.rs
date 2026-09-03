@@ -35,7 +35,7 @@ use tokio::sync::{Mutex, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::{AgentSessionId, SessionClaim};
-use crate::domain::session::HandshakeStatus;
+use crate::domain::session::{HandshakeStatus, PermissionPolicy};
 
 #[cfg(test)]
 mod test;
@@ -156,6 +156,10 @@ pub struct RuntimeAttachment<Connector> {
     /// callers waiting on a reply then fall back to their own timeout alone,
     /// exactly as before this existed.
     pub(crate) closed: Option<CancellationToken>,
+    /// How this attachment's session answers permission requests. Per
+    /// attachment for the same reason as `mcp_servers`: it follows what the
+    /// agent's owner has configured *now*.
+    pub(crate) permission_policy: PermissionPolicy,
 }
 
 /// Activate attachment-owned resources with the exact acquired ownership claim.
@@ -175,6 +179,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             handshake,
             mcp_servers: Vec::new(),
             closed: None,
+            permission_policy: PermissionPolicy::default(),
         }
     }
 
@@ -204,6 +209,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             mcp_servers: self.mcp_servers,
             activation: self.activation,
             closed: self.closed,
+            permission_policy: self.permission_policy,
         }
     }
 
@@ -212,6 +218,13 @@ impl<Connector> RuntimeAttachment<Connector> {
     #[must_use]
     pub fn mcp_servers(mut self, mcp_servers: Vec<McpServer>) -> Self {
         self.mcp_servers = mcp_servers;
+        self
+    }
+
+    /// How this attachment's session answers the agent's permission requests.
+    #[must_use]
+    pub fn permission_policy(mut self, permission_policy: PermissionPolicy) -> Self {
+        self.permission_policy = permission_policy;
         self
     }
 }
@@ -383,6 +396,8 @@ where
             // This connection already tracks its own end (`evict`, or the
             // router task finishing) - the same signal `closed()` awaits.
             closed: Some(self.closed.clone()),
+            // The caller knows whose agent this is; the connection does not.
+            permission_policy: PermissionPolicy::default(),
         }
     }
 

@@ -5,7 +5,7 @@ import {
   useHarnessPairingQuery,
 } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { Button, Dialog, Panel } from '@ui';
+import { Button, Checkbox, Dialog, Panel } from '@ui';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { ChoiceRow } from './primitives';
 
@@ -38,6 +38,7 @@ export function HarnessPairingDialog(props: {
   const [committedCode, setCommittedCode] = createSignal<string | undefined>(
     props.initialCode || undefined
   );
+  const [allowPermissionBypass, setAllowPermissionBypass] = createSignal(false);
   const [approved, setApproved] = createSignal(false);
   const [approveError, setApproveError] = createSignal<string>();
   const [name, setName] = createSignal('');
@@ -88,6 +89,7 @@ export function HarnessPairingDialog(props: {
     setName('');
     setShare('Private');
     setShareEdited(false);
+    setAllowPermissionBypass(false);
   };
 
   const canApprove = () =>
@@ -103,6 +105,7 @@ export function HarnessPairingDialog(props: {
     try {
       await approveMutation.mutateAsync({
         code: pairing.code,
+        allowPermissionBypass: allowPermissionBypass(),
         name: name().trim(),
         teamId: share() === 'Team' ? currentTeamId() : undefined,
       });
@@ -227,6 +230,29 @@ export function HarnessPairingDialog(props: {
                       }}
                     />
                   </fieldset>
+                  <div class="flex flex-col gap-2">
+                    <Checkbox
+                      class="flex items-center gap-3 text-sm"
+                      checked={allowPermissionBypass()}
+                      onChange={setAllowPermissionBypass}
+                    >
+                      <Checkbox.Control />
+                      <Checkbox.Label>
+                        Allow bypassing permission requests
+                      </Checkbox.Label>
+                    </Checkbox>
+                    <p class="text-xs text-ink-muted">
+                      When off, every persona on this harness must ask for
+                      permission.
+                    </p>
+                    <Show when={allowPermissionBypass()}>
+                      <p class="text-xs text-negative" role="alert">
+                        Personas can run commands and edit files on this machine
+                        without approval. Only enable this if you trust everyone
+                        who can create personas on this harness.
+                      </p>
+                    </Show>
+                  </div>
                 </div>
               )}
             </Match>

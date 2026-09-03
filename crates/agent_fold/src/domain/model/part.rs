@@ -41,6 +41,9 @@ pub enum MessagePart {
     },
     /// The agent asking to proceed.
     Permission {
+        /// The agent request id an approval must echo.
+        #[serde(rename = "requestId")]
+        request_id: super::AgentRequestId,
         /// The tool call permission was requested for.
         #[serde(rename = "toolCall")]
         tool_call: ToolUseId,

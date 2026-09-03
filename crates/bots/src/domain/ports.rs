@@ -4,7 +4,7 @@ use super::models::{
     Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotProfile,
     BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
     CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
-    HarnessId, HarnessOwner, PatchBotRequest, UpdateAgentRequest,
+    HarnessFacts, HarnessId, PatchBotRequest, UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
@@ -96,11 +96,11 @@ pub trait BotRepo: Send + Sync + 'static {
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
-    /// Get the owner of an active registered harness.
-    fn get_harness_owner(
+    /// Get ownership and permission capabilities of an active registered harness.
+    fn get_harness_facts(
         &self,
         harness_id: HarnessId,
-    ) -> impl Future<Output = Result<Option<HarnessOwner>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<HarnessFacts>, Self::Err>> + Send;
 
     /// Check whether a bot is an active channel participant.
     fn bot_active_in_channel(

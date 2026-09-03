@@ -14,6 +14,7 @@ mod config;
 mod containers;
 mod harness_bindings;
 mod model_providers;
+mod permission_policy;
 mod runtime_commands;
 mod trigger;
 
@@ -111,6 +112,7 @@ use macro_service_urls::{
     AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
 };
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
+use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
 use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
@@ -538,6 +540,7 @@ async fn run() -> anyhow::Result<()> {
         prompt_composer,
         EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url),
         RedisCommandForwarder::new(redis.clone()),
+        PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
         defaults,
         Arc::clone(&lifecycle_publisher),
         pending_commands,

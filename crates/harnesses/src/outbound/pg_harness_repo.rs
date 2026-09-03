@@ -33,6 +33,7 @@ impl PgHarnessRepo {
 }
 
 struct HarnessRow {
+    allow_permission_bypass: bool,
     id: Uuid,
     kind: String,
     name: String,
@@ -62,6 +63,7 @@ impl TryFrom<HarnessRow> for Harness {
 
         Ok(Self {
             id: HarnessId::new_from_uuid(row.id),
+            allow_permission_bypass: row.allow_permission_bypass,
             kind: row.kind,
             name: row.name,
             owner,
@@ -91,7 +93,7 @@ async fn fetch_harness(
         HarnessRow,
         r#"
         SELECT
-            id, kind, name, owner_user_id, team_id, created_by,
+            id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
             created_at, updated_at, last_connected_at, last_disconnected_at
         FROM harnesses
         WHERE id = $1 AND deleted_at IS NULL
@@ -218,14 +220,15 @@ impl HarnessRepo for PgHarnessRepo {
         };
         sqlx::query!(
             r#"
-            INSERT INTO harnesses (id, kind, name, owner_user_id, team_id, created_by)
-            VALUES ($1, 'macrod', $2, $3, $4, $5)
+            INSERT INTO harnesses (id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass)
+            VALUES ($1, 'macrod', $2, $3, $4, $5, $6)
             "#,
             harness.id.as_uuid(),
             harness.name,
             owner_user_id,
             team_id,
             harness.created_by.as_ref(),
+            harness.allow_permission_bypass,
         )
         .execute(&mut *tx)
         .await
@@ -344,7 +347,7 @@ impl HarnessRepo for PgHarnessRepo {
             HarnessRow,
             r#"
             SELECT
-                id, kind, name, owner_user_id, team_id, created_by,
+                id, kind, name, owner_user_id, team_id, created_by, allow_permission_bypass,
                 created_at, updated_at, last_connected_at, last_disconnected_at
             FROM harnesses
             WHERE deleted_at IS NULL

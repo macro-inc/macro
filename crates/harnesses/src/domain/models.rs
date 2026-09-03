@@ -32,6 +32,9 @@ pub enum HarnessOwner {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct Harness {
+    /// Whether personas may bypass ACP permission requests on this harness.
+    #[serde(default)]
+    pub allow_permission_bypass: bool,
     /// Harness id.
     pub id: HarnessId,
     /// Runtime kind. Currently always `macrod`.
@@ -145,6 +148,9 @@ pub struct PairingDetails {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ApprovePairingRequest {
+    /// Whether personas may bypass ACP permission requests on this harness.
+    #[serde(default)]
+    pub allow_permission_bypass: bool,
     /// Display name override. Defaults to the daemon's requested name.
     pub name: Option<String>,
     /// Owning team. Omit for a private, user-owned harness.

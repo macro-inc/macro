@@ -7,6 +7,7 @@
 
 import type { AgentChannelScope } from './agentChannelScope';
 import type { AgentMcpServers } from './agentMcpServers';
+import type { UpdateAgentRequestAutoAcceptPermissions } from './updateAgentRequestAutoAcceptPermissions';
 import type { UpdateAgentRequestAvatarUrl } from './updateAgentRequestAvatarUrl';
 import type { UpdateAgentRequestDescription } from './updateAgentRequestDescription';
 import type { UpdateAgentRequestHarnessId } from './updateAgentRequestHarnessId';
@@ -16,6 +17,9 @@ import type { UpdateAgentRequestTeamId } from './updateAgentRequestTeamId';
  * Request to replace the editable configuration of a persisted AI agent.
  */
 export interface UpdateAgentRequest {
+  /** Whether the agent's sessions approve ACP permission requests without
+asking. Omit to always prompt. */
+  auto_accept_permissions?: UpdateAgentRequestAutoAcceptPermissions;
   /** Optional avatar URL or data URL. */
   avatar_url?: UpdateAgentRequestAvatarUrl;
   /** Selected channels. Must be non-empty only for `selected` scope. */

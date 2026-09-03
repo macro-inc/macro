@@ -249,6 +249,7 @@ fn render_part(part: &MessagePart) -> String {
                 tool_call,
                 options,
                 outcome,
+                ..
             } => out.push_str(&render_permission(tool_call, options, outcome)),
             MessagePart::Control { control, outcome } => {
                 let label = match control {

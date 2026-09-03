@@ -8,7 +8,7 @@ use crate::domain::{
         Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
         BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotProfile, BotToken,
         BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
-        CreateChannelScopedBotRequest, HarnessId, HarnessOwner, PatchBotRequest,
+        CreateChannelScopedBotRequest, HarnessFacts, HarnessId, HarnessOwner, PatchBotRequest,
         UpdateAgentRequest,
     },
     ports::BotRepo,
@@ -117,6 +117,7 @@ struct AgentRow {
     mcp_scope: String,
     mcp_app_slugs: Vec<String>,
     mcp_server_names: Vec<String>,
+    auto_accept_permissions: Option<bool>,
 }
 
 impl TryFrom<AgentRow> for Agent {
@@ -166,6 +167,7 @@ impl TryFrom<AgentRow> for Agent {
             channel_scope,
             channel_ids: row.channel_ids,
             mcp,
+            auto_accept_permissions: row.auto_accept_permissions,
         })
     }
 }
@@ -356,9 +358,9 @@ impl BotRepo for PgBotsRepo {
         sqlx::query!(
             r#"
             INSERT INTO agent_configs (
-                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope
+                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope, auto_accept_permissions
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             "#,
             bot_id.as_uuid(),
             &req.instructions,
@@ -367,6 +369,7 @@ impl BotRepo for PgBotsRepo {
             &req.default_model,
             req.channel_scope.as_str(),
             req.mcp.scope_str(),
+            req.auto_accept_permissions,
         )
         .execute(&mut *tx)
         .await
@@ -401,6 +404,7 @@ impl BotRepo for PgBotsRepo {
             harness_id: req.harness_id,
             default_model: req.default_model,
             channel_scope: req.channel_scope,
+            auto_accept_permissions: req.auto_accept_permissions,
             channel_ids: req.channel_ids,
             mcp: req.mcp,
         })
@@ -473,6 +477,7 @@ impl BotRepo for PgBotsRepo {
                 default_model = $5,
                 channel_scope = $6,
                 mcp_scope = $7,
+                auto_accept_permissions = $8,
                 updated_at = now()
             WHERE bot_id = $1
             "#,
@@ -483,6 +488,7 @@ impl BotRepo for PgBotsRepo {
             &req.default_model,
             req.channel_scope.as_str(),
             req.mcp.scope_str(),
+            req.auto_accept_permissions,
         )
         .execute(&mut *tx)
         .await
@@ -545,6 +551,7 @@ impl BotRepo for PgBotsRepo {
             channel_scope: req.channel_scope,
             channel_ids: req.channel_ids,
             mcp: req.mcp,
+            auto_accept_permissions: req.auto_accept_permissions,
         }))
     }
 
@@ -574,6 +581,7 @@ impl BotRepo for PgBotsRepo {
                 a.harness_id,
                 a.default_model,
                 a.channel_scope,
+                a.auto_accept_permissions,
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
@@ -937,6 +945,7 @@ impl BotRepo for PgBotsRepo {
                 a.harness_id,
                 a.default_model,
                 a.channel_scope,
+                a.auto_accept_permissions,
                 ARRAY(
                     SELECT p.channel_id
                     FROM comms_channel_participants p
@@ -972,13 +981,13 @@ impl BotRepo for PgBotsRepo {
         row.map(Agent::try_from).transpose()
     }
 
-    async fn get_harness_owner(
+    async fn get_harness_facts(
         &self,
         harness_id: HarnessId,
-    ) -> Result<Option<HarnessOwner>, Self::Err> {
+    ) -> Result<Option<HarnessFacts>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT owner_user_id, team_id
+            SELECT owner_user_id, team_id, allow_permission_bypass
             FROM harnesses
             WHERE id = $1 AND deleted_at IS NULL
             "#,
@@ -989,8 +998,14 @@ impl BotRepo for PgBotsRepo {
         .context("failed to fetch harness owner")?;
 
         row.map(|row| match (row.owner_user_id, row.team_id) {
-            (Some(user_id), None) => Ok(HarnessOwner::User { user_id }),
-            (None, Some(team_id)) => Ok(HarnessOwner::Team { team_id }),
+            (Some(user_id), None) => Ok(HarnessFacts {
+                owner: HarnessOwner::User { user_id },
+                allow_permission_bypass: row.allow_permission_bypass,
+            }),
+            (None, Some(team_id)) => Ok(HarnessFacts {
+                owner: HarnessOwner::Team { team_id },
+                allow_permission_bypass: row.allow_permission_bypass,
+            }),
             // Unreachable: harnesses_owner_check enforces exactly one owner.
             _ => Err(anyhow::anyhow!("harness {harness_id} violates owner xor")),
         })

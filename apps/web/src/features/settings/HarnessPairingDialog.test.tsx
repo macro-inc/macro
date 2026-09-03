@@ -112,6 +112,7 @@ describe('HarnessPairingDialog', () => {
       expect(mocks.approve).toHaveBeenCalledWith({
         code: 'KX7M-4QHD',
         name: 'Home desktop',
+        allowPermissionBypass: false,
         teamId: undefined,
       });
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Harness connected');
@@ -131,6 +132,7 @@ describe('HarnessPairingDialog', () => {
       expect(mocks.approve).toHaveBeenCalledWith({
         code: 'KX7M-4QHD',
         name: 'Dev laptop',
+        allowPermissionBypass: false,
         teamId: 'team-1',
       });
     });
@@ -195,4 +197,23 @@ describe('HarnessPairingDialog', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
     expect(onClose).toHaveBeenCalledOnce();
   });
+});
+
+it('warns before opting a harness into permission bypass', async () => {
+  render(() => (
+    <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+  ));
+  const dialog = screen.getByRole('dialog');
+  const toggle = within(dialog).getByRole('checkbox');
+  expect(toggle).toHaveProperty('checked', false);
+  fireEvent.click(toggle);
+  expect(within(dialog).getByRole('alert').textContent).toContain(
+    'without approval'
+  );
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
+  await waitFor(() =>
+    expect(mocks.approve).toHaveBeenCalledWith(
+      expect.objectContaining({ allowPermissionBypass: true })
+    )
+  );
 });

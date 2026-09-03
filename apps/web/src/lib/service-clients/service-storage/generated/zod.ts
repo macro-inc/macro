@@ -11,6 +11,12 @@ import * as zod from 'zod';
  */
 export const listAgentsResponseItem = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+      ),
     bot: zod
       .object({
         avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
@@ -122,6 +128,12 @@ export const listAgentsResponse = zod.array(listAgentsResponseItem);
  */
 export const createAgentBody = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+      ),
     avatar_url: zod
       .string()
       .nullish()
@@ -203,6 +215,12 @@ export const updateAgentParams = zod.object({
 
 export const updateAgentBody = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to always prompt."
+      ),
     avatar_url: zod
       .string()
       .nullish()
@@ -279,6 +297,12 @@ export const updateAgentBody = zod
 
 export const updateAgentResponse = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` means always prompt. Bypass also requires the harness's opt-in."
+      ),
     bot: zod
       .object({
         avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
@@ -8900,6 +8924,12 @@ export const approveHarnessPairingParams = zod.object({
 
 export const approveHarnessPairingBody = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether personas may bypass ACP permission requests on this harness.'
+      ),
     name: zod
       .string()
       .nullish()
@@ -8915,6 +8945,12 @@ export const approveHarnessPairingBody = zod
 
 export const approveHarnessPairingResponse = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether personas may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -8975,6 +9011,12 @@ export const claimHarnessPairingResponse = zod
   .object({
     harness: zod
       .object({
+        allow_permission_bypass: zod
+          .boolean()
+          .optional()
+          .describe(
+            'Whether personas may bypass ACP permission requests on this harness.'
+          ),
         connected: zod
           .boolean()
           .describe('Whether the daemon currently holds a runtime connection.'),
@@ -9023,6 +9065,12 @@ export const claimHarnessPairingResponse = zod
  */
 export const listHarnessesResponseItem = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether personas may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),
@@ -9065,6 +9113,12 @@ export const listHarnessesResponse = zod.array(listHarnessesResponseItem);
  */
 export const getSelfHarnessResponse = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Whether personas may bypass ACP permission requests on this harness.'
+      ),
     connected: zod
       .boolean()
       .describe('Whether the daemon currently holds a runtime connection.'),

@@ -188,6 +188,14 @@ where
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {
+    /// Resolve current permission policy, failing closed if lookup fails.
+    pub(super) async fn permission_policy_for(&self, bot: BotId) -> PermissionPolicy {
+        self.permission_policies.permission_policy(bot).await.inspect_err(|error| {
+            tracing::warn!(error = ?error, %bot, "could not resolve permission policy; prompting");
+        }).map(crate::domain::model::PermissionPolicyConfig::resolve)
+            .unwrap_or(PermissionPolicy::Prompt)
+    }
+
     /// The MCP servers to advertise when reattaching to an existing container.
     ///
     /// The raw session token exists in exactly one place after spawn - the
@@ -256,8 +264,14 @@ where
                 let mcp_servers = self
                     .resumed_mcp_servers(session_id, &session.owner_id, &session.mcp_servers)
                     .await?;
+                let permission_policy = self.permission_policy_for(session.bot_id).await;
                 self.sessions
-                    .attach_session(session_id, container.mcp_servers(mcp_servers))
+                    .attach_session(
+                        session_id,
+                        container
+                            .mcp_servers(mcp_servers)
+                            .permission_policy(permission_policy),
+                    )
                     .await?;
             }
         }

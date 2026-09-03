@@ -201,6 +201,7 @@ describe('deriveMagicChipPresentation', () => {
             },
             {
               kind: 'permission',
+              requestId: 'perm-1',
               toolCall: 'tool',
               options: [],
               outcome: { kind },

@@ -231,7 +231,9 @@ impl FoldState {
                         // `control_from_runtime` never yields these: a prompt
                         // is folded below, and an elicitation answer is a
                         // response frame, correlated by the agent's id.
-                        AgentAction::Prompt(_) | AgentAction::RespondElicitation(_) => None,
+                        AgentAction::Prompt(_)
+                        | AgentAction::RespondElicitation(_)
+                        | AgentAction::RespondToPermission(_) => None,
                     });
                 }
                 StepChange::message(match &acp.0 {
