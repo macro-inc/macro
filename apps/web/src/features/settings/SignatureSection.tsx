@@ -159,7 +159,7 @@ export function SignatureSection(props: { link: EmailLink }) {
   };
 
   return (
-    <div class="flex flex-col gap-3 rounded-xl border border-edge-muted p-3">
+    <div class="flex flex-col gap-3 rounded-xl border border-edge-muted py-3">
       {/* Editing (Quill) is desktop-only; on mobile the section still offers
           the replies/forwards toggle and Remove, with a pointer to desktop. */}
       <Show
@@ -192,7 +192,7 @@ export function SignatureSection(props: { link: EmailLink }) {
       </Show>
       {/* Stacks on narrow screens so the toggle label and buttons never
           crowd each other onto wrapped lines. */}
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-col gap-3 px-3 sm:flex-row sm:items-center sm:justify-between">
         <ToggleSwitch
           checked={props.link.settings.signature_on_replies_forwards ?? false}
           onChange={setOnRepliesForwards}
@@ -226,7 +226,9 @@ export function SignatureSection(props: { link: EmailLink }) {
         </div>
       </div>
       <Show when={saveError()}>
-        {(msg) => <p class="text-right text-sm text-failure-ink">{msg()}</p>}
+        {(msg) => (
+          <p class="px-3 text-right text-sm text-failure-ink">{msg()}</p>
+        )}
       </Show>
     </div>
   );
