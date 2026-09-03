@@ -338,7 +338,7 @@ async fn websocket_upgrade_is_authorized_at_root_and_gateway_prefix() {
     for path in [
         WEBSOCKET_PATH,
         "/connection-gateway",
-        "/connection-gateway/",
+        "/connection-gateway?macro-api-token=not-a-token",
     ] {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
