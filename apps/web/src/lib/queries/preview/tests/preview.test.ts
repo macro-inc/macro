@@ -162,6 +162,42 @@ describe('preview transport facade', () => {
     });
   });
 
+  it('does not turn a failed REST fallback into a permission result', () => {
+    createGraphqlItemPreviewQueryMock.mockReturnValue({
+      data: () => undefined,
+      error: () => null,
+      isLoading: () => false,
+      isFetching: () => false,
+      isEnabled: () => true,
+      shouldFallback: () => true,
+      refetch: vi.fn(),
+    });
+    useQueryMock.mockImplementation((options: () => unknown) => {
+      useQueryOptions.push(options);
+      return {
+        data: undefined,
+        isLoading: false,
+        isPending: false,
+        isSuccess: false,
+        isError: true,
+      };
+    });
+
+    createRoot((dispose) => {
+      const [item] = useItemPreview(() => ({
+        id: 'doc-1',
+        type: 'document',
+      }));
+
+      expect(item()).toEqual({
+        id: 'doc-1',
+        type: 'document',
+        loading: true,
+      });
+      dispose();
+    });
+  });
+
   it('keeps GraphQL writes out of the TanStack preview cache', () => {
     setPreviewFileType('doc-1', 'pdf');
     setPreviewName({

@@ -162,7 +162,6 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
       : undefined;
 
     if (!data) {
-      if (!previewQuery.isLoading()) return noAccessPreview(item());
       return {
         loading: true,
         id: item().id,
