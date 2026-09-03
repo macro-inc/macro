@@ -4,9 +4,10 @@
 //! provider fan-out so the rest of the crate stays provider-agnostic:
 //!
 //! - [`RoutedModel`] — the routed id bound to its provider client. One arm per
-//!   wire protocol: Anthropic-native, OpenAI Responses, and OpenAI-compatible
-//!   Chat Completions. Compatible providers live in a data registry keyed by
-//!   name, so adding one is [`with_openai_provider`](ModelRouter::with_openai_provider).
+//!   wire protocol: Anthropic-native, OpenAI Responses, Gemini GenerateContent,
+//!   and OpenAI-compatible Chat Completions. Compatible providers live in a
+//!   data registry keyed by name, so adding one is
+//!   [`with_openai_provider`](ModelRouter::with_openai_provider).
 //! - [`ProviderAgent`] — a built rig agent, with the same arms. Its
 //!   [`run_stream`](ProviderAgent::run_stream) matches internally, so callers
 //!   (e.g. `agent_loop`) hold one type and never fan out.
@@ -286,7 +287,8 @@ impl ModelRouter {
     /// Build a router with the built-in providers from the environment.
     ///
     /// Requires `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, and `CEREBRAS_API_KEY`.
-    /// Chain [`with_openai_provider`](Self::with_openai_provider) to add more.
+    /// Adds native Gemini when optional `GEMINI_API_KEY` is present. Chain
+    /// [`with_openai_provider`](Self::with_openai_provider) to add more.
     pub fn try_from_env() -> Result<Self, AgentError> {
         let env = ApiKeys::new()?;
         let anthropic = anthropic::Client::builder()
@@ -454,10 +456,7 @@ pub fn model_is_configured(model: &str) -> bool {
 /// Routing uses `provider/model`, while the pricing table stores the model id
 /// sent on the provider wire.
 pub(crate) fn usage_model_id(model: &str) -> String {
-    Model::try_from(model).map_or_else(
-        |_| model.to_owned(),
-        |parsed| parsed.name().to_owned(),
-    )
+    Model::try_from(model).map_or_else(|_| model.to_owned(), |parsed| parsed.name().to_owned())
 }
 
 /// Build a rig agent from a completion model and per-session config.
