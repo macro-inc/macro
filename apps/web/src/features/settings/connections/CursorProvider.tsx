@@ -174,7 +174,7 @@ export function CursorProvider() {
               >
                 <select
                   id="cursor-default-model"
-                  class="settings-input w-full min-w-0 border-1 border-ink-muted hover:border-ink-muted bg-inset disabled:opacity-100 @[460px]:w-56"
+                  class="settings-input w-full min-w-0 bg-inset disabled:opacity-100 @[460px]:w-56"
                   value={selectedModelId()}
                   disabled={
                     setCursorDefaultModel.isPending || models().length === 0
