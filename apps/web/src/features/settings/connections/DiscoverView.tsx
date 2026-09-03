@@ -21,7 +21,7 @@ import {
   PIPEDREAM_BROWSE_HIDDEN_SLUGS,
   providerIcon,
 } from './provider-meta';
-import { openConnectionsProvider } from './view-state';
+import { openConnectionsProvider, showConnectionsOverview } from './view-state';
 
 export function DiscoverView(props: { model: ConnectionsModel }) {
   const alreadyHave = createMemo(() => {
@@ -197,6 +197,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
       <AddCustomMcpDialog
         open={addingCustom()}
         onOpenChange={setAddingCustom}
+        onAdded={showConnectionsOverview}
       />
     </div>
   );

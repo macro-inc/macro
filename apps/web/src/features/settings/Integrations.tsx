@@ -42,29 +42,15 @@ function hostFromUrl(url: string): string {
 export function AddCustomMcpDialog(props: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onAdded?: () => void;
 }) {
   const [name, setName] = createSignal('');
   const [url, setUrl] = createSignal('');
   const addMutation = useAddMcpServerMutation();
-  const authMutation = useStartMcpAuthMutation();
 
   const reset = () => {
     setName('');
     setUrl('');
-  };
-
-  const startAuth = (serverName: string, serverUrl: string) => {
-    authMutation.mutate(
-      { server_name: serverName, server_url: serverUrl },
-      {
-        onSuccess: (result: StartAuthResponse) => {
-          openExternalUrl(result.authorization_url);
-        },
-        onError: () => {
-          toast.failure('Server added but failed to start authorization');
-        },
-      }
-    );
   };
 
   const handleSubmit = () => {
@@ -76,9 +62,9 @@ export function AddCustomMcpDialog(props: {
       { server_name: n, url: u },
       {
         onSuccess: () => {
-          startAuth(n, u);
           reset();
           props.onOpenChange(false);
+          props.onAdded?.();
         },
         onError: () => {
           toast.failure('Failed to add server');
