@@ -64,6 +64,9 @@ beforeEach(() => {
     updatedAt: null,
   };
   mocks.status.isPlaceholderData = false;
+  mocks.models.data = {
+    models: [{ id: 'default-model', displayName: 'Default Model' }],
+  };
   mocks.save.mockResolvedValue(undefined);
   mocks.disconnect.mockResolvedValue(undefined);
 });
@@ -145,5 +148,21 @@ describe('CursorProvider', () => {
 
     expect(screen.getByText('Loading…')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
+  });
+
+  it('shows Loading models while the roster is empty', () => {
+    mocks.status.data = {
+      registered: true,
+      defaultModelId: null,
+      updatedAt: '2026-08-27T12:00:00Z',
+    };
+    mocks.models.data = { models: [] };
+
+    render(() => <CursorProvider />);
+
+    const select = screen.getByLabelText('Default model');
+    expect(select).toHaveProperty('disabled', true);
+    expect(select).toHaveProperty('value', '');
+    expect(screen.getByRole('option', { name: 'Loading models…' })).toBeTruthy();
   });
 });

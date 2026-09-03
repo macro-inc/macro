@@ -7,6 +7,7 @@ import {
   useSaveCursorApiKey,
   useSetCursorDefaultModel,
 } from '@queries/auth/cursor-api-key';
+import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { DisconnectAction } from '../integration-ui';
@@ -118,7 +119,10 @@ export function CursorProvider() {
           <Show
             when={!cursorStatus.isPlaceholderData}
             fallback={
-              <div class="px-6 py-3 text-xs text-ink-muted">Loading…</div>
+              <div class="flex items-center gap-2 px-6 py-3.5 text-sm text-ink-muted">
+                <SpinnerIcon class="size-4 animate-spin" />
+                Loading…
+              </div>
             }
           >
             <Show
@@ -179,10 +183,14 @@ export function CursorProvider() {
                   disabled={
                     setCursorDefaultModel.isPending || models().length === 0
                   }
+                  aria-busy={models().length === 0}
                   onChange={(event) =>
                     void handleCursorModelChange(event.currentTarget.value)
                   }
                 >
+                  <Show when={models().length === 0}>
+                    <option value="">Loading models…</option>
+                  </Show>
                   <For each={models()}>
                     {(model) => (
                       <option value={model.id}>{model.displayName}</option>

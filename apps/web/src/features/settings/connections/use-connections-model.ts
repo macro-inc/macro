@@ -2,7 +2,10 @@ import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useGithubLinkStatusQuery } from '@queries/auth';
-import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
+import {
+  useCursorApiKeyStatusQuery,
+  useCursorModelsQuery,
+} from '@queries/auth/cursor-api-key';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
@@ -24,6 +27,9 @@ export function useConnectionsModel() {
   const pipedream = usePipedreamConnectionsQuery();
   const nativeMcp = useMcpServersQuery();
   const cursor = useCursorApiKeyStatusQuery();
+  useCursorModelsQuery(
+    () => !cursor.isPlaceholderData && (cursor.data?.registered ?? false)
+  );
 
   const ready = () =>
     (!ENABLE_EMAIL || emailLinks.isFetched) &&
