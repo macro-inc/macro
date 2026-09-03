@@ -3,9 +3,9 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import { Button, buttonClasses } from '@ui';
 import { For, Show } from 'solid-js';
 import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';
+import { LeftoverRow } from './leftover-row';
 import type { ConnectionsModel } from './model';
 import { isConnectionsEmpty } from './model';
-import { LeftoverRow } from './leftover-row';
 import { EMPTY_STARTERS, providerIcon } from './provider-meta';
 import { openConnectionsProvider, showConnectionsDiscover } from './view-state';
 

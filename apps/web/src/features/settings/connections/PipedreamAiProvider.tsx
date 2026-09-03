@@ -9,16 +9,16 @@ import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
 import { CapabilityRow, capabilityFacts } from './capability-row';
 import {
-  ConnectionRowActions,
   type ConnectionMenuItem,
+  ConnectionRowActions,
 } from './connection-more';
 import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
 import {
-  CURATED_AI,
   type ConnectionsModel,
+  CURATED_AI,
   type CuratedAiProvider,
   capabilitiesFor,
 } from './model';

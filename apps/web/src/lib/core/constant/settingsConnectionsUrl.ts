@@ -30,7 +30,9 @@ export function isConnectionsProviderSlug(
 export function isConnectionsRestToken(
   value: string
 ): value is ConnectionsRestToken {
-  return value === CONNECTIONS_DISCOVER_SLUG || isConnectionsProviderSlug(value);
+  return (
+    value === CONNECTIONS_DISCOVER_SLUG || isConnectionsProviderSlug(value)
+  );
 }
 
 export function settingsSplitSegmentCount(

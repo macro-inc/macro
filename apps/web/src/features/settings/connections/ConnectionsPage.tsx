@@ -42,59 +42,59 @@ export function ConnectionsPage() {
         </SettingsPage>
       }
     >
-    <Switch
-      fallback={
-        <SettingsPage
-          title="Connections"
-          description={CONNECTIONS_DESCRIPTION}
-        >
-          <TabsInset
-            fullWidth
-            list={[
-              { value: 'connected', label: 'Connected' },
-              { value: 'discover', label: 'Discover' },
-            ]}
-            value={connectionsMode()}
-            onChange={(value) => {
-              if (value === 'discover') showConnectionsDiscover();
-              else showConnectionsOverview();
-            }}
-          />
-          <Show
-            when={ready()}
-            fallback={
-              <p class="text-sm text-ink-muted">Loading Connections…</p>
-            }
+      <Switch
+        fallback={
+          <SettingsPage
+            title="Connections"
+            description={CONNECTIONS_DESCRIPTION}
           >
+            <TabsInset
+              fullWidth
+              list={[
+                { value: 'connected', label: 'Connected' },
+                { value: 'discover', label: 'Discover' },
+              ]}
+              value={connectionsMode()}
+              onChange={(value) => {
+                if (value === 'discover') showConnectionsDiscover();
+                else showConnectionsOverview();
+              }}
+            />
             <Show
-              when={connectionsMode() === 'discover'}
-              fallback={<ConnectedView model={model()} />}
+              when={ready()}
+              fallback={
+                <p class="text-sm text-ink-muted">Loading Connections…</p>
+              }
             >
-              <DiscoverView model={model()} />
+              <Show
+                when={connectionsMode() === 'discover'}
+                fallback={<ConnectedView model={model()} />}
+              >
+                <DiscoverView model={model()} />
+              </Show>
             </Show>
-          </Show>
-        </SettingsPage>
-      }
-    >
-      <Match when={provider() === 'github'}>
-        <GitHubProvider model={model()} />
-      </Match>
-      <Match when={provider() === 'google'}>
-        <GoogleProvider model={model()} />
-      </Match>
-      <Match when={provider() === 'linear'}>
-        <PipedreamAiProvider model={model()} provider="linear" />
-      </Match>
-      <Match when={provider() === 'notion'}>
-        <PipedreamAiProvider model={model()} provider="notion" />
-      </Match>
-      <Match when={provider() === 'slack'}>
-        <PipedreamAiProvider model={model()} provider="slack" />
-      </Match>
-      <Match when={provider() === 'cursor'}>
-        <CursorProvider />
-      </Match>
-    </Switch>
+          </SettingsPage>
+        }
+      >
+        <Match when={provider() === 'github'}>
+          <GitHubProvider model={model()} />
+        </Match>
+        <Match when={provider() === 'google'}>
+          <GoogleProvider model={model()} />
+        </Match>
+        <Match when={provider() === 'linear'}>
+          <PipedreamAiProvider model={model()} provider="linear" />
+        </Match>
+        <Match when={provider() === 'notion'}>
+          <PipedreamAiProvider model={model()} provider="notion" />
+        </Match>
+        <Match when={provider() === 'slack'}>
+          <PipedreamAiProvider model={model()} provider="slack" />
+        </Match>
+        <Match when={provider() === 'cursor'}>
+          <CursorProvider />
+        </Match>
+      </Switch>
     </Show>
   );
 }

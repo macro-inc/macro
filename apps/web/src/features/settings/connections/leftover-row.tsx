@@ -1,6 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
-import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
+import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
 import { openExternalUrl } from '@core/util/url';
 import {
   useDeleteMcpServerMutation,
@@ -12,7 +12,7 @@ import {
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { Button, Dialog, Panel } from '@ui';
-import { createEffect, createSignal, Show, type JSX } from 'solid-js';
+import { createEffect, createSignal, type JSX, Show } from 'solid-js';
 import { ConnectAction, StatusDot } from '../integration-ui';
 import {
   readMcpAuthAttempted,
@@ -20,8 +20,8 @@ import {
 } from '../mcp-auth-attempt';
 import { IntegrationRow, SettingsRow } from '../primitives';
 import {
-  ConnectionRowActions,
   type ConnectionMenuItem,
+  ConnectionRowActions,
 } from './connection-more';
 import {
   type DisconnectConfirm,

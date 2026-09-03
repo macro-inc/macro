@@ -1,7 +1,7 @@
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import LinkBreakIcon from '@phosphor/link-break.svg';
 import { Dropdown } from '@ui';
-import { For, Show, type JSX } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 
 export type ConnectionMenuItem = {
   label: string;

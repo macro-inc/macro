@@ -434,7 +434,10 @@ export function IntegrationsSection() {
         </SettingsCard>
       </Show>
 
-      <AddCustomMcpDialog open={showAddDialog()} onOpenChange={setShowAddDialog} />
+      <AddCustomMcpDialog
+        open={showAddDialog()}
+        onOpenChange={setShowAddDialog}
+      />
     </SettingsSection>
   );
 }

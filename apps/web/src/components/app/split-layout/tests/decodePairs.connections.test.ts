@@ -13,13 +13,7 @@ describe('decodePairs Connections rest', () => {
       { type: 'component', id: 'settings' },
     ]);
     expect(
-      decodePairs([
-        'settings',
-        'connections',
-        'github',
-        'component',
-        'inbox',
-      ])
+      decodePairs(['settings', 'connections', 'github', 'component', 'inbox'])
     ).toEqual([
       { type: 'component', id: 'settings' },
       { type: 'component', id: 'inbox' },

@@ -59,9 +59,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
   const startAddInbox = useAddInboxFlow();
   const emailLinks = useEmailLinksQuery();
   const linkById = (id: string | undefined): EmailLink | undefined =>
-    id
-      ? emailLinks.data?.links.find((link) => link.id === id)
-      : undefined;
+    id ? emailLinks.data?.links.find((link) => link.id === id) : undefined;
   const removeInbox = useRemoveInboxMutation({
     onSuccess: (_data, linkId) => {
       clearSignatureState(linkId);
@@ -135,9 +133,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
                       removing={removeInbox.isPending}
                       onConnect={() =>
                         void connect(
-                          row.id.startsWith('calendar:')
-                            ? 'calendar'
-                            : 'gmail'
+                          row.id.startsWith('calendar:') ? 'calendar' : 'gmail'
                         )
                       }
                       onReconnect={() => void connect()}
@@ -296,9 +292,7 @@ function GoogleInboxCapability(props: {
       <div>
         {capabilityRow()}
         <Show
-          when={
-            isOwn() && signaturesFlag().enabled ? props.link : undefined
-          }
+          when={isOwn() && signaturesFlag().enabled ? props.link : undefined}
         >
           {(link) => (
             <>
@@ -321,10 +315,7 @@ function GoogleInboxCapability(props: {
                 </Button>
               </SettingsRow>
               <Show when={showSignature()}>
-                <div
-                  id={signatureSectionId()}
-                  class="pr-6 pb-5 pl-10"
-                >
+                <div id={signatureSectionId()} class="pr-6 pb-5 pl-10">
                   <SignatureSection link={link()} />
                 </div>
               </Show>

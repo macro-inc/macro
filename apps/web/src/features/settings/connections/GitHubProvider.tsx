@@ -11,22 +11,22 @@ import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
-import { createSignal, Show, type JSX } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
 import { CapabilityRow, capabilityFacts } from './capability-row';
 import {
-  ConnectionRowActions,
   type ConnectionMenuItem,
+  ConnectionRowActions,
 } from './connection-more';
 import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
 import {
-  CURATED_AI,
   type CapabilityStatus,
   type ConnectionsModel,
+  CURATED_AI,
   capabilitiesFor,
 } from './model';
 import { useNativeMcpActions } from './native-actions';
@@ -204,8 +204,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
         deletePipedream.mutate(
           { app_slug: 'github' },
           {
-            onSuccess: () =>
-              toast.success('Disconnected GitHub AI from Macro'),
+            onSuccess: () => toast.success('Disconnected GitHub AI from Macro'),
             onError: () => toast.failure('Failed to disconnect'),
           }
         ),
@@ -361,10 +360,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
         <SettingsCard>
           <Show when={team()}>
             {(row) => (
-              <CapabilityRow
-                title={row().title}
-                outcome={row().outcome}
-              >
+              <CapabilityRow title={row().title} outcome={row().outcome}>
                 <Show
                   when={accountConnected()}
                   fallback={

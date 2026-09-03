@@ -1,4 +1,4 @@
-import { throwOnErr, thrownResultErrorHasCode } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { authServiceClient } from '@service-auth/client';

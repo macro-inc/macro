@@ -2,7 +2,10 @@
  * @vitest-environment jsdom
  */
 
-import { BackfillJobStatus, SyncStatus } from '@service-email/generated/schemas';
+import {
+  BackfillJobStatus,
+  SyncStatus,
+} from '@service-email/generated/schemas';
 import { render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import { InboxSyncStatus } from './inbox-sync-status';

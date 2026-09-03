@@ -1,8 +1,8 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
-import { settingsSplitSegmentCount } from '@core/constant/settingsConnectionsUrl';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import { settingsSplitSegmentCount } from '@core/constant/settingsConnectionsUrl';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   type Accessor,

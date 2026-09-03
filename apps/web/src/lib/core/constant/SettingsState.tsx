@@ -4,7 +4,10 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { connectionsRest, setConnectionsRest } from '@core/signal/connectionsRest';
+import {
+  connectionsRest,
+  setConnectionsRest,
+} from '@core/signal/connectionsRest';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createMemo, createSignal } from 'solid-js';

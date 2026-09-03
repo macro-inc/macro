@@ -1,5 +1,8 @@
 import { isConnectionsProviderSlug } from '@core/constant/settingsConnectionsUrl';
-import { connectionsRest, setConnectionsRest } from '@core/signal/connectionsRest';
+import {
+  connectionsRest,
+  setConnectionsRest,
+} from '@core/signal/connectionsRest';
 import { createSignal } from 'solid-js';
 import type { ProviderId } from './model';
 

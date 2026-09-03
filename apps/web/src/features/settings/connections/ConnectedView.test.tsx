@@ -68,7 +68,9 @@ describe('ConnectedView', () => {
     render(() => <ConnectedView model={connectedCursor} />);
     expect(screen.getByText('Start with Google')).toBeTruthy();
     expect(screen.getByText('Browse all Connections')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Add a connection' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Add a connection' })
+    ).toBeNull();
   });
 
   it('lists native leftovers in a Custom MCP section', () => {

@@ -9,7 +9,11 @@ import { type JSX, Show } from 'solid-js';
  * comes from the settings primitives (SettingsCard / IntegrationRow).
  */
 
-export type ConnectionState = 'connected' | 'attention' | 'disconnected' | 'off';
+export type ConnectionState =
+  | 'connected'
+  | 'attention'
+  | 'disconnected'
+  | 'off';
 
 /**
  * The trailing action on an integration row. Defaults to a quiet text+arrow

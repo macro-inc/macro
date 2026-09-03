@@ -20,7 +20,10 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { connectionsRest, setConnectionsRest } from '@core/signal/connectionsRest';
+import {
+  connectionsRest,
+  setConnectionsRest,
+} from '@core/signal/connectionsRest';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';

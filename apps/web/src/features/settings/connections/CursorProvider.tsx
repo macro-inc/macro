@@ -1,5 +1,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError } from '@core/util/result';
+import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import {
   useCursorApiKeyStatusQuery,
   useCursorModelsQuery,
@@ -8,7 +9,6 @@ import {
   useSetCursorDefaultModel,
 } from '@queries/auth/cursor-api-key';
 import type { CursorModelOption } from '@service-auth/generated/schemas';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { Button, Select } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import {
