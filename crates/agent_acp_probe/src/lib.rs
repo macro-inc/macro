@@ -89,11 +89,15 @@ pub async fn probe_subprocess(
     let probe = std::pin::pin!(probe_channel(channel, &process.cwd, deadline));
 
     tokio::select! {
-        result = probe => result,
+        // A failed `exec` closes stdio and resolves both futures. Prefer the
+        // child outcome so callers receive a process failure, not a misleading
+        // ACP protocol error caused by the same closure.
+        biased;
         result = connection => match result {
             Ok(()) => Err(ProbeError::Process("process exited before responding".to_owned())),
             Err(error) => Err(ProbeError::Process(error.to_string())),
         },
+        result = probe => result,
     }
 }
 

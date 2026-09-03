@@ -54,6 +54,7 @@ fn model_catalog() -> PairingModelCatalog {
             id: "claude-sonnet".to_owned(),
             name: "Claude Sonnet".to_owned(),
             description: Some("Fast and capable".to_owned()),
+            group: None,
         }],
     }
 }

@@ -38,11 +38,13 @@ fn pairing_catalog_projects_raw_acp_model_options_into_harness_domain_types() {
                 id: "opus".to_owned(),
                 name: "Opus".to_owned(),
                 description: Some("Largest model".to_owned()),
+                group: None,
             },
             PairingModelOption {
                 id: "sonnet".to_owned(),
                 name: "Sonnet".to_owned(),
                 description: None,
+                group: None,
             },
         ]
     );

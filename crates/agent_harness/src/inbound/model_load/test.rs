@@ -5,7 +5,7 @@ use super::*;
 #[test]
 fn target_request_maps_all_supported_harnesses() {
     let in_memory = LoadAgentModels::try_from(LoadAgentModelsRequest {
-        harness: "in-memory".to_owned(),
+        harness: ModelHarnessDto::InMemory,
         harness_id: None,
     })
     .unwrap();
@@ -13,7 +13,7 @@ fn target_request_maps_all_supported_harnesses() {
 
     let macrod_id = Uuid::new_v4();
     let macrod = LoadAgentModels::try_from(LoadAgentModelsRequest {
-        harness: "macrod".to_owned(),
+        harness: ModelHarnessDto::Macrod,
         harness_id: Some(macrod_id),
     })
     .unwrap();
@@ -51,6 +51,7 @@ async fn successful_response_serializes_available_catalog() {
                 id: "fast".to_owned(),
                 name: "Fast".to_owned(),
                 description: None,
+                group: None,
             }],
         })),
     )
@@ -63,7 +64,12 @@ async fn successful_response_serializes_available_catalog() {
         serde_json::json!({
             "status": "available",
             "currentModel": "fast",
-            "models": [{"id": "fast", "name": "Fast", "description": null}]
+            "models": [{
+                "id": "fast",
+                "name": "Fast",
+                "description": null,
+                "group": null
+            }]
         })
     );
 }

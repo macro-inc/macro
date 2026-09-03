@@ -12,6 +12,7 @@ use agent_client_protocol::schema::v1::SessionConfigOption;
 use agent_client_protocol::{Channel as AcpChannel, TransportFrame};
 use futures::StreamExt;
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::task::JoinSet;
 
 use crate::domain::channel::Channel;
 use crate::domain::schema::v0::{
@@ -217,6 +218,9 @@ async fn run_runtime<H>(
     // See the matching comment in `run_server`: dropping the ACP channel must
     // not tear down this connection - only an actual transport failure does.
     let mut acp_open = true;
+    // Owned by the connection driver: dropping the runtime connection aborts
+    // every subprocess-backed probe still in flight.
+    let mut probes = JoinSet::new();
     loop {
         tokio::select! {
             message = inbound.recv() => {
@@ -234,7 +238,7 @@ async fn run_runtime<H>(
                     ToRuntimeMessage::ModelProbeRequest { request_id } => {
                         let model_probes = Arc::clone(&model_probes);
                         let outbound = outbound.clone();
-                        tokio::spawn(async move {
+                        probes.spawn(async move {
                             let result = match model_probes.probe().await {
                                 Ok(config_options) => {
                                     ModelProbeResult::Available { config_options }
@@ -247,6 +251,11 @@ async fn run_runtime<H>(
                             });
                         });
                     }
+                }
+            }
+            result = probes.join_next(), if !probes.is_empty() => {
+                if let Some(Err(error)) = result {
+                    tracing::warn!(%error, "model probe task failed");
                 }
             }
             message = acp.rx.next(), if acp_open => {

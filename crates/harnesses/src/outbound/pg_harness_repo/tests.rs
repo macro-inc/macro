@@ -56,6 +56,7 @@ fn new_pairing(code: &str, secret: &str) -> NewPairing {
                 id: "claude-sonnet".to_owned(),
                 name: "Claude Sonnet".to_owned(),
                 description: None,
+                group: None,
             }],
         }),
         expires_at: Utc::now() + Duration::minutes(15),

@@ -203,8 +203,16 @@ where
         request: LoadAgentModels,
     ) -> Result<AgentModels, LoadAgentModelsError> {
         let probe = match (request.harness, request.harness_id) {
-            (ModelHarness::InMemory, None) => self.in_memory.probe().await,
-            (ModelHarness::Cursor, None) => self.cursor.probe(&caller).await,
+            (ModelHarness::InMemory, None) => {
+                tokio::time::timeout(self.timeout, self.in_memory.probe())
+                    .await
+                    .map_err(|_| LoadAgentModelsError::Timeout)?
+            }
+            (ModelHarness::Cursor, None) => {
+                tokio::time::timeout(self.timeout, self.cursor.probe(&caller))
+                    .await
+                    .map_err(|_| LoadAgentModelsError::Timeout)?
+            }
             (ModelHarness::Macrod, Some(harness)) => {
                 let allowed = self
                     .access
