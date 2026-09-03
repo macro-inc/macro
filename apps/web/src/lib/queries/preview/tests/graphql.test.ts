@@ -4,13 +4,15 @@ import type { ItemPreviewFieldsFragment } from '@service-storage/graphql/generat
 import { describe, expect, it, vi } from 'vitest';
 
 const getGraphqlSoupCacheHostMock = vi.hoisted(() => vi.fn());
+const getGraphqlSoupClientMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: getGraphqlSoupCacheHostMock,
-  getGraphqlSoupClient: vi.fn(),
+  getGraphqlSoupClient: getGraphqlSoupClientMock,
 }));
 
 import {
+  getGraphqlItemPreview,
   graphqlRecordToPreview,
   isGraphqlPreviewItem,
   readCachedGraphqlItemPreviewFromHost,
@@ -119,6 +121,42 @@ describe('GraphQL item previews', () => {
     expect(readRecordsByKeys.mock.calls[0]?.[0].document).not.toContain(
       'properties'
     );
+  });
+
+  it('bypasses cached access state for security-sensitive lookups', async () => {
+    const query = vi.fn(() => ({
+      toPromise: async () => ({
+        data: {
+          user: {
+            soup: {
+              items: [
+                {
+                  __typename: 'GraphqlSoupDocument',
+                  id: 'doc-1',
+                  displayName: 'Roadmap',
+                  documentName: 'Roadmap',
+                  fileType: 'md',
+                  subType: null,
+                },
+              ],
+            },
+          },
+        },
+      }),
+    }));
+    getGraphqlSoupClientMock.mockReturnValue({ query });
+
+    await expect(
+      getGraphqlItemPreview(
+        { id: 'doc-1', type: 'document' },
+        { requireFresh: true }
+      )
+    ).resolves.toMatchObject({ access: 'access', name: 'Roadmap' });
+
+    expect(getGraphqlSoupCacheHostMock).not.toHaveBeenCalled();
+    expect(query).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
+      requestPolicy: 'network-only',
+    });
   });
 
   it('writes optimistic patches and complete creation records to normalized cache', async () => {
