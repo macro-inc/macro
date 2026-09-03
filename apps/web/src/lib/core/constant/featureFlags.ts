@@ -654,8 +654,7 @@ export const enableChatV3Agents = defineFlag({
 });
 
 // The `@cursor` mention entry: agent sessions served by Cursor cloud agents
-// on Macro's Cursor account. PostHog-gated per user; the backend additionally
-// restricts these sessions to @macro.com senders. Override with
+// on the key each user registered. PostHog-gated per user; override with
 // VITE_ENABLE_CURSOR_AGENTS.
 export const enableCursorAgents = defineFlag({
   key: 'enable-cursor-agents',
