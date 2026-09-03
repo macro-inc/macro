@@ -829,6 +829,8 @@ export function BaseInput(props: {
         if (!(await deleteDraft(draftId, skipSoupRefetch))) return;
         refetchThreadMessages();
       }
+      // No draft identity: nothing queued belongs to this composer now.
+      queuedSaveOutstanding = false;
       setSavedDraftId(undefined);
       return;
     }
@@ -877,6 +879,7 @@ export function BaseInput(props: {
       );
     }
 
+    const generationAtDispatch = resetGeneration;
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
         ...draftToSave,
@@ -891,6 +894,8 @@ export function BaseInput(props: {
     const draftId = draftResponse.draft.db_id;
     if (draftId) {
       await uploadPendingAttachments(draftId);
+      // Reset while the save was on the wire — see executeQueuedGraphqlSave.
+      if (resetGeneration !== generationAtDispatch) return;
       setSavedDraftId(draftId);
       queuedSaveOutstanding = false;
       refetchThreadMessages();
@@ -912,6 +917,7 @@ export function BaseInput(props: {
     // v7 (best effort, never trusted) to keep the mapping index friendly.
     const draftId = savedDraftId() ?? uuidv7();
     setSavedDraftId(draftId);
+    const generationAtDispatch = resetGeneration;
 
     const outcome = await executeGraphqlSaveEmailDraft(getGraphqlSoupClient(), {
       draftId,
@@ -934,6 +940,12 @@ export function BaseInput(props: {
         ? decodeBase64Utf8(draftToSave.body_html)
         : null,
     });
+    // The composer may have been reset while this save was on the wire (a
+    // discard, a send, an already-sent outcome of another save). Its answer
+    // then belongs to a draft the user already dropped: adopting the id,
+    // uploading, or refetching would re-plant that draft's state into the
+    // fresh composer. The queue still owns the mutation's durability.
+    if (resetGeneration !== generationAtDispatch) return;
 
     if (outcome.kind === 'queued') {
       // Durably accepted locally. Cache refetches wait for a committed save,
@@ -1210,8 +1222,11 @@ export function BaseInput(props: {
         if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
         pendingSend = false;
         // A new reply target is a fresh draft context: a rejection latched
-        // against the previous one must not keep this composer from saving.
+        // against the previous one must not keep this composer from saving,
+        // and its queued-save state must not refuse the new reply's send.
+        // The next save re-derives both.
         autosaveDisabled = false;
+        queuedSaveOutstanding = false;
         // Each new reply starts with the signature included again.
         setIncludeSignature(true);
       },

@@ -338,6 +338,8 @@ export function EmailCompose(props: EmailComposeProps) {
     if (!draftToSave) {
       const draftID = currentDraftID();
       if (draftID && !(await deleteDraft(draftID))) return;
+      // No draft identity: nothing queued belongs to this composer now.
+      queuedSaveOutstanding = false;
       setCurrentDraftID(undefined);
       return;
     }
@@ -354,6 +356,7 @@ export function EmailCompose(props: EmailComposeProps) {
     }
 
     const previousThreadID = currentThreadID();
+    const generationAtDispatch = resetGeneration;
     const draftResponse = await saveDraftMutation.mutateAsync({
       draft: {
         ...draftToSave,
@@ -361,6 +364,8 @@ export function EmailCompose(props: EmailComposeProps) {
       },
       linkId: headerLinkId(),
     });
+    // Reset while the save was on the wire — see executeQueuedGraphqlSave.
+    if (resetGeneration !== generationAtDispatch) return;
 
     const newThreadID = draftResponse.draft.thread_db_id ?? undefined;
     if (previousThreadID && previousThreadID !== newThreadID) {
@@ -372,6 +377,7 @@ export function EmailCompose(props: EmailComposeProps) {
     const draftId = draftResponse.draft.db_id;
     if (draftId) {
       await uploadComposeAttachments(draftId);
+      if (resetGeneration !== generationAtDispatch) return;
       setCurrentDraftID(draftId);
       queuedSaveOutstanding = false;
       return draftId;
@@ -393,6 +399,7 @@ export function EmailCompose(props: EmailComposeProps) {
     const previousThreadID = currentThreadID();
     const threadDbId = previousThreadID ?? uuidv7();
     setCurrentThreadID(threadDbId);
+    const generationAtDispatch = resetGeneration;
 
     const outcome = await executeGraphqlSaveEmailDraft(getGraphqlSoupClient(), {
       draftId,
@@ -409,6 +416,12 @@ export function EmailCompose(props: EmailComposeProps) {
         ? decodeBase64Utf8(draftToSave.body_html)
         : null,
     });
+    // The composer may have been reset while this save was on the wire (a
+    // discard, a send, an already-sent outcome of another save). Its answer
+    // then belongs to a draft the user already dropped: adopting the id,
+    // uploading, or refetching would re-plant that draft's state into the
+    // fresh composer. The queue still owns the mutation's durability.
+    if (resetGeneration !== generationAtDispatch) return;
 
     if (outcome.kind === 'queued') {
       // Durably accepted locally; soup bookkeeping waits for a committed
@@ -798,6 +811,17 @@ export function EmailCompose(props: EmailComposeProps) {
     if (queuedSaveOutstanding) {
       toast.failure('Failed to send email', {
         subtext: 'Draft still syncing, try again',
+      });
+      return;
+    }
+    // A local attachment still without a record did not upload — the save
+    // above threw past the best-effort catch, or never ran — and the upload
+    // mutation has already reported it. Sending now would silently drop it.
+    if (
+      form.attachments.list().some((a) => a.type === 'local' && !a.attachmentID)
+    ) {
+      toast.failure('Failed to send email', {
+        subtext: 'Attachment not uploaded',
       });
       return;
     }
