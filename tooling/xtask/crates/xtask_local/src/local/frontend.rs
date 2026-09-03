@@ -11,7 +11,7 @@ use std::thread::JoinHandle;
 use anyhow::{Context, Result};
 
 use super::instance::{Instance, Port};
-use super::{Mode, proxy, repo_root, stage::Stage};
+use super::{proxy, repo_root, stage::Stage, Mode};
 
 /// The app dir where the Vite dev server runs.
 fn app_dir() -> std::path::PathBuf {
@@ -295,9 +295,14 @@ pub fn start(
     // Wait until OUR child is serving: poll the port, but fail fast (with bun's
     // output) if the child exits first. A bare port poll would mistake a stale
     // server already on the port for "ready" while our child has died.
+    // After the port binds, wait for Vite to finish warming the /app boot
+    // graph so the first browser load is a cache hit (Linux overlay-fs cold
+    // transforms otherwise take ~8s).
+    const BOOT_GRAPH_READY: &[u8] = b"[vite] boot graph ready";
     let addr: std::net::SocketAddr = ([127, 0, 0, 1], port).into();
     let startup = stage.run_step("Starting frontend", || {
         // Cold starts may rebuild optimized Wasm packages before Vite launches.
+        let mut bound = false;
         for _ in 0..600 {
             // Settle first: a failed bind (e.g. port already in use) makes vite
             // exit near-instantly, so if the child is still alive after this it
@@ -310,11 +315,27 @@ pub fn start(
                      (if the port is in use, free it: `lsof -ti tcp:{port} | xargs kill`)"
                 );
             }
-            if std::net::TcpStream::connect_timeout(&addr, std::time::Duration::from_millis(300))
+            if !bound
+                && std::net::TcpStream::connect_timeout(
+                    &addr,
+                    std::time::Duration::from_millis(300),
+                )
                 .is_ok()
             {
-                return Ok(());
+                bound = true;
             }
+            if bound {
+                let buf = captured.lock().unwrap_or_else(|e| e.into_inner());
+                if buf
+                    .windows(BOOT_GRAPH_READY.len())
+                    .any(|w| w == BOOT_GRAPH_READY)
+                {
+                    return Ok(());
+                }
+            }
+        }
+        if bound {
+            return Ok(());
         }
         anyhow::bail!("frontend dev server did not become ready after 180 seconds")
     });

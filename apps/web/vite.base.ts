@@ -39,6 +39,36 @@ function readGitBranchAsync(): Promise<string> {
   });
 }
 
+const BOOT_GRAPH_READY = '[vite] boot graph ready';
+
+function bootGraphWarmupPlugin(): Plugin {
+  return {
+    name: 'boot-graph-warmup',
+    apply: 'serve',
+    configureServer(server) {
+      const urls = ['/src/index.css', '/src/index.tsx', '/src/routes/Root.tsx'];
+      server.httpServer?.once('listening', () => {
+        const started = performance.now();
+        Promise.all(urls.map((url) => server.warmupRequest(url)))
+          .then(() => {
+            const ms = Math.round(performance.now() - started);
+            server.config.logger.info(`boot graph warmed in ${ms}ms`);
+            // run_local / frontend.sh wait for this exact line before
+            // telling the user the app is ready, so the first /app load
+            // hits transformed modules instead of a cold overlay-fs crawl.
+            console.log(BOOT_GRAPH_READY);
+          })
+          .catch((error) => {
+            server.config.logger.warn(
+              `boot graph warmup failed: ${error instanceof Error ? error.message : error}`
+            );
+            console.log(BOOT_GRAPH_READY);
+          });
+      });
+    },
+  };
+}
+
 function gitBranchHmrPlugin(): Plugin {
   return {
     name: 'git-branch-hmr',
@@ -91,6 +121,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         tsconfigpaths({
           root: './',
         }),
+        bootGraphWarmupPlugin(),
         gitBranchHmrPlugin(),
       ],
       define: defineEnv(ENV_MODE, command),
@@ -156,11 +187,19 @@ export const createAppViteConfig = (): UserConfigFn => {
         jsxImportSource: 'solid-js',
       },
       optimizeDeps: {
+        // Don't block the first HTML/module request on the full dep crawl.
+        // Large apps otherwise sit on a spinner until esbuild finishes.
+        holdUntilCrawlEnd: false,
         include: [
           'vscode-textmate',
           'vscode-oniguruma',
           // 'solid-devtools/setup',
           'libheif-js/wasm-bundle',
+          // ESM packages Vite leaves unbundled as many small files. Prebundling
+          // them collapses the Linux HTTP/1.1 6-connection waterfall.
+          '@internationalized/date',
+          '@internationalized/number',
+          '@use-gesture/core',
         ],
         // loro-crdt is a wasm singleton. The app imports it directly (esbuild
         // pre-bundles a copy) while the linked `@loro-mirror/core` workspace
@@ -195,10 +234,36 @@ export const createAppViteConfig = (): UserConfigFn => {
           host: process.env.TAURI_DEV_HOST || 'localhost',
         },
         cors: true,
+        // Transform the boot graph as soon as Vite binds so the first /app
+        // load hits memory cache instead of the overlay-fs transform path.
+        warmup: {
+          clientFiles: [
+            './index.html',
+            './src/index.tsx',
+            './src/index.css',
+            './src/routes/Root.tsx',
+          ],
+        },
         watch: {
-          usePolling: true,
-          interval: 100,
-          ignored: /(^|[\\/])target([\\/]|$)/,
+          // Native inotify/FSEvents. Polling every 100ms across this monorepo
+          // starves the transform pipeline on Linux overlay/virtio disks
+          // (VMs, Docker, Cloud) while macOS APFS hides the cost. Opt back
+          // in with VITE_USE_POLLING=true when the FS cannot inotify
+          // (some bind mounts, WSL1).
+          usePolling:
+            process.env.VITE_USE_POLLING === 'true' ||
+            process.env.CHOKIDAR_USEPOLLING === 'true',
+          interval: 1000,
+          ignored: [
+            /(^|[\\/])target([\\/]|$)/,
+            /(^|[\\/])\.git([\\/]|$)/,
+            /(^|[\\/])dist([\\/]|$)/,
+            /(^|[\\/])crates([\\/]|$)/,
+            /(^|[\\/])\.sqlx([\\/]|$)/,
+            /(^|[\\/])coverage([\\/]|$)/,
+            /(^|[\\/])\.direnv([\\/]|$)/,
+            /(^|[\\/])output([\\/]|$)/,
+          ],
         },
         fs: {
           allow: [

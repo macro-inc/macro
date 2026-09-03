@@ -12,16 +12,9 @@ import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-prese
 import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
-import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
-import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
-import { ChannelCompose } from '@block-channel/component/Compose';
-import { EmailCompose } from '@block-email/component/compose/Compose';
-import { ComposeSkill } from '@block-md/component/ComposeSkill';
-import { ComposeTask } from '@block-md/component/ComposeTask';
 import {
   CRM_VIEW_URL_PARAM,
   type CrmViewConfig,
@@ -609,6 +602,42 @@ registerComponent('non-member-channel', (params) => {
     />
   );
 });
+const ChannelCompose = lazy(() =>
+  import('@block-channel/component/Compose').then((module) => ({
+    default: module.ChannelCompose,
+  }))
+);
+const EmailCompose = lazy(() =>
+  import('@block-email/component/compose/Compose').then((module) => ({
+    default: module.EmailCompose,
+  }))
+);
+const ComposeTask = lazy(() =>
+  import('@block-md/component/ComposeTask').then((module) => ({
+    default: module.ComposeTask,
+  }))
+);
+const EventComposerSplit = lazy(() =>
+  import('@block-calendar/components/EventComposerSplit').then((module) => ({
+    default: module.EventComposerSplit,
+  }))
+);
+const ComposeSkill = lazy(() =>
+  import('@block-md/component/ComposeSkill').then((module) => ({
+    default: module.ComposeSkill,
+  }))
+);
+const ReminderEditorSplit = lazy(() =>
+  import('@app/features/reminders/ReminderEditorSplit').then((module) => ({
+    default: module.ReminderEditorSplit,
+  }))
+);
+const SettingsPanelComponentWrapper = lazy(() =>
+  import('@app/features/settings/Settings').then((module) => ({
+    default: module.SettingsPanelComponentWrapper,
+  }))
+);
+
 registerComponent('channel-compose', () => {
   usePageViewTracking('channel-compose');
   return <ChannelCompose />;

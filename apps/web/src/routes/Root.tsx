@@ -1,19 +1,11 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE } from '@app/constants/routerBase';
 import { makeEmailAuthComponents } from '@app/features/auth/EmailAuth';
-import { Login } from '@app/features/auth/Login';
-import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAuthWelcome';
-import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
-import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
-import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
-import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
-import { OnboardingFlow } from '@app/features/setup/flow/OnboardingFlow';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
 import { SearchProvider } from '@app/features/soup/search/context';
-import { TeamInviteAcceptance } from '@app/features/team-invitations/TeamInviteAcceptance';
 import {
   AnalyticsContextProvider,
   useAnalytics,
@@ -106,6 +98,7 @@ import {
   createEffect,
   createSignal,
   type JSX,
+  lazy,
   on,
   onCleanup,
   onMount,
@@ -114,7 +107,48 @@ import {
   Suspense,
 } from 'solid-js';
 import { BasePathComponent } from './BasePath';
-import { TaskRoute } from './TaskRoute';
+
+const Login = lazy(() =>
+  import('@app/features/auth/Login').then((module) => ({
+    default: module.Login,
+  }))
+);
+const MobileAuthWelcome = lazy(() =>
+  import('@app/features/auth/mobile-onboarding/MobileAuthWelcome').then(
+    (module) => ({ default: module.MobileAuthWelcome })
+  )
+);
+const MobileOnboarding = lazy(() =>
+  import('@app/features/auth/mobile-onboarding/MobileOnboarding').then(
+    (module) => ({ default: module.MobileOnboarding })
+  )
+);
+const ChannelInviteAcceptance = lazy(() =>
+  import('@app/features/channel-invitations/ChannelInviteAcceptance').then(
+    (module) => ({ default: module.ChannelInviteAcceptance })
+  )
+);
+const InteractiveOnboardingModal = lazy(() =>
+  import('@app/features/onboarding/InteractiveOnboardingModal').then(
+    (module) => ({ default: module.InteractiveOnboardingModal })
+  )
+);
+const MobileWebSignup = lazy(
+  () => import('@app/features/onboarding/MobileWebSignup')
+);
+const OnboardingFlow = lazy(() =>
+  import('@app/features/setup/flow/OnboardingFlow').then((module) => ({
+    default: module.OnboardingFlow,
+  }))
+);
+const TeamInviteAcceptance = lazy(() =>
+  import('@app/features/team-invitations/TeamInviteAcceptance').then(
+    (module) => ({ default: module.TeamInviteAcceptance })
+  )
+);
+const TaskRoute = lazy(() =>
+  import('./TaskRoute').then((module) => ({ default: module.TaskRoute }))
+);
 
 /** Syncs login cookie with auth state. Only updates on successful query (not errors/loading). */
 function useSyncLoginCookie() {
@@ -611,7 +645,9 @@ export function Root() {
                                     }}
                                   </IsomorphicRouter>
                                 </Suspense>
-                                <InitialInteractiveOnboardingModal />
+                                <Suspense>
+                                  <InitialInteractiveOnboardingModal />
+                                </Suspense>
                                 <ToastRegion />
                               </SearchProvider>
                             </QuickAccessProvider>

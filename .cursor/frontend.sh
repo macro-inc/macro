@@ -57,7 +57,10 @@ setsid env \
 echo "$!" >"${PID_FILE}"
 
 # Cold starts build wasm packages before Vite binds; be patient once.
+# After the port is up, wait for the boot-graph warmup so the first /app
+# load is a transform-cache hit (Linux overlay-fs cold crawls are slow).
 n=0
+bound=0
 while [ "${n}" -lt 300 ]; do
   if ! kill -0 "$(cat "${PID_FILE}")" 2>/dev/null; then
     echo "cursor-cloud frontend: dev server exited during startup" >&2
@@ -65,7 +68,10 @@ while [ "${n}" -lt 300 ]; do
     rm -f "${PID_FILE}"
     exit 1
   fi
-  if curl -fsS --max-time 2 "${DEV_URL}" >/dev/null 2>&1; then
+  if [ "${bound}" -eq 0 ] && curl -fsS --max-time 2 "${DEV_URL}" >/dev/null 2>&1; then
+    bound=1
+  fi
+  if [ "${bound}" -eq 1 ] && grep -q '\[vite\] boot graph ready' "${DEV_LOG}" 2>/dev/null; then
     echo "cursor-cloud frontend: hot-reloading dev server at ${DEV_URL}"
     echo "cursor-cloud frontend: logs at ${DEV_LOG}"
     exit 0
@@ -73,6 +79,11 @@ while [ "${n}" -lt 300 ]; do
   n=$((n + 1))
   sleep 1
 done
+if [ "${bound}" -eq 1 ]; then
+  echo "cursor-cloud frontend: hot-reloading dev server at ${DEV_URL} (warmup still running)"
+  echo "cursor-cloud frontend: logs at ${DEV_LOG}"
+  exit 0
+fi
 echo "cursor-cloud frontend: dev server did not become ready" >&2
 tail -40 "${DEV_LOG}" >&2
 exit 1

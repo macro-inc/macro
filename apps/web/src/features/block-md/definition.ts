@@ -14,7 +14,7 @@ import { fetchDocumentLoadBundle } from '@queries/storage/documentLoad/documentL
 import { makeFileFromBlob } from '@service-storage/util/makeFileFromBlob';
 import { createSyncServiceSource } from '@service-sync/source';
 import { err, ok } from 'neverthrow';
-import MarkdownBlock from './component/Block';
+import { lazy } from 'solid-js';
 import {
   endDocumentSpan,
   registerDocumentSpan,
@@ -32,7 +32,7 @@ export const definition = defineBlock({
     { name: 'snippet', defaultFileName: 'New Snippet' },
     { name: 'skill', defaultFileName: 'New Skill' },
   ],
-  component: MarkdownBlock,
+  component: lazy(() => import('./component/Block')),
   accepted: {
     md: 'text/markdown',
   },

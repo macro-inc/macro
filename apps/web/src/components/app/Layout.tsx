@@ -1,40 +1,22 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
-import Banner from '@app/features/auth/banner/Banner';
-import { CalendarPermissionPrompt } from '@app/features/auth/CalendarPermissionPrompt';
-import { GithubReauthenticationPrompt } from '@app/features/auth/GithubReauthenticationPrompt';
-import { GmailReauthenticationPrompt } from '@app/features/auth/GmailReauthenticationPrompt';
 import { SidebarActiveCallWidget } from '@app/features/block-call/sidebar/active-call-widget';
 import { useIncomingCallWidgetVisible } from '@app/features/block-call/sidebar/incoming-calls';
-import { CommandMenu } from '@app/features/command';
-import { FavoritesCommands } from '@app/features/command/FavoritesCommands';
 import {
   createMenuOpen,
   Launcher,
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
-import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
-import { CreateContactModal } from '@app/features/companies/CreateContactModal';
-import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
-import { GlobalBulkEditEntityModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import {
   AddInboxDialog,
   isAddInboxDialogOpen,
 } from '@app/features/inbox/AddInboxDialog';
-import { MacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
-import { Paywall } from '@app/features/paywall/Paywall';
-import { PropertyEditorModal } from '@app/features/property/editor/PropertyEditorModal';
-import { ReminderComposerModal } from '@app/features/reminders/ReminderComposerModal';
 import { useOnboardingV4Flag } from '@app/features/setup/flow/useOnboardingV4Flag';
-import { GlobalShareModal } from '@app/features/sharing/global-share-modal/GlobalShareModal';
-import { IosShareSheet } from '@app/features/sharing/ios-share-sheet/IosShareSheet';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
-import { AutomationComposer } from '@block-automation/component';
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { InCallPanel } from '@channel/Call/InCallPanel';
-import { CreateChannelModal } from '@channel/CreateChannelModal';
 import {
   AppSidebar,
   GoToHotkeys,
@@ -73,11 +55,102 @@ import {
   createMemo,
   createSignal,
   type JSX,
+  lazy,
   onCleanup,
   onMount,
   Show,
   Suspense,
 } from 'solid-js';
+
+const Banner = lazy(() => import('@app/features/auth/banner/Banner'));
+const CalendarPermissionPrompt = lazy(() =>
+  import('@app/features/auth/CalendarPermissionPrompt').then((module) => ({
+    default: module.CalendarPermissionPrompt,
+  }))
+);
+const GithubReauthenticationPrompt = lazy(() =>
+  import('@app/features/auth/GithubReauthenticationPrompt').then((module) => ({
+    default: module.GithubReauthenticationPrompt,
+  }))
+);
+const GmailReauthenticationPrompt = lazy(() =>
+  import('@app/features/auth/GmailReauthenticationPrompt').then((module) => ({
+    default: module.GmailReauthenticationPrompt,
+  }))
+);
+const CommandMenu = lazy(() =>
+  import('@app/features/command').then((module) => ({
+    default: module.CommandMenu,
+  }))
+);
+const FavoritesCommands = lazy(() =>
+  import('@app/features/command/FavoritesCommands').then((module) => ({
+    default: module.FavoritesCommands,
+  }))
+);
+const CreateCompanyModal = lazy(() =>
+  import('@app/features/companies/CreateCompanyModal').then((module) => ({
+    default: module.CreateCompanyModal,
+  }))
+);
+const CreateContactModal = lazy(() =>
+  import('@app/features/companies/CreateContactModal').then((module) => ({
+    default: module.CreateContactModal,
+  }))
+);
+const DevStatusBar = lazy(() =>
+  import('@app/features/devtools/DevStatusBar').then((module) => ({
+    default: module.DevStatusBar,
+  }))
+);
+const GlobalBulkEditEntityModal = lazy(() =>
+  import('@app/features/entity/bulk-edit/BulkEditEntityModal').then(
+    (module) => ({ default: module.GlobalBulkEditEntityModal })
+  )
+);
+const MacroMcpSetupModal = lazy(() =>
+  import('@app/features/integrations/mcp-setup/MacroMcpSetupModal').then(
+    (module) => ({ default: module.MacroMcpSetupModal })
+  )
+);
+const Paywall = lazy(() =>
+  import('@app/features/paywall/Paywall').then((module) => ({
+    default: module.Paywall,
+  }))
+);
+const PropertyEditorModal = lazy(() =>
+  import('@app/features/property/editor/PropertyEditorModal').then(
+    (module) => ({
+      default: module.PropertyEditorModal,
+    })
+  )
+);
+const ReminderComposerModal = lazy(() =>
+  import('@app/features/reminders/ReminderComposerModal').then((module) => ({
+    default: module.ReminderComposerModal,
+  }))
+);
+const GlobalShareModal = lazy(() =>
+  import('@app/features/sharing/global-share-modal/GlobalShareModal').then(
+    (module) => ({ default: module.GlobalShareModal })
+  )
+);
+const IosShareSheet = lazy(() =>
+  import('@app/features/sharing/ios-share-sheet/IosShareSheet').then(
+    (module) => ({ default: module.IosShareSheet })
+  )
+);
+const AutomationComposer = lazy(() =>
+  import('@block-automation/component').then((module) => ({
+    default: module.AutomationComposer,
+  }))
+);
+const CreateChannelModal = lazy(() =>
+  import('@channel/CreateChannelModal').then((module) => ({
+    default: module.CreateChannelModal,
+  }))
+);
+
 import { BundleUpdateProgressBar } from './BundleUpdateProgressBar';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
@@ -484,7 +557,9 @@ function LayoutInner(props: RouteSectionProps) {
       </Show> */}
 
       <Show when={paywallOpen()}>
-        <Paywall />
+        <Suspense>
+          <Paywall />
+        </Suspense>
       </Show>
       <div class="max-h-full grow flex">
         {/* The provider spans the sidebar too so its favorites can register
@@ -558,7 +633,9 @@ function LayoutInner(props: RouteSectionProps) {
           <AutomationComposer />
         </Show>
       </Suspense>
-      <DevStatusBar />
+      <Suspense>
+        <DevStatusBar />
+      </Suspense>
       <ScreencastHotkeys />
     </div>
   );
