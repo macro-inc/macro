@@ -199,7 +199,7 @@ pub const RUST_SERVICES: &[RustService] = &[
         cargo_bin: "service",
         package: "scheduled_action",
         host_port: Some(Port::ScheduledAction),
-        path_prefix: Some("/agent-schedule"),
+        path_prefix: Some("/scheduled-action"),
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
