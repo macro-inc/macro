@@ -161,6 +161,24 @@ fn unwraps_call_tool_results() {
         (json!({"ok": true}), None)
     );
 
+    // A tool's own JSON with a `content` field is not an envelope: only an
+    // array of typed blocks is. `ReadContent` returns exactly this shape.
+    let read_content = json!({"content": {"text": "Q3 plan"}, "comments": []});
+    assert_eq!(
+        mcp::unwrap_call_result(&read_content),
+        (read_content.clone(), None)
+    );
+    let string_content = json!({"content": "document text"});
+    assert_eq!(
+        mcp::unwrap_call_result(&string_content),
+        (string_content.clone(), None)
+    );
+    let untyped_items = json!({"content": [{"text": "no type"}]});
+    assert_eq!(
+        mcp::unwrap_call_result(&untyped_items),
+        (untyped_items.clone(), None)
+    );
+
     // Anything else is already bare.
     let bare = json!({"result": "done"});
     assert_eq!(mcp::unwrap_call_result(&bare), (bare.clone(), None));

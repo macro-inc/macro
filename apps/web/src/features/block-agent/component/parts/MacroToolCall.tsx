@@ -14,7 +14,10 @@
 
 import { RenderTool } from '@core/component/AI/component/tool/handler';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
-import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
+import {
+  deserializeToolCall,
+  deserializeToolResponse,
+} from '@service-cognition/generated/tools/tool';
 import { createMemo, ErrorBoundary, type JSX, Show } from 'solid-js';
 import { FoldedOutput, ToolCard } from '../../ui';
 import type { ToolCallCommon, ToolCallContext } from './shared';
@@ -29,17 +32,24 @@ export function MacroToolCall(props: {
   const finished = () =>
     props.common.status === 'completed' || props.common.status === 'failed';
   // The chat renderer renders nothing for a tool it has no component for or
-  // arguments that do not fit the tool's schema; a call it would drop keeps
-  // the generic card, so no row ever vanishes.
-  const chatRenders = createMemo(
-    () =>
-      props.detail.error == null &&
-      deserializeToolCall({
-        id: props.common.id,
-        name: props.common.label,
-        json: props.detail.input,
-      }).isOk()
-  );
+  // arguments that do not fit the tool's schema, and it shows a *completed*
+  // call whose response it cannot read as failed. A call it would drop or
+  // misreport keeps the generic card, so no row vanishes or lies.
+  const chatRenders = createMemo(() => {
+    if (props.detail.error != null) return false;
+    const call = deserializeToolCall({
+      id: props.common.id,
+      name: props.common.label,
+      json: props.detail.input,
+    });
+    if (call.isErr()) return false;
+    if (props.common.status !== 'completed') return true;
+    return deserializeToolResponse({
+      id: props.common.id,
+      name: props.common.label,
+      json: props.detail.output,
+    }).isOk();
+  });
 
   return (
     <Show when={chatRenders()} fallback={<GenericMacroToolCall {...props} />}>

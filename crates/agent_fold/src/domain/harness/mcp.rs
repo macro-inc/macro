@@ -42,17 +42,16 @@ pub fn is_user_tool(tool: &str) -> bool {
 /// Claude Code copies `content` into `rawOutput`) is read the same way.
 #[must_use]
 pub fn unwrap_call_result(raw: &Value) -> (Value, Option<String>) {
+    // An envelope is recognized by shape, not by key: a tool's own JSON may
+    // well have a `content` field (`ReadContent` returns `{ content: { text },
+    // comments }`), and only an array of typed blocks is MCP's.
     let (blocks, structured, is_error) = match raw {
-        Value::Object(map)
-            if map.contains_key("content") || map.contains_key("structuredContent") =>
-        {
-            (
-                map.get("content").and_then(Value::as_array),
-                map.get("structuredContent"),
-                map.get("isError").and_then(Value::as_bool).unwrap_or(false),
-            )
-        }
-        Value::Array(items) if items.iter().all(is_content_block) && !items.is_empty() => {
+        Value::Object(map) if is_envelope(map) => (
+            map.get("content").and_then(Value::as_array),
+            map.get("structuredContent"),
+            map.get("isError").and_then(Value::as_bool).unwrap_or(false),
+        ),
+        Value::Array(items) if !items.is_empty() && items.iter().all(is_content_block) => {
             (Some(items), None, false)
         }
         _ => return (raw.clone(), None),
@@ -78,6 +77,17 @@ pub fn unwrap_call_result(raw: &Value) -> (Value, Option<String>) {
         return (Value::Null, error);
     }
     (Value::String(texts.join("\n")), error)
+}
+
+/// Whether an object is a `CallToolResult`: it carries `structuredContent`,
+/// or its `content` is an array of typed blocks.
+fn is_envelope(map: &serde_json::Map<String, Value>) -> bool {
+    if map.contains_key("structuredContent") {
+        return true;
+    }
+    map.get("content")
+        .and_then(Value::as_array)
+        .is_some_and(|blocks| blocks.iter().all(is_content_block))
 }
 
 fn is_content_block(value: &Value) -> bool {

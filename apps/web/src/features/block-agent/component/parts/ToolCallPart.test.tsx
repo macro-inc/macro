@@ -245,6 +245,26 @@ describe('ToolCallPart Macro tools', () => {
     );
   });
 
+  it('keeps a completed call whose output the chat cannot read on the card', () => {
+    // The chat renderer would show this as failed; the call succeeded.
+    const rendered = render(() => (
+      <ToolCallPart
+        part={readContent({
+          status: 'completed',
+          detail: {
+            kind: 'macro',
+            input: { documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46' },
+            output: { unexpected: true },
+            error: null,
+          },
+        })}
+      />
+    ));
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('false');
+    expect(rendered.getByTestId('trailing').textContent).toBe('');
+  });
+
   it('keeps a known tool whose arguments do not fit its schema on the card', () => {
     const rendered = render(() => (
       <ToolCallPart
