@@ -263,65 +263,73 @@ function GoogleInboxCapability(props: {
   const signatureSectionId = () =>
     props.link ? `signature-section-${props.link.id}` : undefined;
 
+  const capabilityRow = () => (
+    <CapabilityRow
+      title={props.row.title}
+      outcome={props.row.outcome}
+      facts={
+        isGmail() && props.link ? (
+          <InboxSyncStatus link={props.link} />
+        ) : (
+          capabilityFacts(props.row)
+        )
+      }
+      status={props.row.status}
+    >
+      <GoogleCapabilityActions
+        row={props.row}
+        pending={props.pending}
+        removing={props.removing}
+        onConnect={props.onConnect}
+        onReconnect={props.onReconnect}
+        onRemoveGmail={props.onRemoveGmail}
+        onTurnOffCalendar={props.onTurnOffCalendar}
+      />
+    </CapabilityRow>
+  );
+
   return (
-    <>
-      <CapabilityRow
-        title={props.row.title}
-        outcome={props.row.outcome}
-        facts={
-          isGmail() && props.link ? (
-            <InboxSyncStatus link={props.link} />
-          ) : (
-            capabilityFacts(props.row)
-          )
-        }
-        status={props.row.status}
-      >
-        <GoogleCapabilityActions
-          row={props.row}
-          pending={props.pending}
-          removing={props.removing}
-          onConnect={props.onConnect}
-          onReconnect={props.onReconnect}
-          onRemoveGmail={props.onRemoveGmail}
-          onTurnOffCalendar={props.onTurnOffCalendar}
-        />
-      </CapabilityRow>
-      <Show
-        when={
-          isGmail() && isOwn() && signaturesFlag().enabled
-            ? props.link
-            : undefined
-        }
-      >
-        {(link) => (
-          <>
-            <SettingsRow
-              label="Signature"
-              description="Added to messages you send from this inbox."
-              align="start"
-            >
-              <Button
-                variant="outline"
-                size="sm"
-                depth={3}
-                onClick={() => toggleSignatureExpanded(link().id)}
-                aria-label={`Edit signature for ${link().email_address}`}
-                aria-expanded={showSignature()}
-                aria-controls={signatureSectionId()}
+    <Show when={isGmail()} fallback={capabilityRow()}>
+      <div>
+        {capabilityRow()}
+        <Show
+          when={
+            isOwn() && signaturesFlag().enabled ? props.link : undefined
+          }
+        >
+          {(link) => (
+            <>
+              <SettingsRow
+                label="Signature"
+                description="Added to messages you send from this inbox."
+                align="start"
+                class="min-h-0 py-3 pl-[4.75rem] touch:pl-[4.25rem]"
               >
-                {showSignature() ? 'Done' : 'Edit'}
-              </Button>
-            </SettingsRow>
-            <Show when={showSignature()}>
-              <div id={signatureSectionId()} class="px-6 pb-5">
-                <SignatureSection link={link()} />
-              </div>
-            </Show>
-          </>
-        )}
-      </Show>
-    </>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  depth={3}
+                  onClick={() => toggleSignatureExpanded(link().id)}
+                  aria-label={`Edit signature for ${link().email_address}`}
+                  aria-expanded={showSignature()}
+                  aria-controls={signatureSectionId()}
+                >
+                  {showSignature() ? 'Done' : 'Edit'}
+                </Button>
+              </SettingsRow>
+              <Show when={showSignature()}>
+                <div
+                  id={signatureSectionId()}
+                  class="pr-6 pb-5 pl-[4.75rem] touch:pl-[4.25rem]"
+                >
+                  <SignatureSection link={link()} />
+                </div>
+              </Show>
+            </>
+          )}
+        </Show>
+      </div>
+    </Show>
   );
 }
 
