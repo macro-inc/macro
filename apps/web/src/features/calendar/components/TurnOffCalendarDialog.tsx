@@ -39,6 +39,7 @@ export function TurnOffCalendarDialog(props: {
         if (!open) props.onClose();
       }}
       position="center"
+      visibleScrim
       class="w-120"
     >
       <Panel depth={2} class="rounded-xl">

@@ -88,6 +88,7 @@ export function AddCustomMcpDialog(props: {
       open={props.open}
       onOpenChange={(open) => !open && props.onOpenChange(false)}
       position="center"
+      visibleScrim
       class="w-100"
     >
       <Panel depth={2} class="rounded-xl">
