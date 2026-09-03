@@ -93,7 +93,7 @@ describe('toConnectionsModel', () => {
     ).toBe('not-connected');
   });
 
-  it('treats a disabled calendar as not connected', () => {
+  it('treats a disabled calendar as off, not a missing grant', () => {
     const model = toConnectionsModel({
       ...emptyInput,
       emailLinks: [
@@ -105,10 +105,35 @@ describe('toConnectionsModel', () => {
     });
     expect(
       model.capabilities.find((row) => row.id === 'calendar:cam')?.status
-    ).toBe('not-connected');
+    ).toBe('off');
     expect(model.providers.find((row) => row.id === 'google')?.summary).toBe(
-      'Calendar needs a grant for cam@macro.com'
+      'Use Gmail in Macro'
     );
+  });
+
+  it('does not map a native server by name alone', () => {
+    const model = toConnectionsModel({
+      ...emptyInput,
+      nativeMcp: [native('Linear', 'https://example.com/mcp')],
+    });
+    expect(model.capabilities.find((row) => row.id === 'linear-ai')).toBe(
+      undefined
+    );
+    expect(model.leftovers.map((row) => row.title)).toEqual(['Linear']);
+  });
+
+  it('keeps a second curated native URL as a leftover', () => {
+    const model = toConnectionsModel({
+      ...emptyInput,
+      nativeMcp: [
+        native('Linear', 'https://mcp.linear.app/mcp'),
+        native('Linear copy', 'https://mcp.linear.app/mcp/extra'),
+      ],
+    });
+    expect(
+      model.capabilities.find((row) => row.id === 'linear-ai')?.sourceUrl
+    ).toBe('https://mcp.linear.app/mcp');
+    expect(model.leftovers.map((row) => row.title)).toEqual(['Linear copy']);
   });
 
   it('does not invent a Docs capability', () => {
@@ -130,7 +155,7 @@ describe('toConnectionsModel', () => {
     const githubProvider = model.providers.find((row) => row.id === 'github');
     expect(githubProvider).toMatchObject({
       ready: 1,
-      total: 3,
+      total: 2,
       summary: 'GitHub account needs reconnect',
     });
     expect(

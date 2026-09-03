@@ -1,51 +1,39 @@
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import {
   useDeleteGithubLinkMutation,
   useInitGithubLinkMutation,
   useReauthenticateGithubMutation,
 } from '@queries/auth';
 import {
-  useDeleteMcpServerMutation,
-  useUpdateMcpServerMutation,
-} from '@queries/mcp-servers';
-import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { Show } from 'solid-js';
-import { ConnectAction, StatusDot } from '../integration-ui';
-import {
-  SettingsCard,
-  SettingsPage,
-  SettingsRow,
-  SettingsSection,
-} from '../primitives';
-import {
-  type ConnectionsModel,
-  capabilitiesFor,
-  curatedNativeUrl,
-} from './model';
-import { connectionState, statusLabel } from './status';
-import { showConnectionsOverview } from './view-state';
+import { ConnectAction } from '../integration-ui';
+import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
+import { CapabilityRow, capabilityFacts } from './capability-row';
+import { type ConnectionsModel, capabilitiesFor } from './model';
+import { useNativeMcpActions } from './native-actions';
+import { closeConnectionsProvider } from './view-state';
 
 export function GitHubProvider(props: { model: ConnectionsModel }) {
   const rows = () => capabilitiesFor(props.model, 'github');
   const account = () => rows().find((row) => row.id === 'github-account');
   const team = () => rows().find((row) => row.id === 'github-team');
   const ai = () => rows().find((row) => row.id === 'github-ai');
-  const ready = () => rows().filter((row) => row.status === 'connected').length;
-  const total = () => rows().length + (ai() ? 0 : 1);
+  const counted = () => rows().filter((row) => row.id !== 'github-team');
+  const ready = () =>
+    counted().filter((row) => row.status === 'connected').length;
+  const total = () => counted().length + (ai() ? 0 : 1);
 
   const initGithubLink = useInitGithubLinkMutation();
   const deleteGithubLink = useDeleteGithubLinkMutation();
   const reauthenticateGithub = useReauthenticateGithubMutation();
   const updatePipedream = useUpdatePipedreamConnectionMutation();
   const deletePipedream = useDeletePipedreamConnectionMutation();
-  const updateNative = useUpdateMcpServerMutation();
-  const deleteNative = useDeleteMcpServerMutation();
+  const native = useNativeMcpActions();
   const { connect: connectAi, busy: aiBusy } = createPipedreamCatalogConnect({
     entry: () => ({
       app_slug: 'github',
@@ -82,32 +70,23 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
     }
   };
 
-  const accountLinked =
-    account()?.status === 'connected' ||
-    account()?.status === 'action-required';
+  const accountConnected = () => account()?.status === 'connected';
 
   return (
     <SettingsPage
       title="GitHub"
       description={`${ready()} of ${total()} capabilities ready`}
-      onBack={showConnectionsOverview}
+      onBack={closeConnectionsProvider}
     >
       <SettingsSection title="Your connections">
         <SettingsCard>
           <Show when={account()}>
             {(row) => (
-              <SettingsRow
-                align="start"
-                label={
-                  <span class="flex items-center gap-2">
-                    {row().title}
-                    <StatusDot
-                      state={connectionState(row().status)}
-                      label={statusLabel(row().status)}
-                    />
-                  </span>
-                }
-                description={`${row().outcome} ${row().account} · Personal · ${statusLabel(row().status)}`}
+              <CapabilityRow
+                title={row().title}
+                outcome={row().outcome}
+                facts={capabilityFacts(row())}
+                status={row().status}
               >
                 <Show
                   when={row().status === 'action-required'}
@@ -137,84 +116,94 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                     disabled={reauthenticateGithub.isPending}
                   />
                 </Show>
-              </SettingsRow>
+              </CapabilityRow>
             )}
           </Show>
 
           <Show
             when={ai()}
             fallback={
-              <SettingsRow
-                align="start"
-                label="Use GitHub with Macro AI"
-                description="Let Macro AI answer questions about repositories, pull requests, and issues. Personal · Not connected · Powered by Pipedream"
+              <CapabilityRow
+                title="Use GitHub with Macro AI"
+                outcome="Let Macro AI answer questions about repositories, pull requests, and issues."
+                facts="Personal · Powered by Pipedream"
               >
                 <ConnectAction
                   label="Connect"
                   onClick={() => void connectAi()}
                   loading={aiBusy()}
                 />
-              </SettingsRow>
+              </CapabilityRow>
             }
           >
             {(row) => (
-              <SettingsRow
-                align="start"
-                label={
-                  <span class="flex items-center gap-2">
-                    {row().title}
-                    <StatusDot
-                      state={connectionState(row().status)}
-                      label={statusLabel(row().status)}
-                    />
-                  </span>
-                }
-                description={`${row().outcome} ${row().account} · Personal · ${statusLabel(row().status)}${
-                  row().mechanism === 'pipedream'
-                    ? ' · Powered by Pipedream'
-                    : ''
-                }`}
+              <CapabilityRow
+                title={row().title}
+                outcome={row().outcome}
+                facts={capabilityFacts(row())}
+                status={row().status}
               >
                 <Show
                   when={row().mechanism === 'pipedream'}
                   fallback={
                     <Show when={row().mechanism === 'native-mcp'}>
-                      <ConnectAction
-                        label={row().status === 'off' ? 'Turn on' : 'Turn off'}
-                        variant="neutral"
-                        onClick={() => {
-                          const url = curatedNativeUrl('github');
-                          if (!url) return;
-                          updateNative.mutate(
-                            { url, enabled: row().status === 'off' },
-                            {
-                              onError: () =>
-                                toast.failure('Failed to update connector'),
-                            }
-                          );
-                        }}
-                        disabled={updateNative.isPending}
-                      />
-                      <ConnectAction
-                        label="Disconnect from Macro"
-                        variant="danger"
-                        onClick={() => {
-                          const url = curatedNativeUrl('github');
-                          if (!url) return;
-                          deleteNative.mutate(
-                            { url },
-                            {
-                              onSuccess: () =>
-                                toast.success(
-                                  'Disconnected GitHub AI from Macro'
-                                ),
-                              onError: () =>
-                                toast.failure('Failed to disconnect'),
-                            }
-                          );
-                        }}
-                        disabled={deleteNative.isPending}
-                      />
+                      <Show
+                        when={row().status === 'action-required'}
+                        fallback={
+                          <>
+                            <ConnectAction
+                              label={
+                                row().status === 'off' ? 'Turn on' : 'Turn off'
+                              }
+                              variant="neutral"
+                              onClick={() => {
+                                const url = row().sourceUrl;
+                                if (!url) return;
+                                native.update.mutate(
+                                  { url, enabled: row().status === 'off' },
+                                  {
+                                    onError: () =>
+                                      toast.failure(
+                                        'Failed to update connector'
+                                      ),
+                                  }
+                                );
+                              }}
+                              disabled={native.update.isPending}
+                            />
+                            <ConnectAction
+                              label="Disconnect from Macro"
+                              variant="danger"
+                              onClick={() => {
+                                const url = row().sourceUrl;
+                                if (!url) return;
+                                native.remove.mutate(
+                                  { url },
+                                  {
+                                    onSuccess: () =>
+                                      toast.success(
+                                        'Disconnected GitHub AI from Macro'
+                                      ),
+                                    onError: () =>
+                                      toast.failure('Failed to disconnect'),
+                                  }
+                                );
+                              }}
+                              disabled={native.remove.isPending}
+                            />
+                          </>
+                        }
+                      >
+                        <ConnectAction
+                          label="Reconnect"
+                          onClick={() => {
+                            const url = row().sourceUrl;
+                            if (!url) return;
+                            native.startAuth(url, row().account);
+                          }}
+                          disabled={native.authorize.isPending}
+                        />
+                      </Show>
                     </Show>
                   }
                 >
@@ -251,7 +240,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
                     disabled={deletePipedream.isPending}
                   />
                 </Show>
-              </SettingsRow>
+              </CapabilityRow>
             )}
           </Show>
         </SettingsCard>
@@ -261,38 +250,26 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
         <SettingsCard>
           <Show when={team()}>
             {(row) => (
-              <SettingsRow
-                align="start"
-                label={
-                  <span class="flex items-center gap-2">
-                    {row().title}
-                    <StatusDot
-                      state={connectionState(row().status)}
-                      label={statusLabel(row().status)}
-                    />
-                  </span>
-                }
-                description={`${row().outcome} ${row().account} · Team · ${statusLabel(row().status)}`}
+              <CapabilityRow
+                title={row().title}
+                outcome={row().outcome}
+                facts={capabilityFacts(row())}
+                status={row().status}
               >
                 <Show
-                  when={accountLinked}
+                  when={accountConnected()}
                   fallback={
                     <span class="text-xs text-ink-muted">
                       Connect your GitHub account first
                     </span>
                   }
                 >
-                  <a
+                  <ConnectAction
+                    label="Connect"
                     href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
-                  >
-                    Connect
-                    <ArrowUpRightIcon class="size-3.5 opacity-70" />
-                  </a>
+                  />
                 </Show>
-              </SettingsRow>
+              </CapabilityRow>
             )}
           </Show>
         </SettingsCard>

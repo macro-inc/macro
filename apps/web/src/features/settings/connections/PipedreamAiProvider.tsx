@@ -1,30 +1,21 @@
 import { toast } from '@core/component/Toast/Toast';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
 import {
-  useDeleteMcpServerMutation,
-  useUpdateMcpServerMutation,
-} from '@queries/mcp-servers';
-import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { Show } from 'solid-js';
-import { ConnectAction, StatusDot } from '../integration-ui';
-import {
-  SettingsCard,
-  SettingsPage,
-  SettingsRow,
-  SettingsSection,
-} from '../primitives';
+import { ConnectAction } from '../integration-ui';
+import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
+import { CapabilityRow, capabilityFacts } from './capability-row';
 import {
   type ConnectionsModel,
   type CuratedAiProvider,
   capabilitiesFor,
-  curatedNativeUrl,
 } from './model';
+import { useNativeMcpActions } from './native-actions';
 import { providerIcon } from './provider-meta';
-import { connectionState, statusLabel } from './status';
-import { showConnectionsOverview } from './view-state';
+import { closeConnectionsProvider } from './view-state';
 
 const COPY: Record<
   Exclude<CuratedAiProvider, 'github'>,
@@ -64,9 +55,7 @@ export function PipedreamAiProvider(props: {
     );
   const update = useUpdatePipedreamConnectionMutation();
   const remove = useDeletePipedreamConnectionMutation();
-  const updateNative = useUpdateMcpServerMutation();
-  const removeNative = useDeleteMcpServerMutation();
-  const nativeUrl = () => curatedNativeUrl(props.provider);
+  const native = useNativeMcpActions();
   const { connect, busy } = createPipedreamCatalogConnect({
     entry: () => ({
       app_slug: props.provider,
@@ -75,7 +64,7 @@ export function PipedreamAiProvider(props: {
     onConnected: () => toast.success(`${copy.name} connected`),
   });
 
-  const connected = () =>
+  const granted = () =>
     row()?.status === 'connected' || row()?.status === 'off';
 
   return (
@@ -86,124 +75,126 @@ export function PipedreamAiProvider(props: {
           ? '1 of 1 capability ready'
           : '0 of 1 capabilities ready'
       }
-      onBack={showConnectionsOverview}
+      onBack={closeConnectionsProvider}
     >
       <SettingsSection title="Your connections">
         <SettingsCard>
-          <SettingsRow
-            align="start"
-            label={
-              <span class="flex items-center gap-2">
-                <span class="flex size-9 items-center justify-center [&_svg]:size-5">
-                  {providerIcon(props.provider)}
-                </span>
-                Use {copy.name} with Macro AI
-                <Show when={row()}>
-                  {(capability) => (
-                    <StatusDot
-                      state={connectionState(capability().status)}
-                      label={statusLabel(capability().status)}
-                    />
-                  )}
-                </Show>
-              </span>
+          <CapabilityRow
+            icon={providerIcon(props.provider)}
+            title={`Use ${copy.name} with Macro AI`}
+            outcome={copy.outcome}
+            facts={
+              row()
+                ? capabilityFacts(row()!)
+                : 'Personal · Powered by Pipedream'
             }
-            description={`${copy.outcome} Personal · ${
-              row() ? statusLabel(row()!.status) : 'Not connected'
-            }${
-              !row() || row()?.mechanism === 'pipedream'
-                ? ' · Powered by Pipedream'
-                : ''
-            }`}
+            status={row()?.status}
           >
             <Show
-              when={connected()}
+              when={row()?.status === 'action-required'}
               fallback={
-                <ConnectAction
-                  label="Connect"
-                  onClick={() => void connect()}
-                  loading={busy()}
-                />
-              }
-            >
-              <Show
-                when={row()?.mechanism === 'pipedream'}
-                fallback={
-                  <>
+                <Show
+                  when={granted()}
+                  fallback={
+                    <ConnectAction
+                      label="Connect"
+                      onClick={() => void connect()}
+                      loading={busy()}
+                    />
+                  }
+                >
+                  <Show
+                    when={row()?.mechanism === 'pipedream'}
+                    fallback={
+                      <>
+                        <ConnectAction
+                          label={row()?.status === 'off' ? 'Turn on' : 'Turn off'}
+                          variant="neutral"
+                          onClick={() => {
+                            const url = row()?.sourceUrl;
+                            if (!url) return;
+                            native.update.mutate(
+                              { url, enabled: row()?.status === 'off' },
+                              {
+                                onError: () =>
+                                  toast.failure('Failed to update connector'),
+                              }
+                            );
+                          }}
+                          disabled={native.update.isPending}
+                        />
+                        <ConnectAction
+                          label="Disconnect from Macro"
+                          variant="danger"
+                          onClick={() => {
+                            const url = row()?.sourceUrl;
+                            if (!url) return;
+                            native.remove.mutate(
+                              { url },
+                              {
+                                onSuccess: () =>
+                                  toast.success(
+                                    `Disconnected ${copy.name} from Macro`
+                                  ),
+                                onError: () =>
+                                  toast.failure('Failed to disconnect'),
+                              }
+                            );
+                          }}
+                          disabled={native.remove.isPending}
+                        />
+                      </>
+                    }
+                  >
                     <ConnectAction
                       label={row()?.status === 'off' ? 'Turn on' : 'Turn off'}
                       variant="neutral"
-                      onClick={() => {
-                        const url = nativeUrl();
-                        if (!url) return;
-                        updateNative.mutate(
-                          { url, enabled: row()?.status === 'off' },
+                      onClick={() =>
+                        update.mutate(
+                          {
+                            app_slug: props.provider,
+                            enabled: row()?.status === 'off',
+                          },
                           {
                             onError: () =>
                               toast.failure('Failed to update connector'),
                           }
-                        );
-                      }}
-                      disabled={updateNative.isPending}
+                        )
+                      }
+                      disabled={update.isPending}
                     />
                     <ConnectAction
                       label="Disconnect from Macro"
                       variant="danger"
-                      onClick={() => {
-                        const url = nativeUrl();
-                        if (!url) return;
-                        removeNative.mutate(
-                          { url },
+                      onClick={() =>
+                        remove.mutate(
+                          { app_slug: props.provider },
                           {
                             onSuccess: () =>
                               toast.success(
                                 `Disconnected ${copy.name} from Macro`
                               ),
-                            onError: () =>
-                              toast.failure('Failed to disconnect'),
+                            onError: () => toast.failure('Failed to disconnect'),
                           }
-                        );
-                      }}
-                      disabled={removeNative.isPending}
+                        )
+                      }
+                      disabled={remove.isPending}
                     />
-                  </>
-                }
-              >
-                <ConnectAction
-                  label={row()?.status === 'off' ? 'Turn on' : 'Turn off'}
-                  variant="neutral"
-                  onClick={() =>
-                    update.mutate(
-                      {
-                        app_slug: props.provider,
-                        enabled: row()?.status === 'off',
-                      },
-                      {
-                        onError: () =>
-                          toast.failure('Failed to update connector'),
-                      }
-                    )
-                  }
-                  disabled={update.isPending}
-                />
-                <ConnectAction
-                  label="Disconnect from Macro"
-                  variant="danger"
-                  onClick={() =>
-                    remove.mutate(
-                      { app_slug: props.provider },
-                      {
-                        onSuccess: () =>
-                          toast.success(`Disconnected ${copy.name} from Macro`),
-                        onError: () => toast.failure('Failed to disconnect'),
-                      }
-                    )
-                  }
-                  disabled={remove.isPending}
-                />
-              </Show>
+                  </Show>
+                </Show>
+              }
+            >
+              <ConnectAction
+                label="Reconnect"
+                onClick={() => {
+                  const url = row()?.sourceUrl;
+                  if (!url) return;
+                  native.startAuth(url, row()?.account ?? copy.name);
+                }}
+                disabled={native.authorize.isPending}
+              />
             </Show>
-          </SettingsRow>
+          </CapabilityRow>
         </SettingsCard>
         <p class="px-6 text-xs text-ink-extra-muted">{copy.later}</p>
       </SettingsSection>

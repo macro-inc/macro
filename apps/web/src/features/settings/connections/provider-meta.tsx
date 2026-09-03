@@ -38,31 +38,6 @@ export const FEATURED_DISCOVER: FeaturedStarter[] = [
   },
 ];
 
-export type DiscoverCategory = 'all' | 'work' | 'docs' | 'chat' | 'developer';
-
-export const DISCOVER_CATEGORIES: { id: DiscoverCategory; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'work', label: 'Work' },
-  { id: 'docs', label: 'Docs' },
-  { id: 'chat', label: 'Chat' },
-  { id: 'developer', label: 'Developer' },
-];
-
-const TEMP_CATEGORY: Record<string, Exclude<DiscoverCategory, 'all'>[]> = {
-  google: ['work'],
-  github: ['work', 'developer'],
-  linear: ['work', 'developer'],
-  slack: ['chat', 'work'],
-  cursor: ['developer'],
-  notion: ['docs'],
-};
-
-export function tempCategoriesFor(
-  slug: string
-): Exclude<DiscoverCategory, 'all'>[] {
-  return TEMP_CATEGORY[slug] ?? [];
-}
-
 export function providerIcon(id: Exclude<ProviderId, 'other'>): JSX.Element {
   switch (id) {
     case 'google':

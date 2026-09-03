@@ -242,9 +242,11 @@ export function ChoiceRow(props: {
  */
 export function IntegrationRow(props: {
   /** The brand icon, rendered at its native size inside a fixed slot. */
-  icon: JSX.Element;
+  icon?: JSX.Element;
   title: JSX.Element;
   description?: JSX.Element;
+  /** Proven facts under the outcome. Not truncated. */
+  facts?: JSX.Element;
   /** Optional indicator shown right after the title (e.g. a connection dot). */
   status?: JSX.Element;
   children?: JSX.Element;
@@ -252,16 +254,21 @@ export function IntegrationRow(props: {
 }) {
   return (
     <div class={cn('flex items-center gap-4 px-6 py-4', props.class)}>
-      <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-6">
-        {props.icon}
-      </div>
+      <Show when={props.icon}>
+        <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-6">
+          {props.icon}
+        </div>
+      </Show>
       <div class="flex-1 min-w-0 flex flex-col gap-0.5">
         <div class="flex items-center gap-2 min-w-0">
           <div class="text-sm font-medium text-ink truncate">{props.title}</div>
           <Show when={props.status}>{props.status}</Show>
         </div>
         <Show when={props.description}>
-          <div class="text-sm text-ink-muted truncate">{props.description}</div>
+          <div class="text-sm text-ink-muted">{props.description}</div>
+        </Show>
+        <Show when={props.facts}>
+          <div class="text-xs text-ink-extra-muted">{props.facts}</div>
         </Show>
       </div>
       <Show when={props.children}>

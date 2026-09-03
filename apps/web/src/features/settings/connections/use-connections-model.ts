@@ -32,8 +32,24 @@ export function useConnectionsModel() {
     nativeMcp.isFetched &&
     cursor.isFetched;
 
+  const error = () =>
+    ready() &&
+    ((ENABLE_EMAIL && emailLinks.isError) ||
+      github.isError ||
+      pipedream.isError ||
+      nativeMcp.isError ||
+      cursor.isError);
+
+  const retry = () => {
+    if (ENABLE_EMAIL) void emailLinks.refetch();
+    void github.refetch();
+    void pipedream.refetch();
+    void nativeMcp.refetch();
+    void cursor.refetch();
+  };
+
   const model = createMemo(() => {
-    if (!ready()) return EMPTY_MODEL;
+    if (!ready() || error()) return EMPTY_MODEL;
     return toConnectionsModel({
       userId: userId(),
       emailEnabled: ENABLE_EMAIL,
@@ -51,5 +67,5 @@ export function useConnectionsModel() {
     });
   });
 
-  return { model, ready };
+  return { model, ready, error, retry };
 }

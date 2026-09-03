@@ -5,14 +5,14 @@ import { For } from 'solid-js';
 import { ConnectAction } from '../integration-ui';
 import { IntegrationRow, SettingsCard, SettingsPage } from '../primitives';
 import type { Leftover } from './model';
-import { showConnectionsOverview } from './view-state';
+import { closeConnectionsProvider } from './view-state';
 
 export function OtherView(props: { leftovers: Leftover[] }) {
   return (
     <SettingsPage
       title="Other connections"
       description="Records Macro cannot place under a provider yet. Shown with the facts Macro can prove. Nothing is hidden or guessed."
-      onBack={showConnectionsOverview}
+      onBack={closeConnectionsProvider}
     >
       <SettingsCard>
         <For each={props.leftovers}>
@@ -57,14 +57,8 @@ function LeftoverRow(props: { leftover: Leftover }) {
     <IntegrationRow
       icon={<span class="text-xs font-medium text-ink-muted">?</span>}
       title={props.leftover.title}
-      description={
-        <>
-          {props.leftover.note}
-          <span class="mt-1 block text-xs text-ink-extra-muted">
-            {props.leftover.facts}
-          </span>
-        </>
-      }
+      description={props.leftover.note}
+      facts={props.leftover.facts}
     >
       <ConnectAction
         label="Disconnect from Macro"

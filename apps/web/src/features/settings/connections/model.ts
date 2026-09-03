@@ -38,6 +38,8 @@ export type Capability = {
   scope: CapabilityScope;
   status: CapabilityStatus;
   mechanism: CapabilityMechanism;
+  /** Dest native MCP URL, when this row is that server. */
+  sourceUrl?: string;
 };
 
 export type Leftover = {
@@ -100,28 +102,11 @@ const CURATED_AI: Record<
 const NATIVE_CURATED: {
   provider: CuratedAiProvider;
   url: string;
-  names: string[];
 }[] = [
-  {
-    provider: 'github',
-    url: 'https://api.githubcopilot.com/mcp',
-    names: ['github'],
-  },
-  {
-    provider: 'linear',
-    url: 'https://mcp.linear.app/mcp',
-    names: ['linear'],
-  },
-  {
-    provider: 'notion',
-    url: 'https://mcp.notion.com/mcp',
-    names: ['notion'],
-  },
-  {
-    provider: 'slack',
-    url: 'https://mcp.slack.com/mcp',
-    names: ['slack'],
-  },
+  { provider: 'github', url: 'https://api.githubcopilot.com/mcp' },
+  { provider: 'linear', url: 'https://mcp.linear.app/mcp' },
+  { provider: 'notion', url: 'https://mcp.notion.com/mcp' },
+  { provider: 'slack', url: 'https://mcp.slack.com/mcp' },
 ];
 
 const PROVIDER_NAMES: Record<Exclude<ProviderId, 'other'>, string> = {
@@ -137,11 +122,7 @@ function nativeCuratedProvider(
   server: ServerResponse
 ): CuratedAiProvider | null {
   const url = server.url.replace(/\/$/, '');
-  const name = server.server_name.trim().toLowerCase();
-  for (const row of NATIVE_CURATED) {
-    if (url === row.url || row.names.includes(name)) return row.provider;
-  }
-  return null;
+  return NATIVE_CURATED.find((row) => row.url === url)?.provider ?? null;
 }
 
 function pipedreamBySlug(
@@ -173,6 +154,13 @@ function googleCapabilities(input: ConnectionsInput): Capability[] {
       mechanism: 'macro',
     };
     if (!input.calendarEnabled) return [gmail];
+    const calendarStatus: CapabilityStatus = link.needs_reauth
+      ? 'action-required'
+      : link.calendar_disabled
+        ? 'off'
+        : link.needs_calendar_permission
+          ? 'not-connected'
+          : 'connected';
     const calendar: Capability = {
       id: `calendar:${link.id}`,
       provider: 'google',
@@ -181,10 +169,7 @@ function googleCapabilities(input: ConnectionsInput): Capability[] {
         'Show this calendar in Macro. Disconnect drops calendar access and keeps mail.',
       account: link.email_address,
       scope,
-      status:
-        link.needs_calendar_permission || link.calendar_disabled
-          ? 'not-connected'
-          : 'connected',
+      status: calendarStatus,
       mechanism: 'macro',
     };
     return [gmail, calendar];
@@ -225,12 +210,6 @@ function githubCapabilities(input: ConnectionsInput): Capability[] {
       mechanism: 'github-app',
     },
   ];
-}
-
-export function curatedNativeUrl(
-  provider: CuratedAiProvider
-): string | undefined {
-  return NATIVE_CURATED.find((row) => row.provider === provider)?.url;
 }
 
 function leftoverNative(server: ServerResponse, note: string): Leftover {
@@ -297,13 +276,13 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
           ? aiStatus(native.enabled)
           : 'action-required',
         mechanism: 'native-mcp',
+        sourceUrl: native.url,
       });
     }
   }
 
   for (const server of input.nativeMcp) {
     if (usedNative.has(server.url)) continue;
-    if (nativeCuratedProvider(server)) continue;
     leftovers.push(
       leftoverNative(
         server,
@@ -346,24 +325,25 @@ function providerSummary(
   id: Exclude<ProviderId, 'other'>,
   rows: Capability[]
 ): ProviderSummary | null {
-  const readyRows = rows.filter((row) => row.status === 'connected');
+  const counted = rows.filter((row) => row.mechanism !== 'github-app');
+  const readyRows = counted.filter((row) => row.status === 'connected');
   if (
     readyRows.length === 0 &&
-    !rows.some((row) => row.status !== 'not-connected')
+    !counted.some((row) => row.status !== 'not-connected')
   ) {
     return null;
   }
 
   const accounts = [
     ...new Set(
-      rows
+      counted
         .filter((row) => row.status !== 'not-connected')
         .map((row) => row.account)
     ),
   ].join(' · ');
 
-  const action = rows.find((row) => row.status === 'action-required');
-  const needsCalendar = rows.some(
+  const action = counted.find((row) => row.status === 'action-required');
+  const needsCalendar = counted.some(
     (row) => row.id.startsWith('calendar:') && row.status === 'not-connected'
   );
 
@@ -385,7 +365,7 @@ function providerSummary(
     id,
     name: PROVIDER_NAMES[id],
     ready: readyRows.length,
-    total: rows.length,
+    total: counted.length,
     summary,
     accounts,
   };

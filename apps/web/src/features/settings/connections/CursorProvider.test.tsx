@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     isPlaceholderData: false,
   },
   models: {
+    isSuccess: true,
     data: {
       models: [{ id: 'default-model', displayName: 'Default Model' }],
     },

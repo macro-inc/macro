@@ -9,14 +9,15 @@ import {
 } from '@queries/auth/cursor-api-key';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { StatusDot } from '../integration-ui';
+import { ConnectAction } from '../integration-ui';
 import {
   SettingsCard,
   SettingsPage,
   SettingsRow,
   SettingsSection,
 } from '../primitives';
-import { showConnectionsOverview } from './view-state';
+import { CapabilityRow } from './capability-row';
+import { closeConnectionsProvider } from './view-state';
 
 const CURSOR_KEY_PREFIX = 'crsr_';
 
@@ -78,24 +79,29 @@ export function CursorProvider() {
           ? '1 of 1 capability ready'
           : '0 of 1 capabilities ready'
       }
-      onBack={showConnectionsOverview}
+      onBack={closeConnectionsProvider}
     >
       <SettingsSection title="Your connections">
         <SettingsCard>
-          <SettingsRow
-            align="start"
-            label={
-              <span class="flex items-center gap-2">
-                Run @cursor sessions on your Cursor account
-                <Show
-                  when={!cursorStatus.isPlaceholderData && cursorRegistered()}
-                >
-                  <StatusDot state="connected" label="Connected" />
-                </Show>
-              </span>
+          <CapabilityRow
+            title="Run @cursor sessions on your Cursor account"
+            outcome="Macro AI can start Cursor Cloud Agents for @cursor. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
+            facts="Personal"
+            status={
+              !cursorStatus.isPlaceholderData && cursorRegistered()
+                ? 'connected'
+                : undefined
             }
-            description="Macro AI can start Cursor Cloud Agents for @cursor. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
-          />
+          >
+            <Show when={!cursorStatus.isPlaceholderData && cursorRegistered()}>
+              <ConnectAction
+                label="Disconnect from Macro"
+                variant="danger"
+                disabled={disconnectCursor.isPending}
+                onClick={() => void handleDisconnectCursor()}
+              />
+            </Show>
+          </CapabilityRow>
           <Show
             when={!cursorStatus.isPlaceholderData}
             fallback={
@@ -160,24 +166,18 @@ export function CursorProvider() {
                     void handleCursorModelChange(event.currentTarget.value)
                   }
                 >
-                  <For each={cursorModels.data?.models ?? []}>
+                  <For
+                    each={
+                      cursorModels.isSuccess
+                        ? (cursorModels.data?.models ?? [])
+                        : []
+                    }
+                  >
                     {(model) => (
                       <option value={model.id}>{model.displayName}</option>
                     )}
                   </For>
                 </select>
-              </SettingsRow>
-              <SettingsRow label="Disconnect from Macro">
-                <Button
-                  type="button"
-                  variant="danger"
-                  size="sm"
-                  depth={3}
-                  disabled={disconnectCursor.isPending}
-                  onClick={() => void handleDisconnectCursor()}
-                >
-                  Disconnect from Macro
-                </Button>
               </SettingsRow>
             </Show>
           </Show>

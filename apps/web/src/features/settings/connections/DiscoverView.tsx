@@ -13,12 +13,7 @@ import { AddCustomMcpDialog } from '../Integrations';
 import { ConnectAction } from '../integration-ui';
 import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';
 import type { ConnectionsModel } from './model';
-import {
-  DISCOVER_CATEGORIES,
-  type DiscoverCategory,
-  FEATURED_DISCOVER,
-  tempCategoriesFor,
-} from './provider-meta';
+import { FEATURED_DISCOVER, providerIcon } from './provider-meta';
 import { openConnectionsProvider } from './view-state';
 
 export function DiscoverView(props: { model: ConnectionsModel }) {
@@ -34,17 +29,13 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
       )
   );
   const catalog = createPipedreamCatalogSearch(connectedSlugs);
-  const [category, setCategory] = createSignal<DiscoverCategory>('all');
   const [addingCustom, setAddingCustom] = createSignal(false);
 
   const featured = createMemo(() => {
     const query = catalog.searchInput().trim().toLowerCase();
-    const selected = category();
     return FEATURED_DISCOVER.filter((item) => {
       const haystack = `${item.name} ${item.note}`.toLowerCase();
-      const queryOk = !query || haystack.includes(query);
-      if (selected === 'all') return queryOk;
-      return queryOk && tempCategoriesFor(item.id).includes(selected);
+      return !query || haystack.includes(query);
     });
   });
 
@@ -60,10 +51,6 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
       ) {
         return false;
       }
-      const selected = category();
-      const cats = tempCategoriesFor(entry.app_slug);
-      if (selected !== 'all' && cats.length === 0) return false;
-      if (selected !== 'all' && !cats.includes(selected)) return false;
       if (!query) return true;
       return `${entry.display_name} ${entry.description ?? ''} ${entry.app_slug}`
         .toLowerCase()
@@ -90,44 +77,28 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
             {(item) => (
               <button
                 type="button"
-                class="rounded-xl border-1 border-ink/[0.05] bg-surface px-5 py-4 text-left outline-none hover:bg-ink/[0.02] focus-visible:bg-ink/4"
+                class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6 rounded-xl"
                 onClick={() => openConnectionsProvider(item.id)}
               >
-                <p class="text-sm font-medium text-ink">{item.name}</p>
-                <p class="mt-1 text-xs text-ink-extra-muted">{item.note}</p>
+                <SettingsCard>
+                  <IntegrationRow
+                    icon={providerIcon(item.id)}
+                    title={item.name}
+                    description={item.note}
+                  >
+                    <CaretRightIcon class="size-4 text-ink-extra-muted" />
+                  </IntegrationRow>
+                </SettingsCard>
               </button>
             )}
           </For>
         </div>
         <Show when={featured().length === 0}>
-          <p class="text-sm text-ink-muted">No featured providers match.</p>
+          <p class="px-6 text-sm text-ink-muted">No featured providers match.</p>
         </Show>
       </SettingsSection>
 
       <SettingsSection title="Browse">
-        <div
-          class="flex flex-wrap gap-1.5 px-6"
-          role="tablist"
-          aria-label="Provider categories"
-        >
-          <For each={DISCOVER_CATEGORIES}>
-            {(item) => (
-              <button
-                type="button"
-                role="tab"
-                aria-selected={category() === item.id}
-                class={`h-8 rounded-md px-3 text-sm outline-none focus-visible:bg-ink/6 ${
-                  category() === item.id
-                    ? 'bg-ink text-surface'
-                    : 'bg-ink/5 text-ink-muted hover:bg-ink/8 hover:text-ink'
-                }`}
-                onClick={() => setCategory(item.id)}
-              >
-                {item.label}
-              </button>
-            )}
-          </For>
-        </div>
         <SettingsCard>
           <Show when={catalog.query.isError}>
             <div class="px-6 py-6 text-center text-sm text-ink-muted">
@@ -188,7 +159,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
       <SettingsCard>
         <button
           type="button"
-          class="w-full text-left outline-none hover:bg-ink/[0.02] focus-visible:bg-ink/4"
+          class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
           onClick={() => setAddingCustom(true)}
         >
           <IntegrationRow

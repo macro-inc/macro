@@ -7,6 +7,7 @@ const [connectionsMode, setConnectionsMode] =
   createSignal<ConnectionsMode>('connected');
 const [connectionsProvider, setConnectionsProvider] =
   createSignal<ProviderId | null>(null);
+const [returnMode, setReturnMode] = createSignal<ConnectionsMode>('connected');
 
 export { connectionsMode, connectionsProvider };
 
@@ -21,6 +22,11 @@ export function showConnectionsDiscover() {
 }
 
 export function openConnectionsProvider(id: ProviderId) {
+  setReturnMode(connectionsMode());
   setConnectionsProvider(id);
-  setConnectionsMode('connected');
+}
+
+export function closeConnectionsProvider() {
+  setConnectionsProvider(null);
+  setConnectionsMode(returnMode());
 }

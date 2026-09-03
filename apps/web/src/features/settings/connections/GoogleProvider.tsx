@@ -2,29 +2,28 @@ import {
   TurnOffCalendarDialog,
   type TurnOffCalendarTarget,
 } from '@app/features/calendar/components/TurnOffCalendarDialog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { useRemoveInboxMutation } from '@queries/email/link';
 import type { ConsentScopes } from '@service-auth/client';
+import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
-import { ConnectAction, StatusDot } from '../integration-ui';
-import {
-  SettingsCard,
-  SettingsPage,
-  SettingsRow,
-  SettingsSection,
-} from '../primitives';
+import { ConnectAction } from '../integration-ui';
+import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
+import { CapabilityRow, capabilityFacts } from './capability-row';
 import {
   type Capability,
   type ConnectionsModel,
   capabilitiesFor,
 } from './model';
-import { connectionState, statusLabel } from './status';
-import { showConnectionsOverview } from './view-state';
+import { closeConnectionsProvider } from './view-state';
 
 export function GoogleProvider(props: { model: ConnectionsModel }) {
   const rows = () => capabilitiesFor(props.model, 'google');
-  const ready = () => rows().filter((row) => row.status === 'connected').length;
+  const ready = () =>
+    rows().filter((row) => row.status === 'connected').length;
   const inboxes = () => {
     const emails = [...new Set(rows().map((row) => row.account))];
     return emails.map((email) => ({
@@ -34,6 +33,9 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
     }));
   };
 
+  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
+    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
+  });
   const startAddInbox = useAddInboxFlow();
   const removeInbox = useRemoveInboxMutation({
     onSuccess: () => toast.success('Inbox removed'),
@@ -42,6 +44,11 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
   const [pending, setPending] = createSignal(false);
   const [calendarTarget, setCalendarTarget] =
     createSignal<TurnOffCalendarTarget | null>(null);
+  const [removeTarget, setRemoveTarget] = createSignal<{
+    id: string;
+    email: string;
+    isOwn: boolean;
+  } | null>(null);
 
   const connect = async (scopes?: ConsentScopes) => {
     if (pending()) return;
@@ -66,23 +73,23 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
           ? `${ready()} of ${rows().length} capabilities ready`
           : 'Connect a Google account to bring mail and calendar into Macro.'
       }
-      onBack={showConnectionsOverview}
+      onBack={closeConnectionsProvider}
     >
       <Show
         when={inboxes().length > 0}
         fallback={
           <SettingsSection title="Your connections">
             <SettingsCard>
-              <SettingsRow
-                label="Use Gmail in Macro"
-                description="Read and send mail from a Google account in Macro."
+              <CapabilityRow
+                title="Use Gmail in Macro"
+                outcome="Read and send mail from a Google account in Macro."
               >
                 <ConnectAction
                   label="Connect"
                   onClick={() => void connect()}
                   disabled={pending()}
                 />
-              </SettingsRow>
+              </CapabilityRow>
             </SettingsCard>
           </SettingsSection>
         }
@@ -96,67 +103,43 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
               <SettingsCard>
                 <For each={inbox.caps}>
                   {(row) => (
-                    <SettingsRow
-                      align="start"
-                      label={
-                        <span class="flex items-center gap-2">
-                          {row.title}
-                          <StatusDot
-                            state={connectionState(row.status)}
-                            label={statusLabel(row.status)}
-                          />
-                        </span>
-                      }
-                      description={`${row.outcome} ${row.account} · ${
-                        row.scope === 'shared' ? 'Shared' : 'Personal'
-                      } · ${statusLabel(row.status)}`}
+                    <CapabilityRow
+                      title={row.title}
+                      outcome={row.outcome}
+                      facts={capabilityFacts(row)}
+                      status={row.status}
                     >
-                      <Show
-                        when={row.status === 'action-required'}
-                        fallback={
-                          <Show
-                            when={row.status === 'connected'}
-                            fallback={
-                              <ConnectAction
-                                label="Connect"
-                                onClick={() =>
-                                  void connect(
-                                    row.id.startsWith('calendar:')
-                                      ? 'calendar'
-                                      : 'gmail'
-                                  )
-                                }
-                                disabled={pending()}
-                              />
-                            }
-                          >
-                            <ConnectAction
-                              label="Disconnect from Macro"
-                              variant="danger"
-                              onClick={() => {
-                                const linkId = linkIdFor(row);
-                                if (!linkId) return;
-                                if (row.id.startsWith('calendar:')) {
-                                  setCalendarTarget({
-                                    linkId,
-                                    emailAddress: row.account,
-                                  });
-                                  return;
-                                }
-                                removeInbox.mutate(linkId);
-                              }}
-                              disabled={removeInbox.isPending}
-                            />
-                          </Show>
+                      <GoogleCapabilityActions
+                        row={row}
+                        pending={pending()}
+                        removing={removeInbox.isPending}
+                        onConnect={() =>
+                          void connect(
+                            row.id.startsWith('calendar:')
+                              ? 'calendar'
+                              : 'gmail'
+                          )
                         }
-                      >
-                        <ConnectAction
-                          label="Reconnect"
-                          onClick={() => void connect()}
-                          disabled={pending()}
-                        />
-                      </Show>
-                    </SettingsRow>
+                        onReconnect={() => void connect()}
+                        onRemoveGmail={() => {
+                          const linkId = linkIdFor(row);
+                          if (!linkId) return;
+                          setRemoveTarget({
+                            id: linkId,
+                            email: row.account,
+                            isOwn: row.scope === 'personal',
+                          });
+                        }}
+                        onTurnOffCalendar={() => {
+                          const linkId = linkIdFor(row);
+                          if (!linkId) return;
+                          setCalendarTarget({
+                            linkId,
+                            emailAddress: row.account,
+                          });
+                        }}
+                      />
+                    </CapabilityRow>
                   )}
                 </For>
               </SettingsCard>
@@ -165,18 +148,142 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
         </For>
       </Show>
 
-      <Show when={rows().length > 0}>
-        <ConnectAction
-          label="Add another Google account"
-          onClick={() => void connect()}
-          disabled={pending()}
-        />
+      <Show when={rows().length > 0 && multiInboxFlag().enabled}>
+        <div class="px-6">
+          <ConnectAction
+            label="Add another Google account"
+            onClick={() => void connect()}
+            disabled={pending()}
+          />
+        </div>
       </Show>
 
       <TurnOffCalendarDialog
         target={calendarTarget()}
         onClose={() => setCalendarTarget(null)}
       />
+
+      <Dialog
+        open={removeTarget() !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        position="center"
+        class="w-120"
+      >
+        <Panel depth={2} class="rounded-xl">
+          <Panel.Header class="px-6">
+            <Dialog.Title class="text-ink text-sm font-semibold">
+              Remove inbox
+            </Dialog.Title>
+          </Panel.Header>
+          <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+            <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+              <Show
+                when={removeTarget()?.isOwn}
+                fallback={
+                  <>
+                    Remove access to{' '}
+                    <span class="text-ink">{removeTarget()?.email}</span>? The
+                    inbox and its data stay with its owner.
+                  </>
+                }
+              >
+                Remove <span class="text-ink">{removeTarget()?.email}</span>?
+                This clears all of its email data from Macro and cannot be
+                undone.
+              </Show>
+            </Dialog.Description>
+            <div class="pt-3 justify-end items-center gap-3 inline-flex">
+              <Button
+                variant="outline"
+                depth={3}
+                onClick={() => setRemoveTarget(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                depth={3}
+                onClick={() => {
+                  const target = removeTarget();
+                  if (!target) return;
+                  setRemoveTarget(null);
+                  removeInbox.mutate(target.id);
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          </Panel.Body>
+        </Panel>
+      </Dialog>
     </SettingsPage>
+  );
+}
+
+function GoogleCapabilityActions(props: {
+  row: Capability;
+  pending: boolean;
+  removing: boolean;
+  onConnect: () => void;
+  onReconnect: () => void;
+  onRemoveGmail: () => void;
+  onTurnOffCalendar: () => void;
+}) {
+  const isOwn = () => props.row.scope === 'personal';
+  const isCalendar = () => props.row.id.startsWith('calendar:');
+
+  return (
+    <Show
+      when={props.row.status === 'action-required'}
+      fallback={
+        <Show
+          when={
+            props.row.status === 'connected' || props.row.status === 'off'
+          }
+          fallback={
+            <ConnectAction
+              label={isCalendar() ? 'Enable calendar' : 'Connect'}
+              onClick={props.onConnect}
+              disabled={props.pending}
+            />
+          }
+        >
+          <Show
+            when={isCalendar()}
+            fallback={
+              <ConnectAction
+                label="Disconnect from Macro"
+                variant="danger"
+                onClick={props.onRemoveGmail}
+                disabled={props.removing}
+              />
+            }
+          >
+            <Show when={isOwn() && props.row.status === 'connected'}>
+              <ConnectAction
+                label="Disconnect from Macro"
+                variant="danger"
+                onClick={props.onTurnOffCalendar}
+              />
+            </Show>
+            <Show when={isOwn() && props.row.status === 'off'}>
+              <ConnectAction
+                label="Turn on"
+                onClick={props.onConnect}
+                disabled={props.pending}
+              />
+            </Show>
+          </Show>
+        </Show>
+      }
+    >
+      <ConnectAction
+        label="Reconnect"
+        onClick={props.onReconnect}
+        disabled={props.pending}
+      />
+    </Show>
   );
 }

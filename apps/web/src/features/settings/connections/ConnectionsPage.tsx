@@ -1,4 +1,5 @@
 import { TabsInset } from '@core/component/TabsInset';
+import { Button } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { SettingsPage } from '../primitives';
 import { ConnectedView } from './ConnectedView';
@@ -10,6 +11,7 @@ import { OtherView } from './OtherView';
 import { PipedreamAiProvider } from './PipedreamAiProvider';
 import { useConnectionsModel } from './use-connections-model';
 import {
+  closeConnectionsProvider,
   connectionsMode,
   connectionsProvider,
   showConnectionsDiscover,
@@ -17,10 +19,27 @@ import {
 } from './view-state';
 
 export function ConnectionsPage() {
-  const { model, ready } = useConnectionsModel();
+  const { model, ready, error, retry } = useConnectionsModel();
   const provider = connectionsProvider;
 
   return (
+    <Show
+      when={!error()}
+      fallback={
+        <SettingsPage
+          title="Connections"
+          description="What Macro can access, and who it affects."
+          onBack={provider() ? closeConnectionsProvider : undefined}
+        >
+          <div class="px-6 flex items-center gap-3 text-sm text-ink-muted">
+            Couldn't load connections.
+            <Button variant="outline" size="sm" depth={3} onClick={retry}>
+              Retry
+            </Button>
+          </div>
+        </SettingsPage>
+      }
+    >
     <Switch
       fallback={
         <SettingsPage
@@ -79,5 +98,6 @@ export function ConnectionsPage() {
         <OtherView leftovers={model().leftovers} />
       </Match>
     </Switch>
+    </Show>
   );
 }

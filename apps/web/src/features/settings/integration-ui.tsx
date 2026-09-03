@@ -18,27 +18,28 @@ export type ConnectionState = 'connected' | 'attention' | 'disconnected' | 'off'
  */
 export function ConnectAction(props: {
   label: string;
-  onClick: () => void;
+  onClick?: () => void;
+  href?: string;
   disabled?: boolean;
   loading?: boolean;
   /** 'connect' shows the external-link arrow; the others are plain buttons. */
   variant?: 'connect' | 'neutral' | 'danger';
 }) {
   const variant = () => props.variant ?? 'connect';
-  return (
-    <button
-      type="button"
-      disabled={props.disabled || props.loading}
-      onClick={() => props.onClick()}
-      class={cn(
-        'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-sm font-medium',
-        'cursor-default transition-colors disabled:opacity-50',
-        'outline-none focus-visible:bg-ink/6',
-        variant() === 'danger'
-          ? 'text-ink-muted hover:bg-ink/4 hover:text-failure'
-          : 'text-ink-muted hover:bg-ink/4 hover:text-ink'
-      )}
-    >
+  const className = () =>
+    cn(
+      'inline-flex items-center gap-1.5 h-7 px-2 rounded-md text-sm font-medium',
+      'cursor-default transition-colors',
+      'outline-none focus-visible:bg-ink/6',
+      props.disabled || props.loading
+        ? 'opacity-50 pointer-events-none'
+        : undefined,
+      variant() === 'danger'
+        ? 'text-ink-muted hover:bg-ink/4 hover:text-failure'
+        : 'text-ink-muted hover:bg-ink/4 hover:text-ink'
+    );
+  const body = (
+    <>
       <Show when={props.loading}>
         <SpinnerIcon class="size-4 animate-spin" />
       </Show>
@@ -46,6 +47,28 @@ export function ConnectAction(props: {
       <Show when={variant() === 'connect' && !props.loading}>
         <ArrowUpRightIcon class="size-3.5 opacity-70" />
       </Show>
+    </>
+  );
+  if (props.href) {
+    return (
+      <a
+        href={props.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        class={className()}
+      >
+        {body}
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      disabled={props.disabled || props.loading}
+      onClick={() => props.onClick?.()}
+      class={className()}
+    >
+      {body}
     </button>
   );
 }
