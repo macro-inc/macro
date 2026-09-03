@@ -1,6 +1,7 @@
 import { useCalendarPager } from '@app/features/calendar/components/CalendarPagerContext';
 import { useCalendarView } from '@app/features/calendar/components/CalendarViewContext';
 import { SourceControls } from '@app/features/calendar/components/SourceControls';
+import { useTeamOooSources } from '@app/features/calendar/hooks/use-team-ooo';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
 import { Calendar as MiniCalendar } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
@@ -85,6 +86,28 @@ function CalendarSourcesSidePanelSection() {
   );
 }
 
+function CalendarTeamOooSidePanelSection() {
+  const calendarView = useCalendarView();
+  const teamSources = useTeamOooSources();
+
+  return (
+    <Show when={teamSources().length > 0}>
+      <SidePanel.Section
+        id="calendar-team-ooo"
+        title="Team out of office"
+        order={30}
+        defaultOpen
+      >
+        <SourceControls
+          sources={teamSources()}
+          isVisible={calendarView.isSourceVisible}
+          onVisibilityChange={calendarView.setSourceVisibility}
+        />
+      </SidePanel.Section>
+    </Show>
+  );
+}
+
 /** Registers the calendar's contextual right-side panel sections. */
 export function SidePanelSections() {
   const sidePanel = useSidePanel();
@@ -93,6 +116,7 @@ export function SidePanelSections() {
     <Show when={!sidePanel?.isNarrow()}>
       <CalendarMiniCalendarSidePanelSection />
       <CalendarSourcesSidePanelSection />
+      <CalendarTeamOooSidePanelSection />
     </Show>
   );
 }

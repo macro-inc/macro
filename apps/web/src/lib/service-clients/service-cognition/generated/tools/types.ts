@@ -3009,6 +3009,12 @@ export interface CalendarEventListItem {
    */
   status: string;
   /**
+   * Provider event type for status-style events (out_of_office,
+   * focus_time, working_location, birthday, from_gmail); absent for
+   * regular events.
+   */
+  eventType?: string | null;
+  /**
    * Whether this occurrence belongs to a recurring series.
    */
   isRecurring: boolean;

@@ -49,6 +49,11 @@ pub struct CalendarEventListItem {
     pub description: Option<String>,
     /// Event status: confirmed or tentative.
     pub status: String,
+    /// Provider event type for status-style events (out_of_office,
+    /// focus_time, working_location, birthday, from_gmail); absent for
+    /// regular events.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub event_type: Option<String>,
     /// Whether this occurrence belongs to a recurring series.
     pub is_recurring: bool,
     /// Occurrence key identifying this instance within its recurring series;
@@ -202,6 +207,8 @@ where
                     location: event.location.clone(),
                     description: description_preview(event.description.as_deref()),
                     status: event.status.as_str().to_string(),
+                    event_type: (!event.event_type.is_default())
+                        .then(|| event.event_type.as_str().to_string()),
                     is_recurring,
                     recurrence_id: is_recurring.then(|| occurrence.occurrence_key.clone()),
                     attendees: event

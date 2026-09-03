@@ -35,6 +35,12 @@ section listing each connected account with a per-account `Enable` (grant calend
 `Turn off` action, plus `Connect another account` to connect a new Google account
 (email + calendar).
 
+Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
+`<name>: <event title>`. The side panel's `Team out of office` section lists each teammate
+with a visibility checkbox (shown only when the user belongs to a team with other members).
+Coverage depends on each teammate having connected their own calendar and using Google's
+out-of-office event type.
+
 ## Calls — `/app/component/calls`
 
 Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, transcriptions

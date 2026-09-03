@@ -110,6 +110,48 @@ where
         Ok(rows)
     }
 
+    /// Query teammates' out-of-office occurrences in a bounded viewport.
+    ///
+    /// Teammates learn when — not necessarily why — each other are out: an
+    /// event marked private or confidential keeps its title withheld,
+    /// mirroring what Google shows viewers without full detail access. The
+    /// same provider event synced through more than one of a teammate's
+    /// connected inboxes collapses to one occurrence.
+    #[tracing::instrument(skip(self, requester_id, range), err)]
+    pub async fn list_team_out_of_office(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        limit: u16,
+    ) -> Result<Vec<super::models::TeamOutOfOffice>, Report> {
+        validate_query(&range, limit)?;
+        let rows = self
+            .repository
+            .list_team_out_of_office(requester_id, range, limit)
+            .await?;
+        let mut seen = std::collections::HashSet::new();
+        Ok(rows
+            .into_iter()
+            .filter(|row| {
+                seen.insert((
+                    row.owner_id.clone(),
+                    row.ical_uid.clone(),
+                    row.occurrence_key.clone(),
+                ))
+            })
+            .map(|mut row| {
+                if matches!(
+                    row.visibility,
+                    super::models::EventVisibility::Private
+                        | super::models::EventVisibility::Confidential
+                ) {
+                    row.title = None;
+                }
+                row
+            })
+            .collect())
+    }
+
     /// Return the aggregate ingestion state of the requester's visible accounts.
     #[tracing::instrument(skip(self, requester_id), err)]
     pub async fn sync_status(
@@ -196,6 +238,15 @@ where
     ) -> impl Future<Output = Result<Vec<super::models::CalendarMentionPreview>, Report>> + Send
     {
         CalendarService::mention_previews(self, requester_id, items)
+    }
+
+    fn list_team_out_of_office(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<super::models::TeamOutOfOffice>, Report>> + Send {
+        CalendarService::list_team_out_of_office(self, requester_id, range, limit)
     }
 }
 

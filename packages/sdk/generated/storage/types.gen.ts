@@ -8450,6 +8450,40 @@ export type TaskFilters = {
 };
 
 /**
+ * One teammate's out-of-office occurrence.
+ */
+export type TeamOutOfOfficeItem = {
+    /**
+     * The teammate's calendar event id.
+     */
+    eventId: string;
+    /**
+     * Stable occurrence key within the event.
+     */
+    occurrenceKey: string;
+    /**
+     * Macro user id of the teammate who is out.
+     */
+    ownerId: string;
+    /**
+     * Occurrence time span.
+     */
+    time: EventTime;
+    /**
+     * Event title, absent when the event's visibility withholds details.
+     */
+    title?: string | null;
+};
+
+/**
+ * Team out-of-office viewport response.
+ */
+export type TeamOutOfOfficeResponse = {
+    hasMore: boolean;
+    items: Array<TeamOutOfOfficeItem>;
+};
+
+/**
  * The role a user has within a team.
  *
  * Ordered least to most privileged so comparisons reflect access strength.
@@ -9443,6 +9477,58 @@ export type MentionPreviewsResponses = {
 };
 
 export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
+
+export type ListTeamOutOfOfficeData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive UTC viewport start.
+         */
+        start: string;
+        /**
+         * Exclusive UTC viewport end.
+         */
+        end: string;
+        /**
+         * Inclusive local date boundary for all-day events.
+         */
+        startDate?: string;
+        /**
+         * Exclusive local date boundary for all-day events.
+         */
+        endDate?: string;
+        /**
+         * Maximum number of occurrences, from 1 through 2,000.
+         */
+        limit?: number;
+    };
+    url: '/calendar-events/team-out-of-office';
+};
+
+export type ListTeamOutOfOfficeErrors = {
+    /**
+     * Invalid or unsupported calendar viewport
+     */
+    400: unknown;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type ListTeamOutOfOfficeResponses = {
+    /**
+     * Teammates' out-of-office occurrences in the requested viewport
+     */
+    200: TeamOutOfOfficeResponse;
+};
+
+export type ListTeamOutOfOfficeResponse = ListTeamOutOfOfficeResponses[keyof ListTeamOutOfOfficeResponses];
 
 export type GetActiveCallsData = {
     body?: never;

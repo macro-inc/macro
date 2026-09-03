@@ -22,7 +22,7 @@ use crate::domain::{
         EventReminders, EventStart, EventStatus, EventTime, EventTransparency, EventType,
         EventVisibility, GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet,
         GoogleWatchChannel, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
-        VisibleCalendar,
+        TeamOutOfOffice, VisibleCalendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -1013,6 +1013,93 @@ impl CalendarRepository for PgCalendarRepository {
                     .unwrap_or_default();
                 let event = event_from_join(row, effective)?;
                 Ok((event, occurrence))
+            })
+            .collect()
+    }
+
+    #[tracing::instrument(skip(self, requester_id, range), err)]
+    async fn list_team_out_of_office(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        limit: u16,
+    ) -> Result<Vec<TeamOutOfOffice>, Report> {
+        // The primary-calendar source guard keeps this to the teammate's own
+        // status: an out-of-office event on a calendar they merely subscribe
+        // to belongs to that calendar's owner, not to them.
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                event.owner_id,
+                occurrence.event_id,
+                event.ical_uid,
+                occurrence.occurrence_key,
+                event.title,
+                event.visibility,
+                event.time_zone,
+                occurrence.starts_at AS "occurrence_starts_at?",
+                occurrence.ends_at AS "occurrence_ends_at?",
+                occurrence.start_date AS "occurrence_start_date?",
+                occurrence.end_date AS "occurrence_end_date?"
+            FROM calendar_event_occurrences occurrence
+            JOIN calendar_events event ON event.id = occurrence.event_id
+            WHERE occurrence.owner_id IN (
+                    SELECT teammate.user_id
+                    FROM team_user membership
+                    JOIN team_user teammate ON teammate.team_id = membership.team_id
+                    WHERE membership.user_id = $1
+                      AND teammate.user_id <> $1
+              )
+              AND event.event_type = 'out_of_office'
+              AND event.status <> 'cancelled'
+              AND NOT occurrence.is_cancelled
+              AND EXISTS (
+                    SELECT 1
+                    FROM calendar_event_sources source
+                    JOIN calendars calendar ON calendar.id = source.calendar_id
+                    JOIN calendar_accounts account ON account.id = source.account_id
+                    WHERE source.event_id = event.id
+                      AND calendar.is_primary
+                      AND NOT calendar.is_deleted
+                      AND account.sync_status <> 'disabled'
+              )
+              AND (
+                    occurrence.timed_span && tstzrange($2, $3, '[)')
+                    OR occurrence.day_span && daterange($4, $5, '[)')
+              )
+            ORDER BY
+                COALESCE(occurrence.starts_at, occurrence.start_date::timestamp AT TIME ZONE 'UTC'),
+                occurrence.event_id,
+                occurrence.occurrence_key
+            LIMIT $6
+            "#,
+            requester_id,
+            range.starts_at,
+            range.ends_at,
+            range.start_date,
+            range.end_date,
+            i64::from(limit),
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        rows.into_iter()
+            .map(|row| {
+                Ok(TeamOutOfOffice {
+                    owner_id: row.owner_id,
+                    event_id: row.event_id,
+                    ical_uid: row.ical_uid,
+                    occurrence_key: row.occurrence_key,
+                    title: Some(row.title),
+                    visibility: event_visibility(&row.visibility),
+                    time: row_time(
+                        row.occurrence_starts_at,
+                        row.occurrence_ends_at,
+                        row.occurrence_start_date,
+                        row.occurrence_end_date,
+                        row.time_zone,
+                    )?,
+                })
             })
             .collect()
     }

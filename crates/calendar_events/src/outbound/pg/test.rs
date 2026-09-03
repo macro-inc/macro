@@ -4,7 +4,7 @@ use crate::domain::models::{
     REMINDER_METHOD_EMAIL, REMINDER_METHOD_POPUP,
 };
 use crate::domain::ports::GoogleCalendarSyncRepository;
-use crate::domain::service::GoogleCalendarBackfillFailureService;
+use crate::domain::service::{CalendarService, GoogleCalendarBackfillFailureService};
 use chrono::{Duration, SubsecRound, TimeZone};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 
@@ -3741,4 +3741,243 @@ async fn mention_preview_picks_the_requested_or_nearest_occurrence(pool: PgPool)
         .unwrap();
     let (_, key) = preview_time(&previews[0]);
     assert_eq!(key.as_deref(), Some(first_start.to_rfc3339().as_str()));
+}
+
+async fn insert_team(pool: &PgPool, owner_id: &str, member_ids: &[&str]) -> Uuid {
+    for member_id in member_ids {
+        insert_user(pool, member_id).await;
+    }
+    let team_id = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO team (id, name, owner_id) VALUES ($1, 'Team', $2)"#,
+        team_id,
+        owner_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    for member_id in member_ids {
+        sqlx::query!(
+            r#"INSERT INTO team_user (user_id, team_id, team_role) VALUES ($1, $2, 'member')"#,
+            member_id,
+            team_id,
+        )
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+    team_id
+}
+
+fn ooo_upsert(
+    owner_id: &str,
+    link_id: Uuid,
+    provider: (Uuid, Uuid),
+    uid: &str,
+    title: &str,
+) -> CalendarEventUpsert {
+    let mut upsert = timed_upsert(owner_id, link_id, provider, uid, title, 1);
+    upsert.event.event_type = EventType::OutOfOffice;
+    upsert.event.attendees.clear();
+    upsert.event.recurrence_lines.clear();
+    upsert
+}
+
+fn july_2026_range() -> OccurrenceRange {
+    let starts_at = Utc.with_ymd_and_hms(2026, 7, 24, 0, 0, 0).unwrap();
+    let ends_at = Utc.with_ymd_and_hms(2026, 7, 27, 0, 0, 0).unwrap();
+    OccurrenceRange {
+        starts_at,
+        ends_at,
+        start_date: starts_at.date_naive(),
+        end_date: ends_at.date_naive(),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_returns_teammates_status_only(pool: PgPool) {
+    let requester = "macro|gab@example.com";
+    let teammate = "macro|teammate@example.com";
+    let outsider = "macro|outsider@example.com";
+    insert_team(&pool, requester, &[requester, teammate]).await;
+    insert_team(&pool, outsider, &[outsider]).await;
+    let requester_link = insert_link(&pool, requester).await;
+    let teammate_link = insert_link(&pool, teammate).await;
+    let outsider_link = insert_link(&pool, outsider).await;
+    let repo = PgCalendarRepository::new(pool);
+    let requester_provider = provider_ids(&repo, requester_link).await;
+    let teammate_provider = provider_ids(&repo, teammate_link).await;
+    let outsider_provider = provider_ids(&repo, outsider_link).await;
+    repo.upsert_event_fixture(ooo_upsert(
+        requester,
+        requester_link,
+        requester_provider,
+        "own-ooo@example.com",
+        "My own OOO",
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        teammate,
+        teammate_link,
+        teammate_provider,
+        "teammate-ooo@example.com",
+        "Vacation",
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(timed_upsert(
+        teammate,
+        teammate_link,
+        teammate_provider,
+        "teammate-meeting@example.com",
+        "Regular meeting",
+        1,
+    ))
+    .await
+    .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        outsider,
+        outsider_link,
+        outsider_provider,
+        "outsider-ooo@example.com",
+        "Elsewhere",
+    ))
+    .await
+    .unwrap();
+
+    let rows = repo
+        .list_team_out_of_office(requester, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|row| row.owner_id == teammate));
+    assert!(
+        rows.iter()
+            .all(|row| row.title.as_deref() == Some("Vacation"))
+    );
+    let starts: Vec<_> = rows
+        .iter()
+        .map(|row| match row.time {
+            EventTime::Timed { starts_at, .. } => starts_at,
+            EventTime::AllDay { .. } => panic!("out-of-office fixtures are timed"),
+        })
+        .collect();
+    assert!(starts.windows(2).all(|pair| pair[0] <= pair[1]));
+
+    let empty = repo
+        .list_team_out_of_office(outsider, july_2026_range(), 100)
+        .await
+        .unwrap();
+    assert!(empty.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_requires_an_active_primary_calendar_source(pool: PgPool) {
+    let requester = "macro|viewer@example.com";
+    let subscribed = "macro|subscribed@example.com";
+    let disabled = "macro|disabled@example.com";
+    insert_team(&pool, requester, &[requester, subscribed, disabled]).await;
+    let subscribed_link = insert_link(&pool, subscribed).await;
+    let disabled_link = insert_link(&pool, disabled).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+
+    // An out-of-office event on a calendar the teammate merely subscribes to
+    // is someone else's status and must not surface as theirs.
+    let subscribed_account = repo.upsert_google_account(subscribed_link).await.unwrap();
+    let subscribed_calendar = repo
+        .upsert_calendar_fixture(
+            subscribed_account,
+            ProviderCalendar {
+                provider_calendar_id: "someone-else".to_string(),
+                name: "Someone else".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("reader".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(ooo_upsert(
+        subscribed,
+        subscribed_link,
+        (subscribed_account, subscribed_calendar),
+        "subscribed-ooo@example.com",
+        "Not their own",
+    ))
+    .await
+    .unwrap();
+
+    let disabled_provider = provider_ids(&repo, disabled_link).await;
+    repo.upsert_event_fixture(ooo_upsert(
+        disabled,
+        disabled_link,
+        disabled_provider,
+        "disabled-ooo@example.com",
+        "Stale",
+    ))
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"UPDATE calendar_accounts SET sync_status = 'disabled' WHERE email_link_id = $1"#,
+        disabled_link,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    let rows = repo
+        .list_team_out_of_office(requester, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert!(rows.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_out_of_office_masks_private_titles_and_collapses_duplicate_inboxes(pool: PgPool) {
+    let requester = "macro|asker@example.com";
+    let teammate = "macro|double@example.com";
+    insert_team(&pool, requester, &[requester, teammate]).await;
+    let first_link = insert_link(&pool, teammate).await;
+    let second_link = insert_link(&pool, teammate).await;
+    let repo = PgCalendarRepository::new(pool);
+    let first_provider = provider_ids(&repo, first_link).await;
+    let second_provider = provider_ids(&repo, second_link).await;
+    let mut private_ooo = ooo_upsert(
+        teammate,
+        first_link,
+        first_provider,
+        "shared-ooo@example.com",
+        "Surgery",
+    );
+    private_ooo.event.visibility = EventVisibility::Private;
+    repo.upsert_event_fixture(private_ooo).await.unwrap();
+    let mut duplicate = ooo_upsert(
+        teammate,
+        second_link,
+        second_provider,
+        "shared-ooo@example.com",
+        "Surgery",
+    );
+    duplicate.event.visibility = EventVisibility::Private;
+    repo.upsert_event_fixture(duplicate).await.unwrap();
+
+    let service = CalendarService::new(repo);
+    let rows = service
+        .list_team_out_of_office(requester, july_2026_range(), 100)
+        .await
+        .unwrap();
+
+    assert_eq!(rows.len(), 2);
+    assert!(rows.iter().all(|row| row.title.is_none()));
+    let mut keys: Vec<_> = rows.iter().map(|row| row.occurrence_key.as_str()).collect();
+    keys.sort_unstable();
+    keys.dedup();
+    assert_eq!(keys.len(), 2);
 }

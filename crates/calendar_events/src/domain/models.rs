@@ -649,6 +649,27 @@ impl CalendarOccurrenceCursor {
     }
 }
 
+/// One teammate's out-of-office occurrence, read from the projection their
+/// own connected primary calendar synced.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TeamOutOfOffice {
+    /// Macro user who is out of office.
+    pub owner_id: String,
+    /// The teammate's calendar event entity id.
+    pub event_id: Uuid,
+    /// RFC 5545 UID, used to collapse the same event synced through more
+    /// than one of the teammate's connected inboxes.
+    pub ical_uid: String,
+    /// Stable key of this occurrence within the event.
+    pub occurrence_key: String,
+    /// Event title. `None` once visibility policy withholds it.
+    pub title: Option<String>,
+    /// Stored event visibility backing the title policy.
+    pub visibility: EventVisibility,
+    /// Occurrence time span.
+    pub time: EventTime,
+}
+
 /// One mentioned event to resolve for a requester's mention preview.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CalendarMentionRequestItem {
