@@ -41,6 +41,10 @@ export function parsePhosphorSpecifier(
     const file = bare.slice('@phosphor/'.length);
     return file.endsWith('.svg') ? { weight: 'regular', file } : null;
   }
+  if (bare.startsWith('@phosphor-fill/')) {
+    const file = bare.slice('@phosphor-fill/'.length);
+    return file.endsWith('.svg') ? { weight: 'fill', file } : null;
+  }
   const match = PHOSPHOR_SPEC_RE.exec(bare);
   if (!match) return null;
   const weight = (match[1] ?? 'regular') as PhosphorWeight;
@@ -447,6 +451,7 @@ export function rewritePhosphorImports(
 ): string | null {
   if (
     !code.includes('@phosphor/') &&
+    !code.includes('@phosphor-fill/') &&
     !code.includes('@phosphor-icons/core/')
   ) {
     return null;
@@ -619,8 +624,10 @@ function phosphorIconsPlugin(root: string): Plugin {
     apply: 'serve',
     enforce: 'pre',
     resolveId(id) {
-      if (!id.startsWith(PHOSPHOR_VIRTUAL_PREFIX)) return null;
-      return `\0${id}`;
+      if (id.startsWith(PHOSPHOR_VIRTUAL_PREFIX)) return `\0${id}`;
+      const icon = resolveIcon(id);
+      if (!icon) return null;
+      return `\0${PHOSPHOR_VIRTUAL_PREFIX}${icon.key}`;
     },
     load(id) {
       if (!id.startsWith(PHOSPHOR_RESOLVED_PREFIX)) return null;

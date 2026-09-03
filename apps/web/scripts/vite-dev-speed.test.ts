@@ -16,6 +16,13 @@ describe('parsePhosphorSpecifier', () => {
     });
   });
 
+  it('parses the @phosphor-fill alias as fill', () => {
+    expect(parsePhosphorSpecifier('@phosphor-fill/bell-fill.svg')).toEqual({
+      weight: 'fill',
+      file: 'bell-fill.svg',
+    });
+  });
+
   it('parses package paths and query suffixes', () => {
     expect(
       parsePhosphorSpecifier(
@@ -139,6 +146,7 @@ describe('rewritePhosphorImports', () => {
   it('collapses default and re-exported icons onto the virtual module', () => {
     const rewritten = rewritePhosphorImports(
       `import Plus from '@phosphor/plus.svg';
+import BellFill from '@phosphor-fill/bell-fill.svg';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 export { default as Notepad } from '@phosphor/notepad.svg';
 `,
@@ -154,6 +162,9 @@ export { default as Notepad } from '@phosphor/notepad.svg';
     );
     expect(rewritten).toContain(
       "import Plus from 'virtual:macro-phosphor/regular_plus'"
+    );
+    expect(rewritten).toContain(
+      "import BellFill from 'virtual:macro-phosphor/fill_bell_fill'"
     );
     expect(rewritten).toContain(
       "import Spinner from 'virtual:macro-phosphor/bold_spinner_gap_bold'"
