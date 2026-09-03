@@ -10,6 +10,12 @@ import {
   moreModelFamilies,
 } from './modelCatalog';
 
+/**
+ * Scrolling lists (search hits, More models) cap at roughly eight `h-8` rows
+ * plus a label, so the popover never grows with the size of the catalog.
+ */
+const LIST_HEIGHT_CLASS = 'max-h-72 overflow-y-auto overscroll-contain';
+
 type ModelCatalogPickerProps = {
   value: string | null;
   options: CatalogModelOption[];
@@ -26,22 +32,20 @@ type ModelCatalogPickerProps = {
 function ModelRow(props: {
   option: CatalogModelOption;
   selected: boolean;
+  /** Trailing muted text, e.g. the family a search hit belongs to. */
+  hint?: string;
   onSelect: () => void;
 }) {
   return (
     <Dropdown.Item
-      class={cn('gap-2', props.selected && 'bg-ink/5 text-ink font-medium')}
+      class={cn('h-8 gap-2', props.selected && 'bg-ink/5 text-ink font-medium')}
       title={props.option.description ?? undefined}
       onSelect={props.onSelect}
     >
-      <div class="min-w-0 flex-1">
-        <div class="truncate text-sm">{props.option.label}</div>
-        <Show when={props.option.description}>
-          <div class="truncate text-xs text-ink-extra-muted">
-            {props.option.description}
-          </div>
-        </Show>
-      </div>
+      <span class="min-w-0 flex-1 truncate text-sm">{props.option.label}</span>
+      <Show when={props.hint}>
+        <span class="shrink-0 text-xs text-ink-extra-muted">{props.hint}</span>
+      </Show>
       <Show when={props.selected}>
         <CheckIcon class="size-3.5 shrink-0 text-accent" />
       </Show>
@@ -94,7 +98,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
       </Dropdown.Trigger>
       <Dropdown.Content
         class={cn(
-          'w-80 max-w-[min(24rem,calc(100vw-1rem))]',
+          'w-72 max-w-[min(24rem,calc(100vw-1rem))]',
           props.contentClass
         )}
         onOpenAutoFocus={(event) => {
@@ -151,8 +155,8 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
                         <CaretRight class="size-3" />
                       </span>
                     </Dropdown.SubTrigger>
-                    <Dropdown.SubContent class="w-80 max-w-[min(24rem,calc(100vw-1rem))]">
-                      <Dropdown.Group class="max-h-80 overflow-y-auto overscroll-contain">
+                    <Dropdown.SubContent class="w-72 max-w-[min(24rem,calc(100vw-1rem))]">
+                      <Dropdown.Group class={LIST_HEIGHT_CLASS}>
                         <For each={extraFamilies()}>
                           {(family) => (
                             <>
@@ -179,7 +183,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
             </>
           }
         >
-          <Dropdown.Group class="max-h-80 overflow-y-auto overscroll-contain">
+          <Dropdown.Group class={LIST_HEIGHT_CLASS}>
             <Dropdown.GroupLabel>
               {filtered().length === 1
                 ? '1 matching model'
@@ -188,11 +192,8 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
             <For each={filtered()}>
               {(option) => (
                 <ModelRow
-                  option={{
-                    ...option,
-                    description:
-                      option.description ?? familyForModel(option.label),
-                  }}
+                  option={option}
+                  hint={familyForModel(option.label)}
                   selected={option.id === props.value}
                   onSelect={() => props.onSelect(option.id)}
                 />

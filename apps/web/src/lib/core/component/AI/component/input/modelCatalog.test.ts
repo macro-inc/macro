@@ -4,6 +4,7 @@ import {
   type CatalogModelOption,
   familyForModel,
   isLargeModelCatalog,
+  MAX_RECOMMENDED_MODELS,
   moreModelFamilies,
 } from './modelCatalog';
 
@@ -66,6 +67,19 @@ describe('modelCatalog', () => {
     for (const recommended of catalog.recommended) {
       expect(extraIds).not.toContain(recommended.id);
     }
+  });
+
+  it('caps the recommended shortlist and dedupes repeated display names', () => {
+    const catalog = buildModelCatalog(
+      [{ id: 'auto-alias', label: 'Auto' }, ...OPTIONS],
+      'auto'
+    );
+
+    expect(catalog.recommended).toHaveLength(MAX_RECOMMENDED_MODELS);
+    expect(
+      catalog.recommended.filter((option) => option.label === 'Auto')
+    ).toHaveLength(1);
+    expect(catalog.recommended[0]?.id).toBe('auto');
   });
 
   it('hides leftover rows that reuse a recommended display name', () => {

@@ -48,6 +48,9 @@ const RECOMMENDED_PREFIXES = [
   'Kimi K3',
 ] as const;
 
+/** First-screen shortlist size; the rest goes behind More models. */
+export const MAX_RECOMMENDED_MODELS = 5;
+
 /** Large third-party catalogs need structure rather than one long flat list. */
 export function isLargeModelCatalog(options: readonly CatalogModelOption[]) {
   return options.length > 10;
@@ -66,11 +69,19 @@ export function buildModelCatalog(
 ): ModelCatalog {
   const recommended: CatalogModelOption[] = [];
   const recommendedIds = new Set<string>();
+  const recommendedLabels = new Set<string>();
 
   const pushRecommended = (option: CatalogModelOption | undefined) => {
-    if (!option || recommendedIds.has(option.id)) return;
+    if (
+      !option ||
+      recommended.length >= MAX_RECOMMENDED_MODELS ||
+      recommendedIds.has(option.id) ||
+      recommendedLabels.has(option.label)
+    )
+      return;
     recommended.push(option);
     recommendedIds.add(option.id);
+    recommendedLabels.add(option.label);
   };
 
   pushRecommended(options.find((option) => option.id === selectedId));
