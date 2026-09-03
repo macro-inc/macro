@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 258
 expression: messages
 input_file: crates/agent_fold/fixtures/real/subagent_opencode.jsonl
 ---
@@ -41,6 +40,7 @@ input_file: crates/agent_fold/fixtures/real/subagent_opencode.jsonl
                     },
                     status: Completed,
                     detail: Subagent {
+                        title: "Add numbers with Python",
                         agent_type: Some(
                             "general",
                         ),

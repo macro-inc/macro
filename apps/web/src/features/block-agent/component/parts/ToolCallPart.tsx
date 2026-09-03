@@ -17,8 +17,8 @@ import { MacroToolCall } from './MacroToolCall';
 import { OutputToolCall } from './OutputToolCall';
 import { PathsToolCall } from './PathsToolCall';
 import { SearchToolCall } from './SearchToolCall';
-import { type ToolCallCommon, type ToolCallContext, toolLabel } from './shared';
 import { SubagentToolCall } from './SubagentToolCall';
+import { type ToolCallCommon, type ToolCallContext, toolLabel } from './shared';
 import { TerminalToolCall } from './TerminalToolCall';
 import { UserToolCall } from './UserToolCall';
 

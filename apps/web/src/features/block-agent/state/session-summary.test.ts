@@ -106,6 +106,7 @@ describe('subagent descent', () => {
       status: 'completed',
       detail: {
         kind: 'subagent',
+        title: 'Fix b',
         agentType: 'general-purpose',
         description: 'Fix b',
         prompt: 'Fix b.rs',

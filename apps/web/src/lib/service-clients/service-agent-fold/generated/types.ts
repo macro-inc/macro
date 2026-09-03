@@ -568,6 +568,14 @@ export type ToolDetail =
   | {
       kind: 'subagent';
       /**
+       *  What to call the delegation: the harness's description when it
+       *  gave one, else the first line of the brief, else the tool's own
+       *  name. Always present, so a reader never has to pick a fallback
+       *  itself; `description` and `prompt` stay exactly what the harness
+       *  said.
+       */
+      title: string;
+      /**
        *  Which kind of agent was delegated to (`general-purpose`,
        *  `explore`), when the harness names one.
        */

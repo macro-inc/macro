@@ -111,7 +111,7 @@ function toolActivity(
           : busy
             ? 'Delegating work'
             : 'Subagent finished',
-        detail: detail.description ?? detail.agentType ?? undefined,
+        detail: detail.title,
         busy,
       };
     })

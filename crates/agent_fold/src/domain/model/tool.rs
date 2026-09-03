@@ -265,6 +265,12 @@ pub enum ToolDetail {
     /// only Claude Code does today - and is otherwise summarized in
     /// `result`.
     Subagent {
+        /// What to call the delegation: the harness's description when it
+        /// gave one, else the first line of the brief, else the tool's own
+        /// name. Always present, so a reader never has to pick a fallback
+        /// itself; `description` and `prompt` stay exactly what the harness
+        /// said.
+        title: String,
         /// Which kind of agent was delegated to (`general-purpose`,
         /// `explore`), when the harness names one.
         #[serde(rename = "agentType")]

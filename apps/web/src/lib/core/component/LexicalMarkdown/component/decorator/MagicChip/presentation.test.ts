@@ -35,6 +35,7 @@ describe('deriveMagicChipPresentation', () => {
               status: 'running',
               detail: {
                 kind: 'subagent',
+                title: 'Add 5+5',
                 agentType: 'general-purpose',
                 description: 'Add 5+5',
                 prompt: 'Run python',

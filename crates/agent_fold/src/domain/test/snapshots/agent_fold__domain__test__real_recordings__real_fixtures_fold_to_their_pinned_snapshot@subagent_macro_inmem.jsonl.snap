@@ -47,6 +47,7 @@ input_file: crates/agent_fold/fixtures/real/subagent_macro_inmem.jsonl
                     },
                     status: Completed,
                     detail: Subagent {
+                        title: "Compute 5 + 5 in Python by executing the code, and report the exact numeric result that Python outputs.",
                         agent_type: None,
                         description: None,
                         prompt: Some(

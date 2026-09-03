@@ -50,6 +50,7 @@ input_file: crates/agent_fold/fixtures/real/subagent_cursor.jsonl
                     },
                     status: Completed,
                     detail: Subagent {
+                        title: "Compute integral in Python",
                         agent_type: None,
                         description: Some(
                             "Compute integral in Python",

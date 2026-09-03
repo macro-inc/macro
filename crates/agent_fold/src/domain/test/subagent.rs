@@ -70,6 +70,7 @@ fn claude_code_nests_the_subagents_calls_and_reports_its_stats() {
         status,
         detail:
             ToolDetail::Subagent {
+                title,
                 agent_type,
                 description,
                 prompt,
@@ -83,6 +84,7 @@ fn claude_code_nests_the_subagents_calls_and_reports_its_stats() {
         unreachable!()
     };
     assert_eq!(*name, ToolName::native("Agent"));
+    assert_eq!(title, "Add 5+5 with Python", "the description is the title");
     assert_eq!(*status, ToolStatus::Completed);
     assert_eq!(agent_type.as_deref(), Some("general-purpose"));
     assert_eq!(description.as_deref(), Some("Add 5+5 with Python"));
@@ -191,6 +193,7 @@ fn the_inmem_agents_subagent_tool_folds_to_a_subagent_not_a_macro_tool() {
         status,
         detail:
             ToolDetail::Subagent {
+                title,
                 agent_type,
                 description,
                 prompt,
@@ -208,6 +211,11 @@ fn the_inmem_agents_subagent_tool_folds_to_a_subagent_not_a_macro_tool() {
     assert_eq!(*agent_type, None);
     assert_eq!(*description, None);
     assert!(prompt.as_deref().unwrap().starts_with("Compute 5 + 5"));
+    assert_eq!(
+        title,
+        "Compute 5 + 5 in Python by executing the code, and report the exact numeric result that Python outputs.",
+        "with no description, the brief's first line is the title"
+    );
     assert!(children.is_empty(), "the child is not streamed");
     let result = result.as_deref().expect("reported");
     assert!(result.text.as_deref().unwrap().contains("**10**"));

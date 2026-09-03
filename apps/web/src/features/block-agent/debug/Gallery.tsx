@@ -166,6 +166,7 @@ const FIXTURE_MESSAGE: FoldedMessage = {
       status: 'completed',
       detail: {
         kind: 'subagent',
+        title: 'Check the arithmetic',
         agentType: 'general-purpose',
         description: 'Check the arithmetic',
         prompt: 'Run `python3 -c "print(5+5)"` and report the output.',

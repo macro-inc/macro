@@ -362,6 +362,7 @@ fn render_tool(label: &str, status: ToolStatus, detail: &ToolDetail) -> String {
             let _ = writeln!(out, "{}", indent(&format!("outcome: {outcome:?}")));
         }
         ToolDetail::Subagent {
+            title,
             agent_type,
             description,
             prompt,
@@ -369,7 +370,7 @@ fn render_tool(label: &str, status: ToolStatus, detail: &ToolDetail) -> String {
             children,
             result,
         } => {
-            let mut head = Vec::new();
+            let mut head = vec![format!("title: {title}")];
             if let Some(agent_type) = agent_type {
                 head.push(format!("type: {agent_type}"));
             }

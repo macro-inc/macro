@@ -149,14 +149,28 @@ impl SubagentFrame<'_> {
     }
 }
 
+/// What to call a delegation: the harness's description, else the first
+/// non-empty line of the brief, else the tool's own name. Decided here, once,
+/// so every reader shows the same thing and none has to fall back itself.
+fn subagent_title(description: Option<&str>, prompt: Option<&str>, name: &ToolName) -> String {
+    description
+        .map(str::trim)
+        .filter(|description| !description.is_empty())
+        .or_else(|| prompt?.lines().map(str::trim).find(|line| !line.is_empty()))
+        .unwrap_or_else(|| name.display())
+        .to_owned()
+}
+
 /// The detail for a subagent call, from its opening frame.
 pub(super) fn subagent_detail(
     reader: &dyn HarnessReader,
     delegation: Delegation,
+    name: &ToolName,
     frame: &SubagentFrame<'_>,
 ) -> ToolDetail {
     let input = reader.subagent_input(frame.raw_input, frame.title.unwrap_or_default());
     ToolDetail::Subagent {
+        title: subagent_title(input.description.as_deref(), input.prompt.as_deref(), name),
         agent_type: input.agent_type,
         description: input.description,
         prompt: input.prompt,
@@ -172,10 +186,12 @@ pub(super) fn subagent_detail(
 pub(super) fn patch_subagent_detail(
     reader: &dyn HarnessReader,
     delegation: Delegation,
+    name: &ToolName,
     detail: &mut ToolDetail,
     frame: &SubagentFrame<'_>,
 ) {
     let ToolDetail::Subagent {
+        title,
         agent_type,
         description,
         prompt,
@@ -204,6 +220,7 @@ pub(super) fn patch_subagent_detail(
         if let Some(found) = input.background {
             *background = found;
         }
+        *title = subagent_title(description.as_deref(), prompt.as_deref(), name);
     }
     if let Some(reported) = frame.result(reader, delegation) {
         match result {

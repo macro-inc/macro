@@ -40,6 +40,7 @@ impl FoldState {
             subagent_detail(
                 reader,
                 delegation,
+                &name,
                 &SubagentFrame {
                     meta: call.meta.as_ref(),
                     title: Some(&call.title),
@@ -173,6 +174,7 @@ impl FoldState {
                 patch_subagent_detail(
                     reader,
                     delegation,
+                    name,
                     detail,
                     &SubagentFrame {
                         meta: update.meta.as_ref(),
