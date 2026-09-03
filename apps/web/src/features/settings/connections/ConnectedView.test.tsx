@@ -12,6 +12,7 @@ import {
   setConnectionsRest,
 } from '@core/signal/connectionsRest';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ConnectedView } from './ConnectedView';
 import { toConnectionsModel } from './model';
@@ -45,6 +46,39 @@ describe('ConnectedView', () => {
     expect(screen.getByText('Start with Google')).toBeTruthy();
     expect(screen.getByText('Browse all Connections')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Add a connection' })).toBeNull();
+  });
+
+  it('lists leftover grants in the same card as providers', () => {
+    const leftoverNative = toConnectionsModel({
+      userId: 'macro|self',
+      emailEnabled: true,
+      calendarEnabled: true,
+      emailLinks: [],
+      github: { status: 'unlinked', username: undefined },
+      pipedream: [],
+      nativeMcp: [
+        {
+          server_name: 'Unknown',
+          url: 'https://example.com/mcp',
+          authenticated: true,
+          enabled: true,
+        },
+      ],
+      cursorRegistered: true,
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(() => (
+      <QueryClientProvider client={client}>
+        <ConnectedView model={leftoverNative} />
+      </QueryClientProvider>
+    ));
+    expect(screen.getByText('Cursor')).toBeTruthy();
+    expect(screen.getByText('Unknown')).toBeTruthy();
+    expect(screen.getByText('example.com')).toBeTruthy();
+    expect(screen.queryByText('Other Connections')).toBeNull();
+    expect(screen.queryByText(/other connection/)).toBeNull();
   });
 
   it('opens Google when the empty starter card is clicked', () => {

@@ -26,9 +26,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
       if (row.status !== 'not-connected') slugs.add(row.provider);
     }
     for (const leftover of props.model.leftovers) {
-      if (leftover.mechanism === 'pipedream') {
-        slugs.add(leftover.id.slice('pipedream:'.length));
-      }
+      if (leftover.kind === 'pipedream') slugs.add(leftover.appSlug);
     }
     return slugs;
   });

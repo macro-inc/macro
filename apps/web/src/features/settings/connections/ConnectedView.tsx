@@ -5,6 +5,7 @@ import { For, Show } from 'solid-js';
 import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';
 import type { ConnectionsModel } from './model';
 import { isConnectionsEmpty } from './model';
+import { LeftoverRow } from './leftover-row';
 import { EMPTY_STARTERS, providerIcon } from './provider-meta';
 import { openConnectionsProvider, showConnectionsDiscover } from './view-state';
 
@@ -35,6 +36,9 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
               </button>
             )}
           </For>
+          <For each={props.model.leftovers}>
+            {(leftover) => <LeftoverRow leftover={leftover} />}
+          </For>
         </SettingsCard>
       </SettingsSection>
 
@@ -48,28 +52,6 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
         Add a connection
         <CaretRightIcon class="size-4 text-ink-extra-muted" />
       </Button>
-
-      <Show when={props.model.leftovers.length > 0}>
-        <SettingsSection title="Other Connections">
-          <SettingsCard>
-            <button
-              type="button"
-              class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
-              onClick={() => openConnectionsProvider('other')}
-            >
-              <IntegrationRow
-                icon={<span class="text-xs font-medium text-ink-muted">?</span>}
-                title={`${props.model.leftovers.length} other connection${
-                  props.model.leftovers.length === 1 ? '' : 's'
-                }`}
-                description="These do not sit under a provider yet."
-              >
-                <CaretRightIcon class="size-4 text-ink-extra-muted" />
-              </IntegrationRow>
-            </button>
-          </SettingsCard>
-        </SettingsSection>
-      </Show>
     </Show>
   );
 }

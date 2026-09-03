@@ -36,13 +36,24 @@ export type Capability = {
   sourceUrl?: string;
 };
 
-export type Leftover = {
-  id: string;
-  title: string;
-  note: string;
-  facts: string;
-  mechanism: CapabilityMechanism;
-};
+export type Leftover =
+  | {
+      kind: 'native-mcp';
+      id: string;
+      title: string;
+      subtitle: string;
+      url: string;
+      enabled: boolean;
+      authenticated: boolean;
+    }
+  | {
+      kind: 'pipedream';
+      id: string;
+      title: string;
+      subtitle: string;
+      appSlug: string;
+      enabled: boolean;
+    };
 
 export type ProviderSummary = {
   id: Exclude<ProviderId, 'other'>;
@@ -206,13 +217,23 @@ function githubCapabilities(input: ConnectionsInput): Capability[] {
   ];
 }
 
-function leftoverNative(server: ServerResponse, note: string): Leftover {
+function hostFromUrl(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+function leftoverNative(server: ServerResponse): Leftover {
   return {
+    kind: 'native-mcp',
     id: `mcp:${server.url}`,
     title: server.server_name,
-    note,
-    facts: `Name: ${server.server_name} · URL: ${server.url} · Mechanism: native MCP`,
-    mechanism: 'native-mcp',
+    subtitle: hostFromUrl(server.url),
+    url: server.url,
+    enabled: server.enabled,
+    authenticated: server.authenticated,
   };
 }
 
@@ -245,14 +266,7 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
       });
       if (native) {
         usedNative.add(native.url);
-        leftovers.push(
-          leftoverNative(
-            native,
-            provider === 'github'
-              ? 'A GitHub AI connection that did not line up with the curated one.'
-              : 'A native MCP server that did not line up with the Pipedream connection.'
-          )
-        );
+        leftovers.push(leftoverNative(native));
       }
       continue;
     }
@@ -277,22 +291,18 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
 
   for (const server of input.nativeMcp) {
     if (usedNative.has(server.url)) continue;
-    leftovers.push(
-      leftoverNative(
-        server,
-        'A native MCP grant that is not on a provider page yet.'
-      )
-    );
+    leftovers.push(leftoverNative(server));
   }
 
   for (const row of input.pipedream) {
     if (row.app_slug in CURATED_AI) continue;
     leftovers.push({
+      kind: 'pipedream',
       id: `pipedream:${row.app_slug}`,
       title: row.server_name,
-      note: 'A Pipedream connection without a provider page yet.',
-      facts: `Name: ${row.server_name} · Slug: ${row.app_slug} · Mechanism: Pipedream`,
-      mechanism: 'pipedream',
+      subtitle: row.app_slug,
+      appSlug: row.app_slug,
+      enabled: row.enabled,
     });
   }
 

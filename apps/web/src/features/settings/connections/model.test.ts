@@ -119,7 +119,17 @@ describe('toConnectionsModel', () => {
     expect(model.capabilities.find((row) => row.id === 'linear-ai')).toBe(
       undefined
     );
-    expect(model.leftovers.map((row) => row.title)).toEqual(['Linear']);
+    expect(model.leftovers).toEqual([
+      {
+        kind: 'native-mcp',
+        id: 'mcp:https://example.com/mcp',
+        title: 'Linear',
+        subtitle: 'example.com',
+        url: 'https://example.com/mcp',
+        enabled: true,
+        authenticated: true,
+      },
+    ]);
   });
 
   it('keeps a second curated native URL as a leftover', () => {

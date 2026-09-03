@@ -7,7 +7,6 @@ import { CursorProvider } from './CursorProvider';
 import { DiscoverView } from './DiscoverView';
 import { GitHubProvider } from './GitHubProvider';
 import { GoogleProvider } from './GoogleProvider';
-import { OtherView } from './OtherView';
 import { PipedreamAiProvider } from './PipedreamAiProvider';
 import { useConnectionsModel } from './use-connections-model';
 import {
@@ -94,9 +93,6 @@ export function ConnectionsPage() {
       </Match>
       <Match when={provider() === 'cursor'}>
         <CursorProvider />
-      </Match>
-      <Match when={provider() === 'other'}>
-        <OtherView leftovers={model().leftovers} />
       </Match>
     </Switch>
     </Show>

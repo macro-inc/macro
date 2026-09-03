@@ -10,7 +10,6 @@ export const CONNECTIONS_PROVIDER_SLUGS = [
   'notion',
   'slack',
   'cursor',
-  'other',
 ] as const;
 
 export type ConnectionsProviderSlug =
