@@ -7,11 +7,12 @@ use axum::{
 use tower::ServiceExt;
 
 fn docs_router() -> Router {
-    mount_at_root_and_prefix(
+    Router::new()
+        .merge(mount_at_root_and_prefix(
         Router::new()
             .route("/health", axum::routing::get(health))
-            .merge(mount_docs_at_root_and_prefix()),
-    )
+        ))
+        .merge(mount_docs_at_root_and_prefix())
 }
 
 #[tokio::test]
