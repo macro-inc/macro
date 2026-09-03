@@ -161,6 +161,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
           if (!open) setRemoveTarget(null);
         }}
         position="center"
+        visibleScrim
         class="w-120"
       >
         <Panel depth={2} class="rounded-xl">
