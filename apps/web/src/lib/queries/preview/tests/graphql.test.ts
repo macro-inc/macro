@@ -2,10 +2,21 @@ import type { CacheHost, ReadRecordsByKeysArgs } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import type { ItemPreviewFieldsFragment } from '@service-storage/graphql/generated/graphql';
 import { describe, expect, it, vi } from 'vitest';
+
+const getGraphqlSoupCacheHostMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@service-storage/graphql-soup', () => ({
+  getGraphqlSoupCacheHost: getGraphqlSoupCacheHostMock,
+  getGraphqlSoupClient: vi.fn(),
+}));
+
 import {
   graphqlRecordToPreview,
   isGraphqlPreviewItem,
   readCachedGraphqlItemPreviewFromHost,
+  setGraphqlPreviewFileType,
+  setGraphqlPreviewName,
+  setGraphqlPreviewOnCreate,
 } from '../graphql';
 
 function cacheHost(
@@ -28,9 +39,7 @@ describe('GraphQL item previews', () => {
       id: 'doc-1',
       displayName: 'Roadmap',
       documentName: 'Roadmap',
-      ownerId: 'owner-1',
       fileType: 'md',
-      updatedAt: '2026-01-01T00:00:00.000Z',
       subType: {
         __typename: 'GraphqlTaskSubType',
         isCompleted: true,
@@ -45,8 +54,6 @@ describe('GraphQL item previews', () => {
       rawName: 'Roadmap',
       name: 'Roadmap',
       fileType: 'md',
-      owner: 'owner-1',
-      updatedAt: '2026-01-01T00:00:00.000Z',
       subType: { type: 'task', is_completed: true },
     });
   });
@@ -88,8 +95,6 @@ describe('GraphQL item previews', () => {
           id: 'project-1',
           displayName: 'Launch',
           projectName: 'Launch',
-          ownerId: 'owner-1',
-          updatedAt: '2026-01-01T00:00:00.000Z',
         },
       },
     ]);
@@ -114,6 +119,82 @@ describe('GraphQL item previews', () => {
     expect(readRecordsByKeys.mock.calls[0]?.[0].document).not.toContain(
       'properties'
     );
+  });
+
+  it('writes optimistic patches and complete creation records to normalized cache', async () => {
+    vi.useFakeTimers();
+    const writeQuery = vi.fn(async () => undefined);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      disabled: false,
+      writeQuery,
+    });
+
+    try {
+      await setGraphqlPreviewName({ id: 'doc-1', type: 'document' }, 'Renamed');
+      await setGraphqlPreviewFileType('doc-1', 'pdf');
+      await setGraphqlPreviewOnCreate({
+        itemId: 'doc-2',
+        itemType: 'document',
+        name: 'Created',
+        fileType: 'md',
+        subType: { type: 'task', is_completed: false },
+      });
+
+      expect(writeQuery).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          operationName: 'ItemPreviewNamePatch',
+          data: {
+            previewRecord: {
+              __typename: 'GraphqlSoupDocument',
+              id: 'doc-1',
+              displayName: 'Renamed',
+            },
+          },
+        })
+      );
+      expect(writeQuery).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          operationName: 'ItemPreviewFileTypePatch',
+          data: {
+            previewRecord: {
+              __typename: 'GraphqlSoupDocument',
+              id: 'doc-1',
+              fileType: 'pdf',
+            },
+          },
+        })
+      );
+      expect(writeQuery).toHaveBeenNthCalledWith(
+        3,
+        expect.objectContaining({
+          operationName: 'ItemPreview',
+          data: {
+            user: {
+              soup: {
+                items: [
+                  expect.objectContaining({
+                    __typename: 'GraphqlSoupDocument',
+                    id: 'doc-2',
+                    displayName: 'Created',
+                    documentName: 'Created',
+                    fileType: 'md',
+                    subType: {
+                      __typename: 'GraphqlTaskSubType',
+                      isCompleted: false,
+                    },
+                  }),
+                ],
+              },
+            },
+          },
+        })
+      );
+    } finally {
+      vi.runAllTimers();
+      vi.useRealTimers();
+    }
   });
 
   it('keeps unsupported and enriched preview variants off GraphQL', () => {

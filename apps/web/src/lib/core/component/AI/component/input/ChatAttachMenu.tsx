@@ -184,6 +184,10 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
   };
 
   let isSelecting = false;
+  let selectionRequest = 0;
+  onCleanup(() => {
+    selectionRequest += 1;
+  });
 
   const selectItem = async (item: HistoryItem) => {
     // TODO: add other supported attachment types, e.g. channel
@@ -194,12 +198,14 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
 
     if (isSelecting) return;
     isSelecting = true;
+    const request = ++selectionRequest;
     try {
       const attachment = await getDocumentAttachment(item.id, item.fileType);
+      if (request !== selectionRequest) return;
       if (attachment) props.onAttach(attachment, item);
       props.close();
     } finally {
-      isSelecting = false;
+      if (request === selectionRequest) isSelecting = false;
     }
   };
 

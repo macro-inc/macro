@@ -18,12 +18,38 @@ import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
+import { gql, stringifyDocument } from '@urql/core';
 import type { Accessor } from 'solid-js';
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
+import { registerActiveGraphqlPreviewQuery } from './active-queries';
 import type { ItemEntity, PreviewItem } from './types';
 
 const previewSelection = selectRecords(ItemPreviewFieldsFragmentDoc);
+
+const previewNamePatchDocument = gql`
+  query ItemPreviewNamePatch {
+    previewRecord {
+      __typename
+      id
+      displayName
+    }
+  }
+`;
+
+const previewFileTypePatchDocument = gql`
+  query ItemPreviewFileTypePatch {
+    previewRecord {
+      __typename
+      id
+      fileType
+    }
+  }
+`;
+
+const GRAPHQL_PREVIEW_CREATION_GRACE_MS = 10_000;
+const recentlyCreatedPreviews = new Map<string, number>();
+const [creationGraceRevision, setCreationGraceRevision] = createSignal(0);
 
 const GRAPHQL_TYPENAMES = {
   call: 'GraphqlSoupCall',
@@ -76,6 +102,32 @@ function normalizedRecordKey(item: ItemEntity): string | undefined {
   return `${GRAPHQL_TYPENAMES[type]}:${item.id}`;
 }
 
+function markRecentlyCreated(item: ItemEntity) {
+  const recordKey = normalizedRecordKey(item);
+  if (!recordKey) return;
+  const expiresAt = Date.now() + GRAPHQL_PREVIEW_CREATION_GRACE_MS;
+  recentlyCreatedPreviews.set(recordKey, expiresAt);
+  setCreationGraceRevision((revision) => revision + 1);
+  setTimeout(() => {
+    if (recentlyCreatedPreviews.get(recordKey) !== expiresAt) return;
+    recentlyCreatedPreviews.delete(recordKey);
+    setCreationGraceRevision((revision) => revision + 1);
+  }, GRAPHQL_PREVIEW_CREATION_GRACE_MS);
+}
+
+function hasCreationGrace(item: ItemEntity): boolean {
+  creationGraceRevision();
+  const recordKey = normalizedRecordKey(item);
+  if (!recordKey) return false;
+  return (recentlyCreatedPreviews.get(recordKey) ?? 0) > Date.now();
+}
+
+function clearCreationGrace(item: ItemEntity) {
+  const recordKey = normalizedRecordKey(item);
+  if (!recordKey || !recentlyCreatedPreviews.delete(recordKey)) return;
+  setCreationGraceRevision((revision) => revision + 1);
+}
+
 function itemPreviewInput(item: ItemEntity) {
   if (!isGraphqlPreviewItem(item)) return undefined;
   const type = normalizedItemType(item) as GraphqlPreviewType;
@@ -112,8 +164,6 @@ export function graphqlRecordToPreview(
         rawName: record.displayName ?? record.documentName,
         name: record.displayName ?? record.documentName,
         fileType: (record.fileType ?? undefined) as FileType | undefined,
-        owner: record.ownerId,
-        updatedAt: record.updatedAt,
         subType: documentSubType(record.subType),
       };
     case 'GraphqlSoupChat':
@@ -124,8 +174,6 @@ export function graphqlRecordToPreview(
         loading: false,
         rawName: record.displayName ?? record.chatName,
         name: record.displayName ?? record.chatName,
-        owner: record.ownerId,
-        updatedAt: record.updatedAt,
       };
     case 'GraphqlSoupProject':
       return {
@@ -135,8 +183,6 @@ export function graphqlRecordToPreview(
         loading: false,
         rawName: record.displayName ?? record.projectName,
         name: record.displayName ?? record.projectName,
-        owner: record.ownerId,
-        updatedAt: record.updatedAt,
       };
     case 'GraphqlSoupEmailThread': {
       const name = record.displayName ?? record.emailName ?? 'No Subject';
@@ -147,8 +193,7 @@ export function graphqlRecordToPreview(
         loading: false,
         rawName: name,
         name,
-        owner: record.senderEmail ?? record.senderName ?? record.ownerId,
-        updatedAt: record.updatedAt,
+        owner: record.senderEmail ?? record.senderName ?? undefined,
       };
     }
     case 'GraphqlSoupChannel': {
@@ -181,7 +226,6 @@ export function graphqlRecordToPreview(
         loading: false,
         rawName: name,
         name: name || 'Unknown Call',
-        updatedAt: record.startedAt,
       };
     }
     case 'GraphqlSoupCrmCompany': {
@@ -197,7 +241,6 @@ export function graphqlRecordToPreview(
         loading: false,
         rawName: name,
         name,
-        updatedAt: record.updatedAt,
       };
     }
     default:
@@ -233,19 +276,144 @@ export async function readCachedGraphqlItemPreview(
     : Promise.resolve(undefined);
 }
 
+type CreatedGraphqlPreview = {
+  itemId: string;
+  itemType: Extract<GraphqlPreviewType, 'document' | 'chat' | 'project'>;
+  name?: string;
+  fileType?: string;
+  subType?: { type: 'task' | 'snippet' | 'skill'; is_completed?: boolean };
+};
+
+function createdPreviewRecord({
+  itemId,
+  itemType,
+  name = '',
+  fileType,
+  subType,
+}: CreatedGraphqlPreview): ItemPreviewFieldsFragment {
+  const base = { id: itemId, displayName: name };
+  switch (itemType) {
+    case 'document':
+      return {
+        ...base,
+        __typename: 'GraphqlSoupDocument',
+        documentName: name,
+        fileType: fileType ?? null,
+        subType:
+          subType?.type === 'task'
+            ? {
+                __typename: 'GraphqlTaskSubType',
+                isCompleted: subType.is_completed ?? false,
+              }
+            : subType?.type === 'snippet'
+              ? { __typename: 'GraphqlSnippetSubType' }
+              : subType?.type === 'skill'
+                ? { __typename: 'GraphqlSkillSubType' }
+                : null,
+      };
+    case 'chat':
+      return {
+        ...base,
+        __typename: 'GraphqlSoupChat',
+        chatName: name,
+      };
+    case 'project':
+      return {
+        ...base,
+        __typename: 'GraphqlSoupProject',
+        projectName: name,
+      };
+  }
+}
+
+async function writeGraphqlPreviewCache(
+  args: Parameters<CacheHost['writeQuery']>[0]
+): Promise<void> {
+  const host = getGraphqlSoupCacheHost();
+  if (!host || host.disabled) return;
+  await host.writeQuery(args);
+}
+
+/** Optimistically patches a display name in the normalized GraphQL cache. */
+export async function setGraphqlPreviewName(
+  item: ItemEntity,
+  name: string
+): Promise<void> {
+  const recordKey = normalizedRecordKey(item);
+  if (!recordKey) return;
+  const type = normalizedItemType(item) as GraphqlPreviewType;
+  await writeGraphqlPreviewCache({
+    query: stringifyDocument(previewNamePatchDocument),
+    operationName: 'ItemPreviewNamePatch',
+    data: {
+      previewRecord: {
+        __typename: GRAPHQL_TYPENAMES[type],
+        id: item.id,
+        displayName: name,
+      },
+    },
+  });
+}
+
+/** Optimistically patches a document file type in the normalized GraphQL cache. */
+export async function setGraphqlPreviewFileType(
+  itemId: string,
+  fileType: string
+): Promise<void> {
+  await writeGraphqlPreviewCache({
+    query: stringifyDocument(previewFileTypePatchDocument),
+    operationName: 'ItemPreviewFileTypePatch',
+    data: {
+      previewRecord: {
+        __typename: GRAPHQL_TYPENAMES.document,
+        id: itemId,
+        fileType,
+      },
+    },
+  });
+}
+
+/** Seeds a newly created entity into the normalized GraphQL preview query. */
+export async function setGraphqlPreviewOnCreate(
+  preview: CreatedGraphqlPreview
+): Promise<void> {
+  const item = {
+    id: preview.itemId,
+    type: preview.itemType,
+  } satisfies ItemEntity;
+  const input = itemPreviewInput(item);
+  if (!input) return;
+  markRecentlyCreated(item);
+  await writeGraphqlPreviewCache({
+    query: stringifyDocument(ItemPreviewDocument),
+    operationName: 'ItemPreview',
+    variables: { input },
+    data: {
+      user: {
+        soup: { items: [createdPreviewRecord(preview)] },
+      },
+    } satisfies ItemPreviewQuery,
+  });
+}
+
 /** One-shot GraphQL preview lookup for non-reactive consumers. */
 export async function getGraphqlItemPreview(
-  item: ItemEntity
+  item: ItemEntity,
+  options?: { requireFresh?: boolean }
 ): Promise<PreviewItem | undefined> {
-  const cached = await readCachedGraphqlItemPreview(item);
-  if (cached) return cached;
+  if (!options?.requireFresh) {
+    const cached = await readCachedGraphqlItemPreview(item);
+    if (cached) return cached;
+  }
   const input = itemPreviewInput(item);
   if (!input) return undefined;
   const result = await getGraphqlSoupClient()
     .query<ItemPreviewQuery, ItemPreviewQueryVariables>(
       ItemPreviewDocument,
       { input },
-      { requestPolicy: 'cache-first' }
+      {
+        requestPolicy: options?.requireFresh ? 'network-only' : 'cache-first',
+      }
     )
     .toPromise();
   if (result.error) throw result.error;
@@ -303,10 +471,25 @@ export function createGraphqlItemPreviewQuery(
       query: ItemPreviewDocument,
       client,
       variables: { input },
-      requestPolicy: 'cache-first',
+      requestPolicy: 'cache-and-network',
       keepPreviousData: false,
       select: (data) => previewFromQuery(data, current),
     };
+  });
+
+  const unregister = registerActiveGraphqlPreviewQuery({
+    itemId: () => item().id,
+    isEnabled: () => result.isEnabled,
+    refresh: async () => {
+      await result.refetch({ requestPolicy: 'network-only' });
+    },
+  });
+  onCleanup(unregister);
+
+  createEffect(() => {
+    if (result.data !== undefined && !result.stale && !result.isFetching) {
+      clearCreationGrace(item());
+    }
   });
 
   const cachedPreview = () => {
@@ -321,7 +504,10 @@ export function createGraphqlItemPreviewQuery(
     isGraphqlPreviewItem(item()) &&
     ((result.isError &&
       (result.error?.networkError == null || cachedPreview() === undefined)) ||
-      (result.isFetched && !result.isFetching && result.data === undefined));
+      (result.isFetched &&
+        !result.isFetching &&
+        result.data === undefined &&
+        (cachedPreview() === undefined || !hasCreationGrace(item()))));
 
   return {
     data,

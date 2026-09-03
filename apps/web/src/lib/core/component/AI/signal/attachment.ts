@@ -46,7 +46,10 @@ export const useGetChatAttachmentInfo = () => {
     id: string
   ): Promise<string | undefined> => {
     try {
-      const preview = await getItemPreview({ id, type: 'document' });
+      const preview = await getItemPreview(
+        { id, type: 'document' },
+        { requireFresh: true }
+      );
       if (!isAccessiblePreviewItem(preview) || preview.type !== 'document')
         return;
       return preview.fileType;
