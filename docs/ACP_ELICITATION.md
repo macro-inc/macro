@@ -262,7 +262,8 @@ collapses each pair in `fold/elicitation.rs`; everything else is plain ACP.
 | Hermes Agent | `hermes-agent` | no (PR #30089 unmerged would add `answer` + `other_answer`) | `clarify` excluded from the ACP toolset | n/a |
 | OpenClaw bridge | `openclaw-acp` | no | `ask_user` shows as `tool_call` `title:"ask_user: …"`, blocks the Gateway run; cannot be answered over ACP | n/a (times out → `no_answer`) |
 | Goose | — | yes, form, MCP-originated | plain ACP | JSON-RPC response |
-| Gemini CLI, Kimi, Cursor cloud, in-mem (before this branch) | — | no | — | — |
+| Macro in-memory agent | `macro-inmem` | yes — form, when the client advertises it | model-callable `AskUser` asks one required free-text or single-choice question; `/ask` remains the deterministic end-to-end rig | JSON-RPC response |
+| Gemini CLI, Kimi, Cursor cloud | — | no | — | — |
 
 Consequences already built in:
 
@@ -301,8 +302,9 @@ branch:
   Claude Code fixture pinned; Claude multi-question and Codex shapes tested
   from the adapters' documented output; each reader's idiom pinned in
   `test/harness_readers.rs`.
-- `agent_inmem`: `/ask <question> | option | option` sends a real
-  `elicitation/create` and echoes the answer — the local end-to-end rig.
+- `agent_inmem`: model-callable `AskUser` sends a real `elicitation/create`
+  through a domain user-input port; `/ask <question> | option | option`
+  remains the deterministic local end-to-end rig.
 - Web: `ElicitationPart` (form with select / "Other" / text / number /
   boolean / multi-select, URL consent), `blockedOnUser` composer notice,
   MagicChip ranking, gallery demo, form-model tests.
@@ -315,9 +317,10 @@ session (Claude Code's parallel subagents).
 
 ## Product decisions
 
-1. **Client first.** v1 is Macro receiving elicitation from coding agents.
-   Sending elicitation as an Agent (`cursor_cloud_agents`, `agent_inmem`)
-   is not this project.
+1. **Client first.** The product path is Macro receiving elicitation from
+   coding agents. `agent_inmem` also sends it through `AskUser`, both as a
+   native harness feature and as the local integration path. Sending from
+   `cursor_cloud_agents` remains a later slice.
 2. **Do not auto-answer.** Permissions stay auto-approved. Elicitation
    waits for the session owner.
 3. **Advertise both modes.** `{ form: {}, url: {} }`.

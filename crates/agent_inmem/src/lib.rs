@@ -20,6 +20,7 @@
 #![deny(missing_docs)]
 
 pub mod domain;
+pub mod inbound;
 pub mod outbound;
 #[cfg(test)]
 pub(crate) mod testing;

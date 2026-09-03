@@ -16,7 +16,8 @@ use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart};
 use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
-use ai_toolset::ToolSet as AiToolSet;
+use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
+use axum::extract::FromRef;
 use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService as _;
@@ -26,6 +27,7 @@ use sqlx::PgPool;
 use tokio::sync::mpsc;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[cfg(test)]
 mod test;
@@ -47,6 +49,24 @@ impl RigTurnEngine {
     #[must_use]
     pub fn new(db: PgPool, tool_context: ToolServiceContext) -> Self {
         Self { db, tool_context }
+    }
+}
+
+#[derive(Clone)]
+struct InMemToolContext {
+    base: ToolServiceContext,
+    ask_user: AskUserContext,
+}
+
+impl FromRef<InMemToolContext> for ToolServiceContext {
+    fn from_ref(context: &InMemToolContext) -> Self {
+        context.base.clone()
+    }
+}
+
+impl FromRef<InMemToolContext> for AskUserContext {
+    fn from_ref(context: &InMemToolContext) -> Self {
+        context.ask_user.clone()
     }
 }
 
@@ -77,6 +97,7 @@ async fn drive_turn(
         messages,
         mcp_tools,
         cancel,
+        user_input,
     } = request;
 
     let tools = tools_for(AiHost::Chat);
@@ -87,18 +108,32 @@ async fn drive_turn(
         user_memory.as_deref(),
     );
 
-    // The MCP servers the session was handed sit next to the native tools
-    // the way they do in chat: static tools on every request, MCP tools in
-    // the searchable catalog behind `SearchTools`.
+    // `all_tools` returns a fresh Arc. Take its collection back so the
+    // in-memory runtime can widen it onto the session-specific context and
+    // add the one tool that needs the active ACP connection.
+    let base_tools = Arc::into_inner(tools.toolset)
+        .expect("all_tools should return a fresh, uniquely owned collection");
+    let mut toolset = AsyncToolCollection::<InMemToolContext>::new().add_subtoolset(base_tools);
+    if user_input.is_some() {
+        toolset = toolset.add_tool::<AskUser, AskUserContext>();
+    }
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(toolset);
+    // Keep the session's remote MCP tools alongside the native and AskUser tools.
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
-        Some(mcp) => Arc::new(mcp_select::CombinedToolSet::new(tools.toolset, mcp)),
-        None => tools.toolset,
+        Some(mcp) => Arc::new(mcp_select::CombinedToolSet::new(toolset, mcp)),
+        None => toolset,
     };
     let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
     let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner);
     // Carry the feature on the context so tool-spawned subagents attribute to it.
     let mut tool_context = base_context;
     tool_context.usage_context = usage_ctx.clone();
+    let tool_context = InMemToolContext {
+        base: tool_context,
+        ask_user: AskUserContext {
+            requester: user_input,
+        },
+    };
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
         .await;
