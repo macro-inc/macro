@@ -437,6 +437,11 @@ pub trait CalendarRepository: Send + Sync + 'static {
     /// soonest first, sourced from a primary calendar on an account that is
     /// not disabled. Titles arrive unmasked; the domain service owns the
     /// visibility policy.
+    ///
+    /// "Team" is singular by schema: `team_user` is unique per user, so the
+    /// membership lookup cannot span teams. Relaxing that constraint would
+    /// silently widen this query to every team the requester belongs to —
+    /// revisit it together with any multi-team migration.
     fn list_team_out_of_office(
         &self,
         requester_id: &str,
