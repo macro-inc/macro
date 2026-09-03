@@ -43,9 +43,11 @@ fn base_prompt_includes_channel_message_mention_format() {
 fn base_prompt_requires_macro_equation_xml_instead_of_latex_delimiters() {
     let rendered = BASE_PROMPT.to_string();
 
-    assert!(rendered.contains(
-        r#"<m-katex-equation>{"equation":"E = mc^2","inline":true}</m-katex-equation>"#
-    ));
+    assert!(
+        rendered.contains(
+            r#"<m-katex-equation>{"equation":"E = mc^2","inline":true}</m-katex-equation>"#
+        )
+    );
     assert!(rendered.contains(
         r#"<m-katex-equation>{"equation":"\\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}","inline":false}</m-katex-equation>"#
     ));
