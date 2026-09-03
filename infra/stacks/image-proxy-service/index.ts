@@ -1,6 +1,11 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { BASE_DOMAIN, config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  BASE_DOMAIN,
+  config,
+  getMacroApiToken,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { ImageProxyService } from './image-proxy-service';
 
