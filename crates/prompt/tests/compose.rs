@@ -40,6 +40,22 @@ fn base_prompt_includes_channel_message_mention_format() {
 }
 
 #[test]
+fn base_prompt_requires_macro_equation_xml_instead_of_latex_delimiters() {
+    let rendered = BASE_PROMPT.to_string();
+
+    assert!(rendered.contains(
+        r#"<m-katex-equation>{"equation":"E = mc^2","inline":true}</m-katex-equation>"#
+    ));
+    assert!(rendered.contains(
+        r#"<m-katex-equation>{"equation":"\\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}","inline":false}</m-katex-equation>"#
+    ));
+    assert!(rendered.contains(
+        r#"Do not use raw LaTeX delimiters such as `$...$`, `$$...$$`, `\(...\)`, or `\[...\]`."#
+    ));
+    assert!(!rendered.contains("LaTeX enclosed with double dollar signs"));
+}
+
+#[test]
 fn tool_use_prompt_appends_tool_section_to_base() {
     let rendered = TOOL_USE_PROMPT.to_string();
     assert!(rendered.starts_with(&BASE_PROMPT.to_string()));
