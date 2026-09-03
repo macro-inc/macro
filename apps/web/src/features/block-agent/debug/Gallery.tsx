@@ -224,6 +224,51 @@ const FIXTURE_MESSAGE: FoldedMessage = {
         outcome: { kind: 'pending' },
       },
     },
+    {
+      kind: 'tool_use',
+      id: 'demo-email-sent',
+      name: { kind: 'mcp', server: 'macro', tool: 'SendEmail' },
+      status: 'completed',
+      detail: {
+        kind: 'user_tool',
+        input: {
+          subject: 'Re: fold status',
+          body: 'Thanks Alice - shipping it.',
+          to: [{ email: 'alice@example.com', name: 'Alice' }],
+          cc: [{ email: 'bob@example.com' }],
+        },
+        outcome: {
+          kind: 'sent',
+          messageId: '9c4d2c6e-2f3a-4d1e-8b0a-5e6f7a8b9c0d',
+          threadId: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+        },
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-event',
+      name: { kind: 'mcp', server: 'macro', tool: 'CreateCalendarEvent' },
+      status: 'completed',
+      detail: {
+        kind: 'user_tool',
+        input: {
+          title: 'Fold review',
+          time: {
+            kind: 'timed',
+            startsAt: '2026-09-04T16:00:00Z',
+            endsAt: '2026-09-04T16:30:00Z',
+            timeZone: 'America/New_York',
+          },
+          location: 'Room 4',
+          attendees: [
+            { email: 'alice@example.com' },
+            { email: 'bob@example.com', isOptional: true },
+          ],
+          description: 'Walk through the harness readers.',
+        },
+        outcome: { kind: 'rejected' },
+      },
+    },
   ],
 };
 

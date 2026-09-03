@@ -34,6 +34,18 @@ vi.mock('@core/component/AI/component/tool/handler', () => ({
   ),
 }));
 
+// The entity link a finished email's outcome carries needs the query client
+// and the split layout; a marker carrying the id is enough here.
+vi.mock('@core/component/ItemPreview', () => ({
+  ItemPreview: (props: { id: string; type: string }) => (
+    <span
+      data-id={props.id}
+      data-testid="item-preview"
+      data-type={props.type}
+    />
+  ),
+}));
+
 // Markdown rendering pulls in the Lexical editor; the nested transcript's
 // prose is a marker here.
 vi.mock('./TextPart', () => ({
@@ -322,33 +334,35 @@ describe('ToolCallPart user tools', () => {
       { name: 'SendEmail' }
     );
 
-  it("renders a pending draft with the chat block's SendEmail component", () => {
+  it('renders a pending email draft read-only on its own card, never through the chat', () => {
     const rendered = render(() => (
       <ToolCallPart part={email({ kind: 'pending' })} />
     ));
-    const chat = rendered.getByTestId('macro-tool');
-    expect(chat.textContent).toBe('SendEmail');
-    expect(chat.dataset.response).toBe('"PendingUserExecution"');
-    expect(rendered.queryByTestId('tool-card')).toBeNull();
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+    expect(rendered.getByTestId('title').textContent).toBe('SendEmail');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('Q3 plan');
+    expect(rendered.getByTestId('trailing').textContent).toBe('Awaiting you');
+    const body = rendered.getByTestId('body');
+    expect(body.textContent).toContain('Alice <alice@example.com>');
+    expect(body.textContent).toContain('Q3 plan');
+    expect(rendered.getByTestId('text-part').textContent).toBe('Hi Alice');
   });
 
-  it('maps every outcome the chat has a face for back onto UserToolResponse', () => {
-    for (const [outcome, response] of [
-      [{ kind: 'edited' }, { UserAction: 'userEdited' }],
+  it('labels every outcome, and links the thread an email went to', () => {
+    const cases: [
+      Extract<ToolUsePart['detail'], { kind: 'user_tool' }>['outcome'],
+      string,
+      string | undefined,
+    ][] = [
+      [{ kind: 'edited' }, 'Edited', undefined],
       [
         {
           kind: 'sent',
           messageId: '9c4d2c6e-2f3a-4d1e-8b0a-5e6f7a8b9c0d',
           threadId: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
         },
-        {
-          UserAction: {
-            sent: {
-              message_id: '9c4d2c6e-2f3a-4d1e-8b0a-5e6f7a8b9c0d',
-              thread_id: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
-            },
-          },
-        },
+        'Sent',
+        '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
       ],
       [
         {
@@ -356,22 +370,95 @@ describe('ToolCallPart user tools', () => {
           draftId: '7e8f9a0b-1c2d-4e3f-8a9b-0c1d2e3f4a5b',
           threadId: null,
         },
-        {
-          UserAction: {
-            convertedToDraft: {
-              draft_id: '7e8f9a0b-1c2d-4e3f-8a9b-0c1d2e3f4a5b',
-            },
-          },
-        },
+        'Saved as draft',
+        undefined,
       ],
-      [{ kind: 'rejected' }, 'Rejected'],
-    ] as const) {
+      [
+        {
+          kind: 'draft',
+          draftId: '7e8f9a0b-1c2d-4e3f-8a9b-0c1d2e3f4a5b',
+          threadId: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+        },
+        'Saved as draft',
+        '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+      ],
+      [{ kind: 'rejected' }, 'Rejected', undefined],
+      [{ kind: 'completed', result: { id: 'evt' } }, 'Done', undefined],
+    ];
+    for (const [outcome, label, thread] of cases) {
       const rendered = render(() => <ToolCallPart part={email(outcome)} />);
-      expect(
-        JSON.parse(rendered.getByTestId('macro-tool').dataset.response!)
-      ).toEqual(response);
+      const trailing = rendered.getByTestId('trailing');
+      expect(trailing.textContent).toContain(label);
+      const link = rendered.queryByTestId('item-preview');
+      expect(link?.dataset.id).toBe(thread);
       rendered.unmount();
     }
+  });
+
+  it('shows an edited body, which arrives as base64url HTML, as its text', () => {
+    const html = btoa('<body><p>Hi <b>Alice</b>,</p><p>see plan</p></body>')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_');
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'user_tool',
+            input: {
+              subject: 'Q3 plan',
+              body: html,
+              to: [{ email: 'alice@example.com' }],
+            },
+            outcome: { kind: 'edited' },
+          },
+          { name: 'SendEmail' }
+        )}
+      />
+    ));
+    expect(rendered.queryByTestId('text-part')).toBeNull();
+    expect(rendered.getByTestId('output').textContent).toBe(
+      'Hi Alice,see plan'
+    );
+  });
+
+  it('renders a calendar event draft with when, where and attendees', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'user_tool',
+            input: {
+              title: 'Q3 sync',
+              time: {
+                kind: 'timed',
+                startsAt: '2026-08-20T17:00:00Z',
+                endsAt: '2026-08-20T17:30:00Z',
+                timeZone: 'UTC',
+              },
+              location: 'Room 4',
+              attendees: [
+                { email: 'alice@example.com' },
+                { email: 'bob@example.com', isOptional: true },
+              ],
+              description: 'Agenda in the doc.',
+            },
+            outcome: { kind: 'pending' },
+          },
+          { name: 'CreateCalendarEvent' }
+        )}
+      />
+    ));
+    expect(rendered.getByTestId('title').textContent).toBe(
+      'CreateCalendarEvent'
+    );
+    expect(rendered.getByTestId('subtitle').textContent).toBe('Q3 sync');
+    const body = rendered.getByTestId('body').textContent ?? '';
+    expect(body).toContain('Aug 20, 2026');
+    expect(body).toContain('Room 4');
+    expect(body).toContain('alice@example.com, bob@example.com (optional)');
+    expect(rendered.getByTestId('text-part').textContent).toBe(
+      'Agenda in the doc.'
+    );
   });
 
   it('keeps a failed user tool on a faded card with the error as body', () => {
@@ -384,14 +471,23 @@ describe('ToolCallPart user tools', () => {
     expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
   });
 
-  it('keeps an unrecognized outcome on the card with the draft as JSON', () => {
+  it('shows a draft the schema rejects as JSON, with the outcome still labelled', () => {
     const rendered = render(() => (
-      <ToolCallPart part={email({ kind: 'unrecognized' })} />
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'user_tool',
+            input: { subject: 'no recipients or body' },
+            outcome: { kind: 'unrecognized' },
+          },
+          { name: 'SendEmail' }
+        )}
+      />
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
     expect(rendered.getByTestId('trailing').textContent).toBe('Answered');
     expect(rendered.getByTestId('body').textContent).toContain(
-      '"subject": "Q3 plan"'
+      '"subject": "no recipients or body"'
     );
   });
 });

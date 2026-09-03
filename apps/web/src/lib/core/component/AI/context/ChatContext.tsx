@@ -115,12 +115,6 @@ export function useChatContext(): ChatState {
   return ctx;
 }
 
-/**
- * The chat, when there is one. Tool components that a chat renders can also
- * be hosted by an agent session's transcript, which has no chat behind it;
- * those read the context this way and skip what only a chat can do (write
- * the tool's result back into its message list).
- */
-export function useChatContextOptional(): ChatState | undefined {
+function _useChatContextOptional(): ChatState | undefined {
   return useContext(ChatCtx);
 }

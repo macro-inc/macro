@@ -6,7 +6,7 @@ import {
   calendarDisplayLabel,
   spansMultipleInboxes,
 } from '@app/features/calendar/utils/calendar-label';
-import { useChatContextOptional } from '@core/component/AI/context';
+import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
 import { recipientEntityMapper, useContacts } from '@core/user';
@@ -137,7 +137,7 @@ function CalendarChatComposeFallback() {
 
 /** Inline editor for a deferred CreateCalendarEvent tool call. */
 function CalendarChatComposeContent(props: CalendarChatComposeProps) {
-  const chat = useChatContextOptional();
+  const chat = useChatContext();
   const chatQuery = useChatQuery(() => props.chatId);
   const calendarsQuery = useVisibleCalendarsQuery();
   const contacts = useContacts();
@@ -238,7 +238,7 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
     response: CreateCalendarEventResponse,
     args?: CreateCalendarEvent
   ) {
-    chat?.setMessages((messages) =>
+    chat.setMessages((messages) =>
       messages.map((message) => {
         if (message.id !== props.messageId || !Array.isArray(message.content)) {
           return message;
