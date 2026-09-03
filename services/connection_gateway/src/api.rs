@@ -24,9 +24,17 @@ pub fn router(state: AppState) -> Router {
         .nest("/message", message::router(state.clone()))
         .nest("/track", entities::router(state.clone()))
         .merge(health::router())
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .with_state(state);
-    mount_at_root_and_prefix(inner)
+    mount_at_root_and_prefix(inner).merge(swagger_ui())
+}
+
+pub(crate) fn swagger_ui() -> Router {
+    Router::new()
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(SwaggerUi::new(format!("{GATEWAY_PATH_PREFIX}/docs")).url(
+            format!("{GATEWAY_PATH_PREFIX}/api-doc/openapi.json"),
+            swagger::ApiDoc::openapi(),
+        ))
 }
 
 pub(crate) fn mount_at_root_and_prefix(inner: Router) -> Router {

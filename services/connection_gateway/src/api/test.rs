@@ -363,3 +363,31 @@ async fn websocket_upgrade_is_authorized_at_root_and_gateway_prefix() {
         server.abort();
     }
 }
+
+#[tokio::test]
+async fn openapi_document_is_served_at_root_and_gateway_prefix() {
+    for path in [
+        "/api-doc/openapi.json",
+        "/connection-gateway/api-doc/openapi.json",
+    ] {
+        let response = super::swagger_ui()
+            .oneshot(
+                Request::builder()
+                    .uri(path)
+                    .method("GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK, "{path}");
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let spec: Value = serde_json::from_slice(&body)
+            .unwrap_or_else(|_| panic!("{path} should be OpenAPI JSON"));
+        assert!(
+            spec.get("openapi").is_some(),
+            "{path} should contain an openapi version"
+        );
+    }
+}
