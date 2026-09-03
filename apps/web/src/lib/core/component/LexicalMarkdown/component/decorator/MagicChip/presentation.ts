@@ -160,6 +160,34 @@ function partActivity(part: MessagePart): MagicChipActivity {
       label: 'Stop requested',
       busy: false,
     }))
+    .with({ kind: 'elicitation', outcome: { kind: 'pending' } }, () => ({
+      label: 'Waiting for your input',
+      busy: false,
+    }))
+    .with({ kind: 'elicitation', outcome: { kind: 'accepted' } }, () => ({
+      label: 'Resuming work',
+      busy: true,
+    }))
+    .with({ kind: 'elicitation', outcome: { kind: 'completed' } }, () => ({
+      label: 'Resuming work',
+      busy: true,
+    }))
+    .with({ kind: 'elicitation', outcome: { kind: 'declined' } }, () => ({
+      label: 'Question declined',
+      busy: true,
+    }))
+    .with({ kind: 'elicitation', outcome: { kind: 'cancelled' } }, () => ({
+      label: 'Question cancelled',
+      busy: false,
+    }))
+    .with({ kind: 'elicitation', outcome: { kind: 'errored' } }, () => ({
+      label: 'Question refused',
+      busy: false,
+    }))
+    .with({ kind: 'elicitation', outcome: { kind: 'unrecognized' } }, () => ({
+      label: 'Question answered',
+      busy: true,
+    }))
     .with({ kind: 'plan' }, ({ entries }) => {
       const completed = entries.filter(
         (entry) => entry.status === 'completed'
@@ -214,8 +242,8 @@ function turnEndedActivity(
 
 /**
  * What the agent is doing right now, from the parts of an open turn: an
- * unanswered permission request outranks a running tool, which outranks
- * whatever arrived last.
+ * unanswered permission request or question outranks a running tool, which
+ * outranks whatever arrived last.
  */
 function turnInFlightActivity(
   response: FoldedMessage | undefined
@@ -223,10 +251,11 @@ function turnInFlightActivity(
   if (!response) return undefined;
   const blocked = response.parts.findLast(
     (part) =>
-      part.kind === 'permission' &&
-      (part.outcome.kind === 'pending' ||
-        part.outcome.kind === 'errored' ||
-        part.outcome.kind === 'unrecognized')
+      (part.kind === 'permission' &&
+        (part.outcome.kind === 'pending' ||
+          part.outcome.kind === 'errored' ||
+          part.outcome.kind === 'unrecognized')) ||
+      (part.kind === 'elicitation' && part.outcome.kind === 'pending')
   );
   const runningTool = response.parts.findLast(
     (part) =>

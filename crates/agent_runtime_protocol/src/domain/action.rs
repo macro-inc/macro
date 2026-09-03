@@ -157,8 +157,10 @@ impl AgentSetModelAction {
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(untagged)]
 pub enum ElicitationRequestId {
-    /// A numeric JSON-RPC id.
-    Number(i64),
+    /// A numeric JSON-RPC id. Specta refuses `i64` (it does not fit a JS
+    /// number); agents count their requests from zero, so `i32` is the
+    /// honest TypeScript face.
+    Number(#[specta(type = i32)] i64),
     /// A string JSON-RPC id.
     Str(String),
 }

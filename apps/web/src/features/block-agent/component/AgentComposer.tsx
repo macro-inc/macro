@@ -24,6 +24,7 @@ export function AgentComposer(props: {
   autofocus?: boolean;
 }) {
   const {
+    blockedOnUser,
     composer,
     loadFailed,
     metadata,
@@ -72,6 +73,9 @@ export function AgentComposer(props: {
       </Show>
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
+      </Show>
+      <Show when={blockedOnUser()}>
+        <ComposerNotice text="The agent is waiting for your answer above. Messages sent now are queued." />
       </Show>
       <AgentInput
         placeholder="Message the agent, @mention anything"

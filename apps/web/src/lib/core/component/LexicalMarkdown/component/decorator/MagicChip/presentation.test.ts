@@ -213,6 +213,45 @@ describe('deriveMagicChipPresentation', () => {
     }
   );
 
+  it('prioritizes an unanswered question over a running tool', () => {
+    const presentation = deriveMagicChipPresentation({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [
+          {
+            kind: 'elicitation',
+            requestId: 0,
+            toolCall: 'tool',
+            message: 'Which approach?',
+            request: {
+              kind: 'form',
+              schema: {
+                title: null,
+                description: null,
+                properties: [],
+                required: [],
+              },
+            },
+            outcome: { kind: 'pending' },
+            reported: null,
+          },
+          {
+            kind: 'tool_use',
+            id: 'other',
+            name: { kind: 'native', name: 'Read' },
+            status: 'running',
+            detail: { kind: 'read', paths: [] },
+          },
+        ],
+      }),
+    });
+
+    expect(presentation).toMatchObject({
+      kind: 'working',
+      activity: { label: 'Waiting for your input', busy: false },
+    });
+  });
+
   it('shows the answer as it is written, before the turn ends', () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'acp_ready',

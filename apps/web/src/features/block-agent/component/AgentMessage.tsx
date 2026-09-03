@@ -14,6 +14,7 @@ import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
 import { ActionLine, Thought } from '../ui';
 import { ControlPart } from './parts/ControlPart';
+import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
 import { PlanPart } from './parts/PlanPart';
 import { TextPart } from './parts/TextPart';
@@ -50,6 +51,7 @@ function AgentMessagePart(props: {
     .with({ kind: 'permission' }, (part) => <PermissionPart part={part} />)
     .with({ kind: 'plan' }, (part) => <PlanPart part={part} />)
     .with({ kind: 'control' }, (part) => <ControlPart part={part} />)
+    .with({ kind: 'elicitation' }, (part) => <ElicitationPart part={part} />)
     .exhaustive();
 }
 
