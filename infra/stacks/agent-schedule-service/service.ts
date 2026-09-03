@@ -24,7 +24,7 @@ import {
 const gatewayLoadBalancer = getGatewayAlb();
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
-const GATEWAY_PATH_PREFIX = '/agent-schedule';
+const GATEWAY_PATH_PREFIX = '/scheduled-action';
 const GATEWAY_DOMAIN_NAME = `${stack === 'prod' ? 'gateway' : 'dev-gateway'}.${BASE_DOMAIN}`;
 
 export const SERVICE_DOMAIN_NAME = `agent-schedule${

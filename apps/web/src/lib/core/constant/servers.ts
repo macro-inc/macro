@@ -42,7 +42,7 @@ const serverHostRemote = {
   contacts: `${gatewayHost}/contacts`,
   'email-service': `https://email-service${devServerSuffix}.macro.com`,
   'image-proxy-service': `${gatewayHost}/image-proxy`,
-  'scheduled-action': `${gatewayHost}/agent-schedule`,
+  'scheduled-action': `${gatewayHost}/scheduled-action`,
   'agent-harness': `https://agent-harness${devServerSuffix}.macro.com`,
 } as const;
 
@@ -105,7 +105,7 @@ function proxyServers(): Servers | undefined {
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,
-    'scheduled-action': `${proxyOrigin}/agent-schedule`,
+    'scheduled-action': `${proxyOrigin}/scheduled-action`,
   };
 }
 
