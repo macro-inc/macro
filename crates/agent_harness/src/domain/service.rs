@@ -59,38 +59,20 @@ struct QueuedCommand {
 trait ErasedForwarder: Send + Sync + 'static {
     fn forward<'a>(
         &'a self,
-        target: &'a agent_session::domain::model::ReplicaAddress,
         session: AgentSessionId,
         command: HarnessCommand,
+        harness: Option<harness_id::HarnessId>,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>>;
-
-    fn forward_to_runtime(
-        &self,
-        harness: harness_id::HarnessId,
-        session: AgentSessionId,
-        command: HarnessCommand,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + '_>>;
 }
 
 impl<F: CommandForwarder> ErasedForwarder for F {
     fn forward<'a>(
         &'a self,
-        target: &'a agent_session::domain::model::ReplicaAddress,
         session: AgentSessionId,
         command: HarnessCommand,
+        harness: Option<harness_id::HarnessId>,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>> {
-        Box::pin(CommandForwarder::forward(self, target, session, command))
-    }
-
-    fn forward_to_runtime(
-        &self,
-        harness: harness_id::HarnessId,
-        session: AgentSessionId,
-        command: HarnessCommand,
-    ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + '_>> {
-        Box::pin(CommandForwarder::forward_to_runtime(
-            self, harness, session, command,
-        ))
+        Box::pin(CommandForwarder::forward(self, session, command, harness))
     }
 }
 
@@ -355,15 +337,17 @@ where
     }
 }
 
-/// The receiving half of command forwarding: what the internal forward route
-/// calls, implemented by the harness as [`AgentHarnessService::execute_here`].
+/// The receiving half of command forwarding, called by the command-bus
+/// consumer and implemented by the harness as [`AgentHarnessService::execute_here`].
 pub trait ForwardedCommands: Send + Sync + 'static {
-    /// Run a command a peer already routed to this replica.
+    /// Run a broadcast command only when this replica is responsible for it.
     fn execute_forwarded(
         &self,
         session_id: AgentSessionId,
         command: HarnessCommand,
-    ) -> impl Future<Output = Result<CommandOutcome>> + Send;
+        harness: Option<harness_id::HarnessId>,
+        is_origin: bool,
+    ) -> impl Future<Output = Option<Result<CommandOutcome>>> + Send;
 }
 
 impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
@@ -390,8 +374,31 @@ where
         &self,
         session_id: AgentSessionId,
         command: HarnessCommand,
-    ) -> Result<CommandOutcome> {
-        self.execute_here(session_id, command).await
+        harness: Option<harness_id::HarnessId>,
+        is_origin: bool,
+    ) -> Option<Result<CommandOutcome>> {
+        match self.inner.sessions.management(session_id).await {
+            Ok(SessionManagement::Ours) => Some(self.execute_here(session_id, command).await),
+            Ok(SessionManagement::Peer(_)) => None,
+            Ok(SessionManagement::Unmanaged) => {
+                if let Some(harness) = harness {
+                    let session = match self.inner.sessions.get_session(session_id).await {
+                        Ok(session) => session,
+                        Err(error) => return Some(Err(error.into())),
+                    };
+                    let bound = self.inner.runtimes.bound_harness(session.bot_id).await;
+                    if !matches!(bound, Ok(Some(bound)) if bound == harness)
+                        || !self.inner.runtimes.is_connected(harness)
+                    {
+                        return None;
+                    }
+                } else if !is_origin {
+                    return None;
+                }
+                Some(self.execute_here(session_id, command).await)
+            }
+            Err(error) => Some(Err(error.into())),
+        }
     }
 }
 
@@ -842,16 +849,9 @@ where
             SessionManagement::Unmanaged => {
                 span.record("agent.session.management", "unmanaged");
                 span.record("agent.command.forwarded", false);
-                let result = self.execute(session_id, command.clone()).await;
-                if !matches!(
-                    result,
-                    Err(HarnessError::Session(AgentSessionError::Disconnected(_)))
-                ) {
-                    return result;
-                }
                 let session = self.sessions.get_session(session_id).await?;
                 if AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External {
-                    return result;
+                    return self.execute(session_id, command).await;
                 }
                 let Some(harness) = self
                     .runtimes
@@ -859,12 +859,15 @@ where
                     .await
                     .map_err(AgentSessionError::Unknown)?
                 else {
-                    return result;
+                    return self.execute(session_id, command).await;
                 };
+                if self.runtimes.is_connected(harness) {
+                    return self.execute(session_id, command).await;
+                }
                 span.record("agent.command.forwarded", true);
                 return self
                     .forwarder
-                    .forward_to_runtime(harness, session_id, command)
+                    .forward(session_id, command, Some(harness))
                     .await;
             }
             SessionManagement::Ours => {
@@ -879,17 +882,11 @@ where
             "agent.session.manager_replica",
             tracing::field::display(manager.replica),
         );
-        let Some(address) = manager.address else {
-            // Recorded false deliberately: the command stayed here, but as an
-            // error rather than a local execution.
-            span.record("agent.command.forwarded", false);
-            return Err(HarnessError::ManagerUnreachable(session_id));
-        };
         span.record("agent.command.forwarded", true);
         tracing::info!(%session_id, peer = %manager.replica, "forwarding an agent session command");
         match self
             .forwarder
-            .forward(&address, session_id, command.clone())
+            .forward(session_id, command.clone(), None)
             .await
         {
             Ok(outcome) => Ok(outcome),

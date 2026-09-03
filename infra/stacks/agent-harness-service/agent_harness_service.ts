@@ -64,13 +64,11 @@ type Args = {
 
 /**
  * The agent harness service. Replicated in every environment: each replica
- * claims the sessions whose live actors it holds through a fenced Postgres
- * lease, and a command landing on the wrong replica is forwarded task-to-task
- * over the private network (`POST /internal/agent-sessions/{id}/command`,
- * internal-key authenticated) - which is why the service security group
- * allows itself ingress on the service port. The Kafka consumer group splits
- * partitions across live tasks; the lease plus forwarding is what makes that
- * split correct.
+ * claims the sessions whose live actors it holds through Postgres ownership,
+ * and commands are broadcast through the shared Redis deployment so the
+ * responsible replica can execute them. The Kafka consumer group splits
+ * partitions across live tasks; ownership plus Redis routing is what makes
+ * that split correct.
  *
  * Deploys roll (min healthy 100%, max 200%): the outgoing tasks keep serving
  * until their replacements pass health checks, so the control API and egress
@@ -527,24 +525,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         securityGroupId: serviceSg.id,
         description: 'Allow inbound traffic from the service ALB',
         referencedSecurityGroupId: serviceAlbSg.id,
-        fromPort: serviceContainerPort,
-        toPort: serviceContainerPort,
-        ipProtocol: 'tcp',
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    // Replica-to-replica command forwarding: a task that consumed a command
-    // for a session another replica manages POSTs it directly to that
-    // replica's private address, bypassing the load balancer.
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-peer-in`,
-      {
-        securityGroupId: serviceSg.id,
-        description:
-          'Allow harness replicas to forward session commands to each other',
-        referencedSecurityGroupId: serviceSg.id,
         fromPort: serviceContainerPort,
         toPort: serviceContainerPort,
         ipProtocol: 'tcp',

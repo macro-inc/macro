@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agent_session::domain::connection::RuntimeAttachment;
-use agent_session::domain::model::{AgentSessionId, ReplicaAddress, SandboxSize};
+use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
 use harness_id::HarnessId;
@@ -19,30 +19,15 @@ use super::model::{
 };
 use super::sandbox::SandboxResizeEffect;
 
-/// Delivers a session's command to the replica that manages its live actor.
-///
-/// The receiving side executes without re-resolving management (a forward is
-/// single-hop by contract, so two replicas with momentarily different views
-/// cannot bounce a command between each other). Success means the peer ran
-/// the command to completion - the response is the acknowledgment - so a
-/// caller that awaited a forward has the same guarantee as one that executed
-/// locally.
+/// Broadcasts commands for whichever replica currently owns their execution.
 pub trait CommandForwarder: Send + Sync + 'static {
-    /// Run `command` for `session` on the replica at `target`, reporting
-    /// what that replica's execution did with it.
+    /// Run `command` on the responsible replica. `harness` narrows an
+    /// unmanaged external session to the process holding that runtime socket.
     fn forward(
         &self,
-        target: &ReplicaAddress,
         session: AgentSessionId,
         command: HarnessCommand,
-    ) -> impl Future<Output = Result<CommandOutcome>> + Send;
-
-    /// Broadcast a command to whichever replica holds `harness`'s runtime socket.
-    fn forward_to_runtime(
-        &self,
-        harness: HarnessId,
-        session: AgentSessionId,
-        command: HarnessCommand,
+        harness: Option<HarnessId>,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send;
 }
 
@@ -55,20 +40,9 @@ pub struct NoPeers;
 impl CommandForwarder for NoPeers {
     async fn forward(
         &self,
-        target: &ReplicaAddress,
         session: AgentSessionId,
         _command: HarnessCommand,
-    ) -> Result<CommandOutcome> {
-        Err(HarnessError::Forward(rootcause::report!(
-            "this deployment has no command forwarding, yet {target} manages session {session}"
-        )))
-    }
-
-    async fn forward_to_runtime(
-        &self,
-        _harness: HarnessId,
-        session: AgentSessionId,
-        _command: HarnessCommand,
+        _harness: Option<HarnessId>,
     ) -> Result<CommandOutcome> {
         Err(HarnessError::Disconnected(session))
     }
@@ -187,6 +161,9 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         &self,
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+
+    /// Whether this process currently holds `harness`'s physical runtime socket.
+    fn is_connected(&self, harness: HarnessId) -> bool;
 }
 
 /// Mints the one secret a sandbox is given, and the config that points it at

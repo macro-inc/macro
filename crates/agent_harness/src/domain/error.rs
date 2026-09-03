@@ -63,11 +63,6 @@ pub enum HarnessError {
     /// A prompt could not be composed for the agent runtime.
     #[error("failed to compose agent prompt: {0}")]
     PromptComposition(rootcause::Report),
-    /// A live peer manages the session but published no address to forward
-    /// to. Transient by construction: only a replica from before addresses
-    /// existed, or one whose first heartbeat has not landed, has no address.
-    #[error("agent session {0} is managed by a live replica with no forwarding address")]
-    ManagerUnreachable(AgentSessionId),
     /// Forwarding a command to the session's managing replica failed.
     #[error("failed to forward an agent session command: {0}")]
     Forward(rootcause::Report),

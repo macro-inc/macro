@@ -183,4 +183,8 @@ where
     async fn bound_harness(&self, bot: BotId) -> anyhow::Result<Option<HarnessId>> {
         self.bindings.harness_for(bot).await
     }
+
+    fn is_connected(&self, harness: HarnessId) -> bool {
+        self.registry.is_connected(harness)
+    }
 }
