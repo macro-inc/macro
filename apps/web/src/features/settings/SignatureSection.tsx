@@ -159,7 +159,7 @@ export function SignatureSection(props: { link: EmailLink }) {
   };
 
   return (
-    <div class="flex flex-col gap-3 rounded-xl border border-edge-muted py-3">
+    <div class="flex flex-col gap-3">
       {/* Editing (Quill) is desktop-only; on mobile the section still offers
           the replies/forwards toggle and Remove, with a pointer to desktop. */}
       <Show
