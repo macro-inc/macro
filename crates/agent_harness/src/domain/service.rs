@@ -49,6 +49,7 @@ struct QueuedCommand {
     /// forwarding single-hop - two replicas with momentarily different lease
     /// views cannot bounce a command between each other.
     route: bool,
+    runtime_fence: Option<super::model::RuntimeFence>,
 }
 
 /// [`CommandForwarder`], object-safe.
@@ -61,7 +62,7 @@ trait ErasedForwarder: Send + Sync + 'static {
         &'a self,
         target: &'a agent_session::domain::model::ReplicaAddress,
         session: AgentSessionId,
-        command: HarnessCommand,
+        command: super::model::ForwardedCommand,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>>;
 }
 
@@ -70,7 +71,7 @@ impl<F: CommandForwarder> ErasedForwarder for F {
         &'a self,
         target: &'a agent_session::domain::model::ReplicaAddress,
         session: AgentSessionId,
-        command: HarnessCommand,
+        command: super::model::ForwardedCommand,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>> {
         Box::pin(CommandForwarder::forward(self, target, session, command))
     }
@@ -215,7 +216,7 @@ where
         session_id: AgentSessionId,
         command: HarnessCommand,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
-        self.enqueue(session_id, command, true)
+        self.enqueue(session_id, command, true, None)
     }
 
     /// [`execute`](Self::execute), without resolving which replica manages
@@ -231,7 +232,7 @@ where
         session_id: AgentSessionId,
         command: HarnessCommand,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
-        self.enqueue(session_id, command, false)
+        self.enqueue(session_id, command, false, None)
     }
 
     fn enqueue(
@@ -239,6 +240,7 @@ where
         session_id: AgentSessionId,
         mut command: HarnessCommand,
         route: bool,
+        runtime_fence: Option<super::model::RuntimeFence>,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send + 'static {
         let caller = tracing::Span::current();
         let result = loop {
@@ -249,6 +251,7 @@ where
                 completed,
                 span: caller.clone(),
                 route,
+                runtime_fence: runtime_fence.clone(),
             };
 
             match commands.send(queued) {
@@ -344,7 +347,7 @@ pub trait ForwardedCommands: Send + Sync + 'static {
     fn execute_forwarded(
         &self,
         session_id: AgentSessionId,
-        command: HarnessCommand,
+        command: super::model::ForwardedCommand,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send;
 }
 
@@ -371,9 +374,15 @@ where
     async fn execute_forwarded(
         &self,
         session_id: AgentSessionId,
-        command: HarnessCommand,
+        forwarded: super::model::ForwardedCommand,
     ) -> Result<CommandOutcome> {
-        self.execute_here(session_id, command).await
+        self.enqueue(
+            session_id,
+            forwarded.command,
+            false,
+            forwarded.runtime_fence,
+        )
+        .await
     }
 }
 
@@ -820,6 +829,107 @@ where
             span.record("agent.command.forwarded", false);
             return self.execute(session_id, command).await;
         }
+        let session = self.sessions.get_session(session_id).await?;
+        if AgentKind::for_session(session.bot_id, &session.harness) == AgentKind::External {
+            let harness = self
+                .runtimes
+                .bound_harness(session.bot_id)
+                .await
+                .map_err(AgentSessionError::Unknown)?;
+            if harness.is_none() && self.runtimes.requires_runtime_owner() {
+                return Err(HarnessError::Disconnected(session_id));
+            }
+            let Some(harness) = harness else {
+                return self
+                    .route_by_session_manager(session_id, command, span)
+                    .await;
+            };
+            let owner = self
+                .runtimes
+                .runtime_owner(harness)
+                .await
+                .map_err(AgentSessionError::Unknown)?;
+            if owner.is_none() && self.runtimes.requires_runtime_owner() {
+                return Err(HarnessError::Disconnected(session_id));
+            }
+            let Some(owner) = owner else {
+                return self
+                    .route_by_session_manager(session_id, command, span)
+                    .await;
+            };
+            if self.runtimes.is_local_runtime_owner(&owner) {
+                span.record("agent.session.management", "runtime_local");
+                span.record("agent.command.forwarded", false);
+                return self.execute(session_id, command).await;
+            }
+            let attempted_owner = (owner.replica, owner.connection_id);
+            let Some(address) = owner.address else {
+                return Err(HarnessError::ManagerUnreachable(session_id));
+            };
+            span.record("agent.session.management", "runtime_peer");
+            span.record("agent.command.forwarded", true);
+            return match self
+                .forwarder
+                .forward(
+                    &address,
+                    session_id,
+                    super::model::ForwardedCommand {
+                        command: command.clone(),
+                        runtime_fence: Some(super::model::RuntimeFence {
+                            harness,
+                            replica: owner.replica.as_uuid(),
+                            connection_id: owner.connection_id,
+                        }),
+                    },
+                )
+                .await
+            {
+                Ok(outcome) => Ok(outcome),
+                Err(forward_error) => {
+                    let owner = self
+                        .runtimes
+                        .runtime_owner(harness)
+                        .await
+                        .map_err(AgentSessionError::Unknown)?;
+                    match owner {
+                        Some(owner) if self.runtimes.owns_runtime(harness, &owner) => {
+                            span.record("agent.command.stale_fallback", true);
+                            self.execute(session_id, command).await
+                        }
+                        Some(owner) if (owner.replica, owner.connection_id) != attempted_owner => {
+                            let Some(address) = owner.address else {
+                                return Err(HarnessError::ManagerUnreachable(session_id));
+                            };
+                            self.forwarder
+                                .forward(
+                                    &address,
+                                    session_id,
+                                    super::model::ForwardedCommand {
+                                        command,
+                                        runtime_fence: Some(super::model::RuntimeFence {
+                                            harness,
+                                            replica: owner.replica.as_uuid(),
+                                            connection_id: owner.connection_id,
+                                        }),
+                                    },
+                                )
+                                .await
+                        }
+                        _ => Err(forward_error),
+                    }
+                }
+            };
+        }
+        self.route_by_session_manager(session_id, command, span)
+            .await
+    }
+
+    async fn route_by_session_manager(
+        &self,
+        session_id: AgentSessionId,
+        command: HarnessCommand,
+        span: tracing::Span,
+    ) -> Result<CommandOutcome> {
         let manager = match self.sessions.management(session_id).await? {
             SessionManagement::Unmanaged => {
                 span.record("agent.session.management", "unmanaged");
@@ -848,7 +958,14 @@ where
         tracing::info!(%session_id, peer = %manager.replica, "forwarding an agent session command");
         match self
             .forwarder
-            .forward(&address, session_id, command.clone())
+            .forward(
+                &address,
+                session_id,
+                super::model::ForwardedCommand {
+                    command: command.clone(),
+                    runtime_fence: None,
+                },
+            )
             .await
         {
             Ok(outcome) => Ok(outcome),
@@ -1342,15 +1459,27 @@ where
                     // yet. That is the ordinary case: sessions bind when they
                     // are prompted, not when the runtime dials, so the first
                     // prompt after a reconnect is what restores the session.
-                    let Some(attachment) = self.runtimes.bind(session.bot_id, session_id).await
-                    else {
+                    let Some(binding) = self.runtimes.bind(session.bot_id, session_id).await else {
                         // Kept in the session vocabulary so transports report
                         // it as a disconnect, not an internal error.
                         return Err(HarnessError::Session(AgentSessionError::Disconnected(
                             session_id,
                         )));
                     };
-                    self.sessions.attach_session(session_id, attachment).await?;
+                    if self.runtimes.requires_runtime_owner() {
+                        self.sessions
+                            .attach_runtime_session(
+                                session_id,
+                                binding.attachment,
+                                binding.harness,
+                                binding.connection_id,
+                            )
+                            .await?;
+                    } else {
+                        self.sessions
+                            .attach_session(session_id, binding.attachment)
+                            .await?;
+                    }
                 }
                 self.sessions
                     .send_action(session_id, actor, action, id)
@@ -1494,8 +1623,26 @@ async fn run_session_worker<
             completed,
             span,
             route,
+            runtime_fence,
         } = queued;
-        let result = if route {
+        let result = if let Some(fence) = runtime_fence {
+            let owner = inner
+                .runtimes
+                .runtime_owner(fence.harness)
+                .await
+                .map_err(AgentSessionError::Unknown);
+            match owner {
+                Ok(Some(owner))
+                    if owner.replica.as_uuid() == fence.replica
+                        && owner.connection_id == fence.connection_id
+                        && inner.runtimes.is_local_runtime_owner(&owner) =>
+                {
+                    inner.execute(session_id, command).instrument(span).await
+                }
+                Ok(_) => Err(HarnessError::Disconnected(session_id)),
+                Err(error) => Err(error.into()),
+            }
+        } else if route {
             inner
                 .route_then_execute(session_id, command)
                 .instrument(span)

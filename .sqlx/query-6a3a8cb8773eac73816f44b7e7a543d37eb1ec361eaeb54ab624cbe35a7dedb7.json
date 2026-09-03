@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH released AS ( DELETE FROM harness_runtime_lease WHERE harness_id = $1 AND replica_id = $2 AND connection_id = $3 RETURNING harness_id, replica_id ), fenced AS ( UPDATE agent_session session SET manager_replica_id = NULL FROM released WHERE session.manager_replica_id = released.replica_id AND EXISTS ( SELECT 1 FROM agent_configs config WHERE config.bot_id = session.bot_id AND config.harness_id = released.harness_id ) ) UPDATE harnesses SET last_disconnected_at = now() WHERE id IN (SELECT harness_id FROM released)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6a3a8cb8773eac73816f44b7e7a543d37eb1ec361eaeb54ab624cbe35a7dedb7"
+}

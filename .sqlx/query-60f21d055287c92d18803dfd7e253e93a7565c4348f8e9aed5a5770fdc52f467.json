@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH expired AS ( DELETE FROM harness_runtime_lease lease WHERE NOT EXISTS ( SELECT 1 FROM harness_replica replica WHERE replica.id = lease.replica_id AND replica.last_heartbeat_at > now() - interval '30 seconds' ) RETURNING harness_id, replica_id ), fenced AS ( UPDATE agent_session session SET manager_replica_id = NULL FROM expired WHERE session.manager_replica_id = expired.replica_id AND EXISTS ( SELECT 1 FROM agent_configs config WHERE config.bot_id = session.bot_id AND config.harness_id = expired.harness_id ) ) UPDATE harnesses SET last_disconnected_at = now() WHERE id IN (SELECT harness_id FROM expired)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "60f21d055287c92d18803dfd7e253e93a7565c4348f8e9aed5a5770fdc52f467"
+}

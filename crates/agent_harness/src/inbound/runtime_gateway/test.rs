@@ -15,6 +15,10 @@ use macro_authorization::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio_tungstenite::tungstenite;
 
 const HARNESS_TOKEN: &str = "mhns_self_test";
@@ -70,7 +74,60 @@ impl HarnessAuthorizer for SelfHarnessAuthorizer {
 
 /// Serve the gateway on a loopback port, returning the registry it feeds and
 /// the `ws://` base to dial.
-async fn serve() -> (Arc<RuntimeRegistry<GatewaySender>>, String) {
+#[derive(Clone)]
+struct FakeLease {
+    claim: Result<bool, &'static str>,
+    activate: Result<bool, &'static str>,
+    claimed: Arc<AtomicBool>,
+}
+
+impl RuntimeLease for FakeLease {
+    fn claim(
+        &self,
+        _harness: HarnessId,
+        _replica: agent_session::domain::model::ReplicaId,
+        _connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<bool>> + Send>> {
+        let result = self.claim;
+        let claimed = Arc::clone(&self.claimed);
+        Box::pin(async move {
+            claimed.store(true, Ordering::SeqCst);
+            result.map_err(anyhow::Error::msg)
+        })
+    }
+
+    fn activate(
+        &self,
+        _harness: HarnessId,
+        _replica: agent_session::domain::model::ReplicaId,
+        _connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<bool>> + Send>> {
+        let result = self.activate;
+        Box::pin(async move { result.map_err(anyhow::Error::msg) })
+    }
+
+    fn release(
+        &self,
+        _harness: HarnessId,
+        _replica: agent_session::domain::model::ReplicaId,
+        _connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>> {
+        Box::pin(async { Ok(()) })
+    }
+
+    fn owner(
+        &self,
+        _harness: HarnessId,
+    ) -> Pin<
+        Box<dyn Future<Output = anyhow::Result<Option<crate::domain::model::RuntimeOwner>>> + Send>,
+    > {
+        Box::pin(async { Ok(None) })
+    }
+}
+
+async fn serve_with_lease<Lease: RuntimeLease + Clone>(
+    lease: Lease,
+) -> (Arc<RuntimeRegistry<GatewaySender>>, String) {
     let runtimes = RuntimeRegistry::new();
     let authorization = MacroAuthorizationServiceImpl::new(
         FakeJwtValidator,
@@ -87,12 +144,18 @@ async fn serve() -> (Arc<RuntimeRegistry<GatewaySender>>, String) {
         runtime_gateway_router(RuntimeGatewayState::new(
             Arc::clone(&runtimes),
             MacroAuthorizationState::new(Arc::new(authorization)),
+            agent_session::domain::model::ReplicaId::mint(),
+            lease,
         )),
     );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
     tokio::spawn(async move { axum::serve(listener, app).await });
     (runtimes, format!("ws://{address}"))
+}
+
+async fn serve() -> (Arc<RuntimeRegistry<GatewaySender>>, String) {
+    serve_with_lease(crate::domain::ports::NoRuntimeLease).await
 }
 
 fn dial_request(base: &str, token: Option<&str>) -> tungstenite::handshake::client::Request {
@@ -147,4 +210,64 @@ async fn a_missing_token_is_rejected() {
     // No credentials at all: the extractor rejects before anything runs.
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     assert!(!runtimes.is_connected(HarnessId::TEST_A));
+}
+
+#[tokio::test]
+async fn a_duplicate_fresh_claim_is_rejected_before_upgrade() {
+    let claimed = Arc::new(AtomicBool::new(false));
+    let (runtimes, base) = serve_with_lease(FakeLease {
+        claim: Ok(false),
+        activate: Ok(true),
+        claimed: Arc::clone(&claimed),
+    })
+    .await;
+
+    let status = rejected(dial_request(&base, Some(HARNESS_TOKEN))).await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert!(claimed.load(Ordering::SeqCst));
+    assert!(!runtimes.is_connected(HarnessId::TEST_A));
+}
+
+#[tokio::test]
+async fn a_claim_failure_is_rejected_before_upgrade() {
+    let (runtimes, base) = serve_with_lease(FakeLease {
+        claim: Err("database unavailable"),
+        activate: Ok(true),
+        claimed: Arc::new(AtomicBool::new(false)),
+    })
+    .await;
+
+    let status = rejected(dial_request(&base, Some(HARNESS_TOKEN))).await;
+
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(!runtimes.is_connected(HarnessId::TEST_A));
+}
+
+#[tokio::test]
+async fn a_superseded_upgrade_cannot_evict_the_current_socket() {
+    let (runtimes, base) = serve_with_lease(FakeLease {
+        claim: Ok(true),
+        activate: Ok(false),
+        claimed: Arc::new(AtomicBool::new(false)),
+    })
+    .await;
+    let current_id = macro_uuid::Uuid::new_v4();
+    let (current, _runtime) = agent_runtime_protocol::domain::channel::Channel::<
+        ToRuntimeMessage,
+        ToServerMessage,
+    >::duplex();
+    runtimes.attach_with_id(HarnessId::TEST_A, current_id, current);
+
+    let (socket, _) = tokio_tungstenite::connect_async(dial_request(&base, Some(HARNESS_TOKEN)))
+        .await
+        .expect("the pending claim upgrades before activation is refused");
+    drop(socket);
+    tokio::task::yield_now().await;
+
+    assert_eq!(
+        runtimes.connection_id(HarnessId::TEST_A),
+        Some(current_id),
+        "a stale upgrade must not touch the socket for the authoritative token"
+    );
 }

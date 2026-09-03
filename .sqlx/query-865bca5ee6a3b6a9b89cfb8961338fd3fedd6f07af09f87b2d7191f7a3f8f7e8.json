@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT lease.replica_id, lease.connection_id, replica.address, CASE WHEN lease.pending_until = 'infinity'::timestamptz THEN NULL ELSE lease.pending_until END AS pending_until FROM harness_runtime_lease lease JOIN harness_replica replica ON replica.id = lease.replica_id WHERE lease.harness_id = $1 AND replica.last_heartbeat_at > now() - interval '30 seconds' AND lease.pending_until > now()",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "replica_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "connection_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "address",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "pending_until",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "865bca5ee6a3b6a9b89cfb8961338fd3fedd6f07af09f87b2d7191f7a3f8f7e8"
+}

@@ -940,6 +940,49 @@ impl SessionOwnership for PgAgentSessionRepo {
         }
     }
 
+    async fn claim_for_runtime(
+        &self,
+        session: AgentSessionId,
+        replica: ReplicaId,
+        harness: harness_id::HarnessId,
+        connection_id: macro_uuid::Uuid,
+    ) -> Result<ClaimOutcome> {
+        let fence = sqlx::query_scalar!(
+            r#"
+            WITH runtime AS MATERIALIZED (
+                SELECT harness_id
+                FROM harness_runtime_lease
+                WHERE harness_id = $3 AND replica_id = $2 AND connection_id = $4
+                  AND pending_until > now()
+                FOR UPDATE
+            )
+            UPDATE agent_session
+            SET manager_replica_id = $2,
+                manager_fence = manager_fence + 1,
+                modified_at = now()
+            WHERE id = $1
+              AND EXISTS (SELECT 1 FROM runtime)
+              AND (manager_replica_id IS NULL OR manager_replica_id = $2)
+            RETURNING manager_fence
+            "#,
+            session.as_uuid(),
+            replica.as_uuid(),
+            harness.as_uuid(),
+            connection_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to claim agent session for runtime")?;
+        match fence {
+            Some(fence) => Ok(ClaimOutcome::Claimed(SessionClaim {
+                session,
+                replica,
+                fence: ManagerFence(fence),
+            })),
+            None => Err(AgentSessionError::ManagedElsewhere(session)),
+        }
+    }
+
     async fn release(&self, claim: &SessionClaim) -> Result<()> {
         // Conditional on both holder and fence: a release arriving after a
         // successor claimed must not free the successor's lease, and a

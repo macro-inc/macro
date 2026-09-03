@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO harness_runtime_lease (harness_id, replica_id, connection_id)\n                   VALUES ($1, $2, $3)\n                   ON CONFLICT (harness_id) DO UPDATE\n                   SET replica_id = EXCLUDED.replica_id, connection_id = EXCLUDED.connection_id,\n                       pending_until = now() + interval '5 seconds'\n                   WHERE harness_runtime_lease.pending_until <= now()\n                      OR NOT EXISTS (\n                       SELECT 1 FROM harness_replica current\n                       WHERE current.id = harness_runtime_lease.replica_id\n                         AND current.last_heartbeat_at > now() - interval '30 seconds'\n                   )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0024e745c72d09591b5ee72598a556aad9451c58257670aec2f47f783a4d1757"
+}

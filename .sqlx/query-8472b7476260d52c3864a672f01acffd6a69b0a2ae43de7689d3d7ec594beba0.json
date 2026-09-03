@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT last_disconnected_at >= last_connected_at AS \"disconnected_after_connected!\" FROM harnesses WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "disconnected_after_connected!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8472b7476260d52c3864a672f01acffd6a69b0a2ae43de7689d3d7ec594beba0"
+}

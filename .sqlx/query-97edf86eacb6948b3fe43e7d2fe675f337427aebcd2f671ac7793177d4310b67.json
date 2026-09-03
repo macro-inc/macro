@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE harness_replica SET last_heartbeat_at = now() - interval '31 seconds' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "97edf86eacb6948b3fe43e7d2fe675f337427aebcd2f671ac7793177d4310b67"
+}

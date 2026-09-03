@@ -3,7 +3,9 @@
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
 use agent_egress::domain::model::McpServerSlug;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
+use agent_session::domain::model::{
+    AgentSessionId, MessageId, ReplicaAddress, ReplicaId, SandboxSize,
+};
 use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -68,6 +70,39 @@ pub enum AgentKind {
     /// The bot's operator hosts the runtime and dials the gateway; no
     /// deployment here provisions anything for it.
     External,
+}
+
+/// A fresh runtime socket claim's owning replica, used to route external sessions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeOwner {
+    /// Replica that owns the socket.
+    pub replica: ReplicaId,
+    /// Exact socket claim held by that replica.
+    pub connection_id: macro_uuid::Uuid,
+    /// Pending claim deadline. `None` means the socket was activated.
+    pub pending_until: Option<chrono::DateTime<chrono::Utc>>,
+    /// Its peer-reachable command forwarding address.
+    pub address: Option<ReplicaAddress>,
+}
+
+/// Exact runtime ownership a peer must still hold before executing a forward.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct RuntimeFence {
+    /// Harness whose socket owns the command.
+    pub harness: harness_id::HarnessId,
+    /// Replica selected by the sender.
+    pub replica: macro_uuid::Uuid,
+    /// Exact socket token selected by the sender.
+    pub connection_id: macro_uuid::Uuid,
+}
+
+/// A command sent between replicas, optionally fenced to a runtime socket.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ForwardedCommand {
+    /// Command to execute.
+    pub command: HarnessCommand,
+    /// Runtime ownership that must still be current at the receiving replica.
+    pub runtime_fence: Option<RuntimeFence>,
 }
 
 impl AgentKind {

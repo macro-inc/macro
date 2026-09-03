@@ -82,7 +82,7 @@ use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use github::domain::service::{InstallationTokenConfig, InstallationTokenService};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
-use harness_bindings::{PgHarnessBindings, PgHarnessPresence};
+use harness_bindings::{PgHarnessBindings, PgRuntimeLease};
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -463,9 +463,10 @@ async fn run() -> anyhow::Result<()> {
 
     // One connection per harness, shared by every session of every agent
     // bound to it. Held here because the gateway puts dialed-in sockets into
-    // it and the harness takes sessions out of it. Attach/detach is mirrored
-    // to the harnesses table so the settings page can show connection state.
-    let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
+    // it and the harness takes sessions out of it. The lease makes the socket
+    // owner exclusive across replicas before the gateway accepts an upgrade.
+    let runtime_lease = Arc::new(PgRuntimeLease::new(pool.clone()));
+    let runtimes = RuntimeRegistry::with_lease(replica, runtime_lease.clone());
     let mut defaults = HarnessDefaults::new(SessionDefaults {
         bot_id,
         model: config.harness_model.clone(),
@@ -514,7 +515,11 @@ async fn run() -> anyhow::Result<()> {
         sessions,
         containers,
         announcer,
-        HarnessKeyedConnections::new(PgHarnessBindings::new(pool.clone()), Arc::clone(&runtimes)),
+        HarnessKeyedConnections::with_lease(
+            PgHarnessBindings::new(pool.clone()),
+            runtime_lease.clone(),
+            Arc::clone(&runtimes),
+        ),
         prompt_context,
         prompt_composer,
         EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
@@ -564,13 +569,19 @@ async fn run() -> anyhow::Result<()> {
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let gateway_state = RuntimeGatewayState::new(
-        runtimes,
+        Arc::clone(&runtimes),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        replica,
+        runtime_lease.clone(),
     );
     let forward_state = ForwardGatewayState::new(
         harness.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service)),
     );
+    session_repo
+        .heartbeat(replica, replica_address.as_ref())
+        .await
+        .context("failed to record initial harness replica heartbeat")?;
     let http_port = config.port;
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -595,6 +606,8 @@ async fn run() -> anyhow::Result<()> {
     // what covers the ungraceful ones.
     let heartbeat_repo = session_repo.clone();
     let heartbeat_address = replica_address.clone();
+    let heartbeat_runtime_lease = runtime_lease.clone();
+    let heartbeat_runtimes = runtimes;
     let heartbeat = tokio::spawn(async move {
         let mut ticker =
             tokio::time::interval(agent_session::domain::ports::REPLICA_HEARTBEAT_INTERVAL);
@@ -606,6 +619,10 @@ async fn run() -> anyhow::Result<()> {
             {
                 tracing::warn!(error = ?error, %replica, "failed to heartbeat harness replica");
             }
+            if let Err(error) = heartbeat_runtime_lease.expire_stale().await {
+                tracing::warn!(error = ?error, "failed to expire stale runtime socket leases");
+            }
+            heartbeat_runtimes.reconcile().await;
         }
     });
 

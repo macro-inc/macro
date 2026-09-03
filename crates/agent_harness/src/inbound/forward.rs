@@ -20,7 +20,7 @@ use macro_authorization::{
 use macro_uuid::Uuid;
 
 use crate::domain::error::HarnessError;
-use crate::domain::model::HarnessCommand;
+use crate::domain::model::ForwardedCommand;
 use crate::domain::service::ForwardedCommands;
 
 /// State for the command-forwarding route.
@@ -91,7 +91,7 @@ async fn forward_handler<Harness, Auth>(
     State(state): State<ForwardGatewayState<Harness, Auth>>,
     _caller: MacroAuthorizationExtractor<Auth, InternalOnly>,
     Path(session_id): Path<Uuid>,
-    Json(command): Json<HarnessCommand>,
+    Json(command): Json<ForwardedCommand>,
 ) -> Response
 where
     Harness: ForwardedCommands,

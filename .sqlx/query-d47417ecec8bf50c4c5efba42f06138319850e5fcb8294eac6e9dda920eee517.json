@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH activated AS ( UPDATE harness_runtime_lease SET pending_until = 'infinity'::timestamptz WHERE harness_id = $1 AND replica_id = $2 AND connection_id = $3 AND pending_until > now() RETURNING harness_id ) UPDATE harnesses SET last_connected_at = now() WHERE id IN (SELECT harness_id FROM activated)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d47417ecec8bf50c4c5efba42f06138319850e5fcb8294eac6e9dda920eee517"
+}

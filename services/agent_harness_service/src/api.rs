@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use agent_egress::domain::service::EgressService;
 use agent_egress::inbound::axum_router::{EgressRouterState, egress_router};
+use agent_harness::domain::ports::RuntimeLease;
 use agent_harness::domain::service::ForwardedCommands;
 use agent_harness::inbound::forward::{ForwardGatewayState, forward_router};
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
@@ -74,11 +75,11 @@ where
 }
 
 /// Build the router and serve it until the process is asked to stop.
-pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Harness>(
+pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Harness, Lease>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
-    gateway_state: RuntimeGatewayState<Auth>,
+    gateway_state: RuntimeGatewayState<Auth, Lease>,
     forward_state: ForwardGatewayState<Harness, Auth>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
@@ -91,6 +92,7 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
     Harness: ForwardedCommands,
+    Lease: RuntimeLease + Clone,
 {
     let inner = api_router(
         read_state,
@@ -121,11 +123,11 @@ where
         .context("agent harness service http failed")
 }
 
-fn api_router<T, R, Opener, Bots, Access, Auth, Harness>(
+fn api_router<T, R, Opener, Bots, Access, Auth, Harness, Lease>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
-    gateway_state: RuntimeGatewayState<Auth>,
+    gateway_state: RuntimeGatewayState<Auth, Lease>,
     forward_state: ForwardGatewayState<Harness, Auth>,
 ) -> Router
 where
@@ -136,6 +138,7 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
     Harness: ForwardedCommands,
+    Lease: RuntimeLease + Clone,
 {
     let agent_sessions = agent_session_read_router(read_state.clone())
         .merge(agent_session_control_router(control_state))
