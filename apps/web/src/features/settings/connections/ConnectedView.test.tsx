@@ -48,7 +48,7 @@ describe('ConnectedView', () => {
     expect(screen.queryByRole('button', { name: 'Add a connection' })).toBeNull();
   });
 
-  it('lists leftover grants in the same card as providers', () => {
+  it('lists native leftovers in a Custom MCP section', () => {
     const leftoverNative = toConnectionsModel({
       userId: 'macro|self',
       emailEnabled: true,
@@ -75,10 +75,49 @@ describe('ConnectedView', () => {
       </QueryClientProvider>
     ));
     expect(screen.getByText('Cursor')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Custom MCP' })).toBeTruthy();
+    expect(screen.getByText('Servers you added by URL.')).toBeTruthy();
     expect(screen.getByText('Unknown')).toBeTruthy();
     expect(screen.getByText('example.com')).toBeTruthy();
+    expect(screen.queryByText('Enabled')).toBeNull();
+    expect(screen.queryByText('Disabled')).toBeNull();
+    expect(screen.getByRole('switch', { name: 'Enable Unknown' })).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Disconnect from Macro' })
+    ).toBeTruthy();
     expect(screen.queryByText('Other Connections')).toBeNull();
-    expect(screen.queryByText(/other connection/)).toBeNull();
+  });
+
+  it('hides the connectors card when only a custom MCP is connected', () => {
+    const onlyCustom = toConnectionsModel({
+      userId: 'macro|self',
+      emailEnabled: true,
+      calendarEnabled: true,
+      emailLinks: [],
+      github: { status: 'unlinked', username: undefined },
+      pipedream: [],
+      nativeMcp: [
+        {
+          server_name: 'Unknown',
+          url: 'https://example.com/mcp',
+          authenticated: true,
+          enabled: true,
+        },
+      ],
+      cursorRegistered: false,
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(() => (
+      <QueryClientProvider client={client}>
+        <ConnectedView model={onlyCustom} />
+      </QueryClientProvider>
+    ));
+    expect(screen.queryByText('Cursor')).toBeNull();
+    expect(screen.queryByText('Start with Google')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Custom MCP' })).toBeTruthy();
+    expect(screen.getByText('Unknown')).toBeTruthy();
   });
 
   it('opens Google when the empty starter card is clicked', () => {

@@ -1,7 +1,5 @@
-import { QUICK_CONNECT_ICON_MAP } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
-import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
 import {
   useDeleteMcpServerMutation,
   useUpdateMcpServerMutation,
@@ -11,31 +9,14 @@ import {
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { ToggleSwitch } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Show, type JSX } from 'solid-js';
 import { DisconnectAction } from '../integration-ui';
-import { IntegrationRow } from '../primitives';
+import { IntegrationRow, SettingsRow } from '../primitives';
 import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
 import type { Leftover } from './model';
-
-function leftoverIcon(leftover: Leftover) {
-  switch (leftover.kind) {
-    case 'pipedream':
-      return (
-        <PipedreamConnectorIcon appSlug={leftover.appSlug} class="size-8" />
-      );
-    case 'native-mcp': {
-      const Icon = QUICK_CONNECT_ICON_MAP.get(leftover.url) ?? PlugIcon;
-      return <Icon class="size-8" />;
-    }
-    default: {
-      const _exhaustive: never = leftover;
-      return _exhaustive;
-    }
-  }
-}
 
 function leftoverCanToggle(leftover: Leftover): boolean {
   switch (leftover.kind) {
@@ -115,34 +96,68 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     }
   };
 
+  const actions = (): JSX.Element => (
+    <>
+      <DisconnectAction
+        onClick={() =>
+          setDisconnect({
+            title: 'Disconnect from Macro',
+            body: `Disconnect ${props.leftover.title}?`,
+            onConfirm: remove,
+          })
+        }
+        disabled={busy()}
+      />
+      <Show when={leftoverCanToggle(props.leftover)}>
+        <ToggleSwitch
+          size="md"
+          checked={props.leftover.enabled}
+          disabled={busy()}
+          onChange={toggle}
+          label={`Enable ${props.leftover.title}`}
+          labelClass="sr-only"
+        />
+      </Show>
+    </>
+  );
+
+  const row = (): JSX.Element => {
+    const leftover = props.leftover;
+    switch (leftover.kind) {
+      case 'native-mcp':
+        return (
+          <SettingsRow
+            label={leftover.title}
+            description={leftover.subtitle}
+          >
+            {actions()}
+          </SettingsRow>
+        );
+      case 'pipedream':
+        return (
+          <IntegrationRow
+            icon={
+              <PipedreamConnectorIcon
+                appSlug={leftover.appSlug}
+                class="size-8"
+              />
+            }
+            title={leftover.title}
+            description={leftover.subtitle}
+          >
+            {actions()}
+          </IntegrationRow>
+        );
+      default: {
+        const _exhaustive: never = leftover;
+        return _exhaustive;
+      }
+    }
+  };
+
   return (
     <>
-      <IntegrationRow
-        icon={leftoverIcon(props.leftover)}
-        title={props.leftover.title}
-        description={props.leftover.subtitle}
-      >
-        <Show when={leftoverCanToggle(props.leftover)}>
-          <ToggleSwitch
-            size="md"
-            checked={props.leftover.enabled}
-            disabled={busy()}
-            onChange={toggle}
-            label={props.leftover.enabled ? 'Enabled' : 'Disabled'}
-            labelClass="inline-block w-14 text-left text-xs text-ink-muted whitespace-nowrap"
-          />
-        </Show>
-        <DisconnectAction
-          onClick={() =>
-            setDisconnect({
-              title: 'Disconnect from Macro',
-              body: `Disconnect ${props.leftover.title}?`,
-              onConfirm: remove,
-            })
-          }
-          disabled={busy()}
-        />
-      </IntegrationRow>
+      {row()}
       <DisconnectConfirmDialog
         request={disconnect()}
         onClose={() => setDisconnect(null)}

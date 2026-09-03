@@ -11,36 +11,57 @@ import { openConnectionsProvider, showConnectionsDiscover } from './view-state';
 
 export function ConnectedView(props: { model: ConnectionsModel }) {
   const forceEmpty = useDebugSetting(DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES);
+  const pipedreamLeftovers = () =>
+    props.model.leftovers.filter((row) => row.kind === 'pipedream');
+  const customMcps = () =>
+    props.model.leftovers.filter((row) => row.kind === 'native-mcp');
+  const showConnectors = () =>
+    props.model.providers.length > 0 || pipedreamLeftovers().length > 0;
   return (
     <Show
       when={!forceEmpty() && !isConnectionsEmpty(props.model)}
       fallback={<EmptyConnected />}
     >
-      <SettingsSection>
-        <SettingsCard>
-          <For each={props.model.providers}>
-            {(provider) => (
-              <button
-                type="button"
-                class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
-                onClick={() => openConnectionsProvider(provider.id)}
-              >
-                <IntegrationRow
-                  icon={providerIcon(provider.id)}
-                  title={provider.name}
-                  description={provider.summary}
-                  facts={provider.accounts}
+      <Show when={showConnectors()}>
+        <SettingsSection>
+          <SettingsCard>
+            <For each={props.model.providers}>
+              {(provider) => (
+                <button
+                  type="button"
+                  class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
+                  onClick={() => openConnectionsProvider(provider.id)}
                 >
-                  <CaretRightIcon class="size-4 text-ink-extra-muted" />
-                </IntegrationRow>
-              </button>
-            )}
-          </For>
-          <For each={props.model.leftovers}>
-            {(leftover) => <LeftoverRow leftover={leftover} />}
-          </For>
-        </SettingsCard>
-      </SettingsSection>
+                  <IntegrationRow
+                    icon={providerIcon(provider.id)}
+                    title={provider.name}
+                    description={provider.summary}
+                    facts={provider.accounts}
+                  >
+                    <CaretRightIcon class="size-4 text-ink-extra-muted" />
+                  </IntegrationRow>
+                </button>
+              )}
+            </For>
+            <For each={pipedreamLeftovers()}>
+              {(leftover) => <LeftoverRow leftover={leftover} />}
+            </For>
+          </SettingsCard>
+        </SettingsSection>
+      </Show>
+
+      <Show when={customMcps().length > 0}>
+        <SettingsSection
+          title="Custom MCP"
+          description="Servers you added by URL."
+        >
+          <SettingsCard>
+            <For each={customMcps()}>
+              {(leftover) => <LeftoverRow leftover={leftover} />}
+            </For>
+          </SettingsCard>
+        </SettingsSection>
+      </Show>
 
       <Button
         type="button"
