@@ -4,7 +4,8 @@ import LinkBreakIcon from '@phosphor/link-break.svg';
 import PencilSimpleIcon from '@phosphor/pencil-simple.svg';
 import PowerIcon from '@phosphor/power.svg';
 import { Dropdown } from '@ui';
-import { For, type JSX, Match, Show, Switch } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 
 export type ConnectionMenuIcon =
   | 'disable'
@@ -17,44 +18,16 @@ export type ConnectionMenuItem = {
   onSelect: () => void;
   disabled?: boolean;
   danger?: boolean;
-  icon?: ConnectionMenuIcon;
+  icon: ConnectionMenuIcon;
 };
 
 function MenuItemIcon(props: { item: ConnectionMenuItem }): JSX.Element {
-  const kind = (): ConnectionMenuIcon | undefined => {
-    if (props.item.icon) return props.item.icon;
-    if (props.item.danger) return 'disconnect';
-    switch (props.item.label) {
-      case 'Disable':
-        return 'disable';
-      case 'Rename':
-        return 'rename';
-      case 'Reconnect':
-        return 'reconnect';
-      case 'Disconnect':
-      case 'Remove':
-        return 'disconnect';
-      default:
-        return undefined;
-    }
-  };
-
-  return (
-    <Switch>
-      <Match when={kind() === 'disable'}>
-        <PowerIcon class="size-4" />
-      </Match>
-      <Match when={kind() === 'rename'}>
-        <PencilSimpleIcon class="size-4" />
-      </Match>
-      <Match when={kind() === 'reconnect'}>
-        <ArrowsClockwiseIcon class="size-4" />
-      </Match>
-      <Match when={kind() === 'disconnect'}>
-        <LinkBreakIcon class="size-4" />
-      </Match>
-    </Switch>
-  );
+  return match(props.item.icon)
+    .with('disable', () => <PowerIcon class="size-4" />)
+    .with('rename', () => <PencilSimpleIcon class="size-4" />)
+    .with('reconnect', () => <ArrowsClockwiseIcon class="size-4" />)
+    .with('disconnect', () => <LinkBreakIcon class="size-4" />)
+    .exhaustive();
 }
 
 export function ConnectionMore(props: {

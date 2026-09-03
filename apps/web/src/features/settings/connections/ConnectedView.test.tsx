@@ -27,7 +27,7 @@ const connectedCursor = toConnectionsModel({
   emailEnabled: true,
   calendarEnabled: true,
   emailLinks: [],
-  github: { status: 'unlinked', username: undefined },
+  github: { status: 'unlinked' },
   pipedream: [],
   nativeMcp: [],
   cursorRegistered: true,
@@ -61,7 +61,7 @@ describe('ConnectedView', () => {
       emailEnabled: true,
       calendarEnabled: true,
       emailLinks: [],
-      github: { status: 'unlinked', username: undefined },
+      github: { status: 'unlinked' },
       pipedream: [],
       nativeMcp: [
         {
@@ -103,7 +103,7 @@ describe('ConnectedView', () => {
       emailEnabled: true,
       calendarEnabled: true,
       emailLinks: [],
-      github: { status: 'unlinked', username: undefined },
+      github: { status: 'unlinked' },
       pipedream: [],
       nativeMcp: [
         {
@@ -135,7 +135,7 @@ describe('ConnectedView', () => {
       emailEnabled: true,
       calendarEnabled: true,
       emailLinks: [],
-      github: { status: 'unlinked', username: undefined },
+      github: { status: 'unlinked' },
       pipedream: [],
       nativeMcp: [
         {
@@ -170,7 +170,7 @@ describe('ConnectedView', () => {
       emailEnabled: true,
       calendarEnabled: true,
       emailLinks: [],
-      github: { status: 'unlinked', username: undefined },
+      github: { status: 'unlinked' },
       pipedream: [],
       nativeMcp: [
         {

@@ -17,9 +17,12 @@ export type ConnectionsProviderSlug =
 
 export type ConnectionsRestToken =
   | typeof CONNECTIONS_DISCOVER_SLUG
-  | ConnectionsProviderSlug;
+  | ConnectionsProviderSlug
+  | `discover-${ConnectionsProviderSlug}`;
 
 const PROVIDER_SLUGS: ReadonlySet<string> = new Set(CONNECTIONS_PROVIDER_SLUGS);
+
+const FROM_DISCOVER_PREFIX = 'discover-';
 
 export function isConnectionsProviderSlug(
   value: string
@@ -27,11 +30,35 @@ export function isConnectionsProviderSlug(
   return PROVIDER_SLUGS.has(value);
 }
 
+export function connectionsProviderFromRest(
+  rest: string | null
+): ConnectionsProviderSlug | null {
+  if (!rest) return null;
+  if (isConnectionsProviderSlug(rest)) return rest;
+  if (rest.startsWith(FROM_DISCOVER_PREFIX)) {
+    const slug = rest.slice(FROM_DISCOVER_PREFIX.length);
+    return isConnectionsProviderSlug(slug) ? slug : null;
+  }
+  return null;
+}
+
+export function connectionsRestForProvider(
+  id: ConnectionsProviderSlug,
+  fromDiscover: boolean
+): string {
+  return fromDiscover ? `${FROM_DISCOVER_PREFIX}${id}` : id;
+}
+
+export function connectionsRestIsDiscoverReturn(rest: string | null): boolean {
+  return Boolean(rest?.startsWith(FROM_DISCOVER_PREFIX));
+}
+
 export function isConnectionsRestToken(
   value: string
 ): value is ConnectionsRestToken {
   return (
-    value === CONNECTIONS_DISCOVER_SLUG || isConnectionsProviderSlug(value)
+    value === CONNECTIONS_DISCOVER_SLUG ||
+    connectionsProviderFromRest(value) !== null
   );
 }
 

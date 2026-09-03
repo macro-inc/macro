@@ -2,10 +2,7 @@ import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-
 import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useGithubLinkStatusQuery } from '@queries/auth';
-import {
-  useCursorApiKeyStatusQuery,
-  useCursorModelsQuery,
-} from '@queries/auth/cursor-api-key';
+import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
@@ -22,14 +19,11 @@ const EMPTY_MODEL: ConnectionsModel = {
 export function useConnectionsModel() {
   const userId = useUserId();
   const calendarEnabled = useCalendarUiFlag();
-  const emailLinks = useEmailLinksQuery();
+  const emailLinks = useEmailLinksQuery(() => ENABLE_EMAIL);
   const github = useGithubLinkStatusQuery();
   const pipedream = usePipedreamConnectionsQuery();
   const nativeMcp = useMcpServersQuery();
   const cursor = useCursorApiKeyStatusQuery();
-  useCursorModelsQuery(
-    () => !cursor.isPlaceholderData && (cursor.data?.registered ?? false)
-  );
 
   const ready = () =>
     (!ENABLE_EMAIL || emailLinks.isFetched) &&
@@ -40,11 +34,11 @@ export function useConnectionsModel() {
 
   const error = () =>
     ready() &&
-    ((ENABLE_EMAIL && emailLinks.isError) ||
-      github.isError ||
-      pipedream.isError ||
-      nativeMcp.isError ||
-      cursor.isError);
+    (ENABLE_EMAIL ? emailLinks.isError : true) &&
+    github.isError &&
+    pipedream.isError &&
+    nativeMcp.isError &&
+    cursor.isError;
 
   const retry = () => {
     if (ENABLE_EMAIL) void emailLinks.refetch();

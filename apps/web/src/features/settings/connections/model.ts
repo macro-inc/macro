@@ -23,8 +23,17 @@ export type ProviderId = ConnectionsProviderSlug;
 
 export type CuratedAiProvider = 'github' | 'linear' | 'notion' | 'slack';
 
+export type CapabilityKind =
+  | 'gmail'
+  | 'calendar'
+  | 'github-account'
+  | 'github-team'
+  | 'ai'
+  | 'cursor';
+
 export type Capability = {
   id: string;
+  kind: CapabilityKind;
   provider: ProviderId;
   title: string;
   outcome: string;
@@ -32,6 +41,8 @@ export type Capability = {
   scope: CapabilityScope;
   status: CapabilityStatus;
   mechanism: CapabilityMechanism;
+  /** Inbox / calendar link id for Google rows. */
+  linkId?: string;
   /** Dest native MCP URL, when this row is that server. */
   sourceUrl?: string;
 };
@@ -151,6 +162,8 @@ function googleCapabilities(input: ConnectionsInput): Capability[] {
       input.userId && link.macro_id !== input.userId ? 'shared' : 'personal';
     const gmail: Capability = {
       id: `gmail:${link.id}`,
+      kind: 'gmail',
+      linkId: link.id,
       provider: 'google',
       title: 'Gmail',
       outcome:
@@ -172,6 +185,8 @@ function googleCapabilities(input: ConnectionsInput): Capability[] {
           : 'connected';
     const calendar: Capability = {
       id: `calendar:${link.id}`,
+      kind: 'calendar',
+      linkId: link.id,
       provider: 'google',
       title: 'Calendar',
       outcome:
@@ -192,23 +207,21 @@ function githubCapabilities(input: ConnectionsInput): Capability[] {
       : input.github?.status === 'reauthentication_required'
         ? 'action-required'
         : 'not-connected';
-  const handle = input.github?.username
-    ? `@${input.github.username}`
-    : 'GitHub account';
-
   return [
     {
       id: 'github-account',
+      kind: 'github-account',
       provider: 'github',
       title: 'Account',
       outcome: 'Pull requests show up in Macro.',
-      account: handle,
+      account: 'GitHub account',
       scope: 'personal',
       status: accountStatus,
       mechanism: 'macro',
     },
     {
       id: 'github-team',
+      kind: 'github-team',
       provider: 'github',
       title: 'GitHub App',
       outcome: 'Choose repositories for Macro to sync.',
@@ -261,6 +274,7 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
     if (pd) {
       capabilities.push({
         id: `${provider}-ai`,
+        kind: 'ai',
         provider,
         title: copy.title,
         outcome: copy.outcome,
@@ -280,6 +294,7 @@ function curatedAiAndLeftovers(input: ConnectionsInput): {
       usedNative.add(native.url);
       capabilities.push({
         id: `${provider}-ai`,
+        kind: 'ai',
         provider,
         title: copy.title,
         outcome: copy.outcome,
@@ -319,6 +334,7 @@ function cursorCapabilities(input: ConnectionsInput): Capability[] {
   return [
     {
       id: 'cursor',
+      kind: 'cursor',
       provider: 'cursor',
       title: 'Cursor',
       outcome: 'Use your Cursor account to run agent sessions in Macro.',
@@ -356,15 +372,15 @@ function providerSummary(
 
   const action = counted.find((row) => row.status === 'action-required');
   const needsCalendar = counted.some(
-    (row) => row.id.startsWith('calendar:') && row.status === 'not-connected'
+    (row) => row.kind === 'calendar' && row.status === 'not-connected'
   );
 
   let summary = rows[0]?.title ?? PROVIDER_NAMES[id];
-  if (id === 'github' && action?.id === 'github-account') {
+  if (id === 'github' && action?.kind === 'github-account') {
     summary = 'GitHub account needs reconnect';
   } else if (id === 'google' && needsCalendar) {
     const inbox = rows.find(
-      (row) => row.id.startsWith('calendar:') && row.status === 'not-connected'
+      (row) => row.kind === 'calendar' && row.status === 'not-connected'
     )?.account;
     summary = inbox
       ? `Calendar needs a grant for ${inbox}`

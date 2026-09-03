@@ -71,7 +71,8 @@ function BackfillProgressBar(props: { progress: BackfillProgress }) {
 export function InboxSyncStatus(props: { link: EmailLink }) {
   const backfillJobsQuery = useBackfillJobsQuery();
   const latestJob = (): BackfillJob | undefined => {
-    for (const job of backfillJobsQuery.data?.jobs ?? []) {
+    if (!backfillJobsQuery.isSuccess) return undefined;
+    for (const job of backfillJobsQuery.data.jobs) {
       if (job.link_id === props.link.id) return job;
     }
     return undefined;

@@ -5,6 +5,7 @@ import NotionIcon from '@icon/mcp-notion.svg';
 import SlackIcon from '@icon/mcp-slack.svg';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import type { JSX } from 'solid-js';
+import { match } from 'ts-pattern';
 import { GOOGLE_PROVIDER_NOTE, type ProviderId } from './model';
 
 export type FeaturedStarter = {
@@ -68,22 +69,12 @@ export function isPipedreamBrowseHidden(appSlug: string): boolean {
 }
 
 export function providerIcon(id: Exclude<ProviderId, 'other'>): JSX.Element {
-  switch (id) {
-    case 'google':
-      return <GoogleIcon />;
-    case 'github':
-      return <GithubIcon />;
-    case 'linear':
-      return <LinearIcon />;
-    case 'notion':
-      return <NotionIcon />;
-    case 'slack':
-      return <SlackIcon />;
-    case 'cursor':
-      return <CursorIcon />;
-    default: {
-      const _exhaustive: never = id;
-      return _exhaustive;
-    }
-  }
+  return match(id)
+    .with('google', () => <GoogleIcon />)
+    .with('github', () => <GithubIcon />)
+    .with('linear', () => <LinearIcon />)
+    .with('notion', () => <NotionIcon />)
+    .with('slack', () => <SlackIcon />)
+    .with('cursor', () => <CursorIcon />)
+    .exhaustive();
 }

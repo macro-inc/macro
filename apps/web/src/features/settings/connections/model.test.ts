@@ -20,7 +20,6 @@ const link = (id: string, overrides: Partial<EmailLink> = {}): EmailLink =>
 
 const github = (overrides: Partial<GithubLink> = {}): GithubLink => ({
   status: 'linked',
-  username: 'cameronpak',
   ...overrides,
 });
 
@@ -51,7 +50,7 @@ const emptyInput = {
   emailEnabled: true,
   calendarEnabled: true,
   emailLinks: [],
-  github: github({ status: 'unlinked', username: undefined }),
+  github: github({ status: 'unlinked' }),
   pipedream: [],
   nativeMcp: [],
   cursorRegistered: false,

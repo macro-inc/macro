@@ -120,6 +120,7 @@ export function CursorProvider() {
                     {
                       label: 'Disconnect',
                       danger: true,
+                      icon: 'disconnect',
                       disabled: disconnectCursor.isPending,
                       onSelect: () =>
                         setDisconnect({

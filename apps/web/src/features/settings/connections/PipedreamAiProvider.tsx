@@ -5,13 +5,9 @@ import {
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { createSignal, type JSX } from 'solid-js';
-import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
+import { AiGrantActions } from './ai-grant-actions';
 import { CapabilityRow, capabilityFacts } from './capability-row';
-import {
-  type ConnectionMenuItem,
-  ConnectionRowActions,
-} from './connection-more';
 import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
@@ -54,8 +50,12 @@ export function PipedreamAiProvider(props: {
   const copy = COPY[props.provider];
   const row = () =>
     capabilitiesFor(props.model, props.provider).find(
-      (item) => item.id === `${props.provider}-ai`
+      (item) => item.kind === 'ai'
     );
+  const aiFacts = () => {
+    const cap = row();
+    return cap ? capabilityFacts(cap) : 'Powered by Pipedream';
+  };
   const update = useUpdatePipedreamConnectionMutation();
   const remove = useDeletePipedreamConnectionMutation();
   const native = useNativeMcpActions();
@@ -137,83 +137,20 @@ export function PipedreamAiProvider(props: {
     void connect();
   };
 
-  const reconnectItem = (): ConnectionMenuItem => ({
-    label: 'Reconnect',
-    onSelect: reconnect,
-    disabled: native.authorize.isPending || busy(),
-  });
-
-  const disconnectItem = (): ConnectionMenuItem => ({
-    label: 'Disconnect',
-    danger: true,
-    onSelect: askDisconnect,
-    disabled: native.remove.isPending || remove.isPending,
-  });
-
-  const actions = (): JSX.Element => {
-    const status = row()?.status ?? 'not-connected';
-    switch (status) {
-      case 'not-connected':
-        return (
-          <ConnectionRowActions
-            primary={
-              <ConnectAction
-                label="Connect"
-                onClick={() => void connect()}
-                loading={busy()}
-              />
-            }
-            items={[]}
-          />
-        );
-      case 'action-required':
-        return (
-          <ConnectionRowActions
-            primary={
-              <ConnectAction
-                label="Reconnect"
-                onClick={reconnect}
-                disabled={native.authorize.isPending || busy()}
-              />
-            }
-            items={[reconnectItem(), disconnectItem()]}
-          />
-        );
-      case 'connected':
-        return (
-          <ConnectionRowActions
-            items={[
-              {
-                label: 'Disable',
-                onSelect: () => setEnabled(false),
-                disabled: native.update.isPending || update.isPending,
-                icon: 'disable',
-              },
-              reconnectItem(),
-              disconnectItem(),
-            ]}
-          />
-        );
-      case 'off':
-        return (
-          <ConnectionRowActions
-            primary={
-              <ConnectAction
-                label="Enable"
-                variant="neutral"
-                onClick={() => setEnabled(true)}
-                disabled={native.update.isPending || update.isPending}
-              />
-            }
-            items={[reconnectItem(), disconnectItem()]}
-          />
-        );
-      default: {
-        const _exhaustive: never = status;
-        return _exhaustive;
-      }
-    }
-  };
+  const actions = (): JSX.Element => (
+    <AiGrantActions
+      status={row()?.status ?? 'not-connected'}
+      onConnect={() => void connect()}
+      onReconnect={reconnect}
+      onEnable={() => setEnabled(true)}
+      onDisable={() => setEnabled(false)}
+      onDisconnect={askDisconnect}
+      connectBusy={busy()}
+      authPending={native.authorize.isPending}
+      updatePending={native.update.isPending || update.isPending}
+      removePending={native.remove.isPending || remove.isPending}
+    />
+  );
 
   return (
     <SettingsPage
@@ -226,7 +163,7 @@ export function PipedreamAiProvider(props: {
           <CapabilityRow
             title={copy.title}
             outcome={copy.outcome}
-            facts={row() ? capabilityFacts(row()!) : 'Powered by Pipedream'}
+            facts={aiFacts()}
             muted={row()?.status === 'off'}
           >
             {actions()}

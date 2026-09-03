@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { ENABLE_EMAIL } from '@core/constant/featureFlags';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import {
   createPipedreamCatalogConnect,
@@ -42,6 +43,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
   const featured = createMemo(() => {
     const query = catalog.searchInput().trim().toLowerCase();
     return FEATURED_DISCOVER.filter((item) => {
+      if (item.id === 'google' && !ENABLE_EMAIL) return false;
       const haystack = `${item.name} ${item.note}`.toLowerCase();
       return !query || haystack.includes(query);
     });

@@ -43,12 +43,8 @@ export function OnboardingConnectAccounts() {
 
   const githubLinked = () =>
     debugGithubConnected() || githubLink.data?.status === 'linked';
-  const githubLabel = () => {
-    const username = debugGithubConnected()
-      ? DEBUG_FAKE_GITHUB_USERNAME
-      : githubLink.data?.username;
-    return username ? `@${username}` : 'GitHub';
-  };
+  const githubLabel = () =>
+    debugGithubConnected() ? `@${DEBUG_FAKE_GITHUB_USERNAME}` : 'GitHub';
 
   const hasConnectedAccounts = () =>
     (linksQuery.data?.links.length ?? 0) > 0 || githubLinked();

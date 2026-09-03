@@ -14,6 +14,7 @@ vi.mock('@queries/email/backfill', () => ({
   getBackfillProgress: () => undefined,
   estimateEtaSeconds: () => undefined,
   useBackfillJobsQuery: () => ({
+    isSuccess: true,
     data: {
       jobs: [{ link_id: 'inbox-1', status: BackfillJobStatus.Complete }],
     },

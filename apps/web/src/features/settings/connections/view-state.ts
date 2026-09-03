@@ -1,42 +1,43 @@
-import { isConnectionsProviderSlug } from '@core/constant/settingsConnectionsUrl';
+import {
+  connectionsProviderFromRest,
+  connectionsRestForProvider,
+  connectionsRestIsDiscoverReturn,
+  isConnectionsProviderSlug,
+} from '@core/constant/settingsConnectionsUrl';
 import {
   connectionsRest,
   setConnectionsRest,
 } from '@core/signal/connectionsRest';
-import { createSignal } from 'solid-js';
 import type { ProviderId } from './model';
 
 export type ConnectionsMode = 'connected' | 'discover';
 
-const [returnMode, setReturnMode] = createSignal<ConnectionsMode>('connected');
-
 export function connectionsMode(): ConnectionsMode {
-  const rest = connectionsRest();
-  if (rest === 'discover') return 'discover';
-  if (rest) return returnMode();
-  return 'connected';
+  return connectionsRest() === 'discover' ? 'discover' : 'connected';
 }
 
 export function connectionsProvider(): ProviderId | null {
-  const rest = connectionsRest();
-  return rest && isConnectionsProviderSlug(rest) ? rest : null;
+  return connectionsProviderFromRest(connectionsRest());
 }
 
 export function showConnectionsOverview() {
   setConnectionsRest(null);
-  setReturnMode('connected');
 }
 
 export function showConnectionsDiscover() {
   setConnectionsRest('discover');
-  setReturnMode('discover');
 }
 
 export function openConnectionsProvider(id: ProviderId) {
-  setReturnMode(connectionsRest() === 'discover' ? 'discover' : 'connected');
-  setConnectionsRest(id);
+  if (!isConnectionsProviderSlug(id)) return;
+  const fromDiscover =
+    connectionsRest() === 'discover' ||
+    connectionsRestIsDiscoverReturn(connectionsRest());
+  setConnectionsRest(connectionsRestForProvider(id, fromDiscover));
 }
 
 export function closeConnectionsProvider() {
-  setConnectionsRest(returnMode() === 'discover' ? 'discover' : null);
+  setConnectionsRest(
+    connectionsRestIsDiscoverReturn(connectionsRest()) ? 'discover' : null
+  );
 }

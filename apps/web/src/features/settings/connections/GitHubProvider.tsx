@@ -12,8 +12,10 @@ import {
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { createSignal, type JSX, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
+import { AiGrantActions } from './ai-grant-actions';
 import { CapabilityRow, capabilityFacts } from './capability-row';
 import {
   type ConnectionMenuItem,
@@ -38,9 +40,9 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
     null
   );
   const rows = () => capabilitiesFor(props.model, 'github');
-  const account = () => rows().find((row) => row.id === 'github-account');
-  const team = () => rows().find((row) => row.id === 'github-team');
-  const ai = () => rows().find((row) => row.id === 'github-ai');
+  const account = () => rows().find((row) => row.kind === 'github-account');
+  const team = () => rows().find((row) => row.kind === 'github-team');
+  const ai = () => rows().find((row) => row.kind === 'ai');
 
   const initGithubLink = useInitGithubLinkMutation();
   const deleteGithubLink = useDeleteGithubLinkMutation();
@@ -108,55 +110,48 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
     danger: true,
     onSelect: askDisconnectAccount,
     disabled: deleteGithubLink.isPending,
+    icon: 'disconnect',
   });
 
   const accountReconnectItem = (): ConnectionMenuItem => ({
     label: 'Reconnect',
     onSelect: () => void reconnectAccount(),
     disabled: reauthenticateGithub.isPending,
+    icon: 'reconnect',
   });
 
-  const accountActions = (status: CapabilityStatus): JSX.Element => {
-    switch (status) {
-      case 'action-required':
-        return (
-          <ConnectionRowActions
-            primary={
-              <ConnectAction
-                label="Reconnect"
-                onClick={() => void reconnectAccount()}
-                disabled={reauthenticateGithub.isPending}
-              />
-            }
-            items={[accountReconnectItem(), accountDisconnectItem()]}
-          />
-        );
-      case 'connected':
-        return (
-          <ConnectionRowActions
-            items={[accountReconnectItem(), accountDisconnectItem()]}
-          />
-        );
-      case 'off':
-      case 'not-connected':
-        return (
-          <ConnectionRowActions
-            primary={
-              <ConnectAction
-                label="Connect"
-                onClick={() => void connectAccount()}
-                disabled={initGithubLink.isPending}
-              />
-            }
-            items={[]}
-          />
-        );
-      default: {
-        const _exhaustive: never = status;
-        return _exhaustive;
-      }
-    }
-  };
+  const accountActions = (status: CapabilityStatus): JSX.Element =>
+    match(status)
+      .with('action-required', () => (
+        <ConnectionRowActions
+          primary={
+            <ConnectAction
+              label="Reconnect"
+              onClick={() => void reconnectAccount()}
+              disabled={reauthenticateGithub.isPending}
+            />
+          }
+          items={[accountReconnectItem(), accountDisconnectItem()]}
+        />
+      ))
+      .with('connected', () => (
+        <ConnectionRowActions
+          items={[accountReconnectItem(), accountDisconnectItem()]}
+        />
+      ))
+      .with('off', 'not-connected', () => (
+        <ConnectionRowActions
+          primary={
+            <ConnectAction
+              label="Connect"
+              onClick={() => void connectAccount()}
+              disabled={initGithubLink.isPending}
+            />
+          }
+          items={[]}
+        />
+      ))
+      .exhaustive();
 
   const setAiEnabled = (enabled: boolean) => {
     const cap = ai();
@@ -211,13 +206,6 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
     });
   };
 
-  const aiDisconnectItem = (): ConnectionMenuItem => ({
-    label: 'Disconnect',
-    danger: true,
-    onSelect: askDisconnectAi,
-    disabled: native.remove.isPending || deletePipedream.isPending,
-  });
-
   const reconnectAi = () => {
     const cap = ai();
     if (!cap) return;
@@ -230,75 +218,20 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
     void connectAi();
   };
 
-  const aiReconnectItem = (): ConnectionMenuItem => ({
-    label: 'Reconnect',
-    onSelect: reconnectAi,
-    disabled: native.authorize.isPending || aiBusy(),
-  });
-
-  const aiActions = (status: CapabilityStatus): JSX.Element => {
-    switch (status) {
-      case 'not-connected':
-        return (
-          <ConnectionRowActions
-            primary={
-              <ConnectAction
-                label="Connect"
-                onClick={() => void connectAi()}
-                loading={aiBusy()}
-              />
-            }
-            items={[]}
-          />
-        );
-      case 'action-required':
-        return (
-          <ConnectionRowActions
-            primary={
-              <ConnectAction
-                label="Reconnect"
-                onClick={reconnectAi}
-                disabled={native.authorize.isPending || aiBusy()}
-              />
-            }
-            items={[aiReconnectItem(), aiDisconnectItem()]}
-          />
-        );
-      case 'connected':
-        return (
-          <ConnectionRowActions
-            items={[
-              {
-                label: 'Disable',
-                onSelect: () => setAiEnabled(false),
-                disabled: native.update.isPending || updatePipedream.isPending,
-                icon: 'disable',
-              },
-              aiReconnectItem(),
-              aiDisconnectItem(),
-            ]}
-          />
-        );
-      case 'off':
-        return (
-          <ConnectionRowActions
-            primary={
-              <ConnectAction
-                label="Enable"
-                variant="neutral"
-                onClick={() => setAiEnabled(true)}
-                disabled={native.update.isPending || updatePipedream.isPending}
-              />
-            }
-            items={[aiReconnectItem(), aiDisconnectItem()]}
-          />
-        );
-      default: {
-        const _exhaustive: never = status;
-        return _exhaustive;
-      }
-    }
-  };
+  const aiActions = (status: CapabilityStatus): JSX.Element => (
+    <AiGrantActions
+      status={status}
+      onConnect={() => void connectAi()}
+      onReconnect={reconnectAi}
+      onEnable={() => setAiEnabled(true)}
+      onDisable={() => setAiEnabled(false)}
+      onDisconnect={askDisconnectAi}
+      connectBusy={aiBusy()}
+      authPending={native.authorize.isPending}
+      updatePending={native.update.isPending || updatePipedream.isPending}
+      removePending={native.remove.isPending || deletePipedream.isPending}
+    />
+  );
 
   return (
     <SettingsPage

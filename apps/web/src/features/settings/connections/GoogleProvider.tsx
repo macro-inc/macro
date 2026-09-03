@@ -19,6 +19,7 @@ import type { ConsentScopes } from '@service-auth/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import { InboxSyncStatus } from '../inbox-sync-status';
 import { ConnectAction } from '../integration-ui';
 import {
@@ -62,7 +63,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
   const startAddInbox = useAddInboxFlow();
   const emailLinks = useEmailLinksQuery();
   const linkById = (id: string | undefined): EmailLink | undefined =>
-    id ? emailLinks.data?.links.find((link) => link.id === id) : undefined;
+    id ? emailLinkList().find((link) => link.id === id) : undefined;
   const removeInbox = useRemoveInboxMutation({
     onSuccess: (_data, linkId) => {
       clearSignatureState(linkId);
@@ -89,15 +90,15 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
     }
   };
 
-  const linkIdFor = (capability: Capability) =>
-    capability.id.startsWith('gmail:') || capability.id.startsWith('calendar:')
-      ? capability.id.slice(capability.id.indexOf(':') + 1)
-      : undefined;
+  const linkIdFor = (capability: Capability) => capability.linkId;
+
+  const emailLinkList = () =>
+    emailLinks.isSuccess ? (emailLinks.data.links ?? []) : [];
 
   const disabledPrimaryEmail = () => {
     const email = accountEmail();
     if (!email) return undefined;
-    const links = emailLinks.data?.links ?? [];
+    const links = emailLinkList();
     const hasPrimary = links.some(
       (link) => link.is_primary && link.macro_id === userId()
     );
@@ -146,7 +147,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
                       removing={removeInbox.isPending}
                       onConnect={() =>
                         void connect(
-                          row.id.startsWith('calendar:') ? 'calendar' : 'gmail'
+                          row.kind === 'calendar' ? 'calendar' : 'gmail'
                         )
                       }
                       onReconnect={() => void connect()}
@@ -184,9 +185,11 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
                   title="Gmail"
                   outcome="Sync disabled"
                   facts="Primary · Disabled"
+                  muted
                 >
                   <ConnectAction
                     label="Enable"
+                    variant="neutral"
                     onClick={() => void connect()}
                     disabled={pending()}
                   />
@@ -288,7 +291,7 @@ function GoogleInboxCapability(props: {
   const signaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
     enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
   });
-  const isGmail = () => props.row.id.startsWith('gmail:');
+  const isGmail = () => props.row.kind === 'gmail';
   const isOwn = () => props.row.scope === 'personal';
   const showSignature = () =>
     Boolean(
@@ -376,7 +379,7 @@ function GoogleCapabilityActions(props: {
   onTurnOffCalendar: () => void;
 }) {
   const isOwn = () => props.row.scope === 'personal';
-  const isCalendar = () => props.row.id.startsWith('calendar:');
+  const isCalendar = () => props.row.kind === 'calendar';
   const canRevoke = () => !isCalendar() || isOwn();
   const canTurnOffCalendarWithData = () =>
     isCalendar() &&
@@ -389,64 +392,59 @@ function GoogleCapabilityActions(props: {
     danger: true,
     onSelect: isCalendar() ? props.onTurnOffCalendar : props.onRemoveGmail,
     disabled: !isCalendar() && props.removing,
+    icon: 'disconnect' as const,
   };
   const reconnectItem = {
     label: 'Reconnect',
     onSelect: props.onReconnect,
     disabled: props.pending,
+    icon: 'reconnect' as const,
   };
 
-  switch (props.row.status) {
-    case 'action-required':
-      return (
-        <ConnectionRowActions
-          primary={
+  return match(props.row.status)
+    .with('action-required', () => (
+      <ConnectionRowActions
+        primary={
+          <ConnectAction
+            label="Reconnect"
+            onClick={props.onReconnect}
+            disabled={props.pending}
+          />
+        }
+        items={canRevoke() ? [reconnectItem, disconnectItem] : []}
+      />
+    ))
+    .with('connected', () => (
+      <ConnectionRowActions
+        items={canRevoke() ? [reconnectItem, disconnectItem] : []}
+      />
+    ))
+    .with('off', () => (
+      <ConnectionRowActions
+        primary={
+          isOwn() && isCalendar() ? (
             <ConnectAction
-              label="Reconnect"
-              onClick={props.onReconnect}
-              disabled={props.pending}
-            />
-          }
-          items={canRevoke() ? [reconnectItem, disconnectItem] : []}
-        />
-      );
-    case 'connected':
-      return (
-        <ConnectionRowActions
-          items={canRevoke() ? [reconnectItem, disconnectItem] : []}
-        />
-      );
-    case 'off':
-      return (
-        <ConnectionRowActions
-          primary={
-            isOwn() && isCalendar() ? (
-              <ConnectAction
-                label="Enable"
-                onClick={props.onConnect}
-                disabled={props.pending}
-              />
-            ) : undefined
-          }
-          items={canRevoke() ? [reconnectItem, disconnectItem] : []}
-        />
-      );
-    case 'not-connected':
-      return (
-        <ConnectionRowActions
-          primary={
-            <ConnectAction
-              label={isCalendar() ? 'Enable calendar' : 'Connect'}
+              label="Enable"
+              variant="neutral"
               onClick={props.onConnect}
               disabled={props.pending}
             />
-          }
-          items={canTurnOffCalendarWithData() ? [disconnectItem] : []}
-        />
-      );
-    default: {
-      const _exhaustive: never = props.row.status;
-      return _exhaustive;
-    }
-  }
+          ) : undefined
+        }
+        items={canRevoke() ? [reconnectItem, disconnectItem] : []}
+      />
+    ))
+    .with('not-connected', () => (
+      <ConnectionRowActions
+        primary={
+          <ConnectAction
+            label={isCalendar() ? 'Enable calendar' : 'Connect'}
+            onClick={props.onConnect}
+            disabled={props.pending}
+          />
+        }
+        items={canTurnOffCalendarWithData() ? [disconnectItem] : []}
+      />
+    ))
+    .exhaustive();
 }
