@@ -140,7 +140,6 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
               when={
                 !catalog.query.isFetching &&
                 rest().length === 0 &&
-                featured().length === 0 &&
                 catalog.search().trim()
               }
             >
