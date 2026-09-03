@@ -12,8 +12,8 @@
 //! The seams:
 //!
 //! - [`domain::engine::TurnEngine`] runs one conversational turn and streams
-//!   [`agent::StreamPart`]s back; [`outbound::rig_engine::RigTurnEngine`] is
-//!   the production implementation.
+//!   [`agent::StreamPart`]s back; [`rig_engine::RigTurnEngine`] is the
+//!   production composition root.
 //! - [`outbound::manager::InMemAgentManager`] provisions per-session agent
 //!   tasks and hands the harness the [`agent_runtime_protocol`] transport it
 //!   expects from any container manager.
@@ -22,5 +22,6 @@
 pub mod domain;
 pub mod inbound;
 pub mod outbound;
+pub mod rig_engine;
 #[cfg(test)]
 pub(crate) mod testing;
