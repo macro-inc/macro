@@ -338,6 +338,7 @@ async fn websocket_upgrade_is_authorized_at_root_and_gateway_prefix() {
     for path in [
         WEBSOCKET_PATH,
         "/connection-gateway",
+        "/connection-gateway/",
         "/connection-gateway?macro-api-token=not-a-token",
     ] {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
@@ -349,7 +350,13 @@ async fn websocket_upgrade_is_authorized_at_root_and_gateway_prefix() {
         let server = tokio::spawn(async move {
             axum::serve(
                 listener,
-                super::mount_at_root_and_prefix(test_router()).into_make_service(),
+                super::mount_at_root_and_prefix(test_router())
+                    .merge(
+                        Router::new()
+                            .route("/connection-gateway/", get(connection::ws_handler))
+                            .with_state(test_state()),
+                    )
+                    .into_make_service(),
             )
             .await
             .expect("test server should run");
