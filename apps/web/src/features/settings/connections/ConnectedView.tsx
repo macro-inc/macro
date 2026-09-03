@@ -25,10 +25,6 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
                   description={provider.summary}
                   facts={provider.accounts}
                 >
-                  <span class="text-xs text-ink-extra-muted">
-                    {provider.ready} of {provider.total}{' '}
-                    {provider.total === 1 ? 'capability' : 'capabilities'} ready
-                  </span>
                   <CaretRightIcon class="size-4 text-ink-extra-muted" />
                 </IntegrationRow>
               </button>
