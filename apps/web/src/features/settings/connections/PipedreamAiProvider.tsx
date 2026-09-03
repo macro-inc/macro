@@ -82,12 +82,12 @@ export function PipedreamAiProvider(props: {
     <SettingsPage
       title={copy.title}
       description={copy.page}
+      icon={providerIcon(props.provider)}
       onBack={closeConnectionsProvider}
     >
       <SettingsSection title="Your Connections">
         <SettingsCard>
           <CapabilityRow
-            icon={providerIcon(props.provider)}
             title={copy.title}
             outcome={copy.outcome}
             facts={

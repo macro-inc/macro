@@ -23,6 +23,7 @@ import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
+import { providerIcon } from './provider-meta';
 import { closeConnectionsProvider } from './view-state';
 
 const CURSOR_KEY_PREFIX = 'crsr_';
@@ -91,6 +92,7 @@ export function CursorProvider() {
     <SettingsPage
       title="Cursor"
       description="Use your Cursor account to run agent sessions in Macro."
+      icon={providerIcon('cursor')}
       onBack={closeConnectionsProvider}
     >
       <SettingsSection title="Your Connections">

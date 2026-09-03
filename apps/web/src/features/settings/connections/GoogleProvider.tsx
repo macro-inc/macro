@@ -38,6 +38,7 @@ import {
   type ConnectionsModel,
   capabilitiesFor,
 } from './model';
+import { providerIcon } from './provider-meta';
 import { closeConnectionsProvider } from './view-state';
 
 export function GoogleProvider(props: { model: ConnectionsModel }) {
@@ -95,6 +96,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
     <SettingsPage
       title="Google"
       description="Read, organize, and act on your email."
+      icon={providerIcon('google')}
       onBack={closeConnectionsProvider}
     >
       <Show

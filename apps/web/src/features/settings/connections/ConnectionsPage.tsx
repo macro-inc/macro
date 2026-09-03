@@ -18,6 +18,9 @@ import {
   showConnectionsOverview,
 } from './view-state';
 
+const CONNECTIONS_DESCRIPTION =
+  'Connect your accounts so Macro can work across the tools you already use.';
+
 export function ConnectionsPage() {
   const { model, ready, error, retry } = useConnectionsModel();
   const provider = connectionsProvider;
@@ -28,7 +31,7 @@ export function ConnectionsPage() {
       fallback={
         <SettingsPage
           title="Connections"
-          description="Link your inbox, GitHub, Linear, Notion, and more."
+          description={CONNECTIONS_DESCRIPTION}
           onBack={provider() ? closeConnectionsProvider : undefined}
         >
           <div class="flex items-center gap-3 text-sm text-ink-muted">
@@ -44,7 +47,7 @@ export function ConnectionsPage() {
       fallback={
         <SettingsPage
           title="Connections"
-          description="Link your inbox, GitHub, Linear, Notion, and more."
+          description={CONNECTIONS_DESCRIPTION}
         >
           <TabsInset
             fullWidth

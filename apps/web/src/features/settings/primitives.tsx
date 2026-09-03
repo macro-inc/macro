@@ -26,6 +26,8 @@ export function SettingsPage(props: {
   title: string;
   /** Optional one-line subtitle; accepts text or inline markup (e.g. a link). */
   description?: JSX.Element;
+  /** Brand mark left of the title. Same slot as IntegrationRow. */
+  icon?: JSX.Element;
   /** Right-aligned controls beside the title (e.g. a global toggle). */
   actions?: JSX.Element;
   onBack?: () => void;
@@ -49,13 +51,20 @@ export function SettingsPage(props: {
           </button>
         </Show>
         <header class="flex items-start justify-between gap-4">
-          <div class="flex flex-col gap-1.5 min-w-0">
-            <h1 class="text-2xl/tight font-semibold text-ink">{props.title}</h1>
-            <Show when={props.description}>
-              <p class="text-sm text-ink-muted text-balance">
-                {props.description}
-              </p>
+          <div class="flex min-w-0 items-center gap-3.5">
+            <Show when={props.icon}>
+              <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-8 [&_img]:size-8">
+                {props.icon}
+              </div>
             </Show>
+            <div class="flex flex-col gap-1.5 min-w-0">
+              <h1 class="text-2xl/tight font-semibold text-ink">{props.title}</h1>
+              <Show when={props.description}>
+                <p class="text-sm text-ink-muted text-balance">
+                  {props.description}
+                </p>
+              </Show>
+            </div>
           </div>
           <Show when={props.actions}>
             <div class="shrink-0 pt-1">{props.actions}</div>

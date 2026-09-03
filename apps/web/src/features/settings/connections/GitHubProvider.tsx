@@ -21,6 +21,7 @@ import {
 } from './disconnect-confirm';
 import { CURATED_AI, type ConnectionsModel, capabilitiesFor } from './model';
 import { useNativeMcpActions } from './native-actions';
+import { providerIcon } from './provider-meta';
 import { closeConnectionsProvider } from './view-state';
 
 export function GitHubProvider(props: { model: ConnectionsModel }) {
@@ -90,6 +91,7 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
     <SettingsPage
       title="GitHub"
       description="Connect Macro to your GitHub account and repositories."
+      icon={providerIcon('github')}
       onBack={closeConnectionsProvider}
     >
       <SettingsSection title="Your Connections">
