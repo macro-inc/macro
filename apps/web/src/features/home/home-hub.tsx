@@ -1,5 +1,6 @@
 import { DOCS_BASE } from '@app/constants/docs-links';
 import { LIST_VIEW_PATHS } from '@app/constants/list-views';
+import { openConnectionsProvider } from '@app/features/settings/connections/view-state';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useChatInputContext } from '@core/component/AI/context';
@@ -186,7 +187,10 @@ export function RecommendedSection() {
             <button
               type="button"
               class="group flex w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-active px-4 py-3 text-left transition-colors hover:bg-hover"
-              onClick={() => openSettings('Email')}
+              onClick={() => {
+                openSettings('Connected');
+                openConnectionsProvider('google');
+              }}
             >
               <div class="min-w-0 flex-1">
                 <div class="truncate text-sm font-medium text-ink">

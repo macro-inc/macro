@@ -181,9 +181,9 @@ describe('toConnectionsModel', () => {
       total: 2,
       summary: 'GitHub account needs reconnect',
     });
-    expect(
-      model.capabilities.find((row) => row.id === 'github-team')?.status
-    ).toBe('not-connected');
+    expect(model.capabilities.some((row) => row.id === 'github-team')).toBe(
+      false
+    );
   });
 
   it('maps Pipedream Linear to one AI capability with Off', () => {

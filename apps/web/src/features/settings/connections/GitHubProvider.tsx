@@ -41,7 +41,6 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
   );
   const rows = () => capabilitiesFor(props.model, 'github');
   const account = () => rows().find((row) => row.kind === 'github-account');
-  const team = () => rows().find((row) => row.kind === 'github-team');
   const ai = () => rows().find((row) => row.kind === 'ai');
 
   const initGithubLink = useInitGithubLinkMutation();
@@ -291,25 +290,24 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
 
       <SettingsSection title="Team Connections">
         <SettingsCard>
-          <Show when={team()}>
-            {(row) => (
-              <CapabilityRow title={row().title} outcome={row().outcome}>
-                <Show
-                  when={accountConnected()}
-                  fallback={
-                    <span class="text-xs text-ink-muted">
-                      Connect your GitHub account first
-                    </span>
-                  }
-                >
-                  <ConnectAction
-                    label="Configure app"
-                    href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
-                  />
-                </Show>
-              </CapabilityRow>
-            )}
-          </Show>
+          <CapabilityRow
+            title="GitHub App"
+            outcome="Choose repositories for Macro to sync."
+          >
+            <Show
+              when={accountConnected()}
+              fallback={
+                <span class="text-xs text-ink-muted">
+                  Connect your GitHub account first
+                </span>
+              }
+            >
+              <ConnectAction
+                label="Configure app"
+                href={`${SERVER_HOSTS['document-storage-service']}/github/install-sync`}
+              />
+            </Show>
+          </CapabilityRow>
         </SettingsCard>
       </SettingsSection>
       <DisconnectConfirmDialog

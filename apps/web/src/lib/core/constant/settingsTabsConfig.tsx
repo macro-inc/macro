@@ -110,8 +110,6 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Tags: 'tags',
   CRM: 'crm',
   Connected: 'connections',
-  Email: 'email',
-  GitHub: 'github',
   Admin: 'admin',
 };
 

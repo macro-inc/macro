@@ -10,13 +10,12 @@ export type CapabilityStatus =
   | 'action-required'
   | 'not-connected';
 
-export type CapabilityScope = 'personal' | 'shared' | 'team';
+export type CapabilityScope = 'personal' | 'shared';
 
 export type CapabilityMechanism =
   | 'macro'
   | 'pipedream'
   | 'native-mcp'
-  | 'github-app'
   | 'cursor-key';
 
 export type ProviderId = ConnectionsProviderSlug;
@@ -27,7 +26,6 @@ export type CapabilityKind =
   | 'gmail'
   | 'calendar'
   | 'github-account'
-  | 'github-team'
   | 'ai'
   | 'cursor';
 
@@ -218,17 +216,6 @@ function githubCapabilities(input: ConnectionsInput): Capability[] {
       status: accountStatus,
       mechanism: 'macro',
     },
-    {
-      id: 'github-team',
-      kind: 'github-team',
-      provider: 'github',
-      title: 'GitHub App',
-      outcome: 'Choose repositories for Macro to sync.',
-      account: 'Team organization',
-      scope: 'team',
-      status: 'not-connected',
-      mechanism: 'github-app',
-    },
   ];
 }
 
@@ -349,18 +336,17 @@ function providerSummary(
   id: Exclude<ProviderId, 'other'>,
   rows: Capability[]
 ): ProviderSummary | null {
-  const counted = rows.filter((row) => row.mechanism !== 'github-app');
-  const readyRows = counted.filter((row) => row.status === 'connected');
+  const readyRows = rows.filter((row) => row.status === 'connected');
   if (
     readyRows.length === 0 &&
-    !counted.some((row) => row.status !== 'not-connected')
+    !rows.some((row) => row.status !== 'not-connected')
   ) {
     return null;
   }
 
   const accounts = [
     ...new Set(
-      counted
+      rows
         .filter(
           (row) =>
             row.status !== 'not-connected' && row.mechanism !== 'pipedream'
@@ -369,8 +355,8 @@ function providerSummary(
     ),
   ].join(' · ');
 
-  const action = counted.find((row) => row.status === 'action-required');
-  const needsCalendar = counted.some(
+  const action = rows.find((row) => row.status === 'action-required');
+  const needsCalendar = rows.some(
     (row) => row.kind === 'calendar' && row.status === 'not-connected'
   );
 
@@ -394,7 +380,7 @@ function providerSummary(
     id,
     name: PROVIDER_NAMES[id],
     ready: readyRows.length,
-    total: counted.length,
+    total: rows.length,
     summary,
     accounts,
   };

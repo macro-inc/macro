@@ -4,7 +4,7 @@
 
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
-import { AddCustomMcpDialog } from './Integrations';
+import { AddCustomMcpDialog } from './add-custom-mcp-dialog';
 
 const mocks = vi.hoisted(() => ({
   add: vi.fn(),

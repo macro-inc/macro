@@ -47,8 +47,8 @@ import { Agent } from './Agent';
 import { Agents } from './Agents';
 import { ApiKeys } from './ApiKeys';
 import { Appearance } from './Appearance';
-import { ConnectedAccounts } from './ConnectedAccounts';
 import { Crm } from './Crm';
+import { ConnectionsPage } from './connections/ConnectionsPage';
 import { Harness } from './Harness';
 import { MobileApp } from './MobileApp';
 import { Notifications } from './Notifications';
@@ -437,7 +437,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 </Show>
                 <Show when={isCurrentTab('Connected')}>
                   <Suspense>
-                    <ConnectedAccounts />
+                    <ConnectionsPage />
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Mobile App')}>

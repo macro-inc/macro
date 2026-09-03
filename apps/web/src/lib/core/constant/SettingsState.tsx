@@ -38,8 +38,6 @@ export type SettingsTab =
   | 'Tags'
   | 'CRM'
   | 'Connected'
-  | 'Email'
-  | 'GitHub'
   | 'Admin';
 
 // Where "Back to app" (and move-to-split) should return to: the layout the user

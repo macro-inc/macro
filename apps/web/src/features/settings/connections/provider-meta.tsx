@@ -47,10 +47,8 @@ export const EMPTY_STARTERS: FeaturedStarter[] = [
   },
 ];
 
-export const FEATURED_DISCOVER = EMPTY_STARTERS;
-
 export const PIPEDREAM_BROWSE_HIDDEN_SLUGS: ReadonlySet<string> = new Set([
-  ...FEATURED_DISCOVER.map((item) => item.id),
+  ...EMPTY_STARTERS.map((item) => item.id),
   'gmail',
   'google_calendar',
 ]);

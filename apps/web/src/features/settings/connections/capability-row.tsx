@@ -5,7 +5,6 @@ import type { Capability, CapabilityScope } from './model';
 const SCOPE_LABEL: Record<CapabilityScope, string> = {
   personal: 'Personal',
   shared: 'Shared',
-  team: 'Team',
 };
 
 export function capabilityFacts(

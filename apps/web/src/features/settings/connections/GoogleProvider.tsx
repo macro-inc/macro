@@ -14,6 +14,7 @@ import {
   useEmailLinksQuery,
   useRemoveInboxMutation,
 } from '@queries/email/link';
+import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
 import type { ConsentScopes } from '@service-auth/client';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
 import { Button, Dialog, Panel } from '@ui';
@@ -29,10 +30,17 @@ import {
 } from '../primitives';
 import {
   clearSignatureState,
+  isSignatureDirty,
   isSignatureExpanded,
+  persistSignatureDraft,
   SignatureSection,
   toggleSignatureExpanded,
 } from '../SignatureSection';
+import {
+  finishSignatureRow,
+  signatureRowAction,
+  signatureRowLabel,
+} from '../signature-row-action';
 import { CapabilityRow } from './capability-row';
 import { ConnectionRowActions } from './connection-more';
 import {
@@ -47,14 +55,14 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
   const userId = useUserId();
   const accountEmail = useEmail();
   const rows = () => capabilitiesFor(props.model, 'google');
-  const inboxes = () => {
-    const emails = [...new Set(rows().map((row) => row.account))];
-    return emails.map((email) => ({
-      email,
-      scope: rows().find((row) => row.account === email)?.scope ?? 'personal',
-      caps: rows().filter((row) => row.account === email),
-    }));
-  };
+  const inboxEmails = () => [...new Set(rows().map((row) => row.account))];
+  const inboxScope = (email: string) =>
+    rows().find((row) => row.account === email)?.scope ?? 'personal';
+  const inboxCapIds = (email: string) =>
+    rows()
+      .filter((row) => row.account === email)
+      .map((row) => row.id);
+  const capById = (id: string) => rows().find((row) => row.id === id);
 
   const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const startAddInbox = useAddInboxFlow();
@@ -110,7 +118,7 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
       onBack={closeConnectionsProvider}
     >
       <Show
-        when={inboxes().length > 0}
+        when={inboxEmails().length > 0}
         fallback={
           <SettingsSection title="Your Connections">
             <SettingsCard>
@@ -128,44 +136,50 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
           </SettingsSection>
         }
       >
-        <For each={inboxes()}>
-          {(inbox) => (
+        <For each={inboxEmails()}>
+          {(email) => (
             <SettingsSection
-              title={<span class="ph-no-capture truncate">{inbox.email}</span>}
-              description={inbox.scope === 'shared' ? 'Shared' : undefined}
+              title={<span class="ph-no-capture truncate">{email}</span>}
+              description={
+                inboxScope(email) === 'shared' ? 'Shared' : undefined
+              }
             >
               <SettingsCard>
-                <For each={inbox.caps}>
-                  {(row) => (
-                    <GoogleInboxCapability
-                      row={row}
-                      link={linkById(linkIdFor(row))}
-                      pending={pending()}
-                      removing={removeInbox.isPending}
-                      onConnect={() =>
-                        void connect(
-                          row.kind === 'calendar' ? 'calendar' : 'gmail'
-                        )
-                      }
-                      onReconnect={() => void connect()}
-                      onRemoveGmail={() => {
-                        const linkId = linkIdFor(row);
-                        if (!linkId) return;
-                        setRemoveTarget({
-                          id: linkId,
-                          email: row.account,
-                          isOwn: row.scope === 'personal',
-                        });
-                      }}
-                      onTurnOffCalendar={() => {
-                        const linkId = linkIdFor(row);
-                        if (!linkId) return;
-                        setCalendarTarget({
-                          linkId,
-                          emailAddress: row.account,
-                        });
-                      }}
-                    />
+                <For each={inboxCapIds(email)}>
+                  {(capId) => (
+                    <Show when={capById(capId)}>
+                      {(row) => (
+                        <GoogleInboxCapability
+                          row={row()}
+                          link={linkById(linkIdFor(row()))}
+                          pending={pending()}
+                          removing={removeInbox.isPending}
+                          onConnect={() =>
+                            void connect(
+                              row().kind === 'calendar' ? 'calendar' : 'gmail'
+                            )
+                          }
+                          onReconnect={() => void connect()}
+                          onRemoveGmail={() => {
+                            const linkId = linkIdFor(row());
+                            if (!linkId) return;
+                            setRemoveTarget({
+                              id: linkId,
+                              email: row().account,
+                              isOwn: row().scope === 'personal',
+                            });
+                          }}
+                          onTurnOffCalendar={() => {
+                            const linkId = linkIdFor(row());
+                            if (!linkId) return;
+                            setCalendarTarget({
+                              linkId,
+                              emailAddress: row().account,
+                            });
+                          }}
+                        />
+                      )}
+                    </Show>
                   )}
                 </For>
               </SettingsCard>
@@ -286,6 +300,7 @@ function GoogleInboxCapability(props: {
   onTurnOffCalendar: () => void;
 }) {
   const signaturesFlag = useFeatureFlag(enableEmailSignatures);
+  const updateSettings = useUpdateEmailSettingsMutation();
   const isGmail = () => props.row.kind === 'gmail';
   const isOwn = () => props.row.scope === 'personal';
   const showSignature = () =>
@@ -298,6 +313,29 @@ function GoogleInboxCapability(props: {
     );
   const signatureSectionId = () =>
     props.link ? `signature-section-${props.link.id}` : undefined;
+  const persistedSignature = () => props.link?.settings.signature ?? '';
+  const signatureAction = () => {
+    const id = props.link?.id;
+    if (!id) return 'edit' as const;
+    return signatureRowAction(
+      isSignatureExpanded(id),
+      isSignatureDirty(id, persistedSignature())
+    );
+  };
+  const finishSignature = (linkId: string) => {
+    finishSignatureRow({
+      action: signatureAction(),
+      save: () =>
+        persistSignatureDraft({
+          linkId,
+          mutate: (vars, callbacks) => updateSettings.mutate(vars, callbacks),
+          onSaved: () => {
+            if (isSignatureExpanded(linkId)) toggleSignatureExpanded(linkId);
+          },
+        }),
+      toggle: () => toggleSignatureExpanded(linkId),
+    });
+  };
 
   const capabilityRow = () => (
     <CapabilityRow
@@ -342,12 +380,15 @@ function GoogleInboxCapability(props: {
                   variant="outline"
                   size="sm"
                   depth={3}
-                  onClick={() => toggleSignatureExpanded(link().id)}
-                  aria-label={`Edit signature for ${link().email_address}`}
+                  disabled={
+                    signatureAction() === 'save' && updateSettings.isPending
+                  }
+                  onClick={() => finishSignature(link().id)}
+                  aria-label={`${signatureRowLabel(signatureAction())} signature for ${link().email_address}`}
                   aria-expanded={showSignature()}
                   aria-controls={signatureSectionId()}
                 >
-                  {showSignature() ? 'Done' : 'Edit'}
+                  {signatureRowLabel(signatureAction())}
                 </Button>
               </SettingsRow>
               <Show when={showSignature()}>

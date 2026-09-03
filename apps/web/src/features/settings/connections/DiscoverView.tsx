@@ -13,12 +13,12 @@ import XIcon from '@phosphor/x.svg';
 import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
 import { Button } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { AddCustomMcpDialog } from '../Integrations';
 import { ConnectAction } from '../integration-ui';
 import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';
+import { AddCustomMcpDialog } from './add-custom-mcp-dialog';
 import type { ConnectionsModel } from './model';
 import {
-  FEATURED_DISCOVER,
+  EMPTY_STARTERS,
   PIPEDREAM_BROWSE_HIDDEN_SLUGS,
   providerIcon,
 } from './provider-meta';
@@ -42,7 +42,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
 
   const featured = createMemo(() => {
     const query = catalog.searchInput().trim().toLowerCase();
-    return FEATURED_DISCOVER.filter((item) => {
+    return EMPTY_STARTERS.filter((item) => {
       if (item.id === 'google' && !ENABLE_EMAIL) return false;
       const haystack = `${item.name} ${item.note}`.toLowerCase();
       return !query || haystack.includes(query);

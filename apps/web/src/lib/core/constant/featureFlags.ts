@@ -593,7 +593,7 @@ export function isCalendarSearchUiEnabled(): boolean {
 // The "Enable calendar" prompt on phones. Off by default everywhere,
 // including dev: the mobile toast layout drops the body and the close button,
 // so the prompt lands as an undismissable one-line bar over the composer.
-// Settings › Email keeps a per-inbox "Enable calendar" button, so nothing
+// Connections › Google keeps a per-inbox "Enable calendar" button, so nothing
 // becomes unreachable while this is off. Flip it on in PostHog once the
 // mobile layout is fixed, or locally with
 // VITE_ENABLE_CALENDAR_PROMPT_MOBILE=true.
@@ -604,7 +604,7 @@ export const enableCalendarPromptMobile = defineFlag({
 
 // The "Enable calendar" prompt on desktop/web, the counterpart to
 // `enable-calendar-prompt-mobile`. Off by default everywhere, including dev,
-// until the PostHog rollout is raised; Settings › Email keeps a per-inbox
+// until the PostHog rollout is raised; Connections › Google keeps a per-inbox
 // "Enable calendar" button, so nothing becomes unreachable while this is off.
 // Override locally with VITE_ENABLE_CALENDAR_PROMPT_WEB=true.
 export const enableCalendarPromptWeb = defineFlag({

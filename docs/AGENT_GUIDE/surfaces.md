@@ -70,6 +70,7 @@ snapshot to a file) plus a feed of "You edited/created X" entries.
 
 Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
 `Draft an email`, `Search & research`), and the ubiquitous `Ask AI` composer.
+The connect-inbox empty state opens Connections at Google.
 
 ## Settings — `/app/settings/<section>`
 
@@ -107,8 +108,7 @@ Linear / Notion / Slack (Pipedream AI, Off is enable/disable), Cursor (API key
 + default model). Discover is `/app/settings/connections/discover`. A provider
 is `/app/settings/connections/<provider>` (`github`, `google`, `cursor`, …).
 Those are path tokens under the Connections tab, not extra Settings tabs.
-`/app/settings/github` is a leftover unused tab slug, not the GitHub provider
-page. Connections signposts Macro MCP to
+Connections signposts Macro MCP to
 the `Macro MCP` tab (`/app/settings/mcp-server`). That tab signposts inbound
 connectors to Discover.
 
