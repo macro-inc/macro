@@ -1,6 +1,6 @@
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { Button } from '@ui';
+import { Button, buttonClasses } from '@ui';
 import { For, Show } from 'solid-js';
 import { IntegrationRow, SettingsCard, SettingsSection } from '../primitives';
 import type { ConnectionsModel } from './model';
@@ -78,21 +78,21 @@ function EmptyConnected() {
   return (
     <>
       <SettingsCard>
-        <IntegrationRow
-          icon={providerIcon('google')}
-          title="Start with Google"
-          description="Read, organize, and act on your email."
+        <button
+          type="button"
+          class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
+          onClick={() => openConnectionsProvider('google')}
         >
-          <Button
-            type="button"
-            variant="accent"
-            size="sm"
-            depth={3}
-            onClick={() => openConnectionsProvider('google')}
+          <IntegrationRow
+            icon={providerIcon('google')}
+            title="Start with Google"
+            description="Read, organize, and act on your email."
           >
-            Connect Google
-          </Button>
-        </IntegrationRow>
+            <span class={buttonClasses({ variant: 'accent', size: 'sm' })}>
+              Connect Google
+            </span>
+          </IntegrationRow>
+        </button>
       </SettingsCard>
 
       <SettingsSection title="Or start with one of these">
