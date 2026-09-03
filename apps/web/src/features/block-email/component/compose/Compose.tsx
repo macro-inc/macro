@@ -866,8 +866,11 @@ export function EmailCompose(props: EmailComposeProps) {
     if (date) {
       // Always save fresh: a committed save adopts server-minted draft and
       // thread ids, replacing any local handle left by a queued offline
-      // save — which the REST endpoints below cannot resolve.
-      const draftID = await executeSaveDraft();
+      // save — which the REST endpoints below cannot resolve. A save that
+      // throws has already reported itself; treat it as "no draft" so the
+      // send time set above is rolled back instead of left looking
+      // scheduled.
+      const draftID = await executeSaveDraft().catch(() => undefined);
       if (!draftID) {
         form.setSendTime(null);
         toast.failure('Failed to schedule message', {

@@ -934,8 +934,13 @@ export function BaseInput(props: {
       // over REST right away — offline, or against a handle the server has
       // not seen, that fails out the way an offline attachment does today:
       // the upload mutation's toast, with the file kept on the form for the
-      // next save to retry.
-      await uploadPendingAttachments(draftId, { syncForwarded: false });
+      // next save to retry. That miss is not the save's failure — the draft
+      // is queued either way — so the handle is still returned.
+      try {
+        await uploadPendingAttachments(draftId, { syncForwarded: false });
+      } catch {
+        // Reported by the upload mutation's onError (toast + cleanup).
+      }
       return draftId;
     }
     if (outcome.kind === 'failed') {
@@ -959,10 +964,22 @@ export function BaseInput(props: {
   }
 
   // Sent from another device: the server outcome supersedes the local
-  // draft. Drop it and show the thread's real state.
+  // draft. Drop it — content and id both, so no later save or send targets
+  // the sent message — and show the thread's real state. Autosave is not
+  // latched here: the bottom-of-thread input stays mounted, and its next
+  // reply must still save.
   function handleReplyAlreadySent() {
     toast.alert('This reply was already sent');
+    // Block the save scheduled by resetState's side effects; restored on a
+    // timeout for the stay-mounted case, as in deleteDraftAndReset.
+    pendingDeletion = true;
+    if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+    resetState();
     clearDraftState();
+    setTimeout(() => {
+      if (draftSaveTimer) window.clearTimeout(draftSaveTimer);
+      pendingDeletion = false;
+    }, 0);
     ctx.query.refetch();
   }
 
@@ -1759,8 +1776,11 @@ export function BaseInput(props: {
     if (date) {
       // Always save fresh: a committed save adopts the server-minted draft
       // id, replacing any local handle left by a queued offline save —
-      // which the schedule endpoint below cannot resolve.
-      const draftID = await executeSaveDraft();
+      // which the schedule endpoint below cannot resolve. A save that throws
+      // (REST rejection, attachment upload failure) has already reported
+      // itself; treat it as "no draft" so the send time set above is rolled
+      // back instead of left looking scheduled.
+      const draftID = await executeSaveDraft().catch(() => undefined);
       if (!draftID) {
         form().setSendTime(null);
         toast.failure('Failed to schedule message', {

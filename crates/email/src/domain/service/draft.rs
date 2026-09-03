@@ -294,9 +294,31 @@ where
             .await
             .map_err(anyhow::Error::from)?
         else {
-            // The upsert's owner guard rejected the write: the ID exists under
-            // another inbox or stopped being an unsent draft since validation.
-            // Opaque not-found, matching the validation read's failure mode.
+            // The upsert's owner guard rejected the write: the row it landed
+            // on is under another inbox or is no longer an unsent draft. Tell
+            // the sent case apart, as the delete path does — the client
+            // resets its composer on `MessageAlreadySent` but latches
+            // autosave off on a not-found. Re-read through the handle when the
+            // save carried one, since a concurrent first save may have
+            // settled it on a row this save's input never named. Anything
+            // else stays the opaque not-found the validation read reports.
+            let rejected_id = match resolved.draft_client_id {
+                Some(handle) => self
+                    .email_repo
+                    .message_id_for_client_draft_id(handle, &accessible_link_ids)
+                    .await
+                    .map_err(anyhow::Error::from)?
+                    .unwrap_or(resolved.db_id),
+                None => resolved.db_id,
+            };
+            let rejected = self
+                .email_repo
+                .get_simple_message(rejected_id, &accessible_link_ids)
+                .await
+                .map_err(anyhow::Error::from)?;
+            if rejected.is_some_and(|m| m.is_sent || !m.is_draft) {
+                return Err(EmailErr::MessageAlreadySent(resolved.db_id));
+            }
             return Err(EmailErr::MessageNotFound(resolved.db_id));
         };
 
