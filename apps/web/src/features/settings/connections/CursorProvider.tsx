@@ -95,7 +95,7 @@ export function CursorProvider() {
         <SettingsCard>
           <CapabilityRow
             title="Cursor"
-            outcome="Use your Cursor account to run agent sessions in Macro."
+            outcome="Use your Cursor account to run agent sessions in Macro. Disconnect from Macro deletes Macro's copy of the key. It does not revoke the key in Cursor."
             facts="Personal"
             status={
               !cursorStatus.isPlaceholderData && cursorRegistered()

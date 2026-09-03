@@ -126,7 +126,9 @@ describe('CursorProvider', () => {
 
     expect(mocks.disconnect).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeTruthy();
-    expect(screen.getByText(/does not revoke the key in Cursor/)).toBeTruthy();
+    expect(
+      screen.getAllByText(/does not revoke the key in Cursor/).length
+    ).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
 
