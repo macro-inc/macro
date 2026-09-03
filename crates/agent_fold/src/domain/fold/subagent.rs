@@ -4,8 +4,8 @@
 use serde_json::Value;
 
 use crate::domain::error::FoldError;
-use crate::domain::harness::HarnessReader;
-use crate::domain::model::{MessagePart, ToolDetail, ToolUseId};
+use crate::domain::harness::{HarnessReader, mcp};
+use crate::domain::model::{MessagePart, SubagentResult, ToolDetail, ToolName, ToolUseId};
 use agent_client_protocol::schema::v1::Meta;
 
 use super::state::{Changed, FoldState, ToolPath};
@@ -65,52 +65,133 @@ impl FoldState {
     }
 }
 
+/// Which delegation tool a subagent call is: the harness's own (Claude
+/// Code's `Agent`, Cursor's `task`), read by its reader, or Macro's
+/// `Subagent`, whose response shape is Macro's whichever harness relayed it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Delegation {
+    Harness,
+    MacroSubagent,
+}
+
+impl Delegation {
+    /// Whether `name` delegates at all under this harness, and if so how.
+    /// Macro's `Subagent` is checked by name whichever harness calls it;
+    /// everything else is the reader's call.
+    pub(super) fn of(
+        reader: &dyn HarnessReader,
+        name: &ToolName,
+        kind: agent_client_protocol::schema::v1::ToolKind,
+        meta: Option<&Meta>,
+    ) -> Option<Self> {
+        if reader.macro_tool(name).is_some_and(mcp::is_subagent_tool) {
+            Some(Self::MacroSubagent)
+        } else if reader.is_subagent(name, kind, meta) {
+            Some(Self::Harness)
+        } else {
+            None
+        }
+    }
+
+    /// What the subagent reported on this frame.
+    fn result(
+        self,
+        reader: &dyn HarnessReader,
+        meta: Option<&Meta>,
+        raw_input: Option<&Value>,
+        raw_output: Option<&Value>,
+        content_text: Option<&str>,
+    ) -> Option<SubagentResult> {
+        match self {
+            Self::Harness => reader.subagent_result(meta, raw_input, raw_output, content_text),
+            Self::MacroSubagent => macro_subagent_result(reader, raw_output),
+        }
+    }
+}
+
+/// Macro's `Subagent` tool's result: its `{ "result" }` response, out of
+/// whatever envelope the harness wrapped it in (none for Macro's own agent,
+/// MCP's for the rest), or the error the envelope reported.
+fn macro_subagent_result(
+    reader: &dyn HarnessReader,
+    raw_output: Option<&Value>,
+) -> Option<SubagentResult> {
+    let (value, error) = reader.unwrap_tool_output(raw_output?);
+    let result = SubagentResult {
+        text: mcp::subagent_response_text(&value),
+        error,
+        ..SubagentResult::default()
+    };
+    (!result.is_empty()).then_some(result)
+}
+
+/// The fields of one frame a subagent's detail is read from. A `tool_call`
+/// carries all of them; a `tool_call_update` only those it patches.
+pub(super) struct SubagentFrame<'frame> {
+    pub meta: Option<&'frame Meta>,
+    pub title: Option<&'frame str>,
+    pub raw_input: Option<&'frame Value>,
+    pub raw_output: Option<&'frame Value>,
+    /// The content blocks' text, only once the call has finished: while it
+    /// streams, Claude Code echoes the brief there.
+    pub content_text: Option<&'frame str>,
+}
+
+impl SubagentFrame<'_> {
+    fn result(&self, reader: &dyn HarnessReader, delegation: Delegation) -> Option<SubagentResult> {
+        delegation.result(
+            reader,
+            self.meta,
+            self.raw_input,
+            self.raw_output,
+            self.content_text,
+        )
+    }
+}
+
 /// The detail for a subagent call, from its opening frame.
 pub(super) fn subagent_detail(
     reader: &dyn HarnessReader,
-    meta: Option<&Meta>,
-    title: &str,
-    raw_input: Option<&Value>,
-    raw_output: Option<&Value>,
-    content_text: Option<&str>,
+    delegation: Delegation,
+    frame: &SubagentFrame<'_>,
 ) -> ToolDetail {
-    let input = reader.subagent_input(raw_input, title);
+    let input = reader.subagent_input(frame.raw_input, frame.title.unwrap_or_default());
     ToolDetail::Subagent {
         agent_type: input.agent_type,
         description: input.description,
         prompt: input.prompt,
         background: input.background.unwrap_or(false),
-        children: Vec::new(),
-        result: reader
-            .subagent_result(meta, raw_input, raw_output, content_text)
-            .map(Box::new),
+        children: reader.subagent_transcript(frame.raw_output),
+        result: frame.result(reader, delegation).map(Box::new),
     }
 }
 
 /// Write an update's fields into a subagent's detail: input fields the
-/// update names, and whatever result it reports merged over what is held.
+/// update names, whatever result it reports merged over what is held, and
+/// the child's transcript when the harness delivers one whole.
 pub(super) fn patch_subagent_detail(
     reader: &dyn HarnessReader,
+    delegation: Delegation,
     detail: &mut ToolDetail,
-    meta: Option<&Meta>,
-    title: Option<&str>,
-    raw_input: Option<&Value>,
-    raw_output: Option<&Value>,
-    content_text: Option<&str>,
+    frame: &SubagentFrame<'_>,
 ) {
     let ToolDetail::Subagent {
         agent_type,
         description,
         prompt,
         background,
+        children,
         result,
-        ..
     } = detail
     else {
         return;
     };
-    if raw_input.is_some() || title.is_some() {
-        let input = reader.subagent_input(raw_input, title.unwrap_or_default());
+    let transcript = reader.subagent_transcript(frame.raw_output);
+    if !transcript.is_empty() {
+        *children = transcript;
+    }
+    if frame.raw_input.is_some() || frame.title.is_some() {
+        let input = reader.subagent_input(frame.raw_input, frame.title.unwrap_or_default());
         if input.agent_type.is_some() {
             *agent_type = input.agent_type;
         }
@@ -124,7 +205,7 @@ pub(super) fn patch_subagent_detail(
             *background = found;
         }
     }
-    if let Some(reported) = reader.subagent_result(meta, raw_input, raw_output, content_text) {
+    if let Some(reported) = frame.result(reader, delegation) {
         match result {
             Some(existing) => existing.merge(reported),
             None => *result = Some(Box::new(reported)),

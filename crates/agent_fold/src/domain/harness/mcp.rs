@@ -39,6 +39,32 @@ pub fn is_user_tool(tool: &str) -> bool {
     USER_TOOLS.contains(&tool)
 }
 
+/// Macro's own delegation tool. A delegation whichever harness calls it:
+/// natively by Macro's in-process agent, or over Macro's MCP server by any
+/// other. Mirrors `agent_inmem`'s `SUBAGENT_TOOL`.
+pub const SUBAGENT_TOOL: &str = "Subagent";
+
+/// Whether the Macro tool `tool` delegates to a subagent.
+#[must_use]
+pub fn is_subagent_tool(tool: &str) -> bool {
+    tool == SUBAGENT_TOOL
+}
+
+/// What Macro's `Subagent` tool returns: the child's answer as prose.
+/// Mirrors `ai_tools::subagent::SubagentResponse`.
+#[derive(Deserialize)]
+struct SubagentResponse {
+    result: String,
+}
+
+/// The answer inside a `Subagent` tool's own result, `value` already
+/// unwrapped. `None` when the value is not that response.
+#[must_use]
+pub fn subagent_response_text(value: &Value) -> Option<String> {
+    let response: SubagentResponse = serde_json::from_value(value.clone()).ok()?;
+    (!response.result.is_empty()).then_some(response.result)
+}
+
 /// MCP's `CallToolResult`, as far as the fold reads it.
 ///
 /// Deserializing an object into this is how an envelope is recognized: a

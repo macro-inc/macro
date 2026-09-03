@@ -43,7 +43,7 @@ pub mod openclaw;
 /// OpenCode's built-in ACP server.
 pub mod opencode;
 
-use crate::domain::model::{Harness, SubagentResult, ToolName, ToolUseId};
+use crate::domain::model::{Harness, MessagePart, SubagentResult, ToolName, ToolUseId};
 use agent_client_protocol::schema::v1::{Meta, ToolKind};
 use lazy_regex::regex_is_match;
 use serde::Deserialize;
@@ -136,6 +136,16 @@ pub trait HarnessReader: Sync {
     ) -> Option<SubagentResult> {
         let _ = (meta, raw_input);
         generic::subagent_result(raw_output, content_text)
+    }
+
+    /// The subagent's own activity, when the harness reports it wholesale in
+    /// the call's result rather than streaming the child's frames and
+    /// attributing them to the parent (see [`Self::parent_tool_call`]).
+    /// Only Cursor does today. Empty means the frame carries none; a
+    /// non-empty transcript replaces whatever children the call held.
+    fn subagent_transcript(&self, raw_output: Option<&serde_json::Value>) -> Vec<MessagePart> {
+        let _ = raw_output;
+        Vec::new()
     }
 }
 

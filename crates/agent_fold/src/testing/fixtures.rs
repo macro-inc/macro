@@ -31,3 +31,19 @@ pub const SUBAGENT_CLAUDE_CODE: &str =
 /// whose completion names the child session and wraps the answer in
 /// `<task_result>`, with nothing of the child streamed.
 pub const SUBAGENT_OPENCODE: &str = include_str!("../../fixtures/real/subagent_opencode.jsonl");
+
+/// A sanitized real Cursor (`cursor-acp`) turn delegating to a subagent: the
+/// `task` call with `subagentType: { unspecified: {} }` and `model:
+/// "default"`, whose completion carries the child's whole transcript in
+/// `rawOutput.result.success.conversationSteps` - thoughts, prose, and two
+/// `shellToolCall`s with their results - plus `agentId` and a `durationMs`
+/// string. Nothing of the child is streamed as its own frames.
+pub const SUBAGENT_CURSOR: &str = include_str!("../../fixtures/real/subagent_cursor.jsonl");
+
+/// A sanitized real turn of Macro's in-process agent (`macro-inmem`)
+/// delegating to a subagent: its native `Subagent` call, flagged
+/// `_meta.macro.subagent: true`, with `{ "task" }` as input and the bare
+/// `{ "result": "<answer>" }` response on completion. Nothing of the child is
+/// streamed.
+pub const SUBAGENT_MACRO_INMEM: &str =
+    include_str!("../../fixtures/real/subagent_macro_inmem.jsonl");

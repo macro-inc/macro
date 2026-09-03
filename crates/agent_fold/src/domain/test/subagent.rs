@@ -10,7 +10,9 @@ use crate::domain::model::{
 };
 use crate::domain::ports::FoldMachine;
 use crate::domain::test::util::capturing_warnings;
-use crate::testing::fixtures::{SUBAGENT_CLAUDE_CODE, SUBAGENT_OPENCODE};
+use crate::testing::fixtures::{
+    SUBAGENT_CLAUDE_CODE, SUBAGENT_CURSOR, SUBAGENT_MACRO_INMEM, SUBAGENT_OPENCODE,
+};
 use crate::testing::parse_log;
 use agent_client_protocol::schema::v1::{Meta, ToolKind};
 use serde_json::json;
@@ -172,11 +174,99 @@ fn opencode_reports_the_child_session_and_strips_the_task_wrapper() {
     assert_eq!(result.error, None);
 }
 
+/// Macro's own agent delegates through its `Subagent` tool, which by name is
+/// a Macro tool; the fold still folds it to the subagent detail, with the
+/// tool's `{ "result" }` response read as the answer rather than shown as
+/// JSON.
+#[test]
+fn the_inmem_agents_subagent_tool_folds_to_a_subagent_not_a_macro_tool() {
+    let (messages, warnings) = capturing_warnings(|| fold(parse_log(SUBAGENT_MACRO_INMEM)));
+    assert_eq!(warnings, vec![]);
+    let agent = agent_message(&messages);
+    let [part] = subagent_parts(agent)[..] else {
+        panic!("exactly one subagent: {:#?}", agent.parts);
+    };
+    let MessagePart::ToolUse {
+        name,
+        status,
+        detail:
+            ToolDetail::Subagent {
+                agent_type,
+                description,
+                prompt,
+                children,
+                result,
+                ..
+            },
+        ..
+    } = part
+    else {
+        unreachable!()
+    };
+    assert_eq!(*name, ToolName::native("Subagent"));
+    assert_eq!(*status, ToolStatus::Completed);
+    assert_eq!(*agent_type, None);
+    assert_eq!(*description, None);
+    assert!(prompt.as_deref().unwrap().starts_with("Compute 5 + 5"));
+    assert!(children.is_empty(), "the child is not streamed");
+    let result = result.as_deref().expect("reported");
+    assert!(result.text.as_deref().unwrap().contains("**10**"));
+    assert_eq!(result.error, None);
+    assert!(
+        !agent.parts.iter().any(|part| matches!(
+            part,
+            MessagePart::ToolUse {
+                detail: ToolDetail::Macro { .. },
+                ..
+            }
+        )),
+        "the delegation must not also fold as a Macro tool"
+    );
+}
+
+/// Any other harness reaches the same tool over Macro's MCP server, with the
+/// response inside MCP's envelope; it is a delegation there too.
+#[test]
+fn the_subagent_tool_over_mcp_folds_to_a_subagent() {
+    let log = r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"go"}]}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"_meta":{"claudeCode":{"toolName":"mcp__macro__Subagent"}},"toolCallId":"a","sessionUpdate":"tool_call","rawInput":{"task":"Find the frog poem"},"status":"in_progress","title":"Subagent","kind":"other"}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"toolCallId":"a","sessionUpdate":"tool_call_update","status":"completed","rawOutput":{"content":[{"type":"text","text":"{\"result\":\"where quiet frogs go off to sleep.\"}"}]}}}}}
+{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#;
+    let (messages, warnings) = capturing_warnings(|| fold(parse_log(log)));
+    assert_eq!(warnings, vec![]);
+    let agent = agent_message(&messages);
+    let [part] = subagent_parts(agent)[..] else {
+        panic!("exactly one subagent: {:#?}", agent.parts);
+    };
+    let MessagePart::ToolUse {
+        name,
+        detail: ToolDetail::Subagent { prompt, result, .. },
+        ..
+    } = part
+    else {
+        unreachable!()
+    };
+    assert_eq!(
+        *name,
+        ToolName::Mcp {
+            server: "macro".to_owned(),
+            tool: "Subagent".to_owned()
+        }
+    );
+    assert_eq!(prompt.as_deref(), Some("Find the frog poem"));
+    assert_eq!(
+        result.as_deref().and_then(|result| result.text.as_deref()),
+        Some("where quiet frogs go off to sleep.")
+    );
+}
+
 #[test]
 fn the_fixtures_name_their_harnesses() {
     for (fixture, expected) in [
         (SUBAGENT_CLAUDE_CODE, Harness::ClaudeCode),
         (SUBAGENT_OPENCODE, Harness::OpenCode),
+        (SUBAGENT_CURSOR, Harness::Cursor),
+        (SUBAGENT_MACRO_INMEM, Harness::Macro),
     ] {
         let mut machine = FoldMachineImpl::new();
         for entry in parse_log(fixture) {
@@ -184,6 +274,47 @@ fn the_fixtures_name_their_harnesses() {
         }
         assert_eq!(machine.metadata().harness, expected);
     }
+}
+
+/// A harness that delivers the child's transcript whole and re-announces the
+/// call with it (Cursor sends the same `tool_call` event for every progress
+/// report) replaces the children rather than doubling them.
+#[test]
+fn a_reannounced_transcript_replaces_the_children() {
+    let announce = |status: &str| {
+        format!(
+            r#"{{"direction":"to_server","content":{{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{{"sessionId":"s","update":{{"toolCallId":"t","sessionUpdate":"tool_call","rawInput":{{"prompt":"add"}},"status":"{status}","title":"task","kind":"other","rawOutput":{{"result":{{"success":{{"agentId":"bc-1","conversationSteps":[{{"toolCall":{{"toolCallId":"c","shellToolCall":{{"args":{{"command":"echo 10"}},"result":{{"success":{{"stdout":"10\n"}}}}}}}}}},{{"assistantMessage":{{"text":"10"}}}}]}}}}}}}}}}}}}}"#
+        )
+    };
+    let log = [
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"i","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}}"#.to_owned(),
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"i","result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"cursor-acp","version":"0"}}}}"#.to_owned(),
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"go"}]}}}"#.to_owned(),
+        announce("in_progress"),
+        announce("completed"),
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#.to_owned(),
+    ]
+    .join("\n");
+    let (messages, warnings) = capturing_warnings(|| fold(parse_log(&log)));
+    assert_eq!(warnings, vec![]);
+    let agent = agent_message(&messages);
+    let [part] = subagent_parts(agent)[..] else {
+        panic!("exactly one subagent: {:#?}", agent.parts);
+    };
+    let MessagePart::ToolUse {
+        detail: ToolDetail::Subagent {
+            children, result, ..
+        },
+        ..
+    } = part
+    else {
+        unreachable!()
+    };
+    assert_eq!(children.len(), 1, "one shell call, not two: {children:#?}");
+    assert_eq!(
+        result.as_deref().and_then(|result| result.text.as_deref()),
+        Some("10")
+    );
 }
 
 /// A harness that re-announces a subagent call (a repeated `tool_call` for the

@@ -3,7 +3,9 @@
 //! recording exists it is pinned in `real_recordings`; these pin the readers
 //! for harnesses we have read but not yet recorded.
 
-use crate::domain::model::{Harness, SubagentResult, ToolName};
+use crate::domain::model::{
+    AnsiText, Harness, MessagePart, SubagentResult, ToolDetail, ToolName, ToolStatus, ToolUseId,
+};
 use agent_client_protocol::schema::v1::{Meta, ToolKind};
 use serde_json::{Value, json};
 
@@ -162,6 +164,136 @@ fn cursor_task_reads_its_oneof_subagent_type_and_ids() {
             .as_deref(),
         Some("explore")
     );
+
+    // Proto defaults say nothing: no agent type, no model.
+    let defaults =
+        json!({"subagentType": {"unspecified": {}}, "model": "default", "agentId": "bc-1"});
+    assert_eq!(
+        reader.subagent_input(Some(&defaults), "task").agent_type,
+        None
+    );
+    let result = reader
+        .subagent_result(None, Some(&defaults), None, None)
+        .unwrap();
+    assert_eq!(result.model, None);
+    assert_eq!(result.agent_id.as_deref(), Some("bc-1"));
+}
+
+/// The finished `task` call carries the child's transcript whole; it folds to
+/// nested parts, and the closing prose is the answer rather than a child.
+#[test]
+fn cursor_task_result_unfolds_the_childs_transcript() {
+    let reader = Harness::Cursor.reader();
+    let raw_output = json!({"result": {"success": {
+        "agentId": "bc-child",
+        "durationMs": "12978",
+        "conversationSteps": [
+            {"thinkingMessage": {"text": "Use the shell.", "durationMs": 1168}},
+            {"assistantMessage": {"text": "Computing."}},
+            {"toolCall": {
+                "toolCallId": "call_1\nfc_1",
+                "shellToolCall": {
+                    "args": {"command": "python3 -c 'import sympy'"},
+                    "result": {"failure": {"stderr": "No module named 'sympy'\n", "exitCode": 1}, "isBackground": false}
+                }
+            }},
+            {"toolCall": {
+                "toolCallId": "call_2\nfc_2",
+                "shellToolCall": {
+                    "args": {"command": "python3 -c 'print(124/3)'"},
+                    "result": {"success": {"stdout": "41.3\n", "interleavedOutput": "41.3\n"}}
+                }
+            }},
+            {"toolCall": {
+                "toolCallId": "call_3",
+                "readToolCall": {"args": {"path": "/workspace/README.md"}, "result": {"success": {"path": "/workspace/README.md"}}}
+            }},
+            {"toolCall": {
+                "toolCallId": "call_4",
+                "brandNewToolCall": {"args": {"anything": 1}, "result": {"success": {}}}
+            }},
+            {"somethingElse": {"text": "a step kind this reader has never seen"}},
+            {"assistantMessage": {"text": "The exact value is **124/3**."}}
+        ]
+    }}});
+
+    let result = reader
+        .subagent_result(None, None, Some(&raw_output), None)
+        .unwrap();
+    assert_eq!(
+        result,
+        SubagentResult {
+            text: Some("The exact value is **124/3**.".to_owned()),
+            agent_id: Some("bc-child".to_owned()),
+            duration_ms: Some(12978),
+            tool_uses: Some(4),
+            ..SubagentResult::default()
+        }
+    );
+
+    let children = reader.subagent_transcript(Some(&raw_output));
+    assert_eq!(
+        children,
+        vec![
+            MessagePart::Thought {
+                text: "Use the shell.".to_owned()
+            },
+            MessagePart::Text {
+                text: "Computing.".to_owned()
+            },
+            MessagePart::ToolUse {
+                id: ToolUseId("call_1 fc_1".to_owned()),
+                name: native("shell"),
+                status: ToolStatus::Failed,
+                detail: ToolDetail::Terminal {
+                    command: Some("python3 -c 'import sympy'".to_owned()),
+                    output: Some(AnsiText("No module named 'sympy'\n".to_owned())),
+                    exit_code: Some(1),
+                },
+            },
+            MessagePart::ToolUse {
+                id: ToolUseId("call_2 fc_2".to_owned()),
+                name: native("shell"),
+                status: ToolStatus::Completed,
+                detail: ToolDetail::Terminal {
+                    command: Some("python3 -c 'print(124/3)'".to_owned()),
+                    output: Some(AnsiText("41.3\n".to_owned())),
+                    exit_code: Some(0),
+                },
+            },
+            MessagePart::ToolUse {
+                id: ToolUseId("call_3".to_owned()),
+                name: native("read"),
+                status: ToolStatus::Completed,
+                detail: ToolDetail::Read {
+                    paths: vec!["/workspace/README.md".into()],
+                },
+            },
+            // An unknown tool is kept by name; an unknown step kind is skipped.
+            MessagePart::ToolUse {
+                id: ToolUseId("call_4".to_owned()),
+                name: native("brandNew"),
+                status: ToolStatus::Pending,
+                detail: ToolDetail::Other {
+                    kind: "other".to_owned(),
+                    output: None,
+                    input: None,
+                },
+            },
+        ]
+    );
+
+    // A failed task is an error, with nothing to nest.
+    let failed = json!({"result": {"error": "agent crashed"}});
+    let result = reader
+        .subagent_result(None, None, Some(&failed), None)
+        .unwrap();
+    assert_eq!(result.error.as_deref(), Some("agent crashed"));
+    assert_eq!(result.text, None);
+    assert_eq!(reader.subagent_transcript(Some(&failed)), vec![]);
+
+    // The opening frame carries no result and so no transcript.
+    assert_eq!(reader.subagent_transcript(None), vec![]);
 }
 
 // --- Hermes (hermes-agent) ---

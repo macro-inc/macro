@@ -15,7 +15,7 @@ use agent_client_protocol::schema::v1::{
 
 use super::convert::{content_block_text, tool_kind_name, tool_status};
 use super::state::{Changed, FoldState, ToolPath};
-use super::subagent::{patch_subagent_detail, subagent_detail};
+use super::subagent::{Delegation, SubagentFrame, patch_subagent_detail, subagent_detail};
 
 impl FoldState {
     /// Handle a `tool_call`: add a new tool part.
@@ -24,30 +24,38 @@ impl FoldState {
         let reader = self.reader();
         let name = harness::tool_name(reader, call.meta.as_ref(), &call.title);
 
-        // Macro's tools and subagents are chosen by name and never
+        // Subagents and Macro's tools are chosen by name and never
         // recategorized: the kind ACP gives them is `other` (or `think`), and
         // what a reader wants is the tool's own shape, which only the name -
-        // and the harness's conventions - tell us how to read.
-        let detail = if let Some(tool) = reader.macro_tool(&name) {
-            macro_detail(
-                reader,
-                tool,
-                call.raw_input.as_ref(),
-                call.raw_output.as_ref(),
-            )
-        } else if reader.is_subagent(&name, call.kind, call.meta.as_ref()) {
+        // and the harness's conventions - tell us how to read. Delegation is
+        // decided first: Macro's own `Subagent` is a Macro tool by name, but
+        // what a reader wants for it is the subagent card, same as for
+        // Claude Code's `Agent` or Cursor's `task`.
+        let detail = if let Some(delegation) =
+            Delegation::of(reader, &name, call.kind, call.meta.as_ref())
+        {
             // Content text is only an answer once the call has finished;
             // while it streams, Claude Code echoes the brief there.
             let finished = tool_status(call.status).is_finished();
             subagent_detail(
                 reader,
-                call.meta.as_ref(),
-                &call.title,
+                delegation,
+                &SubagentFrame {
+                    meta: call.meta.as_ref(),
+                    title: Some(&call.title),
+                    raw_input: call.raw_input.as_ref(),
+                    raw_output: call.raw_output.as_ref(),
+                    content_text: generic_output(&call.content)
+                        .as_deref()
+                        .filter(|_| finished),
+                },
+            )
+        } else if let Some(tool) = reader.macro_tool(&name) {
+            macro_detail(
+                reader,
+                tool,
                 call.raw_input.as_ref(),
                 call.raw_output.as_ref(),
-                generic_output(&call.content)
-                    .as_deref()
-                    .filter(|_| finished),
             )
         } else {
             tool_detail(
@@ -69,12 +77,14 @@ impl FoldState {
         // A repeated open for the same id patches in place rather than
         // duplicating the row. A subagent's children were pushed by their own
         // frames, which a re-announcement of the parent does not carry, so
-        // they are kept.
+        // they are kept - unless the re-announcement carries the child's
+        // whole transcript itself, which is then the newer copy.
         if let Some(at) = self.tool_positions.get(&id).cloned() {
             let message = at.message;
             if let Some(existing @ MessagePart::ToolUse { .. }) = self.part_at_mut(&at) {
                 let mut tool = tool;
                 if let (Some(kept), Some(children)) = (existing.children_mut(), tool.children_mut())
+                    && children.is_empty()
                 {
                     children.append(kept);
                 }
@@ -153,19 +163,29 @@ impl FoldState {
             ),
             ToolDetail::Subagent { .. } => {
                 let finished = status.is_finished();
+                // Decided at open; a patch that names a different tool does
+                // not change what the call was.
+                let delegation = if reader.macro_tool(name).is_some_and(mcp::is_subagent_tool) {
+                    Delegation::MacroSubagent
+                } else {
+                    Delegation::Harness
+                };
                 patch_subagent_detail(
                     reader,
+                    delegation,
                     detail,
-                    update.meta.as_ref(),
-                    fields.title.as_deref(),
-                    fields.raw_input.as_ref(),
-                    fields.raw_output.as_ref(),
-                    fields
-                        .content
-                        .as_deref()
-                        .and_then(generic_output)
-                        .as_deref()
-                        .filter(|_| finished),
+                    &SubagentFrame {
+                        meta: update.meta.as_ref(),
+                        title: fields.title.as_deref(),
+                        raw_input: fields.raw_input.as_ref(),
+                        raw_output: fields.raw_output.as_ref(),
+                        content_text: fields
+                            .content
+                            .as_deref()
+                            .and_then(generic_output)
+                            .as_deref()
+                            .filter(|_| finished),
+                    },
                 );
             }
             _ => patch_detail(
