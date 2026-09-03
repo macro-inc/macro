@@ -6433,6 +6433,7 @@
           "name",
           "isPrimary",
           "isWritable",
+          "isSubscription",
           "defaultReminders"
         ],
         "properties": {
@@ -6464,6 +6465,10 @@
           "isPrimary": {
             "type": "boolean",
             "description": "Whether this is its account's primary calendar."
+          },
+          "isSubscription": {
+            "type": "boolean",
+            "description": "Whether this is one of Google's shared system calendars (holidays,\nbirthdays) the account subscribes to rather than one a person maintains."
           },
           "isWritable": {
             "type": "boolean",

@@ -1606,6 +1606,11 @@ export type VisibleCalendar = {
      */
     isPrimary: boolean;
     /**
+     * Whether this is one of Google's shared system calendars (holidays,
+     * birthdays) the account subscribes to rather than one a person maintains.
+     */
+    isSubscription: boolean;
+    /**
      * Whether the grant can create and modify events on this calendar.
      */
     isWritable: boolean;
