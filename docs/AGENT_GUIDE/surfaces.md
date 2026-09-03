@@ -62,7 +62,8 @@ list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team`, `Tags`, `CRM`, `Connections` (Connected / Discover), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; `Log out`.
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE; signposts
+inbound connectors to Connections Discover), `Bots`; `Log out`.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
 ## Settings — Connections — `/app/settings/connections`
@@ -78,7 +79,8 @@ Linear / Notion / Slack (Pipedream AI, Off is enable/disable), Cursor (API key
 is `/app/settings/connections/<provider>` (`github`, `google`, `cursor`, …).
 Those are path tokens under the Connections tab, not extra Settings tabs.
 `/app/settings/github` is a leftover unused tab slug, not the GitHub provider
-page. Harness only signposts Cursor here.
+page. Harness only signposts Cursor here. MCP server signposts inbound
+connectors to Discover.
 
 ## Notifications
 
