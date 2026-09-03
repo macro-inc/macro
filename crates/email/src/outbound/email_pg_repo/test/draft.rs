@@ -1130,7 +1130,13 @@ async fn test_insert_message_reports_applied_on_create(pool: Pool<Postgres>) -> 
         recipients: vec![],
     };
     let applied = repo
-        .insert_message(&resolved_input(fresh_id, thread), &contacts, link, None, true)
+        .insert_message(
+            &resolved_input(fresh_id, thread),
+            &contacts,
+            link,
+            None,
+            true,
+        )
         .await?;
 
     assert!(applied, "a fresh unclaimed id inserts normally");
