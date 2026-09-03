@@ -3,6 +3,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import GithubIcon from '@icon/mcp-github.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import {
+  githubLinkStartFailureMessage,
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
@@ -41,8 +42,13 @@ export function GitHubCard() {
       window.location.href = await initGithubLink.mutateAsync(
         window.location.href
       );
-    } catch {
-      toast.failure('Failed to start GitHub connect flow');
+    } catch (error) {
+      toast.failure(
+        githubLinkStartFailureMessage(
+          error,
+          'Failed to start GitHub connect flow'
+        )
+      );
     }
   };
 
@@ -59,8 +65,13 @@ export function GitHubCard() {
       window.location.href = await reauthenticateGithub.mutateAsync(
         window.location.href
       );
-    } catch {
-      toast.failure('Failed to start GitHub reconnect flow');
+    } catch (error) {
+      toast.failure(
+        githubLinkStartFailureMessage(
+          error,
+          'Failed to start GitHub reconnect flow'
+        )
+      );
     }
   };
 

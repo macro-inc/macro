@@ -7,6 +7,7 @@ export {
 export {
   type GithubLink,
   type GithubLinkStatus,
+  githubLinkStartFailureMessage,
   invalidateGithubLinkStatus,
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,

@@ -671,9 +671,25 @@ export const authServiceClient = {
       ? `${authHost}/link/github?original_url=${encodeURIComponent(originalUrl)}`
       : `${authHost}/link/github`;
     return (
-      await fetchWithAuth<InitGithubLinkResponse>(url, {
-        method: 'POST',
-      })
+      await fetchWithAuth<InitGithubLinkResponse, 'TOO_MANY_PENDING_LINKS'>(
+        url,
+        {
+          method: 'POST',
+          // 429 is a pending-OAuth cap, not a request-rate limit.
+          errorResponseHandler: async (response) => {
+            if (response.status === 429) {
+              return {
+                code: 'TOO_MANY_PENDING_LINKS',
+                message: 'Too many pending connections',
+              };
+            }
+            return {
+              code: 'HTTP_ERROR',
+              message: `HTTP error! status: ${response.status}`,
+            };
+          },
+        }
+      )
     ).map((result) => result.authorization_url);
   },
 

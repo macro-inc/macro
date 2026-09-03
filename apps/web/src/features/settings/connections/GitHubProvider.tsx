@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
 import {
+  githubLinkStartFailureMessage,
   useDeleteGithubLinkMutation,
   useInitGithubLinkMutation,
   useReauthenticateGithubMutation,
@@ -50,8 +51,13 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
       window.location.href = await initGithubLink.mutateAsync(
         window.location.href
       );
-    } catch {
-      toast.failure('Failed to start GitHub connect flow');
+    } catch (error) {
+      toast.failure(
+        githubLinkStartFailureMessage(
+          error,
+          'Failed to start GitHub connect flow'
+        )
+      );
     }
   };
 
@@ -60,8 +66,13 @@ export function GitHubProvider(props: { model: ConnectionsModel }) {
       window.location.href = await reauthenticateGithub.mutateAsync(
         window.location.href
       );
-    } catch {
-      toast.failure('Failed to start GitHub reconnect flow');
+    } catch (error) {
+      toast.failure(
+        githubLinkStartFailureMessage(
+          error,
+          'Failed to start GitHub reconnect flow'
+        )
+      );
     }
   };
 

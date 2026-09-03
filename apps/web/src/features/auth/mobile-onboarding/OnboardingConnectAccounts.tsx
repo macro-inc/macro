@@ -5,6 +5,7 @@ import { getNativeMobilePlatform } from '@core/util/platform';
 import IconGoogle from '@icon/macro-google.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import {
+  githubLinkStartFailureMessage,
   invalidateGithubLinkStatus,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
@@ -97,7 +98,9 @@ export function OnboardingConnectAccounts() {
       toast.success('GitHub connected');
     } catch (error) {
       console.error('connect github failed', error);
-      toast.failure('Failed to connect GitHub');
+      toast.failure(
+        githubLinkStartFailureMessage(error, 'Failed to connect GitHub')
+      );
     }
   };
 
