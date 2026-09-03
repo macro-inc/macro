@@ -119,8 +119,6 @@ describe('inbox date buckets', () => {
   });
 
   it('buckets by content recency while the notified sort is off', () => {
-    // A stamp left by a live notification must not move the row's header
-    // when the server page is ordered by update recency.
     const signal = {
       tab: 'signal' as const,
       capabilities: withoutNotifiedSort.capabilities,

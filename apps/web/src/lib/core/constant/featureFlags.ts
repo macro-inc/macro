@@ -522,12 +522,6 @@ export const ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE = DEV_MODE_ENV
   ? true
   : undefined;
 
-/**
- * Orders the Inbox Signal/Noise tabs by the viewer's latest notification (the
- * soup `notified_at` sort) instead of update recency. PostHog-gated and off
- * by default while the candidate query is reworked for heavy notification
- * histories; on in dev mode. Override with VITE_ENABLE_INBOX_NOTIFIED_SORT.
- */
 export const ENABLE_INBOX_NOTIFIED_SORT_FLAG = 'enable-inbox-notified-sort';
 export const ENABLE_INBOX_NOTIFIED_SORT_OVERRIDE =
   getFeatureFlagOverride('ENABLE_INBOX_NOTIFIED_SORT') ??

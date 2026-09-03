@@ -18,7 +18,6 @@ import type { InboxTab } from '../types';
 export type InboxQueryCapabilities = {
   calendar: boolean;
   foreignEntities: boolean;
-  /** The notification tabs may order by the viewer's latest notification. */
   notifiedSort: boolean;
   reminders: boolean;
   snippets: boolean;
@@ -168,8 +167,6 @@ export type InboxViewContext = {
  * notification puts it, not where its content's last edit does — a comment
  * on a week-old task is today's news. The server sort is also a filter (rows
  * without a notification are absent), which is what those tabs mean anyway.
- * Gated by the `notifiedSort` capability (a PostHog flag) while the server's
- * candidate query is reworked; off, those tabs keep update recency.
  */
 export const inboxTabOrdersByNotification = (
   context: Pick<InboxViewContext, 'tab' | 'capabilities'>

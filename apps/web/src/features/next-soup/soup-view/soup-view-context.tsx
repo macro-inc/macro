@@ -686,8 +686,6 @@ export const SoupViewContextProvider: FlowComponent<
       : undefined;
   });
 
-  // The tab's forced server sort, with the notified order behind its flag:
-  // off, Signal and Noise keep update recency like before the sort existed.
   const presetSortMethod = () => {
     const method = activePreset()?.sortMethod;
     return method === 'notified_at' && !notifiedSortFF().enabled
