@@ -420,14 +420,21 @@ export function TaskList() {
   return (
     <MaybeSoupEntityActionDrawerManager>
       <Surface
-        depth={2}
+        depth={isTouchDevice() ? 0 : 2}
+        hideBorder={isTouchDevice()}
         ref={setGrid}
         role="grid"
         aria-label="Tasks"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
-        class="@container/u-list flex min-h-0 min-w-0 flex-col rounded-2xl p-2 outline-none"
+        class={cn(
+          '@container/u-list flex min-h-0 min-w-0 flex-col outline-none',
+          {
+            'rounded-2xl p-2': !isTouchDevice(),
+            'rounded-none bg-transparent p-0': isTouchDevice(),
+          }
+        )}
       >
         <ListLayoutProvider ref={grid}>
           <ResponsiveTaskListHeader />
