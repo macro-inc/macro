@@ -19,12 +19,12 @@
 
 use std::collections::BTreeMap;
 
-use agent_client_protocol::schema::v1::{Meta, ToolKind};
-use lazy_regex::regex_captures;
+use agent_client_protocol::schema::v1::Meta;
+use lazy_regex::{regex_captures, regex_is_match};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, generic, namespaced, raw};
+use super::{HarnessReader, SubagentInput, ToolFrame, generic, has_namespace, namespaced, raw};
 use crate::domain::model::{SubagentResult, ToolName};
 
 /// The `_meta` namespace codex-acp writes under.
@@ -69,46 +69,50 @@ struct AgentState {
     message: Option<String>,
 }
 
+fn flags_of(meta: Option<&Meta>) -> CodexFlags {
+    meta.and_then(|meta| serde_json::from_value(Value::Object(meta.clone())).ok())
+        .unwrap_or_default()
+}
+
 impl HarnessReader for Codex {
-    fn meta_namespace(&self) -> Option<&'static str> {
-        Some(NAMESPACE)
+    fn announces(&self, name: &str) -> bool {
+        regex_is_match!(r"(?i)codex", name)
     }
 
-    fn harness_tool_name(&self, meta: Option<&Meta>, title: &str) -> Option<ToolName> {
-        let flags: CodexFlags = meta
-            .and_then(|meta| serde_json::from_value(Value::Object(meta.clone())).ok())
-            .unwrap_or_default();
-        if !flags.is_mcp_tool_call {
+    /// Either of its `_meta` signals: the namespace, or the flat MCP flag it
+    /// writes on MCP calls whether or not the namespace is present.
+    fn wrote(&self, frame: &ToolFrame<'_>) -> bool {
+        has_namespace(frame.meta, NAMESPACE) || flags_of(frame.meta).is_mcp_tool_call
+    }
+
+    fn reported_tool_name(&self, frame: &ToolFrame<'_>) -> Option<ToolName> {
+        if !flags_of(frame.meta).is_mcp_tool_call {
             return None;
         }
-        regex_captures!(r"^mcp\.([^.]+)\.(.+)$", title).map(|(_, server, tool)| ToolName::Mcp {
-            server: server.to_owned(),
-            tool: tool.to_owned(),
+        regex_captures!(r"^mcp\.([^.]+)\.(.+)$", frame.title?).map(|(_, server, tool)| {
+            ToolName::Mcp {
+                server: server.to_owned(),
+                tool: tool.to_owned(),
+            }
         })
     }
 
-    fn is_subagent(&self, _name: &ToolName, _kind: ToolKind, meta: Option<&Meta>) -> bool {
-        namespaced::<CodexMeta>(meta, NAMESPACE)
+    fn is_subagent(&self, _name: &ToolName, frame: &ToolFrame<'_>) -> bool {
+        namespaced::<CodexMeta>(frame.meta, NAMESPACE)
             .and_then(|meta| meta.collaboration)
             .is_some_and(|collaboration| collaboration.tool == "spawnAgent")
     }
 
-    fn subagent_input(&self, raw_input: Option<&Value>, _title: &str) -> SubagentInput {
+    fn subagent_input(&self, frame: &ToolFrame<'_>) -> SubagentInput {
         SubagentInput {
-            prompt: raw::<SpawnAgentInput>(raw_input).and_then(|input| input.prompt),
+            prompt: raw::<SpawnAgentInput>(frame.raw_input).and_then(|input| input.prompt),
             ..SubagentInput::default()
         }
     }
 
-    fn subagent_result(
-        &self,
-        _meta: Option<&Meta>,
-        raw_input: Option<&Value>,
-        raw_output: Option<&Value>,
-        content_text: Option<&str>,
-    ) -> Option<SubagentResult> {
-        let Some(input) = raw::<SpawnAgentInput>(raw_input) else {
-            return generic::subagent_result(raw_output, content_text);
+    fn subagent_result(&self, frame: &ToolFrame<'_>) -> Option<SubagentResult> {
+        let Some(input) = raw::<SpawnAgentInput>(frame.raw_input) else {
+            return generic::subagent_result(frame);
         };
         let child = input.receiver_thread_ids.first().cloned();
         let message = child

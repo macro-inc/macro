@@ -4,69 +4,39 @@ use std::path::PathBuf;
 
 use crate::domain::error::FoldError;
 use crate::domain::harness::{
-    self, HarnessReader, ToolShape, command_from_raw_input, file_edit_from_raw_input,
+    self, HarnessReader, ToolFrame, ToolShape, command_from_raw_input, file_edit_from_raw_input,
 };
 use crate::domain::model::{
     AnsiText, FileDiff, MessagePart, ToolDetail, ToolName, ToolUseId, UserToolOutcome,
 };
 use agent_client_protocol::schema::v1::{
-    Content, Meta, ToolCall, ToolCallContent, ToolCallLocation, ToolCallUpdate, ToolKind,
+    ToolCall, ToolCallContent, ToolCallLocation, ToolCallUpdate, ToolKind,
 };
 
-use super::convert::{content_block_text, tool_kind_name, tool_status};
+use super::convert::tool_kind_name;
 use super::state::{Changed, FoldState, ToolPath};
-use super::subagent::{SubagentFrame, patch_subagent_detail, subagent_detail};
+use super::subagent::{patch_subagent_detail, subagent_detail};
 
 impl FoldState {
     /// Handle a `tool_call`: add a new tool part.
     pub(super) fn open_tool_call(&mut self, call: ToolCall) -> Option<Changed> {
         let id = ToolUseId(call.tool_call_id.0.to_string());
         let reader = self.reader();
-        let name = harness::tool_name(reader, call.meta.as_ref(), &call.title);
+        let frame = ToolFrame::of_call(&call);
+        let name = harness::tool_name(reader, &frame);
 
         // Whose shape the call is in is decided here, once; a patch finds the
         // detail it opened with and reads into that.
-        let detail = match harness::tool_shape(reader, &name, call.kind, call.meta.as_ref()) {
-            ToolShape::Harness => tool_detail(
-                reader,
-                call.kind,
-                call.raw_input.as_ref(),
-                &call.content,
-                &call.locations,
-                call.meta.as_ref(),
-            ),
-            ToolShape::Macro(_) => {
-                macro_detail(reader, call.raw_input.as_ref(), call.raw_output.as_ref())
-            }
-            ToolShape::UserTool(tool) => user_tool_detail(
-                reader,
-                tool,
-                call.raw_input.as_ref(),
-                call.raw_output.as_ref(),
-            ),
-            ToolShape::Subagent => {
-                // Content text is only an answer once the call has finished;
-                // while it streams, Claude Code echoes the brief there.
-                let finished = tool_status(call.status).is_finished();
-                subagent_detail(
-                    reader,
-                    &name,
-                    &SubagentFrame {
-                        meta: call.meta.as_ref(),
-                        title: Some(&call.title),
-                        raw_input: call.raw_input.as_ref(),
-                        raw_output: call.raw_output.as_ref(),
-                        content_text: generic_output(&call.content)
-                            .as_deref()
-                            .filter(|_| finished),
-                    },
-                )
-            }
+        let detail = match harness::tool_shape(reader, &name, &frame) {
+            ToolShape::Harness => tool_detail(reader, &frame),
+            ToolShape::Macro(_) => macro_detail(reader, &frame),
+            ToolShape::UserTool(tool) => user_tool_detail(reader, tool, &frame),
+            ToolShape::Subagent => subagent_detail(reader, &name, &frame),
         };
         let tool = MessagePart::ToolUse {
             id: id.clone(),
             name,
-            status: tool_status(call.status),
+            status: call.status.into(),
             detail,
         };
 
@@ -90,7 +60,7 @@ impl FoldState {
         }
 
         // A call the harness attributes to a subagent nests under it.
-        let (changed, at) = match self.parent_path(reader, call.meta.as_ref(), &id) {
+        let (changed, at) = match self.parent_path(reader, &frame, &id) {
             Some(parent) => self.push_child_part(&parent, tool)?,
             None => {
                 let (changed, position) = self.push_agent_part(tool)?;
@@ -132,59 +102,31 @@ impl FoldState {
             return None;
         };
 
-        let fields = update.fields;
-
-        if let Some(new_status) = fields.status {
-            *status = tool_status(new_status);
+        let frame = ToolFrame::of_update(&update);
+        if let Some(new_status) = frame.status {
+            *status = new_status;
         }
+        // Readers see the status the call is in once this update lands, so
+        // "has it finished" is answered the same on a patch that carries a
+        // status and on one that follows it.
+        let frame = frame.with_status(*status);
+
         // A harness-supplied name outranks any ACP title, so a title alone
         // only fills a name nothing better has set.
-        if let Some(found) =
-            reader.harness_tool_name(update.meta.as_ref(), fields.title.as_deref().unwrap_or(""))
-        {
+        if let Some(found) = reader.reported_tool_name(&frame) {
             *name = found;
-        } else if let Some(title) = fields.title.as_deref()
+        } else if let Some(title) = frame.title
             && name.is_empty()
         {
             *name = title.parse().unwrap_or_else(|never| match never {});
         }
 
         match detail {
-            ToolDetail::Macro { .. } | ToolDetail::UserTool { .. } => patch_macro_detail(
-                reader,
-                name,
-                detail,
-                fields.raw_input.as_ref(),
-                fields.raw_output.as_ref(),
-            ),
-            ToolDetail::Subagent { .. } => {
-                let finished = status.is_finished();
-                patch_subagent_detail(
-                    reader,
-                    name,
-                    detail,
-                    &SubagentFrame {
-                        meta: update.meta.as_ref(),
-                        title: fields.title.as_deref(),
-                        raw_input: fields.raw_input.as_ref(),
-                        raw_output: fields.raw_output.as_ref(),
-                        content_text: fields
-                            .content
-                            .as_deref()
-                            .and_then(generic_output)
-                            .as_deref()
-                            .filter(|_| finished),
-                    },
-                );
+            ToolDetail::Macro { .. } | ToolDetail::UserTool { .. } => {
+                patch_macro_detail(reader, name, detail, &frame);
             }
-            _ => patch_detail(
-                reader,
-                detail,
-                fields.raw_input.as_ref(),
-                fields.content.as_deref(),
-                fields.locations.as_deref(),
-                update.meta.as_ref(),
-            ),
+            ToolDetail::Subagent { .. } => patch_subagent_detail(reader, name, detail, &frame),
+            _ => patch_detail(reader, detail, &frame),
         }
 
         Some(Changed::updated(message))
@@ -192,22 +134,17 @@ impl FoldState {
 }
 
 /// Build a [`ToolDetail`] from a tool call's opening frame.
-pub(super) fn tool_detail(
-    reader: &dyn HarnessReader,
-    kind: ToolKind,
-    raw_input: Option<&serde_json::Value>,
-    content: &[ToolCallContent],
-    locations: &[ToolCallLocation],
-    meta: Option<&Meta>,
-) -> ToolDetail {
-    match kind {
+pub(super) fn tool_detail(reader: &dyn HarnessReader, frame: &ToolFrame<'_>) -> ToolDetail {
+    let content = frame.content.unwrap_or_default();
+    let locations = frame.locations.unwrap_or_default();
+    match frame.kind.unwrap_or_default() {
         ToolKind::Execute => ToolDetail::Terminal {
-            command: command_from_raw_input(raw_input),
-            output: reader.terminal_output(meta).map(AnsiText),
-            exit_code: reader.terminal_exit_code(meta),
+            command: command_from_raw_input(frame.raw_input),
+            output: reader.terminal_output(frame).map(AnsiText),
+            exit_code: reader.terminal_exit_code(frame),
         },
         ToolKind::Edit => ToolDetail::Edit {
-            diffs: edit_diffs(content, raw_input),
+            diffs: edit_diffs(content, frame.raw_input),
         },
         ToolKind::Read => ToolDetail::Read {
             paths: location_paths(locations),
@@ -220,35 +157,31 @@ pub(super) fn tool_detail(
         },
         ToolKind::Search => ToolDetail::Search {
             paths: location_paths(locations),
-            output: generic_output(content),
+            output: frame.content_text(),
         },
         ToolKind::Fetch => ToolDetail::Fetch {
-            output: generic_output(content),
+            output: frame.content_text(),
         },
         ToolKind::Think => ToolDetail::Think {
-            output: generic_output(content),
+            output: frame.content_text(),
         },
         other => ToolDetail::Other {
             kind: tool_kind_name(other).to_owned(),
-            output: generic_output(content),
-            input: raw_input.cloned(),
+            output: frame.content_text(),
+            input: frame.raw_input.cloned(),
         },
     }
 }
 
 /// Build the detail for a Macro tool from its opening frame: its input as
 /// given, its output out of the harness's wrapper.
-pub(super) fn macro_detail(
-    reader: &dyn HarnessReader,
-    raw_input: Option<&serde_json::Value>,
-    raw_output: Option<&serde_json::Value>,
-) -> ToolDetail {
-    let (output, error) = match raw_output.map(|raw| reader.unwrap_tool_output(raw)) {
+pub(super) fn macro_detail(reader: &dyn HarnessReader, frame: &ToolFrame<'_>) -> ToolDetail {
+    let (output, error) = match frame.raw_output.map(|raw| reader.unwrap_tool_output(raw)) {
         None => (None, None),
         Some((value, error)) => (Some(value), error),
     };
     ToolDetail::Macro {
-        input: raw_input.cloned().unwrap_or(serde_json::Value::Null),
+        input: frame.raw_input.cloned().unwrap_or(serde_json::Value::Null),
         output,
         error,
     }
@@ -262,12 +195,11 @@ pub(super) fn macro_detail(
 pub(super) fn user_tool_detail(
     reader: &dyn HarnessReader,
     tool: &str,
-    raw_input: Option<&serde_json::Value>,
-    raw_output: Option<&serde_json::Value>,
+    frame: &ToolFrame<'_>,
 ) -> ToolDetail {
     ToolDetail::UserTool {
-        input: raw_input.cloned().unwrap_or(serde_json::Value::Null),
-        outcome: raw_output.map_or(UserToolOutcome::Pending, |raw| {
+        input: frame.raw_input.cloned().unwrap_or(serde_json::Value::Null),
+        outcome: frame.raw_output.map_or(UserToolOutcome::Pending, |raw| {
             harness::user_tool_outcome(reader, tool, raw)
         }),
     }
@@ -282,8 +214,7 @@ pub(super) fn patch_macro_detail(
     reader: &dyn HarnessReader,
     name: &ToolName,
     detail: &mut ToolDetail,
-    raw_input: Option<&serde_json::Value>,
-    raw_output: Option<&serde_json::Value>,
+    frame: &ToolFrame<'_>,
 ) {
     match detail {
         ToolDetail::Macro {
@@ -291,20 +222,20 @@ pub(super) fn patch_macro_detail(
             output,
             error,
         } => {
-            if let Some(found) = raw_input {
+            if let Some(found) = frame.raw_input {
                 *input = found.clone();
             }
-            if let Some(raw) = raw_output {
+            if let Some(raw) = frame.raw_output {
                 let (value, failure) = reader.unwrap_tool_output(raw);
                 *output = Some(value);
                 *error = failure;
             }
         }
         ToolDetail::UserTool { input, outcome } => {
-            if let Some(found) = raw_input {
+            if let Some(found) = frame.raw_input {
                 *input = found.clone();
             }
-            if let Some(raw) = raw_output {
+            if let Some(raw) = frame.raw_output {
                 // The detail says this is a user tool, so the name's short
                 // form is the tool's: `SendEmail` whether the harness wrote it
                 // bare or as `mcp__macro__SendEmail`.
@@ -320,10 +251,7 @@ pub(super) fn patch_macro_detail(
 pub(super) fn patch_detail(
     reader: &dyn HarnessReader,
     detail: &mut ToolDetail,
-    raw_input: Option<&serde_json::Value>,
-    content: Option<&[ToolCallContent]>,
-    locations: Option<&[ToolCallLocation]>,
-    meta: Option<&Meta>,
+    frame: &ToolFrame<'_>,
 ) {
     match detail {
         ToolDetail::Terminal {
@@ -331,19 +259,19 @@ pub(super) fn patch_detail(
             output,
             exit_code,
         } => {
-            if let Some(found) = command_from_raw_input(raw_input) {
+            if let Some(found) = command_from_raw_input(frame.raw_input) {
                 *command = Some(found);
             }
             // Each update carries the output accumulated so far, so replace.
-            if let Some(found) = reader.terminal_output(meta) {
+            if let Some(found) = reader.terminal_output(frame) {
                 *output = Some(AnsiText(found));
             }
-            if let Some(found) = reader.terminal_exit_code(meta) {
+            if let Some(found) = reader.terminal_exit_code(frame) {
                 *exit_code = Some(found);
             }
         }
         ToolDetail::Edit { diffs: existing } => {
-            if let Some(content) = content {
+            if let Some(content) = frame.content {
                 let found = diffs(content);
                 if !found.is_empty() {
                     *existing = found;
@@ -352,38 +280,38 @@ pub(super) fn patch_detail(
             // A call that never reports a diff block (Claude Code's `Write`)
             // may still deliver its raw input on a later update.
             if existing.is_empty()
-                && let Some(found) = synthesized_edit_diff(raw_input)
+                && let Some(found) = synthesized_edit_diff(frame.raw_input)
             {
                 *existing = vec![found];
             }
         }
         ToolDetail::Read { paths } | ToolDetail::Delete { paths } | ToolDetail::Move { paths } => {
-            if let Some(found) = locations.map(location_paths)
+            if let Some(found) = frame.locations.map(location_paths)
                 && !found.is_empty()
             {
                 *paths = found;
             }
         }
         ToolDetail::Search { paths, output } => {
-            if let Some(found) = locations.map(location_paths)
+            if let Some(found) = frame.locations.map(location_paths)
                 && !found.is_empty()
             {
                 *paths = found;
             }
-            if let Some(found) = content.and_then(generic_output) {
+            if let Some(found) = frame.content_text() {
                 *output = Some(found);
             }
         }
         ToolDetail::Fetch { output } | ToolDetail::Think { output } => {
-            if let Some(found) = content.and_then(generic_output) {
+            if let Some(found) = frame.content_text() {
                 *output = Some(found);
             }
         }
         ToolDetail::Other { input, output, .. } => {
-            if let Some(found) = raw_input {
+            if let Some(found) = frame.raw_input {
                 *input = Some(found.clone());
             }
-            if let Some(found) = content.and_then(generic_output) {
+            if let Some(found) = frame.content_text() {
                 *output = Some(found);
             }
         }
@@ -443,25 +371,4 @@ pub(super) fn location_paths(locations: &[ToolCallLocation]) -> Vec<PathBuf> {
         .iter()
         .map(|location| location.path.clone())
         .collect()
-}
-
-/// The text among a tool call's content blocks - e.g. search matches or a
-/// fetched page's text - joined in order.
-///
-/// `None` when none of the blocks carry text, same as an empty result: there
-/// is nothing useful to distinguish "reported nothing" from "reported an
-/// empty string."
-pub(super) fn generic_output(content: &[ToolCallContent]) -> Option<String> {
-    let text = content
-        .iter()
-        .filter_map(|block| match block {
-            ToolCallContent::Content(Content {
-                content: block_content,
-                ..
-            }) => content_block_text(block_content.clone()),
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("");
-    (!text.is_empty()).then_some(text)
 }

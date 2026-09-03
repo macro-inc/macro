@@ -13,12 +13,11 @@
 //!
 //! or, on failure, `{ "error": "…", "metadata": { … } }`.
 
-use agent_client_protocol::schema::v1::Meta;
-use lazy_regex::regex_captures;
+use lazy_regex::{regex_captures, regex_is_match};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, generic, raw};
+use super::{HarnessReader, ToolFrame, generic, raw};
 use crate::domain::model::SubagentResult;
 
 /// Reader for OpenCode's conventions.
@@ -48,17 +47,16 @@ struct TaskModel {
 }
 
 impl HarnessReader for OpenCode {
-    fn subagent_result(
-        &self,
-        _meta: Option<&Meta>,
-        _raw_input: Option<&Value>,
-        raw_output: Option<&Value>,
-        content_text: Option<&str>,
-    ) -> Option<SubagentResult> {
+    fn announces(&self, name: &str) -> bool {
+        regex_is_match!(r"(?i)^opencode", name)
+    }
+
+    fn subagent_result(&self, frame: &ToolFrame<'_>) -> Option<SubagentResult> {
+        let raw_output = frame.raw_output;
         let Some(output) =
             raw::<TaskOutput>(raw_output).filter(|_| raw_output.is_some_and(Value::is_object))
         else {
-            return generic::subagent_result(raw_output, content_text);
+            return generic::subagent_result(frame);
         };
         let metadata = output.metadata;
         let result = SubagentResult {

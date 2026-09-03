@@ -12,11 +12,12 @@
 //!   [`AgentResponse`]: the subagent's answer, id, model, timings, token
 //!   count and per-tool statistics.
 
-use agent_client_protocol::schema::v1::{ContentBlock, Meta, ToolKind};
+use agent_client_protocol::schema::v1::{ContentBlock, Meta};
+use lazy_regex::regex_is_match;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, generic, namespaced, raw};
+use super::{HarnessReader, ToolFrame, generic, has_namespace, namespaced, raw};
 use crate::domain::model::{SubagentResult, ToolName, ToolStats, ToolUseId};
 
 /// The `_meta` namespace Claude Code writes under.
@@ -120,34 +121,28 @@ impl From<AgentResponse> for SubagentResult {
 }
 
 impl HarnessReader for ClaudeCode {
-    fn meta_namespace(&self) -> Option<&'static str> {
-        Some(NAMESPACE)
+    fn announces(&self, name: &str) -> bool {
+        regex_is_match!(r"(?i)claude", name)
     }
 
-    fn harness_tool_name(&self, meta: Option<&Meta>, _title: &str) -> Option<ToolName> {
-        tool_name(meta).map(|name| name.parse().unwrap_or_else(|never| match never {}))
+    fn wrote(&self, frame: &ToolFrame<'_>) -> bool {
+        has_namespace(frame.meta, NAMESPACE)
     }
 
-    fn is_subagent(&self, name: &ToolName, kind: ToolKind, meta: Option<&Meta>) -> bool {
-        meta_of(meta).subagent || generic::is_subagent(name, kind)
+    fn reported_tool_name(&self, frame: &ToolFrame<'_>) -> Option<ToolName> {
+        tool_name(frame.meta).map(|name| name.parse().unwrap_or_else(|never| match never {}))
     }
 
-    fn parent_tool_call(&self, meta: Option<&Meta>) -> Option<ToolUseId> {
-        meta_of(meta).parent_tool_use_id.map(ToolUseId)
+    fn is_subagent(&self, name: &ToolName, frame: &ToolFrame<'_>) -> bool {
+        meta_of(frame.meta).subagent || generic::is_subagent(name, frame)
     }
 
-    fn subagent_input(&self, raw_input: Option<&Value>, _title: &str) -> SubagentInput {
-        generic::subagent_input(raw_input)
+    fn parent_tool_call(&self, frame: &ToolFrame<'_>) -> Option<ToolUseId> {
+        meta_of(frame.meta).parent_tool_use_id.map(ToolUseId)
     }
 
-    fn subagent_result(
-        &self,
-        meta: Option<&Meta>,
-        _raw_input: Option<&Value>,
-        raw_output: Option<&Value>,
-        content_text: Option<&str>,
-    ) -> Option<SubagentResult> {
-        if let Some(response) = meta_of(meta).tool_response {
+    fn subagent_result(&self, frame: &ToolFrame<'_>) -> Option<SubagentResult> {
+        if let Some(response) = meta_of(frame.meta).tool_response {
             // The response object is what the harness says about the run;
             // one that does not read as an `AgentResponse` still says nothing
             // the generic path would not.
@@ -158,7 +153,7 @@ impl HarnessReader for ClaudeCode {
         // The final frame copies the answer into `rawOutput` as content
         // blocks, the second of which is an "agentId: ... <usage>" boilerplate
         // the response object already said better. Keep the first.
-        let first_text = raw::<Vec<ContentBlock>>(raw_output).and_then(|blocks| {
+        let first_text = raw::<Vec<ContentBlock>>(frame.raw_output).and_then(|blocks| {
             blocks.into_iter().find_map(|block| match block {
                 ContentBlock::Text(text) => Some(text.text),
                 _ => None,
@@ -169,7 +164,7 @@ impl HarnessReader for ClaudeCode {
                 text: Some(text),
                 ..SubagentResult::default()
             }),
-            None => generic::subagent_result(raw_output, content_text),
+            None => generic::subagent_result(frame),
         }
     }
 }

@@ -9,12 +9,12 @@ use crate::domain::model::{
     ToolStatus,
 };
 use crate::domain::ports::FoldMachine;
-use crate::domain::test::util::capturing_warnings;
+use crate::domain::test::util::{Frame, capturing_warnings};
 use crate::testing::fixtures::{
     SUBAGENT_CLAUDE_CODE, SUBAGENT_CURSOR, SUBAGENT_MACRO_INMEM, SUBAGENT_OPENCODE,
 };
 use crate::testing::parse_log;
-use agent_client_protocol::schema::v1::{Meta, ToolKind};
+use agent_client_protocol::schema::v1::ToolKind;
 use serde_json::json;
 
 fn agent_message(messages: &[FoldedMessage]) -> &FoldedMessage {
@@ -380,68 +380,85 @@ fn an_orphaned_child_folds_at_top_level_and_warns() {
 #[test]
 fn the_generic_reader_recognizes_the_task_tool_convention() {
     let generic = Harness::Unknown.reader();
+    let kinded = |kind: ToolKind| Frame::new().kind(kind);
     for name in ["task", "Task", "Agent"] {
-        assert!(generic.is_subagent(&ToolName::native(name), ToolKind::Think, None));
-        assert!(generic.is_subagent(&ToolName::native(name), ToolKind::Other, None));
+        assert!(generic.is_subagent(&ToolName::native(name), &kinded(ToolKind::Think).view()));
+        assert!(generic.is_subagent(&ToolName::native(name), &kinded(ToolKind::Other).view()));
         assert!(
-            !generic.is_subagent(&ToolName::native(name), ToolKind::Execute, None),
+            !generic.is_subagent(&ToolName::native(name), &kinded(ToolKind::Execute).view()),
             "a shell command called task is a shell command"
         );
     }
-    assert!(!generic.is_subagent(&ToolName::native("Bash"), ToolKind::Think, None));
+    assert!(!generic.is_subagent(&ToolName::native("Bash"), &kinded(ToolKind::Think).view()));
 
-    let input = generic.subagent_input(
-        Some(&json!({
-            "subagent_type": "explore",
-            "description": "Find it",
-            "task": "Look everywhere",
-            "background": true
-        })),
-        "",
-    );
+    let frame = Frame::new().raw_input(json!({
+        "subagent_type": "explore",
+        "description": "Find it",
+        "task": "Look everywhere",
+        "background": true
+    }));
+    let input = generic.subagent_input(&frame.view());
     assert_eq!(input.agent_type.as_deref(), Some("explore"));
     assert_eq!(input.description.as_deref(), Some("Find it"));
     assert_eq!(input.prompt.as_deref(), Some("Look everywhere"));
     assert_eq!(input.background, Some(true));
-    assert_eq!(generic.subagent_input(None, "anything"), Default::default());
+    assert_eq!(
+        generic.subagent_input(&Frame::new().title("anything").view()),
+        Default::default()
+    );
 
     // Without a structured result the text is whatever the call reported.
+    let text_of = |frame: Frame| generic.subagent_result(&frame.view()).unwrap().text;
     assert_eq!(
-        generic
-            .subagent_result(None, None, Some(&json!("done")), None)
-            .unwrap()
-            .text
-            .as_deref(),
+        text_of(Frame::new().raw_output(json!("done"))).as_deref(),
         Some("done")
     );
     assert_eq!(
         generic
-            .subagent_result(None, None, Some(&json!({"error": "nope"})), None)
+            .subagent_result(&Frame::new().raw_output(json!({"error": "nope"})).view())
             .unwrap()
             .error
             .as_deref(),
         Some("nope")
     );
     assert_eq!(
+        text_of(Frame::new().text("from content")).as_deref(),
+        Some("from content")
+    );
+    assert_eq!(generic.subagent_result(&Frame::new().view()), None);
+}
+
+/// While a delegation streams, Claude Code echoes the brief into the content
+/// blocks; that text is the question, not the answer, until the call ends.
+#[test]
+fn content_text_is_an_answer_only_once_the_call_has_finished() {
+    let generic = Harness::Unknown.reader();
+    let streaming = Frame::new()
+        .text("Find the frog poem")
+        .status(ToolStatus::Running);
+    assert_eq!(generic.subagent_result(&streaming.view()), None);
+    let finished = Frame::new()
+        .text("Find the frog poem")
+        .status(ToolStatus::Completed);
+    assert_eq!(
         generic
-            .subagent_result(None, None, None, Some("from content"))
+            .subagent_result(&finished.view())
             .unwrap()
             .text
             .as_deref(),
-        Some("from content")
+        Some("Find the frog poem")
     );
-    assert_eq!(generic.subagent_result(None, None, None, None), None);
 }
 
 #[test]
 fn claude_code_marks_a_subagent_by_meta_even_under_another_name() {
-    let meta: Meta = match json!({"claudeCode": {"toolName": "Agent", "subagent": true}}) {
-        serde_json::Value::Object(map) => map,
-        _ => unreachable!(),
-    };
     let claude = Harness::ClaudeCode.reader();
-    assert!(claude.is_subagent(&ToolName::native("Whatever"), ToolKind::Other, Some(&meta)));
-    assert!(!claude.is_subagent(&ToolName::native("Whatever"), ToolKind::Other, None));
+    let flagged = Frame::new()
+        .kind(ToolKind::Other)
+        .meta(json!({"claudeCode": {"toolName": "Agent", "subagent": true}}));
+    assert!(claude.is_subagent(&ToolName::native("Whatever"), &flagged.view()));
+    let unflagged = Frame::new().kind(ToolKind::Other);
+    assert!(!claude.is_subagent(&ToolName::native("Whatever"), &unflagged.view()));
 }
 
 #[test]

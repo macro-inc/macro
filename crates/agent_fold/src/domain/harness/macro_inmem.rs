@@ -11,10 +11,11 @@
 //! Its own tools run in-process, not over MCP, so their output is the tool's
 //! own JSON with no envelope around it.
 
-use agent_client_protocol::schema::v1::{Meta, ToolKind};
+use agent_client_protocol::schema::v1::Meta;
+use lazy_regex::regex_is_match;
 use serde::Deserialize;
 
-use super::{HarnessReader, generic, macro_tools, namespaced, raw};
+use super::{HarnessReader, ToolFrame, generic, has_namespace, macro_tools, namespaced, raw};
 use crate::domain::model::ToolName;
 
 /// The `_meta` namespace `agent_inmem` writes under.
@@ -45,12 +46,16 @@ struct ErrorOutput {
 }
 
 impl HarnessReader for MacroInmem {
-    fn meta_namespace(&self) -> Option<&'static str> {
-        Some(NAMESPACE)
+    fn announces(&self, name: &str) -> bool {
+        regex_is_match!(r"(?i)^macro", name)
     }
 
-    fn harness_tool_name(&self, meta: Option<&Meta>, _title: &str) -> Option<ToolName> {
-        meta_of(meta)
+    fn wrote(&self, frame: &ToolFrame<'_>) -> bool {
+        has_namespace(frame.meta, NAMESPACE)
+    }
+
+    fn reported_tool_name(&self, frame: &ToolFrame<'_>) -> Option<ToolName> {
+        meta_of(frame.meta)
             .tool_name
             .map(|name| name.parse().unwrap_or_else(|never| match never {}))
     }
@@ -75,7 +80,7 @@ impl HarnessReader for MacroInmem {
         }
     }
 
-    fn is_subagent(&self, name: &ToolName, kind: ToolKind, meta: Option<&Meta>) -> bool {
-        meta_of(meta).subagent || generic::is_subagent(name, kind)
+    fn is_subagent(&self, name: &ToolName, frame: &ToolFrame<'_>) -> bool {
+        meta_of(frame.meta).subagent || generic::is_subagent(name, frame)
     }
 }

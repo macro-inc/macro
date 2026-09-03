@@ -14,29 +14,32 @@
 //!
 //! The subagent's own calls are not streamed to the parent.
 
-use agent_client_protocol::schema::v1::{Meta, ToolKind};
 use lazy_regex::{regex_captures, regex_is_match};
-use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, generic};
+use super::{HarnessReader, SubagentInput, ToolFrame, generic};
 use crate::domain::model::{SubagentResult, ToolName};
 
 /// Reader for Hermes's conventions.
 pub struct Hermes;
 
 impl HarnessReader for Hermes {
+    fn announces(&self, name: &str) -> bool {
+        regex_is_match!(r"(?i)hermes", name)
+    }
+
     /// The title is the only name there is; strip the goal off it so the
     /// call reads as the tool it is.
-    fn harness_tool_name(&self, _meta: Option<&Meta>, title: &str) -> Option<ToolName> {
-        is_delegation_title(title).then(|| ToolName::native("delegate_task"))
+    fn reported_tool_name(&self, frame: &ToolFrame<'_>) -> Option<ToolName> {
+        is_delegation_title(frame.title?).then(|| ToolName::native("delegate_task"))
     }
 
-    fn is_subagent(&self, name: &ToolName, kind: ToolKind, _meta: Option<&Meta>) -> bool {
-        name.display() == "delegate_task" || generic::is_subagent(name, kind)
+    fn is_subagent(&self, name: &ToolName, frame: &ToolFrame<'_>) -> bool {
+        name.display() == "delegate_task" || generic::is_subagent(name, frame)
     }
 
-    fn subagent_input(&self, raw_input: Option<&Value>, title: &str) -> SubagentInput {
-        let mut input = generic::subagent_input(raw_input);
+    fn subagent_input(&self, frame: &ToolFrame<'_>) -> SubagentInput {
+        let mut input = generic::subagent_input(frame);
+        let title = frame.title.unwrap_or_default();
         if input.prompt.is_none()
             && let Some((_, goal)) = regex_captures!(r"^delegate:\s*(.+)$", title)
         {
@@ -48,14 +51,8 @@ impl HarnessReader for Hermes {
         input
     }
 
-    fn subagent_result(
-        &self,
-        _meta: Option<&Meta>,
-        _raw_input: Option<&Value>,
-        raw_output: Option<&Value>,
-        content_text: Option<&str>,
-    ) -> Option<SubagentResult> {
-        let mut result = generic::subagent_result(raw_output, content_text)?;
+    fn subagent_result(&self, frame: &ToolFrame<'_>) -> Option<SubagentResult> {
+        let mut result = generic::subagent_result(frame)?;
         if let Some(text) = result.text.as_deref()
             && let Some((_, error)) = regex_captures!(r"^Delegation failed:\s*(.+)$", text)
         {

@@ -11,11 +11,11 @@
 //!   OpenCode and Cursor copied: a tool named `task`/`agent` with
 //!   `{ description, prompt, subagent_type }` arguments.
 
-use agent_client_protocol::schema::v1::{Meta, ToolKind};
+use agent_client_protocol::schema::v1::ToolKind;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, mcp, namespaced, raw};
+use super::{HarnessReader, SubagentInput, ToolFrame, mcp, namespaced, raw};
 use crate::domain::model::{SubagentResult, ToolName};
 
 /// A harness this fold knows nothing specific about.
@@ -41,24 +41,24 @@ struct TerminalExit {
 /// accumulated so far rather than only the new bytes, so callers should
 /// replace rather than append.
 #[must_use]
-pub fn terminal_output(meta: Option<&Meta>) -> Option<String> {
-    namespaced::<TerminalOutput>(meta, "terminal_output").map(|output| output.data)
+pub fn terminal_output(frame: &ToolFrame<'_>) -> Option<String> {
+    namespaced::<TerminalOutput>(frame.meta, "terminal_output").map(|output| output.data)
 }
 
 /// The exit code reported when a terminal-backed tool call finished.
 ///
 /// Reads `_meta.terminal_exit.exit_code`.
 #[must_use]
-pub fn terminal_exit_code(meta: Option<&Meta>) -> Option<i32> {
-    let code = namespaced::<TerminalExit>(meta, "terminal_exit")?.exit_code?;
+pub fn terminal_exit_code(frame: &ToolFrame<'_>) -> Option<i32> {
+    let code = namespaced::<TerminalExit>(frame.meta, "terminal_exit")?.exit_code?;
     i32::try_from(code).ok()
 }
 
 /// The Task-tool convention: a tool named `task` or `agent` whose kind is
 /// `think` (Claude Code, OpenCode) or `other` (Cursor).
 #[must_use]
-pub fn is_subagent(name: &ToolName, kind: ToolKind) -> bool {
-    matches!(kind, ToolKind::Think | ToolKind::Other)
+pub fn is_subagent(name: &ToolName, frame: &ToolFrame<'_>) -> bool {
+    matches!(frame.kind, Some(ToolKind::Think | ToolKind::Other))
         && matches!(
             name.display().to_ascii_lowercase().as_str(),
             "task" | "agent"
@@ -80,8 +80,8 @@ struct TaskInput {
 
 /// The Task-tool argument shape, read off a call's raw input.
 #[must_use]
-pub fn subagent_input(raw_input: Option<&Value>) -> SubagentInput {
-    let input: TaskInput = raw(raw_input).unwrap_or_default();
+pub fn subagent_input(frame: &ToolFrame<'_>) -> SubagentInput {
+    let input: TaskInput = raw(frame.raw_input).unwrap_or_default();
     SubagentInput {
         agent_type: input.subagent_type,
         description: input.description,
@@ -100,13 +100,14 @@ struct ErrorOutput {
 /// A subagent's result when the harness reports nothing structured: the
 /// raw output as text, else the content blocks' text; an `{ "error" }`
 /// object is a failure.
+///
+/// Content text counts only once the call has finished: while a delegation
+/// streams, Claude Code echoes the brief there, and an echo of the question
+/// is not an answer.
 #[must_use]
-pub fn subagent_result(
-    raw_output: Option<&Value>,
-    content_text: Option<&str>,
-) -> Option<SubagentResult> {
+pub fn subagent_result(frame: &ToolFrame<'_>) -> Option<SubagentResult> {
     let mut result = SubagentResult::default();
-    if let Some(raw_value) = raw_output {
+    if let Some(raw_value) = frame.raw_output {
         if let Some(ErrorOutput { error }) = raw(Some(raw_value)) {
             result.error = Some(error);
         } else {
@@ -119,8 +120,8 @@ pub fn subagent_result(
             };
         }
     }
-    if result.text.is_none() && result.error.is_none() {
-        result.text = content_text.map(ToOwned::to_owned);
+    if result.text.is_none() && result.error.is_none() && frame.finished() {
+        result.text = frame.content_text();
     }
     (!result.is_empty()).then_some(result)
 }

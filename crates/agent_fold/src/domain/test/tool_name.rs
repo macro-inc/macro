@@ -1,6 +1,6 @@
 use crate::domain::harness::{self, macro_tools};
 use crate::domain::model::{Harness, ToolName};
-use agent_client_protocol::schema::v1::Meta;
+use crate::domain::test::util::Frame;
 use serde_json::json;
 
 fn parse(name: &str) -> ToolName {
@@ -62,29 +62,33 @@ fn empty_is_the_name_of_a_call_that_named_nothing_yet() {
 
 #[test]
 fn a_harness_name_in_meta_outranks_the_title() {
-    let meta: Meta = match json!({"claudeCode": {"toolName": "Bash"}}) {
-        serde_json::Value::Object(map) => map,
-        _ => unreachable!(),
-    };
+    let named = Frame::new()
+        .meta(json!({"claudeCode": {"toolName": "Bash"}}))
+        .title("ls examples");
     let claude = Harness::ClaudeCode.reader();
     assert_eq!(
-        harness::tool_name(claude, Some(&meta), "ls examples"),
+        harness::tool_name(claude, &named.view()),
         ToolName::native("Bash")
     );
     assert_eq!(
-        harness::tool_name(claude, None, "ls examples"),
+        harness::tool_name(claude, &Frame::new().title("ls examples").view()),
         parse("ls examples")
     );
     assert_eq!(
-        harness::tool_name(claude, None, "mcp__macro__ReadContent"),
+        harness::tool_name(
+            claude,
+            &Frame::new().title("mcp__macro__ReadContent").view()
+        ),
         mcp("macro", "ReadContent")
     );
     // A harness that does not write that namespace reads only the title.
     let unknown = Harness::Unknown.reader();
     assert_eq!(
-        harness::tool_name(unknown, Some(&meta), "ls examples"),
+        harness::tool_name(unknown, &named.view()),
         parse("ls examples")
     );
+    // A frame with neither names nothing, which a later patch may fill.
+    assert!(harness::tool_name(claude, &Frame::new().view()).is_empty());
 }
 
 #[test]

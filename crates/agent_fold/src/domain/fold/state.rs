@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::domain::error::FoldError;
-use crate::domain::harness::HarnessReader;
+use crate::domain::harness::{HarnessReader, ToolFrame};
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::model::{Control, FoldedMessage, SessionMetadata, ToolUseId, TurnId};
 use agent_client_protocol::schema::v1::{
@@ -337,12 +337,14 @@ impl FoldState {
             // the authoritative copy, so this is dropped.
             SessionUpdate::UserMessageChunk(_) => Vec::new(),
             SessionUpdate::ToolCall(call) => {
-                let mut changes = StepChange::metadata(self.sniff_harness(call.meta.as_ref()));
+                let mut changes =
+                    StepChange::metadata(self.sniff_harness(&ToolFrame::of_call(&call)));
                 changes.extend(StepChange::message(self.open_tool_call(call)));
                 changes
             }
             SessionUpdate::ToolCallUpdate(update) => {
-                let mut changes = StepChange::metadata(self.sniff_harness(update.meta.as_ref()));
+                let mut changes =
+                    StepChange::metadata(self.sniff_harness(&ToolFrame::of_update(&update)));
                 changes.extend(StepChange::message(self.patch_tool_call(update)));
                 changes
             }

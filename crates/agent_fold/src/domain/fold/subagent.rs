@@ -1,12 +1,9 @@
 //! Delegated agents: building a subagent's detail, patching it, and nesting
 //! the calls it made under it.
 
-use serde_json::Value;
-
 use crate::domain::error::FoldError;
-use crate::domain::harness::{self, HarnessReader};
-use crate::domain::model::{MessagePart, SubagentResult, ToolDetail, ToolName, ToolUseId};
-use agent_client_protocol::schema::v1::Meta;
+use crate::domain::harness::{self, HarnessReader, ToolFrame};
+use crate::domain::model::{MessagePart, ToolDetail, ToolName, ToolUseId};
 
 use super::state::{Changed, FoldState, ToolPath};
 
@@ -18,10 +15,10 @@ impl FoldState {
     pub(super) fn parent_path(
         &mut self,
         reader: &dyn HarnessReader,
-        meta: Option<&Meta>,
+        frame: &ToolFrame<'_>,
         child: &ToolUseId,
     ) -> Option<ToolPath> {
-        let parent = reader.parent_tool_call(meta)?;
+        let parent = reader.parent_tool_call(frame)?;
         let Some(path) = self.tool_positions.get(&parent).cloned() else {
             self.warn(FoldError::UnknownParent {
                 tool_call: child.clone(),
@@ -65,33 +62,6 @@ impl FoldState {
     }
 }
 
-/// The fields of one frame a subagent's detail is read from. A `tool_call`
-/// carries all of them; a `tool_call_update` only those it patches.
-pub(super) struct SubagentFrame<'frame> {
-    pub meta: Option<&'frame Meta>,
-    pub title: Option<&'frame str>,
-    pub raw_input: Option<&'frame Value>,
-    pub raw_output: Option<&'frame Value>,
-    /// The content blocks' text, only once the call has finished: while it
-    /// streams, Claude Code echoes the brief there.
-    pub content_text: Option<&'frame str>,
-}
-
-impl SubagentFrame<'_> {
-    /// What the subagent reported on this frame, in whatever shape the
-    /// delegation tool called `name` answers in.
-    fn result(&self, reader: &dyn HarnessReader, name: &ToolName) -> Option<SubagentResult> {
-        harness::subagent_result(
-            reader,
-            name,
-            self.meta,
-            self.raw_input,
-            self.raw_output,
-            self.content_text,
-        )
-    }
-}
-
 /// What to call a delegation: the harness's description, else the first
 /// non-empty line of the brief, else the tool's own name. Decided here, once,
 /// so every reader shows the same thing and none has to fall back itself.
@@ -108,17 +78,17 @@ fn subagent_title(description: Option<&str>, prompt: Option<&str>, name: &ToolNa
 pub(super) fn subagent_detail(
     reader: &dyn HarnessReader,
     name: &ToolName,
-    frame: &SubagentFrame<'_>,
+    frame: &ToolFrame<'_>,
 ) -> ToolDetail {
-    let input = reader.subagent_input(frame.raw_input, frame.title.unwrap_or_default());
+    let input = reader.subagent_input(frame);
     ToolDetail::Subagent {
         title: subagent_title(input.description.as_deref(), input.prompt.as_deref(), name),
         agent_type: input.agent_type,
         description: input.description,
         prompt: input.prompt,
         background: input.background.unwrap_or(false),
-        children: reader.subagent_transcript(frame.raw_output),
-        result: frame.result(reader, name).map(Box::new),
+        children: reader.subagent_transcript(frame),
+        result: harness::subagent_result(reader, name, frame).map(Box::new),
     }
 }
 
@@ -129,7 +99,7 @@ pub(super) fn patch_subagent_detail(
     reader: &dyn HarnessReader,
     name: &ToolName,
     detail: &mut ToolDetail,
-    frame: &SubagentFrame<'_>,
+    frame: &ToolFrame<'_>,
 ) {
     let ToolDetail::Subagent {
         title,
@@ -143,12 +113,12 @@ pub(super) fn patch_subagent_detail(
     else {
         return;
     };
-    let transcript = reader.subagent_transcript(frame.raw_output);
+    let transcript = reader.subagent_transcript(frame);
     if !transcript.is_empty() {
         *children = transcript;
     }
     if frame.raw_input.is_some() || frame.title.is_some() {
-        let input = reader.subagent_input(frame.raw_input, frame.title.unwrap_or_default());
+        let input = reader.subagent_input(frame);
         if input.agent_type.is_some() {
             *agent_type = input.agent_type;
         }
@@ -163,7 +133,7 @@ pub(super) fn patch_subagent_detail(
         }
         *title = subagent_title(description.as_deref(), prompt.as_deref(), name);
     }
-    if let Some(reported) = frame.result(reader, name) {
+    if let Some(reported) = harness::subagent_result(reader, name, frame) {
         match result {
             Some(existing) => existing.merge(reported),
             None => *result = Some(Box::new(reported)),

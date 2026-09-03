@@ -4,6 +4,7 @@ use std::convert::Infallible;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use agent_client_protocol::schema::v1::ToolCallStatus;
 use lazy_regex::regex_captures;
 use serde::Serialize;
 use specta::Type;
@@ -125,6 +126,20 @@ impl ToolStatus {
     #[must_use]
     pub const fn is_finished(self) -> bool {
         matches!(self, Self::Completed | Self::Failed)
+    }
+}
+
+impl From<ToolCallStatus> for ToolStatus {
+    fn from(status: ToolCallStatus) -> Self {
+        match status {
+            ToolCallStatus::Pending => Self::Pending,
+            ToolCallStatus::InProgress => Self::Running,
+            ToolCallStatus::Completed => Self::Completed,
+            ToolCallStatus::Failed => Self::Failed,
+            // `ToolCallStatus` is `#[non_exhaustive]`; an unknown status has
+            // not demonstrably finished.
+            _ => Self::Pending,
+        }
     }
 }
 

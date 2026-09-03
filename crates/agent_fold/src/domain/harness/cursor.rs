@@ -45,12 +45,12 @@
 
 use std::collections::BTreeMap;
 
-use agent_client_protocol::schema::v1::Meta;
+use lazy_regex::regex_is_match;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, generic, raw};
+use super::{HarnessReader, SubagentInput, ToolFrame, generic, raw};
 use crate::domain::model::{
     AnsiText, FileDiff, MessagePart, SubagentResult, ToolDetail, ToolName, ToolStatus, ToolUseId,
 };
@@ -59,36 +59,34 @@ use crate::domain::model::{
 pub struct Cursor;
 
 impl HarnessReader for Cursor {
-    fn subagent_input(&self, raw_input: Option<&Value>, _title: &str) -> SubagentInput {
-        let mut input = generic::subagent_input(raw_input);
+    fn announces(&self, name: &str) -> bool {
+        regex_is_match!(r"(?i)cursor", name)
+    }
+
+    fn subagent_input(&self, frame: &ToolFrame<'_>) -> SubagentInput {
+        let mut input = generic::subagent_input(frame);
         if input.agent_type.is_none() {
-            input.agent_type = TaskArguments::read(raw_input)
+            input.agent_type = TaskArguments::read(frame.raw_input)
                 .and_then(|arguments| arguments.subagent_type)
                 .and_then(SubagentType::name);
         }
         input
     }
 
-    fn subagent_result(
-        &self,
-        _meta: Option<&Meta>,
-        raw_input: Option<&Value>,
-        raw_output: Option<&Value>,
-        content_text: Option<&str>,
-    ) -> Option<SubagentResult> {
-        let mut result = match TaskOutput::read(raw_output) {
+    fn subagent_result(&self, frame: &ToolFrame<'_>) -> Option<SubagentResult> {
+        let mut result = match TaskOutput::read(frame.raw_output) {
             Some(output) => output.result.into_subagent_result(),
-            None => generic::subagent_result(raw_output, content_text).unwrap_or_default(),
+            None => generic::subagent_result(frame).unwrap_or_default(),
         };
-        if let Some(arguments) = TaskArguments::read(raw_input) {
+        if let Some(arguments) = TaskArguments::read(frame.raw_input) {
             result.agent_id = arguments.agent_id.or(result.agent_id);
             result.model = arguments.model.or(result.model);
         }
         (!result.is_empty()).then_some(result)
     }
 
-    fn subagent_transcript(&self, raw_output: Option<&Value>) -> Vec<MessagePart> {
-        TaskOutput::read(raw_output)
+    fn subagent_transcript(&self, frame: &ToolFrame<'_>) -> Vec<MessagePart> {
+        TaskOutput::read(frame.raw_output)
             .and_then(|output| output.result.success)
             .map(Transcript::into_parts)
             .unwrap_or_default()

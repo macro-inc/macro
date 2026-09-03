@@ -1,8 +1,7 @@
 //! ACP-to-vocabulary conversions and params access shared by the handlers.
 
-use crate::domain::model::ToolStatus;
 use agent_client_protocol::RawJsonRpcParams;
-use agent_client_protocol::schema::v1::{ContentBlock, ToolCallStatus, ToolKind};
+use agent_client_protocol::schema::v1::{ContentBlock, ToolKind};
 
 /// The text carried by a content block, if it carries any.
 pub(super) fn content_block_text(block: ContentBlock) -> Option<String> {
@@ -11,18 +10,6 @@ pub(super) fn content_block_text(block: ContentBlock) -> Option<String> {
         // Images, audio, resource links and embedded resources have no text
         // to fold. Rendering them is a separate problem from this one.
         _ => None,
-    }
-}
-
-pub(super) fn tool_status(status: ToolCallStatus) -> ToolStatus {
-    match status {
-        ToolCallStatus::Pending => ToolStatus::Pending,
-        ToolCallStatus::InProgress => ToolStatus::Running,
-        ToolCallStatus::Completed => ToolStatus::Completed,
-        ToolCallStatus::Failed => ToolStatus::Failed,
-        // `ToolCallStatus` is `#[non_exhaustive]`; an unknown status has not
-        // demonstrably finished.
-        _ => ToolStatus::Pending,
     }
 }
 

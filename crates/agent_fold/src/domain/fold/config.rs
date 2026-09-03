@@ -1,10 +1,11 @@
 //! Config options, available commands, and session info: the metadata.
 
+use crate::domain::harness::ToolFrame;
 use crate::domain::model::{AvailableCommand, Harness, ModelOption};
 use agent_client_protocol::schema::MaybeUndefined;
 use agent_client_protocol::schema::v1::{
     AvailableCommandInput, AvailableCommandsUpdate as AcpAvailableCommandsUpdate,
-    InitializeRequest, InitializeResponse, LoadSessionRequest, Meta, NewSessionRequest,
+    InitializeRequest, InitializeResponse, LoadSessionRequest, NewSessionRequest,
     ResumeSessionRequest, SessionConfigKind, SessionConfigOption, SessionConfigSelectOptions,
     SessionInfoUpdate, SetSessionConfigOptionRequest,
 };
@@ -39,15 +40,15 @@ impl FoldState {
         self.set_harness(Harness::from_agent_info(&info.name))
     }
 
-    /// Recognize the harness from a tool frame's `_meta` when the log never
-    /// showed an `initialize` - a resumed session, or a recording that starts
-    /// mid-turn. Only ever fills in an unknown; an announced harness is never
+    /// Recognize the harness from a tool frame when the log never showed an
+    /// `initialize` - a resumed session, or a recording that starts mid-turn.
+    /// Only ever fills in an unknown; an announced harness is never
     /// second-guessed by a frame.
-    pub(super) fn sniff_harness(&mut self, meta: Option<&Meta>) -> bool {
+    pub(super) fn sniff_harness(&mut self, frame: &ToolFrame<'_>) -> bool {
         if self.metadata.harness != Harness::Unknown {
             return false;
         }
-        match Harness::sniff_meta(meta) {
+        match Harness::sniff(frame) {
             Some(harness) => self.set_harness(harness),
             None => false,
         }

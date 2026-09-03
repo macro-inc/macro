@@ -1,25 +1,33 @@
 //! Harness-specific conventions: who produced the log, and how to read what
 //! they wrote beyond the ACP schema.
 //!
-//! ACP reserves `_meta` for implementation-defined data and tells clients to
-//! make no assumptions about it. A faithful fold nevertheless has to read it,
-//! because the material a reader most wants is only there:
+//! ACP gives a tool call a human-readable `title`, a coarse
+//! [`ToolKind`](agent_client_protocol::ToolKind), typed content blocks, and
+//! three fields it deliberately leaves open: `rawInput`, `rawOutput`, and
+//! `_meta`. The material a reader most wants lives in those open fields, by
+//! each harness's own convention:
 //!
-//! - The real tool name (`Bash`, `Read`, `Write`). ACP normalizes tools to a
-//!   coarse [`ToolKind`](agent_client_protocol::ToolKind), so `execute` is all
-//!   the spec gives us.
+//! - The real tool name (`Bash`, `Read`, `Write`). Claude Code writes it to
+//!   `_meta`; Codex spells MCP tools into the title; OpenClaw prefixes the
+//!   title with it.
 //! - Terminal output and exit codes. ACP's own
 //!   [`Terminal`](agent_client_protocol::Terminal) content block carries only
 //!   a `terminalId` pointing at a terminal the client is expected to have
 //!   created itself. A fold reading a historical log never created one, so the
 //!   only output it will ever see is the copy in `_meta`.
+//! - Whether a call delegates to another agent, and what that agent said.
+//!   Every harness spells this differently: a `_meta` flag, a tool name, a
+//!   title prefix; the answer in `_meta`, in `rawInput`, in `rawOutput`, or
+//!   in the content text.
 //!
-//! Each harness writes these differently, so each gets a [`HarnessReader`]
-//! in its own file, and the fold reads `_meta` through
-//! [`Harness::reader`] and nowhere else. Every method has a harness-neutral
-//! default in [`generic`], so an unknown harness still folds; a known one
-//! overrides only what it can answer from its own conventions. Every reader
-//! treats a missing or misshapen key as "no information".
+//! So each harness gets a [`HarnessReader`] in its own file, and every reader
+//! method takes the whole frame - a [`ToolFrame`] - rather than the fields
+//! some earlier harness happened to need. A harness that answers a question
+//! from a field no other harness uses reads it off the frame; the trait does
+//! not change. Every method has a harness-neutral default in [`generic`], so
+//! an unknown harness still folds; a known one overrides only what it can
+//! answer from its own conventions. Every reader treats a missing or
+//! misshapen field as "no information".
 //!
 //! Two things a tool call carries are not the harness's to define, and have
 //! modules of their own rather than a reader:
@@ -32,12 +40,14 @@
 //!   them.
 //!
 //! The fold reads a call through the functions at the bottom of this file -
-//! [`tool_shape`], [`subagent_result`], [`user_tool_outcome`] - which decide
-//! whose shape a call is in and read it accordingly, so the fold itself
-//! never names a harness, MCP, or a Macro tool.
+//! [`tool_name`], [`tool_shape`], [`subagent_result`], [`user_tool_outcome`]
+//! - which decide whose shape a call is in and read it accordingly, so the
+//! fold itself never names a harness, MCP, or a Macro tool.
 //!
-//! Supporting a new harness is one file here, one arm in
-//! [`Harness::reader`], and one row in [`Harness::from_agent_info`].
+//! Supporting a new harness is one file here and one arm in
+//! [`Harness::reader`]. The reader says how to recognize itself
+//! ([`HarnessReader::announces`], [`HarnessReader::wrote`]) as well as how
+//! to read its frames.
 
 /// The Claude Code harness (`claude-agent-acp`).
 pub mod claude_code;
@@ -61,47 +71,162 @@ pub mod openclaw;
 pub mod opencode;
 
 use crate::domain::model::{
-    Harness, MessagePart, SubagentResult, ToolName, ToolUseId, UserToolOutcome,
+    Harness, MessagePart, SubagentResult, ToolName, ToolStatus, ToolUseId, UserToolOutcome,
 };
-use agent_client_protocol::schema::v1::{Meta, ToolKind};
-use lazy_regex::regex_is_match;
+use agent_client_protocol::schema::v1::{
+    Content, ContentBlock, Meta, ToolCall, ToolCallContent, ToolCallLocation, ToolCallUpdate,
+    ToolKind,
+};
 use macro_tools::MacroTool;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-/// What a harness's conventions let the fold read off a tool frame.
+/// One tool frame, as a harness reads it: everything a `tool_call` or a
+/// `tool_call_update` carries, borrowed.
+///
+/// A `tool_call` fills every field it has; an update fills only what it
+/// patches, so every field is optional and a reader treats an absent one as
+/// "not on this frame". Readers take this whole rather than a hand-picked
+/// subset of it, so a harness that answers a question from a field no other
+/// harness uses needs no change to the trait.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ToolFrame<'frame> {
+    /// ACP's implementation-defined `_meta`.
+    pub meta: Option<&'frame Meta>,
+    /// The human-readable title.
+    pub title: Option<&'frame str>,
+    /// ACP's coarse kind.
+    pub kind: Option<ToolKind>,
+    /// How far the call has got. On an update, the status the call is in
+    /// once the update is applied - the update's own when it carries one,
+    /// else the status held before it (see [`Self::with_status`]).
+    pub status: Option<ToolStatus>,
+    /// The tool's arguments, in the harness's shape.
+    pub raw_input: Option<&'frame Value>,
+    /// The tool's result, in the harness's shape.
+    pub raw_output: Option<&'frame Value>,
+    /// The typed content blocks.
+    pub content: Option<&'frame [ToolCallContent]>,
+    /// The paths the call touched.
+    pub locations: Option<&'frame [ToolCallLocation]>,
+}
+
+impl<'frame> ToolFrame<'frame> {
+    /// The view of an opening `tool_call`.
+    #[must_use]
+    pub fn of_call(call: &'frame ToolCall) -> Self {
+        Self {
+            meta: call.meta.as_ref(),
+            title: Some(&call.title),
+            kind: Some(call.kind),
+            status: Some(call.status.into()),
+            raw_input: call.raw_input.as_ref(),
+            raw_output: call.raw_output.as_ref(),
+            content: Some(&call.content),
+            locations: Some(&call.locations),
+        }
+    }
+
+    /// The view of a `tool_call_update`: only what it carries.
+    #[must_use]
+    pub fn of_update(update: &'frame ToolCallUpdate) -> Self {
+        let fields = &update.fields;
+        Self {
+            meta: update.meta.as_ref(),
+            title: fields.title.as_deref(),
+            kind: fields.kind,
+            status: fields.status.map(Into::into),
+            raw_input: fields.raw_input.as_ref(),
+            raw_output: fields.raw_output.as_ref(),
+            content: fields.content.as_deref(),
+            locations: fields.locations.as_deref(),
+        }
+    }
+
+    /// The same frame with the status the call is in once it is applied,
+    /// for an update that carried none of its own.
+    #[must_use]
+    pub fn with_status(self, status: ToolStatus) -> Self {
+        Self {
+            status: Some(status),
+            ..self
+        }
+    }
+
+    /// Whether the call is over, as far as this frame says.
+    #[must_use]
+    pub fn finished(&self) -> bool {
+        self.status.is_some_and(ToolStatus::is_finished)
+    }
+
+    /// The text among the content blocks - e.g. search matches or a fetched
+    /// page's text - joined in order. `None` when no block carries text,
+    /// same as an empty result: nothing useful distinguishes "reported
+    /// nothing" from "reported an empty string".
+    #[must_use]
+    pub fn content_text(&self) -> Option<String> {
+        let text = self
+            .content?
+            .iter()
+            .filter_map(|block| match block {
+                ToolCallContent::Content(Content {
+                    content: ContentBlock::Text(text),
+                    ..
+                }) => Some(text.text.as_str()),
+                _ => None,
+            })
+            .collect::<String>();
+        (!text.is_empty()).then_some(text)
+    }
+}
+
+/// What a harness's conventions let the fold read off a tool frame, and how
+/// the fold tells which harness it is reading.
 ///
 /// Every method has a default a harness can leave alone. Defaults are the
 /// neutral readings in [`generic`], never `None`-for-everything: a frame
 /// from an unrecognized harness still folds to the same vocabulary as one
 /// from a known harness, only with less filled in.
 pub trait HarnessReader: Sync {
-    /// The `_meta` namespace this harness writes its own keys under, when it
-    /// has one - `claudeCode`, `macro`. Used to recognize a harness from a
-    /// tool frame when the log has no `initialize` to read.
-    fn meta_namespace(&self) -> Option<&'static str> {
-        None
+    /// Whether `name` - the `agentInfo.name` an `initialize` response
+    /// announced - is this harness. Matching should be loose: a harness's
+    /// package name, title and version format all change more often than
+    /// the word that identifies it.
+    fn announces(&self, name: &str) -> bool {
+        let _ = name;
+        false
+    }
+
+    /// Whether this harness wrote `frame` - for a log with no `initialize`
+    /// to read (a resumed session, a recording that starts mid-turn). Only a
+    /// harness that leaves something distinctive on its tool frames, like a
+    /// `_meta` namespace of its own, can say yes.
+    fn wrote(&self, frame: &ToolFrame<'_>) -> bool {
+        let _ = frame;
+        false
     }
 
     /// The tool's own name, when the harness reported one beyond the bare
     /// ACP title - in `_meta`, or by a naming convention in the title.
     ///
     /// Outranks the plain title, which is human-readable copy and may change
-    /// over a call's life. `None` means the title is all there is.
-    fn harness_tool_name(&self, meta: Option<&Meta>, title: &str) -> Option<ToolName> {
-        let _ = (meta, title);
+    /// over a call's life. `None` means the title is all there is. Returns a
+    /// [`ToolName`] rather than a string because splitting an MCP tool's
+    /// server from its name is itself a harness convention.
+    fn reported_tool_name(&self, frame: &ToolFrame<'_>) -> Option<ToolName> {
+        let _ = frame;
         None
     }
 
-    /// Terminal output accumulated so far, from `_meta`.
-    fn terminal_output(&self, meta: Option<&Meta>) -> Option<String> {
-        generic::terminal_output(meta)
+    /// Terminal output accumulated so far.
+    fn terminal_output(&self, frame: &ToolFrame<'_>) -> Option<String> {
+        generic::terminal_output(frame)
     }
 
-    /// The exit code a terminal-backed call finished with, from `_meta`.
-    fn terminal_exit_code(&self, meta: Option<&Meta>) -> Option<i32> {
-        generic::terminal_exit_code(meta)
+    /// The exit code a terminal-backed call finished with.
+    fn terminal_exit_code(&self, frame: &ToolFrame<'_>) -> Option<i32> {
+        generic::terminal_exit_code(frame)
     }
 
     /// The Macro tool `name` refers to, if it is one of Macro's.
@@ -127,37 +252,26 @@ pub trait HarnessReader: Sync {
     /// shape mid-flight. The neutral rule is the Claude Code "Task tool"
     /// convention that OpenCode and Cursor copied: a tool called `task` or
     /// `agent` whose kind is `think` or `other`.
-    fn is_subagent(&self, name: &ToolName, kind: ToolKind, meta: Option<&Meta>) -> bool {
-        let _ = meta;
-        generic::is_subagent(name, kind)
+    fn is_subagent(&self, name: &ToolName, frame: &ToolFrame<'_>) -> bool {
+        generic::is_subagent(name, frame)
     }
 
     /// The subagent call this frame's call belongs to, when the harness
     /// attributes calls to a parent. Only Claude Code does today.
-    fn parent_tool_call(&self, meta: Option<&Meta>) -> Option<ToolUseId> {
-        let _ = meta;
+    fn parent_tool_call(&self, frame: &ToolFrame<'_>) -> Option<ToolUseId> {
+        let _ = frame;
         None
     }
 
-    /// What a subagent was asked, read off a call's raw input (and, for a
-    /// harness that puts it nowhere else, its title).
-    fn subagent_input(&self, raw_input: Option<&serde_json::Value>, title: &str) -> SubagentInput {
-        let _ = title;
-        generic::subagent_input(raw_input)
+    /// What a subagent was asked.
+    fn subagent_input(&self, frame: &ToolFrame<'_>) -> SubagentInput {
+        generic::subagent_input(frame)
     }
 
-    /// What a subagent reported, read off a frame's `_meta`, raw input, raw
-    /// output and content text - whichever of those the harness uses.
+    /// What a subagent reported on this frame, wherever the harness puts it.
     /// `None` when the frame carries no result at all.
-    fn subagent_result(
-        &self,
-        meta: Option<&Meta>,
-        raw_input: Option<&serde_json::Value>,
-        raw_output: Option<&serde_json::Value>,
-        content_text: Option<&str>,
-    ) -> Option<SubagentResult> {
-        let _ = (meta, raw_input);
-        generic::subagent_result(raw_output, content_text)
+    fn subagent_result(&self, frame: &ToolFrame<'_>) -> Option<SubagentResult> {
+        generic::subagent_result(frame)
     }
 
     /// The subagent's own activity, when the harness reports it wholesale in
@@ -165,8 +279,8 @@ pub trait HarnessReader: Sync {
     /// attributing them to the parent (see [`Self::parent_tool_call`]).
     /// Only Cursor does today. Empty means the frame carries none; a
     /// non-empty transcript replaces whatever children the call held.
-    fn subagent_transcript(&self, raw_output: Option<&serde_json::Value>) -> Vec<MessagePart> {
-        let _ = raw_output;
+    fn subagent_transcript(&self, frame: &ToolFrame<'_>) -> Vec<MessagePart> {
+        let _ = frame;
         Vec::new()
     }
 }
@@ -188,56 +302,28 @@ pub struct SubagentInput {
 
 impl Harness {
     /// Recognize a harness from the `agentInfo.name` it announced in its
-    /// `initialize` response: the first known harness whose name matches.
+    /// `initialize` response: the first known harness that claims the name.
     #[must_use]
     pub fn from_agent_info(name: &str) -> Self {
         Self::KNOWN
             .iter()
             .copied()
-            .find(|harness| harness.name_matches(name))
+            .find(|harness| harness.reader().announces(name))
             .unwrap_or(Self::Unknown)
     }
 
-    /// Whether `name` - an `agentInfo.name` - is this harness announcing
-    /// itself.
-    ///
-    /// Matching is loose on purpose: a harness's package name, title and
-    /// version format all change more often than the word that identifies
-    /// it, so each harness matches that word. [`Self::Unknown`] matches
-    /// nothing; it is what is left when no harness does.
+    /// Recognize a harness from a tool frame, for a log with no `initialize`
+    /// to read. `None` when no known harness claims the frame.
     #[must_use]
-    pub fn name_matches(self, name: &str) -> bool {
-        match self {
-            Self::ClaudeCode => regex_is_match!(r"(?i)claude", name),
-            Self::OpenCode => regex_is_match!(r"(?i)^opencode", name),
-            Self::Codex => regex_is_match!(r"(?i)codex", name),
-            Self::Cursor => regex_is_match!(r"(?i)cursor", name),
-            Self::Macro => regex_is_match!(r"(?i)^macro", name),
-            Self::Hermes => regex_is_match!(r"(?i)hermes", name),
-            Self::OpenClaw => regex_is_match!(r"(?i)openclaw", name),
-            Self::Unknown => false,
-        }
-    }
-
-    /// Recognize a harness from the `_meta` namespaces on a tool frame, for
-    /// a log with no `initialize` to read - a session that was resumed, or a
-    /// recording that starts mid-turn. `None` when nothing on the frame
-    /// names one.
-    #[must_use]
-    pub fn sniff_meta(meta: Option<&Meta>) -> Option<Self> {
-        let meta = meta?;
-        Self::KNOWN.iter().copied().find(|harness| {
-            harness
-                .reader()
-                .meta_namespace()
-                .is_some_and(|namespace| meta.contains_key(namespace))
-        })
+    pub fn sniff(frame: &ToolFrame<'_>) -> Option<Self> {
+        Self::KNOWN
+            .iter()
+            .copied()
+            .find(|harness| harness.reader().wrote(frame))
     }
 
     /// Every harness with a reader of its own, in the order recognition
-    /// tries them - by announced name, then by `_meta` namespace. Harnesses
-    /// that write no `_meta` namespace on tool frames (OpenCode, Cursor,
-    /// Hermes, OpenClaw) can only be recognized from `initialize`.
+    /// tries them.
     const KNOWN: &'static [Self] = &[
         Self::ClaudeCode,
         Self::Macro,
@@ -264,13 +350,18 @@ impl Harness {
     }
 }
 
-/// The name of the tool behind a `tool_call`'s opening frame: the harness's
-/// own name when it wrote one to `_meta`, else the ACP title.
+/// The name of the tool behind a frame: the harness's own name when it
+/// reported one, else the ACP title, else empty - a name a later patch may
+/// fill.
 #[must_use]
-pub fn tool_name(reader: &dyn HarnessReader, meta: Option<&Meta>, title: &str) -> ToolName {
-    reader
-        .harness_tool_name(meta, title)
-        .unwrap_or_else(|| title.parse().unwrap_or_else(|never| match never {}))
+pub fn tool_name(reader: &dyn HarnessReader, frame: &ToolFrame<'_>) -> ToolName {
+    reader.reported_tool_name(frame).unwrap_or_else(|| {
+        frame
+            .title
+            .unwrap_or_default()
+            .parse()
+            .unwrap_or_else(|never| match never {})
+    })
 }
 
 /// Whose shape a tool call is in, and so how the fold reads it.
@@ -305,14 +396,13 @@ pub enum ToolShape<'name> {
 pub fn tool_shape<'name>(
     reader: &dyn HarnessReader,
     name: &'name ToolName,
-    kind: ToolKind,
-    meta: Option<&Meta>,
+    frame: &ToolFrame<'_>,
 ) -> ToolShape<'name> {
     match reader.macro_tool(name).map(MacroTool::of) {
         Some(MacroTool::User(tool)) => ToolShape::UserTool(tool),
         Some(MacroTool::Subagent) => ToolShape::Subagent,
         Some(MacroTool::Other(tool)) => ToolShape::Macro(tool),
-        None if reader.is_subagent(name, kind, meta) => ToolShape::Subagent,
+        None if reader.is_subagent(name, frame) => ToolShape::Subagent,
         None => ToolShape::Harness,
     }
 }
@@ -326,16 +416,13 @@ pub fn tool_shape<'name>(
 pub fn subagent_result(
     reader: &dyn HarnessReader,
     name: &ToolName,
-    meta: Option<&Meta>,
-    raw_input: Option<&Value>,
-    raw_output: Option<&Value>,
-    content_text: Option<&str>,
+    frame: &ToolFrame<'_>,
 ) -> Option<SubagentResult> {
     if reader.macro_tool(name).map(MacroTool::of) == Some(MacroTool::Subagent) {
-        let (value, error) = reader.unwrap_tool_output(raw_output?);
+        let (value, error) = reader.unwrap_tool_output(frame.raw_output?);
         return macro_tools::subagent_result(&value, error);
     }
-    reader.subagent_result(meta, raw_input, raw_output, content_text)
+    reader.subagent_result(frame)
 }
 
 /// Where a Macro user tool got to, from a frame's `rawOutput`: the harness's
@@ -367,10 +454,17 @@ pub(crate) fn namespaced<T: DeserializeOwned>(meta: Option<&Meta>, namespace: &s
         .flatten()
 }
 
+/// Whether `_meta` has a key called `namespace` at all - how a harness that
+/// writes one recognizes its own frames.
+#[must_use]
+pub(crate) fn has_namespace(meta: Option<&Meta>, namespace: &str) -> bool {
+    meta.is_some_and(|meta| meta.contains_key(namespace))
+}
+
 /// `raw_input` or `raw_output`, read as `T`. `None` when absent or not that
 /// shape.
 #[must_use]
-pub(crate) fn raw<T: DeserializeOwned>(value: Option<&serde_json::Value>) -> Option<T> {
+pub(crate) fn raw<T: DeserializeOwned>(value: Option<&Value>) -> Option<T> {
     serde_json::from_value(value?.clone()).ok()
 }
 
@@ -380,7 +474,7 @@ pub(crate) fn raw<T: DeserializeOwned>(value: Option<&serde_json::Value>) -> Opt
 /// because the key it looks for (`command`) is a harness convention that ACP
 /// does not specify.
 #[must_use]
-pub fn command_from_raw_input(raw_input: Option<&serde_json::Value>) -> Option<String> {
+pub fn command_from_raw_input(raw_input: Option<&Value>) -> Option<String> {
     #[derive(Deserialize)]
     struct Input {
         command: Option<String>,
@@ -397,7 +491,7 @@ pub fn command_from_raw_input(raw_input: Option<&serde_json::Value>) -> Option<S
 /// prior contents are not on the wire at all — a reader treats the file as
 /// new.
 #[must_use]
-pub fn file_edit_from_raw_input(raw_input: Option<&serde_json::Value>) -> Option<(String, String)> {
+pub fn file_edit_from_raw_input(raw_input: Option<&Value>) -> Option<(String, String)> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct Input {

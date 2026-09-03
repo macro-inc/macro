@@ -17,12 +17,11 @@
 //!   "details": { "status": "accepted", "childSessionKey": "agent:main:subagent:…", "runId": "…" } }
 //! ```
 
-use agent_client_protocol::schema::v1::{Meta, ToolKind};
-use lazy_regex::regex_captures;
+use lazy_regex::{regex_captures, regex_is_match};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, generic, mcp, raw};
+use super::{HarnessReader, SubagentInput, ToolFrame, generic, mcp, raw};
 use crate::domain::model::{SubagentResult, ToolName};
 
 /// Reader for OpenClaw's conventions.
@@ -55,18 +54,23 @@ struct DetailedOutput {
 }
 
 impl HarnessReader for OpenClaw {
+    fn announces(&self, name: &str) -> bool {
+        regex_is_match!(r"(?i)openclaw", name)
+    }
+
     /// `<tool>: key: value…` - the tool is what comes before the first colon.
-    fn harness_tool_name(&self, _meta: Option<&Meta>, title: &str) -> Option<ToolName> {
-        regex_captures!(r"^([a-z][a-z0-9_]*):\s", title).map(|(_, tool)| ToolName::native(tool))
+    fn reported_tool_name(&self, frame: &ToolFrame<'_>) -> Option<ToolName> {
+        regex_captures!(r"^([a-z][a-z0-9_]*):\s", frame.title?)
+            .map(|(_, tool)| ToolName::native(tool))
     }
 
-    fn is_subagent(&self, name: &ToolName, kind: ToolKind, _meta: Option<&Meta>) -> bool {
-        name.display() == "sessions_spawn" || generic::is_subagent(name, kind)
+    fn is_subagent(&self, name: &ToolName, frame: &ToolFrame<'_>) -> bool {
+        name.display() == "sessions_spawn" || generic::is_subagent(name, frame)
     }
 
-    fn subagent_input(&self, raw_input: Option<&Value>, _title: &str) -> SubagentInput {
-        let mut input = generic::subagent_input(raw_input);
-        let args: SpawnArgs = raw(raw_input).unwrap_or_default();
+    fn subagent_input(&self, frame: &ToolFrame<'_>) -> SubagentInput {
+        let mut input = generic::subagent_input(frame);
+        let args: SpawnArgs = raw(frame.raw_input).unwrap_or_default();
         if input.description.is_none() {
             input.description = args.label;
         }
@@ -76,15 +80,9 @@ impl HarnessReader for OpenClaw {
         input
     }
 
-    fn subagent_result(
-        &self,
-        _meta: Option<&Meta>,
-        _raw_input: Option<&Value>,
-        raw_output: Option<&Value>,
-        content_text: Option<&str>,
-    ) -> Option<SubagentResult> {
-        let Some(raw_output) = raw_output else {
-            return generic::subagent_result(None, content_text);
+    fn subagent_result(&self, frame: &ToolFrame<'_>) -> Option<SubagentResult> {
+        let Some(raw_output) = frame.raw_output else {
+            return generic::subagent_result(frame);
         };
         let details = match raw::<DetailedOutput>(Some(raw_output)) {
             Some(output) => output.details,
