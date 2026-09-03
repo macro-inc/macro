@@ -113,7 +113,7 @@ export function SettingsCard(props: { class?: string; children: JSX.Element }) {
     <Layer depth={2}>
       <div
         class={cn(
-          'rounded-xl border-1 border-ink/[0.05] bg-surface overflow-hidden settings-row-dividers',
+          '@container rounded-xl border-1 border-ink/[0.05] bg-surface overflow-hidden settings-row-dividers',
           props.class
         )}
       >
@@ -235,7 +235,8 @@ export function ChoiceRow(props: {
 /**
  * A row for an integration / service: a brand icon, a title + one-line
  * description, and a trailing action slot. Used by the Connected accounts and
- * MCP cards so every integration reads the same.
+ * MCP cards so every integration reads the same. Below 460px the action drops
+ * under the copy so the description can use the card width.
  */
 export function IntegrationRow(props: {
   /** The brand icon, rendered at its native size inside a fixed slot. */
@@ -250,27 +251,38 @@ export function IntegrationRow(props: {
   class?: string;
 }) {
   return (
-    <div class={cn('flex items-center gap-4 px-6 py-4', props.class)}>
+    <div
+      class={cn(
+        'flex items-start gap-4 px-6 py-4 touch:px-4',
+        props.class
+      )}
+    >
       <Show when={props.icon}>
         <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-6">
           {props.icon}
         </div>
       </Show>
-      <div class="flex-1 min-w-0 flex flex-col gap-0.5">
-        <div class="flex items-center gap-2 min-w-0">
-          <div class="text-sm font-medium text-ink truncate">{props.title}</div>
-          <Show when={props.status}>{props.status}</Show>
+      <div class="flex min-w-0 flex-1 flex-col gap-3 @[460px]:flex-row @[460px]:items-center @[460px]:gap-4">
+        <div class="min-w-0 flex-1 flex flex-col gap-0.5">
+          <div class="flex items-center gap-2 min-w-0">
+            <div class="text-sm font-medium text-ink truncate">
+              {props.title}
+            </div>
+            <Show when={props.status}>{props.status}</Show>
+          </div>
+          <Show when={props.description}>
+            <div class="text-sm text-ink-muted">{props.description}</div>
+          </Show>
+          <Show when={props.facts}>
+            <div class="text-xs text-ink-extra-muted">{props.facts}</div>
+          </Show>
         </div>
-        <Show when={props.description}>
-          <div class="text-sm text-ink-muted">{props.description}</div>
-        </Show>
-        <Show when={props.facts}>
-          <div class="text-xs text-ink-extra-muted">{props.facts}</div>
+        <Show when={props.children}>
+          <div class="flex shrink-0 items-center gap-2 self-start @[460px]:self-auto @[460px]:justify-end">
+            {props.children}
+          </div>
         </Show>
       </div>
-      <Show when={props.children}>
-        <div class="shrink-0 flex items-center gap-2">{props.children}</div>
-      </Show>
     </div>
   );
 }
