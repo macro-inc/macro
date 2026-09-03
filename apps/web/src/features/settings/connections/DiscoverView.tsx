@@ -94,7 +94,7 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
           </For>
         </div>
         <Show when={featured().length === 0}>
-          <p class="px-6 text-sm text-ink-muted">No featured providers match.</p>
+          <p class="text-sm text-ink-muted">No featured providers match.</p>
         </Show>
       </SettingsSection>
 

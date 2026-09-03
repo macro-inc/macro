@@ -19,7 +19,7 @@ export function OtherView(props: { leftovers: Leftover[] }) {
           {(item) => <LeftoverRow leftover={item} />}
         </For>
       </SettingsCard>
-      <p class="px-6 text-xs text-ink-extra-muted">
+      <p class="text-xs text-ink-extra-muted">
         If a leftover later maps to a provider, it moves there. Until then it
         stays here.
       </p>

@@ -149,13 +149,11 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
       </Show>
 
       <Show when={rows().length > 0 && multiInboxFlag().enabled}>
-        <div class="px-6">
-          <ConnectAction
-            label="Add another Google account"
-            onClick={() => void connect()}
-            disabled={pending()}
-          />
-        </div>
+        <ConnectAction
+          label="Add another Google account"
+          onClick={() => void connect()}
+          disabled={pending()}
+        />
       </Show>
 
       <TurnOffCalendarDialog

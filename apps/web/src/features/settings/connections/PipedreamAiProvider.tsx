@@ -196,7 +196,7 @@ export function PipedreamAiProvider(props: {
             </Show>
           </CapabilityRow>
         </SettingsCard>
-        <p class="px-6 text-xs text-ink-extra-muted">{copy.later}</p>
+        <p class="text-xs text-ink-extra-muted">{copy.later}</p>
       </SettingsSection>
     </SettingsPage>
   );

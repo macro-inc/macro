@@ -41,17 +41,14 @@ export function SettingsPage(props: {
         <Show when={props.onBack}>
           <button
             type="button"
-            class="mb-5 inline-flex items-center gap-1.5 rounded-md px-6 py-1 text-sm text-ink-muted outline-none hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
+            class="mb-5 -ml-1.5 inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-ink-muted outline-none hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
             onClick={props.onBack}
           >
             <CaretLeftIcon class="size-4" />
             {props.backLabel ?? 'Connections'}
           </button>
         </Show>
-        {/* Headers are inset by the card's inner padding so the title and
-            section labels line up with the leftmost content inside the cards,
-            while the cards themselves stay full-width. */}
-        <header class="flex items-start justify-between gap-4 px-6">
+        <header class="flex items-start justify-between gap-4">
           <div class="flex flex-col gap-1.5 min-w-0">
             <h1 class="text-2xl/tight font-semibold text-ink">{props.title}</h1>
             <Show when={props.description}>
@@ -83,7 +80,7 @@ export function SettingsSection(props: {
   return (
     <section class={cn('flex flex-col gap-3', props.class)}>
       <Show when={props.title || props.actions}>
-        <div class="flex items-end justify-between gap-4 px-6">
+        <div class="flex items-end justify-between gap-4">
           <div class="flex flex-col gap-0.5 min-w-0">
             <Show when={props.title}>
               <h2 class="text-[15px] font-semibold text-ink">{props.title}</h2>

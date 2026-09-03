@@ -31,7 +31,7 @@ export function ConnectionsPage() {
           description="What Macro can access, and who it affects."
           onBack={provider() ? closeConnectionsProvider : undefined}
         >
-          <div class="px-6 flex items-center gap-3 text-sm text-ink-muted">
+          <div class="flex items-center gap-3 text-sm text-ink-muted">
             Couldn't load connections.
             <Button variant="outline" size="sm" depth={3} onClick={retry}>
               Retry
@@ -46,24 +46,22 @@ export function ConnectionsPage() {
           title="Connections"
           description="What Macro can access, and who it affects."
         >
-          <div class="px-6">
-            <TabsInset
-              fullWidth
-              list={[
-                { value: 'connected', label: 'Connected' },
-                { value: 'discover', label: 'Discover' },
-              ]}
-              value={connectionsMode()}
-              onChange={(value) => {
-                if (value === 'discover') showConnectionsDiscover();
-                else showConnectionsOverview();
-              }}
-            />
-          </div>
+          <TabsInset
+            fullWidth
+            list={[
+              { value: 'connected', label: 'Connected' },
+              { value: 'discover', label: 'Discover' },
+            ]}
+            value={connectionsMode()}
+            onChange={(value) => {
+              if (value === 'discover') showConnectionsDiscover();
+              else showConnectionsOverview();
+            }}
+          />
           <Show
             when={ready()}
             fallback={
-              <p class="px-6 text-sm text-ink-muted">Loading connections…</p>
+              <p class="text-sm text-ink-muted">Loading connections…</p>
             }
           >
             <Show

@@ -37,18 +37,16 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
         </SettingsCard>
       </SettingsSection>
 
-      <div class="px-6">
-        <Button
-          type="button"
-          variant="outline"
-          depth={3}
-          class="w-full justify-between"
-          onClick={showConnectionsDiscover}
-        >
-          Add a connection
-          <CaretRightIcon class="size-4 text-ink-extra-muted" />
-        </Button>
-      </div>
+      <Button
+        type="button"
+        variant="outline"
+        depth={3}
+        class="w-full justify-between"
+        onClick={showConnectionsDiscover}
+      >
+        Add a connection
+        <CaretRightIcon class="size-4 text-ink-extra-muted" />
+      </Button>
 
       <Show when={props.model.leftovers.length > 0}>
         <SettingsSection title="Other connections">
@@ -118,18 +116,16 @@ function EmptyConnected() {
         </SettingsCard>
       </SettingsSection>
 
-      <div class="px-6">
-        <Button
-          type="button"
-          variant="outline"
-          depth={3}
-          class="w-full justify-between"
-          onClick={showConnectionsDiscover}
-        >
-          Browse all connections
-          <CaretRightIcon class="size-4 text-ink-extra-muted" />
-        </Button>
-      </div>
+      <Button
+        type="button"
+        variant="outline"
+        depth={3}
+        class="w-full justify-between"
+        onClick={showConnectionsDiscover}
+      >
+        Browse all connections
+        <CaretRightIcon class="size-4 text-ink-extra-muted" />
+      </Button>
     </>
   );
 }
