@@ -451,7 +451,7 @@ describe('ToolCallPart subagents', () => {
     );
   });
 
-  it('falls back to the tool name and shows the brief when little is known', () => {
+  it('titles the card from the brief when there is no description', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={subagent({
@@ -462,10 +462,48 @@ describe('ToolCallPart subagents', () => {
         })}
       />
     ));
-    expect(rendered.getByTestId('title').textContent).toBe('Agent');
+    expect(rendered.getByTestId('title').textContent).toBe(
+      'Run python and report the output.'
+    );
+    expect(rendered.getByTestId('subtitle').textContent).toBe('Agent');
     expect(rendered.getByTestId('body').textContent).toContain(
       'Run python and report the output.'
     );
+  });
+
+  it('cuts a long brief at a word and keeps the agent type in the subtitle', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={subagent({
+          description: null,
+          prompt:
+            'Compute 5 + 5 in Python by executing the code, and report the exact numeric result that Python outputs.\n\nBe brief.',
+          children: [],
+          result: null,
+        })}
+      />
+    ));
+    expect(rendered.getByTestId('title').textContent).toBe(
+      'Compute 5 + 5 in Python by executing the code, and report the exact…'
+    );
+    expect(rendered.getByTestId('subtitle').textContent).toBe(
+      'Agent · general-purpose'
+    );
+  });
+
+  it('falls back to the tool name when there is neither description nor brief', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={subagent({
+          description: null,
+          prompt: null,
+          agentType: null,
+          children: [],
+          result: null,
+        })}
+      />
+    ));
+    expect(rendered.getByTestId('title').textContent).toBe('Agent');
   });
 
   it('shows a failed subagent faded with its error', () => {

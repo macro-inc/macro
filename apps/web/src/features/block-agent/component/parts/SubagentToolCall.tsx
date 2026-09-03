@@ -41,6 +41,27 @@ function resultSummary(result: SubagentResult): string | undefined {
   return facts.length > 0 ? facts.join(' · ') : undefined;
 }
 
+/**
+ * A title for a call whose harness gave no description: the brief's first
+ * line, cut to fit a row. Macro's own `Subagent` tool and OpenCode's `task`
+ * carry a prompt and nothing else, and a card that only says "Subagent"
+ * tells the reader nothing about what was delegated.
+ */
+export function promptTitle(
+  prompt: string,
+  maxLength = 72
+): string | undefined {
+  const line = prompt
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  if (line == null) return undefined;
+  if (line.length <= maxLength) return line;
+  const cut = line.slice(0, maxLength);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${lastSpace > maxLength / 2 ? cut.slice(0, lastSpace) : cut}…`;
+}
+
 /** A subagent's nested part: prose, reasoning, or one of its tool calls. */
 function ChildPart(props: {
   part: MessagePart;
@@ -85,9 +106,21 @@ export function SubagentToolCall(props: {
       ...props.context,
       inFlight: working() && props.context.inFlight,
     };
-  const title = () => props.detail.description ?? props.common.label;
+  // Description, else the brief's first line, else the tool's name. When the
+  // brief stands in for the title, the tool's name moves to the subtitle so
+  // the row still says which harness's delegation this is.
+  const fromPrompt = () =>
+    props.detail.description == null && props.detail.prompt != null
+      ? promptTitle(props.detail.prompt)
+      : undefined;
+  const title = () =>
+    props.detail.description ?? fromPrompt() ?? props.common.label;
   const subtitle = () =>
-    [props.detail.agentType, props.detail.background ? 'background' : undefined]
+    [
+      fromPrompt() != null ? props.common.label : undefined,
+      props.detail.agentType,
+      props.detail.background ? 'background' : undefined,
+    ]
       .filter(Boolean)
       .join(' · ') || undefined;
   const trailing = () =>
