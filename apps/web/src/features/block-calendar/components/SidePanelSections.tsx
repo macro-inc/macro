@@ -16,8 +16,10 @@ import {
   createMemo,
   createSignal,
   For,
+  Match,
   on,
   Show,
+  Switch,
 } from 'solid-js';
 
 function CalendarMiniCalendarSidePanelSection() {
@@ -172,17 +174,21 @@ function TeamOooUpcomingList() {
 
   return (
     <div class="flex flex-col gap-0.5">
-      <Show when={!upcoming.isPending()} fallback={<TeamOooSkeleton />}>
-        <Show
-          when={windows().length > 0}
-          fallback={
-            <span class="px-2 py-1 text-xs text-ink-muted">
-              {upcoming.isError()
-                ? "Couldn't load time off"
-                : 'No time off in the next 90 days'}
-            </span>
-          }
-        >
+      <Switch>
+        <Match when={upcoming.isPending()}>
+          <TeamOooSkeleton />
+        </Match>
+        <Match when={upcoming.isError()}>
+          <span class="px-2 py-1 text-xs text-ink-muted">
+            Couldn't load time off
+          </span>
+        </Match>
+        <Match when={windows().length === 0}>
+          <span class="px-2 py-1 text-xs text-ink-muted">
+            No time off in the next 90 days
+          </span>
+        </Match>
+        <Match when={windows().length > 0}>
           <For each={windows().slice(0, UPCOMING_SHOWN_MAX)}>
             {(window) => (
               <button
@@ -211,8 +217,8 @@ function TeamOooUpcomingList() {
               +{windows().length - UPCOMING_SHOWN_MAX} more
             </span>
           </Show>
-        </Show>
-      </Show>
+        </Match>
+      </Switch>
     </div>
   );
 }

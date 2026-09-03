@@ -99,10 +99,11 @@ export function useTeamOooEvents(
     })
   );
   const events = createMemo(() => {
-    // A failed overlay fetch degrades to no events rather than an error surface
-    // since the grid's own state is driven by the occurrences query.
-    if (!isRangeSupported() || query.isPending) return [];
-    return (query.data ?? []).map(mapTeamOooItem);
+    // Read data only on success: a failed overlay fetch degrades to no events
+    // since the grid's own state is driven by the occurrences query, and gating
+    // on success keeps this off the pending/errored resource read that suspends.
+    if (!isRangeSupported() || !query.isSuccess) return [];
+    return query.data.map(mapTeamOooItem);
   });
   const visibleEvents = createMemo(() => (isOverlayVisible() ? events() : []));
   const eventsById = createMemo(
@@ -149,10 +150,10 @@ export function useUpcomingTeamOoo(): UpcomingTeamOoo {
   const query = useTeamOutOfOfficeQuery(() => ({ userId: userId(), range }));
 
   const windows = createMemo<TeamOooWindow[]>(() => {
-    // Reading data only once settled keeps this off the pending resource read
-    // that would suspend, while still surfacing stale data through a refetch.
-    if (query.isPending) return [];
-    return (query.data ?? []).map((item) => {
+    // Read data only on success so a pending query never hits the suspending
+    // resource read and an errored refetch never surfaces stale rows.
+    if (!query.isSuccess) return [];
+    return query.data.map((item) => {
       const time = item.time;
       const [start, end, allDay] =
         time.kind === 'timed'
