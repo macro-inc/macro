@@ -327,6 +327,11 @@ body.tauri-ios {
   --color-thread-rail: color-mix(in oklch, var(--color-surface) 90%, var(--color-ink));
   --color-modal-overlay: oklch(0 0 0 / 0.25);
   --color-drop-shadow: oklch(0.15 0 0 / 0.04);
+  /* Inset hairline that settles an avatar against the surface behind it. It
+     recedes toward the page tone rather than outlining against it, so a photo's
+     edge stops competing with the layout. Per-mode values are below; this
+     default covers first paint, before the mode attribute is written. */
+  --color-avatar-edge: oklch(0 0 0 / 0.4);
   --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
   --color-list-hover: color-mix(in oklch, var(--color-hover) 65%, transparent);
   --color-list-highlighted: var(--color-hover);
@@ -485,13 +490,33 @@ body.tauri-ios {
   }
 }
 
-@custom-variant light-mode (&:where(html[data-theme-light="true"] *));
-@custom-variant dark-mode (&:where(html[data-theme-light="false"] *));
+/* Matched on any ancestor rather than `html` so a container can scope a mode to
+   its own subtree — the component gallery previews a light theme inside a dark
+   app that way. The theme feature only ever writes the attribute to `<html>`,
+   so app behavior is unchanged. */
+@custom-variant light-mode (&:where([data-theme-light="true"] *));
+@custom-variant dark-mode (&:where([data-theme-light="false"] *));
 
 /* Dark surfaces need a larger ink step for the thread path to remain visible.
    Both inputs stay opaque, so overlapping rail segments still render evenly. */
 html[data-theme-light='false'] {
   --color-thread-rail: color-mix(in oklch, var(--color-surface) 70%, var(--color-ink));
+}
+
+/* The avatar hairline follows the surface it sits on: it darkens the edge on
+   dark surfaces and lightens it on light ones, so the avatar settles into the
+   page instead of being ringed against it. Ancestor-scoped for the same reason
+   as the variants above.
+
+   NOTE: turned up to 0.4 so the treatment is obvious while it is being
+   reviewed. The intended production value is 0.08 — change both alphas below
+   (and the @theme default) once the look is settled. */
+[data-theme-light='false'] {
+  --color-avatar-edge: oklch(0 0 0 / 0.4);
+}
+
+[data-theme-light='true'] {
+  --color-avatar-edge: oklch(1 0 0 / 0.4);
 }
 
 /* Floating "island" chrome shared by the mobile dock buttons, header islands,
@@ -501,6 +526,21 @@ html[data-theme-light='false'] {
    hand-prefixing each part. */
 @utility island {
   @apply min-h-[40px] min-w-[40px] bg-chrome text-ink ring dark-mode:ring-edge light-mode:ring-panel light-mode:shadow-[0_4px_20px_8px_oklch(0.15_0_0/0.07)];
+}
+
+/* Hairline that settles a round image against the surface behind it, darkening
+   the edge on dark surfaces and lightening it on light ones (see
+   --color-avatar-edge). Applied by `Avatar`; anything drawing an image chip can
+   reuse it, whatever its shape.
+
+   An outline, not a ring: outlines paint after every descendant, so this shows
+   over a `size-full` image, where an inset box-shadow would sit underneath it.
+   A negative offset pulls it inside the border box so the footprint is
+   unchanged, outlines follow `border-radius` so it traces whatever shape the
+   host has, and it leaves box-shadow free for AvatarGroup's separator ring. */
+@utility avatar-edge {
+  outline: 1px solid var(--color-avatar-edge);
+  outline-offset: -1px;
 }
 
 [data-press-pulse] {

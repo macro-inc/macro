@@ -30,7 +30,11 @@ import type {
 import { getOklch } from './colorUtil';
 import { convertThemev2v3 } from './themeMigrations';
 import { isThemeV2, isThemeV3 } from './themeValidation';
-import { normalizeThemeColorTokens } from './themeVNext';
+import {
+  isStructuralThemeToken,
+  normalizeThemeColorTokens,
+  themeTokenCssVar,
+} from './themeVNext';
 
 export function exportTheme(themeId?: string) {
   const id = themeId ?? currentThemeId();
@@ -132,37 +136,18 @@ function syncLegacyCompatibilityTokens(): void {
   });
 }
 
-const LAYER_RELATIVE_TOKENS = {
-  surface: 'var(--layer-surface)',
-  inset: 'var(--layer-inset)',
-  lift: 'var(--layer-lift)',
-} as const;
-
 function renderThemeColorToken(token: string, value: string): void {
-  if (token === 'panel') {
-    // Keep the authored structural value separate from the public semantic var
-    // so containers can scope --color-panel without losing the theme source.
-    document.documentElement.style.removeProperty('--color-panel');
-    document.documentElement.style.setProperty('--theme-panel', value);
-    return;
-  }
+  const mapped = themeTokenCssVar(token, value);
 
-  const layerDefault =
-    LAYER_RELATIVE_TOKENS[token as keyof typeof LAYER_RELATIVE_TOKENS];
-
-  if (layerDefault) {
-    // CSS owns the public --color-* mapping for layer-relative semantics.
-    // Only author an optional theme override when the assignment is custom.
+  if (isStructuralThemeToken(token)) {
     document.documentElement.style.removeProperty(`--color-${token}`);
-    if (value === layerDefault) {
-      document.documentElement.style.removeProperty(`--theme-${token}`);
-    } else {
-      document.documentElement.style.setProperty(`--theme-${token}`, value);
-    }
-    return;
   }
 
-  document.documentElement.style.setProperty(`--color-${token}`, value);
+  if (mapped) {
+    document.documentElement.style.setProperty(mapped.name, mapped.value);
+  } else {
+    document.documentElement.style.removeProperty(`--theme-${token}`);
+  }
 }
 
 /** Applies a color token for an editor drag without updating persisted state. */

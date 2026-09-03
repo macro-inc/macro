@@ -5,6 +5,7 @@ import type {
   ThemeColorTokens,
   ThemeV2,
   ThemeV2Tokens,
+  ThemeV3,
 } from '../types/themeTypes';
 
 /** Tailwind 500 hue angles used to project a legacy theme's accent color. */
@@ -191,4 +192,63 @@ export function isInputColorToken(token: string): token is InputColorToken {
     token === 'accent' ||
     token in PALETTE_HUES
   );
+}
+
+const LAYER_RELATIVE_TOKENS = {
+  surface: 'var(--layer-surface)',
+  inset: 'var(--layer-inset)',
+  lift: 'var(--layer-lift)',
+} as const;
+
+/** Tokens whose public `--color-*` var is owned by the layer CSS rather than
+ *  written directly. */
+export function isStructuralThemeToken(token: string): boolean {
+  return token === 'panel' || token in LAYER_RELATIVE_TOKENS;
+}
+
+/**
+ * Maps one authored theme token to the CSS custom property that carries it.
+ * Returns null when CSS owns the public var and the authored value is already
+ * the default, i.e. there is nothing to write.
+ *
+ * Shared by the document-level renderer and by `themeCssVars`, so scoping a
+ * theme to a subtree resolves tokens exactly the way the root does.
+ */
+export function themeTokenCssVar(
+  token: string,
+  value: string
+): { name: string; value: string } | null {
+  if (token === 'panel') {
+    // Keep the authored structural value separate from the public semantic var
+    // so containers can scope --color-panel without losing the theme source.
+    return { name: '--theme-panel', value };
+  }
+
+  const layerDefault =
+    LAYER_RELATIVE_TOKENS[token as keyof typeof LAYER_RELATIVE_TOKENS];
+
+  if (layerDefault) {
+    // CSS owns the public --color-* mapping for layer-relative semantics.
+    // Only author an optional theme override when the assignment is custom.
+    return value === layerDefault ? null : { name: `--theme-${token}`, value };
+  }
+
+  return { name: `--color-${token}`, value };
+}
+
+/**
+ * All of a theme's tokens as inline CSS custom properties, for rendering a
+ * theme inside a subtree instead of on the document. Every authored value is
+ * either a literal color or a `var()`/`color-mix()` expression over other
+ * `--color-*` tokens, so the whole set resolves against whichever element it is
+ * set on.
+ */
+export function themeCssVars(theme: ThemeV3): Record<string, string> {
+  const tokens = normalizeThemeColorTokens(theme.colorTokens, theme.mode);
+  const vars: Record<string, string> = {};
+  for (const [token, value] of Object.entries(tokens)) {
+    const mapped = themeTokenCssVar(token, value);
+    if (mapped) vars[mapped.name] = mapped.value;
+  }
+  return vars;
 }

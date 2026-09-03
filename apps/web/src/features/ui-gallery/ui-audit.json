@@ -1,0 +1,3733 @@
+{
+  "generatedAt": "2026-08-28T20:19:51.005Z",
+  "scannedFiles": 1068,
+  "components": [
+    {
+      "name": "Button",
+      "files": 194,
+      "usages": 508,
+      "withClass": 248,
+      "withOverride": 223,
+      "overrideRate": 0.439,
+      "topOverrides": [
+        {
+          "token": "rounded-lg",
+          "count": 53
+        },
+        {
+          "token": "rounded-xs",
+          "count": 52
+        },
+        {
+          "token": "rounded-md",
+          "count": 34
+        },
+        {
+          "token": "bg-surface",
+          "count": 23
+        },
+        {
+          "token": "text-ink-muted",
+          "count": 23
+        },
+        {
+          "token": "rounded-full",
+          "count": 20
+        },
+        {
+          "token": "p-1",
+          "count": 18
+        },
+        {
+          "token": "border-0",
+          "count": 17
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/soup-view-create-button.tsx",
+          "line": 179,
+          "classes": "border-0 rounded-full px-3 py-2 pl-1 font-semibold pr-1"
+        },
+        {
+          "file": "features/next-soup/soup-view/search-ask-ai-button.tsx",
+          "line": 46,
+          "classes": "shrink-0 h-7 touch:h-9 gap-1.5 rounded-lg px-2"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/inbox-selector.tsx",
+          "line": 89,
+          "classes": "bg-surface gap-1 px-1"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx",
+          "line": 802,
+          "classes": "min-h-10 rounded-lg bg-active!"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/consolidated-filter-chip.tsx",
+          "line": 377,
+          "classes": "rounded-none h-full not-disabled:hover:text-failure bg-active border-none"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/search-facet-chip.tsx",
+          "line": 207,
+          "classes": "rounded-none h-full not-disabled:hover:text-failure"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer.tsx",
+          "line": 307,
+          "classes": "min-h-10 rounded-lg bg-active!"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/soup-active-filters-bar.tsx",
+          "line": 53,
+          "classes": "h-7 rounded-md"
+        },
+        {
+          "file": "features/next-soup/soup-view/NewCallButton.tsx",
+          "line": 81,
+          "classes": "border-0 rounded-full px-3 py-2 pl-1 font-semibold"
+        },
+        {
+          "file": "features/next-soup/soup-view/views/companies/CompanyViewsMenu.tsx",
+          "line": 64,
+          "classes": "size-6 shrink-0 rounded-md p-1 text-ink-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        },
+        {
+          "file": "features/next-soup/soup-view/views/companies/CompanyViewsMenu.tsx",
+          "line": 81,
+          "classes": "size-6 shrink-0 rounded-md p-1 text-ink-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        },
+        {
+          "file": "features/next-soup/soup-view/views/companies/CompanyViewsMenu.tsx",
+          "line": 94,
+          "classes": "size-6 shrink-0 rounded-md p-1 text-ink-muted opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+        },
+        {
+          "file": "features/next-soup/soup-view/soup-view.tsx",
+          "line": 574,
+          "classes": "p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
+        },
+        {
+          "file": "features/next-soup/soup-view/soup-view.tsx",
+          "line": 671,
+          "classes": "p-1 size-7 rounded-lg ml-2 bg-surface"
+        },
+        {
+          "file": "features/next-soup/soup-view/soup-view.tsx",
+          "line": 1458,
+          "classes": "bg-surface border-transparent"
+        },
+        {
+          "file": "features/next-soup/soup-view/soup-view.tsx",
+          "line": 1474,
+          "classes": "bg-surface border-transparent"
+        },
+        {
+          "file": "features/next-soup/debug/DocumentWherePlayground.tsx",
+          "line": 503,
+          "classes": "h-auto justify-start py-1.5"
+        },
+        {
+          "file": "features/block-call/sidebar/active-call-widget.tsx",
+          "line": 167,
+          "classes": "relative flex items-center cursor-default rounded-md text-ink-extra-muted not-disabled:hover:bg-ink/3 justify-center size-8"
+        },
+        {
+          "file": "features/block-call/sidebar/active-call-widget.tsx",
+          "line": 269,
+          "classes": "shrink-0 size-5 p-0 flex items-center justify-center rounded-md bg-ink-muted/10 text-ink-muted/80 not-disabled:hover:bg-failure/10 not-disabled:hover:text-failure"
+        },
+        {
+          "file": "features/block-call/component/CallRecording/CallRecordingSplitHeader.tsx",
+          "line": 141,
+          "classes": "bg-surface"
+        },
+        {
+          "file": "features/settings/Settings.tsx",
+          "line": 231,
+          "classes": "p-1 rounded-md"
+        },
+        {
+          "file": "features/settings/Settings.tsx",
+          "line": 294,
+          "classes": "p-1 rounded-lg"
+        },
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 57,
+          "classes": "rounded-xs"
+        },
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 65,
+          "classes": "rounded-xs"
+        },
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 171,
+          "classes": "rounded-xs"
+        }
+      ],
+      "truncatedSites": 198
+    },
+    {
+      "name": "Layer",
+      "files": 87,
+      "usages": 114,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.Group",
+      "files": 42,
+      "usages": 89,
+      "withClass": 5,
+      "withOverride": 4,
+      "overrideRate": 0.045,
+      "topOverrides": [
+        {
+          "token": "gap-0",
+          "count": 3
+        },
+        {
+          "token": "p-0",
+          "count": 2
+        },
+        {
+          "token": "p-3",
+          "count": 1
+        },
+        {
+          "token": "p-1.5",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/filters-bar/unified-filter-dropdown.tsx",
+          "line": 471,
+          "classes": "p-0 gap-0"
+        },
+        {
+          "file": "features/calendar/components/PeriodSelector.tsx",
+          "line": 189,
+          "classes": "p-3"
+        },
+        {
+          "file": "features/property/editors/popover/EditorPopover.tsx",
+          "line": 101,
+          "classes": "p-0 gap-0 flex-1 min-h-0"
+        },
+        {
+          "file": "components/app/app-sidebar/sidebar.tsx",
+          "line": 906,
+          "classes": "p-1.5 gap-0"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Tooltip",
+      "files": 47,
+      "usages": 89,
+      "withClass": 3,
+      "withOverride": 1,
+      "overrideRate": 0.011,
+      "topOverrides": [
+        {
+          "token": "rounded-full",
+          "count": 1
+        },
+        {
+          "token": "opacity-0",
+          "count": 1
+        },
+        {
+          "token": "opacity-100",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/channel/sidebar/channels-recent-widget.tsx",
+          "line": 572,
+          "classes": "pointer-events-none rounded-full opacity-0 transition-opacity duration-100 group-hover/sidebar-section:pointer-events-auto group-hover/sidebar-section:opacity-100"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.Item",
+      "files": 36,
+      "usages": 78,
+      "withClass": 18,
+      "withOverride": 15,
+      "overrideRate": 0.192,
+      "topOverrides": [
+        {
+          "token": "gap-2",
+          "count": 9
+        },
+        {
+          "token": "text-ink",
+          "count": 6
+        },
+        {
+          "token": "px-2.5",
+          "count": 6
+        },
+        {
+          "token": "py-2",
+          "count": 4
+        },
+        {
+          "token": "text-sm",
+          "count": 4
+        },
+        {
+          "token": "outline-none",
+          "count": 4
+        },
+        {
+          "token": "text-failure",
+          "count": 3
+        },
+        {
+          "token": "bg-ink/6",
+          "count": 3
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 259,
+          "classes": "text-failure"
+        },
+        {
+          "file": "features/calendar/components/CalendarSettingsDropdown.tsx",
+          "line": 243,
+          "classes": "text-failure"
+        },
+        {
+          "file": "features/block-md/component/FormatTools.tsx",
+          "line": 251,
+          "classes": "text-ink"
+        },
+        {
+          "file": "features/block-md/component/FormatTools.tsx",
+          "line": 327,
+          "classes": "text-ink"
+        },
+        {
+          "file": "features/block-agent/ui/AgentModelSelector.tsx",
+          "line": 55,
+          "classes": "gap-2 text-ink font-medium"
+        },
+        {
+          "file": "features/block-agent/ui/SandboxSizeSelector.tsx",
+          "line": 50,
+          "classes": "gap-2"
+        },
+        {
+          "file": "features/command/sidebar/sidebar-create-menu.tsx",
+          "line": 127,
+          "classes": "min-h-9 gap-2 px-2.5"
+        },
+        {
+          "file": "components/app/app-sidebar/sidebar.tsx",
+          "line": 746,
+          "classes": "min-h-8 gap-2 px-2.5 text-[13px] bg-ink/6 text-ink hover:bg-ink/6 data-highlighted:bg-ink/6"
+        },
+        {
+          "file": "components/app/app-sidebar/sidebar.tsx",
+          "line": 933,
+          "classes": "flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+        },
+        {
+          "file": "components/app/app-sidebar/sidebar.tsx",
+          "line": 953,
+          "classes": "flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+        },
+        {
+          "file": "components/app/app-sidebar/sidebar.tsx",
+          "line": 967,
+          "classes": "flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-ink-muted"
+        },
+        {
+          "file": "components/app/app-sidebar/sidebar.tsx",
+          "line": 981,
+          "classes": "flex items-center gap-2 px-2.5 py-2 text-sm cursor-default outline-none text-failure"
+        },
+        {
+          "file": "lib/core/component/TabsInsetDropdown.tsx",
+          "line": 65,
+          "classes": "text-ink font-semibold"
+        },
+        {
+          "file": "lib/core/component/AI/component/input/ModelSelector.tsx",
+          "line": 65,
+          "classes": "gap-2 opacity-50"
+        },
+        {
+          "file": "lib/core/component/LexicalMarkdown/component/menu/FloatingFormatMenu.tsx",
+          "line": 366,
+          "classes": "text-ink"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Hotkey",
+      "files": 27,
+      "usages": 55,
+      "withClass": 22,
+      "withOverride": 10,
+      "overrideRate": 0.182,
+      "topOverrides": [
+        {
+          "token": "gap-1",
+          "count": 4
+        },
+        {
+          "token": "text-ink-muted",
+          "count": 4
+        },
+        {
+          "token": "gap-0.5",
+          "count": 1
+        },
+        {
+          "token": "px-2",
+          "count": 1
+        },
+        {
+          "token": "py-0.5",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/filters-bar/soup-view-search-bar.tsx",
+          "line": 194,
+          "classes": "flex gap-1"
+        },
+        {
+          "file": "features/settings/Shortcuts.tsx",
+          "line": 1014,
+          "classes": "flex gap-0.5"
+        },
+        {
+          "file": "features/block-md/component/FormatTools.tsx",
+          "line": 262,
+          "classes": "text-ink-muted"
+        },
+        {
+          "file": "features/command/sidebar/sidebar-create-menu.tsx",
+          "line": 98,
+          "classes": "flex gap-1"
+        },
+        {
+          "file": "features/command/Launcher.tsx",
+          "line": 1029,
+          "classes": "px-2 py-0.5"
+        },
+        {
+          "file": "features/command/CommandItem.tsx",
+          "line": 58,
+          "classes": "flex gap-1 items-center"
+        },
+        {
+          "file": "features/command/CommandItem.tsx",
+          "line": 73,
+          "classes": "flex gap-1 items-center"
+        },
+        {
+          "file": "features/block-canvas/component/ToolBar.tsx",
+          "line": 72,
+          "classes": "text-ink-muted"
+        },
+        {
+          "file": "features/block-canvas/component/ToolBar.tsx",
+          "line": 85,
+          "classes": "text-ink-muted"
+        },
+        {
+          "file": "features/block-canvas/component/ToolBar.tsx",
+          "line": 98,
+          "classes": "text-ink-muted"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown",
+      "files": 42,
+      "usages": 54,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.Content",
+      "files": 42,
+      "usages": 54,
+      "withClass": 25,
+      "withOverride": 15,
+      "overrideRate": 0.278,
+      "topOverrides": [
+        {
+          "token": "shadow-menu",
+          "count": 14
+        },
+        {
+          "token": "border",
+          "count": 2
+        },
+        {
+          "token": "border-ink/[0.05]",
+          "count": 2
+        },
+        {
+          "token": "bg-surface",
+          "count": 2
+        },
+        {
+          "token": "p-0",
+          "count": 1
+        },
+        {
+          "token": "text-sm",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/filters-bar/consolidated-filter-chip.tsx",
+          "line": 169,
+          "classes": "shadow-menu"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/sort-dropdown.tsx",
+          "line": 38,
+          "classes": "shadow-menu"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/unified-filter-dropdown.tsx",
+          "line": 965,
+          "classes": "shadow-menu min-w-32"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/search-facet-chip.tsx",
+          "line": 70,
+          "classes": "shadow-menu"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/search-facet-chip.tsx",
+          "line": 111,
+          "classes": "shadow-menu"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/group-dropdown.tsx",
+          "line": 37,
+          "classes": "shadow-menu"
+        },
+        {
+          "file": "features/next-soup/soup-view/views/companies/CompanyViewsMenu.tsx",
+          "line": 205,
+          "classes": "w-64 shadow-menu"
+        },
+        {
+          "file": "features/next-soup/soup-view/views/companies/CompanyViewsMenu.tsx",
+          "line": 356,
+          "classes": "w-56 shadow-menu"
+        },
+        {
+          "file": "features/settings/Appearance.tsx",
+          "line": 370,
+          "classes": "w-60 overflow-hidden border border-ink/[0.05] bg-surface shadow-menu"
+        },
+        {
+          "file": "features/settings/Appearance.tsx",
+          "line": 535,
+          "classes": "w-56 overflow-hidden border border-ink/[0.05] bg-surface shadow-menu"
+        },
+        {
+          "file": "features/property/editors/popover/EditorPopover.tsx",
+          "line": 92,
+          "classes": "max-h-96 overflow-hidden flex flex-col w-full max-w-70 p-0 text-sm"
+        },
+        {
+          "file": "features/command/sidebar/sidebar-create-menu.tsx",
+          "line": 123,
+          "classes": "min-w-52 shadow-menu"
+        },
+        {
+          "file": "components/app/app-sidebar/sidebar.tsx",
+          "line": 579,
+          "classes": "w-56 shadow-menu"
+        },
+        {
+          "file": "components/app/app-sidebar/sidebar.tsx",
+          "line": 905,
+          "classes": "min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))] shadow-menu"
+        },
+        {
+          "file": "components/app/split-layout/components/SplitFileMenu.tsx",
+          "line": 197,
+          "classes": "w-64 shadow-menu"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.Trigger",
+      "files": 39,
+      "usages": 51,
+      "withClass": 40,
+      "withOverride": 39,
+      "overrideRate": 0.765,
+      "topOverrides": [
+        {
+          "token": "bg-surface",
+          "count": 12
+        },
+        {
+          "token": "rounded-md",
+          "count": 10
+        },
+        {
+          "token": "rounded-full",
+          "count": 7
+        },
+        {
+          "token": "bg-transparent",
+          "count": 7
+        },
+        {
+          "token": "gap-1.5",
+          "count": 6
+        },
+        {
+          "token": "rounded-lg",
+          "count": 6
+        },
+        {
+          "token": "px-2",
+          "count": 5
+        },
+        {
+          "token": "rounded-none",
+          "count": 4
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/soup-view-create-button.tsx",
+          "line": 197,
+          "classes": "border-0 rounded-full px-3 py-2 pl-1 font-semibold pr-1"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/consolidated-filter-chip.tsx",
+          "line": 312,
+          "classes": "inline-flex items-center gap-1.5 px-2.5 h-auto! bg-active hover:bg-active active:bg-active rounded-none px-3 hover:bg-ink/5 active:bg-ink/8 rounded-none"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/sort-dropdown.tsx",
+          "line": 33,
+          "classes": "bg-surface"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/unified-filter-dropdown.tsx",
+          "line": 950,
+          "classes": "bg-surface"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/search-facet-chip.tsx",
+          "line": 64,
+          "classes": "inline-flex items-center gap-1.5 px-2 h-auto! hover:bg-ink/5 active:bg-ink/8 rounded-none"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/search-facet-chip.tsx",
+          "line": 105,
+          "classes": "inline-flex items-center px-2 h-auto! text-ink-muted hover:bg-ink/5 active:bg-ink/8 rounded-none"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/group-dropdown.tsx",
+          "line": 26,
+          "classes": "bg-surface"
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/soup-active-filters-bar.tsx",
+          "line": 22,
+          "classes": "p-1 rounded-full"
+        },
+        {
+          "file": "features/next-soup/soup-view/views/companies/CompanyViewsMenu.tsx",
+          "line": 193,
+          "classes": "bg-surface"
+        },
+        {
+          "file": "features/next-soup/soup-view/views/companies/CompanyViewsMenu.tsx",
+          "line": 347,
+          "classes": "bg-surface"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 233,
+          "classes": "group block size-full cursor-pointer rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        },
+        {
+          "file": "features/calendar/components/PeriodSelector.tsx",
+          "line": 150,
+          "classes": "shrink-0 gap-1 rounded-lg border-edge-muted text-xs font-medium text-ink"
+        },
+        {
+          "file": "features/calendar/components/CalendarSettingsDropdown.tsx",
+          "line": 123,
+          "classes": "shrink-0 rounded-lg"
+        },
+        {
+          "file": "features/calendar/availability/CopyAvailabilityButton.tsx",
+          "line": 116,
+          "classes": "gap-1.5 bg-transparent px-2 hover:bg-ink/[0.04]"
+        },
+        {
+          "file": "features/calendar/availability/CopyAvailabilityButton.tsx",
+          "line": 139,
+          "classes": "bg-transparent p-1 hover:bg-ink/[0.04]"
+        },
+        {
+          "file": "features/block-md/component/TaskDuplicateMatches.tsx",
+          "line": 36,
+          "classes": "h-auto min-w-0 gap-1.5 rounded-full border-failure/40 px-2 py-1 leading-tight bg-failure/10 text-failure-ink shadow-none hover:bg-failure/15 focus-visible:bg-failure/15 focus-visible:ring-failure/60 bg-failure/15"
+        },
+        {
+          "file": "features/block-md/component/FormatTools.tsx",
+          "line": 516,
+          "classes": "rounded-md"
+        },
+        {
+          "file": "features/block-md/component/FormatTools.tsx",
+          "line": 580,
+          "classes": "rounded-md"
+        },
+        {
+          "file": "features/block-md/component/FormatTools.tsx",
+          "line": 630,
+          "classes": "rounded-md"
+        },
+        {
+          "file": "features/block-md/component/FormatTools.tsx",
+          "line": 684,
+          "classes": "rounded-md"
+        },
+        {
+          "file": "features/block-md/component/FormatTools.tsx",
+          "line": 1006,
+          "classes": "rounded-md"
+        },
+        {
+          "file": "features/block-md/component/DispatchAgentMenu.tsx",
+          "line": 259,
+          "classes": "bg-transparent p-1 hover:bg-ink/[0.04]"
+        },
+        {
+          "file": "features/block-agent/ui/AgentModelSelector.tsx",
+          "line": 42,
+          "classes": "h-6 gap-1 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10"
+        },
+        {
+          "file": "features/block-agent/ui/SandboxSizeSelector.tsx",
+          "line": 36,
+          "classes": "rounded-lg gap-1.5 text-xs"
+        },
+        {
+          "file": "features/command/sidebar/sidebar-create-menu.tsx",
+          "line": 77,
+          "classes": "center h-8 bg-ink/4 text-[13px]"
+        }
+      ],
+      "truncatedSites": 14
+    },
+    {
+      "name": "Surface",
+      "files": 48,
+      "usages": 49,
+      "withClass": 41,
+      "withOverride": 38,
+      "overrideRate": 0.776,
+      "topOverrides": [
+        {
+          "token": "rounded-xl",
+          "count": 37
+        },
+        {
+          "token": "shadow-lg",
+          "count": 13
+        },
+        {
+          "token": "shadow-drop-shadow",
+          "count": 13
+        },
+        {
+          "token": "bg-surface",
+          "count": 4
+        },
+        {
+          "token": "pt-2",
+          "count": 4
+        },
+        {
+          "token": "pb-1.5",
+          "count": 4
+        },
+        {
+          "token": "py-1.5",
+          "count": 4
+        },
+        {
+          "token": "shadow-menu",
+          "count": 3
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/NewCallButton.tsx",
+          "line": 98,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/block-automation/component/AutomationComposer.tsx",
+          "line": 147,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/block-md/component/DocumentAiEditBar.tsx",
+          "line": 121,
+          "classes": "w-96 max-w-full rounded-xl"
+        },
+        {
+          "file": "features/entity/bulk-edit/BulkEditEntityModal.tsx",
+          "line": 46,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/entity/composed/list-entity/foreign.tsx",
+          "line": 407,
+          "classes": "flex items-stretch justify-start rounded-xl w-full"
+        },
+        {
+          "file": "features/entity/extractors/entity-email-participants.tsx",
+          "line": 157,
+          "classes": "py-1 text-ink"
+        },
+        {
+          "file": "features/block-agent/ui/AgentInput.tsx",
+          "line": 102,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/channel/sidebar/channels-recent-widget.tsx",
+          "line": 180,
+          "classes": "shadow-menu ring ring-edge rounded-xl"
+        },
+        {
+          "file": "features/channel/Bots/BotCreationResult.tsx",
+          "line": 32,
+          "classes": "mt-7 flex items-center gap-3 rounded-xl border border-ink/[0.06] p-4"
+        },
+        {
+          "file": "features/channel/Bots/BotDeleteDialog.tsx",
+          "line": 18,
+          "classes": "rounded-xl text-ink"
+        },
+        {
+          "file": "features/channel/Bots/BotFormSection.tsx",
+          "line": 20,
+          "classes": "rounded-xl border border-ink/[0.06] p-4"
+        },
+        {
+          "file": "features/channel/Input/ChannelInput.tsx",
+          "line": 537,
+          "classes": "rounded-xl bg-surface touch:rounded-3xl touch:island hidden bg-chrome"
+        },
+        {
+          "file": "features/channel/Channel/create-delete-message-confirmation.tsx",
+          "line": 43,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/integrations/mcp-setup/MacroMcpSetupModal.tsx",
+          "line": 29,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/paywall/Paywall.tsx",
+          "line": 64,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/block-email/component/compose/Compose.tsx",
+          "line": 884,
+          "classes": "rounded-xl border border-ink-muted/8"
+        },
+        {
+          "file": "features/block-email/component/BaseInput.tsx",
+          "line": 1706,
+          "classes": "relative flex flex-col flex-1 max-w-full min-h-0 min-h-full overflow-y-scroll overscroll-y-none rounded-lg rounded-xl"
+        },
+        {
+          "file": "features/block-project/component/ProjectCreateMenu.tsx",
+          "line": 222,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/block-channel/component/Compose.tsx",
+          "line": 274,
+          "classes": "rounded-xl touch:rounded-3xl ring ring-edge"
+        },
+        {
+          "file": "components/app/app-sidebar/calendar-sidebar-preview.tsx",
+          "line": 461,
+          "classes": "h-[min(24rem,calc(100vh-2rem))] w-[min(20rem,calc(100vw-2rem))] overflow-hidden rounded-xl shadow-menu ring ring-edge"
+        },
+        {
+          "file": "components/app/FatalError.tsx",
+          "line": 20,
+          "classes": "rounded-xl bg-surface"
+        },
+        {
+          "file": "lib/core/comments/discussion/DiscussionInput.tsx",
+          "line": 211,
+          "classes": "rounded-xl bg-surface"
+        },
+        {
+          "file": "lib/core/component/DocumentPreview.tsx",
+          "line": 1121,
+          "classes": "rounded-xl shadow-lg shadow-drop-shadow"
+        },
+        {
+          "file": "lib/core/component/Toast/Toast.tsx",
+          "line": 305,
+          "classes": "relative w-[90vw] sm:w-md p-2 sm:p-3 rounded-xl bg-toast shadow-lg shadow-drop-shadow"
+        },
+        {
+          "file": "lib/core/component/AI/component/input/useAiDataConsent.tsx",
+          "line": 40,
+          "classes": "rounded-xl"
+        }
+      ],
+      "truncatedSites": 13
+    },
+    {
+      "name": "Panel",
+      "files": 24,
+      "usages": 47,
+      "withClass": 40,
+      "withOverride": 40,
+      "overrideRate": 0.851,
+      "topOverrides": [
+        {
+          "token": "rounded-xl",
+          "count": 29
+        },
+        {
+          "token": "text-ink",
+          "count": 13
+        },
+        {
+          "token": "bg-surface",
+          "count": 10
+        },
+        {
+          "token": "p-4",
+          "count": 5
+        },
+        {
+          "token": "bg-dialog",
+          "count": 4
+        },
+        {
+          "token": "shadow-drop-shadow",
+          "count": 2
+        },
+        {
+          "token": "p-2",
+          "count": 1
+        },
+        {
+          "token": "shadow-lg",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 45,
+          "classes": "max-h-[75vh] text-ink rounded-xl"
+        },
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 205,
+          "classes": "max-h-[75vh] text-ink rounded-xl"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 651,
+          "classes": "max-h-[75vh] text-ink rounded-xl"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1506,
+          "classes": "max-h-[75vh] text-ink rounded-xl"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1566,
+          "classes": "max-h-[75vh] text-ink rounded-xl"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1611,
+          "classes": "max-h-[75vh] text-ink rounded-xl"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1653,
+          "classes": "max-h-[75vh] text-ink rounded-xl"
+        },
+        {
+          "file": "features/settings/Email.tsx",
+          "line": 277,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 278,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 517,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 612,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/settings/Tags.tsx",
+          "line": 189,
+          "classes": "max-h-[75vh] rounded-xl text-ink"
+        },
+        {
+          "file": "features/settings/Integrations.tsx",
+          "line": 93,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/calendar/components/TurnOffCalendarDialog.tsx",
+          "line": 44,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/inbox/AddInboxDialog.tsx",
+          "line": 51,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/inbox/ShareInboxConflictDialog.tsx",
+          "line": 28,
+          "classes": "rounded-xl"
+        },
+        {
+          "file": "features/block-md/component/FindAndReplace.tsx",
+          "line": 310,
+          "classes": "flex items-center justify-start rounded-xl bg-surface p-2 shadow-lg shadow-drop-shadow w-fit"
+        },
+        {
+          "file": "features/block-calendar/components/EventRsvpSection.tsx",
+          "line": 124,
+          "classes": "max-w-[calc(100vw-2rem)] rounded-xl text-ink"
+        },
+        {
+          "file": "features/team-invitations/invite-modal.tsx",
+          "line": 70,
+          "classes": "max-h-[75vh] text-ink rounded-xl"
+        },
+        {
+          "file": "features/channel/Bots/CreateBotTokenDialog.tsx",
+          "line": 36,
+          "classes": "rounded-xl text-ink"
+        },
+        {
+          "file": "features/channel/Participants/ChannelParticipantsTab.tsx",
+          "line": 147,
+          "classes": "min-h-0 flex-1 overflow-hidden text-ink"
+        },
+        {
+          "file": "features/channel/Participants/ChannelBotsPanel.tsx",
+          "line": 46,
+          "classes": "h-[min(42%,22rem)] min-h-52 shrink-0 overflow-hidden text-ink"
+        },
+        {
+          "file": "features/channel/CreateChannelModal.tsx",
+          "line": 151,
+          "classes": "rounded-xl *:max-h-[75vh]"
+        },
+        {
+          "file": "features/channel/Attachments/SectionHeader.tsx",
+          "line": 16,
+          "classes": "h-auto"
+        },
+        {
+          "file": "features/companies/CreateContactModal.tsx",
+          "line": 121,
+          "classes": "rounded-xl *:max-h-[75vh]"
+        }
+      ],
+      "truncatedSites": 15
+    },
+    {
+      "name": "Dialog",
+      "files": 36,
+      "usages": 43,
+      "withClass": 23,
+      "withOverride": 2,
+      "overrideRate": 0.047,
+      "topOverrides": [
+        {
+          "token": "bg-surface",
+          "count": 2
+        },
+        {
+          "token": "h-[min(900px,calc(100vh-32px))]",
+          "count": 1
+        },
+        {
+          "token": "rounded-xl",
+          "count": 1
+        },
+        {
+          "token": "shadow-2xl",
+          "count": 1
+        },
+        {
+          "token": "rounded-lg",
+          "count": 1
+        },
+        {
+          "token": "border",
+          "count": 1
+        },
+        {
+          "token": "border-edge",
+          "count": 1
+        },
+        {
+          "token": "shadow-lg",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/onboarding/InteractiveOnboardingModal.tsx",
+          "line": 313,
+          "classes": "w-[min(1600px,calc(100vw-32px))] h-[min(900px,calc(100vh-32px))] max-w-none rounded-xl bg-surface shadow-2xl"
+        },
+        {
+          "file": "lib/core/component/LexicalMarkdown/component/decorator/PasteNode.tsx",
+          "line": 166,
+          "classes": "rounded-lg border border-edge bg-surface shadow-lg"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Panel.Body",
+      "files": 22,
+      "usages": 41,
+      "withClass": 31,
+      "withOverride": 29,
+      "overrideRate": 0.707,
+      "topOverrides": [
+        {
+          "token": "gap-3",
+          "count": 17
+        },
+        {
+          "token": "p-3",
+          "count": 10
+        },
+        {
+          "token": "p-4",
+          "count": 9
+        },
+        {
+          "token": "p-6",
+          "count": 8
+        },
+        {
+          "token": "font-sans",
+          "count": 7
+        },
+        {
+          "token": "gap-5",
+          "count": 1
+        },
+        {
+          "token": "p-5",
+          "count": 1
+        },
+        {
+          "token": "text-ink",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 54,
+          "classes": "p-3 flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 214,
+          "classes": "p-3 flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 660,
+          "classes": "p-3 flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1515,
+          "classes": "p-3 flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1575,
+          "classes": "p-3 flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1620,
+          "classes": "p-3 flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1663,
+          "classes": "p-3 flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Email.tsx",
+          "line": 283,
+          "classes": "p-6 font-sans flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 284,
+          "classes": "p-6 font-sans flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 523,
+          "classes": "p-6 font-sans flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 618,
+          "classes": "p-6 font-sans flex flex-col gap-3"
+        },
+        {
+          "file": "features/settings/Tags.tsx",
+          "line": 203,
+          "classes": "flex flex-col gap-3 p-3"
+        },
+        {
+          "file": "features/settings/Integrations.tsx",
+          "line": 97,
+          "classes": "p-6 flex flex-col gap-5"
+        },
+        {
+          "file": "features/calendar/components/TurnOffCalendarDialog.tsx",
+          "line": 50,
+          "classes": "p-6 font-sans flex flex-col gap-3"
+        },
+        {
+          "file": "features/inbox/AddInboxDialog.tsx",
+          "line": 57,
+          "classes": "p-6 font-sans flex flex-col gap-3"
+        },
+        {
+          "file": "features/inbox/ShareInboxConflictDialog.tsx",
+          "line": 34,
+          "classes": "p-6 font-sans flex flex-col gap-3"
+        },
+        {
+          "file": "features/block-calendar/components/EventRsvpSection.tsx",
+          "line": 133,
+          "classes": "flex flex-col gap-3 p-3"
+        },
+        {
+          "file": "features/team-invitations/invite-modal.tsx",
+          "line": 80,
+          "classes": "p-3 flex flex-col gap-3"
+        },
+        {
+          "file": "features/channel/Bots/CreateBotTokenDialog.tsx",
+          "line": 54,
+          "classes": "p-5"
+        },
+        {
+          "file": "lib/core/internal/ThemeDebug.tsx",
+          "line": 66,
+          "classes": "p-4"
+        },
+        {
+          "file": "lib/core/internal/ThemeDebug.tsx",
+          "line": 108,
+          "classes": "p-4"
+        },
+        {
+          "file": "lib/core/internal/ThemeDebug.tsx",
+          "line": 125,
+          "classes": "p-4"
+        },
+        {
+          "file": "lib/core/internal/ThemeDebug.tsx",
+          "line": 150,
+          "classes": "p-4"
+        },
+        {
+          "file": "lib/core/internal/ThemeDebug.tsx",
+          "line": 229,
+          "classes": "p-4"
+        },
+        {
+          "file": "lib/core/internal/ThemeDebug.tsx",
+          "line": 268,
+          "classes": "p-4"
+        }
+      ],
+      "truncatedSites": 4
+    },
+    {
+      "name": "Dialog.Title",
+      "files": 25,
+      "usages": 32,
+      "withClass": 31,
+      "withOverride": 28,
+      "overrideRate": 0.875,
+      "topOverrides": [
+        {
+          "token": "text-sm",
+          "count": 24
+        },
+        {
+          "token": "font-semibold",
+          "count": 16
+        },
+        {
+          "token": "p-0",
+          "count": 13
+        },
+        {
+          "token": "font-medium",
+          "count": 12
+        },
+        {
+          "token": "text-ink",
+          "count": 11
+        },
+        {
+          "token": "text-lg",
+          "count": 3
+        },
+        {
+          "token": "text-ink-extra-muted",
+          "count": 2
+        },
+        {
+          "token": "text-md",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/NewCallButton.tsx",
+          "line": 105,
+          "classes": "text-sm font-medium p-0 m-0"
+        },
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 50,
+          "classes": "text-sm font-medium p-0 m-0"
+        },
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 210,
+          "classes": "text-sm font-medium p-0 m-0"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 656,
+          "classes": "text-sm font-medium p-0 m-0"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1511,
+          "classes": "text-sm font-medium p-0 m-0"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1571,
+          "classes": "text-sm font-medium p-0 m-0"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1616,
+          "classes": "text-sm font-medium p-0 m-0"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1658,
+          "classes": "text-sm font-medium p-0 m-0"
+        },
+        {
+          "file": "features/settings/Email.tsx",
+          "line": 279,
+          "classes": "text-ink text-sm font-semibold"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 280,
+          "classes": "text-ink text-sm font-semibold"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 519,
+          "classes": "text-ink text-sm font-semibold"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 614,
+          "classes": "text-ink text-sm font-semibold"
+        },
+        {
+          "file": "features/settings/Tags.tsx",
+          "line": 199,
+          "classes": "m-0 p-0 text-sm font-medium"
+        },
+        {
+          "file": "features/block-automation/component/AutomationComposer.tsx",
+          "line": 151,
+          "classes": "m-0 p-0 text-sm font-semibold"
+        },
+        {
+          "file": "features/calendar/components/TurnOffCalendarDialog.tsx",
+          "line": 46,
+          "classes": "text-ink text-sm font-semibold"
+        },
+        {
+          "file": "features/inbox/AddInboxDialog.tsx",
+          "line": 53,
+          "classes": "text-ink text-sm font-semibold"
+        },
+        {
+          "file": "features/inbox/ShareInboxConflictDialog.tsx",
+          "line": 30,
+          "classes": "text-ink text-sm font-semibold"
+        },
+        {
+          "file": "features/property/component/modal/CreatePropertyModal.tsx",
+          "line": 550,
+          "classes": "min-w-0 flex-1 truncate text-sm font-semibold text-ink-extra-muted"
+        },
+        {
+          "file": "features/property/tags/TagEditorDialog.tsx",
+          "line": 192,
+          "classes": "min-w-0 flex-1 truncate text-sm font-semibold text-ink-extra-muted"
+        },
+        {
+          "file": "features/block-calendar/components/EventRsvpSection.tsx",
+          "line": 129,
+          "classes": "m-0 p-0 text-sm font-medium"
+        },
+        {
+          "file": "features/team-invitations/invite-modal.tsx",
+          "line": 75,
+          "classes": "text-sm font-medium p-0 m-0"
+        },
+        {
+          "file": "features/channel/Bots/CreateBotTokenDialog.tsx",
+          "line": 38,
+          "classes": "text-sm font-semibold"
+        },
+        {
+          "file": "features/channel/Bots/BotDeleteDialog.tsx",
+          "line": 20,
+          "classes": "text-sm font-semibold"
+        },
+        {
+          "file": "features/channel/Channel/create-delete-message-confirmation.tsx",
+          "line": 48,
+          "classes": "text-sm font-medium p-0 m-0"
+        },
+        {
+          "file": "features/block-project/component/ProjectCreateMenu.tsx",
+          "line": 225,
+          "classes": "text-md font-semibold text-ink pb-3"
+        }
+      ],
+      "truncatedSites": 3
+    },
+    {
+      "name": "Panel.Header",
+      "files": 18,
+      "usages": 29,
+      "withClass": 26,
+      "withOverride": 26,
+      "overrideRate": 0.897,
+      "topOverrides": [
+        {
+          "token": "px-6",
+          "count": 11
+        },
+        {
+          "token": "px-2",
+          "count": 10
+        },
+        {
+          "token": "gap-1",
+          "count": 10
+        },
+        {
+          "token": "px-4",
+          "count": 3
+        },
+        {
+          "token": "px-5",
+          "count": 1
+        },
+        {
+          "token": "gap-2",
+          "count": 1
+        },
+        {
+          "token": "h-auto",
+          "count": 1
+        },
+        {
+          "token": "gap-3",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 46,
+          "classes": "px-2 gap-1"
+        },
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 206,
+          "classes": "px-2 gap-1"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 652,
+          "classes": "px-2 gap-1"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1507,
+          "classes": "px-2 gap-1"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1567,
+          "classes": "px-2 gap-1"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1612,
+          "classes": "px-2 gap-1"
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1654,
+          "classes": "px-2 gap-1"
+        },
+        {
+          "file": "features/settings/Email.tsx",
+          "line": 278,
+          "classes": "px-6"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 279,
+          "classes": "px-6"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 518,
+          "classes": "px-6"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 613,
+          "classes": "px-6"
+        },
+        {
+          "file": "features/settings/Tags.tsx",
+          "line": 190,
+          "classes": "gap-1 px-2"
+        },
+        {
+          "file": "features/settings/Integrations.tsx",
+          "line": 94,
+          "classes": "px-6"
+        },
+        {
+          "file": "features/calendar/components/TurnOffCalendarDialog.tsx",
+          "line": 45,
+          "classes": "px-6"
+        },
+        {
+          "file": "features/inbox/AddInboxDialog.tsx",
+          "line": 52,
+          "classes": "px-6"
+        },
+        {
+          "file": "features/inbox/ShareInboxConflictDialog.tsx",
+          "line": 29,
+          "classes": "px-6"
+        },
+        {
+          "file": "features/block-calendar/components/EventRsvpSection.tsx",
+          "line": 125,
+          "classes": "gap-1 px-2"
+        },
+        {
+          "file": "features/team-invitations/invite-modal.tsx",
+          "line": 71,
+          "classes": "px-2 gap-1"
+        },
+        {
+          "file": "features/channel/Bots/CreateBotTokenDialog.tsx",
+          "line": 37,
+          "classes": "px-5"
+        },
+        {
+          "file": "features/channel/Participants/ChannelParticipantsTab.tsx",
+          "line": 148,
+          "classes": "justify-between gap-2 px-6"
+        },
+        {
+          "file": "features/channel/Participants/ChannelBotsPanel.tsx",
+          "line": 50,
+          "classes": "h-auto min-h-10 justify-between gap-3 px-6 py-2"
+        },
+        {
+          "file": "features/channel/Attachments/SectionHeader.tsx",
+          "line": 17,
+          "classes": "justify-between px-6"
+        },
+        {
+          "file": "components/app/split-layout/components/SplitPanel.tsx",
+          "line": 319,
+          "classes": "relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0! z-split-panel-chrome touch:min-h-0 touch:border-b-0 hidden"
+        },
+        {
+          "file": "lib/core/internal/ThemeDebug.tsx",
+          "line": 453,
+          "classes": "px-4"
+        },
+        {
+          "file": "lib/core/component/TopBar/ShareButton.tsx",
+          "line": 983,
+          "classes": "px-4"
+        }
+      ],
+      "truncatedSites": 1
+    },
+    {
+      "name": "ToggleSwitch",
+      "files": 20,
+      "usages": 27,
+      "withClass": 5,
+      "withOverride": 3,
+      "overrideRate": 0.111,
+      "topOverrides": [
+        {
+          "token": "rounded-full",
+          "count": 2
+        },
+        {
+          "token": "py-1",
+          "count": 2
+        },
+        {
+          "token": "gap-1.5",
+          "count": 2
+        },
+        {
+          "token": "gap-1",
+          "count": 1
+        },
+        {
+          "token": "px-1.5",
+          "count": 1
+        },
+        {
+          "token": "h-7",
+          "count": 1
+        },
+        {
+          "token": "border",
+          "count": 1
+        },
+        {
+          "token": "border-edge-muted",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/channel/sidebar/channels-recent-widget.tsx",
+          "line": 581,
+          "classes": "flex-row-reverse gap-1 rounded-full px-1.5 py-1"
+        },
+        {
+          "file": "features/channel/Input/TaskModeSwitch.tsx",
+          "line": 14,
+          "classes": "h-7 gap-1.5 rounded-full border border-edge-muted bg-surface pl-1.5 pr-2.5 hover:bg-hover"
+        },
+        {
+          "file": "features/command/Launcher.tsx",
+          "line": 1022,
+          "classes": "ml-auto flex-row-reverse gap-1.5 px-2 py-1"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dialog.CloseButton",
+      "files": 18,
+      "usages": 23,
+      "withClass": 2,
+      "withOverride": 1,
+      "overrideRate": 0.043,
+      "topOverrides": [
+        {
+          "token": "text-sm",
+          "count": 1
+        },
+        {
+          "token": "text-ink-muted",
+          "count": 1
+        },
+        {
+          "token": "text-ink",
+          "count": 1
+        },
+        {
+          "token": "px-3",
+          "count": 1
+        },
+        {
+          "token": "py-1.5",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "lib/core/mobile/IosPushNotificationModal.tsx",
+          "line": 40,
+          "classes": "text-sm text-ink-muted hover:text-ink px-3 py-1.5"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "EmptyStatePanel",
+      "files": 5,
+      "usages": 21,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Badge",
+      "files": 10,
+      "usages": 16,
+      "withClass": 7,
+      "withOverride": 4,
+      "overrideRate": 0.25,
+      "topOverrides": [
+        {
+          "token": "gap-1.5",
+          "count": 3
+        },
+        {
+          "token": "text-ink-subtle",
+          "count": 1
+        },
+        {
+          "token": "text-left",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/views/tasks/task-grid-layout.tsx",
+          "line": 225,
+          "classes": "max-w-full gap-1.5"
+        },
+        {
+          "file": "features/property/tags/TagsRow.tsx",
+          "line": 54,
+          "classes": "m-px min-w-0 max-w-[30ch] gap-1.5 cursor-default"
+        },
+        {
+          "file": "features/ui-gallery/components/CoveragePage.tsx",
+          "line": 49,
+          "classes": "text-ink-subtle"
+        },
+        {
+          "file": "lib/core/component/DocumentPreview.tsx",
+          "line": 436,
+          "classes": "min-w-0 max-w-full gap-1.5 text-left"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Avatar.Fallback",
+      "files": 10,
+      "usages": 16,
+      "withClass": 9,
+      "withOverride": 9,
+      "overrideRate": 0.563,
+      "topOverrides": [
+        {
+          "token": "font-semibold",
+          "count": 9
+        },
+        {
+          "token": "text-base",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/views/inbox/inbox-card-layouts.tsx",
+          "line": 215,
+          "classes": "text-base font-semibold"
+        },
+        {
+          "file": "features/block-call/sidebar/active-call-widget.tsx",
+          "line": 37,
+          "classes": "font-semibold"
+        },
+        {
+          "file": "features/calendar/components/EventDetails.tsx",
+          "line": 139,
+          "classes": "font-semibold"
+        },
+        {
+          "file": "features/contacts/Contact/ContactHeader.tsx",
+          "line": 56,
+          "classes": "font-semibold"
+        },
+        {
+          "file": "features/channel/Message/BotIcon.tsx",
+          "line": 27,
+          "classes": "font-semibold"
+        },
+        {
+          "file": "features/channel/Call/InCallPanel/InCallPanelView.tsx",
+          "line": 166,
+          "classes": "font-semibold"
+        },
+        {
+          "file": "lib/core/component/UserIcon.tsx",
+          "line": 71,
+          "classes": "font-semibold"
+        },
+        {
+          "file": "lib/core/component/UserIcon.tsx",
+          "line": 84,
+          "classes": "font-semibold"
+        },
+        {
+          "file": "lib/core/component/UserIcon.tsx",
+          "line": 127,
+          "classes": "font-semibold"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Avatar",
+      "files": 10,
+      "usages": 16,
+      "withClass": 6,
+      "withOverride": 5,
+      "overrideRate": 0.313,
+      "topOverrides": [
+        {
+          "token": "text-ink-muted",
+          "count": 3
+        },
+        {
+          "token": "bg-surface",
+          "count": 3
+        },
+        {
+          "token": "ring",
+          "count": 3
+        },
+        {
+          "token": "ring-edge-muted",
+          "count": 3
+        },
+        {
+          "token": "text-accent",
+          "count": 2
+        },
+        {
+          "token": "bg-ink-extra-muted/15",
+          "count": 1
+        },
+        {
+          "token": "size-(--user-icon-width)",
+          "count": 1
+        },
+        {
+          "token": "bg-transparent",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/block-call/sidebar/active-call-widget.tsx",
+          "line": 36,
+          "classes": "bg-ink-extra-muted/15 text-ink-muted"
+        },
+        {
+          "file": "features/channel/Message/ChannelCreatedIndicator.tsx",
+          "line": 36,
+          "classes": "size-(--user-icon-width) bg-surface text-ink-muted ring ring-edge-muted"
+        },
+        {
+          "file": "features/channel/Call/InCallPanel/InCallPanelView.tsx",
+          "line": 165,
+          "classes": "bg-transparent text-ink-muted"
+        },
+        {
+          "file": "lib/core/component/UserIcon.tsx",
+          "line": 177,
+          "classes": "bg-surface text-accent ring ring-edge-muted"
+        },
+        {
+          "file": "lib/core/component/UserIcon.tsx",
+          "line": 188,
+          "classes": "bg-surface text-accent ring ring-edge-muted"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.GroupLabel",
+      "files": 7,
+      "usages": 15,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "SingleSelectCheck",
+      "files": 7,
+      "usages": 12,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.Sub",
+      "files": 7,
+      "usages": 12,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.SubTrigger",
+      "files": 7,
+      "usages": 12,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.SubContent",
+      "files": 7,
+      "usages": 12,
+      "withClass": 8,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dialog.Description",
+      "files": 10,
+      "usages": 12,
+      "withClass": 12,
+      "withOverride": 12,
+      "overrideRate": 1,
+      "topOverrides": [
+        {
+          "token": "text-ink-muted",
+          "count": 9
+        },
+        {
+          "token": "text-sm/tight",
+          "count": 7
+        },
+        {
+          "token": "font-normal",
+          "count": 7
+        },
+        {
+          "token": "text-sm",
+          "count": 5
+        },
+        {
+          "token": "leading-5",
+          "count": 3
+        },
+        {
+          "token": "text-ink-extra-muted",
+          "count": 3
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/settings/Email.tsx",
+          "line": 284,
+          "classes": "text-ink-muted text-sm/tight font-normal"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 285,
+          "classes": "text-ink-muted text-sm/tight font-normal"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 524,
+          "classes": "text-ink-muted text-sm/tight font-normal"
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 619,
+          "classes": "text-ink-muted text-sm/tight font-normal"
+        },
+        {
+          "file": "features/calendar/components/TurnOffCalendarDialog.tsx",
+          "line": 51,
+          "classes": "text-ink-muted text-sm/tight font-normal"
+        },
+        {
+          "file": "features/inbox/AddInboxDialog.tsx",
+          "line": 58,
+          "classes": "text-ink-muted text-sm/tight font-normal"
+        },
+        {
+          "file": "features/inbox/ShareInboxConflictDialog.tsx",
+          "line": 35,
+          "classes": "text-ink-muted text-sm/tight font-normal"
+        },
+        {
+          "file": "features/channel/Bots/BotDeleteDialog.tsx",
+          "line": 25,
+          "classes": "text-sm leading-5 text-ink-muted"
+        },
+        {
+          "file": "features/channel/Channel/create-delete-message-confirmation.tsx",
+          "line": 54,
+          "classes": "text-sm text-ink-muted"
+        },
+        {
+          "file": "lib/core/mobile/IosPushNotificationModal.tsx",
+          "line": 36,
+          "classes": "text-sm text-ink-extra-muted"
+        },
+        {
+          "file": "lib/core/mobile/IpadUnsupportedDialog.tsx",
+          "line": 50,
+          "classes": "text-sm leading-5 text-ink-extra-muted"
+        },
+        {
+          "file": "lib/core/mobile/NativeAppUpdateRequiredDialog.tsx",
+          "line": 26,
+          "classes": "text-sm leading-5 text-ink-extra-muted"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "InlineCheckbox",
+      "files": 9,
+      "usages": 11,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Scroll",
+      "files": 10,
+      "usages": 11,
+      "withClass": 5,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.RadioItem",
+      "files": 7,
+      "usages": 10,
+      "withClass": 2,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "SendButton",
+      "files": 8,
+      "usages": 10,
+      "withClass": 2,
+      "withOverride": 1,
+      "overrideRate": 0.1,
+      "topOverrides": [
+        {
+          "token": "rounded-full",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/channel/Input/SendAction.tsx",
+          "line": 29,
+          "classes": "touch:rounded-full"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.ItemIndicator",
+      "files": 6,
+      "usages": 9,
+      "withClass": 2,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CommandMenuEmptyState",
+      "files": 3,
+      "usages": 9,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "SegmentedControl",
+      "files": 7,
+      "usages": 8,
+      "withClass": 3,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.RadioGroup",
+      "files": 7,
+      "usages": 8,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "HoverCard",
+      "files": 6,
+      "usages": 8,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.CheckboxItem",
+      "files": 5,
+      "usages": 7,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Stepper.Step",
+      "files": 3,
+      "usages": 7,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CommandMenuShell.Body",
+      "files": 6,
+      "usages": 7,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CommandMenuList",
+      "files": 2,
+      "usages": 7,
+      "withClass": 2,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Select",
+      "files": 3,
+      "usages": 6,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Select.Trigger",
+      "files": 3,
+      "usages": 6,
+      "withClass": 6,
+      "withOverride": 2,
+      "overrideRate": 0.333,
+      "topOverrides": [
+        {
+          "token": "h-7",
+          "count": 2
+        },
+        {
+          "token": "gap-1.5",
+          "count": 1
+        },
+        {
+          "token": "px-2",
+          "count": 1
+        },
+        {
+          "token": "text-xs",
+          "count": 1
+        },
+        {
+          "token": "rounded-md",
+          "count": 1
+        },
+        {
+          "token": "border",
+          "count": 1
+        },
+        {
+          "token": "border-edge-muted",
+          "count": 1
+        },
+        {
+          "token": "text-ink-muted",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/calendar/components/composer/RecurrenceBuilder.tsx",
+          "line": 115,
+          "classes": "settings-input h-7 w-28"
+        },
+        {
+          "file": "features/ui-gallery/components/PreviewToolbar.tsx",
+          "line": 70,
+          "classes": "h-7 gap-1.5 px-2 text-xs rounded-md border border-edge-muted text-ink-muted hover:text-ink hover:bg-hover data-expanded:bg-active"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Select.Value",
+      "files": 3,
+      "usages": 6,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Select.Content",
+      "files": 3,
+      "usages": 6,
+      "withClass": 2,
+      "withOverride": 1,
+      "overrideRate": 0.167,
+      "topOverrides": [
+        {
+          "token": "p-0",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/calendar/components/composer/EventPropertyPills.tsx",
+          "line": 736,
+          "classes": "w-56 p-0"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Select.Listbox",
+      "files": 3,
+      "usages": 6,
+      "withClass": 1,
+      "withOverride": 1,
+      "overrideRate": 0.167,
+      "topOverrides": [
+        {
+          "token": "p-1.5",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/calendar/components/composer/EventPropertyPills.tsx",
+          "line": 745,
+          "classes": "p-1.5"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CommandMenuShell",
+      "files": 6,
+      "usages": 6,
+      "withClass": 6,
+      "withOverride": 6,
+      "overrideRate": 1,
+      "topOverrides": [
+        {
+          "token": "text-sm",
+          "count": 4
+        },
+        {
+          "token": "rounded-xl",
+          "count": 3
+        },
+        {
+          "token": "h-auto",
+          "count": 1
+        },
+        {
+          "token": "outline-none",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/property/component/modal/CreatePropertyModal.tsx",
+          "line": 545,
+          "classes": "text-sm"
+        },
+        {
+          "file": "features/property/tags/TagEditorDialog.tsx",
+          "line": 187,
+          "classes": "text-sm"
+        },
+        {
+          "file": "features/property/editor/PropertyEditorModal.tsx",
+          "line": 319,
+          "classes": "rounded-xl max-h-108 text-sm"
+        },
+        {
+          "file": "features/command/Launcher.tsx",
+          "line": 995,
+          "classes": "h-auto w-full outline-none"
+        },
+        {
+          "file": "features/command/CommandMenu.tsx",
+          "line": 560,
+          "classes": "max-h-[75vh] rounded-xl"
+        },
+        {
+          "file": "features/reminders/ReminderComposerModal.tsx",
+          "line": 414,
+          "classes": "rounded-xl max-h-108 text-sm"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CommandMenuShell.Header",
+      "files": 6,
+      "usages": 6,
+      "withClass": 3,
+      "withOverride": 3,
+      "overrideRate": 0.5,
+      "topOverrides": [
+        {
+          "token": "border-b-0",
+          "count": 3
+        },
+        {
+          "token": "px-4",
+          "count": 3
+        },
+        {
+          "token": "h-13",
+          "count": 2
+        },
+        {
+          "token": "gap-3",
+          "count": 2
+        },
+        {
+          "token": "gap-2",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/property/component/modal/CreatePropertyModal.tsx",
+          "line": 546,
+          "classes": "my-0 h-13 gap-3 border-b-0 px-4"
+        },
+        {
+          "file": "features/property/tags/TagEditorDialog.tsx",
+          "line": 188,
+          "classes": "my-0 h-13 gap-3 border-b-0 px-4"
+        },
+        {
+          "file": "features/command/Launcher.tsx",
+          "line": 1001,
+          "classes": "gap-2 px-4 my-1 border-b-0"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CommandMenuShell.Footer",
+      "files": 5,
+      "usages": 6,
+      "withClass": 4,
+      "withOverride": 4,
+      "overrideRate": 0.667,
+      "topOverrides": [
+        {
+          "token": "py-3",
+          "count": 4
+        },
+        {
+          "token": "gap-2",
+          "count": 3
+        },
+        {
+          "token": "border-t-0",
+          "count": 3
+        },
+        {
+          "token": "gap-3",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/property/component/modal/CreatePropertyModal.tsx",
+          "line": 757,
+          "classes": "gap-2 border-t-0 py-3"
+        },
+        {
+          "file": "features/property/tags/TagEditorDialog.tsx",
+          "line": 268,
+          "classes": "gap-2 border-t-0 py-3"
+        },
+        {
+          "file": "features/reminders/ReminderComposerModal.tsx",
+          "line": 609,
+          "classes": "gap-2 border-t-0 py-3"
+        },
+        {
+          "file": "features/reminders/ReminderComposerModal.tsx",
+          "line": 950,
+          "classes": "gap-3 py-3"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Select.Icon",
+      "files": 2,
+      "usages": 5,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Checkbox",
+      "files": 4,
+      "usages": 5,
+      "withClass": 3,
+      "withOverride": 2,
+      "overrideRate": 0.4,
+      "topOverrides": [
+        {
+          "token": "text-xs",
+          "count": 2
+        },
+        {
+          "token": "rounded-lg",
+          "count": 1
+        },
+        {
+          "token": "px-2",
+          "count": 1
+        },
+        {
+          "token": "py-1.5",
+          "count": 1
+        },
+        {
+          "token": "text-ink",
+          "count": 1
+        },
+        {
+          "token": "bg-hover",
+          "count": 1
+        },
+        {
+          "token": "gap-2",
+          "count": 1
+        },
+        {
+          "token": "text-ink-muted",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/calendar/components/SourceControls.tsx",
+          "line": 17,
+          "classes": "flex w-full items-center rounded-lg px-2 py-1.5 text-xs text-ink hover:bg-hover"
+        },
+        {
+          "file": "features/theme/components/ThemeTokenEditor.tsx",
+          "line": 543,
+          "classes": "flex items-center gap-2 text-xs text-ink-muted"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Checkbox.Control",
+      "files": 4,
+      "usages": 5,
+      "withClass": 1,
+      "withOverride": 1,
+      "overrideRate": 0.2,
+      "topOverrides": [
+        {
+          "token": "border-accent",
+          "count": 2
+        },
+        {
+          "token": "size-3.5",
+          "count": 1
+        },
+        {
+          "token": "border-transparent",
+          "count": 1
+        },
+        {
+          "token": "bg-transparent",
+          "count": 1
+        },
+        {
+          "token": "bg-accent",
+          "count": 1
+        },
+        {
+          "token": "border-edge-muted",
+          "count": 1
+        },
+        {
+          "token": "rounded-full",
+          "count": 1
+        },
+        {
+          "token": "rounded-sm",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/property/editors/selectors/OptionCheckBox.tsx",
+          "line": 21,
+          "classes": "size-3.5 border-transparent bg-transparent hover:border-accent data-checked:bg-accent data-checked:border-accent      group-hover:not-hover:border-edge-muted rounded-full rounded-sm"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Avatar.Image",
+      "files": 5,
+      "usages": 5,
+      "withClass": 2,
+      "withOverride": 2,
+      "overrideRate": 0.4,
+      "topOverrides": [
+        {
+          "token": "bg-surface",
+          "count": 2
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/channel/Message/BotIcon.tsx",
+          "line": 36,
+          "classes": "bg-surface"
+        },
+        {
+          "file": "lib/core/component/UserIcon.tsx",
+          "line": 89,
+          "classes": "bg-surface"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Calendar",
+      "files": 4,
+      "usages": 4,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "AvatarGroup",
+      "files": 4,
+      "usages": 4,
+      "withClass": 1,
+      "withOverride": 1,
+      "overrideRate": 0.25,
+      "topOverrides": [
+        {
+          "token": "pl-2",
+          "count": 1
+        },
+        {
+          "token": "pr-1",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "lib/core/component/LiveIndicators.tsx",
+          "line": 27,
+          "classes": "pl-2 pr-1"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "AvatarGroup.Count",
+      "files": 4,
+      "usages": 4,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CommandMenuSearchInput",
+      "files": 4,
+      "usages": 4,
+      "withClass": 2,
+      "withOverride": 2,
+      "overrideRate": 0.5,
+      "topOverrides": [
+        {
+          "token": "text-base",
+          "count": 2
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/property/editor/PropertyEditorModal.tsx",
+          "line": 419,
+          "classes": "text-base"
+        },
+        {
+          "file": "features/reminders/ReminderComposerModal.tsx",
+          "line": 582,
+          "classes": "text-base"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "NavRow",
+      "files": 3,
+      "usages": 4,
+      "withClass": 4,
+      "withOverride": 4,
+      "overrideRate": 1,
+      "topOverrides": [
+        {
+          "token": "h-7",
+          "count": 4
+        },
+        {
+          "token": "pl-6",
+          "count": 1
+        },
+        {
+          "token": "pr-2",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/favorites/sidebar/favorites-section.tsx",
+          "line": 433,
+          "classes": "h-7"
+        },
+        {
+          "file": "features/channel/sidebar/channels-recent-widget.tsx",
+          "line": 222,
+          "classes": "justify-start w-full h-7"
+        },
+        {
+          "file": "components/app/app-sidebar/sidebar.tsx",
+          "line": 1845,
+          "classes": "h-7"
+        },
+        {
+          "file": "components/app/app-sidebar/sidebar.tsx",
+          "line": 2193,
+          "classes": "h-7 pl-6 pr-2"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CommandMenuHotkeyHint",
+      "files": 3,
+      "usages": 4,
+      "withClass": 1,
+      "withOverride": 1,
+      "overrideRate": 0.25,
+      "topOverrides": [
+        {
+          "token": "text-xs",
+          "count": 1
+        },
+        {
+          "token": "text-ink-extra-muted/80",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/reminders/ReminderComposerModal.tsx",
+          "line": 827,
+          "classes": "ml-auto shrink-0 text-xs text-ink-extra-muted/80"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "SideNav.Group",
+      "files": 2,
+      "usages": 3,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "SideNav.Item",
+      "files": 2,
+      "usages": 3,
+      "withClass": 1,
+      "withOverride": 1,
+      "overrideRate": 0.333,
+      "topOverrides": [
+        {
+          "token": "text-xs",
+          "count": 1
+        },
+        {
+          "token": "py-1.5",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/settings/Settings.tsx",
+          "line": 327,
+          "classes": "text-xs py-1.5"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "ButtonGroup",
+      "files": 3,
+      "usages": 3,
+      "withClass": 3,
+      "withOverride": 3,
+      "overrideRate": 1,
+      "topOverrides": [
+        {
+          "token": "border",
+          "count": 2
+        },
+        {
+          "token": "border-edge-muted",
+          "count": 2
+        },
+        {
+          "token": "rounded-lg",
+          "count": 1
+        },
+        {
+          "token": "rounded-full",
+          "count": 1
+        },
+        {
+          "token": "bg-surface",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/calendar/availability/CopyAvailabilityButton.tsx",
+          "line": 110,
+          "classes": "shrink-0 rounded-lg border border-edge-muted"
+        },
+        {
+          "file": "features/block-md/component/DispatchAgentMenu.tsx",
+          "line": 237,
+          "classes": "rounded-full border border-edge-muted"
+        },
+        {
+          "file": "lib/core/component/TopBar/ShareButton.tsx",
+          "line": 1241,
+          "classes": "bg-surface"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "ButtonGroup.Divider",
+      "files": 3,
+      "usages": 3,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Stepper",
+      "files": 3,
+      "usages": 3,
+      "withClass": 1,
+      "withOverride": 1,
+      "overrideRate": 0.333,
+      "topOverrides": [
+        {
+          "token": "h-full",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/auth/mobile-onboarding/MobileOnboarding.tsx",
+          "line": 92,
+          "classes": "h-full"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CommandMenuShell.Toolbar",
+      "files": 3,
+      "usages": 3,
+      "withClass": 3,
+      "withOverride": 3,
+      "overrideRate": 1,
+      "topOverrides": [
+        {
+          "token": "p-3",
+          "count": 2
+        },
+        {
+          "token": "py-2",
+          "count": 2
+        },
+        {
+          "token": "border-b-0",
+          "count": 2
+        },
+        {
+          "token": "pl-2.5",
+          "count": 1
+        },
+        {
+          "token": "pr-1.5",
+          "count": 1
+        },
+        {
+          "token": "pt-2",
+          "count": 1
+        },
+        {
+          "token": "border-0",
+          "count": 1
+        },
+        {
+          "token": "gap-1.5",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/property/editor/PropertyEditorModal.tsx",
+          "line": 333,
+          "classes": "p-3 py-2 border-b-0"
+        },
+        {
+          "file": "features/command/CommandMenu.tsx",
+          "line": 595,
+          "classes": "pl-2.5 pr-1.5 pt-2 border-0 gap-1.5"
+        },
+        {
+          "file": "features/reminders/ReminderComposerModal.tsx",
+          "line": 456,
+          "classes": "p-3 py-2 border-b-0 gap-2"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "SideNav",
+      "files": 2,
+      "usages": 2,
+      "withClass": 2,
+      "withOverride": 1,
+      "overrideRate": 0.5,
+      "topOverrides": [
+        {
+          "token": "gap-3",
+          "count": 1
+        },
+        {
+          "token": "pr-1",
+          "count": 1
+        },
+        {
+          "token": "pr-2",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/settings/Settings.tsx",
+          "line": 308,
+          "classes": "w-[clamp(208px,20%,248px)] gap-3 pr-1 pr-2"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Dropdown.Separator",
+      "files": 2,
+      "usages": 2,
+      "withClass": 2,
+      "withOverride": 2,
+      "overrideRate": 1,
+      "topOverrides": [
+        {
+          "token": "h-px",
+          "count": 2
+        },
+        {
+          "token": "border-0",
+          "count": 2
+        },
+        {
+          "token": "bg-edge-muted",
+          "count": 2
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/settings/Appearance.tsx",
+          "line": 563,
+          "classes": "h-px border-0 bg-edge-muted"
+        },
+        {
+          "file": "features/channel/Call/CallControls/CallMenuPrimitives.tsx",
+          "line": 19,
+          "classes": "my-1 h-px border-0 bg-edge-muted -mx-1.5"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Select.Item",
+      "files": 2,
+      "usages": 2,
+      "withClass": 1,
+      "withOverride": 1,
+      "overrideRate": 0.5,
+      "topOverrides": [
+        {
+          "token": "gap-3",
+          "count": 1
+        },
+        {
+          "token": "px-2",
+          "count": 1
+        },
+        {
+          "token": "py-1.5",
+          "count": 1
+        },
+        {
+          "token": "text-sm",
+          "count": 1
+        },
+        {
+          "token": "rounded-xs",
+          "count": 1
+        },
+        {
+          "token": "outline-none",
+          "count": 1
+        },
+        {
+          "token": "bg-hover",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/ui-gallery/components/PreviewToolbar.tsx",
+          "line": 52,
+          "classes": "flex items-center justify-between gap-3 px-2 py-1.5 text-sm rounded-xs outline-none data-highlighted:bg-hover"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Select.ItemLabel",
+      "files": 2,
+      "usages": 2,
+      "withClass": 1,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Panel.Toolbar",
+      "files": 2,
+      "usages": 2,
+      "withClass": 2,
+      "withOverride": 2,
+      "overrideRate": 1,
+      "topOverrides": [
+        {
+          "token": "h-15.25",
+          "count": 1
+        },
+        {
+          "token": "px-2",
+          "count": 1
+        },
+        {
+          "token": "border-b-0",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/channel/Participants/ChannelParticipantsTab.tsx",
+          "line": 154,
+          "classes": "h-15.25 px-2"
+        },
+        {
+          "file": "components/app/split-layout/components/SplitPanel.tsx",
+          "line": 335,
+          "classes": "items-start overflow-visible hidden hidden border-b-0"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CommandMenuListItem",
+      "files": 2,
+      "usages": 2,
+      "withClass": 1,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "FilteredHiddenBanner",
+      "files": 1,
+      "usages": 1,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CalendarMonthMenu",
+      "files": 1,
+      "usages": 1,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "DeleteDialog",
+      "files": 1,
+      "usages": 1,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Pager.Viewport",
+      "files": 1,
+      "usages": 1,
+      "withClass": 1,
+      "withOverride": 1,
+      "overrideRate": 1,
+      "topOverrides": [
+        {
+          "token": "size-full",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/block-calendar/components/Workspace.tsx",
+          "line": 63,
+          "classes": "size-full min-w-0 min-h-0"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Pager.Page",
+      "files": 1,
+      "usages": 1,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "PagerSwipeGestures",
+      "files": 1,
+      "usages": 1,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Pager.Root",
+      "files": 1,
+      "usages": 1,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "CollapsedInput",
+      "files": 1,
+      "usages": 1,
+      "withClass": 1,
+      "withOverride": 1,
+      "overrideRate": 1,
+      "topOverrides": [
+        {
+          "token": "rounded-full",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "features/channel/Input/ChannelInput.tsx",
+          "line": 515,
+          "classes": "touch:rounded-full touch:island"
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Select.ItemIndicator",
+      "files": 1,
+      "usages": 1,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "TabbedControl",
+      "files": 1,
+      "usages": 1,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "ImperativeDialogHost",
+      "files": 1,
+      "usages": 1,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "ScreencastHotkeys",
+      "files": 1,
+      "usages": 1,
+      "withClass": 0,
+      "withOverride": 0,
+      "overrideRate": 0,
+      "topOverrides": [],
+      "sites": [],
+      "truncatedSites": 0
+    },
+    {
+      "name": "Panel.Footer",
+      "files": 1,
+      "usages": 1,
+      "withClass": 1,
+      "withOverride": 1,
+      "overrideRate": 1,
+      "topOverrides": [
+        {
+          "token": "px-4",
+          "count": 1
+        },
+        {
+          "token": "gap-2",
+          "count": 1
+        }
+      ],
+      "sites": [
+        {
+          "file": "lib/core/internal/ThemeDebug.tsx",
+          "line": 460,
+          "classes": "px-4 justify-end gap-2"
+        }
+      ],
+      "truncatedSites": 0
+    }
+  ],
+  "handRolled": [
+    {
+      "element": "button",
+      "suggested": "Button",
+      "usages": 290,
+      "files": 174,
+      "libraryUsages": 508,
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/SoupEntityActionDrawer.tsx",
+          "line": 77
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx",
+          "line": 383
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx",
+          "line": 461
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx",
+          "line": 497
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx",
+          "line": 515
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx",
+          "line": 571
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx",
+          "line": 653
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx",
+          "line": 742
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/soup-view-search-bar.tsx",
+          "line": 198
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/searchable-multi-select.tsx",
+          "line": 107
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer.tsx",
+          "line": 30
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer.tsx",
+          "line": 88
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer.tsx",
+          "line": 130
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer.tsx",
+          "line": 166
+        },
+        {
+          "file": "features/next-soup/soup-view/views/tasks/TaskListHeader.tsx",
+          "line": 173
+        },
+        {
+          "file": "features/next-soup/soup-view/views/inbox/InboxCard.tsx",
+          "line": 182
+        },
+        {
+          "file": "features/next-soup/soup-view/views/companies/CompanyViewsMenu.tsx",
+          "line": 51
+        },
+        {
+          "file": "features/next-soup/soup-view/views/companies/CompanyListHeader.tsx",
+          "line": 96
+        },
+        {
+          "file": "features/next-soup/soup-view/FolderDropZone.tsx",
+          "line": 30
+        },
+        {
+          "file": "features/next-soup/soup-view/FolderDropZone.tsx",
+          "line": 43
+        },
+        {
+          "file": "features/next-soup/debug/DocumentWherePlayground.tsx",
+          "line": 521
+        },
+        {
+          "file": "features/block-call/sidebar/active-call-widget.tsx",
+          "line": 226
+        },
+        {
+          "file": "features/block-call/sidebar/active-call-widget.tsx",
+          "line": 250
+        },
+        {
+          "file": "features/block-call/component/sidepanel/CallSidePanelSections.tsx",
+          "line": 178
+        },
+        {
+          "file": "features/block-call/component/CallTranscript.tsx",
+          "line": 396
+        }
+      ],
+      "truncatedSites": 265
+    },
+    {
+      "element": "input",
+      "suggested": null,
+      "usages": 137,
+      "files": 86,
+      "libraryUsages": null,
+      "sites": [
+        {
+          "file": "features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx",
+          "line": 636
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/mobile-filter-drawer.tsx",
+          "line": 725
+        },
+        {
+          "file": "features/next-soup/soup-view/filters-bar/search/mobile-search-filter-drawer.tsx",
+          "line": 109
+        },
+        {
+          "file": "features/next-soup/soup-view/views/companies/CompanyViewsMenu.tsx",
+          "line": 273
+        },
+        {
+          "file": "features/next-soup/debug/DocumentWherePlayground.tsx",
+          "line": 546
+        },
+        {
+          "file": "features/next-soup/debug/DocumentWherePlayground.tsx",
+          "line": 552
+        },
+        {
+          "file": "features/next-soup/debug/DocumentWherePlayground.tsx",
+          "line": 558
+        },
+        {
+          "file": "features/next-soup/debug/DocumentWherePlayground.tsx",
+          "line": 565
+        },
+        {
+          "file": "features/next-soup/debug/DocumentWherePlayground.tsx",
+          "line": 571
+        },
+        {
+          "file": "features/next-soup/debug/DocumentWherePlayground.tsx",
+          "line": 582
+        },
+        {
+          "file": "features/settings/Crm.tsx",
+          "line": 281
+        },
+        {
+          "file": "features/settings/Cursor.tsx",
+          "line": 113
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 173
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 668
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 772
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1188
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1236
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1406
+        },
+        {
+          "file": "features/settings/Team.tsx",
+          "line": 1528
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 758
+        },
+        {
+          "file": "features/settings/PipedreamIntegrations.tsx",
+          "line": 195
+        },
+        {
+          "file": "features/settings/Appearance.tsx",
+          "line": 387
+        },
+        {
+          "file": "features/settings/Integrations.tsx",
+          "line": 101
+        },
+        {
+          "file": "features/settings/Integrations.tsx",
+          "line": 118
+        },
+        {
+          "file": "features/block-automation/component/AutomationTimePicker.tsx",
+          "line": 98
+        }
+      ],
+      "truncatedSites": 112
+    },
+    {
+      "element": "textarea",
+      "suggested": null,
+      "usages": 19,
+      "files": 16,
+      "libraryUsages": null,
+      "sites": [
+        {
+          "file": "features/next-soup/debug/DocumentWherePlayground.tsx",
+          "line": 611
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 562
+        },
+        {
+          "file": "features/calendar/components/composer/EventForm.tsx",
+          "line": 138
+        },
+        {
+          "file": "features/block-md/component/MarkdownPopup.tsx",
+          "line": 577
+        },
+        {
+          "file": "features/block-md/component/MarkdownPopup.tsx",
+          "line": 639
+        },
+        {
+          "file": "features/property/editors/inline/InlineTextEditor.tsx",
+          "line": 58
+        },
+        {
+          "file": "features/block-pdf/component/placeables/TextBox.tsx",
+          "line": 74
+        },
+        {
+          "file": "features/team-invitations/invite-modal.tsx",
+          "line": 86
+        },
+        {
+          "file": "features/channel/Bots/BotProfileFields.tsx",
+          "line": 90
+        },
+        {
+          "file": "features/devtools/debug/ProjectionPlayground.tsx",
+          "line": 129
+        },
+        {
+          "file": "features/block-email/component/compose/ComposeSubject.tsx",
+          "line": 78
+        },
+        {
+          "file": "lib/core/component/AI/component/InlineAi.tsx",
+          "line": 53
+        },
+        {
+          "file": "lib/core/component/AI/component/InlineAi.tsx",
+          "line": 111
+        },
+        {
+          "file": "lib/core/component/AI/component/InlineAi.tsx",
+          "line": 130
+        },
+        {
+          "file": "lib/core/component/AI/component/debug/StaticMarkdownStream.tsx",
+          "line": 295
+        },
+        {
+          "file": "lib/core/component/AI/component/debug/HttpStream.tsx",
+          "line": 158
+        },
+        {
+          "file": "lib/core/component/LexicalMarkdown/component/menu/FloatingEquationMenu.tsx",
+          "line": 245
+        },
+        {
+          "file": "lib/core/component/LexicalMarkdown/component/debug/MarkdownParseTestPage.tsx",
+          "line": 336
+        },
+        {
+          "file": "lib/core/component/LexicalMarkdown/component/debug/LexicalStateDebugger.tsx",
+          "line": 448
+        }
+      ],
+      "truncatedSites": 0
+    },
+    {
+      "element": "select",
+      "suggested": "Select",
+      "usages": 15,
+      "files": 9,
+      "libraryUsages": 6,
+      "sites": [
+        {
+          "file": "features/next-soup/debug/DocumentWherePlayground.tsx",
+          "line": 482
+        },
+        {
+          "file": "features/settings/Cursor.tsx",
+          "line": 153
+        },
+        {
+          "file": "features/settings/Account.tsx",
+          "line": 534
+        },
+        {
+          "file": "features/settings/SignatureEditor.tsx",
+          "line": 229
+        },
+        {
+          "file": "features/settings/SignatureEditor.tsx",
+          "line": 238
+        },
+        {
+          "file": "features/settings/SignatureEditor.tsx",
+          "line": 258
+        },
+        {
+          "file": "features/settings/SignatureEditor.tsx",
+          "line": 261
+        },
+        {
+          "file": "features/block-agent/debug/replay/Replay.tsx",
+          "line": 167
+        },
+        {
+          "file": "features/block-agent/debug/replay/Replay.tsx",
+          "line": 181
+        },
+        {
+          "file": "features/block-agent/debug/replay/Replay.tsx",
+          "line": 193
+        },
+        {
+          "file": "features/integrations/import-linear/ImportLinear.tsx",
+          "line": 263
+        },
+        {
+          "file": "features/devtools/debug/ProjectionPlayground.tsx",
+          "line": 203
+        },
+        {
+          "file": "features/devtools/debug/ProjectionPlayground.tsx",
+          "line": 214
+        },
+        {
+          "file": "lib/core/component/LexicalMarkdown/component/debug/MarkdownParseTestPage.tsx",
+          "line": 414
+        },
+        {
+          "file": "lib/core/collab-surface/debug/CollabSurfaceDemoPage.tsx",
+          "line": 62
+        }
+      ],
+      "truncatedSites": 0
+    }
+  ]
+}

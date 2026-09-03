@@ -765,3 +765,11 @@ registerComponent(
   'icon-gallery',
   lazy(() => import('@core/internal/IconGallery'))
 );
+
+// Component library. Registered outside LOCAL_ONLY so design can browse it on
+// preview deploys; the whole gallery is one lazy chunk the app never loads
+// unless the route is opened.
+registerComponent(
+  'ui',
+  lazy(() => import('@app/features/ui-gallery/UiGallery'))
+);
