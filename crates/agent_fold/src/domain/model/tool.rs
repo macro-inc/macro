@@ -43,11 +43,6 @@ pub enum ToolName {
 }
 
 impl ToolName {
-    /// The name every session's server list gives Macro's own MCP server.
-    /// Mirrors `agent_harness::MACRO_MCP_NAME`; restated here rather than
-    /// imported so the wasm fold does not pull in the harness crate.
-    pub const MACRO_MCP_SERVER: &'static str = "macro";
-
     /// A native name, as reported.
     #[must_use]
     pub fn native(name: impl Into<String>) -> Self {
@@ -61,18 +56,6 @@ impl ToolName {
         match self {
             Self::Native { name } => name,
             Self::Mcp { tool, .. } => tool,
-        }
-    }
-
-    /// The Macro tool this names, if it is one reached over Macro's own MCP
-    /// server. A native name is never a Macro tool by this method - Macro's
-    /// own in-process agent is recognized by the harness it runs under, not
-    /// by its tool names.
-    #[must_use]
-    pub fn macro_mcp_tool(&self) -> Option<&str> {
-        match self {
-            Self::Mcp { server, tool } if server == Self::MACRO_MCP_SERVER => Some(tool),
-            _ => None,
         }
     }
 
@@ -156,10 +139,11 @@ impl ToolStatus {
 /// kind ACP defines - only for `switch_mode` (nothing a reader would want
 /// rendered) and a kind this fold does not yet know about.
 ///
-/// Two variants are chosen by *name* rather than kind: Macro's own tools
+/// Three variants are chosen by *name* rather than kind: Macro's own tools
 /// ([`Self::Macro`], [`Self::UserTool`]) arrive as ACP `other`, and what a
-/// reader wants for them is the tool's own JSON, not a generic card. The
-/// harness reader decides which names are Macro's.
+/// reader wants for them is the tool's own JSON, not a generic card; a
+/// delegation ([`Self::Subagent`]) is a tool call by whatever name its
+/// harness gives it. The harness layer decides which names are which.
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ToolDetail {

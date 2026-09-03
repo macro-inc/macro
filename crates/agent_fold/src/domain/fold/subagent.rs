@@ -4,7 +4,7 @@
 use serde_json::Value;
 
 use crate::domain::error::FoldError;
-use crate::domain::harness::{HarnessReader, mcp};
+use crate::domain::harness::{self, HarnessReader};
 use crate::domain::model::{MessagePart, SubagentResult, ToolDetail, ToolName, ToolUseId};
 use agent_client_protocol::schema::v1::Meta;
 
@@ -65,66 +65,6 @@ impl FoldState {
     }
 }
 
-/// Which delegation tool a subagent call is: the harness's own (Claude
-/// Code's `Agent`, Cursor's `task`), read by its reader, or Macro's
-/// `Subagent`, whose response shape is Macro's whichever harness relayed it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Delegation {
-    Harness,
-    MacroSubagent,
-}
-
-impl Delegation {
-    /// Whether `name` delegates at all under this harness, and if so how.
-    /// Macro's `Subagent` is checked by name whichever harness calls it;
-    /// everything else is the reader's call.
-    pub(super) fn of(
-        reader: &dyn HarnessReader,
-        name: &ToolName,
-        kind: agent_client_protocol::schema::v1::ToolKind,
-        meta: Option<&Meta>,
-    ) -> Option<Self> {
-        if reader.macro_tool(name).is_some_and(mcp::is_subagent_tool) {
-            Some(Self::MacroSubagent)
-        } else if reader.is_subagent(name, kind, meta) {
-            Some(Self::Harness)
-        } else {
-            None
-        }
-    }
-
-    /// What the subagent reported on this frame.
-    fn result(
-        self,
-        reader: &dyn HarnessReader,
-        meta: Option<&Meta>,
-        raw_input: Option<&Value>,
-        raw_output: Option<&Value>,
-        content_text: Option<&str>,
-    ) -> Option<SubagentResult> {
-        match self {
-            Self::Harness => reader.subagent_result(meta, raw_input, raw_output, content_text),
-            Self::MacroSubagent => macro_subagent_result(reader, raw_output),
-        }
-    }
-}
-
-/// Macro's `Subagent` tool's result: its `{ "result" }` response, out of
-/// whatever envelope the harness wrapped it in (none for Macro's own agent,
-/// MCP's for the rest), or the error the envelope reported.
-fn macro_subagent_result(
-    reader: &dyn HarnessReader,
-    raw_output: Option<&Value>,
-) -> Option<SubagentResult> {
-    let (value, error) = reader.unwrap_tool_output(raw_output?);
-    let result = SubagentResult {
-        text: mcp::subagent_response_text(&value),
-        error,
-        ..SubagentResult::default()
-    };
-    (!result.is_empty()).then_some(result)
-}
-
 /// The fields of one frame a subagent's detail is read from. A `tool_call`
 /// carries all of them; a `tool_call_update` only those it patches.
 pub(super) struct SubagentFrame<'frame> {
@@ -138,9 +78,12 @@ pub(super) struct SubagentFrame<'frame> {
 }
 
 impl SubagentFrame<'_> {
-    fn result(&self, reader: &dyn HarnessReader, delegation: Delegation) -> Option<SubagentResult> {
-        delegation.result(
+    /// What the subagent reported on this frame, in whatever shape the
+    /// delegation tool called `name` answers in.
+    fn result(&self, reader: &dyn HarnessReader, name: &ToolName) -> Option<SubagentResult> {
+        harness::subagent_result(
             reader,
+            name,
             self.meta,
             self.raw_input,
             self.raw_output,
@@ -164,7 +107,6 @@ fn subagent_title(description: Option<&str>, prompt: Option<&str>, name: &ToolNa
 /// The detail for a subagent call, from its opening frame.
 pub(super) fn subagent_detail(
     reader: &dyn HarnessReader,
-    delegation: Delegation,
     name: &ToolName,
     frame: &SubagentFrame<'_>,
 ) -> ToolDetail {
@@ -176,7 +118,7 @@ pub(super) fn subagent_detail(
         prompt: input.prompt,
         background: input.background.unwrap_or(false),
         children: reader.subagent_transcript(frame.raw_output),
-        result: frame.result(reader, delegation).map(Box::new),
+        result: frame.result(reader, name).map(Box::new),
     }
 }
 
@@ -185,7 +127,6 @@ pub(super) fn subagent_detail(
 /// the child's transcript when the harness delivers one whole.
 pub(super) fn patch_subagent_detail(
     reader: &dyn HarnessReader,
-    delegation: Delegation,
     name: &ToolName,
     detail: &mut ToolDetail,
     frame: &SubagentFrame<'_>,
@@ -222,7 +163,7 @@ pub(super) fn patch_subagent_detail(
         }
         *title = subagent_title(description.as_deref(), prompt.as_deref(), name);
     }
-    if let Some(reported) = frame.result(reader, delegation) {
+    if let Some(reported) = frame.result(reader, name) {
         match result {
             Some(existing) => existing.merge(reported),
             None => *result = Some(Box::new(reported)),

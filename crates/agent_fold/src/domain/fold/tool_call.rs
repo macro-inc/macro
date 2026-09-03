@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::domain::error::FoldError;
 use crate::domain::harness::{
-    self, HarnessReader, command_from_raw_input, file_edit_from_raw_input, mcp,
+    self, HarnessReader, ToolShape, command_from_raw_input, file_edit_from_raw_input,
 };
 use crate::domain::model::{
     AnsiText, FileDiff, MessagePart, ToolDetail, ToolName, ToolUseId, UserToolOutcome,
@@ -15,7 +15,7 @@ use agent_client_protocol::schema::v1::{
 
 use super::convert::{content_block_text, tool_kind_name, tool_status};
 use super::state::{Changed, FoldState, ToolPath};
-use super::subagent::{Delegation, SubagentFrame, patch_subagent_detail, subagent_detail};
+use super::subagent::{SubagentFrame, patch_subagent_detail, subagent_detail};
 
 impl FoldState {
     /// Handle a `tool_call`: add a new tool part.
@@ -24,49 +24,44 @@ impl FoldState {
         let reader = self.reader();
         let name = harness::tool_name(reader, call.meta.as_ref(), &call.title);
 
-        // Subagents and Macro's tools are chosen by name and never
-        // recategorized: the kind ACP gives them is `other` (or `think`), and
-        // what a reader wants is the tool's own shape, which only the name -
-        // and the harness's conventions - tell us how to read. Delegation is
-        // decided first: Macro's own `Subagent` is a Macro tool by name, but
-        // what a reader wants for it is the subagent card, same as for
-        // Claude Code's `Agent` or Cursor's `task`.
-        let detail = if let Some(delegation) =
-            Delegation::of(reader, &name, call.kind, call.meta.as_ref())
-        {
-            // Content text is only an answer once the call has finished;
-            // while it streams, Claude Code echoes the brief there.
-            let finished = tool_status(call.status).is_finished();
-            subagent_detail(
-                reader,
-                delegation,
-                &name,
-                &SubagentFrame {
-                    meta: call.meta.as_ref(),
-                    title: Some(&call.title),
-                    raw_input: call.raw_input.as_ref(),
-                    raw_output: call.raw_output.as_ref(),
-                    content_text: generic_output(&call.content)
-                        .as_deref()
-                        .filter(|_| finished),
-                },
-            )
-        } else if let Some(tool) = reader.macro_tool(&name) {
-            macro_detail(
-                reader,
-                tool,
-                call.raw_input.as_ref(),
-                call.raw_output.as_ref(),
-            )
-        } else {
-            tool_detail(
+        // Whose shape the call is in is decided here, once; a patch finds the
+        // detail it opened with and reads into that.
+        let detail = match harness::tool_shape(reader, &name, call.kind, call.meta.as_ref()) {
+            ToolShape::Harness => tool_detail(
                 reader,
                 call.kind,
                 call.raw_input.as_ref(),
                 &call.content,
                 &call.locations,
                 call.meta.as_ref(),
-            )
+            ),
+            ToolShape::Macro(_) => {
+                macro_detail(reader, call.raw_input.as_ref(), call.raw_output.as_ref())
+            }
+            ToolShape::UserTool(tool) => user_tool_detail(
+                reader,
+                tool,
+                call.raw_input.as_ref(),
+                call.raw_output.as_ref(),
+            ),
+            ToolShape::Subagent => {
+                // Content text is only an answer once the call has finished;
+                // while it streams, Claude Code echoes the brief there.
+                let finished = tool_status(call.status).is_finished();
+                subagent_detail(
+                    reader,
+                    &name,
+                    &SubagentFrame {
+                        meta: call.meta.as_ref(),
+                        title: Some(&call.title),
+                        raw_input: call.raw_input.as_ref(),
+                        raw_output: call.raw_output.as_ref(),
+                        content_text: generic_output(&call.content)
+                            .as_deref()
+                            .filter(|_| finished),
+                    },
+                )
+            }
         };
         let tool = MessagePart::ToolUse {
             id: id.clone(),
@@ -164,16 +159,8 @@ impl FoldState {
             ),
             ToolDetail::Subagent { .. } => {
                 let finished = status.is_finished();
-                // Decided at open; a patch that names a different tool does
-                // not change what the call was.
-                let delegation = if reader.macro_tool(name).is_some_and(mcp::is_subagent_tool) {
-                    Delegation::MacroSubagent
-                } else {
-                    Delegation::Harness
-                };
                 patch_subagent_detail(
                     reader,
-                    delegation,
                     name,
                     detail,
                     &SubagentFrame {
@@ -249,37 +236,40 @@ pub(super) fn tool_detail(
     }
 }
 
-/// Build the detail for a Macro tool from its opening frame.
+/// Build the detail for a Macro tool from its opening frame: its input as
+/// given, its output out of the harness's wrapper.
+pub(super) fn macro_detail(
+    reader: &dyn HarnessReader,
+    raw_input: Option<&serde_json::Value>,
+    raw_output: Option<&serde_json::Value>,
+) -> ToolDetail {
+    let (output, error) = match raw_output.map(|raw| reader.unwrap_tool_output(raw)) {
+        None => (None, None),
+        Some((value, error)) => (Some(value), error),
+    };
+    ToolDetail::Macro {
+        input: raw_input.cloned().unwrap_or(serde_json::Value::Null),
+        output,
+        error,
+    }
+}
+
+/// Build the detail for a Macro user tool from its opening frame.
 ///
 /// A user tool starts [`UserToolOutcome::Pending`] whether or not the frame
 /// carried output: the backend's `"PendingUserExecution"` reads as pending
 /// too, and a frame with nothing yet is a call still being made.
-pub(super) fn macro_detail(
+pub(super) fn user_tool_detail(
     reader: &dyn HarnessReader,
     tool: &str,
     raw_input: Option<&serde_json::Value>,
     raw_output: Option<&serde_json::Value>,
 ) -> ToolDetail {
-    let input = raw_input.cloned().unwrap_or(serde_json::Value::Null);
-    let unwrapped = raw_output.map(|raw| reader.unwrap_tool_output(raw));
-    if mcp::is_user_tool(tool) {
-        return ToolDetail::UserTool {
-            input,
-            outcome: match unwrapped {
-                None => UserToolOutcome::Pending,
-                Some((_, Some(error))) => UserToolOutcome::Failed { message: error },
-                Some((value, None)) => mcp::user_tool_outcome(tool, &value),
-            },
-        };
-    }
-    let (output, error) = match unwrapped {
-        None => (None, None),
-        Some((value, error)) => (Some(value), error),
-    };
-    ToolDetail::Macro {
-        input,
-        output,
-        error,
+    ToolDetail::UserTool {
+        input: raw_input.cloned().unwrap_or(serde_json::Value::Null),
+        outcome: raw_output.map_or(UserToolOutcome::Pending, |raw| {
+            harness::user_tool_outcome(reader, tool, raw)
+        }),
     }
 }
 
@@ -295,7 +285,6 @@ pub(super) fn patch_macro_detail(
     raw_input: Option<&serde_json::Value>,
     raw_output: Option<&serde_json::Value>,
 ) {
-    let tool = reader.macro_tool(name).unwrap_or_else(|| name.display());
     match detail {
         ToolDetail::Macro {
             input,
@@ -316,10 +305,10 @@ pub(super) fn patch_macro_detail(
                 *input = found.clone();
             }
             if let Some(raw) = raw_output {
-                *outcome = match reader.unwrap_tool_output(raw) {
-                    (_, Some(error)) => UserToolOutcome::Failed { message: error },
-                    (value, None) => mcp::user_tool_outcome(tool, &value),
-                };
+                // The detail says this is a user tool, so the name's short
+                // form is the tool's: `SendEmail` whether the harness wrote it
+                // bare or as `mcp__macro__SendEmail`.
+                *outcome = harness::user_tool_outcome(reader, name.display(), raw);
             }
         }
         _ => {}

@@ -21,6 +21,21 @@
 //! overrides only what it can answer from its own conventions. Every reader
 //! treats a missing or misshapen key as "no information".
 //!
+//! Two things a tool call carries are not the harness's to define, and have
+//! modules of their own rather than a reader:
+//!
+//! - [`mcp`] - the envelope MCP wraps every external tool's result in, which
+//!   a harness may copy into `rawOutput` whole.
+//! - [`macro_tools`] - Macro's own tools, which any harness may call (over
+//!   Macro's MCP server, or natively when the harness *is* Macro's agent).
+//!   Their names and result shapes are Macro's whichever harness relayed
+//!   them.
+//!
+//! The fold reads a call through the functions at the bottom of this file -
+//! [`tool_shape`], [`subagent_result`], [`user_tool_outcome`] - which decide
+//! whose shape a call is in and read it accordingly, so the fold itself
+//! never names a harness, MCP, or a Macro tool.
+//!
 //! Supporting a new harness is one file here, one arm in
 //! [`Harness::reader`], and one row in [`Harness::from_agent_info`].
 
@@ -36,18 +51,24 @@ pub mod generic;
 pub mod hermes;
 /// Macro's own in-process agent (`agent_inmem`).
 pub mod macro_inmem;
-/// MCP's result and user-tool response shapes.
+/// Macro's tools: their names and what they return.
+pub mod macro_tools;
+/// MCP's result envelope.
 pub mod mcp;
 /// OpenClaw's ACP gateway.
 pub mod openclaw;
 /// OpenCode's built-in ACP server.
 pub mod opencode;
 
-use crate::domain::model::{Harness, MessagePart, SubagentResult, ToolName, ToolUseId};
+use crate::domain::model::{
+    Harness, MessagePart, SubagentResult, ToolName, ToolUseId, UserToolOutcome,
+};
 use agent_client_protocol::schema::v1::{Meta, ToolKind};
 use lazy_regex::regex_is_match;
+use macro_tools::MacroTool;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
+use serde_json::Value;
 
 /// What a harness's conventions let the fold read off a tool frame.
 ///
@@ -89,12 +110,13 @@ pub trait HarnessReader: Sync {
     /// server; Macro's in-process agent calls the same tools natively and
     /// says so by being the harness it is.
     fn macro_tool<'name>(&self, name: &'name ToolName) -> Option<&'name str> {
-        name.macro_mcp_tool()
+        macro_tools::mcp_tool(name)
     }
 
-    /// A Macro tool's own result, out of whatever `rawOutput` wrapped it in,
-    /// plus the error text when the wrapper reported failure.
-    fn unwrap_tool_output(&self, raw: &serde_json::Value) -> (serde_json::Value, Option<String>) {
+    /// An external tool's own result, out of whatever this harness wrapped it
+    /// in when it wrote `rawOutput`, plus the error text when the wrapper
+    /// reported failure. The neutral reading is MCP's envelope.
+    fn unwrap_tool_output(&self, raw: &Value) -> (Value, Option<String>) {
         mcp::unwrap_call_result(raw)
     }
 
@@ -249,6 +271,86 @@ pub fn tool_name(reader: &dyn HarnessReader, meta: Option<&Meta>, title: &str) -
     reader
         .harness_tool_name(meta, title)
         .unwrap_or_else(|| title.parse().unwrap_or_else(|never| match never {}))
+}
+
+/// Whose shape a tool call is in, and so how the fold reads it.
+///
+/// Decided once, from the opening frame, and never revisited: the detail a
+/// call opens with is the detail it keeps, so a subagent never turns into a
+/// Macro tool mid-flight or the other way round.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolShape<'name> {
+    /// One of the harness's own tools, read by its ACP kind: `Bash`, `Read`,
+    /// `Write`, or a tool from an MCP server the fold knows nothing about.
+    Harness,
+    /// A Macro tool, by the name Macro gives it. Its input and output are the
+    /// tool's own JSON once the harness's wrapper is off.
+    Macro(&'name str),
+    /// A Macro user tool, by name: the agent drafts it, the user finishes it.
+    UserTool(&'name str),
+    /// Work delegated to another agent - the harness's own delegation tool
+    /// (Claude Code's `Agent`, Cursor's `task`) or Macro's `Subagent`. Which
+    /// of the two it is stays out of the fold's way: [`subagent_result`]
+    /// reads either by the tool's name.
+    Subagent,
+}
+
+/// Classify a tool call from its opening frame.
+///
+/// Macro's tools are recognized by name before anything else, since the
+/// kind ACP gives them is `other` and says nothing; among them, `Subagent`
+/// is a delegation like the harness's own. Everything else is the harness's,
+/// and whether it delegates is the reader's call.
+#[must_use]
+pub fn tool_shape<'name>(
+    reader: &dyn HarnessReader,
+    name: &'name ToolName,
+    kind: ToolKind,
+    meta: Option<&Meta>,
+) -> ToolShape<'name> {
+    match reader.macro_tool(name).map(MacroTool::of) {
+        Some(MacroTool::User(tool)) => ToolShape::UserTool(tool),
+        Some(MacroTool::Subagent) => ToolShape::Subagent,
+        Some(MacroTool::Other(tool)) => ToolShape::Macro(tool),
+        None if reader.is_subagent(name, kind, meta) => ToolShape::Subagent,
+        None => ToolShape::Harness,
+    }
+}
+
+/// What a subagent reported on one frame, read in whichever shape the
+/// delegation tool named by `name` answers in: Macro's `Subagent` returns
+/// Macro's response inside the harness's wrapper, whoever the harness is;
+/// any other delegation tool is the harness's own, and its reader knows it.
+/// `None` when the frame carries no result.
+#[must_use]
+pub fn subagent_result(
+    reader: &dyn HarnessReader,
+    name: &ToolName,
+    meta: Option<&Meta>,
+    raw_input: Option<&Value>,
+    raw_output: Option<&Value>,
+    content_text: Option<&str>,
+) -> Option<SubagentResult> {
+    if reader.macro_tool(name).map(MacroTool::of) == Some(MacroTool::Subagent) {
+        let (value, error) = reader.unwrap_tool_output(raw_output?);
+        return macro_tools::subagent_result(&value, error);
+    }
+    reader.subagent_result(meta, raw_input, raw_output, content_text)
+}
+
+/// Where a Macro user tool got to, from a frame's `rawOutput`: the harness's
+/// wrapper reporting failure is [`UserToolOutcome::Failed`]; otherwise the
+/// response inside it says.
+#[must_use]
+pub fn user_tool_outcome(
+    reader: &dyn HarnessReader,
+    tool: &str,
+    raw_output: &Value,
+) -> UserToolOutcome {
+    match reader.unwrap_tool_output(raw_output) {
+        (_, Some(error)) => UserToolOutcome::Failed { message: error },
+        (value, None) => macro_tools::user_tool_outcome(tool, &value),
+    }
 }
 
 /// The object at `_meta.<namespace>`, read as `T`.

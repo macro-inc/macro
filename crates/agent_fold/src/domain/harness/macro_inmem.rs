@@ -14,7 +14,7 @@
 use agent_client_protocol::schema::v1::{Meta, ToolKind};
 use serde::Deserialize;
 
-use super::{HarnessReader, generic, namespaced, raw};
+use super::{HarnessReader, generic, macro_tools, namespaced, raw};
 use crate::domain::model::ToolName;
 
 /// The `_meta` namespace `agent_inmem` writes under.
@@ -60,7 +60,7 @@ impl HarnessReader for MacroInmem {
     fn macro_tool<'name>(&self, name: &'name ToolName) -> Option<&'name str> {
         match name {
             ToolName::Native { name } => Some(name),
-            ToolName::Mcp { .. } => name.macro_mcp_tool(),
+            ToolName::Mcp { .. } => macro_tools::mcp_tool(name),
         }
     }
 

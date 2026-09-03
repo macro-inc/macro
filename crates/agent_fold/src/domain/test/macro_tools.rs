@@ -2,11 +2,14 @@
 //! their own details with the MCP envelope removed.
 
 use crate::domain::fold::{FoldMachineImpl, fold};
-use crate::domain::harness::mcp;
-use crate::domain::model::{Harness, MessagePart, ToolDetail, ToolStatus, UserToolOutcome};
+use crate::domain::harness::{self, ToolShape, macro_tools, mcp};
+use crate::domain::model::{
+    Harness, MessagePart, SubagentResult, ToolDetail, ToolName, ToolStatus, UserToolOutcome,
+};
 use crate::domain::ports::FoldMachine;
 use crate::testing::fixtures::MACRO_MCP;
 use crate::testing::parse_log;
+use agent_client_protocol::schema::v1::ToolKind;
 use serde_json::{Value, json};
 
 #[test]
@@ -194,19 +197,19 @@ fn unwraps_call_tool_results() {
 fn reads_user_tool_responses() {
     let email = "SendEmail";
     assert_eq!(
-        mcp::user_tool_outcome(email, &json!("PendingUserExecution")),
+        macro_tools::user_tool_outcome(email, &json!("PendingUserExecution")),
         UserToolOutcome::Pending
     );
     assert_eq!(
-        mcp::user_tool_outcome(email, &json!("Rejected")),
+        macro_tools::user_tool_outcome(email, &json!("Rejected")),
         UserToolOutcome::Rejected
     );
     assert_eq!(
-        mcp::user_tool_outcome(email, &json!({"UserAction": "userEdited"})),
+        macro_tools::user_tool_outcome(email, &json!({"UserAction": "userEdited"})),
         UserToolOutcome::Edited
     );
     assert_eq!(
-        mcp::user_tool_outcome(
+        macro_tools::user_tool_outcome(
             email,
             &json!({"UserAction": {"sent": {"message_id": "m", "thread_id": "t"}}})
         ),
@@ -216,7 +219,7 @@ fn reads_user_tool_responses() {
         }
     );
     assert_eq!(
-        mcp::user_tool_outcome(
+        macro_tools::user_tool_outcome(
             email,
             &json!({"UserAction": {"convertedToDraft": {"draft_id": "d"}}})
         ),
@@ -228,34 +231,174 @@ fn reads_user_tool_responses() {
     // Another user tool's action is carried whole.
     let event = json!({"id": "evt", "title": "Sync"});
     assert_eq!(
-        mcp::user_tool_outcome("CreateCalendarEvent", &json!({"UserAction": event})),
+        macro_tools::user_tool_outcome("CreateCalendarEvent", &json!({"UserAction": event})),
         UserToolOutcome::Completed {
             result: event.clone()
         }
     );
     // Shapes this fold does not know are named as such, never dropped.
     assert_eq!(
-        mcp::user_tool_outcome(email, &json!({"UserAction": {"teleported": true}})),
+        macro_tools::user_tool_outcome(email, &json!({"UserAction": {"teleported": true}})),
         UserToolOutcome::Unrecognized
     );
     assert_eq!(
-        mcp::user_tool_outcome(email, &json!({"other": 1})),
+        macro_tools::user_tool_outcome(email, &json!({"other": 1})),
         UserToolOutcome::Unrecognized
     );
     assert_eq!(
-        mcp::user_tool_outcome(email, &json!(42)),
+        macro_tools::user_tool_outcome(email, &json!(42)),
         UserToolOutcome::Unrecognized
     );
     assert_eq!(
-        mcp::user_tool_outcome(email, &Value::Null),
+        macro_tools::user_tool_outcome(email, &Value::Null),
         UserToolOutcome::Pending
+    );
+}
+
+/// Whose shape a call is in is decided by name first, then by the harness.
+#[test]
+fn tool_shape_puts_macro_tools_first_and_leaves_the_rest_to_the_harness() {
+    let parse = |name: &str| -> ToolName { name.parse().unwrap_or_else(|never| match never {}) };
+    let claude = Harness::ClaudeCode.reader();
+    assert_eq!(
+        harness::tool_shape(
+            claude,
+            &parse("mcp__macro__ReadContent"),
+            ToolKind::Other,
+            None
+        ),
+        ToolShape::Macro("ReadContent")
+    );
+    assert_eq!(
+        harness::tool_shape(
+            claude,
+            &parse("mcp__macro__SendEmail"),
+            ToolKind::Other,
+            None
+        ),
+        ToolShape::UserTool("SendEmail")
+    );
+    assert_eq!(
+        harness::tool_shape(
+            claude,
+            &parse("mcp__macro__Subagent"),
+            ToolKind::Other,
+            None
+        ),
+        ToolShape::Subagent
+    );
+    // Another server's tool, whatever it is called, is the harness's to read.
+    assert_eq!(
+        harness::tool_shape(
+            claude,
+            &parse("mcp__deepwiki__Subagent"),
+            ToolKind::Other,
+            None
+        ),
+        ToolShape::Harness
+    );
+    assert_eq!(
+        harness::tool_shape(claude, &parse("Bash"), ToolKind::Execute, None),
+        ToolShape::Harness
+    );
+    // The harness's own delegation tool is a subagent by its rule.
+    assert_eq!(
+        harness::tool_shape(claude, &parse("Task"), ToolKind::Think, None),
+        ToolShape::Subagent
+    );
+    // Macro's own agent calls its tools by bare name.
+    let inmem = Harness::Macro.reader();
+    assert_eq!(
+        harness::tool_shape(inmem, &parse("SendEmail"), ToolKind::Other, None),
+        ToolShape::UserTool("SendEmail")
+    );
+    assert_eq!(
+        harness::tool_shape(inmem, &parse("Subagent"), ToolKind::Other, None),
+        ToolShape::Subagent
+    );
+    // Any other harness only knows a bare `SendEmail` as its own.
+    assert_eq!(
+        harness::tool_shape(claude, &parse("SendEmail"), ToolKind::Other, None),
+        ToolShape::Harness
+    );
+}
+
+/// Macro's `Subagent` answers in Macro's shape through every harness's
+/// wrapper; a harness's own delegation tool is read by its reader.
+#[test]
+fn subagent_result_reads_macro_subagent_through_the_harness_wrapper() {
+    let parse = |name: &str| -> ToolName { name.parse().unwrap_or_else(|never| match never {}) };
+    let answer = |text: &str| {
+        Some(SubagentResult {
+            text: Some(text.to_owned()),
+            ..SubagentResult::default()
+        })
+    };
+    // Over MCP: the response is a JSON text block inside the envelope.
+    let claude = Harness::ClaudeCode.reader();
+    let enveloped = json!({"content": [{"type": "text", "text": "{\"result\":\"ten\"}"}]});
+    assert_eq!(
+        harness::subagent_result(
+            claude,
+            &parse("mcp__macro__Subagent"),
+            None,
+            None,
+            Some(&enveloped),
+            None
+        ),
+        answer("ten")
+    );
+    // Natively: bare.
+    let inmem = Harness::Macro.reader();
+    assert_eq!(
+        harness::subagent_result(
+            inmem,
+            &parse("Subagent"),
+            None,
+            None,
+            Some(&json!({"result": "ten"})),
+            None
+        ),
+        answer("ten")
+    );
+    // An in-process failure is the wrapper's error, not an answer.
+    assert_eq!(
+        harness::subagent_result(
+            inmem,
+            &parse("Subagent"),
+            None,
+            None,
+            Some(&json!({"error": "pool exhausted"})),
+            None
+        ),
+        Some(SubagentResult {
+            error: Some("pool exhausted".to_owned()),
+            ..SubagentResult::default()
+        })
+    );
+    // No output yet, nothing reported.
+    assert_eq!(
+        harness::subagent_result(inmem, &parse("Subagent"), None, None, None, Some("echo")),
+        None
+    );
+    // The same `{ "result" }` from the harness's own tool is not Macro's
+    // shape: the generic reading shows it as JSON text.
+    assert_eq!(
+        harness::subagent_result(
+            claude,
+            &parse("Task"),
+            None,
+            None,
+            Some(&json!({"result": "ten"})),
+            None
+        ),
+        answer(r#"{"result":"ten"}"#)
     );
 }
 
 /// Macro's in-process agent calls the same tools natively, with bare output.
 #[test]
 fn the_inmem_harness_reads_native_names_as_macro_tools_with_bare_output() {
-    use crate::domain::model::ToolName;
     let reader = Harness::Macro.reader();
     assert_eq!(
         reader.macro_tool(&ToolName::native("SendEmail")),

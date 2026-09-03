@@ -1,4 +1,4 @@
-use crate::domain::harness;
+use crate::domain::harness::{self, macro_tools};
 use crate::domain::model::{Harness, ToolName};
 use agent_client_protocol::schema::v1::Meta;
 use serde_json::json;
@@ -44,11 +44,14 @@ fn display_drops_the_server_namespace() {
 #[test]
 fn only_macro_mcp_names_are_macro_tools() {
     assert_eq!(
-        parse("mcp__macro__ReadContent").macro_mcp_tool(),
+        macro_tools::mcp_tool(&parse("mcp__macro__ReadContent")),
         Some("ReadContent")
     );
-    assert_eq!(parse("mcp__deepwiki__ReadContent").macro_mcp_tool(), None);
-    assert_eq!(parse("ReadContent").macro_mcp_tool(), None);
+    assert_eq!(
+        macro_tools::mcp_tool(&parse("mcp__deepwiki__ReadContent")),
+        None
+    );
+    assert_eq!(macro_tools::mcp_tool(&parse("ReadContent")), None);
 }
 
 #[test]
