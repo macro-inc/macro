@@ -129,6 +129,7 @@ function CatalogRow(props: { entry: PipedreamCatalogEntryResponse }) {
         <PipedreamConnectorIcon
           appSlug={props.entry.app_slug}
           iconUrl={props.entry.icon_url}
+          class="size-8"
         />
       }
       title={props.entry.display_name}

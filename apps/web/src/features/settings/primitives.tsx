@@ -256,7 +256,7 @@ export function IntegrationRow(props: {
       class={cn('flex items-start gap-4 px-6 py-4 touch:px-4', props.class)}
     >
       <Show when={props.icon}>
-        <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-6">
+        <div class="flex size-9 shrink-0 items-center justify-center [&_svg]:size-8 [&_img]:size-8">
           {props.icon}
         </div>
       </Show>
