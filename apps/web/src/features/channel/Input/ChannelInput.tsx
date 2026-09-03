@@ -12,7 +12,10 @@ import {
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
 import { isCursorBotId } from '@core/constant/cursorAgent';
-import { ENABLE_CHAT_V3_AGENTS } from '@core/constant/featureFlags';
+import {
+  enableChatV3Agents,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useCursorAgentsAccess } from '@core/cursor/flag';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -273,13 +276,13 @@ export function ChannelInput(props: ChannelInputProps) {
       ...(props.bots?.() ?? []),
     ].filter((user) => cursorEnabled || !isCursorBotId(user.id));
     if (
-      ENABLE_CHAT_V3_AGENTS() &&
+      isFeatureEnabled(enableChatV3Agents) &&
       !base.some((user) => isMacroCoderId(user.id))
     ) {
       base.unshift(macroCoderMentionUser());
     }
     if (
-      ENABLE_CHAT_V3_AGENTS() &&
+      isFeatureEnabled(enableChatV3Agents) &&
       !base.some((user) => isMacroNewId(user.id))
     ) {
       base.unshift(macroNewMentionUser());

@@ -17,5 +17,6 @@
  * Version 2.4 - Aug 2026. MagicChipNode: block response surface, channelId optional for standalone sessions.
  * Version 2.5 - Aug 2026. Added expandable AgentContextNode.
  * Version 2.6 - Aug 2026. PasteNode origin: pasted (default) or referenced.
+ * Version 3.0 - Sep 2026. Added ReplyTargetNode.
  */
-export const MARKDOWN_VERSION_COUNTER = 2.6;
+export const MARKDOWN_VERSION_COUNTER = 3.0;

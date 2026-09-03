@@ -18,6 +18,7 @@ import type { InboxTab } from '../types';
 export type InboxQueryCapabilities = {
   calendar: boolean;
   foreignEntities: boolean;
+  notifiedSort: boolean;
   reminders: boolean;
   snippets: boolean;
 };
@@ -161,6 +162,18 @@ export type InboxViewContext = {
   userId: string | undefined;
 };
 
+/**
+ * Signal and Noise are notification feeds: a row belongs where its latest
+ * notification puts it, not where its content's last edit does — a comment
+ * on a week-old task is today's news. The server sort is also a filter (rows
+ * without a notification are absent), which is what those tabs mean anyway.
+ */
+export const inboxTabOrdersByNotification = (
+  context: Pick<InboxViewContext, 'tab' | 'capabilities'>
+): boolean =>
+  context.capabilities.notifiedSort &&
+  (context.tab === 'signal' || context.tab === 'noise');
+
 /** Builds the heterogeneous Soup AST for the composable Inbox view. */
 export function buildInboxQuery(
   context: InboxViewContext,
@@ -191,7 +204,9 @@ export function buildInboxQuery(
     params: {
       expand: true,
       limit: 100,
-      sort_method: 'updated_at',
+      sort_method: inboxTabOrdersByNotification(context)
+        ? 'notified_at'
+        : 'updated_at',
       sort_direction: context.tab === 'reminders' ? 'asc' : 'desc',
     },
     body,

@@ -17,7 +17,7 @@ use super::models::{
     CalendarSyncStatus, DisconnectedGoogleCalendar, DueCalendarReminder,
     GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSyncBatch, GoogleScopeSet,
     GoogleSyncPlan, GoogleWatchChannel, GoogleWatchConfig, OccurrenceRange, ProviderCalendar,
-    StoredGoogleCalendar, VisibleCalendar,
+    StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
 };
 
 /// Classification supplied by provider adapters to backfill policy.
@@ -319,6 +319,15 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
         requester_id: &str,
         items: Vec<CalendarMentionRequestItem>,
     ) -> impl Future<Output = Result<Vec<CalendarMentionPreview>, Report>> + Send;
+
+    /// Return teammates' out-of-office occurrences overlapping the viewport,
+    /// soonest first, with title visibility policy already applied.
+    fn list_team_out_of_office(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<TeamOutOfOffice>, Report>> + Send;
 }
 
 /// What a write did to one event's canonical `calendar_events` row.
@@ -422,6 +431,25 @@ pub trait CalendarRepository: Send + Sync + 'static {
         items: Vec<CalendarMentionRequestItem>,
         now: DateTime<Utc>,
     ) -> impl Future<Output = Result<Vec<CalendarMentionPreview>, Report>> + Send;
+
+    /// Out-of-office occurrences owned by the requester's teammates — the
+    /// other members of the requester's team — overlapping the viewport,
+    /// soonest first, sourced from a primary calendar on an account that is
+    /// not disabled. The same provider event synced through more than one of
+    /// a teammate's inboxes collapses to one row before the limit applies,
+    /// so callers can detect truncation by row count. Titles arrive
+    /// unmasked; the domain service owns the visibility policy.
+    ///
+    /// "Team" is singular by schema: `team_user` is unique per user, so the
+    /// membership lookup cannot span teams. Relaxing that constraint would
+    /// silently widen this query to every team the requester belongs to —
+    /// revisit it together with any multi-team migration.
+    fn list_team_out_of_office(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<TeamOutOfOffice>, Report>> + Send;
 
     /// Upsert one provider calendar while holding the current backfill fence.
     fn upsert_google_calendar(
@@ -673,6 +701,16 @@ pub trait GoogleCalendarSyncRepository: Send + Sync + 'static {
     fn schedule_due_google_syncs(
         &self,
         due_before: DateTime<Utc>,
+    ) -> impl Future<Output = Result<usize, Report>> + Send;
+
+    /// Re-arm current-grant jobs stranded off the queue: `pending` jobs whose
+    /// outbox row is already published yet went untouched since `stalled_before`
+    /// (a deterministic delivery that dead-lettered), and `running` jobs whose
+    /// lease expired before `stalled_before` (a worker that died mid-run).
+    /// Republishing the outbox row lets the drain redeliver them.
+    fn reap_wedged_google_syncs(
+        &self,
+        stalled_before: DateTime<Utc>,
     ) -> impl Future<Output = Result<usize, Report>> + Send;
 }
 

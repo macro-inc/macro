@@ -13,7 +13,11 @@ input_file: crates/agent_fold/fixtures/real/subagent_opencode.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                219d3ba0-a6bf-4104-a273-51b8bf4409c7,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {

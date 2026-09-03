@@ -1,8 +1,10 @@
 import {
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS,
-  ENABLE_GRAPHQL_SOUP,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { Entity } from '@core/types';
+import { muteItemForRef } from '@entity/utils/notification';
 import { createSocketEffect } from '@macro-inc/collaboration/websocket';
 import {
   useMuteItemMutation,
@@ -244,7 +246,7 @@ export function createNotificationSource(
     // TODO(dev-rb/notifications): Remove this legacy eager pagination when the
     // REST notification source is retired. GraphQL consumers should use Soup
     // notification edges or dedicated notification queries instead.
-    if (ENABLE_GRAPHQL_SOUP()) return;
+    if (isFeatureEnabled(enableGraphqlSoup)) return;
     if (!notificationsQuery.data) return;
     if (notificationsQuery.hasNextPage && !notificationsQuery.isFetching) {
       notificationsQuery.fetchNextPage();
@@ -319,7 +321,7 @@ export function createNotificationSource(
 
   const unsubscribeFromGraphql = subscribeToGraphqlNotificationPatches(
     (patch) => {
-      if (!ENABLE_GRAPHQL_SOUP()) return;
+      if (!isFeatureEnabled(enableGraphqlSoup)) return;
       scheduleGraphqlNotificationRefetch();
       if (patch.__typename !== 'GraphqlNewNotification') return;
       dispatchIncomingNotification(mapGraphqlNotification(patch.notification));
@@ -341,7 +343,10 @@ export function createNotificationSource(
   };
 
   createSocketEffect(ws, (wsData) => {
-    if (wsData.type !== NOTIFICATION_EVENT_TYPE || ENABLE_GRAPHQL_SOUP()) {
+    if (
+      wsData.type !== NOTIFICATION_EVENT_TYPE ||
+      isFeatureEnabled(enableGraphqlSoup)
+    ) {
       return;
     }
     let parsedNotification: UnifiedNotification;
@@ -409,18 +414,17 @@ export function createNotificationSource(
     await bulkMarkAsRead([notification]);
   };
 
+  // Canonicalize the type where we know how to; otherwise pass it through so
+  // legacy callers keep working unchanged.
+  const toMuteItem = (entity: Entity): UserUnsubscribe =>
+    muteItemForRef(entity) ?? { item_id: entity.id, item_type: entity.type };
+
   const muteEntity = async (entity: Entity) => {
-    await muteItem.mutateAsync({
-      item_id: entity.id,
-      item_type: entity.type,
-    });
+    await muteItem.mutateAsync(toMuteItem(entity));
   };
 
   const unmuteEntity = async (entity: Entity) => {
-    await unmuteItem.mutateAsync({
-      item_id: entity.id,
-      item_type: entity.type,
-    });
+    await unmuteItem.mutateAsync(toMuteItem(entity));
   };
 
   const subscribe = (subscribeFn: SubscribeFn) => {

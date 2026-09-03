@@ -793,6 +793,7 @@ pub fn build_properties_tool_context(
     PropertiesToolContext {
         service: properties,
         entity_access_service,
+        actor: bot_id::MACRO_AI_BOT_ID,
     }
 }
 
@@ -1303,6 +1304,19 @@ pub struct ToolServiceContext {
     /// this context. Set per-session by the caller so AI calls made by tools
     /// (e.g. subagents) are attributed to the feature that spawned them.
     pub usage_context: ai_usage::UsageContext,
+}
+
+impl ToolServiceContext {
+    /// Run the mutating tools as `actor`, delegated for the requesting user,
+    /// instead of the default Macro AI bot. Hosts running a specific agent
+    /// call this once when they build the context for that agent's session.
+    pub fn with_actor(mut self, actor: bot_id::BotId) -> Self {
+        self.document_tool_context = self.document_tool_context.with_actor(actor);
+        self.properties_tool_context = self.properties_tool_context.with_actor(actor);
+        self.project_tool_context = self.project_tool_context.with_actor(actor);
+        self.channel_tool_context = self.channel_tool_context.with_actor(actor);
+        self
+    }
 }
 
 impl FromRef<ToolServiceContext> for ai_toolset::NoContext {

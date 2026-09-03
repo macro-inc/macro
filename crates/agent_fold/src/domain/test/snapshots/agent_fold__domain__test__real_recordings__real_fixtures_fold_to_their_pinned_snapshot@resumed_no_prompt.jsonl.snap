@@ -3460,7 +3460,11 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         author: User {
             user_id: None,
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                482c3d39-c381-4809-874c-fe00bc757345,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Control {

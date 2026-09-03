@@ -161,7 +161,7 @@ fn optimistic_mutations_keep_first_seen_order_and_deletion_precedence() {
 }
 
 #[test]
-fn authoritative_direct_fields_do_not_require_a_projection_schema_field() {
+fn authoritative_direct_fields_without_projection_schema_field_become_v3_patch() {
     let query = r#"query LegacySoup {
         user {
             soup(input: { limit: 1 }) {
@@ -201,8 +201,177 @@ fn authoritative_direct_fields_do_not_require_a_projection_schema_field() {
     .expect("legacy query parses");
     assert!(matches!(
         mutations.as_slice(),
-        [ProjectionMutation::Replace(_)]
+        [ProjectionMutation::Patch { profile, .. }]
+            if profile == &vocabulary::profile_v3()
     ));
+}
+
+#[test]
+fn partial_queries_preserve_v3_authority_and_mark_missing_v3() {
+    let id = "00000000-0000-0000-0000-000000000001";
+    let base_mutations = authoritative_projection_mutations(
+        SUPPLEMENT_SUBSCRIPTION,
+        Some("Supplement"),
+        &supplement_subscription_data(selected_document(
+            id,
+            serde_json::Value::String(document_supplement(id, false)),
+            serde_json::Value::Null,
+        )),
+    )
+    .unwrap();
+    let [ProjectionMutation::Replace(base)] = base_mutations.as_slice() else {
+        panic!("complete Soup data must hydrate v3 authority");
+    };
+    let base = base.clone();
+    let key = base.record_key.clone();
+
+    let query = r#"query SoupNotifications {
+        user {
+            soup(input: { limit: 500 }) {
+                items {
+                    __typename
+                    id
+                    notifications { id }
+                }
+            }
+        }
+    }"#;
+    let mutations = authoritative_projection_mutations(
+        query,
+        Some("SoupNotifications"),
+        &serde_json::json!({
+            "user": {
+                "soup": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": id,
+                        "notifications": []
+                    }]
+                }
+            }
+        }),
+    )
+    .unwrap();
+    let [
+        ProjectionMutation::Patch {
+            profile,
+            exact,
+            integers,
+            sorts,
+            ..
+        },
+    ] = mutations.as_slice()
+    else {
+        panic!("a projection-less partial query must produce a bounded v3 patch");
+    };
+    assert_eq!(profile, &vocabulary::profile_v3());
+    assert!(exact.is_empty());
+    assert!(integers.is_empty());
+    assert!(sorts.is_empty());
+
+    let mut existing = std::collections::HashMap::from([(
+        key.clone(),
+        cache_core::predicate::ProjectionState::Complete(base.clone()),
+    )]);
+    cache_core::predicate::apply_authoritative_projection_mutations(&mut existing, &mutations);
+    assert_eq!(
+        existing.get(&key),
+        Some(&cache_core::predicate::ProjectionState::Complete(base))
+    );
+
+    let mut missing = std::collections::HashMap::new();
+    cache_core::predicate::apply_authoritative_projection_mutations(&mut missing, &mutations);
+    assert!(matches!(
+        missing.get(&key),
+        Some(cache_core::predicate::ProjectionState::Incomplete {
+            profile,
+            kind: ProjectionIncompleteKind::Missing,
+            ..
+        }) if profile == &vocabulary::profile_v3()
+    ));
+}
+
+#[test]
+fn empty_query_patch_does_not_overwrite_an_earlier_field_patch() {
+    let id = "00000000-0000-0000-0000-000000000001";
+    let query = r#"query RepeatedSoupEntity {
+        user {
+            rich: soup(input: { limit: 1 }) {
+                items {
+                    __typename
+                    id
+                    ... on GraphqlSoupDocument {
+                        ownerId
+                        projectId
+                        fileType
+                        createdAt
+                        updatedAt
+                        subType { __typename }
+                    }
+                }
+            }
+            partial: soup(input: { limit: 1 }) {
+                items {
+                    __typename
+                    id
+                    notifications { id }
+                }
+            }
+        }
+    }"#;
+    let mutations = authoritative_projection_mutations(
+        query,
+        Some("RepeatedSoupEntity"),
+        &serde_json::json!({
+            "user": {
+                "rich": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": id,
+                        "ownerId": "macro|owner@example.com",
+                        "projectId": null,
+                        "fileType": "md",
+                        "createdAt": "2025-01-01T00:00:00.000001Z",
+                        "updatedAt": "2025-01-02T00:00:00.000001Z",
+                        "subType": null
+                    }]
+                },
+                "partial": {
+                    "items": [{
+                        "__typename": "GraphqlSoupDocument",
+                        "id": id,
+                        "notifications": []
+                    }]
+                }
+            }
+        }),
+    )
+    .unwrap();
+    let [
+        ProjectionMutation::Patch {
+            exact,
+            integers,
+            sorts,
+            ..
+        },
+    ] = mutations.as_slice()
+    else {
+        panic!("the richer appearance must retain its field patch");
+    };
+    assert!(exact.iter().any(|patch| {
+        patch.attribute == vocabulary::owner()
+            && patch.values == vec![ExactValue::utf8("macro|owner@example.com").unwrap()]
+    }));
+    assert!(
+        integers
+            .iter()
+            .any(|patch| patch.attribute == vocabulary::updated_at())
+    );
+    assert!(
+        sorts
+            .iter()
+            .any(|fact| fact.attribute == vocabulary::updated_at())
+    );
 }
 
 const SUPPLEMENT_SUBSCRIPTION: &str = r#"subscription Supplement {

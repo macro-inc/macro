@@ -14,6 +14,7 @@ export enum ServiceUrl {
   DOCUMENT_COGNITION_SERVICE_URL = 'DOCUMENT_COGNITION_SERVICE_URL',
   LEXICAL_SERVICE_URL = 'LEXICAL_SERVICE_URL',
   UNFURL_SERVICE_URL = 'UNFURL_SERVICE_URL',
+  AGENT_HARNESS_SERVICE_URL = 'AGENT_HARNESS_SERVICE_URL',
 }
 
 /**
@@ -32,17 +33,20 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.EMAIL_SERVICE_URL]: 'https://email-service-dev.macro.com',
   [ServiceUrl.STATIC_FILE_SERVICE_URL]:
     'https://static-file-service-dev.macro.com',
-  [ServiceUrl.NOTIFICATION_SERVICE_URL]: 'https://notifications-dev.macro.com',
+  [ServiceUrl.NOTIFICATION_SERVICE_URL]:
+    'https://dev-gateway.macro.com/notification',
   [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'https://auth-service-dev.macro.com',
   [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]:
     'https://dev-gateway.macro.com/dss',
   [ServiceUrl.CONNECTION_GATEWAY_URL]:
-    'https://connection-gateway-dev.macro.com',
+    'https://dev-gateway.macro.com/connection-gateway',
   [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]:
     'https://document-cognition-dev.macro.com',
   [ServiceUrl.LEXICAL_SERVICE_URL]:
     'https://lexical-service-dev.macroverse.workers.dev',
   [ServiceUrl.UNFURL_SERVICE_URL]: 'https://dev-gateway.macro.com/unfurl',
+  [ServiceUrl.AGENT_HARNESS_SERVICE_URL]:
+    'https://dev-gateway.macro.com/agent-harness',
 };
 
 /**
@@ -53,15 +57,19 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
     'https://sync-service-prod2.macroverse.workers.dev',
   [ServiceUrl.EMAIL_SERVICE_URL]: 'https://email-service.macro.com',
   [ServiceUrl.STATIC_FILE_SERVICE_URL]: 'https://static-file-service.macro.com',
-  [ServiceUrl.NOTIFICATION_SERVICE_URL]: 'https://notifications.macro.com',
+  [ServiceUrl.NOTIFICATION_SERVICE_URL]:
+    'https://gateway.macro.com/notification',
   [ServiceUrl.AUTHENTICATION_SERVICE_URL]: 'https://auth-service.macro.com',
   [ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL]: 'https://gateway.macro.com/dss',
-  [ServiceUrl.CONNECTION_GATEWAY_URL]: 'https://connection-gateway.macro.com',
+  [ServiceUrl.CONNECTION_GATEWAY_URL]:
+    'https://gateway.macro.com/connection-gateway',
   [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]:
     'https://document-cognition.macro.com',
   [ServiceUrl.LEXICAL_SERVICE_URL]:
     'https://lexical-service-prod.macroverse.workers.dev',
   [ServiceUrl.UNFURL_SERVICE_URL]: 'https://gateway.macro.com/unfurl',
+  [ServiceUrl.AGENT_HARNESS_SERVICE_URL]:
+    'https://gateway.macro.com/agent-harness',
 };
 
 /**

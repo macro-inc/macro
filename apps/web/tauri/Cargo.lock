@@ -216,6 +216,7 @@ dependencies = [
  "tauri-plugin-call-kit",
  "tauri-plugin-deep-link",
  "tauri-plugin-device-info",
+ "tauri-plugin-edit-menu",
  "tauri-plugin-haptics",
  "tauri-plugin-http",
  "tauri-plugin-input-accessory",
@@ -6408,6 +6409,15 @@ dependencies = [
  "thiserror 2.0.18",
  "winapi",
  "wmi",
+]
+
+[[package]]
+name = "tauri-plugin-edit-menu"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tauri",
+ "tauri-plugin",
 ]
 
 [[package]]

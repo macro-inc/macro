@@ -195,30 +195,6 @@ fn suppresses_existing_immutable_non_drafts() {
 }
 
 #[test]
-fn macro_staff_gets_all_inbox_new_email_policy() {
-    assert_eq!(
-        new_email_notify_policy(&id("macro|teo@macro.com")),
-        NewEmailNotifyPolicy::AllInbox
-    );
-}
-
-#[test]
-fn macro_staff_plus_alias_gets_all_inbox_new_email_policy() {
-    assert_eq!(
-        new_email_notify_policy(&id("macro|teo+notify@macro.com")),
-        NewEmailNotifyPolicy::AllInbox
-    );
-}
-
-#[test]
-fn customer_gets_signal_only_new_email_policy() {
-    assert_eq!(
-        new_email_notify_policy(&id("macro|user@example.com")),
-        NewEmailNotifyPolicy::SignalOnly
-    );
-}
-
-#[test]
 fn staff_recipients_are_split_onto_the_apns_path() {
     let (staff, customers) = partition_email_push_recipients(HashSet::from([
         id("macro|teo@macro.com"),
@@ -243,18 +219,9 @@ fn customer_only_recipients_do_not_take_the_apns_path() {
 }
 
 #[test]
-fn all_inbox_preview_filter_is_thread_only() {
+fn signal_filter_requires_importance_and_unshared() {
     let thread_id = Uuid::nil();
-    match new_email_preview_filter(thread_id, NewEmailNotifyPolicy::AllInbox) {
-        Expr::Literal(EmailLiteral::ThreadId(id)) => assert_eq!(id, thread_id),
-        other => panic!("expected thread-only filter, got {other:?}"),
-    }
-}
-
-#[test]
-fn signal_only_preview_filter_requires_importance_and_unshared() {
-    let thread_id = Uuid::nil();
-    match new_email_preview_filter(thread_id, NewEmailNotifyPolicy::SignalOnly) {
+    match signal_filter(thread_id) {
         Expr::And(thread, rest) => {
             assert!(matches!(
                 *thread,

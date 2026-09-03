@@ -1,21 +1,15 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
-  ENABLE_CALENDAR_PROMPT_MOBILE_FLAG,
-  ENABLE_CALENDAR_PROMPT_MOBILE_OVERRIDE,
-  ENABLE_CALENDAR_PROMPT_WEB_FLAG,
-  ENABLE_CALENDAR_PROMPT_WEB_OVERRIDE,
-  ENABLE_CALENDAR_SEARCH_UI_FLAG,
-  ENABLE_CALENDAR_SEARCH_UI_OVERRIDE,
-  ENABLE_CALENDAR_UI_FLAG,
-  ENABLE_CALENDAR_UI_OVERRIDE,
+  enableCalendarPromptMobile,
+  enableCalendarPromptWeb,
+  enableCalendarSearchUi,
+  enableCalendarUi,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import type { Accessor } from 'solid-js';
 
 export function useCalendarUiFlag(): Accessor<boolean> {
-  const flag = useFeatureFlag(ENABLE_CALENDAR_UI_FLAG, {
-    enabledOverride: ENABLE_CALENDAR_UI_OVERRIDE,
-  });
+  const flag = useFeatureFlag(enableCalendarUi);
   return () => flag().enabled;
 }
 
@@ -26,9 +20,7 @@ export function useCalendarUiFlag(): Accessor<boolean> {
  */
 export function useCalendarSearchUiFlag(): Accessor<boolean> {
   const calendarUi = useCalendarUiFlag();
-  const searchFlag = useFeatureFlag(ENABLE_CALENDAR_SEARCH_UI_FLAG, {
-    enabledOverride: ENABLE_CALENDAR_SEARCH_UI_OVERRIDE,
-  });
+  const searchFlag = useFeatureFlag(enableCalendarSearchUi);
   return () => calendarUi() && searchFlag().enabled;
 }
 
@@ -41,11 +33,7 @@ export function useCalendarSearchUiFlag(): Accessor<boolean> {
  * call site.
  */
 export function useCalendarPromptAllowed(): Accessor<boolean> {
-  const mobileFlag = useFeatureFlag(ENABLE_CALENDAR_PROMPT_MOBILE_FLAG, {
-    enabledOverride: ENABLE_CALENDAR_PROMPT_MOBILE_OVERRIDE,
-  });
-  const webFlag = useFeatureFlag(ENABLE_CALENDAR_PROMPT_WEB_FLAG, {
-    enabledOverride: ENABLE_CALENDAR_PROMPT_WEB_OVERRIDE,
-  });
+  const mobileFlag = useFeatureFlag(enableCalendarPromptMobile);
+  const webFlag = useFeatureFlag(enableCalendarPromptWeb);
   return () => (isMobile() ? mobileFlag() : webFlag()).enabled;
 }

@@ -35,7 +35,8 @@ export function SetupStatus() {
   const startAddInbox = useAddInboxFlow();
 
   const hasEvents = () =>
-    (calendarPager.activeData()?.events().length ?? 0) > 0;
+    (calendarPager.activeData()?.events().length ?? 0) > 0 ||
+    calendarPager.activeTeamEvents().length > 0;
 
   // Existing events are not evidence that setup is complete: a revoked grant
   // or delegated inbox can leave events visible without a working calendar

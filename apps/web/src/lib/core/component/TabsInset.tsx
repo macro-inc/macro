@@ -17,6 +17,8 @@ type TabsInsetProps = {
   defaultValue?: string;
   class?: string;
   trackClass?: string;
+  itemClass?: string;
+  labelClass?: string;
   depth?: 0 | 1 | 2 | 3 | 4;
   fullWidth?: boolean;
 } & Omit<SegmentedControlRootProps, 'defaultValue'>;
@@ -29,6 +31,8 @@ export const TabsInset = (props: TabsInsetProps) => {
     'disabled',
     'class',
     'trackClass',
+    'itemClass',
+    'labelClass',
     'depth',
     'fullWidth',
   ]);
@@ -65,13 +69,14 @@ export const TabsInset = (props: TabsInsetProps) => {
                 <KSegmentedControl.Item
                   value={item.value}
                   disabled={local.disabled}
-                  class={cn(local.fullWidth && 'flex-1')}
+                  class={cn(local.fullWidth && 'flex-1', local.itemClass)}
                 >
                   <KSegmentedControl.ItemInput class="absolute inset-0 pointer-events-none" />
                   <KSegmentedControl.ItemLabel
                     class={cn(
                       'flex items-center px-2.5 py-1 text-xs font-medium data-checked:ring data-checked:ring-edge-muted ring-inset rounded-md text-ink-extra-muted hover:text-ink data-checked:bg-surface data-checked:text-ink data-checked:shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
-                      local.fullWidth && 'w-full justify-center'
+                      local.fullWidth && 'w-full justify-center',
+                      local.labelClass
                     )}
                     onPointerDown={(e) => {
                       if (isTouchDevice()) e.preventDefault();

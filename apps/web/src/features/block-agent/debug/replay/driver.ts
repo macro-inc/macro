@@ -168,9 +168,10 @@ export function createReplayDriver(options: ReplayDriverOptions): ReplayDriver {
       }
       // Every other action — stop, permissions — acks and does nothing:
       // their observable effects come from frames, which playback owns. The
-      // id is what the real endpoint returns; replay frames never carry it,
-      // so nothing correlates against it.
-      return ok(`replay-action-${cursor()}`);
+      // response is what the real endpoint returns; replay frames never
+      // carry the id, so nothing correlates against it, and replay has no
+      // queue, so everything is `sent`.
+      return ok({ actionId: `replay-action-${cursor()}`, status: 'sent' });
     },
   };
 

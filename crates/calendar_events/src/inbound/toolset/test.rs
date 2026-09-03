@@ -258,6 +258,15 @@ impl CalendarOccurrenceService for MockOccurrences {
     ) -> Result<Vec<crate::domain::models::CalendarMentionPreview>, rootcause::Report> {
         unreachable!("no calendar tool resolves mention previews")
     }
+
+    async fn list_team_out_of_office(
+        &self,
+        _requester_id: &str,
+        _range: OccurrenceRange,
+        _limit: u16,
+    ) -> Result<Vec<crate::domain::models::TeamOutOfOffice>, rootcause::Report> {
+        unreachable!("no calendar tool lists team out-of-office")
+    }
 }
 
 fn context(

@@ -919,3 +919,62 @@ fn reminder_metadata_reads_back_without_a_firing() {
 
     assert!(metadata.scheduled_for.is_none());
 }
+
+#[test]
+fn notification_status_patch_decodes_notif_event_metadata() {
+    use std::borrow::Cow;
+
+    use notification::domain::models::{
+        PatchDelete, UserNotificationRow, websocket_notification_event::NotificationTopicEvent,
+    };
+
+    let user = uid("macro|recipient@example.com");
+    let assigned_by = uid("macro|assigner@example.com");
+    let row = UserNotificationRow {
+        owner_id: user.clone(),
+        notification_id: Uuid::nil(),
+        notification_event_type: "task_assigned".to_string(),
+        entity: EntityType::Document.with_entity_string("document-id".to_string()),
+        sent: true,
+        done: false,
+        created_at: Utc::now(),
+        viewed_at: None,
+        updated_at: Utc::now(),
+        deleted_at: None,
+        notification_metadata: serde_json::json!({
+            "taskId": "task-1",
+            "taskName": "Test task",
+            "assignedBy": assigned_by.as_ref(),
+        }),
+        sender_id: None,
+    };
+    let event = NotificationTopicEvent::NotificationStatusesUpdatedForUser {
+        user,
+        updates: vec![PatchDelete::Patch {
+            diff: Cow::Owned(row),
+        }],
+    };
+
+    let NotificationTopicEvent::NotificationStatusesUpdatedForUser { updates, .. } = event
+        .deserialize_metadata::<crate::NotifEvent>()
+        .expect("tagged status patch metadata decodes")
+    else {
+        panic!("expected user notification statuses event");
+    };
+    let PatchDelete::Patch { diff } = &updates[0] else {
+        panic!("expected status patch");
+    };
+    let crate::NotifEvent::TaskAssigned(TaskAssignedMetadata {
+        task_id,
+        task_name,
+        assigned_by: decoded_assigned_by,
+        ..
+    }) = &diff.notification_metadata
+    else {
+        panic!("expected task assigned metadata");
+    };
+
+    assert_eq!(task_id, "task-1");
+    assert_eq!(task_name.as_deref(), Some("Test task"));
+    assert_eq!(decoded_assigned_by, &assigned_by);
+}

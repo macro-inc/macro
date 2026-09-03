@@ -11,7 +11,11 @@ input_file: crates/agent_fold/fixtures/real/subagent_claude_code.jsonl
         author: User {
             user_id: None,
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                56062802-48df-4dca-b98d-966c762ee74c,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Control {
@@ -33,7 +37,11 @@ input_file: crates/agent_fold/fixtures/real/subagent_claude_code.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                b63bb736-1022-4b01-abcf-d00c2b6adf90,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {

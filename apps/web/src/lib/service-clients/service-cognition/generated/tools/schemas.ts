@@ -1752,6 +1752,7 @@ export const ListCalendarEventsResponse = z.object({
       location: z.union([z.string(), z.null()]).optional(),
       description: z.union([z.string(), z.null()]).optional(),
       status: z.string(),
+      eventType: z.union([z.string(), z.null()]).optional(),
       isRecurring: z.boolean(),
       recurrenceId: z.union([z.string(), z.null()]).optional(),
       attendees: z.array(

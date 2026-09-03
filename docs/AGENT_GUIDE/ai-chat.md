@@ -41,4 +41,33 @@ stream over the app's websocket, not the HTTP response.
 
 ## In channels
 
-Mention `@Macro` in any channel message to invoke the agent there.
+Mention `@Macro` in any channel message for the classic in-channel reply. Mention
+`@macro-new` (or `@coder` / `@cursor`) to open an **agent session** — a dedicated
+transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+
+## Agent sessions
+
+An agent session is `/app/agent/<uuid>`. The composer placeholder is
+**`Message the agent, @mention anything`**. Type `@` to insert the same mention chips
+used in chat and channels; they serialize as `<m-document-mention>` tags in the prompt
+the agent sees. Agent replies that emit those tags render as clickable chips in the
+transcript (and in the originating channel thread).
+
+- Sending is never blocked by a running turn. A prompt sent mid-turn is queued
+  **server-side** and dispatches automatically when the current turn ends, one per turn.
+  The queue holds at most 50 entries; past that a send is refused with an error rather
+  than queued.
+- Queued prompts render as a list between the transcript and the input, newest at the
+  top — the prompt about to be sent sits at the bottom, immediately above the input.
+  Each row shows a `Queued` label (with `by {user}` when someone else queued it —
+  several users can stack prompts in one session's queue) and an always-visible remove
+  (`X`) button. A queued prompt's text is itself an editor: click in and type — changes
+  autosave (debounced, and on blur) with no save button. Editing and removal are
+  possible only until the entry dispatches; after that the row simply becomes the next
+  user message in the transcript.
+- Keyboard: Up at the very start of the composer input moves focus into the
+  bottom (next-to-send) queue row; further Up presses walk toward newer entries, Down
+  walks back and past the bottom row returns to the input.
+- The stop button cancels only the **current** turn. The queue keeps draining: the next
+  queued prompt starts a new turn. To fully quiesce a session, remove the queued
+  entries, then stop.

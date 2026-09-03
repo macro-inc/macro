@@ -28,7 +28,9 @@ function AgentMessagePart(props: {
   inFlight: boolean;
 }): JSX.Element {
   return match(props.part)
-    .with({ kind: 'text' }, (part) => <TextPart text={part.text} />)
+    .with({ kind: 'text' }, (part) => (
+      <TextPart text={part.text} inFlight={props.inFlight} />
+    ))
     .with({ kind: 'thought' }, (part) => (
       <Thought text={part.text} active={props.inFlight} />
     ))

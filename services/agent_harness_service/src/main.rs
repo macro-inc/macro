@@ -258,6 +258,9 @@ async fn run() -> anyhow::Result<()> {
         address = ?replica_address.as_ref().map(ReplicaAddress::as_str),
         "harness replica identity"
     );
+    // Bound to the harness once it exists (it is built *from* this service);
+    // both attach-capable service instances report turns to the same one.
+    let turn_observer = Arc::new(agent_session::domain::ports::LateBoundTurnObserver::new());
     let sessions = AgentSessionServiceImpl::new(
         session_repo.clone(),
         FoldedMessageService::new(session_repo.clone()),
@@ -267,6 +270,7 @@ async fn run() -> anyhow::Result<()> {
         ),
     )
     .with_replica(replica)
+    .with_turn_observer(turn_observer.clone())
     .with_name_generator(HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(
         pool.clone(),
     )));
@@ -346,7 +350,8 @@ async fn run() -> anyhow::Result<()> {
         FoldedMessageService::new(session_repo.clone()),
         NoOpRealtime,
     )
-    .with_replica(replica);
+    .with_replica(replica)
+    .with_turn_observer(turn_observer.clone());
     let sandbox_and_inmem = RoutedContainers::new(sandbox, inmem, inmem_sessions);
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
@@ -517,6 +522,9 @@ async fn run() -> anyhow::Result<()> {
             .map_err(|error| anyhow::anyhow!("failed to build the command forwarder: {error}"))?,
         defaults,
     ));
+    // Close the loop: turn ends observed by the session actors drain the
+    // harness's prompt queue.
+    turn_observer.bind(harness.clone());
 
     // The complete session API is served from this process because it owns the
     // live sessions. Spawned rather than awaited: the Kafka loop below owns the
@@ -739,6 +747,12 @@ async fn run() -> anyhow::Result<()> {
                                 HarnessCommand::SetSandboxSize(_) => {
                                     "agent_trigger.set_sandbox_size"
                                 }
+                                // Never trigger-borne: queue mutations arrive over
+                                // HTTP, and the turn signals are the harness's own.
+                                HarnessCommand::EditQueued { .. }
+                                | HarnessCommand::RemoveQueued { .. }
+                                | HarnessCommand::TurnEnded
+                                | HarnessCommand::SessionStopped => "agent_trigger.unexpected",
                             };
                             tracing::Span::current().record("macro.event.type", event_type);
                             let execution_span = tracing::info_span!(
@@ -752,6 +766,7 @@ async fn run() -> anyhow::Result<()> {
                             // what carries this child context through the queue.
                             let execution = execution_span
                                 .in_scope(|| harness.execute(session_id, command));
+                            let execution = async move { execution.await.map(drop) };
                             PendingHarnessWork {
                                 session_id,
                                 span: execution_span,

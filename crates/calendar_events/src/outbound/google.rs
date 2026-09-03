@@ -1896,6 +1896,24 @@ fn map_upsert(
             .ok()
             .flatten()
         })
+        .fold(
+            BTreeMap::<String, CalendarOccurrence>::new(),
+            |mut deduped, occurrence| {
+                // Google can expand two instances onto one occurrence key — a
+                // moved exception whose original start still lands on the series
+                // slot, a DST boundary, a pagination overlap. Both would carry
+                // the same (event_id, occurrence_key) primary key, so collapse
+                // them here and keep the live instance over a cancelled tombstone.
+                let replace = deduped
+                    .get(&occurrence.occurrence_key)
+                    .is_none_or(|existing| existing.is_cancelled && !occurrence.is_cancelled);
+                if replace {
+                    deduped.insert(occurrence.occurrence_key.clone(), occurrence);
+                }
+                deduped
+            },
+        )
+        .into_values()
         .collect();
 
     Ok(CalendarEventUpsert {

@@ -850,6 +850,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: Some(owner.clone()),
+                actor: None,
+                on_behalf_of: None,
                 document_name: Some("Renamed document".to_string()),
                 previous_project_id: Some(PROJECT_ID.to_string()),
                 project_id: None,
@@ -867,6 +869,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: Some(owner.clone()),
+                actor: None,
+                on_behalf_of: None,
                 document_name: None,
                 previous_project_id: None,
                 project_id: Some(PROJECT_ID.to_string()),
@@ -883,6 +887,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
             DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
                 actor_user_id: Some(owner.clone()),
+                actor: None,
+                on_behalf_of: None,
                 project_id: Some(PROJECT_ID.to_string()),
             }),
             DocumentEventDescription {
@@ -913,6 +919,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 document_id: DOCUMENT_ID.to_string(),
                 file_type: FileType::Md,
                 document_version_id: None,
+                actor: None,
+                on_behalf_of: None,
             }),
             DocumentEventDescription {
                 action: DocumentIndexAction::ExtractSync {
@@ -1414,6 +1422,8 @@ fn document_extraction_actions_preserve_optional_versions() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
+            actor: None,
+            on_behalf_of: None,
         });
     assert_eq!(
         describe_document_event(&sync_content_updated).action,
@@ -1698,6 +1708,8 @@ fn exact_macro_documents_envelopes_decode_into_document_events() {
                     document_id: DOCUMENT_ID.to_string(),
                     file_type: FileType::Md,
                     document_version_id: None,
+                    actor: None,
+                    on_behalf_of: None,
                 }),
             ),
         ),

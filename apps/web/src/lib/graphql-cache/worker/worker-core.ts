@@ -490,7 +490,11 @@ export class CacheWorkerCore {
           request.identity
         );
         result.revision = parseCacheRevision(result.revision);
-        this.fanOut(result, true);
+        // Hydration is background cache warming. Keep its revision advancement
+        // for coherent reads, but do not publish foreground invalidations that
+        // would make mounted Soup views switch authority mid-backfill. An
+        // identity change is a real cache reset and must still be broadcast.
+        if (result.reset) this.fanOut(result, true);
         const hydration: HydrationResult & Pick<WriteResult, 'reset'> =
           result.data === null
             ? { kind: 'void', revision: result.revision, reset: result.reset }

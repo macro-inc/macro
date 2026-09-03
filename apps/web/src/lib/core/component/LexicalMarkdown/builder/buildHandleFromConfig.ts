@@ -7,6 +7,7 @@ import {
   actionsPlugin,
   agentCommandsPlugin,
   awaitPlugin,
+  blockDecoratorTrailingParagraphPlugin,
   codePlugin,
   createAccessoryStore,
   createDraggableBlockStore,
@@ -125,6 +126,10 @@ export function buildHandleFromConfig(config: EditorConfig): EditorHandle {
       .markdownShortcuts()
       .delete()
       .state<string>(setMarkdownState, 'markdown');
+  }
+
+  if (config.type !== 'plain-text' && !config.singleLine) {
+    plugins.use(blockDecoratorTrailingParagraphPlugin());
   }
 
   // History

@@ -40,7 +40,7 @@ export type SplitFileMenuActionGroups = {
   sender: SplitFileMenuAction[];
   /** Share, Copy Link, Copy ID, and friends. */
   sharing: SplitFileMenuAction[];
-  /** Macro platform features: Favorite, Remind me, Add tag. */
+  /** Macro platform features: Favorite, Mute, Remind me, Add tag. */
   macro: SplitFileMenuAction[];
   /** Non-destructive operations on the file itself: Duplicate, Rename, Move, Download. */
   file: SplitFileMenuAction[];

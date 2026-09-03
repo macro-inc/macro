@@ -102,7 +102,11 @@ export interface CacheHost {
   /** Evaluates an exact initial Soup filter page over complete local projections. */
   entityFilter(args: EntityFilterCacheArgs): Promise<EntityFilterCacheResult>;
   writeQuery(args: CacheWriteArgs): Promise<WriteResult>;
-  /** Stores a query response and returns only fields not marked `@cacheOnly`. */
+  /**
+   * Stores a background query response and returns only fields not marked
+   * `@cacheOnly`. Advances the internal revision for coherent reads without
+   * notifying foreground subscribers unless the write resets cache identity.
+   */
   hydrateQuery(args: Omit<CacheWriteArgs, 'opKey'>): Promise<HydrationResult>;
   /** Durably queues an optimistic mutation and claims the strict head. */
   enqueueOptimisticMutation(

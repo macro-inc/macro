@@ -13,11 +13,7 @@ input_file: crates/agent_fold/fixtures/real/subagent_macro_inmem.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: Some(
-            AgentActionId(
-                "agent_session:01a0681c-dd2f-7cf9-90b8-32198e5cf8b0",
-            ),
-        ),
+        request_id: None,
         parts: NonEmpty {
             inner: [
                 Text {

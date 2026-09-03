@@ -270,6 +270,33 @@ services:
       start_period: 10s
 
   # ============================================================================
+  # scheduled_action_service (Port 8099)
+  # Scheduled actions API and dispatcher
+  # ============================================================================
+  scheduled_action_service:
+    <<: [*common-env, *rust-services-image]
+    command: ["/app/out/service"]
+    ports:
+      - "8099:8080"
+    environment:
+      OVERRIDE_CONNECTION_GATEWAY_URL: http://connection-gateway:8080
+    depends_on:
+      - postgres
+      - authentication-service
+      - connection_gateway
+    networks:
+      databases:
+      services:
+        aliases:
+          - scheduled-action-service
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ============================================================================
   # search_processing_service (Port 8092)
   # Search indexing worker
   # ============================================================================

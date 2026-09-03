@@ -202,62 +202,6 @@ pub fn project_direct_fields(
     )
 }
 
-/// Compose direct GraphQL facts and an optional server-only supplement into one
-/// canonical, validated `soup-flat-v2` projection.
-///
-/// Documents require exactly one supplement and obtain only their authoritative
-/// email-attachment fact from it. Projects and Chats are complete from direct
-/// fields alone and reject supplements.
-pub fn compose_soup_flat_v2(
-    input: DirectProjectionInput,
-    document_sub_type: Option<DocumentSubType>,
-    supplement: Option<&SoupCacheProjectionSupplement>,
-) -> Result<IndexDocument, SoupFlatV2CompositionError> {
-    let kind = input.kind;
-    let expected_record_key = input.record_key.clone();
-    let expected_partition = kind.partition();
-    let mut document = project_direct_fields(input)?;
-    document.profile = vocabulary::profile_v2();
-
-    match kind {
-        SoupFlatEntityKind::Document => {
-            let supplement =
-                supplement.ok_or(SoupFlatV2CompositionError::MissingDocumentSupplement)?;
-            if supplement.record_key() != &expected_record_key {
-                return Err(SoupFlatV2CompositionError::SupplementRecordKeyMismatch);
-            }
-            if supplement.target_profile() != &vocabulary::profile_v2() {
-                return Err(SoupFlatV2CompositionError::SupplementTargetProfileMismatch);
-            }
-            if supplement.partition() != &expected_partition {
-                return Err(SoupFlatV2CompositionError::SupplementPartitionMismatch);
-            }
-            if let Some(sub_type) = document_sub_type {
-                document.exact_facts.push(utf8_fact(
-                    vocabulary::document_sub_type(),
-                    sub_type.to_string(),
-                )?);
-            }
-            document.exact_facts.push(ExactFact {
-                attribute: vocabulary::email_attachment(),
-                value: ExactValue::new([u8::from(supplement.is_email_attachment())])?,
-            });
-        }
-        SoupFlatEntityKind::Project | SoupFlatEntityKind::Chat => {
-            if supplement.is_some() {
-                return Err(SoupFlatV2CompositionError::UnexpectedSupplement);
-            }
-            if document_sub_type.is_some() {
-                return Err(SoupFlatV2CompositionError::UnexpectedDocumentSubType);
-            }
-        }
-    }
-
-    document.canonicalize();
-    validate_soup_flat_v2(&document)?;
-    Ok(document)
-}
-
 /// Compose direct GraphQL facts and a server-only supplement into one
 /// canonical, validated `soup-flat-v3` projection.
 ///

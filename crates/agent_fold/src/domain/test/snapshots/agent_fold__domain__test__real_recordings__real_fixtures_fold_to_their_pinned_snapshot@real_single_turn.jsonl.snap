@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 258
 expression: messages
 input_file: crates/agent_fold/fixtures/real/real_single_turn.jsonl
 ---
@@ -14,7 +13,11 @@ input_file: crates/agent_fold/fixtures/real/real_single_turn.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                7346b5a4-ae32-46b2-b957-6ba3aad7d474,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {

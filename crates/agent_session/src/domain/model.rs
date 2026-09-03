@@ -278,6 +278,47 @@ pub struct SessionBot {
     pub avatar_url: Option<String>,
 }
 
+/// One action waiting in a session's queue.
+///
+/// Clients deserialize this, so both derives are used.
+// Domain-owned because the queue GET endpoint and the realtime snapshot
+// serialize this type byte-identically; that identity is the client contract.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct QueuedActionDto {
+    /// The id the action was accepted under.
+    pub action_id: agent_runtime_protocol::domain::action::AgentActionId,
+    /// What kind of action waits - `prompt` or `compact`; only
+    /// turn-occupying actions are ever queued.
+    pub kind: String,
+    /// The prompt's raw text, present for prompts only. What an edit
+    /// replaces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    /// The user who queued it, absent when a bot acted on nobody's behalf.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_user_id: Option<String>,
+    /// When it was accepted.
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<super::ports::QueuedControl> for QueuedActionDto {
+    fn from(queued: super::ports::QueuedControl) -> Self {
+        use agent_runtime_protocol::domain::action::AgentAction;
+        let prompt = match &queued.action {
+            AgentAction::Prompt(action) => Some(action.prompt.clone()),
+            _ => None,
+        };
+        Self {
+            action_id: queued.action_id,
+            kind: queued.action.as_ref().to_owned(),
+            prompt,
+            actor_user_id: queued.actor.map(|actor| actor.to_string()),
+            created_at: queued.created_at,
+        }
+    }
+}
+
 /// One frame appended to a live session's log, for anyone watching.
 ///
 /// The streaming counterpart of [`SessionLog`]: that is the whole log

@@ -370,6 +370,18 @@ pub trait AgentSessionLogWriter: Send + 'static {
     fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// A session's queue changed; this is the whole queue as it stands now.
+///
+/// A snapshot rather than a delta so that any one event is self-sufficient:
+/// a viewer applies the newest one it has seen and needs nothing else.
+#[derive(Debug, Clone)]
+pub struct AgentSessionQueueChanged {
+    /// The session whose queue this is.
+    pub agent_session_id: AgentSessionId,
+    /// Everything waiting, oldest (next to dispatch) first.
+    pub entries: Vec<QueuedControl>,
+}
+
 /// Pushing a live session's frames to whoever is watching it.
 ///
 /// Separate from the durable log: that is what a reader arriving late fetches
@@ -392,6 +404,95 @@ pub trait AgentSessionRealtime {
         _event: AgentSessionRenamed,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
         async { Ok(()) }
+    }
+
+    /// Publish a session's changed queue - the whole queue, every time - to
+    /// its viewers.
+    fn publish_queue_changed(
+        &self,
+        _event: AgentSessionQueueChanged,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+}
+
+/// Told when a session's turn ends and when its live actor stops.
+///
+/// What the harness gates its prompt queue on: a turn ending means the agent
+/// can take the next queued prompt, an actor stopping means no turn is in
+/// flight anymore however the last one looked. Both fire from the actor's own
+/// task, so implementations must only hand the fact off - enqueue, notify -
+/// never do the resulting work inline.
+///
+/// Object-safe and synchronous on purpose: the service stores it erased so
+/// wiring it is not another type parameter, and the one production
+/// implementation admits work to a queue synchronously.
+pub trait SessionTurnObserver: Send + Sync + 'static {
+    /// The runtime answered the session's in-flight turn.
+    fn turn_ended(&self, id: AgentSessionId);
+
+    /// The session's live actor is gone - disconnect, teardown, or crash. Any
+    /// in-flight turn went with it, without [`Self::turn_ended`] firing.
+    fn session_stopped(&self, id: AgentSessionId);
+}
+
+impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> {
+    fn turn_ended(&self, id: AgentSessionId) {
+        (**self).turn_ended(id);
+    }
+
+    fn session_stopped(&self, id: AgentSessionId) {
+        (**self).session_stopped(id);
+    }
+}
+
+/// A [`SessionTurnObserver`] for services with no queue above them: tests,
+/// offline tooling, and replay.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoOpTurnObserver;
+
+impl SessionTurnObserver for NoOpTurnObserver {
+    fn turn_ended(&self, _id: AgentSessionId) {}
+
+    fn session_stopped(&self, _id: AgentSessionId) {}
+}
+
+/// A [`SessionTurnObserver`] bound after construction, for the composition
+/// root's chicken-and-egg: the session service wants its observer at build
+/// time, and the observer (the harness) is built *from* the session service.
+///
+/// Events before `bind` are dropped. That window is the instants between the
+/// two constructions, before anything serves traffic - nothing turns then.
+#[derive(Default)]
+pub struct LateBoundTurnObserver {
+    observer: std::sync::OnceLock<Box<dyn SessionTurnObserver>>,
+}
+
+impl LateBoundTurnObserver {
+    /// An observer awaiting its target.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Attach the real observer. A second bind is a wiring bug; the first
+    /// stays authoritative and the duplicate is dropped.
+    pub fn bind(&self, observer: impl SessionTurnObserver) {
+        let _ = self.observer.set(Box::new(observer));
+    }
+}
+
+impl SessionTurnObserver for LateBoundTurnObserver {
+    fn turn_ended(&self, id: AgentSessionId) {
+        if let Some(observer) = self.observer.get() {
+            observer.turn_ended(id);
+        }
+    }
+
+    fn session_stopped(&self, id: AgentSessionId) {
+        if let Some(observer) = self.observer.get() {
+            observer.session_stopped(id);
+        }
     }
 }
 
@@ -446,6 +547,42 @@ pub struct ControlEvent {
     pub actor: Option<MacroUserIdStr<'static>>,
 }
 
+/// What accepting a control operation did with it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ControlDisposition {
+    /// The action reached the agent's runtime.
+    Sent,
+    /// A turn was running, so the action waits in the session's queue and
+    /// dispatches when that turn ends. Until then it can be listed, edited,
+    /// and removed under its action id.
+    Queued,
+}
+
+/// A control operation the recipient accepted: the id a caller correlates
+/// with, and what became of it.
+#[derive(Debug, Clone)]
+pub struct AcceptedControl {
+    /// Matches `requestId` on the folded message the action derives once it
+    /// dispatches, and names the queue entry until then.
+    pub action_id: AgentActionId,
+    /// Whether it went out or waits.
+    pub disposition: ControlDisposition,
+}
+
+/// One action waiting in a session's queue, as a reader sees it.
+#[derive(Debug, Clone)]
+pub struct QueuedControl {
+    /// The id the action was accepted under.
+    pub action_id: AgentActionId,
+    /// What will be delivered - a prompt's text is the raw user text, which
+    /// is what editing replaces.
+    pub action: AgentAction,
+    /// The user who queued it, absent when a bot acted on nobody's behalf.
+    pub actor: Option<MacroUserIdStr<'static>>,
+    /// When it was accepted.
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
 /// Whoever holds a session's live resources, told when the durable session
 /// changes in a way those resources have to follow.
 ///
@@ -459,12 +596,44 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     fn session_deleted(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
     /// A control operation the live connection has to be told about. Returns
-    /// the action id the caller correlates against the fold stream.
+    /// the action id the caller correlates against the fold stream, and
+    /// whether the action went out or waits in the session's queue.
     fn control_event(
         &self,
         id: AgentSessionId,
         event: ControlEvent,
-    ) -> impl Future<Output = Result<AgentActionId>> + Send;
+    ) -> impl Future<Output = Result<AcceptedControl>> + Send;
+
+    /// The actions waiting in this session's queue, oldest first.
+    fn queued_controls(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<QueuedControl>>> + Send;
+
+    /// Replace a queued prompt's text. [`AgentSessionError::QueuedControlNotFound`]
+    /// once it has dispatched; [`AgentSessionError::QueuedControlNotEditable`]
+    /// for a queued action that carries no text.
+    ///
+    /// `actor` is the user responsible, judged by the same gates as sending:
+    /// whoever may not prompt a session may not rewrite what it is about to
+    /// be prompted with.
+    fn edit_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        prompt: String,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Remove a queued action before it dispatches.
+    /// [`AgentSessionError::QueuedControlNotFound`] once it has. `actor` as
+    /// on [`Self::edit_queued_control`].
+    fn remove_queued_control(
+        &self,
+        id: AgentSessionId,
+        action_id: AgentActionId,
+        actor: Option<MacroUserIdStr<'static>>,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Resize this session's sandbox and remember `size` as the owner's default.
     fn set_sandbox_size(

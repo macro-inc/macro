@@ -206,7 +206,10 @@ const WORKFLOWS: &[WorkflowFile] = &[
     WorkflowFile {
         slug: "deploy_on_push",
         file_name: "deploy_on_push.yml",
-        render_yaml: || render_patched(deploy_on_push::deploy_on_push, deploy_on_push::patch),
+        render_yaml: || {
+            let yaml = render_patched(deploy_on_push::deploy_on_push, deploy_on_push::patch)?;
+            Ok(format!("{}{yaml}", deploy_on_push::NOTICE))
+        },
     },
     WorkflowFile {
         slug: "deploy_fusionauth_instance",

@@ -512,11 +512,29 @@ service_url! {
             dev: "https://dev-gateway.macro.com/dss",
             prod: "https://gateway.macro.com/dss",
         },
+        /// Convert service API URL.
+        pub ConvertServiceUrl {
+            local: "http://localhost:8080",
+            dev: "https://dev-gateway.macro.com/convert",
+            prod: "https://gateway.macro.com/convert",
+        },
+        /// Search processing service API URL.
+        pub SearchProcessingServiceUrl {
+            local: "http://localhost:8092",
+            dev: "https://dev-gateway.macro.com/search-processing",
+            prod: "https://gateway.macro.com/search-processing",
+        },
         /// Connection gateway HTTP API URL.
         pub ConnectionGatewayUrl {
             local: "http://localhost:8082",
-            dev: "https://connection-gateway-dev.macro.com",
-            prod: "https://connection-gateway.macro.com",
+            dev: "https://dev-gateway.macro.com/connection-gateway",
+            prod: "https://gateway.macro.com/connection-gateway",
+        },
+        /// Connection gateway WebSocket URL.
+        pub ConnectionGatewayWebsocketUrl {
+            local: "ws://localhost:8082",
+            dev: "wss://dev-gateway.macro.com/connection-gateway",
+            prod: "wss://gateway.macro.com/connection-gateway",
         },
         /// Document cognition service API URL.
         pub DocumentCognitionServiceUrl {
@@ -527,8 +545,8 @@ service_url! {
         /// Notification service API URL.
         pub NotificationServiceUrl {
             local: "http://localhost:8089",
-            dev: "https://notifications-dev.macro.com",
-            prod: "https://notifications.macro.com",
+            dev: "https://dev-gateway.macro.com/notification",
+            prod: "https://gateway.macro.com/notification",
         },
         /// Static file service/CDN URL.
         pub StaticFileServiceUrl {
@@ -540,8 +558,8 @@ service_url! {
         /// routes, which run in the process that owns the live sessions.
         pub AgentHarnessServiceUrl {
             local: "http://localhost:8101",
-            dev: "https://agent-harness-dev.macro.com",
-            prod: "https://agent-harness.macro.com",
+            dev: "https://dev-gateway.macro.com/agent-harness",
+            prod: "https://gateway.macro.com/agent-harness",
         },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
@@ -552,8 +570,8 @@ service_url! {
         /// Contacts service API URL.
         pub ContactsServiceUrl {
             local: "http://localhost:8083",
-            dev: "https://contacts-dev.macro.com",
-            prod: "https://contacts.macro.com",
+            dev: "https://dev-gateway.macro.com/contacts",
+            prod: "https://gateway.macro.com/contacts",
         },
         /// Email service API URL.
         pub EmailServiceUrl {
@@ -564,8 +582,8 @@ service_url! {
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {
             local: "http://localhost:8097",
-            dev: "https://image-proxy-dev.macro.com",
-            prod: "https://image-proxy.macro.com",
+            dev: "https://dev-gateway.macro.com/image-proxy",
+            prod: "https://gateway.macro.com/image-proxy",
         },
         /// Lexical conversion service API URL.
         pub LexicalServiceUrl {

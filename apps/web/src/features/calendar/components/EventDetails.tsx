@@ -1,3 +1,4 @@
+import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import {
@@ -25,6 +26,7 @@ import XIcon from '@phosphor/x.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
+import { createCallback } from '@solid-primitives/rootless';
 import { Avatar, Button, cn } from '@ui';
 import {
   type Accessor,
@@ -37,6 +39,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import { isSameLocalDate, parseLocalDate } from '../utils/calendar-date';
+import {
+  parseMacroAppLink,
+  sanitizeCalendarDescription,
+} from '../utils/calendar-description';
 import {
   type CalendarPerson,
   eventAttribution,
@@ -500,6 +506,20 @@ export function EventDetails(props: {
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)
   );
+  const descriptionHtml = createMemo(() =>
+    sanitizeCalendarDescription(props.event.description ?? '')
+  );
+  const openDescriptionLink = createCallback((event: MouseEvent) => {
+    const anchor = (event.target as Element | null)?.closest('a[href]');
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    event.preventDefault();
+    const target = parseMacroAppLink(anchor.href);
+    if (target) {
+      openDocument(target.blockName, target.documentId);
+      return;
+    }
+    openExternalUrl(anchor.href);
+  });
   const recurrenceDescription = createMemo(() => {
     const description = formatRecurrenceDescription(
       props.event.recurrenceLines
@@ -569,13 +589,15 @@ export function EventDetails(props: {
         {(location) => <EventLocationItem location={location()} />}
       </Show>
 
-      <Show when={props.event.description}>
-        {(description) => (
+      <Show when={descriptionHtml()}>
+        {(html) => (
           <div class="contents">
             <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
-            <p class="select-text leading-relaxed text-ink-muted">
-              {description()}
-            </p>
+            <div
+              class="select-text leading-relaxed text-ink-muted [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              innerHTML={html()}
+              onClick={openDescriptionLink}
+            />
           </div>
         )}
       </Show>

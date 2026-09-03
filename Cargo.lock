@@ -336,6 +336,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "url",
  "utoipa",
@@ -362,6 +363,7 @@ dependencies = [
  "macro_uuid",
  "memory",
  "prompt",
+ "rig-agent",
  "serde",
  "serde_json",
  "sqlx",
@@ -4139,9 +4141,7 @@ checksum = "7704b5fdd17b18ae31c4c1da5a2e0305a2bf17b5249300a9ee9ed7b72114c636"
 name = "cowlike"
 version = "0.1.0"
 dependencies = [
- "bot_id",
  "either",
- "macro_user_id",
 ]
 
 [[package]]
@@ -11060,7 +11060,6 @@ dependencies = [
  "macro_uuid",
  "model-entity",
  "model-error-response",
- "model_notifications",
  "model_user",
  "models_pagination",
  "rate_limit",
@@ -12646,6 +12645,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bot_id",
  "chrono",
  "document_sub_type",
  "documents",
@@ -12712,6 +12712,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "bot_id",
  "chrono",
  "document_sub_type",
  "entity_access",
@@ -14132,6 +14133,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "utoipa-swagger-ui",
