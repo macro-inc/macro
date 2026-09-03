@@ -9,9 +9,10 @@ before an ordinary agent session exists. Cursor, in-memory, and registered
 macrod harnesses should all produce the same response shape from the same ACP
 source: the `model` entry in `configOptions`.
 
-This first version deliberately has no application cache. Loading the settings
-page or selecting a different harness may run a fresh probe. The design keeps a
-cache boundary explicit so one can be added without changing the API or UI.
+This first version deliberately has no application cache. Opening the agent
+settings dialog runs one fresh probe for every available harness. The design
+keeps a cache boundary explicit so one can be added without changing the API or
+UI.
 
 ## Important distinction
 
@@ -36,8 +37,10 @@ machine. Everything after the `session/new` response can be identical.
 
 ## Proposed product API
 
-The settings UI loads only the currently selected harness. It should not start
-one probe for every registered harness when the dialog opens.
+The settings UI calls the load endpoint once for every available harness when
+the dialog opens. Those requests run in parallel, so switching the harness
+selector does not introduce another loading pause and a broken harness is
+visible before the user selects it.
 
 ```http
 POST /agent-models/load
@@ -45,7 +48,7 @@ Content-Type: application/json
 
 {
   "harness": "macrod",
-  "harnessId": "019...",
+  "harnessId": "019..."
 }
 ```
 
@@ -83,6 +86,9 @@ Operational failures are HTTP errors rather than an empty successful catalog:
 - `409` when a registered macrod harness is disconnected.
 - `424` when the harness process cannot be started or exits during discovery.
 - `504` when `initialize` or `session/new` times out.
+
+Because each harness has an independent request, one failure does not discard
+successful catalogs or delay rendering from the others.
 
 `POST` is intentional. Although the result is read-only product data, a probe
 starts a process or task and creates temporary ACP session state. Browsers,
@@ -245,8 +251,8 @@ working-directory contents.
 The Agents dialog should:
 
 1. Render the harness selector immediately.
-2. Start a model load when the selected harness changes.
-3. Disable the model selector and show a loading state during the probe.
+2. Start one parallel model probe for every available harness.
+3. Show a per-harness loading state until that harness's probe completes.
 4. Render the returned models with their ACP labels and descriptions.
 5. Include the saved model if it is no longer advertised, marked
    `Unavailable`.
@@ -263,10 +269,15 @@ provider default or an agent-config default remains a separate write concern.
 
 ## Concurrency and lifecycle
 
-- Cancel the UI request when the user changes harness, but do not assume HTTP
-  cancellation reached the provider. The service still closes its probe.
+- Start one request per harness and publish each result independently; a slow
+  harness must not hold back completed selectors.
+- If the dialog closes, cancel its requests, but do not assume HTTP cancellation
+  reached every provider. The service still closes every probe.
 - Coalesce concurrent loads for the same connected macrod harness while they
   are in flight. This is concurrency control, not a result cache.
+- Apply a service-wide probe semaphore so repeated clients cannot create
+  unbounded subprocess fan-out. A request still schedules exactly one probe per
+  target; the semaphore only bounds how many run at once across the deployment.
 - Do not persist ACP session ids, fold logs, or external-agent rows.
 - Do not call provider teardown for a normal Macro session.
 - Never send a prompt.
@@ -279,8 +290,8 @@ opening a temporary session is expensive.
 
 ## No-cache first version
 
-Every successful load result is discarded after the HTTP response. React Query
-should use `staleTime: 0` and key requests by the full harness target.
+Every successful load result is discarded after the response. React Query
+should use `staleTime: 0` and key each request by the full harness target.
 
 The service boundary should nevertheless be:
 
@@ -321,7 +332,10 @@ explicitly out of scope for this version.
 ### API and UI
 
 - Authorization is enforced for another user's macrod harness.
-- Switching harnesses cannot display a late result from the previous harness.
+- One failed or disconnected harness does not hide successful catalogs.
+- Results are associated with their full target, so two macrod harnesses cannot
+  overwrite each other.
+- Switching harnesses immediately shows an already completed result.
 - Loading, available, unsupported, disconnected, failure, and stale saved
   selection states render explicitly.
 - Selecting an advertised model submits its exact ACP id as `default_model`.
