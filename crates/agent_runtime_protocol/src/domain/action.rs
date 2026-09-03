@@ -4,8 +4,8 @@
 //! as ACP, since that needs the [`SessionId`] the handshake produces.
 
 use agent_client_protocol::schema::v1::{
-    CancelNotification, ClientRequest, PromptRequest, RequestId, SessionId,
-    SetSessionConfigOptionRequest,
+    CancelNotification, ClientRequest, PromptRequest, RequestId, RequestPermissionOutcome,
+    RequestPermissionResponse, SelectedPermissionOutcome, SessionId, SetSessionConfigOptionRequest,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use macro_uuid::Uuid;
@@ -144,6 +144,52 @@ impl AgentSetModelAction {
     }
 }
 
+/// A user's answer to the agent's `session/request_permission`.
+///
+/// Unlike every other action this is not a new request but the reply to one
+/// the agent made, so it carries the agent's own request id rather than
+/// receiving a server-minted one.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct AgentPermissionAction {
+    /// The agent's JSON-RPC request id, echoed verbatim from the folded
+    /// permission part. A string or a number on the wire; agents mint both,
+    /// and `7` does not answer `"7"`.
+    #[cfg_attr(feature = "utoipa", schema(value_type = serde_json::Value))]
+    pub request_id: RequestId,
+    /// What the user decided.
+    pub answer: PermissionAnswer,
+}
+
+/// The decision carried by an [`AgentPermissionAction`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PermissionAnswer {
+    /// One of the options the agent offered was chosen.
+    Selected {
+        /// The chosen option's id, as the agent listed it.
+        #[serde(rename = "optionId")]
+        option_id: String,
+    },
+    /// The request was dismissed without choosing.
+    Cancelled,
+}
+
+impl PermissionAnswer {
+    /// The ACP outcome this answer resolves the request with.
+    #[must_use]
+    pub fn to_acp(&self) -> RequestPermissionOutcome {
+        match self {
+            Self::Selected { option_id } => RequestPermissionOutcome::Selected(
+                SelectedPermissionOutcome::new(option_id.clone()),
+            ),
+            Self::Cancelled => RequestPermissionOutcome::Cancelled,
+        }
+    }
+}
+
 /// One thing a caller wants an agent to do.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -158,6 +204,8 @@ pub enum AgentAction {
     Compact,
     /// Interrupt whatever the agent is doing.
     Stop,
+    /// Answer a permission request the agent is waiting on.
+    RespondToPermission(AgentPermissionAction),
 }
 
 impl AgentAction {
@@ -223,7 +271,7 @@ impl AgentAction {
     pub fn occupies_turn(&self) -> bool {
         match self {
             Self::Prompt(_) | Self::Compact => true,
-            Self::SetModel(_) | Self::Stop => false,
+            Self::SetModel(_) | Self::Stop | Self::RespondToPermission(_) => false,
         }
     }
 
@@ -279,6 +327,26 @@ impl AgentAction {
                     .map_err(|error| ActionError::Acp(error.to_string()))?;
                 Ok(ToRuntimeMessage::Acp(AcpMessage(frame)))
             }
+            // A response to the agent's own request, so both `session_id` and
+            // the minted `request_id` are unused: the frame carries the id the
+            // agent chose. The session machine validates the answer against
+            // the request it is holding open before translating it.
+            Self::RespondToPermission(action) => Ok(permission_response(
+                action.request_id.clone(),
+                action.answer.to_acp(),
+            )?),
         }
     }
+}
+
+/// The ACP frame answering permission request `request_id` with `outcome`.
+pub fn permission_response(
+    request_id: RequestId,
+    outcome: RequestPermissionOutcome,
+) -> Result<ToRuntimeMessage, ActionError> {
+    let result = serde_json::to_value(RequestPermissionResponse::new(outcome))
+        .map_err(|error| ActionError::Acp(error.to_string()))?;
+    Ok(ToRuntimeMessage::Acp(AcpMessage(
+        RawJsonRpcMessage::response(request_id, Ok(result)),
+    )))
 }

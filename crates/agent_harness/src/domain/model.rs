@@ -5,6 +5,10 @@ use agent_egress::domain::model::McpServerSlug;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
+use agent_session::domain::session::PermissionPolicy;
+
+#[cfg(test)]
+mod test;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -116,6 +120,32 @@ impl AgentKind {
     #[must_use]
     pub fn is_managed(self) -> bool {
         !matches!(self, Self::External)
+    }
+
+    /// How this kind's sessions answer permission requests when the agent's
+    /// owner has not said.
+    ///
+    /// Managed runtimes act inside sandboxes this deployment owns (or, for
+    /// Cursor, never ask), so approving on arrival costs nothing. An external
+    /// runtime is somebody's own machine, where a bot approving its own tool
+    /// calls is exactly what a person should be asked about.
+    #[must_use]
+    pub fn default_permission_policy(self) -> PermissionPolicy {
+        match self {
+            Self::SandboxedCoder | Self::Cursor | Self::InMemory => PermissionPolicy::AutoAccept,
+            Self::External => PermissionPolicy::Prompt,
+        }
+    }
+}
+
+/// The policy a session runs under: the agent owner's explicit choice when
+/// they made one, otherwise the runtime kind's default.
+#[must_use]
+pub fn resolve_permission_policy(kind: AgentKind, auto_accept: Option<bool>) -> PermissionPolicy {
+    match auto_accept {
+        Some(true) => PermissionPolicy::AutoAccept,
+        Some(false) => PermissionPolicy::Prompt,
+        None => kind.default_permission_policy(),
     }
 }
 

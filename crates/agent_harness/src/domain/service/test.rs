@@ -4,15 +4,18 @@
 
 use std::sync::{Arc, Mutex};
 
-use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
-    ResumeSessionResponse, SessionCapabilities, SessionId, SessionResumeCapabilities,
+    PermissionOption, PermissionOptionKind, RequestId, RequestPermissionOutcome,
+    RequestPermissionRequest, RequestPermissionResponse, Response, ResumeSessionResponse,
+    SelectedPermissionOutcome, SessionCapabilities, SessionId, SessionResumeCapabilities,
+    ToolCallUpdate, ToolCallUpdateFields,
 };
+use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_fold::domain::model::{AuthorKind, MessageId};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_runtime_protocol::domain::{
-    action::AgentAction,
+    action::{AgentAction, AgentPermissionAction, PermissionAnswer},
     schema::v0::{AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage},
 };
 use agent_session::PROTOCOL_VERSION;
@@ -209,6 +212,19 @@ impl crate::domain::ports::HarnessBindings for MirrorBindings {
     }
 }
 
+/// No agent has said anything about permissions: every bot runs under its
+/// kind's default.
+struct KindDefaultPolicies;
+
+impl crate::domain::ports::PermissionPolicySource for KindDefaultPolicies {
+    async fn permission_policy(
+        &self,
+        bot: BotId,
+    ) -> anyhow::Result<agent_session::domain::session::PermissionPolicy> {
+        Ok(AgentKind::of(bot).default_permission_policy())
+    }
+}
+
 fn harness_for_bot(bot: BotId) -> harness_id::HarnessId {
     harness_id::HarnessId::new_from_uuid(bot.as_uuid())
 }
@@ -296,6 +312,7 @@ fn harness_with_signals(
         prompt_composer,
         EgressProvisionerMock::new(),
         NoPeers,
+        KindDefaultPolicies,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -1209,6 +1226,151 @@ async fn a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session() {
     assert_eq!(prompts(&container.agent()).len(), 1);
 }
 
+/// The agent asking whether it may run a tool, as an ACP request frame.
+fn permission_request(id: &str) -> RawJsonRpcMessage {
+    let (method, params) = RequestPermissionRequest::new(
+        "acp-test",
+        ToolCallUpdate::new("call-1", ToolCallUpdateFields::new()),
+        vec![
+            PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
+            PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways),
+            PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+        ],
+    )
+    .to_untyped_message()
+    .expect("a permission request serializes")
+    .into_parts();
+    RawJsonRpcMessage::request(method, params, RequestId::Str(id.to_owned()))
+        .expect("a permission request is a valid frame")
+}
+
+fn permission_answer(id: &str, option_id: &str) -> AgentAction {
+    AgentAction::RespondToPermission(AgentPermissionAction {
+        request_id: RequestId::Str(id.to_owned()),
+        answer: PermissionAnswer::Selected {
+            option_id: option_id.to_owned(),
+        },
+    })
+}
+
+/// The outcome the harness answered `id` with, from what the agent received.
+fn permission_outcome(agent: &FakeAgent, id: &str) -> Option<RequestPermissionOutcome> {
+    agent
+        .received_responses()
+        .into_iter()
+        .find_map(|frame| match frame {
+            RawJsonRpcMessage::Response(Response::Result { id: got, result })
+                if got == RequestId::Str(id.to_owned()) =>
+            {
+                serde_json::from_value::<RequestPermissionResponse>(result)
+                    .ok()
+                    .map(|response| response.outcome)
+            }
+            _ => None,
+        })
+}
+
+#[tokio::test]
+async fn an_external_bots_permission_request_waits_for_a_users_answer() {
+    // The test bot is nobody's fixed system bot, so its kind is `External`
+    // and the policy source's default for it is to prompt.
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    let agent = container.agent();
+
+    agent.sends_raw(permission_request("perm-1"));
+    service
+        .control_event(
+            id,
+            ControlEvent {
+                action: permission_answer("perm-1", "once"),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("a user's answer reaches the agent");
+
+    let responses = agent.received_responses();
+    assert_eq!(
+        responses.len(),
+        1,
+        "one answer, the user's; got {responses:?}"
+    );
+    assert_eq!(
+        permission_outcome(&agent, "perm-1"),
+        Some(RequestPermissionOutcome::Selected(
+            SelectedPermissionOutcome::new("once")
+        )),
+        "the user's choice is what goes out, not auto-accept's broadest allow"
+    );
+}
+
+#[tokio::test]
+async fn a_harness_principal_cannot_answer_a_permission_request() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    container.agent().sends_raw(permission_request("perm-1"));
+
+    let error = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: permission_answer("perm-1", "always"),
+                actor: None,
+            },
+        )
+        .await
+        .expect_err("a runtime must not approve its own tool call");
+
+    assert!(matches!(error, AgentSessionError::Forbidden));
+    assert!(container.agent().received_responses().is_empty());
+}
+
+#[tokio::test]
+async fn a_managed_bots_permission_request_is_accepted_on_arrival() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    let container = live_sandboxed_coder_session(&service, &containers, id).await;
+    let agent = container.agent();
+
+    agent.sends_raw(permission_request("perm-1"));
+    agent.wait_for_responses(1).await;
+
+    assert_eq!(
+        permission_outcome(&agent, "perm-1"),
+        Some(RequestPermissionOutcome::Selected(
+            SelectedPermissionOutcome::new("always")
+        )),
+        "a sandboxed runtime keeps today's auto-accept"
+    );
+}
+
+#[tokio::test]
+async fn answering_a_disconnected_session_does_not_wake_its_sandbox() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let id = disconnected_session(&repo, &containers).await;
+
+    let error = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: permission_answer("perm-1", "once"),
+                actor: Some(staff_sender()),
+            },
+        )
+        .await
+        .expect_err("nothing on a fresh connection could be waiting for this");
+
+    assert!(matches!(error, AgentSessionError::Disconnected(_)));
+    assert_eq!(
+        containers.resumed(),
+        0,
+        "a prompt would resume the sandbox; an answer has nothing to deliver to"
+    );
+}
+
 #[tokio::test]
 async fn a_staff_control_event_can_drive_a_sandboxed_coder_session() {
     let ((service, _repo, containers, _announcer, _runtimes), mut turns) =
@@ -1759,6 +1921,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
         NoPeers,
+        KindDefaultPolicies,
         HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -2233,6 +2396,7 @@ async fn commands_for_a_peer_managed_session_forward_to_its_address() {
         PromptComposerMock::default(),
         EgressProvisionerMock::new(),
         forwarder.clone(),
+        KindDefaultPolicies,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
@@ -2282,6 +2446,7 @@ async fn a_dead_peers_command_falls_back_to_local_execution() {
             repo: repo.clone(),
             claim,
         },
+        KindDefaultPolicies,
         SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),

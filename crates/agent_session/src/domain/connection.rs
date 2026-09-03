@@ -35,7 +35,7 @@ use tokio::sync::{Mutex, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::AgentSessionId;
-use crate::domain::session::HandshakeStatus;
+use crate::domain::session::{HandshakeStatus, PermissionPolicy};
 
 #[cfg(test)]
 mod test;
@@ -144,6 +144,10 @@ pub struct RuntimeAttachment<Connector> {
     /// fresh at each attach - the set follows what the owner has connected
     /// *now*, not what they had connected when the session was created.
     pub(crate) mcp_servers: Vec<McpServer>,
+    /// How this attachment's session answers permission requests. Per
+    /// attachment for the same reason as `mcp_servers`: it follows what the
+    /// agent's owner has configured *now*.
+    pub(crate) permission_policy: PermissionPolicy,
 }
 
 impl<Connector> RuntimeAttachment<Connector> {
@@ -157,6 +161,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             connector,
             handshake,
             mcp_servers: Vec::new(),
+            permission_policy: PermissionPolicy::default(),
         }
     }
 
@@ -165,6 +170,13 @@ impl<Connector> RuntimeAttachment<Connector> {
     #[must_use]
     pub fn mcp_servers(mut self, mcp_servers: Vec<McpServer>) -> Self {
         self.mcp_servers = mcp_servers;
+        self
+    }
+
+    /// How this attachment's session answers the agent's permission requests.
+    #[must_use]
+    pub fn permission_policy(mut self, permission_policy: PermissionPolicy) -> Self {
+        self.permission_policy = permission_policy;
         self
     }
 }
@@ -288,6 +300,8 @@ where
             // External runtimes hold no egress environment; the sessions
             // they serve are not handed proxied MCP servers.
             mcp_servers: Vec::new(),
+            // The caller knows whose agent this is; the connection does not.
+            permission_policy: PermissionPolicy::default(),
         }
     }
 

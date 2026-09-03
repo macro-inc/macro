@@ -224,6 +224,10 @@ pub struct Agent {
     pub channel_scope: AgentChannelScope,
     /// Selected channel ids. Empty for a global agent.
     pub channel_ids: Vec<Uuid>,
+    /// Whether the agent's sessions approve ACP permission requests without
+    /// asking. `None` defers to the runtime kind's default: managed runtimes
+    /// auto-accept, macrod prompts.
+    pub auto_accept_permissions: Option<bool>,
 }
 
 /// Request to create a persisted AI agent.
@@ -255,6 +259,10 @@ pub struct CreateAgentRequest {
     /// Selected channels. Must be non-empty only for `selected` scope.
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
+    /// Whether the agent's sessions approve ACP permission requests without
+    /// asking. Omit to defer to the runtime kind's default.
+    #[serde(default)]
+    pub auto_accept_permissions: Option<bool>,
 }
 
 /// Request to replace the editable configuration of a persisted AI agent.
@@ -286,6 +294,10 @@ pub struct UpdateAgentRequest {
     /// Selected channels. Must be non-empty only for `selected` scope.
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
+    /// Whether the agent's sessions approve ACP permission requests without
+    /// asking. Omit to defer to the runtime kind's default.
+    #[serde(default)]
+    pub auto_accept_permissions: Option<bool>,
 }
 
 /// Channel containing a bot.

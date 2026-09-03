@@ -1,6 +1,6 @@
 //! The machine's vocabulary: phases, inputs, and effects.
 
-use agent_client_protocol::schema::v1::{RequestId, SessionId};
+use agent_client_protocol::schema::v1::{PermissionOptionId, RequestId, SessionId};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -14,6 +14,28 @@ pub(super) struct PendingAction<Token> {
     pub(super) action: AgentAction,
     pub(super) action_id: AgentActionId,
     pub(super) token: Token,
+}
+
+/// How a connection answers the agent's `session/request_permission`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum PermissionPolicy {
+    /// Approve the broadest allow option the moment the request arrives.
+    /// Right for runtimes in sandboxes this deployment owns, where nothing
+    /// the agent can touch is anyone's real machine.
+    #[default]
+    AutoAccept,
+    /// Hold the request open until a user answers it through the control
+    /// endpoint. The turn blocks meanwhile, which is the point.
+    Prompt,
+}
+
+/// A permission request the agent is waiting on, under
+/// [`PermissionPolicy::Prompt`].
+#[derive(Debug)]
+pub(super) struct OutstandingPermission {
+    /// The choices the agent offered; an answer naming anything else is
+    /// refused rather than forwarded.
+    pub(super) options: Vec<PermissionOptionId>,
 }
 
 pub(super) enum SessionPhase {
@@ -241,6 +263,21 @@ pub enum StopReason {
     /// The agent answered `session/new` with something unintelligible; the
     /// detail is the parser's.
     SessionUnintelligible(String),
+}
+
+impl StopReason {
+    /// Whether the runtime can still be reached when the machine stops for
+    /// this reason - true for every death except the transport's own.
+    pub(super) fn transport_is_up(&self) -> bool {
+        !matches!(
+            self,
+            Self::Closed(
+                CloseReason::TransportClosed
+                    | CloseReason::TransportFailed
+                    | CloseReason::SendFailed
+            )
+        )
+    }
 }
 
 impl std::fmt::Display for StopReason {

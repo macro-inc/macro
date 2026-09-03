@@ -8,7 +8,9 @@ use agent_client_protocol::schema::v1::{
     SessionCapabilities, SessionResumeCapabilities, ToolCallUpdate, ToolCallUpdateFields,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::action::{
+    AgentAction, AgentActionId, AgentPermissionAction, PermissionAnswer,
+};
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
@@ -19,11 +21,29 @@ use crate::domain::error::AgentSessionError;
 use crate::domain::model::AgentSessionId;
 
 use super::{
-    CloseReason, Effect, Input, RuntimeStatus, SessionMachine, SessionRestoreSupport, StopReason,
+    CloseReason, Effect, Input, PermissionPolicy, RuntimeStatus, SessionMachine,
+    SessionRestoreSupport, StopReason,
 };
 
 fn machine() -> SessionMachine<u32> {
-    SessionMachine::new(AgentSessionId::TEST_A, "/workspace".to_owned(), Vec::new())
+    machine_under(PermissionPolicy::AutoAccept)
+}
+
+fn machine_under(policy: PermissionPolicy) -> SessionMachine<u32> {
+    SessionMachine::new(
+        AgentSessionId::TEST_A,
+        "/workspace".to_owned(),
+        Vec::new(),
+        policy,
+    )
+}
+
+/// A live machine under `policy`, past the whole handshake.
+fn live_machine_under(policy: PermissionPolicy) -> SessionMachine<u32> {
+    let mut machine = machine_under(policy);
+    begin_opening(&mut machine);
+    machine.handle(session_opened("acp-42"));
+    machine
 }
 
 fn command(text: &str, token: u32) -> Input<u32> {
@@ -251,6 +271,7 @@ fn reconnect_uses_session_resume_when_the_agent_supports_it() {
         "acp-42".into(),
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
     machine.handle(command("continue", 1));
     machine.handle(acp_ready());
@@ -288,6 +309,7 @@ fn reconnect_falls_back_to_session_load() {
         "acp-42".into(),
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
     machine.handle(acp_ready());
     let initialized = InitializeResponse::new(PROTOCOL_VERSION)
@@ -305,6 +327,7 @@ fn reconnect_stops_when_the_agent_cannot_restore_sessions() {
         "acp-42".into(),
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
     machine.handle(command("cannot continue", 1));
     machine.handle(acp_ready());
@@ -440,44 +463,281 @@ fn a_live_frame_only_logs() {
 }
 
 #[test]
-fn a_permission_request_prefers_allow_always_so_the_agent_does_not_block() {
-    let outcome = permission_response(vec![
-        PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
-        PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways),
-        PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
-    ]);
+fn auto_accept_prefers_allow_always_so_the_agent_does_not_block() {
+    let mut machine = live_machine_under(PermissionPolicy::AutoAccept);
+    let effects = machine.handle(permission_request(
+        permission_id(0),
+        vec![
+            PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
+            PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways),
+            PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+        ],
+    ));
 
+    assert!(matches!(effects.first(), Some(Effect::Log { .. })));
     assert_eq!(
-        outcome,
+        permission_outcome(&effects[1], &permission_id(0)),
         RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("always"))
     );
 }
 
 #[test]
-fn a_permission_request_falls_back_to_allow_once() {
-    let outcome = permission_response(vec![
-        PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
-        PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
-    ]);
+fn auto_accept_falls_back_to_allow_once() {
+    let mut machine = live_machine_under(PermissionPolicy::AutoAccept);
+    let effects = machine.handle(permission_request(
+        permission_id(0),
+        vec![
+            PermissionOption::new("once", "Allow once", PermissionOptionKind::AllowOnce),
+            PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+        ],
+    ));
 
     assert_eq!(
-        outcome,
+        permission_outcome(&effects[1], &permission_id(0)),
         RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("once"))
     );
 }
 
 #[test]
-fn a_permission_request_without_an_allow_option_is_cancelled() {
-    let outcome = permission_response(Vec::new());
+fn auto_accept_cancels_a_request_without_an_allow_option() {
+    let mut machine = live_machine_under(PermissionPolicy::AutoAccept);
+    let effects = machine.handle(permission_request(permission_id(0), Vec::new()));
 
-    assert_eq!(outcome, RequestPermissionOutcome::Cancelled);
+    assert_eq!(
+        permission_outcome(&effects[1], &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
 }
 
-fn permission_response(options: Vec<PermissionOption>) -> RequestPermissionOutcome {
-    let mut machine = machine();
-    begin_opening(&mut machine);
-    machine.handle(session_opened("acp-42"));
-    let permission_id = RequestId::Str("agent:permission:0".to_owned());
+#[test]
+fn prompting_holds_the_request_open_and_only_logs_it() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    let effects = machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    assert!(matches!(effects[..], [Effect::Log { .. }]));
+}
+
+#[test]
+fn a_users_answer_is_sent_as_the_agents_response_and_attributed_to_them() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(permission_answer(permission_id(0), "allow", 7));
+
+    let [
+        Effect::Send { from, .. },
+        Effect::Complete {
+            token: 7,
+            result: Ok(()),
+        },
+    ] = &effects[..]
+    else {
+        panic!("expected the response then the caller's completion, got {effects:?}");
+    };
+    assert_eq!(
+        from.as_ref().map(ToString::to_string).as_deref(),
+        Some("macro|owner@example.com")
+    );
+    assert_eq!(
+        permission_outcome(&effects[0], &permission_id(0)),
+        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("allow"))
+    );
+    // Answered: a second answer has nothing to resolve.
+    let effects = machine.handle(permission_answer(permission_id(0), "allow", 8));
+    assert!(matches!(
+        effects[..],
+        [Effect::Complete {
+            token: 8,
+            result: Err(AgentSessionError::PermissionRequestNotFound(_))
+        }]
+    ));
+}
+
+#[test]
+fn numeric_request_ids_are_answered_by_the_same_number() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(RequestId::Number(7), allow_or_reject()));
+
+    let effects = machine.handle(permission_answer(RequestId::Number(7), "reject", 1));
+
+    assert_eq!(
+        permission_outcome(&effects[0], &RequestId::Number(7)),
+        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("reject"))
+    );
+}
+
+#[test]
+fn an_answer_naming_an_unoffered_option_is_refused_and_the_request_stays_open() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(permission_answer(permission_id(0), "sudo", 1));
+    assert!(matches!(
+        effects[..],
+        [Effect::Complete {
+            token: 1,
+            result: Err(AgentSessionError::PermissionOptionUnknown(_))
+        }]
+    ));
+
+    let effects = machine.handle(permission_answer(permission_id(0), "allow", 2));
+    assert!(matches!(
+        effects[..],
+        [
+            Effect::Send { .. },
+            Effect::Complete {
+                token: 2,
+                result: Ok(())
+            }
+        ]
+    ));
+}
+
+#[test]
+fn a_cancelled_answer_needs_no_option() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(Input::Command {
+        from: None,
+        action: AgentAction::RespondToPermission(AgentPermissionAction {
+            request_id: permission_id(0),
+            answer: PermissionAnswer::Cancelled,
+        }),
+        action_id: AgentActionId::mint(),
+        token: 1,
+    });
+
+    assert_eq!(
+        permission_outcome(&effects[0], &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
+}
+
+#[test]
+fn an_answer_before_the_session_is_live_is_never_queued() {
+    let mut machine = machine_under(PermissionPolicy::Prompt);
+
+    let effects = machine.handle(permission_answer(permission_id(0), "allow", 1));
+
+    assert!(matches!(
+        effects[..],
+        [Effect::Complete {
+            token: 1,
+            result: Err(AgentSessionError::PermissionRequestNotFound(_))
+        }]
+    ));
+    assert_eq!(machine.pending_count(), 0);
+}
+
+#[test]
+fn an_answer_to_a_dead_session_is_a_disconnect() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+    machine.handle(Input::Closed(CloseReason::TransportClosed));
+
+    let effects = machine.handle(permission_answer(permission_id(0), "allow", 1));
+
+    assert!(matches!(
+        effects[..],
+        [Effect::Complete {
+            token: 1,
+            result: Err(AgentSessionError::Disconnected(_))
+        }]
+    ));
+}
+
+#[test]
+fn stop_cancels_open_permission_requests_after_the_cancel_notification() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(Input::Command {
+        from: None,
+        action: AgentAction::Stop,
+        action_id: AgentActionId::mint(),
+        token: 1,
+    });
+
+    assert_eq!(sent_methods(&effects), vec!["session/cancel"]);
+    let [
+        Effect::Send { .. },
+        cancelled @ Effect::Send { .. },
+        Effect::Complete { token: 1, .. },
+    ] = &effects[..]
+    else {
+        panic!("expected cancel, then the cancelled response, then completion; got {effects:?}");
+    };
+    assert_eq!(
+        permission_outcome(cancelled, &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
+}
+
+#[test]
+fn a_turn_ending_cancels_whatever_the_agent_left_open() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    let action_id = AgentActionId::mint();
+    machine.handle(command_with_id("run it", action_id, 1));
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        action_id.to_request_id(),
+        Ok(serde_json::json!({ "stopReason": "end_turn" })),
+    )));
+
+    let [
+        Effect::Log { .. },
+        cancelled @ Effect::Send { .. },
+        Effect::TurnEnded { .. },
+    ] = &effects[..]
+    else {
+        panic!("expected log, cancelled response, turn end; got {effects:?}");
+    };
+    assert_eq!(
+        permission_outcome(cancelled, &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
+}
+
+#[test]
+fn an_abandoned_session_cancels_open_requests_before_stopping() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(Input::Closed(CloseReason::Abandoned));
+
+    let [cancelled @ Effect::Send { .. }, Effect::Stop { .. }] = &effects[..] else {
+        panic!("expected the cancelled response then stop; got {effects:?}");
+    };
+    assert_eq!(
+        permission_outcome(cancelled, &permission_id(0)),
+        RequestPermissionOutcome::Cancelled
+    );
+}
+
+#[test]
+fn a_dead_transport_gets_no_cancellations_it_cannot_carry() {
+    let mut machine = live_machine_under(PermissionPolicy::Prompt);
+    machine.handle(permission_request(permission_id(0), allow_or_reject()));
+
+    let effects = machine.handle(Input::Closed(CloseReason::TransportClosed));
+
+    assert!(matches!(effects[..], [Effect::Stop { .. }]));
+}
+
+fn allow_or_reject() -> Vec<PermissionOption> {
+    vec![
+        PermissionOption::new("allow", "Allow once", PermissionOptionKind::AllowOnce),
+        PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+    ]
+}
+
+fn permission_id(n: u64) -> RequestId {
+    RequestId::Str(format!("agent:permission:{n}"))
+}
+
+fn permission_request(id: RequestId, options: Vec<PermissionOption>) -> Input<u32> {
     let (method, params) = RequestPermissionRequest::new(
         "acp-42",
         ToolCallUpdate::new("call-1", ToolCallUpdateFields::new()),
@@ -486,12 +746,25 @@ fn permission_response(options: Vec<PermissionOption>) -> RequestPermissionOutco
     .to_untyped_message()
     .unwrap()
     .into_parts();
+    frame(RawJsonRpcMessage::request(method, params, id).unwrap())
+}
 
-    let effects = machine.handle(frame(
-        RawJsonRpcMessage::request(method, params, permission_id.clone()).unwrap(),
-    ));
+fn permission_answer(request_id: RequestId, option_id: &str, token: u32) -> Input<u32> {
+    Input::Command {
+        from: Some(MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id")),
+        action: AgentAction::RespondToPermission(AgentPermissionAction {
+            request_id,
+            answer: PermissionAnswer::Selected {
+                option_id: option_id.to_owned(),
+            },
+        }),
+        action_id: AgentActionId::mint(),
+        token,
+    }
+}
 
-    assert!(matches!(effects.first(), Some(Effect::Log { .. })));
+/// The outcome carried by a sent permission response to `expected_id`.
+fn permission_outcome(effect: &Effect<u32>, expected_id: &RequestId) -> RequestPermissionOutcome {
     let Effect::Send {
         message:
             ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(Response::Result {
@@ -499,11 +772,11 @@ fn permission_response(options: Vec<PermissionOption>) -> RequestPermissionOutco
                 result,
             }))),
         ..
-    } = &effects[1]
+    } = effect
     else {
-        panic!("expected a successful ACP permission response");
+        panic!("expected a successful ACP permission response, got {effect:?}");
     };
-    assert_eq!(id, &permission_id);
+    assert_eq!(id, expected_id);
     serde_json::from_value::<RequestPermissionResponse>(result.clone())
         .unwrap()
         .outcome
@@ -794,6 +1067,7 @@ fn session_new_carries_the_sessions_workspace() {
         AgentSessionId::TEST_A,
         "/home/operator/code".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
     machine.handle(acp_ready());
     let effects = machine.handle(initialized());
@@ -809,6 +1083,7 @@ fn resume_carries_the_sessions_workspace() {
         "acp-42".into(),
         "/home/operator/code".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
     machine.handle(acp_ready());
     let effects = machine.handle(initialized_with(
@@ -854,6 +1129,7 @@ fn a_ready_connection_still_picks_resume_for_a_session_that_has_one() {
         "acp-42".into(),
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
 
     let opening = machine.handle(Input::Ready {
@@ -873,6 +1149,7 @@ fn a_ready_connection_that_cannot_restore_stops_the_session() {
         "acp-42".into(),
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
     );
 
     let effects = machine.handle(Input::Ready {

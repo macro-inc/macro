@@ -82,6 +82,7 @@ fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAge
         default_model: "cursor-small".to_string(),
         channel_scope,
         channel_ids: Vec::new(),
+        auto_accept_permissions: None,
     }
 }
 
@@ -98,6 +99,7 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
         default_model: "claude-sonnet-4-5".to_string(),
         channel_scope,
         channel_ids: Vec::new(),
+        auto_accept_permissions: Some(false),
     }
 }
 
@@ -424,6 +426,7 @@ async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Re
     assert_eq!(created.default_model, "cursor-small");
     assert_eq!(created.channel_scope, AgentChannelScope::All);
     assert!(created.channel_ids.is_empty());
+    assert_eq!(created.auto_accept_permissions, None);
 
     let listed = service.list_agents(user_id(USER_OWNER)).await?;
     assert_eq!(listed.len(), 1);
@@ -431,6 +434,7 @@ async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Re
     assert_eq!(listed[0].instructions, created.instructions);
     assert_eq!(listed[0].harness, created.harness);
     assert_eq!(listed[0].default_model, created.default_model);
+    assert_eq!(listed[0].auto_accept_permissions, None);
 
     let fetched = PgBotsRepo::new(pool.clone())
         .get_agent(created.bot.id)
@@ -440,6 +444,7 @@ async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Re
     assert_eq!(fetched.instructions, created.instructions);
     assert_eq!(fetched.harness, created.harness);
     assert_eq!(fetched.default_model, created.default_model);
+    assert_eq!(fetched.auto_accept_permissions, None);
 
     assert!(service.list_agents(user_id(USER_OTHER)).await?.is_empty());
     Ok(())
@@ -498,6 +503,7 @@ async fn updated_agent_replaces_every_field_and_selected_channel(
     assert_eq!(updated.harness, "in-memory");
     assert_eq!(updated.default_model, "claude-sonnet-4-5");
     assert_eq!(updated.channel_ids, vec![second]);
+    assert_eq!(updated.auto_accept_permissions, Some(false));
     assert_eq!(
         active_channel_participant_count(&pool, first, created.bot.id).await?,
         0
@@ -511,6 +517,47 @@ async fn updated_agent_replaces_every_field_and_selected_channel(
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].bot.handle, "updated-fixer");
     assert_eq!(listed[0].channel_ids, vec![second]);
+    assert_eq!(listed[0].auto_accept_permissions, Some(false));
+
+    let fetched = PgBotsRepo::new(pool.clone())
+        .get_agent(created.bot.id)
+        .await?
+        .expect("updated agent should still be addressable by bot id");
+    assert_eq!(fetched.auto_accept_permissions, Some(false));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn auto_accept_permissions_persists_each_of_its_three_states(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let repo = PgBotsRepo::new(pool.clone());
+    let mut create = create_agent_req("permissive", AgentChannelScope::All);
+    create.auto_accept_permissions = Some(true);
+    let created = service.create_agent(user_id(USER_OWNER), create).await?;
+    assert_eq!(created.auto_accept_permissions, Some(true));
+    assert_eq!(
+        repo.get_agent(created.bot.id)
+            .await?
+            .unwrap()
+            .auto_accept_permissions,
+        Some(true)
+    );
+
+    // An update that says nothing clears the choice back to the kind default.
+    let mut update = update_agent_req("permissive", AgentChannelScope::All);
+    update.auto_accept_permissions = None;
+    service
+        .update_agent(user_id(USER_OWNER), created.bot.id, update)
+        .await?;
+    assert_eq!(
+        repo.get_agent(created.bot.id)
+            .await?
+            .unwrap()
+            .auto_accept_permissions,
+        None
+    );
     Ok(())
 }
 

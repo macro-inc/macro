@@ -13,6 +13,7 @@ mod bots_directory;
 mod config;
 mod containers;
 mod harness_bindings;
+mod permission_policy;
 mod trigger;
 
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -97,6 +98,7 @@ use macro_event_broker::{
     MacroEventCollection as _, MacroEventConsumerService,
 };
 use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
+use permission_policy::PgPermissionPolicySource;
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
 use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
@@ -520,6 +522,7 @@ async fn run() -> anyhow::Result<()> {
         EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
         HttpCommandForwarder::new(config.internal_api_key.clone())
             .map_err(|error| anyhow::anyhow!("failed to build the command forwarder: {error}"))?,
+        PgPermissionPolicySource::new(PgBotsRepo::new(pool.clone())),
         defaults,
     ));
     // Close the loop: turn ends observed by the session actors drain the

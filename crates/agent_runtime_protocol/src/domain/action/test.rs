@@ -1,4 +1,4 @@
-use agent_client_protocol::schema::v1::{ClientRequest, ContentBlock, SessionId};
+use agent_client_protocol::schema::v1::{ClientRequest, ContentBlock, Response, SessionId};
 
 use super::*;
 
@@ -144,4 +144,73 @@ fn only_prompt_shaped_actions_occupy_a_turn() {
     assert!(AgentAction::Compact.occupies_turn());
     assert!(!AgentAction::set_model("opus").occupies_turn());
     assert!(!AgentAction::Stop.occupies_turn());
+    assert!(!permission_answer(RequestId::Number(7)).occupies_turn());
+}
+
+#[test]
+fn a_permission_answer_becomes_a_response_carrying_the_agents_request_id() {
+    let session_id = SessionId::new("acp-abc");
+    let translated = permission_answer(RequestId::Number(7))
+        .to_runtime(&session_id, RequestId::Str("minted-and-ignored".to_owned()))
+        .unwrap();
+
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(Response::Result {
+        id,
+        result,
+    }))) = translated
+    else {
+        panic!("a permission answer translates to a successful ACP response");
+    };
+    assert_eq!(id, RequestId::Number(7));
+    let response: RequestPermissionResponse = serde_json::from_value(result).unwrap();
+    assert_eq!(
+        response.outcome,
+        RequestPermissionOutcome::Selected(SelectedPermissionOutcome::new("allow"))
+    );
+
+    let message =
+        ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(Response::Result {
+            id: RequestId::Number(7),
+            result: serde_json::json!({}),
+        })));
+    assert_eq!(AgentAction::control_from_runtime(&message), None);
+}
+
+#[test]
+fn a_permission_answer_round_trips_through_json_keeping_the_ids_shape() {
+    let numeric = permission_answer(RequestId::Number(7));
+    let json = serde_json::to_value(&numeric).unwrap();
+    assert_eq!(
+        json,
+        serde_json::json!({
+            "type": "respondToPermission",
+            "requestId": 7,
+            "answer": { "kind": "selected", "optionId": "allow" },
+        })
+    );
+    assert_eq!(
+        serde_json::from_value::<AgentAction>(json).unwrap(),
+        numeric
+    );
+
+    let cancelled = AgentAction::RespondToPermission(AgentPermissionAction {
+        request_id: RequestId::Str("req-1".to_owned()),
+        answer: PermissionAnswer::Cancelled,
+    });
+    let json = serde_json::to_value(&cancelled).unwrap();
+    assert_eq!(json["requestId"], serde_json::json!("req-1"));
+    assert_eq!(json["answer"], serde_json::json!({ "kind": "cancelled" }));
+    assert_eq!(
+        serde_json::from_value::<AgentAction>(json).unwrap(),
+        cancelled
+    );
+}
+
+fn permission_answer(request_id: RequestId) -> AgentAction {
+    AgentAction::RespondToPermission(AgentPermissionAction {
+        request_id,
+        answer: PermissionAnswer::Selected {
+            option_id: "allow".to_owned(),
+        },
+    })
 }

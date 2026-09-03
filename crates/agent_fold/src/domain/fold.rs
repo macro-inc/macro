@@ -361,7 +361,9 @@ impl FoldState {
                         AgentAction::Stop => {
                             self.record_control(Control::Stop, None, entry.user_id.clone())
                         }
-                        AgentAction::Prompt(_) => None,
+                        // Never produced here: a permission answer is a
+                        // response frame, and responses are not controls.
+                        AgentAction::Prompt(_) | AgentAction::RespondToPermission(_) => None,
                     });
                 }
                 StepChange::message(match &acp.0 {
@@ -992,6 +994,7 @@ impl FoldState {
             .insert(request_id.clone(), tool_call.clone());
 
         let (changed, position) = self.push_agent_part(MessagePart::Permission {
+            request_id: request_id.into(),
             tool_call: tool_call.clone(),
             options,
             outcome: PermissionOutcome::Pending,

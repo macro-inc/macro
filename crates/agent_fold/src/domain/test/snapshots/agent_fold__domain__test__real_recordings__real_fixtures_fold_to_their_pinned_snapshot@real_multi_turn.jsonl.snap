@@ -68,6 +68,9 @@ input_file: crates/agent_fold/fixtures/real/real_multi_turn.jsonl
                     ),
                 },
                 Permission {
+                    request_id: Number(
+                        5,
+                    ),
                     tool_call: ToolUseId(
                         "toolu_01F5V288iQ8iArGM4B3ayCFm",
                     ),

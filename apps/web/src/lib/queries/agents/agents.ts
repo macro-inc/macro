@@ -27,6 +27,12 @@ export type CreateAgentParams = {
   name: string;
   instructions: string;
   teamId?: string;
+  /**
+   * Whether the agent's sessions approve permission requests without asking.
+   * Omit to defer to the runtime's default: built-in runtimes auto-accept,
+   * macrod prompts.
+   */
+  autoAcceptPermissions?: boolean;
 };
 
 export type UpdateAgentParams = CreateAgentParams & {
@@ -77,6 +83,7 @@ export function useCreateAgentMutation() {
           name: vars.name,
           instructions: vars.instructions,
           team_id: vars.teamId,
+          auto_accept_permissions: vars.autoAcceptPermissions ?? null,
         })
       ),
     onSuccess: async (agent) => {
@@ -108,6 +115,7 @@ export function useUpdateAgentMutation() {
           name: vars.name,
           instructions: vars.instructions,
           team_id: vars.teamId,
+          auto_accept_permissions: vars.autoAcceptPermissions ?? null,
         })
       ),
     onSuccess: async (updated) => {

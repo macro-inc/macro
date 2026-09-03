@@ -7,6 +7,7 @@ use std::sync::Arc;
 use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::model::{AgentSessionId, ReplicaAddress, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
+use agent_session::domain::session::PermissionPolicy;
 use bot_id::BotId;
 use harness_id::HarnessId;
 
@@ -70,6 +71,18 @@ pub trait HarnessBindings: Send + Sync + 'static {
         &self,
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+}
+
+/// Resolves how a bot's sessions answer the agent's permission requests.
+///
+/// Resolved at attach time like [`HarnessBindings`], so changing the agent's
+/// setting takes effect on its existing sessions the next time they attach.
+pub trait PermissionPolicySource: Send + Sync + 'static {
+    /// The policy `bot`'s sessions run under right now.
+    fn permission_policy(
+        &self,
+        bot: BotId,
+    ) -> impl Future<Output = anyhow::Result<PermissionPolicy>> + Send;
 }
 
 /// Durable attach/detach bookkeeping for harness runtime connections.

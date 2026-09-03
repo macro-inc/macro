@@ -24,6 +24,12 @@ export { FoldedAnsiText } from './FoldedAnsiText';
 export { FoldedOutput } from './FoldedOutput';
 export { FoldedPathList } from './FoldedPathList';
 export { FoldedTerminal } from './FoldedTerminal';
+export {
+  type PermissionOptionItem,
+  type PermissionOptionKind,
+  PermissionOptions,
+  type PermissionOptionsProps,
+} from './PermissionOptions';
 export { PierreDiff } from './PierreDiff';
 export { QuestionAnswers, type QuestionAnswersProps } from './QuestionAnswers';
 export {

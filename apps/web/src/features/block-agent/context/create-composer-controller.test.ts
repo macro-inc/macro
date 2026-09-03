@@ -309,6 +309,58 @@ describe('a model change in flight', () => {
   });
 });
 
+describe('answering a permission request', () => {
+  const answer = { kind: 'selected', optionId: 'allow' } as const;
+
+  it('posts the answer with the request id exactly as the fold gave it', async () => {
+    const { controller, dispose } = setup();
+    controller.respondToPermission(7, answer);
+    controller.respondToPermission('perm-1', answer);
+    await flush();
+
+    expect(control.calls.map((call) => call.action)).toEqual([
+      { type: 'respondToPermission', requestId: 7, answer },
+      { type: 'respondToPermission', requestId: 'perm-1', answer },
+    ]);
+    dispose();
+  });
+
+  it('reports answering only while the POST is on the wire, per request', async () => {
+    const { controller, dispose } = setup();
+    controller.respondToPermission(7, answer);
+
+    expect(controller.answeringPermission(7)).toBe(true);
+    expect(controller.answeringPermission('7')).toBe(false);
+    expect(controller.answeringPermission(8)).toBe(false);
+    await flush();
+    expect(controller.answeringPermission(7)).toBe(false);
+    dispose();
+  });
+
+  it('posts one answer per request, however many times it is clicked', async () => {
+    const { controller, dispose } = setup();
+    controller.respondToPermission(7, answer);
+    controller.respondToPermission(7, { kind: 'cancelled' });
+    await flush();
+
+    expect(control.calls).toHaveLength(1);
+    dispose();
+  });
+
+  it('surfaces a refused answer as a toast and lets the options be tried again', async () => {
+    const { controller, dispose } = setup();
+    control.outcome = 'err';
+    controller.respondToPermission(7, answer);
+    await flush();
+
+    expect(toast.failure).toHaveBeenCalledWith(
+      'The permission request could not be answered'
+    );
+    expect(controller.answeringPermission(7)).toBe(false);
+    dispose();
+  });
+});
+
 describe('session switch', () => {
   it('drops a pending model change — it never leaks into another session', async () => {
     const { controller, setSessionId, dispose } = setup({ model: 'old-model' });

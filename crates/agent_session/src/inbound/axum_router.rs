@@ -289,6 +289,14 @@ impl IntoResponse for AgentSessionApiError {
             Self::Domain(error @ AgentSessionError::ControlQueueFull(_)) => {
                 (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
             }
+            // Somebody else answered first, or the agent moved on: nothing to
+            // answer anymore, and the transcript already shows how it went.
+            Self::Domain(error @ AgentSessionError::PermissionRequestNotFound(_)) => {
+                (StatusCode::CONFLICT, error.to_string()).into_response()
+            }
+            Self::Domain(error @ AgentSessionError::PermissionOptionUnknown(_)) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, error.to_string()).into_response()
+            }
             Self::Domain(error) => {
                 if let AgentSessionError::InvalidName(message) = error {
                     return (StatusCode::BAD_REQUEST, Json(message)).into_response();

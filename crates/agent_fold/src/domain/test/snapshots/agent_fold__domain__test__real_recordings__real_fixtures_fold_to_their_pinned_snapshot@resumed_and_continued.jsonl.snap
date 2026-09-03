@@ -437,6 +437,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                     ),
                 },
                 Permission {
+                    request_id: Number(
+                        0,
+                    ),
                     tool_call: ToolUseId(
                         "toolu_015c1NGtLCDbzzN6gLsNek6c",
                     ),
@@ -534,6 +537,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                     ),
                 },
                 Permission {
+                    request_id: Number(
+                        1,
+                    ),
                     tool_call: ToolUseId(
                         "toolu_01SfjW3NaG4UD6znQMU23cyf",
                     ),
@@ -588,6 +594,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                     ),
                 },
                 Permission {
+                    request_id: Number(
+                        2,
+                    ),
                     tool_call: ToolUseId(
                         "toolu_01CtXAUSJxvsbs2FD7QmMqDu",
                     ),
@@ -645,6 +654,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                     ),
                 },
                 Permission {
+                    request_id: Number(
+                        3,
+                    ),
                     tool_call: ToolUseId(
                         "toolu_01C3WXuHqyYExW1fkiSdhQBm",
                     ),
@@ -699,6 +711,9 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                     ),
                 },
                 Permission {
+                    request_id: Number(
+                        4,
+                    ),
                     tool_call: ToolUseId(
                         "toolu_011EjWXxbBUL3LeeWdhwZzVE",
                     ),

@@ -65,6 +65,7 @@ fn agent_with(bot_id: BotId, owner: BotOwner, channel_scope: AgentChannelScope) 
         default_model: "model".to_owned(),
         channel_scope,
         channel_ids: vec![],
+        auto_accept_permissions: None,
     }
 }
 

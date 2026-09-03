@@ -12577,6 +12577,10 @@
           "channel_ids"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. `None` defers to the runtime kind's default: managed runtimes\nauto-accept, macrod prompts."
+          },
           "bot": {
             "$ref": "#/components/schemas/Bot",
             "description": "The bot identity used for mentions and channel participation."
@@ -16412,6 +16416,10 @@
           "channel_scope"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to defer to the runtime kind's default."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."
@@ -26007,6 +26015,10 @@
           "channel_scope"
         ],
         "properties": {
+          "auto_accept_permissions": {
+            "type": ["boolean", "null"],
+            "description": "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to defer to the runtime kind's default."
+          },
           "avatar_url": {
             "type": ["string", "null"],
             "description": "Optional avatar URL or data URL."

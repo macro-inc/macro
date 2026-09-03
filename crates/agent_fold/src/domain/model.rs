@@ -38,6 +38,33 @@ pub struct TurnId(pub u32);
 #[specta(transparent)]
 pub struct ToolUseId(pub String);
 
+/// The JSON-RPC id of a request the agent made, as the agent wrote it.
+///
+/// Kept in the agent's own shape - a number stays a number - because an
+/// answer has to echo it exactly; `"7"` does not answer `7`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Type)]
+#[serde(untagged)]
+pub enum AgentRequestId {
+    /// A numeric id. Exported as a plain TypeScript number: agents count
+    /// requests from zero, nowhere near where an `i64` stops round-tripping.
+    Number(#[specta(type = f64)] i64),
+    /// A string id.
+    Str(String),
+}
+
+impl From<&agent_client_protocol::schema::v1::RequestId> for AgentRequestId {
+    fn from(id: &agent_client_protocol::schema::v1::RequestId) -> Self {
+        use agent_client_protocol::schema::v1::RequestId;
+        match id {
+            RequestId::Number(number) => Self::Number(*number),
+            RequestId::Str(text) => Self::Str(text.clone()),
+            // Requests carry an id by definition; a null one is a protocol
+            // violation the fold renders rather than rejects.
+            RequestId::Null => Self::Str(id.to_string()),
+        }
+    }
+}
+
 /// The natural key of a [`FoldedMessage`] within its session.
 ///
 /// Nothing here is stored, so there is no surrogate row id to hand out.
@@ -237,6 +264,9 @@ pub enum MessagePart {
     },
     /// The agent asking to proceed.
     Permission {
+        /// The agent's request id, which an answer must echo.
+        #[serde(rename = "requestId")]
+        request_id: AgentRequestId,
         /// The tool call permission was requested for.
         #[serde(rename = "toolCall")]
         tool_call: ToolUseId,

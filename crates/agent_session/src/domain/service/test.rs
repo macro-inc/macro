@@ -4,7 +4,7 @@ use crate::domain::model::{
     DEFAULT_AGENT_SESSION_NAME, Message, ReplicaAddress, SessionBot, SessionManager,
 };
 use crate::domain::ports::NoOpRealtime;
-use crate::domain::session::HandshakeStatus;
+use crate::domain::session::{HandshakeStatus, PermissionPolicy};
 use crate::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
 use agent_fold::domain::fold::fold;
 use agent_fold::domain::service::FoldedMessageService;
@@ -714,6 +714,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         None,
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
         RecordingTransport {
             outbound: outbound_tx,
             inbound: inbound_rx,
@@ -793,6 +794,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
         None,
         "/workspace".to_owned(),
         Vec::new(),
+        PermissionPolicy::AutoAccept,
         RecordingTransport {
             outbound: outbound_tx,
             inbound: inbound_rx,

@@ -869,6 +869,25 @@
                 "enum": ["stop"]
               }
             }
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AgentPermissionAction",
+                "description": "Answer a permission request the agent is waiting on."
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["respondToPermission"]
+                  }
+                }
+              }
+            ],
+            "description": "Answer a permission request the agent is waiting on."
           }
         ],
         "description": "One thing a caller wants an agent to do."
@@ -877,6 +896,20 @@
         "type": "string",
         "format": "uuid",
         "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nMinted only by the server at accept time, as a v7 uuid so ids sort by mint\ntime. On the wire and in JSON it is the bare uuid, and a uuid-shaped\nrequest id is the whole ownership test: the server is the only writer of\nruntime-bound frames. The machine's own handshake request ids\n(`agent_session:{session}:{n}`) are not uuids and stay `None`."
+      },
+      "AgentPermissionAction": {
+        "type": "object",
+        "description": "A user's answer to the agent's `session/request_permission`.\n\nUnlike every other action this is not a new request but the reply to one\nthe agent made, so it carries the agent's own request id rather than\nreceiving a server-minted one.",
+        "required": ["requestId", "answer"],
+        "properties": {
+          "answer": {
+            "$ref": "#/components/schemas/PermissionAnswer",
+            "description": "What the user decided."
+          },
+          "requestId": {
+            "description": "The agent's JSON-RPC request id, echoed verbatim from the folded\npermission part. A string or a number on the wire; agents mint both,\nand `7` does not answer `\"7\"`."
+          }
+        }
       },
       "AgentPromptAction": {
         "type": "object",
@@ -1222,6 +1255,37 @@
             "description": "Which way the frame travelled."
           }
         }
+      },
+      "PermissionAnswer": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "One of the options the agent offered was chosen.",
+            "required": ["optionId", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["selected"]
+              },
+              "optionId": {
+                "type": "string",
+                "description": "The chosen option's id, as the agent listed it."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The request was dismissed without choosing.",
+            "required": ["kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["cancelled"]
+              }
+            }
+          }
+        ],
+        "description": "The decision carried by an [`AgentPermissionAction`]."
       },
       "QueuedActionDto": {
         "type": "object",

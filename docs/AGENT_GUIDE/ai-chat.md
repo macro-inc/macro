@@ -71,3 +71,15 @@ transcript (and in the originating channel thread).
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
   entries, then stop.
+- **Permission prompts.** An agent running on a macrod harness (the user's own machine)
+  asks before running a tool. The request renders in the transcript as a
+  `Permission needed` card with the agent's own option buttons (e.g. `Allow once`,
+  `Always allow`, `Reject`), and the same options repeat in a banner directly above the
+  composer — `The agent is waiting for your permission to continue.` — so the turn's
+  block is never buried. The turn stays paused until an option is clicked; the card then
+  reads `Permission requested` with the chosen label. Stopping the turn cancels any open
+  request. Built-in runtimes (`@macro-new`, `@coder`, `@cursor`) auto-accept and never
+  show the prompt. The per-agent setting lives on the agent's create/edit dialog
+  (Settings → Agents → Runtime section): the `Auto-accept permission requests` toggle
+  defaults off for macrod harnesses and on for built-in runtimes; turning it on for a
+  macrod harness shows a red warning that every tool call will be approved unasked.

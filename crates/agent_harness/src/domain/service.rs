@@ -15,6 +15,7 @@ use agent_session::domain::ports::{
     ControlDisposition, ControlEvent, QueuedControl,
 };
 use agent_session::domain::service::AgentSessionService;
+use agent_session::domain::session::PermissionPolicy;
 use bot_id::BotId;
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
@@ -30,7 +31,7 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
-    RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
+    PermissionPolicySource, RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -76,6 +77,24 @@ impl<F: CommandForwarder> ErasedForwarder for F {
     }
 }
 
+/// [`PermissionPolicySource`], object-safe, erased for the same reason as
+/// [`ErasedForwarder`].
+trait ErasedPermissionPolicySource: Send + Sync + 'static {
+    fn permission_policy<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<PermissionPolicy>> + Send + 'a>>;
+}
+
+impl<S: PermissionPolicySource> ErasedPermissionPolicySource for S {
+    fn permission_policy<'a>(
+        &'a self,
+        bot: BotId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = anyhow::Result<PermissionPolicy>> + Send + 'a>> {
+        Box::pin(PermissionPolicySource::permission_policy(self, bot))
+    }
+}
+
 struct AgentHarnessInner<
     Sessions,
     Containers,
@@ -93,6 +112,7 @@ struct AgentHarnessInner<
     prompt_composer: PromptComposer,
     egress: Egress,
     forwarder: Box<dyn ErasedForwarder>,
+    permission_policies: Box<dyn ErasedPermissionPolicySource>,
     defaults: HarnessDefaults,
     /// Turn-occupying actions waiting for their session's running turn to
     /// end. In-memory beside the live actors this replica manages.
@@ -184,6 +204,7 @@ where
         prompt_composer: PromptComposer,
         egress: Egress,
         forwarder: impl CommandForwarder,
+        permission_policies: impl PermissionPolicySource,
         defaults: impl Into<HarnessDefaults>,
     ) -> Self {
         Self {
@@ -196,6 +217,7 @@ where
                 prompt_composer,
                 egress,
                 forwarder: Box::new(forwarder),
+                permission_policies: Box::new(permission_policies),
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 busy: DashMap::new(),
@@ -692,11 +714,17 @@ where
                 return Err(into_session_error(error));
             }
         };
+        let permission_policy = self
+            .inner
+            .permission_policy_for(session.bot_id, &session.harness)
+            .await;
         self.inner
             .sessions
             .attach_session(
                 session.id,
-                RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+                RuntimeAttachment::solo(container)
+                    .mcp_servers(mcp_servers)
+                    .permission_policy(permission_policy),
             )
             .await?;
 
@@ -886,6 +914,16 @@ where
             // an edited entry is delivered later under its original identity,
             // so rewriting (or dropping) what a Daytona session is about to
             // run is the same privilege as prompting it.
+            // A permission prompt exists to put a person between the agent
+            // and its tool call. Only a person answers it - never a harness
+            // principal, which would be the runtime approving itself.
+            HarnessCommand::Deliver(DeliverAction {
+                actor: None,
+                action: AgentAction::RespondToPermission(_),
+                ..
+            }) => {
+                return Err(AgentSessionError::Forbidden.into());
+            }
             HarnessCommand::Deliver(DeliverAction { actor, .. })
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
@@ -1117,6 +1155,27 @@ where
     /// holds no token (a provider whose sessions carry no egress environment,
     /// or a sandbox from before tokens existed) gets no servers, which is
     /// also everything it could do with them.
+    /// How a session of `bot_id`'s answers permission requests, resolved now.
+    ///
+    /// A failed lookup falls back to the runtime kind's default rather than
+    /// failing the attach: a database blip must not keep a session from
+    /// reconnecting, and the default is the safe answer for its kind.
+    async fn permission_policy_for(&self, bot_id: BotId, harness: &str) -> PermissionPolicy {
+        match self.permission_policies.permission_policy(bot_id).await {
+            Ok(policy) => policy,
+            Err(error) => {
+                let fallback = AgentKind::for_session(bot_id, harness).default_permission_policy();
+                tracing::warn!(
+                    error = ?error,
+                    %bot_id,
+                    ?fallback,
+                    "could not resolve the bot's permission policy; using its kind's default"
+                );
+                fallback
+            }
+        }
+    }
+
     #[tracing::instrument(err, skip(self, owner), fields(%session_id, %owner))]
     async fn resumed_mcp_servers(
         &self,
@@ -1176,10 +1235,15 @@ where
                 let mcp_servers = self
                     .resumed_mcp_servers(session_id, &session.owner_id)
                     .await?;
+                let permission_policy = self
+                    .permission_policy_for(session.bot_id, &session.harness)
+                    .await;
                 self.sessions
                     .attach_session(
                         session_id,
-                        RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+                        RuntimeAttachment::solo(container)
+                            .mcp_servers(mcp_servers)
+                            .permission_policy(permission_policy),
                     )
                     .await?;
             }
@@ -1270,10 +1334,13 @@ where
                 return Err(error);
             }
         };
+        let permission_policy = self.permission_policy_for(bot_id, &runtime.harness).await;
         self.sessions
             .attach_session(
                 session_id,
-                RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+                RuntimeAttachment::solo(container)
+                    .mcp_servers(mcp_servers)
+                    .permission_policy(permission_policy),
             )
             .await?;
         // The first prompt goes through the same door as every later one:
@@ -1319,11 +1386,23 @@ where
             .await
         {
             Ok(()) => {}
+            // A permission answer resolves a request the *current* connection
+            // is holding open. There is no such request on a connection that
+            // does not exist yet, so reattaching could only cost a sandbox
+            // resume to deliver an answer nothing is waiting for.
+            Err(error @ AgentSessionError::Disconnected(_))
+                if matches!(action, AgentAction::RespondToPermission(_)) =>
+            {
+                return Err(error.into());
+            }
             // Nothing is attached, so get this session onto a transport and
             // retry against it. Same id: the first attempt never reached the
             // wire.
             Err(AgentSessionError::Disconnected(_)) => {
                 let session = self.sessions.get_session(session_id).await?;
+                let permission_policy = self
+                    .permission_policy_for(session.bot_id, &session.harness)
+                    .await;
                 if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
@@ -1332,7 +1411,9 @@ where
                     self.sessions
                         .attach_session(
                             session_id,
-                            RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
+                            RuntimeAttachment::solo(container)
+                                .mcp_servers(mcp_servers)
+                                .permission_policy(permission_policy),
                         )
                         .await?;
                 } else {
@@ -1350,7 +1431,9 @@ where
                             session_id,
                         )));
                     };
-                    self.sessions.attach_session(session_id, attachment).await?;
+                    self.sessions
+                        .attach_session(session_id, attachment.permission_policy(permission_policy))
+                        .await?;
                 }
                 self.sessions
                     .send_action(session_id, actor, action, id)

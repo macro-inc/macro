@@ -24,7 +24,7 @@ import {
 } from '@queries/auth/cursor-api-key';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
-import { Avatar, Button, Dialog, Panel } from '@ui';
+import { Avatar, Button, Dialog, Panel, ToggleSwitch } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot } from '../channel/Bots/botPermissions';
@@ -33,6 +33,7 @@ import {
   ChoiceRow,
   SettingsCard,
   SettingsPage,
+  SettingsRow,
   SettingsSection,
 } from './primitives';
 
@@ -535,6 +536,16 @@ function AgentDialog(props: {
   const [share, setShare] = createSignal<AgentShare>(
     props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
   );
+  // The user's explicit choice, or `undefined` to follow the runtime's
+  // default. Kept apart from the shown value so switching runtime re-applies
+  // that runtime's default rather than dragging the old one along.
+  const [autoAcceptChoice, setAutoAcceptChoice] = createSignal<
+    boolean | undefined
+  >(props.agent?.auto_accept_permissions ?? undefined);
+  // Built-in runtimes act inside sandboxes we own; a macrod harness is the
+  // user's own machine, where the agent should ask first.
+  const autoAcceptDefault = () => selectedHarness()?.kind !== 'macrod';
+  const autoAcceptPermissions = () => autoAcceptChoice() ?? autoAcceptDefault();
   let avatarInputRef: HTMLInputElement | undefined;
 
   const close = () => props.onClose();
@@ -551,6 +562,13 @@ function AgentDialog(props: {
     setDefaultModelId(
       harness?.kind === 'macrod' ? 'default' : (harness?.models[0]?.id ?? '')
     );
+    setAutoAcceptChoice(undefined);
+  };
+
+  // Storing the choice only when it differs from the default keeps an
+  // untouched toggle following the default if it ever changes.
+  const handleAutoAcceptChange = (checked: boolean) => {
+    setAutoAcceptChoice(checked === autoAcceptDefault() ? undefined : checked);
   };
 
   const handleAvatarInput = (file: File | undefined) => {
@@ -596,6 +614,7 @@ function AgentDialog(props: {
       name: name().trim(),
       instructions: instructions().trim(),
       teamId: selectedTeamId(),
+      autoAcceptPermissions: autoAcceptChoice(),
     });
     if (saved) close();
   };
@@ -787,6 +806,34 @@ function AgentDialog(props: {
                     />
                   </Show>
                 </label>
+              </div>
+              <div class="mt-4 border-t border-ink/[0.06] pt-4">
+                <SettingsRow
+                  label="Auto-accept permission requests"
+                  description={
+                    selectedHarness()?.kind === 'macrod'
+                      ? 'Off by default: this harness runs on your machine, so the agent asks before running commands or editing files.'
+                      : 'On by default: this runtime works inside a sandbox, so the agent proceeds without asking.'
+                  }
+                >
+                  <ToggleSwitch
+                    size="md"
+                    checked={autoAcceptPermissions()}
+                    onChange={handleAutoAcceptChange}
+                  />
+                </SettingsRow>
+                <Show
+                  when={
+                    autoAcceptPermissions() &&
+                    selectedHarness()?.kind === 'macrod'
+                  }
+                >
+                  <p class="mt-2 text-xs text-failure">
+                    The agent will approve every tool call on that machine —
+                    shell commands, file edits, anything the harness allows —
+                    without asking you first.
+                  </p>
+                </Show>
               </div>
             </AgentFormSection>
 

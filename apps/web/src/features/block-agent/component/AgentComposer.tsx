@@ -6,27 +6,46 @@
 
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
-import { Show } from 'solid-js';
+import type { MessagePart } from '@service-agent-fold/generated/types';
+import { For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import {
   AgentInput,
   AgentModelSelector,
   ComposerNotice,
+  PermissionOptions,
   type QueuedPromptItem,
   QueuedPrompts,
 } from '../ui';
+
+type PendingPermission = Extract<MessagePart, { kind: 'permission' }>;
 
 export function AgentComposer() {
   const {
     composer,
     loadFailed,
+    messages,
     metadata,
     pending,
     queue,
     resuming,
+    working,
     registerQuoteInsert,
   } = useAgentSession();
   const userId = useUserId();
+
+  // Permission requests the agent is blocked on, surfaced here so a prompt
+  // buried mid-transcript is not missed. Only the running turn's: a request
+  // left open by a turn that already ended can no longer be answered.
+  const pendingPermissions = (): PendingPermission[] => {
+    if (!working()) return [];
+    const last = messages().at(-1);
+    if (last?.author.kind !== 'agent' || last.stop != null) return [];
+    return last.parts.filter(
+      (part): part is PendingPermission =>
+        part.kind === 'permission' && part.outcome.kind === 'pending'
+    );
+  };
 
   // Focus plumbing between the input and the queue list above it: Up at the
   // start of the input lands on the bottom (next-to-dispatch) queue row, and
@@ -72,6 +91,25 @@ export function AgentComposer() {
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>
+      <For each={pendingPermissions()}>
+        {(permission) => (
+          <div class="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-edge-muted bg-surface px-3 py-2 text-xs">
+            <span class="text-ink">
+              The agent is waiting for your permission to continue.
+            </span>
+            <PermissionOptions
+              options={permission.options}
+              disabled={composer.answeringPermission(permission.requestId)}
+              onSelect={(optionId) =>
+                composer.respondToPermission(permission.requestId, {
+                  kind: 'selected',
+                  optionId,
+                })
+              }
+            />
+          </div>
+        )}
+      </For>
       <AgentInput
         placeholder="Message the agent, @mention anything"
         autofocus={autofocus}

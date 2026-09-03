@@ -11,6 +11,12 @@ import * as zod from 'zod';
  */
 export const listAgentsResponseItem = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` defers to the runtime kind's default: managed runtimes\nauto-accept, macrod prompts."
+      ),
     bot: zod
       .object({
         avatar_url: zod.string().nullish().describe('Optional avatar URL.'),
@@ -86,6 +92,12 @@ export const listAgentsResponse = zod.array(listAgentsResponseItem);
  */
 export const createAgentBody = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to defer to the runtime kind's default."
+      ),
     avatar_url: zod
       .string()
       .nullish()
@@ -130,6 +142,12 @@ export const updateAgentParams = zod.object({
 
 export const updateAgentBody = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. Omit to defer to the runtime kind's default."
+      ),
     avatar_url: zod
       .string()
       .nullish()
@@ -169,6 +187,12 @@ export const updateAgentBody = zod
 
 export const updateAgentResponse = zod
   .object({
+    auto_accept_permissions: zod
+      .boolean()
+      .nullish()
+      .describe(
+        "Whether the agent's sessions approve ACP permission requests without\nasking. `None` defers to the runtime kind's default: managed runtimes\nauto-accept, macrod prompts."
+      ),
     bot: zod
       .object({
         avatar_url: zod.string().nullish().describe('Optional avatar URL.'),

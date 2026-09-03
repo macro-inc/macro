@@ -238,3 +238,12 @@ export function useAgentSession(): AgentSessionState {
   }
   return ctx;
 }
+
+/**
+ * The session state when rendered inside a block, `undefined` when a
+ * transcript is shown on its own (the debug gallery, replay fixtures). For
+ * parts that act on the session when they can and read as inert otherwise.
+ */
+export function useOptionalAgentSession(): AgentSessionState | undefined {
+  return useContext(AgentSessionCtx);
+}

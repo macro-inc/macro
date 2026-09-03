@@ -4,7 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { AgentAutoAcceptPermissions } from './agentAutoAcceptPermissions';
 import type { AgentChannelScope } from './agentChannelScope';
 import type { AgentHarnessId } from './agentHarnessId';
 import type { Bot } from './bot';
@@ -13,6 +13,10 @@ import type { Bot } from './bot';
  * A persisted user- or team-owned AI agent.
  */
 export interface Agent {
+  /** Whether the agent's sessions approve ACP permission requests without
+asking. `None` defers to the runtime kind's default: managed runtimes
+auto-accept, macrod prompts. */
+  auto_accept_permissions?: AgentAutoAcceptPermissions;
   /** The bot identity used for mentions and channel participation. */
   bot: Bot;
   /** Selected channel ids. Empty for a global agent. */
