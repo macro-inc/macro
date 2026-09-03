@@ -27,25 +27,32 @@ mod test;
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadAgentModelsRequest {
-    /// `in-memory`, `cursor`, or `macrod`.
-    pub harness: String,
+    /// Provider to probe.
+    pub harness: ModelHarnessDto,
     /// Required for macrod and forbidden for other targets.
     pub harness_id: Option<Uuid>,
+}
+
+/// Harness names accepted by the model discovery endpoint.
+#[derive(Debug, Deserialize, ToSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum ModelHarnessDto {
+    /// Macro's in-process agent.
+    InMemory,
+    /// The caller's Cursor account.
+    Cursor,
+    /// A paired macrod runtime.
+    Macrod,
 }
 
 impl TryFrom<LoadAgentModelsRequest> for LoadAgentModels {
     type Error = LoadAgentModelsError;
 
     fn try_from(value: LoadAgentModelsRequest) -> Result<Self, Self::Error> {
-        let harness = match value.harness.as_str() {
-            "in-memory" => ModelHarness::InMemory,
-            "cursor" => ModelHarness::Cursor,
-            "macrod" => ModelHarness::Macrod,
-            _ => {
-                return Err(LoadAgentModelsError::BadRequest(
-                    "harness must be in-memory, cursor, or macrod".to_owned(),
-                ));
-            }
+        let harness = match value.harness {
+            ModelHarnessDto::InMemory => ModelHarness::InMemory,
+            ModelHarnessDto::Cursor => ModelHarness::Cursor,
+            ModelHarnessDto::Macrod => ModelHarness::Macrod,
         };
         Ok(Self {
             harness,
@@ -72,22 +79,31 @@ pub struct AgentModelDto {
 #[derive(Debug, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadAgentModelsResponse {
-    /// `available` or `unsupported`.
-    pub status: String,
+    /// Model-selection availability.
+    pub status: AgentModelsStatusDto,
     /// Current provider model, if model selection is available.
     pub current_model: Option<String>,
     /// Ordered model catalog.
     pub models: Vec<AgentModelDto>,
 }
 
+/// Model-selection availability returned over HTTP.
+#[derive(Debug, Serialize, ToSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum AgentModelsStatusDto {
+    /// A model select was advertised.
+    Available,
+    /// The provider does not advertise model selection.
+    Unsupported,
+}
+
 impl From<AgentModels> for LoadAgentModelsResponse {
     fn from(value: AgentModels) -> Self {
         Self {
             status: match value.status {
-                AgentModelsStatus::Available => "available",
-                AgentModelsStatus::Unsupported => "unsupported",
-            }
-            .to_owned(),
+                AgentModelsStatus::Available => AgentModelsStatusDto::Available,
+                AgentModelsStatus::Unsupported => AgentModelsStatusDto::Unsupported,
+            },
             current_model: value.current_model,
             models: value
                 .models
@@ -158,6 +174,7 @@ where
     post,
     path = "/agent-models/load",
     tag = "agent-models",
+    security(("bearerAuth" = [])),
     request_body = LoadAgentModelsRequest,
     responses(
         (status = 200, description = "Fresh provider model catalog", body = LoadAgentModelsResponse),

@@ -34,11 +34,13 @@ fn projects_ungrouped_models_and_ignores_other_config() {
                 id: "opus".to_owned(),
                 name: "Opus".to_owned(),
                 description: Some("Largest model".to_owned()),
+                group: None,
             },
             ModelOption {
                 id: "sonnet".to_owned(),
                 name: "Sonnet".to_owned(),
                 description: None,
+                group: None,
             },
         ]
     );
@@ -78,5 +80,13 @@ fn flattens_grouped_models_in_group_and_option_order() {
     assert_eq!(
         selection.options[2].description.as_deref(),
         Some("Deep reasoning")
+    );
+    assert_eq!(
+        selection
+            .options
+            .iter()
+            .map(|option| option.group.as_deref())
+            .collect::<Vec<_>>(),
+        vec![Some("Anthropic"), Some("Anthropic"), Some("OpenAI")]
     );
 }

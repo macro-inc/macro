@@ -1,7 +1,8 @@
 //! OpenAPI document for the agent harness service's session routes.
 
 use agent_harness::inbound::model_load::{
-    self, AgentModelDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
+    self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
+    ModelHarnessDto,
 };
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{SandboxSize, SessionBot};
@@ -12,10 +13,27 @@ use agent_session::inbound::axum_router::{
     EditQueuedActionRequest, LogDirectionDto, LogFrameDto, QueuedActionDto,
     RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto,
 };
-use utoipa::OpenApi;
+use utoipa::{
+    Modify, OpenApi,
+    openapi::security::{Http, HttpAuthScheme, SecurityScheme},
+};
+
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        if let Some(components) = openapi.components.as_mut() {
+            components.add_security_scheme(
+                "bearerAuth",
+                SecurityScheme::Http(Http::new(HttpAuthScheme::Bearer)),
+            );
+        }
+    }
+}
 
 #[derive(OpenApi)]
 #[openapi(
+    modifiers(&SecurityAddon),
     info(terms_of_service = "https://macro.com/terms"),
     paths(
         axum_router::create_agent_session_handler,
@@ -57,6 +75,8 @@ use utoipa::OpenApi;
         LoadAgentModelsRequest,
         LoadAgentModelsResponse,
         AgentModelDto,
+        AgentModelsStatusDto,
+        ModelHarnessDto,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),
