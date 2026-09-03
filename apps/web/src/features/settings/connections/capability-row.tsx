@@ -30,7 +30,6 @@ export function CapabilityRow(props: {
     <IntegrationRow
       icon={props.icon}
       title={props.title}
-      stackOnNarrow
       status={
         props.status ? (
           <StatusDot

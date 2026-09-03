@@ -236,8 +236,7 @@ export function ChoiceRow(props: {
  * A row for an integration / service: a brand icon, a title + one-line
  * description, and a trailing action slot. Used by the Connected accounts and
  * MCP cards so every integration reads the same. The action stays on the
- * title row so a chevron stays right, unless `stackOnNarrow` drops it under
- * the title below 460px. Description and facts use the width under the title.
+ * title row. Description and facts use the width under the title.
  */
 export function IntegrationRow(props: {
   /** The brand icon, rendered at its native size inside a fixed slot. */
@@ -248,11 +247,6 @@ export function IntegrationRow(props: {
   facts?: JSX.Element;
   /** Optional indicator shown right after the title (e.g. a connection dot). */
   status?: JSX.Element;
-  /**
-   * Below a 460px container width, stack the action under the title instead
-   * of keeping it on the same row. Requires an ancestor carrying `@container`.
-   */
-  stackOnNarrow?: boolean;
   children?: JSX.Element;
   class?: string;
 }) {
@@ -266,14 +260,7 @@ export function IntegrationRow(props: {
         </div>
       </Show>
       <div class="min-w-0 flex-1 flex flex-col gap-1">
-        <div
-          class={cn(
-            'flex min-w-0',
-            props.stackOnNarrow
-              ? 'flex-col gap-2 @[460px]:flex-row @[460px]:items-center @[460px]:gap-3'
-              : 'items-center gap-3'
-          )}
-        >
+        <div class="flex min-w-0 items-center gap-3">
           <div class="flex min-w-0 flex-1 items-center gap-2">
             <div class="text-sm font-medium text-ink truncate">
               {props.title}
@@ -281,12 +268,7 @@ export function IntegrationRow(props: {
             <Show when={props.status}>{props.status}</Show>
           </div>
           <Show when={props.children}>
-            <div
-              class={cn(
-                'flex items-center gap-2',
-                props.stackOnNarrow ? '@[460px]:shrink-0' : 'shrink-0'
-              )}
-            >
+            <div class="flex shrink-0 items-center gap-2">
               {props.children}
             </div>
           </Show>
