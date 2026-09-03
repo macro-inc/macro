@@ -51,12 +51,12 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
 
       <Show when={props.model.leftovers.length > 0}>
         <SettingsSection title="Other Connections">
-          <button
-            type="button"
-            class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6 rounded-xl"
-            onClick={() => openConnectionsProvider('other')}
-          >
-            <SettingsCard>
+          <SettingsCard>
+            <button
+              type="button"
+              class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
+              onClick={() => openConnectionsProvider('other')}
+            >
               <IntegrationRow
                 icon={<span class="text-xs font-medium text-ink-muted">?</span>}
                 title={`${props.model.leftovers.length} other connection${
@@ -66,8 +66,8 @@ export function ConnectedView(props: { model: ConnectionsModel }) {
               >
                 <CaretRightIcon class="size-4 text-ink-extra-muted" />
               </IntegrationRow>
-            </SettingsCard>
-          </button>
+            </button>
+          </SettingsCard>
         </SettingsSection>
       </Show>
     </Show>

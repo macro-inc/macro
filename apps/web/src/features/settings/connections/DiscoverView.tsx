@@ -75,12 +75,12 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
         <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <For each={featured()}>
             {(item) => (
-              <button
-                type="button"
-                class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6 rounded-xl"
-                onClick={() => openConnectionsProvider(item.id)}
-              >
-                <SettingsCard>
+              <SettingsCard>
+                <button
+                  type="button"
+                  class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
+                  onClick={() => openConnectionsProvider(item.id)}
+                >
                   <IntegrationRow
                     icon={providerIcon(item.id)}
                     title={item.name}
@@ -88,8 +88,8 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
                   >
                     <CaretRightIcon class="size-4 text-ink-extra-muted" />
                   </IntegrationRow>
-                </SettingsCard>
-              </button>
+                </button>
+              </SettingsCard>
             )}
           </For>
         </div>
