@@ -85,7 +85,7 @@ describe('ConnectedView', () => {
     expect(screen.getByRole('heading', { name: 'Custom MCP' })).toBeTruthy();
     expect(screen.getByText('Servers you added by URL.')).toBeTruthy();
     expect(screen.getByText('Unknown')).toBeTruthy();
-    expect(screen.getByText('example.com')).toBeTruthy();
+    expect(screen.getByText('example.com/mcp')).toBeTruthy();
     expect(screen.queryByText('Enabled')).toBeNull();
     expect(screen.queryByText('Disabled')).toBeNull();
     expect(screen.queryByRole('switch')).toBeNull();
@@ -160,7 +160,8 @@ describe('ConnectedView', () => {
     expect(screen.getByRole('button', { name: 'More' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: 'Connect' })).toBeNull();
-    expect(screen.getByRole('menuitem', { name: 'Disconnect' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Remove' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Disconnect' })).toBeNull();
   });
 
   it('shows Enable for a paused custom MCP', () => {

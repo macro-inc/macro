@@ -124,11 +124,25 @@ describe('toConnectionsModel', () => {
         kind: 'native-mcp',
         id: 'mcp:https://example.com/mcp',
         title: 'Linear',
-        subtitle: 'example.com',
+        subtitle: 'example.com/mcp',
         url: 'https://example.com/mcp',
         enabled: true,
         authenticated: true,
       },
+    ]);
+  });
+
+  it('previews host and path and drops query params', () => {
+    const model = toConnectionsModel({
+      ...emptyInput,
+      nativeMcp: [
+        native('Kody', 'https://kody.codes/mcp?token=secret'),
+        native('Bare', 'https://tools.example/'),
+      ],
+    });
+    expect(model.leftovers.map((row) => row.subtitle)).toEqual([
+      'kody.codes/mcp',
+      'tools.example',
     ]);
   });
 

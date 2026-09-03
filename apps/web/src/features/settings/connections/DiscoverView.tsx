@@ -81,14 +81,14 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
         </Show>
       </label>
 
-      <SettingsSection title="Featured">
-        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <SettingsSection title="Featured" class="@container">
+        <div class="grid grid-cols-1 gap-3 @[460px]:grid-cols-2">
           <For each={featured()}>
             {(item) => (
               <SettingsCard>
                 <button
                   type="button"
-                  class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
+                  class="flex h-full w-full flex-col items-stretch text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
                   onClick={() => openConnectionsProvider(item.id)}
                 >
                   <IntegrationRow
@@ -205,9 +205,14 @@ export function DiscoverView(props: { model: ConnectionsModel }) {
 
 function AddedMark() {
   return (
-    <span class="inline-flex items-center gap-1 text-sm text-ink-muted">
+    <span
+      class="inline-flex shrink-0 items-center gap-1 text-sm text-ink-muted"
+      aria-label="Added"
+    >
       <CheckIcon class="size-3.5" />
-      Added
+      <span class="hidden @[16rem]:inline" aria-hidden="true">
+        Added
+      </span>
     </span>
   );
 }
@@ -221,7 +226,11 @@ function CatalogRow(props: {
     onConnected: (entry) => toast.success(`${entry.display_name} connected`),
   });
 
-  return (
+  const name = () => props.entry.display_name;
+  const descriptionId = `discover-connect-${props.entry.app_slug}`;
+  const description = props.entry.description ?? props.entry.app_slug;
+
+  const row = (
     <IntegrationRow
       icon={
         <PipedreamConnectorIcon
@@ -230,21 +239,28 @@ function CatalogRow(props: {
           class="size-8"
         />
       }
-      title={props.entry.display_name}
-      description={props.entry.description ?? props.entry.app_slug}
+      title={name()}
+      description={<span id={descriptionId}>{description}</span>}
     >
-      <Show
-        when={props.added}
-        fallback={
-          <ConnectAction
-            label="Connect"
-            onClick={() => void connect()}
-            loading={busy()}
-          />
-        }
-      >
+      <Show when={props.added} fallback={<ConnectAction label="Connect" loading={busy()} />}>
         <AddedMark />
       </Show>
     </IntegrationRow>
+  );
+
+  if (props.added) return row;
+
+  return (
+    <button
+      type="button"
+      class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
+      aria-label={busy() ? `Connecting ${name()}` : `Connect ${name()}`}
+      aria-describedby={descriptionId}
+      aria-busy={busy()}
+      disabled={busy()}
+      onClick={() => void connect()}
+    >
+      {row}
+    </button>
   );
 }

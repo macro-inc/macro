@@ -32,6 +32,7 @@ function MenuItemIcon(props: { item: ConnectionMenuItem }): JSX.Element {
       case 'Reconnect':
         return 'reconnect';
       case 'Disconnect':
+      case 'Remove':
         return 'disconnect';
       default:
         return undefined;

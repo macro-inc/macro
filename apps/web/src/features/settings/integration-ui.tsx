@@ -67,6 +67,13 @@ export function ConnectAction(props: {
       </a>
     );
   }
+  if (!props.onClick) {
+    return (
+      <span aria-hidden="true" class={cn(className(), 'pointer-events-none')}>
+        {body}
+      </span>
+    );
+  }
   return (
     <button
       type="button"

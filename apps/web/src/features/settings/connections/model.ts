@@ -220,9 +220,11 @@ function githubCapabilities(input: ConnectionsInput): Capability[] {
   ];
 }
 
-function hostFromUrl(url: string): string {
+function mcpUrlPreview(url: string): string {
   try {
-    return new URL(url).host;
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace(/\/$/, '');
+    return path ? `${parsed.host}${path}` : parsed.host;
   } catch {
     return url;
   }
@@ -233,7 +235,7 @@ function leftoverNative(server: ServerResponse): Leftover {
     kind: 'native-mcp',
     id: `mcp:${server.url}`,
     title: server.server_name,
-    subtitle: hostFromUrl(server.url),
+    subtitle: mcpUrlPreview(server.url),
     url: server.url,
     enabled: server.enabled,
     authenticated: server.authenticated,

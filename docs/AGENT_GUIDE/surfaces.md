@@ -71,13 +71,16 @@ Macro MCP to `Macro MCP`. `Bots`; `Log out`.
 
 `Connected` lists mapped providers (ready-of-total). Custom MCP grants sit in
 a second section. Discover's Add custom MCP saves name and URL only. Connect
-on that Connected row starts OAuth. More holds Disable, Rename, Reconnect, Disconnect.
-Connect and Enable stay on the row when that is the job. Reconnect also
-sits on the row when auth is broken. No status lights on rows. Off is
+on that Connected row starts OAuth. More holds Disable, Rename, Reconnect,
+and Disconnect. An unauthenticated custom MCP shows Remove, not Disconnect.
+The row lists host plus path and drops query params. A failed connect sits
+under the URL. Connect and Enable stay on the row when that is the job.
+Reconnect also sits on the row when auth is broken. No status lights on rows. Off is
 shown by Enable, not a muted dot. Unmatched
 Pipedream leftovers stay with the providers.
 Empty state offers Google first, then GitHub, Linear, Notion,
-Slack, Cursor. `Discover` searches the Pipedream catalog; featured cards are
+Slack, Cursor. `Discover` searches the Pipedream catalog. Browse rows that
+are not added yet connect on a click of the whole row. Featured cards are
 Google, GitHub, Linear, Notion, Slack, Cursor. Click a provider for its page: Google
 (Gmail + Calendar per inbox, no Docs; Gmail shows dest sync status. Signature
 nests under Gmail for an owned inbox), GitHub (account, Configure app for

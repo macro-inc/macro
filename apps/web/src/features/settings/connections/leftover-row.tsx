@@ -115,15 +115,17 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     }
   };
 
-  const remove = () => {
+  const remove = (connected: boolean) => {
     const leftover = props.leftover;
+    const ok = connected ? 'Disconnected from Macro' : 'Removed';
+    const fail = connected ? 'Failed to disconnect' : 'Failed to remove';
     switch (leftover.kind) {
       case 'native-mcp':
         deleteNative.mutate(
           { url: leftover.url },
           {
-            onSuccess: () => toast.success('Disconnected from Macro'),
-            onError: () => toast.failure('Failed to disconnect'),
+            onSuccess: () => toast.success(ok),
+            onError: () => toast.failure(fail),
           }
         );
         return;
@@ -131,8 +133,8 @@ export function LeftoverRow(props: { leftover: Leftover }) {
         deletePipedream.mutate(
           { app_slug: leftover.appSlug },
           {
-            onSuccess: () => toast.success('Disconnected from Macro'),
-            onError: () => toast.failure('Failed to disconnect'),
+            onSuccess: () => toast.success(ok),
+            onError: () => toast.failure(fail),
           }
         );
         return;
@@ -163,11 +165,14 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     );
   };
 
-  const askDisconnect = () =>
+  const askRemove = (connected: boolean) =>
     setDisconnect({
-      title: 'Disconnect from Macro',
-      body: `Disconnect ${props.leftover.title}?`,
-      onConfirm: remove,
+      title: connected ? 'Disconnect from Macro' : 'Remove',
+      body: connected
+        ? `Disconnect ${props.leftover.title}?`
+        : `Remove ${props.leftover.title}?`,
+      confirmLabel: connected ? 'Disconnect' : 'Remove',
+      onConfirm: () => remove(connected),
     });
 
   const openRename = () => {
@@ -190,9 +195,9 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     );
   };
 
-  const disconnectItem = (): ConnectionMenuItem => ({
-    label: 'Disconnect',
-    onSelect: askDisconnect,
+  const disconnectItem = (connected = true): ConnectionMenuItem => ({
+    label: connected ? 'Disconnect' : 'Remove',
+    onSelect: () => askRemove(connected),
     disabled: busy(),
     danger: true,
   });
@@ -231,20 +236,13 @@ export function LeftoverRow(props: { leftover: Leftover }) {
           return (
             <ConnectionRowActions
               primary={
-                <>
-                  <Show when={connectionFailed()}>
-                    <span class="text-xs text-failure whitespace-nowrap">
-                      Last attempt failed
-                    </span>
-                  </Show>
-                  <ConnectAction
-                    label={connectionFailed() ? 'Try Again' : 'Connect'}
-                    onClick={startAuth}
-                    disabled={busy()}
-                  />
-                </>
+                <ConnectAction
+                  label={connectionFailed() ? 'Try Again' : 'Connect'}
+                  onClick={startAuth}
+                  disabled={busy()}
+                />
               }
-              items={[renameItem(), disconnectItem()]}
+              items={[renameItem(), disconnectItem(false)]}
             />
           );
         }
@@ -324,7 +322,14 @@ export function LeftoverRow(props: { leftover: Leftover }) {
         return (
           <SettingsRow
             label={leftover.title}
-            description={leftover.subtitle}
+            description={
+              <>
+                <span class="block truncate">{leftover.subtitle}</span>
+                <Show when={connectionFailed()}>
+                  <span class="block text-failure">Last attempt failed</span>
+                </Show>
+              </>
+            }
             muted={muted}
           >
             {actions()}

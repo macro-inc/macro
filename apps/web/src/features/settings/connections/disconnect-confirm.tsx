@@ -3,6 +3,7 @@ import { Button, Dialog, Panel } from '@ui';
 export type DisconnectConfirm = {
   title: string;
   body: string;
+  confirmLabel?: string;
   onConfirm: () => void;
 };
 
@@ -44,7 +45,7 @@ export function DisconnectConfirmDialog(props: {
                 request.onConfirm();
               }}
             >
-              Disconnect
+              {props.request?.confirmLabel ?? 'Disconnect'}
             </Button>
           </div>
         </Panel.Body>
