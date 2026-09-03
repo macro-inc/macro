@@ -6,6 +6,28 @@ import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CursorProvider } from './CursorProvider';
 
+vi.mock('@ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ui')>();
+  const Dropdown = Object.assign(
+    (p: { children?: unknown }) => <>{p.children}</>,
+    {
+      Trigger: (p: { 'aria-label'?: string; children?: unknown }) => (
+        <button type="button" aria-label={p['aria-label']}>
+          {p.children}
+        </button>
+      ),
+      Content: (p: { children?: unknown }) => <div>{p.children}</div>,
+      Group: (p: { children?: unknown }) => <div>{p.children}</div>,
+      Item: (p: { children?: unknown; onSelect?: () => void }) => (
+        <div role="menuitem" onClick={() => p.onSelect?.()}>
+          {p.children}
+        </div>
+      ),
+    }
+  );
+  return { ...actual, Dropdown };
+});
+
 const mocks = vi.hoisted(() => ({
   status: {
     data: {
@@ -120,9 +142,7 @@ describe('CursorProvider', () => {
     expect(picker.textContent).toContain('Default Model');
     expect(picker.getAttribute('aria-haspopup')).toBe('listbox');
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Disconnect from Macro' })
-    );
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Disconnect' }));
 
     expect(mocks.disconnect).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeTruthy();

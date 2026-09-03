@@ -14,7 +14,7 @@ export type ConnectionState = 'connected' | 'attention' | 'disconnected' | 'off'
 /**
  * The trailing action on an integration row. Defaults to a quiet text+arrow
  * "Connect" affordance (mirrors Linear's link-style connect button); pass
- * `variant` to render a neutral or destructive action (e.g. Disconnect).
+ * `variant` to render a neutral or destructive action.
  */
 export function ConnectAction(props: {
   label: JSX.Element;
@@ -73,29 +73,6 @@ export function ConnectAction(props: {
     >
       {body}
     </button>
-  );
-}
-
-/** Danger disconnect. Narrow cards hide "from Macro". The name stays full. */
-export function DisconnectAction(props: {
-  onClick?: () => void;
-  disabled?: boolean;
-  loading?: boolean;
-}) {
-  return (
-    <ConnectAction
-      variant="danger"
-      ariaLabel="Disconnect from Macro"
-      label={
-        <>
-          Disconnect
-          <span class="hidden @[460px]:inline"> from Macro</span>
-        </>
-      }
-      onClick={props.onClick}
-      disabled={props.disabled}
-      loading={props.loading}
-    />
   );
 }
 
