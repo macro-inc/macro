@@ -11,7 +11,12 @@ import { EmailControls } from './EmailControls';
 import { EmailInboxSelector } from './EmailInboxSelector';
 import { EmailNavigation } from './EmailSidebar';
 
-export function EmailHeader() {
+export type EmailHeaderProps = {
+  /** Hands focus back to the list after Escape leaves the search field. */
+  onSearchEscape?: () => void;
+};
+
+export function EmailHeader(props: EmailHeaderProps) {
   const panel = useSplitPanelOrThrow();
   const { state, setState } = useEmailView();
   const [navigationOpen, setNavigationOpen] = createSignal(false);
@@ -97,6 +102,7 @@ export function EmailHeader() {
           value={state.search}
           hotkey="cmd+f"
           onValueChange={(search) => setState('search', search)}
+          onEscape={props.onSearchEscape}
           placeholder="Search email"
           class="max-w-md flex-1"
         />

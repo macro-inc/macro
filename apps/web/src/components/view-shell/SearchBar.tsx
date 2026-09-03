@@ -14,6 +14,11 @@ export type SearchBarProps = Omit<
   value: string;
   onValueChange: (value: string) => void;
   hotkey?: string;
+  /**
+   * Called after Escape clears the field and blurs the input, so the view
+   * can hand keyboard focus back to its list.
+   */
+  onEscape?: () => void;
   class?: string;
   inputClass?: string;
 };
@@ -24,6 +29,7 @@ export function SearchBar(props: SearchBarProps) {
     'value',
     'onValueChange',
     'hotkey',
+    'onEscape',
     'class',
     'inputClass',
     'disabled',
@@ -38,6 +44,15 @@ export function SearchBar(props: SearchBarProps) {
   const clear = () => {
     local.onValueChange('');
     queueMicrotask(() => input?.focus());
+  };
+
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key !== 'Escape') return;
+
+    event.preventDefault();
+    if (local.value) local.onValueChange('');
+    input?.blur();
+    local.onEscape?.();
   };
 
   return (
@@ -55,6 +70,7 @@ export function SearchBar(props: SearchBarProps) {
         readOnly={local.readOnly}
         required={local.required}
         class="group flex size-full min-w-0 items-center gap-2 px-3"
+        onKeyDown={onKeyDown}
       >
         <TextField.Label class="sr-only">{local.label}</TextField.Label>
         <MagnifyingGlassIcon

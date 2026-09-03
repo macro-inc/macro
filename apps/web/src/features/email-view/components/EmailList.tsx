@@ -42,6 +42,7 @@ import {
   createMemo,
   createSignal,
   Match,
+  onMount,
   type Setter,
   Show,
   Switch,
@@ -62,6 +63,7 @@ import {
   type EmailDataSourceItem,
   useEmailDataSource,
 } from '../queries/use-email-query';
+import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
 
@@ -75,7 +77,12 @@ type EmailListActivationMetadata = {
   newSplit?: boolean;
 };
 
-export function EmailList() {
+export type EmailListProps = {
+  /** The focusable list root, for callers that hand keyboard focus back. */
+  ref?: (element: HTMLDivElement) => void;
+};
+
+export function EmailList(props: EmailListProps) {
   const { state } = useEmailView();
   const panel = useSplitPanelOrThrow();
 
@@ -277,6 +284,32 @@ export function EmailList() {
     condition: panel.isPanelActive,
   });
 
+  useEmailListHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    selectedEntities,
+    clearSelection: listInteractions.selection.clear,
+  });
+
+  // Take focus on mount, as the legacy list does: focus inside the panel is
+  // what activates the split and its hotkey scope, so the list, tab, and
+  // filter shortcuts work on a fresh load without a click first. Deferred so
+  // the hotkey focusin handler's scope write doesn't re-run this from inside
+  // its own tracking scope, and skipped while the user is typing elsewhere.
+  onMount(() => {
+    queueMicrotask(() => {
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement &&
+        (active.isContentEditable || active.matches('input, textarea'))
+      ) {
+        return;
+      }
+
+      grid()?.focus();
+    });
+  });
+
   function actionGroupsFor(row: EmailActionRow) {
     const content = panel.handle.content();
 
@@ -382,7 +415,10 @@ export function EmailList() {
     <MaybeSoupEntityActionDrawerManager>
       <Surface
         depth={2}
-        ref={setGrid}
+        ref={(element: HTMLDivElement) => {
+          setGrid(element);
+          props.ref?.(element);
+        }}
         role="grid"
         aria-label="Email"
         aria-multiselectable="true"

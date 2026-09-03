@@ -5,7 +5,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Surface } from '@ui';
-import { onMount, Suspense } from 'solid-js';
+import { createSignal, onMount, Suspense } from 'solid-js';
 import { EmailHeader } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailSidebar } from './components/EmailSidebar';
@@ -30,6 +30,7 @@ function EmailListFallback() {
 
 function EmailViewRoot() {
   const panel = useSplitPanelOrThrow();
+  const [listElement, setListElement] = createSignal<HTMLDivElement>();
 
   onMount(() => panel.handle.setDisplayName('Email'));
 
@@ -48,11 +49,11 @@ function EmailViewRoot() {
               </ViewShell.Aside>
               <ViewShell.Main>
                 <ViewShell.Header>
-                  <EmailHeader />
+                  <EmailHeader onSearchEscape={() => listElement()?.focus()} />
                 </ViewShell.Header>
                 <ViewShell.Content>
                   <Suspense fallback={<EmailListFallback />}>
-                    <EmailList />
+                    <EmailList ref={setListElement} />
                   </Suspense>
                 </ViewShell.Content>
               </ViewShell.Main>
