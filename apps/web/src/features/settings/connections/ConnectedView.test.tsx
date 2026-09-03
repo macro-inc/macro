@@ -13,9 +13,31 @@ import {
 } from '@core/signal/connectionsRest';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConnectedView } from './ConnectedView';
 import { toConnectionsModel } from './model';
+
+vi.mock('@ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@ui')>();
+  const Dropdown = Object.assign(
+    (p: { children?: unknown }) => <>{p.children}</>,
+    {
+      Trigger: (p: { 'aria-label'?: string; children?: unknown }) => (
+        <button type="button" aria-label={p['aria-label']}>
+          {p.children}
+        </button>
+      ),
+      Content: (p: { children?: unknown }) => <div>{p.children}</div>,
+      Group: (p: { children?: unknown }) => <div>{p.children}</div>,
+      Item: (p: { children?: unknown; onSelect?: () => void }) => (
+        <div role="menuitem" onClick={() => p.onSelect?.()}>
+          {p.children}
+        </div>
+      ),
+    }
+  );
+  return { ...actual, Dropdown };
+});
 
 const connectedCursor = toConnectionsModel({
   userId: 'macro|self',
@@ -82,9 +104,10 @@ describe('ConnectedView', () => {
     expect(screen.queryByText('Enabled')).toBeNull();
     expect(screen.queryByText('Disabled')).toBeNull();
     expect(screen.getByRole('switch', { name: 'Enable Unknown' })).toBeTruthy();
-    expect(
-      screen.getByRole('button', { name: 'Disconnect from Macro' })
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'More' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Reconnect' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Disconnect' })).toBeTruthy();
     expect(screen.queryByText('Other Connections')).toBeNull();
   });
 
@@ -118,6 +141,39 @@ describe('ConnectedView', () => {
     expect(screen.queryByText('Start with Google')).toBeNull();
     expect(screen.getByRole('heading', { name: 'Custom MCP' })).toBeTruthy();
     expect(screen.getByText('Unknown')).toBeTruthy();
+  });
+
+  it('puts Connect in the More menu when a custom MCP is not authenticated', () => {
+    const unauthenticated = toConnectionsModel({
+      userId: 'macro|self',
+      emailEnabled: true,
+      calendarEnabled: true,
+      emailLinks: [],
+      github: { status: 'unlinked', username: undefined },
+      pipedream: [],
+      nativeMcp: [
+        {
+          server_name: 'Unknown',
+          url: 'https://example.com/mcp',
+          authenticated: false,
+          enabled: false,
+        },
+      ],
+      cursorRegistered: false,
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(() => (
+      <QueryClientProvider client={client}>
+        <ConnectedView model={unauthenticated} />
+      </QueryClientProvider>
+    ));
+    expect(screen.queryByRole('switch')).toBeNull();
+    expect(screen.getByRole('button', { name: 'More' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Connect' })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Disconnect' })).toBeTruthy();
   });
 
   it('opens Google when the empty starter card is clicked', () => {

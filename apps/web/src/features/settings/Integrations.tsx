@@ -24,6 +24,10 @@ import type {
 import { Button, Dialog, Panel, ToggleSwitch } from '@ui';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { ConnectAction } from './integration-ui';
+import {
+  readMcpAuthAttempted,
+  writeMcpAuthAttempted,
+} from './mcp-auth-attempt';
 import { IntegrationRow, SettingsCard, SettingsSection } from './primitives';
 
 /** Best-effort hostname for an MCP server URL — friendlier than the raw URL. */
@@ -163,42 +167,20 @@ export function AddCustomMcpDialog(props: {
   );
 }
 
-// We have no server-side signal for a failed auth, so we remember locally that a
-// connect attempt was made. A disconnected server with a recorded attempt is
-// treated as a failed connection; the flag is cleared once it authenticates.
-const AUTH_ATTEMPT_PREFIX = 'mcp:auth-attempted:';
-
-function readAuthAttempted(url: string): boolean {
-  try {
-    return localStorage.getItem(AUTH_ATTEMPT_PREFIX + url) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function writeAuthAttempted(url: string, attempted: boolean): void {
-  try {
-    if (attempted) localStorage.setItem(AUTH_ATTEMPT_PREFIX + url, '1');
-    else localStorage.removeItem(AUTH_ATTEMPT_PREFIX + url);
-  } catch {
-    // Ignore storage failures (private mode, quota, etc.)
-  }
-}
-
 function ServerRow(props: { server: ServerResponse }) {
   const updateMutation = useUpdateMcpServerMutation();
   const deleteMutation = useDeleteMcpServerMutation();
   const authMutation = useStartMcpAuthMutation();
   const [confirmDelete, setConfirmDelete] = createSignal(false);
   const [attempted, setAttempted] = createSignal(
-    readAuthAttempted(props.server.url)
+    readMcpAuthAttempted(props.server.url)
   );
 
   // A recorded attempt on a still-disconnected server means the last connect
   // attempt didn't succeed. Clear the flag once the server authenticates.
   createEffect(() => {
     if (props.server.authenticated && attempted()) {
-      writeAuthAttempted(props.server.url, false);
+      writeMcpAuthAttempted(props.server.url, false);
       setAttempted(false);
     }
   });
@@ -241,11 +223,11 @@ function ServerRow(props: { server: ServerResponse }) {
       {
         onSuccess: (result: StartAuthResponse) => {
           openExternalUrl(result.authorization_url);
-          writeAuthAttempted(props.server.url, true);
+          writeMcpAuthAttempted(props.server.url, true);
           setAttempted(true);
         },
         onError: () => {
-          writeAuthAttempted(props.server.url, true);
+          writeMcpAuthAttempted(props.server.url, true);
           setAttempted(true);
           toast.failure('Failed to start authorization');
         },

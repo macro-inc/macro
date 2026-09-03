@@ -69,7 +69,8 @@ inbound connectors to Connections Discover), `Bots`; `Log out`.
 ## Settings — Connections — `/app/settings/connections`
 
 `Connected` lists mapped providers (ready-of-total). Custom MCP grants sit in
-a second section. Unmatched Pipedream leftovers stay with the providers.
+a second section. The More menu can Rename, Connect or Reconnect, and
+Disconnect. Unmatched Pipedream leftovers stay with the providers.
 Empty state offers Google first, then GitHub, Linear, Notion,
 Slack, Cursor. `Discover` searches the Pipedream catalog; featured cards are
 Google, GitHub, Linear, Slack, Cursor. Click a provider for its page: Google
