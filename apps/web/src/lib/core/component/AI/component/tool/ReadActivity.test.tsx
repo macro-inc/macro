@@ -29,6 +29,10 @@ const definitions = [
   } as unknown as PropertyDefinitionDomain,
 ];
 
+vi.mock('@app/features/activity/open-entity-in-split', () => ({
+  openEntityInSplit: vi.fn(),
+}));
+
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({

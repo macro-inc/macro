@@ -3,6 +3,7 @@ import type {
   ActivityEntityType,
   ActivityEvent,
 } from '@app/features/activity/core/event';
+import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { ActivityTimelineRow } from '@app/features/activity/views/activity-timeline-row';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import ClockCounterClockwise from '@phosphor-icons/core/regular/clock-counter-clockwise.svg';
@@ -120,7 +121,11 @@ const handler = createToolRenderer({
               <div class="max-h-120 overflow-y-auto rounded-md border border-edge-muted/60 py-1">
                 <For each={events()}>
                   {(event) => (
-                    <ActivityTimelineRow event={event} showActor={false} />
+                    <ActivityTimelineRow
+                      event={event}
+                      showActor={false}
+                      onOpen={openEntityInSplit}
+                    />
                   )}
                 </For>
               </div>

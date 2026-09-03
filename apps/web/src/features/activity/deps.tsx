@@ -18,6 +18,7 @@ export type EntityDisplay = {
   linkParams: Accessor<Record<string, string> | undefined>;
 };
 
+/** What a row asks its host to open. The host decides how. */
 export type OpenEntityTarget = {
   block: string;
   id: string;
@@ -26,10 +27,11 @@ export type OpenEntityTarget = {
 };
 
 /**
- * Everything the activity feature reaches outside itself for. The app wires
- * the real implementations in `app-deps.tsx`; tests hand in mocks. No file
- * under `queries/`, `state/`, `components/`, or `views/` imports these
- * capabilities directly.
+ * The ambient capabilities every activity surface needs the same way. The
+ * app wires the real implementations in `app-deps.tsx`; tests hand in
+ * mocks. Per-surface policy (what a click opens) is a callback prop, not a
+ * dep. No file under `queries/`, `state/`, `components/`, or `views/`
+ * imports these capabilities directly.
  */
 export type ActivityDeps = {
   /** GraphQL client for the activity queries. */
@@ -46,8 +48,6 @@ export type ActivityDeps = {
     entityId: Accessor<string>,
     entityType: Accessor<EntityType>
   ) => EntityDisplay;
-  /** Open an entity in the split layout. */
-  openEntity: (target: OpenEntityTarget) => void;
   /** The property definition behind a property-changed row, when known. */
   propertyDefinition: (
     propertyId: Accessor<string | undefined>

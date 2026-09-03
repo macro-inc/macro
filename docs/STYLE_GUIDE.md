@@ -249,11 +249,13 @@ TypeScript · `[ui]` UI / UX conventions
   models: Solid primitives, no JSX; each returns a view-state union such as
   `loading | error | empty | ready` plus actions), `components/` (props in, JSX
   out; no queries, state, or navigation), and `views/` (compose deps, state, and
-  components). Every outside capability the feature needs (GraphQL client, viewer
-  id, display names, entity display, open-entity, property definitions, time zone)
-  is a field on one `Deps` type in `deps.ts`, provided through a context
-  provider; `app-deps.ts` is the only production wiring and is mounted once at
-  the app root. Tests provide mocks through the same provider, so `state/` runs
+  components). Every ambient capability the feature needs the same way on every
+  surface (GraphQL client, viewer id, display names, entity display, property
+  definitions, time zone) is a field on one `Deps` type in `deps.ts`, provided
+  through a context provider; `app-deps.ts` is the only production wiring and is
+  mounted once at the app root. Behavior that varies per surface (what a row
+  click opens) is a callback prop from the host, not a dep, so an inert surface
+  simply omits it. Tests provide mocks through the same provider, so `state/` runs
   under `createRoot` against a mock client and `views/` render without `vi.mock`.
   The import graph is one-way: `core` → `queries` → `state` → `views` and
   `core` → `components` → `views`; `components` may import types from `deps.ts`.

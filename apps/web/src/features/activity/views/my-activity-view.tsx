@@ -6,7 +6,7 @@ import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { ActionGraph } from '../components/action-graph';
 import { TopEntitiesSection, TopEntityRow } from '../components/top-entities';
 import type { ActivityEvent, ActivityTopEntity } from '../core/event';
-import { useActivityDeps } from '../deps';
+import { type OpenEntityTarget, useActivityDeps } from '../deps';
 import { createActorName } from '../state/actor-name';
 import { createEntityOpener } from '../state/entity-opener';
 import { createMyActivityState } from '../state/my-activity';
@@ -28,8 +28,13 @@ function FeedStatus(props: { children: JSX.Element }) {
   );
 }
 
-/** The user's own activity, newest first. Needs `ActivityDeps` in context. */
-export function MyActivityView() {
+/**
+ * The user's own activity, newest first. Needs `ActivityDeps` in context;
+ * the host decides what a row click opens.
+ */
+export function MyActivityView(props: {
+  onOpen: (target: OpenEntityTarget) => void;
+}) {
   const deps = useActivityDeps();
   const state = createMyActivityState(deps);
   const overview = () => {
@@ -70,7 +75,12 @@ export function MyActivityView() {
                     empty={overview().topEntities.length === 0}
                   >
                     <For each={overview().topEntities}>
-                      {(entity) => <OpenableTopEntityRow entity={entity} />}
+                      {(entity) => (
+                        <OpenableTopEntityRow
+                          entity={entity}
+                          onOpen={props.onOpen}
+                        />
+                      )}
                     </For>
                   </TopEntitiesSection>
                 </>
@@ -85,7 +95,12 @@ export function MyActivityView() {
                         <>
                           <SoupSectionHeader>{group.label}</SoupSectionHeader>
                           <For each={group.events}>
-                            {(event) => <NamedActivityRow event={event} />}
+                            {(event) => (
+                              <NamedActivityRow
+                                event={event}
+                                onOpen={props.onOpen}
+                              />
+                            )}
                           </For>
                         </>
                       )}
@@ -123,18 +138,31 @@ export function MyActivityView() {
   );
 }
 
-function NamedActivityRow(props: { event: ActivityEvent }) {
+function NamedActivityRow(props: {
+  event: ActivityEvent;
+  onOpen: (target: OpenEntityTarget) => void;
+}) {
   const deps = useActivityDeps();
   const name = createActorName(deps, () => props.event.actorId);
-  return <ActivityTimelineRow event={props.event} actorName={name()} />;
+  return (
+    <ActivityTimelineRow
+      event={props.event}
+      actorName={name()}
+      onOpen={props.onOpen}
+    />
+  );
 }
 
-function OpenableTopEntityRow(props: { entity: ActivityTopEntity }) {
+function OpenableTopEntityRow(props: {
+  entity: ActivityTopEntity;
+  onOpen: (target: OpenEntityTarget) => void;
+}) {
   const deps = useActivityDeps();
   const opener = createEntityOpener(
     deps,
     () => props.entity.entityId,
-    () => props.entity.entityType
+    () => props.entity.entityType,
+    props.onOpen
   );
   return (
     <TopEntityRow

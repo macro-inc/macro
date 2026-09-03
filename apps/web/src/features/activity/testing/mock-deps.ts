@@ -1,24 +1,20 @@
 import type { Client } from '@urql/core';
-import type { ActivityDeps, OpenEntityTarget } from '../deps';
+import type { ActivityDeps } from '../deps';
 import { createMockGraphql, type MockGraphql } from './mock-graphql';
 
 export const MOCK_VIEWER_ID = 'macro|me@example.com';
 
-export type MockActivityDeps = ActivityDeps & {
-  graphqlMock: MockGraphql;
-  opened: OpenEntityTarget[];
-};
+export type MockActivityDeps = ActivityDeps & { graphqlMock: MockGraphql };
 
 /**
  * In-memory implementations of every activity dependency. Entities resolve
- * to `Entity <id>` and open as markdown blocks; actor ids of the form
+ * to `Entity <id>` and link as markdown blocks; actor ids of the form
  * `macro|name@…` resolve to `name`, anything else reads as automation.
  */
 export function createMockActivityDeps(
   overrides: Partial<ActivityDeps> = {}
 ): MockActivityDeps {
   const graphqlMock = createMockGraphql();
-  const opened: OpenEntityTarget[] = [];
   const client: Client = graphqlMock.client;
   return {
     graphql: () => client,
@@ -35,13 +31,9 @@ export function createMockActivityDeps(
       blockOrFileType: () => 'md',
       linkParams: () => undefined,
     }),
-    openEntity: (target) => {
-      opened.push(target);
-    },
     propertyDefinition: () => () => undefined,
     timeZone: () => 'UTC',
     ...overrides,
     graphqlMock,
-    opened,
   };
 }

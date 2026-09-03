@@ -22,12 +22,13 @@ afterEach(cleanup);
 
 function renderView() {
   const deps = createMockActivityDeps();
+  const onOpen = vi.fn();
   const result = render(() => (
     <ActivityDepsProvider deps={deps}>
-      <MyActivityView />
+      <MyActivityView onOpen={onOpen} />
     </ActivityDepsProvider>
   ));
-  return { ...result, deps, graphql: deps.graphqlMock };
+  return { ...result, onOpen, graphql: deps.graphqlMock };
 }
 
 const rows = () => document.querySelectorAll('[data-activity-row]');
@@ -61,17 +62,20 @@ describe('MyActivityView', () => {
     expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
   });
 
-  it('opens the row entity through the injected opener', () => {
-    const { deps, graphql } = renderView();
+  it('asks the host to open the row entity', () => {
+    const { onOpen, graphql } = renderView();
     graphql.latest('MyActivity').resolve(feedPage([createdEvent]));
 
     const body = rows()[0]?.querySelector('.hover\\:bg-hover\\/30');
     if (!body) throw new Error('row body not rendered');
     fireEvent.click(body);
 
-    expect(deps.opened).toEqual([
-      { block: 'md', id: 'doc-1', params: undefined, newSplit: false },
-    ]);
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith({
+      block: 'md',
+      id: 'doc-1',
+      params: undefined,
+      newSplit: false,
+    });
   });
 
   it('shows unavailable copy when the feed fails', () => {
@@ -89,7 +93,7 @@ describe('MyActivityView', () => {
   });
 
   it('lists the most active entities and opens them', () => {
-    const { container, deps, graphql } = renderView();
+    const { container, onOpen, graphql } = renderView();
     graphql.latest('MyActivityOverview').resolve(
       overviewPage({
         total: 4,
@@ -105,8 +109,11 @@ describe('MyActivityView', () => {
     if (!body) throw new Error('top entity body not rendered');
     fireEvent.click(body);
 
-    expect(deps.opened).toEqual([
-      { block: 'md', id: 'doc-7', params: undefined, newSplit: false },
-    ]);
+    expect(onOpen).toHaveBeenCalledExactlyOnceWith({
+      block: 'md',
+      id: 'doc-7',
+      params: undefined,
+      newSplit: false,
+    });
   });
 });

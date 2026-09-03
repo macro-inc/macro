@@ -1,4 +1,3 @@
-import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { useUserId } from '@core/context/user';
 import { tryMacroId, useDisplayName } from '@core/user';
 import { useAllProperties } from '@property/editor/hooks/useAllProperties';
@@ -20,8 +19,6 @@ function createAppActivityDeps(): ActivityDeps {
     },
     entityDisplay: (entityId, entityType) =>
       usePropertyEntityDisplay(entityId, entityType),
-    openEntity: ({ block, id, params, newSplit }) =>
-      openDocument(block, id, params, newSplit),
     propertyDefinition: (propertyId) => {
       const definitions = useAllProperties();
       return () => {
