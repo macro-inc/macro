@@ -21,7 +21,7 @@ export function capabilityFacts(
 export function CapabilityRow(props: {
   title: string;
   outcome: string;
-  facts?: string;
+  facts?: JSX.Element;
   status?: Capability['status'];
   icon?: JSX.Element;
   children?: JSX.Element;

@@ -4,14 +4,30 @@ import {
 } from '@app/features/calendar/components/TurnOffCalendarDialog';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
+import {
+  ENABLE_EMAIL_SIGNATURES_FLAG,
+  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  ENABLE_MULTI_INBOX_OVERRIDE,
+} from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
-import { useRemoveInboxMutation } from '@queries/email/link';
+import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
+import {
+  useEmailLinksQuery,
+  useRemoveInboxMutation,
+} from '@queries/email/link';
 import type { ConsentScopes } from '@service-auth/client';
-import { Button, Dialog, Panel } from '@ui';
+import type { Link as EmailLink } from '@service-email/generated/schemas';
+import { Button, Dialog, Panel, Tooltip } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
+import { InboxSyncStatus } from '../inbox-sync-status';
 import { ConnectAction } from '../integration-ui';
 import { SettingsCard, SettingsPage, SettingsSection } from '../primitives';
+import {
+  clearSignatureState,
+  isSignatureExpanded,
+  SignatureSection,
+  toggleSignatureExpanded,
+} from '../SignatureSection';
 import { CapabilityRow, capabilityFacts } from './capability-row';
 import {
   type Capability,
@@ -35,8 +51,16 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
     enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
   });
   const startAddInbox = useAddInboxFlow();
+  const emailLinks = useEmailLinksQuery();
+  const linkById = (id: string | undefined): EmailLink | undefined =>
+    id
+      ? emailLinks.data?.links.find((link) => link.id === id)
+      : undefined;
   const removeInbox = useRemoveInboxMutation({
-    onSuccess: () => toast.success('Inbox removed'),
+    onSuccess: (_data, linkId) => {
+      clearSignatureState(linkId);
+      toast.success('Inbox removed');
+    },
     onError: () => toast.failure('Failed to remove inbox. Please try again.'),
   });
   const [pending, setPending] = createSignal(false);
@@ -97,43 +121,37 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
               <SettingsCard>
                 <For each={inbox.caps}>
                   {(row) => (
-                    <CapabilityRow
-                      title={row.title}
-                      outcome={row.outcome}
-                      facts={capabilityFacts(row)}
-                      status={row.status}
-                    >
-                      <GoogleCapabilityActions
-                        row={row}
-                        pending={pending()}
-                        removing={removeInbox.isPending}
-                        onConnect={() =>
-                          void connect(
-                            row.id.startsWith('calendar:')
-                              ? 'calendar'
-                              : 'gmail'
-                          )
-                        }
-                        onReconnect={() => void connect()}
-                        onRemoveGmail={() => {
-                          const linkId = linkIdFor(row);
-                          if (!linkId) return;
-                          setRemoveTarget({
-                            id: linkId,
-                            email: row.account,
-                            isOwn: row.scope === 'personal',
-                          });
-                        }}
-                        onTurnOffCalendar={() => {
-                          const linkId = linkIdFor(row);
-                          if (!linkId) return;
-                          setCalendarTarget({
-                            linkId,
-                            emailAddress: row.account,
-                          });
-                        }}
-                      />
-                    </CapabilityRow>
+                    <GoogleInboxCapability
+                      row={row}
+                      link={linkById(linkIdFor(row))}
+                      pending={pending()}
+                      removing={removeInbox.isPending}
+                      onConnect={() =>
+                        void connect(
+                          row.id.startsWith('calendar:')
+                            ? 'calendar'
+                            : 'gmail'
+                        )
+                      }
+                      onReconnect={() => void connect()}
+                      onRemoveGmail={() => {
+                        const linkId = linkIdFor(row);
+                        if (!linkId) return;
+                        setRemoveTarget({
+                          id: linkId,
+                          email: row.account,
+                          isOwn: row.scope === 'personal',
+                        });
+                      }}
+                      onTurnOffCalendar={() => {
+                        const linkId = linkIdFor(row);
+                        if (!linkId) return;
+                        setCalendarTarget({
+                          linkId,
+                          emailAddress: row.account,
+                        });
+                      }}
+                    />
                   )}
                 </For>
               </SettingsCard>
@@ -212,6 +230,90 @@ export function GoogleProvider(props: { model: ConnectionsModel }) {
         </Panel>
       </Dialog>
     </SettingsPage>
+  );
+}
+
+function GoogleInboxCapability(props: {
+  row: Capability;
+  link: EmailLink | undefined;
+  pending: boolean;
+  removing: boolean;
+  onConnect: () => void;
+  onReconnect: () => void;
+  onRemoveGmail: () => void;
+  onTurnOffCalendar: () => void;
+}) {
+  const signaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
+    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
+  });
+  const isGmail = () => props.row.id.startsWith('gmail:');
+  const isOwn = () => props.row.scope === 'personal';
+  const showSignature = () =>
+    Boolean(
+      props.link &&
+        isGmail() &&
+        isOwn() &&
+        signaturesFlag().enabled &&
+        isSignatureExpanded(props.link.id)
+    );
+  const signatureSectionId = () =>
+    props.link ? `signature-section-${props.link.id}` : undefined;
+
+  return (
+    <>
+      <CapabilityRow
+        title={props.row.title}
+        outcome={props.row.outcome}
+        facts={
+          isGmail() && props.link ? (
+            <InboxSyncStatus link={props.link} />
+          ) : (
+            capabilityFacts(props.row)
+          )
+        }
+        status={props.row.status}
+      >
+        <Show
+          when={
+            isGmail() && isOwn() && signaturesFlag().enabled
+              ? props.link
+              : undefined
+          }
+        >
+          {(link) => (
+            <Tooltip label="Edit signature">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                depth={3}
+                onClick={() => toggleSignatureExpanded(link().id)}
+                aria-label={`Edit signature for ${link().email_address}`}
+                aria-expanded={showSignature()}
+                aria-controls={signatureSectionId()}
+              >
+                <SignatureIcon class="size-4" />
+              </Button>
+            </Tooltip>
+          )}
+        </Show>
+        <GoogleCapabilityActions
+          row={props.row}
+          pending={props.pending}
+          removing={props.removing}
+          onConnect={props.onConnect}
+          onReconnect={props.onReconnect}
+          onRemoveGmail={props.onRemoveGmail}
+          onTurnOffCalendar={props.onTurnOffCalendar}
+        />
+      </CapabilityRow>
+      <Show when={showSignature() ? props.link : undefined}>
+        {(link) => (
+          <div id={signatureSectionId()} class="px-6 pb-5">
+            <SignatureSection link={link()} />
+          </div>
+        )}
+      </Show>
+    </>
   );
 }
 
