@@ -2,6 +2,8 @@ export type ChannelsTab = 'browse' | 'recents';
 
 export type ChannelsGroup = 'channels' | 'direct_messages';
 
+export type ChannelsQueryScope = ChannelsGroup | 'recents';
+
 export type ChannelsRailMode = 'auto' | 'full' | 'slim';
 
 export type ChannelsViewState = {

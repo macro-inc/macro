@@ -1,9 +1,4 @@
 import { ViewShell } from '@app/components/view-shell';
-import {
-  compileToAst,
-  defineQueryFilters,
-  queryStateFrom,
-} from '@app/features/next-soup/filters/filter-store';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
@@ -13,59 +8,29 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isChannelEntity, ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createMemo, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
-import {
-  ChannelsMobileView,
-  type MobileChannelsTab,
-} from './components/ChannelsMobileView';
+import { ChannelsMobileView } from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import {
   CHANNELS_MAX_RAIL_WIDTH,
   CHANNELS_MIN_RAIL_WIDTH,
   CHANNELS_NARROW_RAIL_WIDTH,
 } from './constants';
-import type { ChannelsViewStateOptions } from './types';
-
-const SIDEBAR_CHANNEL_LIMIT = 100;
+import { useChannelsQuery } from './queries';
+import type { ChannelsQueryScope, ChannelsViewStateOptions } from './types';
 
 export type ChannelsViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
   initialState?: ChannelsViewStateOptions;
 };
 
-function channelFiltersForMobileTab(tab: MobileChannelsTab) {
-  if (tab === 'channels') {
-    return defineQueryFilters({
-      include: { channelIsParticipant: [true] },
-      exclude: { channelType: ['direct_message'] },
-    });
-  }
-
-  if (tab === 'dms') {
-    return defineQueryFilters({
-      include: {
-        channelType: ['direct_message'],
-        channelIsParticipant: [true],
-      },
-    });
-  }
-
-  return defineQueryFilters({
-    include: {
-      channelImportance: true,
-      channelIsParticipant: [true],
-    },
-  });
-}
-
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
   const { state, setAsideWidth, setRailMode } = useChannelsView();
-  const [mobileTab, setMobileTab] = createSignal<MobileChannelsTab>(
+  const [mobileTab, setMobileTab] = createSignal<ChannelsQueryScope>(
     state.tab === 'recents' ? 'recents' : 'channels'
   );
   const [workspace, setWorkspace] = createSignal<HTMLDivElement>();
@@ -93,21 +58,8 @@ function ChannelsViewRoot() {
           max: CHANNELS_MAX_RAIL_WIDTH,
         };
 
-  const channelsQuery = useSoupAstItemsQuery(
-    () => ({
-      params: {
-        limit: SIDEBAR_CHANNEL_LIMIT,
-        sort_method: 'updated_at',
-      },
-      body: compileToAst(
-        queryStateFrom(
-          isTouchDevice()
-            ? channelFiltersForMobileTab(mobileTab())
-            : channelFiltersForMobileTab('recents')
-        )
-      ),
-    }),
-    () => ({ staleTime: 30_000 })
+  const channelsQuery = useChannelsQuery(() =>
+    isTouchDevice() ? mobileTab() : 'recents'
   );
   const channels = createMemo(() =>
     (channelsQuery.data?.entities ?? []).filter(isChannelEntity)

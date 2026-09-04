@@ -19,16 +19,16 @@ import {
 import { Button } from '@ui';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../channels-view-context';
+import { filterChannelsForScope } from '../queries';
+import type { ChannelsQueryScope } from '../types';
 import { ConversationCard } from './rail/ChannelRailItems';
 import { useChannelCallState } from './rail/useChannelCallState';
 import { useChannelRailActivity } from './rail/useChannelRailActivity';
 
-export type MobileChannelsTab = 'channels' | 'dms' | 'recents';
-
-const MOBILE_CHANNEL_TABS: readonly PillTabItem<MobileChannelsTab>[] = [
+const MOBILE_CHANNEL_TABS: readonly PillTabItem<ChannelsQueryScope>[] = [
   { value: 'recents', label: 'Recents' },
   { value: 'channels', label: 'Channels' },
-  { value: 'dms', label: 'DMs' },
+  { value: 'direct_messages', label: 'DMs' },
 ];
 const MOBILE_TAB_STRIP_CLASS =
   '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
@@ -40,8 +40,8 @@ const LOAD_MORE_THRESHOLD = 300;
 export function ChannelsMobileView(props: {
   channels: ChannelEntity[];
   source: SoupAstItemsQuery;
-  tab: MobileChannelsTab;
-  onTabChange: (tab: MobileChannelsTab) => void;
+  tab: ChannelsQueryScope;
+  onTabChange: (tab: ChannelsQueryScope) => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -58,23 +58,11 @@ export function ChannelsMobileView(props: {
     callActivity
   );
 
-  const visibleChannels = createMemo(() => {
-    if (props.tab === 'channels') {
-      return props.channels.filter(
-        (channel) => channel.channelType !== 'direct_message'
-      );
-    }
+  const visibleChannels = createMemo(() =>
+    filterChannelsForScope(props.tab, props.channels)
+  );
 
-    if (props.tab === 'dms') {
-      return props.channels.filter(
-        (channel) => channel.channelType === 'direct_message'
-      );
-    }
-
-    return props.channels.filter((channel) => channel.latestRootMessage);
-  });
-
-  const selectTab = (tab: MobileChannelsTab) => {
+  const selectTab = (tab: ChannelsQueryScope) => {
     props.onTabChange(tab);
     setTab(tab === 'recents' ? 'recents' : 'browse');
     viewport()?.scrollTo({ top: 0 });
@@ -127,7 +115,7 @@ export function ChannelsMobileView(props: {
 
   const emptyLabel = () => {
     if (props.tab === 'channels') return 'No channels';
-    if (props.tab === 'dms') return 'No direct messages';
+    if (props.tab === 'direct_messages') return 'No direct messages';
 
     return 'No recent conversations';
   };
