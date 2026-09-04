@@ -123,6 +123,18 @@ fn document_cognition_service_url_parses() {
 }
 
 #[test]
+fn document_cognition_service_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = DocumentCognitionServiceUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
+}
+
+#[test]
 fn notification_service_url_parses() {
     assert_parses_for_all_environments(NotificationServiceUrl::default_for_environment);
 }
@@ -461,7 +473,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
-        "https://document-cognition-dev.macro.com",
+        "https://dev-gateway.macro.com/cognition",
     );
     assert_eq!(
         service_urls.notification_service_url.as_ref(),
@@ -532,7 +544,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
-        "https://document-cognition.macro.com",
+        "https://gateway.macro.com/cognition",
     );
     assert_eq!(
         service_urls.notification_service_url.as_ref(),
