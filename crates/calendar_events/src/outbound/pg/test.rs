@@ -5140,3 +5140,114 @@ async fn canonical_selection_skips_copies_on_deleted_calendars(pool: PgPool) {
         }]
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_older_canonical_resync_cannot_undo_a_user_edit_made_through_another_copy(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "writer", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    // The member moves the event through the shared calendar; Google stamps
+    // that copy an hour after the primary's last update.
+    let moved_start = starts_at + Duration::hours(2);
+    let mut echo = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        moved_start,
+    );
+    echo.event.sequence = 1;
+    echo.event.updated_at = starts_at + Duration::hours(1);
+    repo.upsert_event(CalendarEventWrite::UserMutation(echo))
+        .await
+        .unwrap();
+
+    // The primary copy syncs a change that is older than the edit and keeps
+    // its own sequence — a description Google recorded before the move. Its
+    // content lands, its stale schedule does not.
+    let mut stale_primary = member_primary_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        starts_at,
+    );
+    stale_primary.event.description = Some("Dentist, then lunch".to_string());
+    stale_primary.event.updated_at = starts_at + Duration::minutes(30);
+    repo.upsert_event_fixture(stale_primary).await.unwrap();
+
+    let rows = repo
+        .list_occurrences(member, range_around(moved_start), None, 10)
+        .await
+        .unwrap();
+    let (event, occurrence) = rows.first().expect("the moved occurrence lists");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        occurrence.time,
+        EventTime::Timed {
+            starts_at: moved_start,
+            ends_at: moved_start + Duration::hours(1),
+            time_zone: None,
+        },
+        "an older canonical state leaves the user's move in place"
+    );
+    assert_eq!(event.description.as_deref(), Some("Dentist, then lunch"));
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        vec![(
+            moved_start.to_rfc3339(),
+            30,
+            moved_start - Duration::minutes(30)
+        )]
+    );
+
+    // Google propagates the move to the primary copy, advancing its sequence;
+    // that fresher canonical state owns the schedule again.
+    let mut fresh_primary = member_primary_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        moved_start + Duration::hours(1),
+    );
+    fresh_primary.event.sequence = 1;
+    fresh_primary.event.updated_at = starts_at + Duration::hours(2);
+    repo.upsert_event_fixture(fresh_primary).await.unwrap();
+    let rows = repo
+        .list_occurrences(member, range_around(moved_start), None, 10)
+        .await
+        .unwrap();
+    assert_eq!(
+        rows[0].1.time,
+        EventTime::Timed {
+            starts_at: moved_start + Duration::hours(1),
+            ends_at: moved_start + Duration::hours(2),
+            time_zone: None,
+        }
+    );
+}

@@ -28,6 +28,15 @@ ALTER TABLE calendar_event_sources
     ADD COLUMN creator_email text,
     ADD COLUMN creator_name text;
 
+-- The provider update stamp of the schedule the entity currently carries.
+-- A canonical copy's sync replaces the schedule only when it is at least this
+-- fresh or its own sequence advanced, so a user's edit made through another
+-- copy is not undone by an older state of the canonical copy.
+ALTER TABLE calendar_events
+    ADD COLUMN schedule_updated_at timestamptz NOT NULL DEFAULT now();
+
+UPDATE calendar_events SET schedule_updated_at = canonical_source_updated_at;
+
 -- Every source row already stores its own normalized projection, so its
 -- content backfills from there rather than from the entity a later copy may
 -- have overwritten. Fields the projection omits at their default read as
@@ -116,7 +125,8 @@ SET title = canonical.title,
     creator_email = canonical.creator_email,
     creator_name = canonical.creator_name,
     sequence = canonical.source_sequence,
-    canonical_source_updated_at = canonical.source_updated_at
+    canonical_source_updated_at = canonical.source_updated_at,
+    schedule_updated_at = canonical.source_updated_at
 FROM canonical
 WHERE event.id = canonical.event_id;
 

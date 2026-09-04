@@ -722,7 +722,7 @@ impl CalendarRepository for PgCalendarRepository {
                 canonical_source_kind,
                 canonical_source_updated_at,
                 reminders_use_default, reminder_overrides,
-                created_at, updated_at
+                created_at, updated_at, schedule_updated_at
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6, $7,
@@ -732,7 +732,7 @@ impl CalendarRepository for PgCalendarRepository {
                 $28, $29,
                 $19, $27, $20, $21, $22, $24,
                 $25, $26,
-                $23, $24
+                $23, $24, $24
             )
             ON CONFLICT (owner_id, source_link_id, ical_uid) DO NOTHING
             RETURNING id
@@ -808,21 +808,28 @@ impl CalendarRepository for PgCalendarRepository {
         // copy still lands its schedule: Google confirmed it for the meeting,
         // and waiting for the primary to sync would show the edit as lost.
         let canonical = canonical_source(&mut tx, event_id).await?;
+        let projection = StoredSourceProjection::from(&upsert);
         if canonical.as_ref().map(|canonical| canonical.source_id) == Some(source_id) {
-            apply_canonical_projection(
+            apply_content_projection(
                 &mut tx,
                 event_id,
-                &StoredSourceProjection::from(&upsert),
+                &projection,
                 source_kind,
                 upsert.event.updated_at,
-                Some(source.calendar_id),
             )
             .await?;
+            // The schedule a user edit landed through another copy is newer
+            // than what the canonical copy last synced; an older state of the
+            // canonical copy must not undo it, only a fresher one.
+            if schedule_is_fresh(&mut tx, event_id, &projection.event).await? {
+                apply_schedule_projection(&mut tx, event_id, &projection).await?;
+            }
+            rebuild_entity_reminder_firings(&mut tx, event_id, Some(source.calendar_id)).await?;
         } else if user_mutation {
-            apply_schedule_projection(
+            apply_schedule_projection(&mut tx, event_id, &projection).await?;
+            rebuild_entity_reminder_firings(
                 &mut tx,
                 event_id,
-                &StoredSourceProjection::from(&upsert),
                 canonical.map(|canonical| canonical.calendar_id),
             )
             .await?;
@@ -2793,19 +2800,92 @@ async fn canonical_source(
     }))
 }
 
-/// Rewrite only the entity's schedule — status, time, recurrence, organizer,
+/// Whether a copy's projection may replace the schedule the entity carries:
+/// the copy's own sequence advanced, or its provider stamp is at least as
+/// recent as the schedule's. A user edit made through another copy stamps
+/// the entity with that edit's time, so an older state of the canonical copy
+/// leaves it alone until the canonical copy itself changes.
+async fn schedule_is_fresh(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    event: &CalendarEvent,
+) -> Result<bool, Report> {
+    let entity = sqlx::query!(
+        r#"SELECT sequence, schedule_updated_at FROM calendar_events WHERE id = $1"#,
+        event_id,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(db_sequence(event.sequence)? > entity.sequence
+        || event.updated_at >= entity.schedule_updated_at)
+}
+
+/// Rewrite the entity's copy-specific content from its canonical copy and
+/// record that copy as canonical.
+async fn apply_content_projection(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    projection: &StoredSourceProjection,
+    source_kind: &str,
+    source_updated_at: DateTime<Utc>,
+) -> Result<(), Report> {
+    sqlx::query!(
+        r#"
+        UPDATE calendar_events
+        SET title = $2,
+            description = $3,
+            location = $4,
+            visibility = $5,
+            transparency = $6,
+            event_type = $7,
+            creator_email = $8,
+            creator_name = $9,
+            sequence = $10,
+            is_read_only = $11,
+            canonical_source_kind = $12,
+            canonical_source_updated_at = $13,
+            reminders_use_default = $14,
+            reminder_overrides = $15,
+            created_at = $16,
+            updated_at = GREATEST(calendar_events.updated_at, $17)
+        WHERE id = $1
+        "#,
+        event_id,
+        &projection.event.title,
+        projection.event.description.as_deref(),
+        projection.event.location.as_deref(),
+        projection.event.visibility.as_str(),
+        projection.event.transparency.as_str(),
+        projection.event.event_type.as_str(),
+        projection.event.creator_email.as_deref(),
+        projection.event.creator_name.as_deref(),
+        db_sequence(projection.event.sequence)?,
+        projection.event.is_read_only,
+        source_kind,
+        source_updated_at,
+        projection.event.reminders.use_default,
+        serde_json::to_value(&projection.event.reminders.overrides).map_err(report)?,
+        projection.event.created_at,
+        projection.event.updated_at,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    Ok(())
+}
+
+/// Rewrite the entity's schedule — status, time, recurrence, organizer,
 /// conference, attendees, overrides, and occurrences — from one copy's
-/// projection, leaving the canonical copy's content untouched. The reminder
-/// schedule is rebuilt from the entity's stored reminders against the new
-/// occurrences, so alerts keep following the canonical copy's settings.
+/// projection and stamp it with that copy's provider update time, leaving the
+/// canonical copy's content untouched.
 async fn apply_schedule_projection(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
     projection: &StoredSourceProjection,
-    canonical_calendar_id: Option<Uuid>,
 ) -> Result<(), Report> {
     let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&projection.event.time);
-    let entity = sqlx::query!(
+    sqlx::query!(
         r#"
         UPDATE calendar_events
         SET status = $2,
@@ -2819,9 +2899,9 @@ async fn apply_schedule_projection(
             organizer_name = $10,
             conference_url = $11,
             conference_provider = $12,
+            schedule_updated_at = $13,
             updated_at = GREATEST(calendar_events.updated_at, $13)
         WHERE id = $1
-        RETURNING event_type, reminders_use_default, reminder_overrides
         "#,
         event_id,
         projection.event.status.as_str(),
@@ -2839,114 +2919,6 @@ async fn apply_schedule_projection(
             .conference_provider
             .map(ConferenceProvider::as_str),
         projection.event.updated_at,
-    )
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(report)?;
-    replace_attendees(tx, event_id, &projection.event.attendees).await?;
-    replace_overrides(tx, event_id, &projection.overrides).await?;
-    replace_occurrences(
-        tx,
-        event_id,
-        &projection.event.owner_id,
-        &projection.occurrences,
-    )
-    .await?;
-    let reminders = EventReminders {
-        use_default: entity.reminders_use_default,
-        overrides: serde_json::from_value(entity.reminder_overrides)
-            .inspect_err(|e| {
-                tracing::error!(error = ?e, %event_id, "malformed event reminder_overrides json");
-            })
-            .unwrap_or_default(),
-    };
-    let calendar = fetch_calendar_reminder_context(tx, canonical_calendar_id).await?;
-    rebuild_event_reminder_firings(
-        tx,
-        event_id,
-        projection.event.status,
-        event_type(&entity.event_type),
-        &reminders,
-        calendar.as_ref(),
-    )
-    .await
-}
-
-/// Rewrite the entity's content, attendees, overrides, occurrences, and
-/// reminder schedule from one source's projection. Runs inside the caller's
-/// transaction so the entity can never disagree with the copy it mirrors.
-async fn apply_canonical_projection(
-    tx: &mut Transaction<'_, Postgres>,
-    event_id: Uuid,
-    projection: &StoredSourceProjection,
-    source_kind: &str,
-    source_updated_at: DateTime<Utc>,
-    calendar_id: Option<Uuid>,
-) -> Result<(), Report> {
-    let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&projection.event.time);
-    sqlx::query!(
-        r#"
-        UPDATE calendar_events
-        SET title = $2,
-            description = $3,
-            location = $4,
-            status = $5,
-            visibility = $6,
-            transparency = $7,
-            event_type = $28,
-            starts_at = $8,
-            ends_at = $9,
-            start_date = $10,
-            end_date = $11,
-            time_zone = $12,
-            recurrence_lines = $13,
-            organizer_email = $14,
-            organizer_name = $15,
-            creator_email = $26,
-            creator_name = $27,
-            conference_url = $16,
-            conference_provider = $25,
-            sequence = $17,
-            is_read_only = $18,
-            canonical_source_kind = $19,
-            canonical_source_updated_at = $20,
-            reminders_use_default = $23,
-            reminder_overrides = $24,
-            created_at = $21,
-            updated_at = GREATEST(calendar_events.updated_at, $22)
-        WHERE id = $1
-        "#,
-        event_id,
-        &projection.event.title,
-        projection.event.description.as_deref(),
-        projection.event.location.as_deref(),
-        projection.event.status.as_str(),
-        projection.event.visibility.as_str(),
-        projection.event.transparency.as_str(),
-        starts_at,
-        ends_at,
-        start_date,
-        end_date,
-        time_zone,
-        &projection.event.recurrence_lines,
-        projection.event.organizer_email.as_deref(),
-        projection.event.organizer_name.as_deref(),
-        projection.event.conference_url.as_deref(),
-        db_sequence(projection.event.sequence)?,
-        projection.event.is_read_only,
-        source_kind,
-        source_updated_at,
-        projection.event.created_at,
-        projection.event.updated_at,
-        projection.event.reminders.use_default,
-        serde_json::to_value(&projection.event.reminders.overrides).map_err(report)?,
-        projection
-            .event
-            .conference_provider
-            .map(ConferenceProvider::as_str),
-        projection.event.creator_email.as_deref(),
-        projection.event.creator_name.as_deref(),
-        projection.event.event_type.as_str(),
     )
     .execute(&mut **tx)
     .await
@@ -2959,17 +2931,65 @@ async fn apply_canonical_projection(
         &projection.event.owner_id,
         &projection.occurrences,
     )
-    .await?;
-    let calendar = fetch_calendar_reminder_context(tx, calendar_id).await?;
+    .await
+}
+
+/// Rebuild the entity's reminder firings from the content and occurrences it
+/// now carries, resolving calendar defaults against the canonical copy's
+/// calendar, so alerts keep following the canonical copy's settings whichever
+/// copy last moved the schedule.
+async fn rebuild_entity_reminder_firings(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    canonical_calendar_id: Option<Uuid>,
+) -> Result<(), Report> {
+    let entity = sqlx::query!(
+        r#"
+        SELECT status, event_type, reminders_use_default, reminder_overrides
+        FROM calendar_events
+        WHERE id = $1
+        "#,
+        event_id,
+    )
+    .fetch_one(&mut **tx)
+    .await
+    .map_err(report)?;
+    let reminders = EventReminders {
+        use_default: entity.reminders_use_default,
+        overrides: serde_json::from_value(entity.reminder_overrides)
+            .inspect_err(|e| {
+                tracing::error!(error = ?e, %event_id, "malformed event reminder_overrides json");
+            })
+            .unwrap_or_default(),
+    };
+    let calendar = fetch_calendar_reminder_context(tx, canonical_calendar_id).await?;
     rebuild_event_reminder_firings(
         tx,
         event_id,
-        projection.event.status,
-        projection.event.event_type,
-        &projection.event.reminders,
+        event_status(&entity.status),
+        event_type(&entity.event_type),
+        &reminders,
         calendar.as_ref(),
     )
     .await
+}
+
+/// Rewrite the entity wholesale — content, schedule, and reminder firings —
+/// from one copy's projection, used when a retired canonical copy hands the
+/// entity to the next best one and no schedule it carried can be trusted over
+/// the survivor's. Runs inside the caller's transaction so the entity can
+/// never disagree with the copy it mirrors.
+async fn apply_canonical_projection(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    projection: &StoredSourceProjection,
+    source_kind: &str,
+    source_updated_at: DateTime<Utc>,
+    calendar_id: Option<Uuid>,
+) -> Result<(), Report> {
+    apply_content_projection(tx, event_id, projection, source_kind, source_updated_at).await?;
+    apply_schedule_projection(tx, event_id, projection).await?;
+    rebuild_entity_reminder_firings(tx, event_id, calendar_id).await
 }
 
 /// Rewrite an event from its next-best remaining source, or delete it when no

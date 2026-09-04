@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendar_events\n        SET title = $2,\n            description = $3,\n            location = $4,\n            visibility = $5,\n            transparency = $6,\n            event_type = $7,\n            creator_email = $8,\n            creator_name = $9,\n            sequence = $10,\n            is_read_only = $11,\n            canonical_source_kind = $12,\n            canonical_source_updated_at = $13,\n            reminders_use_default = $14,\n            reminder_overrides = $15,\n            created_at = $16,\n            updated_at = GREATEST(calendar_events.updated_at, $17)\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Bool",
+        "Text",
+        "Timestamptz",
+        "Bool",
+        "Jsonb",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "14cd69290b87f07f00db877edfb474b38032bad65293411e4eb4e82e0fb2e06f"
+}
