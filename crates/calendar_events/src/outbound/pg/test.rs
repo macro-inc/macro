@@ -2546,6 +2546,49 @@ async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mutation_target_addresses_the_writable_primary_not_a_shared_copy(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    insert_user(&pool, member).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = grant_and_provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id).await;
+    let uid = "teo-ooo@example.com";
+
+    repo.upsert_event_fixture(member_primary_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        "OOO",
+    ))
+    .await
+    .unwrap();
+    let event_id = repo
+        .upsert_event_fixture(shared_copy_upsert(
+            member,
+            link_id,
+            (account_id, shared_calendar_id),
+            uid,
+            "[teo] OOO",
+        ))
+        .await
+        .unwrap();
+
+    // The reader-access copy wins the read projection, but a mutation must
+    // address the member's own writable event on their primary calendar.
+    let target = repo
+        .get_event_mutation_target(member, event_id)
+        .await
+        .unwrap()
+        .expect("owner sees the mutation target");
+    assert_eq!(target.calendar_id, primary_calendar_id);
+    assert_eq!(target.provider_calendar_id, "primary");
+    assert_eq!(target.provider_event_id, format!("provider-{uid}"));
+    assert!(!target.is_read_only);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn creation_target_actor_is_owned_inboxes_not_the_calendar_inbox(pool: PgPool) {
     let owner_id = "macro|calendar-create-actor@example.com";
     let delegate_id = "macro|calendar-create-delegate@example.com";

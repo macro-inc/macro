@@ -1766,8 +1766,13 @@ impl CalendarRepository for PgCalendarRepository {
         requester_id: &str,
         event_id: Uuid,
     ) -> Result<Option<CalendarEventMutationTarget>, Report> {
-        // Rank Google sources exactly like source restoration so mutations
-        // address the same provider copy reads are projected from.
+        // A mutation must address the source the member can write, which owns
+        // `is_read_only`: their primary calendar's, not the freshest. A shared
+        // calendar's reader-access copy usually wins the read projection (and so
+        // supplies the title), but running an update, delete, or RSVP against it
+        // fails at the provider or edits the script-managed copy instead of the
+        // member's own event. Rank the primary source first, then fall back to
+        // the same freshness order reads use when no primary source exists.
         let row = sqlx::query!(
             r#"
             SELECT
@@ -1803,6 +1808,7 @@ impl CalendarRepository for PgCalendarRepository {
                     )
               )
             ORDER BY
+                calendar.is_primary DESC,
                 source.source_sequence DESC,
                 source.source_updated_at DESC,
                 source.last_seen_at DESC,
