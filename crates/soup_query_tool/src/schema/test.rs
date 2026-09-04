@@ -1,4 +1,8 @@
+use std::collections::HashMap;
+use std::sync::Arc;
+
 use crate::ReadQuery;
+use crate::listing::{ListingError, ListingPage, ListingRequest, SoupLister};
 use crate::schema::{SCHEMA, compact_sdl};
 
 #[test]
@@ -70,6 +74,50 @@ fn tool_schema_is_a_subset_of_the_authoritative_schema() {
             "{name} changed kind relative to the authoritative schema"
         );
     }
+}
+
+struct EmptyLister {
+    limit: std::sync::Mutex<Option<u16>>,
+}
+
+#[async_trait::async_trait]
+impl SoupLister for EmptyLister {
+    async fn list(&self, request: ListingRequest) -> Result<ListingPage, ListingError> {
+        *self.limit.lock().unwrap() = Some(request.limit.get());
+        Ok(ListingPage {
+            items: Vec::new(),
+            has_more: false,
+            tag_labels: HashMap::new(),
+        })
+    }
+}
+
+#[tokio::test]
+async fn execute_returns_a_graphql_page() {
+    let read = ReadQuery::parse(
+        "{ soup(input: { limit: 5 }) { items { id } hasMore summary } }",
+        None,
+    )
+    .unwrap();
+    let lister = Arc::new(EmptyLister {
+        limit: std::sync::Mutex::new(None),
+    });
+    let response = SCHEMA
+        .execute(
+            read.into_request()
+                .data(Arc::clone(&lister) as Arc<dyn SoupLister>),
+        )
+        .await;
+    assert!(
+        response.errors.is_empty(),
+        "unexpected errors: {:?}",
+        response.errors
+    );
+    assert_eq!(*lister.limit.lock().unwrap(), Some(5));
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["soup"]["hasMore"], false);
+    assert_eq!(data["soup"]["items"], serde_json::json!([]));
+    assert_eq!(data["soup"]["summary"], "No items found in workspace.");
 }
 
 #[test]
