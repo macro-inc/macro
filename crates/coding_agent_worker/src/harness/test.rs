@@ -1,7 +1,4 @@
 use super::*;
-use agent_client_protocol::schema::v1::{
-    SessionConfigId, SessionConfigOption, SessionConfigSelectOption,
-};
 use agent_runtime_protocol::domain::channel::Channel;
 use agent_runtime_protocol::domain::connection::ServerChannel;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -11,43 +8,6 @@ fn harness(command: &str) -> Harness {
         command: command.to_owned(),
         args: Vec::new(),
     }
-}
-
-#[test]
-fn pairing_catalog_projects_raw_acp_model_options_into_harness_domain_types() {
-    let options = vec![
-        SessionConfigOption::boolean(SessionConfigId::new("thinking"), "Thinking", true),
-        SessionConfigOption::select(
-            SessionConfigId::new("model"),
-            "Model",
-            "sonnet",
-            vec![
-                SessionConfigSelectOption::new("opus", "Opus").description("Largest model"),
-                SessionConfigSelectOption::new("sonnet", "Sonnet"),
-            ],
-        ),
-    ];
-
-    let catalog = pairing_model_catalog(&options).expect("model select should project");
-
-    assert_eq!(catalog.current, "sonnet");
-    assert_eq!(
-        catalog.options,
-        vec![
-            PairingModelOption {
-                id: "opus".to_owned(),
-                name: "Opus".to_owned(),
-                description: Some("Largest model".to_owned()),
-                group: None,
-            },
-            PairingModelOption {
-                id: "sonnet".to_owned(),
-                name: "Sonnet".to_owned(),
-                description: None,
-                group: None,
-            },
-        ]
-    );
 }
 
 /// Drain the system events the service side observed, in order.

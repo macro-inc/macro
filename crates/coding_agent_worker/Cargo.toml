@@ -13,7 +13,6 @@ path = "src/main.rs"
 # the trigger event vocabulary, and the delivery signature all come from the
 # owning crates, compiler-checked.
 agent-client-protocol = { workspace = true }
-agent_fold = { path = "../agent_fold", default-features = false }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }

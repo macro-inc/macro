@@ -13,7 +13,6 @@ use rootcause::prelude::ResultExt as _;
 use uuid::Uuid;
 
 use crate::config::{Config, HarnessCredentials, HarnessScope};
-use crate::harness::discover_model_catalog;
 
 /// One claim poll's answer.
 #[derive(Debug)]
@@ -47,19 +46,6 @@ impl PairingClient {
 
     /// Open a pairing using the config's identity.
     pub async fn start(&self, config: &Config) -> rootcause::Result<CreatedPairing> {
-        // Pairing precedes every HarnessId, runtime socket, and session row, so
-        // model discovery must happen against the configured local process.
-        let model_catalog =
-            match discover_model_catalog(&config.harness, &config.workspace.path).await {
-                Ok(catalog) => catalog,
-                Err(error) => {
-                    tracing::warn!(
-                        %error,
-                        "model discovery failed while pairing; continuing without a catalog"
-                    );
-                    None
-                }
-            };
         let name = config
             .identity
             .name
@@ -78,7 +64,6 @@ impl PairingClient {
                 name,
                 host: Some(host_info()),
                 scope: Some(scope),
-                model_catalog,
             })
             .send()
             .await

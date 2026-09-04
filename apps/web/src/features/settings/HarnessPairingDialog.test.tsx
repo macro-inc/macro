@@ -19,20 +19,6 @@ const mocks = vi.hoisted(() => ({
       requested_name: 'Dev laptop',
       requested_scope: null,
       host: 'erics-mbp.local',
-      model_catalog: {
-        current: 'claude-code',
-        options: [
-          {
-            id: 'claude-code',
-            name: 'Claude Code',
-            description: 'Anthropic coding agent',
-          },
-          { id: 'codex', name: 'Codex', description: null },
-        ],
-      } as {
-        current: string;
-        options: { id: string; name: string; description: string | null }[];
-      } | null,
       created_at: '2026-08-27T12:00:00Z',
       expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
     },
@@ -83,17 +69,6 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.pairing.isError = false;
-  mocks.pairing.data.model_catalog = {
-    current: 'claude-code',
-    options: [
-      {
-        id: 'claude-code',
-        name: 'Claude Code',
-        description: 'Anthropic coding agent',
-      },
-      { id: 'codex', name: 'Codex', description: null },
-    ],
-  };
   mocks.approve.mockResolvedValue({ id: 'harness-1' });
   mocks.currentTeam = { team: { id: 'team-1' } };
 });
@@ -115,29 +90,11 @@ describe('HarnessPairingDialog', () => {
     ).toBeTruthy();
     expect(within(dialog).getByText('Dev laptop')).toBeTruthy();
     expect(within(dialog).getByText('erics-mbp.local')).toBeTruthy();
-    expect(within(dialog).getByText('Available models')).toBeTruthy();
-    expect(within(dialog).getByText('Claude Code')).toBeTruthy();
-    expect(within(dialog).getByText('Codex')).toBeTruthy();
-    expect(within(dialog).getByText('Current')).toBeTruthy();
     expect(within(dialog).getByText(/Expires in \d+ minutes/)).toBeTruthy();
     expect(within(dialog).getByLabelText('Name')).toHaveProperty(
       'value',
       'Dev laptop'
     );
-  });
-
-  it('gracefully explains an absent pairing model catalog', () => {
-    mocks.pairing.data.model_catalog = null;
-
-    render(() => (
-      <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
-    ));
-
-    expect(
-      screen.getByText(
-        'This harness did not provide a model catalog during pairing.'
-      )
-    ).toBeTruthy();
   });
 
   it('approves a private harness without a team id', async () => {

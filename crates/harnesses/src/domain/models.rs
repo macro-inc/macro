@@ -66,33 +66,6 @@ pub enum RequestedHarnessScope {
     Team,
 }
 
-/// Model choices discovered from a harness while opening a pairing.
-///
-/// This transport-safe domain type deliberately does not expose ACP or fold
-/// types. The daemon maps its local probe result into this catalog.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct PairingModelCatalog {
-    /// The model value currently selected by the harness.
-    pub current: String,
-    /// Models offered by the harness, in its advertised order.
-    pub options: Vec<PairingModelOption>,
-}
-
-/// One selectable model discovered from a harness.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct PairingModelOption {
-    /// The value sent back to the harness to select this model.
-    pub id: String,
-    /// Human-readable model label.
-    pub name: String,
-    /// Optional descriptive copy supplied by the harness.
-    pub description: Option<String>,
-    /// Optional group heading supplied by the harness.
-    pub group: Option<String>,
-}
-
 impl RequestedHarnessScope {
     /// Storage representation.
     pub const fn as_str(self) -> &'static str {
@@ -129,9 +102,6 @@ pub struct CreatePairingRequest {
     /// preselected to it.
     #[serde(default)]
     pub scope: Option<RequestedHarnessScope>,
-    /// Model choices discovered from the configured harness subprocess.
-    #[serde(default)]
-    pub model_catalog: Option<PairingModelCatalog>,
 }
 
 /// A pairing the daemon created, including its claim credential.
@@ -165,8 +135,6 @@ pub struct PairingDetails {
     pub host: Option<String>,
     /// The scope the daemon's config asked for, when it named one.
     pub requested_scope: Option<RequestedHarnessScope>,
-    /// Model choices discovered before this pairing was created.
-    pub model_catalog: Option<PairingModelCatalog>,
     /// When the pairing was created.
     pub created_at: DateTime<Utc>,
     /// When the pairing expires.

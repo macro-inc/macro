@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT code, requested_name, host_info, requested_scope,\n                   model_catalog AS \"model_catalog?: sqlx::types::Json<PairingModelCatalog>\",\n                   status, created_at, expires_at\n            FROM harness_pairing_requests\n            WHERE code = $1\n            ",
+  "query": "\n            SELECT code, requested_name, host_info, requested_scope, status, created_at,\n                   expires_at\n            FROM harness_pairing_requests\n            WHERE code = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -25,21 +25,16 @@
       },
       {
         "ordinal": 4,
-        "name": "model_catalog?: sqlx::types::Json<PairingModelCatalog>",
-        "type_info": "Jsonb"
-      },
-      {
-        "ordinal": 5,
         "name": "status",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "expires_at",
         "type_info": "Timestamptz"
       }
@@ -54,11 +49,10 @@
       false,
       true,
       true,
-      true,
       false,
       false,
       false
     ]
   },
-  "hash": "8b3b773e07fc6fcb1e45dbc4ac1f2f461557f6224340e74318546f2b8807b8cc"
+  "hash": "462894fae868528fbf10226edf99171a52bdcd0377f40616c3c304ab6a106f25"
 }
