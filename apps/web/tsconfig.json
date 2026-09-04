@@ -206,12 +206,6 @@
       "@service-contacts/*": [
         "./src/lib/service-clients/service-contacts/*"
       ],
-      "@baby-gl": [
-        "./src/lib/baby-gl/"
-      ],
-      "@baby-gl/*": [
-        "./src/lib/baby-gl/*"
-      ],
       "@notifications": [
         "./src/features/notifications/"
       ],

@@ -736,14 +736,6 @@ if (LOCAL_ONLY) {
     lazy(() => import('@core/internal/DataDebug'))
   );
   registerComponent(
-    'noise',
-    lazy(() => import('@core/internal/PcNoiseGridDemo'))
-  );
-  registerComponent(
-    'svg-noise',
-    lazy(() => import('@core/internal/SvgNoiseGridDemo'))
-  );
-  registerComponent(
     'chat',
     lazy(() => import('@core/component/AI/component/debug/Component'))
   );
@@ -843,11 +835,6 @@ if (DEV_MODE_ENV) {
     )
   );
 
-  // NOTE (seamus) : putting pixel icons on dev/staging for aidan
-  registerComponent(
-    'pixel-icon',
-    lazy(() => import('@core/internal/PixelArtIconDemo'))
-  );
   registerComponent(
     'md-parse',
     lazy(
