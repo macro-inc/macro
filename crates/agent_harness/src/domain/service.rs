@@ -59,20 +59,20 @@ struct QueuedCommand {
 trait ErasedForwarder: Send + Sync + 'static {
     fn forward<'a>(
         &'a self,
-        target: &'a agent_session::domain::model::ReplicaAddress,
         session: AgentSessionId,
         command: HarnessCommand,
+        target: crate::domain::ports::CommandTarget,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>>;
 }
 
 impl<F: CommandForwarder> ErasedForwarder for F {
     fn forward<'a>(
         &'a self,
-        target: &'a agent_session::domain::model::ReplicaAddress,
         session: AgentSessionId,
         command: HarnessCommand,
+        target: crate::domain::ports::CommandTarget,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<CommandOutcome>> + Send + 'a>> {
-        Box::pin(CommandForwarder::forward(self, target, session, command))
+        Box::pin(CommandForwarder::forward(self, session, command, target))
     }
 }
 
@@ -337,10 +337,10 @@ where
     }
 }
 
-/// The receiving half of command forwarding: what the internal forward route
-/// calls, implemented by the harness as [`AgentHarnessService::execute_here`].
+/// The receiving half of command forwarding, called by the command-bus
+/// consumer and implemented by the harness as [`AgentHarnessService::execute_here`].
 pub trait ForwardedCommands: Send + Sync + 'static {
-    /// Run a command a peer already routed to this replica.
+    /// Run a command the transport has targeted to this replica.
     fn execute_forwarded(
         &self,
         session_id: AgentSessionId,
@@ -761,6 +761,7 @@ fn queue_result<T>(
 fn into_session_error(error: HarnessError) -> AgentSessionError {
     match error {
         HarnessError::Session(error) => error,
+        HarnessError::Disconnected(session) => AgentSessionError::Disconnected(session),
         other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
     }
 }
@@ -786,12 +787,6 @@ where
 {
     /// Execute where the session's live actor is: locally when nobody (or
     /// this replica) manages it, on the managing peer otherwise.
-    ///
-    /// A failed forward re-reads the lease once: the one legitimate reason a
-    /// live manager refuses its own session is that it died mid-flight, and
-    /// then its heartbeat going stale is what lets this replica take over. A
-    /// manager that is alive but unreachable stays an error - executing
-    /// locally anyway is how two actors end up on one session.
     /// The routing decision is recorded on the span, not only logged: which of
     /// the three answers the lease gave, which peer it named, and whether the
     /// command left this process. Those are the fields you group by when a
@@ -804,7 +799,6 @@ where
             agent.session.management = tracing::field::Empty,
             agent.session.manager_replica = tracing::field::Empty,
             agent.command.forwarded = tracing::field::Empty,
-            agent.command.stale_fallback = tracing::field::Empty,
         )
     )]
     async fn route_then_execute(
@@ -824,7 +818,30 @@ where
             SessionManagement::Unmanaged => {
                 span.record("agent.session.management", "unmanaged");
                 span.record("agent.command.forwarded", false);
-                return self.execute(session_id, command).await;
+                let session = self.sessions.get_session(session_id).await?;
+                if AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::External {
+                    return self.execute(session_id, command).await;
+                }
+                let Some(harness) = self
+                    .runtimes
+                    .bound_harness(session.bot_id)
+                    .await
+                    .map_err(AgentSessionError::Unknown)?
+                else {
+                    return self.execute(session_id, command).await;
+                };
+                if self.runtimes.is_connected(harness) {
+                    return self.execute(session_id, command).await;
+                }
+                span.record("agent.command.forwarded", true);
+                return self
+                    .forwarder
+                    .forward(
+                        session_id,
+                        command,
+                        crate::domain::ports::CommandTarget::Harness(harness),
+                    )
+                    .await;
             }
             SessionManagement::Ours => {
                 span.record("agent.session.management", "ours");
@@ -838,36 +855,15 @@ where
             "agent.session.manager_replica",
             tracing::field::display(manager.replica),
         );
-        let Some(address) = manager.address else {
-            // Recorded false deliberately: the command stayed here, but as an
-            // error rather than a local execution.
-            span.record("agent.command.forwarded", false);
-            return Err(HarnessError::ManagerUnreachable(session_id));
-        };
         span.record("agent.command.forwarded", true);
         tracing::info!(%session_id, peer = %manager.replica, "forwarding an agent session command");
-        match self
-            .forwarder
-            .forward(&address, session_id, command.clone())
+        self.forwarder
+            .forward(
+                session_id,
+                command,
+                crate::domain::ports::CommandTarget::Replica(manager.replica),
+            )
             .await
-        {
-            Ok(outcome) => Ok(outcome),
-            Err(forward_error) => match self.sessions.management(session_id).await? {
-                SessionManagement::Unmanaged | SessionManagement::Ours => {
-                    // Worth aggregating rather than only logging: routine
-                    // fallbacks mean heartbeats are not keeping up, which is a
-                    // different problem from an occasional dead peer.
-                    span.record("agent.command.stale_fallback", true);
-                    tracing::warn!(
-                        error = ?forward_error,
-                        %session_id,
-                        "the managing replica went stale mid-forward; executing locally"
-                    );
-                    self.execute(session_id, command).await
-                }
-                SessionManagement::Peer(_) => Err(forward_error),
-            },
-        }
     }
 
     async fn execute(

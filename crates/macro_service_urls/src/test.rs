@@ -177,6 +177,18 @@ fn email_service_url_parses() {
 }
 
 #[test]
+fn email_service_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = EmailServiceUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
+}
+
+#[test]
 fn image_proxy_service_url_parses() {
     assert_parses_for_all_environments(ImageProxyServiceUrl::default_for_environment);
 }
@@ -302,8 +314,8 @@ crate::service_url! {
         #[derive(Debug, Clone)]
         pub TestEmailServiceUrl {
             local: "http://localhost:8087",
-            dev: "https://email-service-dev.macro.com",
-            prod: "https://email-service.macro.com",
+            dev: "https://dev-gateway.macro.com/email",
+            prod: "https://gateway.macro.com/email",
         },
     }
 }
@@ -341,7 +353,7 @@ fn grouped_defaults_do_not_check_overrides() {
     );
     assert_eq!(
         service_urls.test_email_service_url.as_ref(),
-        "https://email-service.macro.com",
+        "https://gateway.macro.com/email",
     );
 }
 
@@ -425,7 +437,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
-        "https://auth-service-dev.macro.com",
+        "https://dev-gateway.macro.com/auth",
     );
     assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
@@ -473,7 +485,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.email_service_url.as_ref(),
-        "https://email-service-dev.macro.com",
+        "https://dev-gateway.macro.com/email",
     );
     assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),
@@ -496,7 +508,7 @@ fn exported_service_urls_match_prod_values() {
     assert_eq!(service_urls.app_service_url.as_ref(), "https://macro.com");
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
-        "https://auth-service.macro.com",
+        "https://gateway.macro.com/auth",
     );
     assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
@@ -544,7 +556,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.email_service_url.as_ref(),
-        "https://email-service.macro.com",
+        "https://gateway.macro.com/email",
     );
     assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),

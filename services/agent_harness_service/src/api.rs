@@ -7,8 +7,6 @@ use std::time::Duration;
 
 use agent_egress::domain::service::EgressService;
 use agent_egress::inbound::axum_router::{EgressRouterState, egress_router};
-use agent_harness::domain::service::ForwardedCommands;
-use agent_harness::inbound::forward::{ForwardGatewayState, forward_router};
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
@@ -21,6 +19,8 @@ use agent_session::inbound::axum_router::{
 };
 use anyhow::Context;
 use axum::Router;
+use axum::extract::State;
+use axum::http::StatusCode;
 use axum::routing::get;
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::MacroAuthorizationService;
@@ -43,8 +43,8 @@ fn mount_at_root_and_prefix(inner: Router) -> Router {
         .nest(GATEWAY_PATH_PREFIX, inner)
 }
 
-fn health_router() -> Router {
-    Router::new().route("/health", get(health))
+fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
+    Router::new().route("/health", get(health).with_state(ready))
 }
 
 /// Serve the sandbox-facing egress proxy on its own listener.
@@ -74,12 +74,12 @@ where
 }
 
 /// Build the router and serve it until the process is asked to stop.
-pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth, Harness>(
+pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
     gateway_state: RuntimeGatewayState<Auth>,
-    forward_state: ForwardGatewayState<Harness, Auth>,
+    runtime_commands_ready: tokio::sync::watch::Receiver<bool>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
@@ -90,18 +90,11 @@ where
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
-    Harness: ForwardedCommands,
 {
-    let inner = api_router(
-        read_state,
-        control_state,
-        create_state,
-        gateway_state,
-        forward_state,
-    )
-    .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
-    .merge(health_router())
-    .layer(macro_cors::cors_layer());
+    let inner = api_router(read_state, control_state, create_state, gateway_state)
+        .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
+        .merge(health_router(runtime_commands_ready))
+        .layer(macro_cors::cors_layer());
     let app = mount_at_root_and_prefix(inner)
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
         .merge(SwaggerUi::new("/agent-harness/docs").url(
@@ -121,12 +114,11 @@ where
         .context("agent harness service http failed")
 }
 
-fn api_router<T, R, Opener, Bots, Access, Auth, Harness>(
+fn api_router<T, R, Opener, Bots, Access, Auth>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
     gateway_state: RuntimeGatewayState<Auth>,
-    forward_state: ForwardGatewayState<Harness, Auth>,
 ) -> Router
 where
     T: AgentSessionService,
@@ -135,7 +127,6 @@ where
     Bots: BotDirectory,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
-    Harness: ForwardedCommands,
 {
     let agent_sessions = agent_session_read_router(read_state.clone())
         .merge(agent_session_control_router(control_state))
@@ -144,13 +135,12 @@ where
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(read_state))
         .nest("/runtime", runtime_gateway_router(gateway_state))
-        // Replica-to-replica command forwarding. Internal-key authenticated,
-        // and reached over task-to-task networking rather than the load
-        // balancer; mounting it on the public listener is fine because the
-        // extractor refuses anything without the deployment's internal key.
-        .nest("/internal", forward_router(forward_state))
 }
 
-async fn health() -> &'static str {
-    "ok"
+async fn health(State(ready): State<tokio::sync::watch::Receiver<bool>>) -> StatusCode {
+    if *ready.borrow() {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    }
 }

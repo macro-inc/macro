@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart};
-use ai_tools::{ToolServiceContext, ToolSetWithPrompt, all_tools};
+use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
 use futures::StreamExt as _;
@@ -38,7 +38,7 @@ mod test;
 const PART_BUFFER: usize = 256;
 
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
-/// [`ai_tools::all_tools`].
+/// [`ai_tools::tools_for`].
 pub struct RigTurnEngine {
     db: PgPool,
     tool_context: ToolServiceContext,
@@ -112,7 +112,7 @@ async fn drive_turn(
         user_input,
     } = request;
 
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
     let system_prompt = system_prompt(
         &tools.prompt,
@@ -120,11 +120,11 @@ async fn drive_turn(
         user_memory.as_deref(),
     );
 
-    // `all_tools` returns a fresh Arc. Take its collection back so the
+    // `tools_for` returns a fresh Arc. Take its collection back so the
     // in-memory runtime can widen it onto the session-specific context and
     // add the one tool that needs the active ACP connection.
     let base_tools = Arc::into_inner(tools.toolset)
-        .expect("all_tools should return a fresh, uniquely owned collection");
+        .expect("tools_for should return a fresh, uniquely owned collection");
     let toolset = tools_for_turn(base_tools, user_input.is_some());
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(toolset);
     let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
@@ -209,7 +209,7 @@ async fn fetch_user_memory(
     tool_context: &ToolServiceContext,
     owner: &MacroUserIdStr<'static>,
 ) -> Option<String> {
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let tools = ToolSetWithPrompt {
         toolset: tools.toolset,
         prompt: tools.prompt,

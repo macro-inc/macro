@@ -12,6 +12,10 @@ path = "src/main.rs"
 name = "agent_harness_service_openapi"
 path = "src/openapi.rs"
 
+[[bin]]
+name = "agent_harness_service_doppler_config"
+path = "src/doppler_config.rs"
+
 [dependencies]
 agent_egress = { path = "../../crates/agent_egress" }
 agent_fold = { path = "../../crates/agent_fold" }
@@ -32,6 +36,7 @@ cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
+futures = { workspace = true }
 github = { path = "../../crates/github", default-features = false, features = [
   "outbound",
   "ports",
@@ -63,18 +68,20 @@ macro_authorization = { path = "../../crates/macro_authorization", default-featu
 ] }
 macro_cors = { path = "../../crates/macro_cors" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
-reqwest = { workspace = true }
-serde_json = { workspace = true }
+redis = { workspace = true, features = ["aio", "tokio-comp"] }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 macro_config = { path = "../../crates/macro_config" }
+doppler-config = { workspace = true }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 serde = { workspace = true }
+serde_json = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tokio-retry = { workspace = true }
 tokio-util = { workspace = true, features = ["rt"] }
 tower = { workspace = true }
 tracing = { workspace = true }

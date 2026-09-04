@@ -36,8 +36,8 @@ OTEL_EXPORTER_OTLP_ENDPOINT = "http://localhost:4318/v1/traces"
 SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
 DSS_BASE = "https://gateway.macro.com/dss"
 SEARCH_SERVICE_BASE = "https://gateway.macro.com/dss"
-CONTACTS_SERVICE_BASE = "https://contacts.macro.com"
-AUTH_SERVICE_BASE = "https://auth-service.macro.com"
+CONTACTS_SERVICE_BASE = "https://gateway.macro.com/contacts"
+AUTH_SERVICE_BASE = "https://gateway.macro.com/auth"
 
 [dev]
 port = 8933
@@ -63,8 +63,8 @@ OTEL_EXPORTER_OTLP_ENDPOINT = "https://macro-prox-dev.macroverse.workers.dev/i/o
 SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
 DSS_BASE = "https://dev-gateway.macro.com/dss"
 SEARCH_SERVICE_BASE = "https://dev-gateway.macro.com/dss"
-CONTACTS_SERVICE_BASE = "https://contacts-dev.macro.com"
-AUTH_SERVICE_BASE = "https://auth-service-dev.macro.com"
+CONTACTS_SERVICE_BASE = "https://dev-gateway.macro.com/contacts"
+AUTH_SERVICE_BASE = "https://dev-gateway.macro.com/auth"
 
 [[env.dev.d1_databases]]
 binding = "TRACES_DB"
@@ -79,8 +79,8 @@ ENVIRONMENT = "development"
 SYNC_WS_BASE = "wss://sync-service-dev3.macroverse.workers.dev"
 DSS_BASE = "https://dev-gateway.macro.com/dss"
 SEARCH_SERVICE_BASE = "https://dev-gateway.macro.com/dss"
-CONTACTS_SERVICE_BASE = "https://contacts-dev.macro.com"
-AUTH_SERVICE_BASE = "https://auth-service-dev.macro.com"
+CONTACTS_SERVICE_BASE = "https://dev-gateway.macro.com/contacts"
+AUTH_SERVICE_BASE = "https://dev-gateway.macro.com/auth"
 
 [[env.playground.d1_databases]]
 binding = "TRACES_DB"
@@ -96,8 +96,8 @@ OTEL_EXPORTER_OTLP_ENDPOINT = "https://macro-prox-prod.macroverse.workers.dev/i/
 SYNC_WS_BASE = "wss://sync-service-prod2.macroverse.workers.dev"
 DSS_BASE = "https://gateway.macro.com/dss"
 SEARCH_SERVICE_BASE = "https://gateway.macro.com/dss"
-CONTACTS_SERVICE_BASE = "https://contacts.macro.com"
-AUTH_SERVICE_BASE = "https://auth-service.macro.com"
+CONTACTS_SERVICE_BASE = "https://gateway.macro.com/contacts"
+AUTH_SERVICE_BASE = "https://gateway.macro.com/auth"
 
 [[env.prod.d1_databases]]
 binding = "TRACES_DB"

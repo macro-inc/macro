@@ -550,6 +550,9 @@ export class CacheCoordinatorPageAdapter {
         else this.options.onProtocolError?.(error);
         break;
       }
+      case 'terminal-error':
+        this.failTerminal(new Error(message.error));
+        break;
     }
   }
 

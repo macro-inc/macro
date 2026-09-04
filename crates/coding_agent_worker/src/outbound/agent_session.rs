@@ -11,8 +11,7 @@ use agent_session::inbound::axum_router::{
 use macro_user_id::user_id::MacroUserIdStr;
 use reqwest::StatusCode;
 
-use crate::config::MacroApi;
-use crate::outbound::credentials::HarnessCredentials;
+use crate::config::{HarnessCredentials, MacroApi};
 
 const HARNESS_TOKEN_HEADER: &str = "x-macro-harness-token";
 const HARNESS_ACTING_USER_HEADER: &str = "x-macro-harness-for-macro-user-id";

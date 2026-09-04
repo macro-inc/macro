@@ -9,6 +9,9 @@ use thiserror::Error;
 use tokio::io::AsyncWriteExt;
 use url::Url;
 
+#[cfg(test)]
+mod test;
+
 /// HTTP client for checking and downloading bundle updates.
 pub struct BundleClient {
     /// Reusable HTTP client.
@@ -31,9 +34,30 @@ pub enum BundleClientErr {
 impl BundleClient {
     /// Create a new client pointing at the given base URL.
     pub fn new(mut base: Url) -> Self {
-        base.set_path("");
+        base.set_query(None);
+        base.set_fragment(None);
         let client = reqwest::Client::new();
         Self { client, base }
+    }
+
+    fn update_check_url(
+        &self,
+        request: crate::domain::models::AppInfo,
+    ) -> Result<Url, BundleClientErr> {
+        let mut url = self.base.clone();
+        url.path_segments_mut()
+            .map_err(|_| BundleClientErr::CannotBeABase(self.base.clone()))?
+            .push("update")
+            .push("bundle")
+            .push(request.target.into())
+            .push(request.arch.into());
+        url.query_pairs_mut()
+            .append_pair(
+                "current_bundle_build",
+                &request.current_bundle_build.to_string(),
+            )
+            .append_pair("native_build", &request.native_build.to_string());
+        Ok(url)
     }
 
     // pub async fn request(&self) -> Result<Option<BundleUpdate>, BundleClientErr> {
@@ -45,20 +69,7 @@ impl UpdateRepo for BundleClient {
         &self,
         request: crate::domain::models::AppInfo,
     ) -> Result<Option<BundleAction>, rootcause::Report> {
-        let mut url = self.base.clone();
-        url.path_segments_mut()
-            .map_err(|_| BundleClientErr::CannotBeABase(self.base.clone()))?
-            .clear()
-            .push("update")
-            .push("bundle")
-            .push(request.target.into())
-            .push(request.arch.into());
-        url.query_pairs_mut()
-            .append_pair(
-                "current_bundle_build",
-                &request.current_bundle_build.to_string(),
-            )
-            .append_pair("native_build", &request.native_build.to_string());
+        let url = self.update_check_url(request)?;
 
         let res = self.client.get(url).send().await?.error_for_status()?;
 

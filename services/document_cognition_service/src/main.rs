@@ -611,7 +611,7 @@ async fn main() -> anyhow::Result<()> {
         recorder,
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
-    let all_tools = ai_tools::all_tools();
+    let all_tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
     let all_tools_toolset = all_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
         Arc::new(all_tools.prompt.to_string());
@@ -639,7 +639,7 @@ async fn main() -> anyhow::Result<()> {
     let projection_generator =
         ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
-            ai_tools::all_tools(),
+            ai_tools::tools_for(ai_tools::AiHost::Chat),
         );
     // Notifier that pushes finished materializations to the target's connected
     // clients through the connection gateway.

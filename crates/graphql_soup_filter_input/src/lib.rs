@@ -817,6 +817,8 @@ enum GraphqlEmailLiteral {
     CreatedAt(GraphqlDateLiteral),
     /// The updated at option.
     UpdatedAt(GraphqlDateLiteral),
+    /// The per-viewer viewed at option.
+    ViewedAt(GraphqlDateLiteral),
 }
 
 impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
@@ -837,6 +839,7 @@ impl IntoFilterExpr<EmailLiteral> for GraphqlEmailLiteral {
             Self::CalendarOnly(calendar_only) => EmailLiteral::CalendarOnly(calendar_only),
             Self::CreatedAt(date) => EmailLiteral::CreatedAt(date.into_ast()?),
             Self::UpdatedAt(date) => EmailLiteral::UpdatedAt(date.into_ast()?),
+            Self::ViewedAt(date) => EmailLiteral::ViewedAt(date.into_ast()?),
         };
         Ok(Expr::val(literal))
     }

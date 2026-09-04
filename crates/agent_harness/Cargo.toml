@@ -34,7 +34,9 @@ macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+opentelemetry = { workspace = true, features = ["trace"] }
 reqwest = { workspace = true }
+redis = { workspace = true, features = ["aio", "tokio-comp"] }
 rootcause = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
@@ -51,6 +53,7 @@ tokio = { workspace = true, features = [
 tokio-util = { workspace = true, features = ["rt"] }
 tokio-tungstenite = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 

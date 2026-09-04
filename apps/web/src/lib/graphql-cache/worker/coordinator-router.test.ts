@@ -207,6 +207,80 @@ describe('CoordinatorRouter', () => {
     ]);
   });
 
+  it('backs off repeated recovery attempts and terminal-fails at the retry limit', async () => {
+    vi.useFakeTimers();
+    const router = new CoordinatorRouter({
+      verifyTabLockHeld: async () => true,
+      watchTabLock: () => () => {},
+    });
+    const tabA = new FakePort();
+    const tabB = new FakePort();
+    await register(router, tabA, 'tab-a');
+    await register(router, tabB, 'tab-b');
+    const initialEngine = new FakePort();
+    await attach(router, tabA, 'tab-a', 1, initialEngine);
+
+    initialEngine.receive({
+      ...version,
+      kind: 'activation-failed',
+      tabId: 'tab-a',
+      ownerEpoch: 1,
+      reason: 'initial OPFS open failed',
+      failureCode: 'initialization-failed',
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    const backoffDelays = [100, 200, 400, 800];
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      const state = router.snapshot()?.state;
+      expect(state).toMatchObject({
+        kind: 'activating',
+        ownerEpoch: attempt + 1,
+        databaseAction: 'wipe-before-open',
+      });
+      if (state?.kind !== 'activating') {
+        throw new Error('expected an activating recovery owner');
+      }
+      const tabId = state.tabId;
+      const tab = tabId === 'tab-a' ? tabA : tabB;
+      const engine = new FakePort();
+      await attach(router, tab, tabId, state.ownerEpoch, engine);
+      engine.receive({
+        ...version,
+        kind: 'activation-failed',
+        tabId,
+        ownerEpoch: state.ownerEpoch,
+        reason: 'OPFS path remove failed (NoModificationAllowedError)',
+        failureCode: 'recovery-open-failed',
+      });
+
+      if (attempt === 5) break;
+      expect(router.snapshot()?.state).toMatchObject({
+        kind: 'resetting-after-loss',
+        nextEpoch: attempt + 2,
+      });
+      const delay = backoffDelays[attempt - 1] ?? 0;
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(router.snapshot()?.state.kind).toBe('resetting-after-loss');
+      await vi.advanceTimersByTimeAsync(1);
+    }
+
+    expect(router.snapshot()?.state).toEqual({
+      kind: 'failed',
+      reason: expect.stringContaining('cache recovery failed after 5 attempts'),
+    });
+    expect(messagesOfKind(tabA, 'terminal-error')).toEqual([
+      expect.objectContaining({
+        error: expect.stringContaining(
+          'OPFS path remove failed (NoModificationAllowedError)'
+        ),
+      }),
+    ]);
+    expect(messagesOfKind(tabB, 'terminal-error')).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(router.snapshot()?.state.kind).toBe('failed');
+  });
+
   it('registers only after independent liveness-lock contention succeeds', async () => {
     let releaseVerification: ((held: boolean) => void) | undefined;
     const verification = new Promise<boolean>((resolve) => {

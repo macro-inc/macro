@@ -128,6 +128,11 @@ export type CoordinatorToTabEnvelope =
       coordinatorVersion: 2;
       kind: 'protocol-error';
       error: string;
+    }
+  | {
+      coordinatorVersion: 2;
+      kind: 'terminal-error';
+      error: string;
     };
 
 export type PageToEngineEnvelope = {
@@ -797,6 +802,7 @@ export function validateCoordinatorToTabEnvelope(
       }
       break;
     case 'protocol-error':
+    case 'terminal-error':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'error']) &&
         isNonEmptyString(value.error)

@@ -4,9 +4,9 @@ use super::*;
 const TOOLS: &str = "TOOLS";
 
 fn has_ask_user(supports_user_input: bool) -> bool {
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let base_tools = Arc::into_inner(tools.toolset)
-        .expect("all_tools should return a fresh, uniquely owned collection");
+        .expect("tools_for should return a fresh, uniquely owned collection");
     tools_for_turn(base_tools, supports_user_input)
         .request_schemas()
         .expect("tool schemas should be valid")

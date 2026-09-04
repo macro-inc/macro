@@ -5,10 +5,37 @@ const EXAMPLE: &str = include_str!("../../config.example.toml");
 #[test]
 fn the_example_config_parses() {
     let config: Config = toml::from_str(EXAMPLE).expect("example config parses");
-    assert_eq!(config.harness.command, "opencode");
+    assert_eq!(config.harness.command, "hermes");
     assert_eq!(config.harness.args, vec!["acp"]);
     assert_eq!(config.identity.name.as_deref(), Some("erics-macbook"));
     assert_eq!(config.identity.scope, IdentityScope::Private);
+    assert_eq!(config.credentials, None);
+}
+
+#[test]
+fn embedded_credentials_parse_with_their_approved_scope() {
+    let with_credentials = format!(
+        "{EXAMPLE}\n[credentials]\nharness_id = \"{}\"\ntoken = \"mhns_secret\"\nscope = \"team\"\n",
+        harness_id::HarnessId::TEST_A
+    );
+    let config: Config = toml::from_str(&with_credentials).expect("embedded credentials parse");
+    let credentials = config.credentials.expect("credentials");
+
+    assert_eq!(credentials.harness_id, harness_id::HarnessId::TEST_A);
+    assert_eq!(credentials.scope, HarnessScope::Team);
+    assert!(credentials.is_valid());
+    assert_eq!(config.identity.scope, IdentityScope::Private);
+}
+
+#[test]
+fn malformed_bearer_token_is_not_valid() {
+    let credentials = HarnessCredentials {
+        harness_id: harness_id::HarnessId::TEST_A,
+        token: "not-a-harness-token".to_owned(),
+        scope: HarnessScope::User,
+    };
+
+    assert!(!credentials.is_valid());
 }
 
 #[test]

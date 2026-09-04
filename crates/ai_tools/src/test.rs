@@ -20,13 +20,38 @@ fn subagent_toolset_passes_schema_validation() {
 }
 
 #[test]
-fn all_tools_passes_schema_validation() {
-    let _ = all_tools();
+fn every_host_toolset_passes_schema_validation() {
+    for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
+        let _ = tools_for(host);
+    }
 }
 
+/// Hosts without a composer cannot finish a deferred user tool, so their
+/// toolsets must execute calendar creation directly and omit SendEmail
+/// entirely — a `UserToolResponse` output there would mean a call that
+/// nothing can ever execute.
 #[test]
-fn mcp_tools_passes_schema_validation() {
-    let _ = mcp_tools();
+fn composerless_hosts_execute_calendar_create_directly_and_omit_send_email() {
+    for host in [AiHost::ChannelBot, AiHost::Mcp] {
+        let json = frontend_schemas_builder()
+            .merge(&tools_for(host))
+            .build()
+            .to_json_pretty()
+            .expect("host schemas serialize");
+        let schemas: serde_json::Value = serde_json::from_str(&json).expect("valid schema json");
+        let tools = schemas["tools"].as_array().expect("tools array");
+
+        let create = tools
+            .iter()
+            .find(|tool| tool["name"] == "CreateCalendarEvent")
+            .expect("composer-less toolset keeps CreateCalendarEvent");
+        assert_eq!(create["output"], "ToolCalendarEvent", "{host:?}");
+
+        assert!(
+            !tools.iter().any(|tool| tool["name"] == "SendEmail"),
+            "{host:?} toolset must not expose SendEmail"
+        );
+    }
 }
 
 #[test]

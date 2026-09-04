@@ -424,4 +424,34 @@ describe('CoordinatorCore', () => {
       },
     ]);
   });
+
+  it('makes retry exhaustion terminal for current and future tabs', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    ready(core, 'tab-a', 1, 'opened-existing');
+    core.ownerLost('tab-a', 1, 'OPFS recovery failed');
+    core.request('tab-b', { id: 7, kind: 'clear' });
+
+    expect(core.terminalFailure('cache recovery exhausted')).toEqual([
+      { kind: 'terminal-failure', error: 'cache recovery exhausted' },
+    ]);
+    expect(core.state).toEqual({
+      kind: 'failed',
+      reason: 'cache recovery exhausted',
+    });
+    expect(core.snapshot().queuedRequestCount).toBe(0);
+    expect(core.request('tab-b', { id: 8, kind: 'clear' })).toEqual([
+      {
+        kind: 'reject-request',
+        tabId: 'tab-b',
+        requestId: 8,
+        error: 'cache recovery exhausted',
+      },
+    ]);
+    expect(core.registerTab('tab-c')).toEqual([
+      { kind: 'terminal-failure', error: 'cache recovery exhausted' },
+    ]);
+    expect(core.resumeAfterLoss()).toEqual([]);
+  });
 });

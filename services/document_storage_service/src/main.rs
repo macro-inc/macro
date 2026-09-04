@@ -1013,10 +1013,12 @@ async fn run() -> anyhow::Result<()> {
 
     // Wire Macro AI to react to mentions with the classic in-channel chat
     // reply. The router posts replies through the channel service we just
-    // built and runs the agent loop in-process with the same pre-configured
-    // toolset used by other AI hosts. Agent sessions belong to a different
-    // bot entirely (`bot_id::MACRO_NEW_BOT_ID`, served by the harness), so
-    // the two paths can never answer the same mention.
+    // built and runs the agent loop in-process with the channel-bot toolset:
+    // a channel has no composer to finish a chat-deferred user tool in, so
+    // calendar event creation executes directly and SendEmail is unavailable.
+    // Agent sessions belong to a different bot entirely
+    // (`bot_id::MACRO_NEW_BOT_ID`, served by the harness), so the two paths
+    // can never answer the same mention.
     let mut macro_agent_tool_context =
         ai_tools::build_tool_service_context_from_env(db.clone(), event_broker_tracker.clone())
             .await
@@ -1031,7 +1033,7 @@ async fn run() -> anyhow::Result<()> {
             std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
             lexical_client.clone(),
         );
-    let macro_agent_tools = ai_tools::all_tools();
+    let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
         channels_service.clone(),
         Arc::new(channel_bots::outbound::AgentLoopResponder::new(

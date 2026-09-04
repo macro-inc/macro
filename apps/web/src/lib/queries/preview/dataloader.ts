@@ -1,6 +1,6 @@
 import { DEFAULT_ITEM_TYPE } from '@service-storage/client';
 import { AsyncBatcher } from '@tanstack/pacer';
-import { fetchPreviewBatch } from './fetchers';
+import { fetchRestPreviewBatch } from './fetchers';
 import { previewKeys } from './keys';
 import type { ItemEntity, PreviewItem } from './types';
 
@@ -16,7 +16,7 @@ class PreviewDataLoader {
 
   private batcher = new AsyncBatcher<ItemEntity>(
     async (items) => {
-      return await fetchPreviewBatch(items);
+      return await fetchRestPreviewBatch(items);
     },
     {
       wait: 30,

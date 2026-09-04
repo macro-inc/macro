@@ -10,6 +10,7 @@ import {
   useChatInputContext,
 } from '@core/component/AI/context';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
+import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
@@ -163,12 +164,12 @@ const HomeChatInput = () => {
   const input = useChatInputContext();
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+  const attachmentMentionCallbacks = createMentionAttachmentCallbacks(
+    input.attachments,
+    getAttachmentFromMention
+  );
   const editor = buildChatEditor().withMentions({
-    onCreate: (mention) => {
-      const attachment = getAttachmentFromMention(mention);
-      if (attachment) input.attachments.addAttachment(attachment);
-    },
-    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
+    ...attachmentMentionCallbacks,
     block: 'chat',
     showOpenTabs: true,
   });

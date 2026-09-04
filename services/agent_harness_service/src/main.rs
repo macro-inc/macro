@@ -13,6 +13,7 @@ mod bots_directory;
 mod config;
 mod containers;
 mod harness_bindings;
+mod runtime_commands;
 mod trigger;
 
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -32,7 +33,6 @@ use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::domain::trigger_router::{
     RoutedTrigger, agent_trigger_bot_id, route_agent_trigger,
 };
-use agent_harness::inbound::forward::ForwardGatewayState;
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
@@ -44,7 +44,7 @@ use agent_harness::outbound::daytona::{
     DaytonaContainerManager, DaytonaSettings, Snapshot,
 };
 use agent_harness::outbound::egress::EgressProvisioner;
-use agent_harness::outbound::forward::HttpCommandForwarder;
+use agent_harness::outbound::forward::RedisCommandForwarder;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
@@ -52,7 +52,7 @@ use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::rig_engine::RigTurnEngine;
 use agent_runtime_directory::PgAgentRuntimeDirectory;
-use agent_session::domain::model::{ReplicaAddress, ReplicaId};
+use agent_session::domain::model::ReplicaId;
 use agent_session::domain::ports::{NoOpRealtime, SessionOwnership as _};
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
@@ -102,7 +102,10 @@ use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::Instrument as _;
+
+use runtime_commands::consume_runtime_commands;
 
 /// Consumer group owning this harness's agent-session offsets.
 ///
@@ -110,6 +113,8 @@ use tracing::Instrument as _;
 /// split partitions between them and each miss half its events; fine while
 /// exactly one harness deployment exists.
 struct AgentHarnessConsumerGroup;
+
+const RUNTIME_COMMAND_CONSUMER_ATTEMPTS: usize = 5;
 
 impl GroupName for AgentHarnessConsumerGroup {
     const GROUP_NAME: &'static str = "agent-harness-service";
@@ -135,63 +140,6 @@ struct PendingHarnessWork {
     span: tracing::Span,
     work: HarnessWork,
     description: &'static str,
-}
-
-/// This task's own private base URL, for peers forwarding session commands.
-///
-/// On ECS the task metadata endpoint (v4) publishes the task's private IPv4;
-/// the port is the service listener peers can reach through the task-to-task
-/// security group rule. Local development has no routable address and runs
-/// one replica, so `None` is correct there; every other environment refuses
-/// to boot rather than heartbeat an unreachable identity, because a replica
-/// without an address is one whose sessions peers can see but never reach.
-async fn discover_replica_address(
-    environment: Environment,
-    port: u16,
-) -> anyhow::Result<Option<agent_session::domain::model::ReplicaAddress>> {
-    // Explicit override first: how a local multi-replica experiment names
-    // each process (`REPLICA_ADDRESS=http://127.0.0.1:<port>`), since nothing
-    // off ECS can discover an address.
-    if let Some(address) = macro_env_var::optional_read_env_var("REPLICA_ADDRESS")
-        .ok()
-        .flatten()
-    {
-        return Ok(Some(agent_session::domain::model::ReplicaAddress::new(
-            address,
-        )));
-    }
-    let Some(metadata_uri) = macro_env_var::optional_read_env_var("ECS_CONTAINER_METADATA_URI_V4")
-        .ok()
-        .flatten()
-    else {
-        if matches!(environment, Environment::Local) {
-            return Ok(None);
-        }
-        anyhow::bail!(
-            "ECS_CONTAINER_METADATA_URI_V4 is unset outside a local environment: \
-             this replica would be unreachable for command forwarding"
-        );
-    };
-    let task: serde_json::Value = reqwest::Client::new()
-        .get(format!("{metadata_uri}/task"))
-        .timeout(std::time::Duration::from_secs(5))
-        .send()
-        .await
-        .context("failed to reach the ECS task metadata endpoint")?
-        .json()
-        .await
-        .context("failed to parse ECS task metadata")?;
-    let ip = task["Containers"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .flat_map(|container| container["Networks"].as_array().into_iter().flatten())
-        .flat_map(|network| network["IPv4Addresses"].as_array().into_iter().flatten())
-        .find_map(serde_json::Value::as_str)
-        .context("ECS task metadata carries no private IPv4 address")?;
-    Ok(Some(agent_session::domain::model::ReplicaAddress::new(
-        format!("http://{ip}:{port}"),
-    )))
 }
 
 #[tokio::main]
@@ -246,18 +194,10 @@ async fn run() -> anyhow::Result<()> {
     // log and pushes each frame at the channel's participants so a viewer sees
     // it happen.
     let session_repo = PgAgentSessionRepo::new(pool.clone());
-    // One lease identity for the whole process: commands forward to an
-    // address, and both attach-capable service instances below live at this
-    // one, so they share the id. The address is this task's own private URL,
-    // discovered from ECS metadata; a deployment that cannot learn it must
-    // not scale, so discovery failing anywhere but local refuses to boot.
+    // One ownership identity for the whole process. Both attach-capable
+    // service instances below live here, so they share it.
     let replica = ReplicaId::mint();
-    let replica_address = discover_replica_address(config.environment, config.port).await?;
-    tracing::info!(
-        %replica,
-        address = ?replica_address.as_ref().map(ReplicaAddress::as_str),
-        "harness replica identity"
-    );
+    tracing::info!(%replica, "harness replica identity");
     // Bound to the harness once it exists (it is built *from* this service);
     // both attach-capable service instances report turns to the same one.
     let turn_observer = Arc::new(agent_session::domain::ports::LateBoundTurnObserver::new());
@@ -466,6 +406,8 @@ async fn run() -> anyhow::Result<()> {
     // it and the harness takes sessions out of it. Attach/detach is mirrored
     // to the harnesses table so the settings page can show connection state.
     let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
+    let redis = redis::Client::open(config.redis_uri.as_ref())
+        .context("failed to create the runtime command Redis client")?;
     let mut defaults = HarnessDefaults::new(SessionDefaults {
         bot_id,
         model: config.harness_model.clone(),
@@ -518,13 +460,50 @@ async fn run() -> anyhow::Result<()> {
         prompt_context,
         prompt_composer,
         EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
-        HttpCommandForwarder::new(config.internal_api_key.clone())
-            .map_err(|error| anyhow::anyhow!("failed to build the command forwarder: {error}"))?,
+        RedisCommandForwarder::new(redis.clone()),
         defaults,
     ));
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.
     turn_observer.bind(harness.clone());
+    let runtime_command_redis = redis.clone();
+    let runtime_command_harness = harness.clone();
+    let runtime_command_runtimes = Arc::clone(&runtimes);
+    let (runtime_commands_ready, mut runtime_commands_readiness) =
+        tokio::sync::watch::channel(false);
+    let runtime_commands = tokio::spawn(async move {
+        let result = Retry::start(
+            FixedInterval::new(std::time::Duration::from_secs(1))
+                .take(RUNTIME_COMMAND_CONSUMER_ATTEMPTS - 1),
+            || {
+                runtime_commands_ready.send_replace(false);
+                consume_runtime_commands(
+                    runtime_command_redis.clone(),
+                    replica,
+                    {
+                        let runtimes = Arc::clone(&runtime_command_runtimes);
+                        Arc::new(move |harness| runtimes.is_connected(harness))
+                    },
+                    runtime_command_harness.clone(),
+                    runtime_commands_ready.clone(),
+                )
+            },
+        )
+        .await;
+        if let Err(error) = result {
+            tracing::error!(
+                error = ?error,
+                "runtime command Redis consumer stopped after five attempts"
+            );
+        }
+    });
+    tokio::time::timeout(
+        std::time::Duration::from_secs(30),
+        runtime_commands_readiness.wait_for(|ready| *ready),
+    )
+    .await
+    .context("timed out subscribing to the runtime command bus")?
+    .context("runtime command bus stopped before subscribing")?;
 
     // The complete session API is served from this process because it owns the
     // live sessions. Spawned rather than awaited: the Kafka loop below owns the
@@ -567,10 +546,7 @@ async fn run() -> anyhow::Result<()> {
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
-    let forward_state = ForwardGatewayState::new(
-        harness.clone(),
-        MacroAuthorizationState::new(Arc::new(authorization_service)),
-    );
+    let http_runtime_commands_readiness = runtime_commands_readiness.clone();
     let http_port = config.port;
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -578,7 +554,7 @@ async fn run() -> anyhow::Result<()> {
             control_state,
             create_state,
             gateway_state,
-            forward_state,
+            http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),
         )
@@ -594,16 +570,16 @@ async fn run() -> anyhow::Result<()> {
     // release each claim eagerly in the actor teardown path; this loop is
     // what covers the ungraceful ones.
     let heartbeat_repo = session_repo.clone();
-    let heartbeat_address = replica_address.clone();
+    let heartbeat_readiness = runtime_commands_readiness.clone();
     let heartbeat = tokio::spawn(async move {
         let mut ticker =
             tokio::time::interval(agent_session::domain::ports::REPLICA_HEARTBEAT_INTERVAL);
         loop {
             ticker.tick().await;
-            if let Err(error) = heartbeat_repo
-                .heartbeat(replica, heartbeat_address.as_ref())
-                .await
-            {
+            if !*heartbeat_readiness.borrow() {
+                continue;
+            }
+            if let Err(error) = heartbeat_repo.heartbeat(replica, None).await {
                 tracing::warn!(error = ?error, %replica, "failed to heartbeat harness replica");
             }
         }
@@ -837,6 +813,7 @@ async fn run() -> anyhow::Result<()> {
     trigger.abort();
     egress_http.abort();
     heartbeat.abort();
+    runtime_commands.abort();
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {
         tracing::error!(stop_failures, "some sandboxes failed to stop");

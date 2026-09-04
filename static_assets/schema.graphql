@@ -1689,6 +1689,10 @@ input GraphqlEmailLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+	"""
+	The per-viewer viewed at option.
+	"""
+	viewedAt: GraphqlDateLiteral
 }
 
 """

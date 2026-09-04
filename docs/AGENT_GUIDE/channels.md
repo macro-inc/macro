@@ -31,8 +31,14 @@ message; ordinary Markdown blockquotes remain presentation-only and do not count
 The composer always keeps an editable empty line after a block reference, including after
 the user deletes that line, so clicking below the reference can restore the text caret.
 
-`@Macro` answers in the thread (classic bot). `@macro-new` / `@coder` / `@cursor` open
-an agent session; follow-up `@` mentions of that bot in the same thread route to it.
+`@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
+no composer or pending-confirmation card in a channel, so asking it to create a calendar
+event without attendees creates the event right away (unlike AI chat, where creation waits
+for the user to confirm a composer card). For an event with attendees the bot is prompted to
+ask for confirmation in the thread first, since Google sends the invitations the moment the
+event is created — no invitation goes out from the initial request. It cannot draft or send
+email at all. `@macro-new` / `@coder` / `@cursor` open an agent session; follow-up `@`
+mentions of that bot in the same thread route to it.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention.
 

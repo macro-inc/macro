@@ -1,7 +1,7 @@
+import { HoverCard as CoreHoverCard } from '@core/component/HoverCard';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { Placement } from '@floating-ui/dom';
-import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
-import { createSignal, type JSX, type ParentProps, Show } from 'solid-js';
+import { type JSX, type ParentProps, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Surface } from './Surface';
 
@@ -18,26 +18,36 @@ type HoverCardProps = ParentProps<{
    * instead of stacking it on top of the popover.
    */
   disabled?: boolean;
+  /** Rich hover cards in the same group share one open nested branch. */
+  chokeGroup?: string | false;
 }>;
 
 /**
+ * Styled rich hover content that can contain controls and nested hover cards.
+ * Use `Tooltip` instead when the content is only a short text hint; its
+ * string-only `label` API and coordination group are intentionally separate.
+ *
  * @example
- * <HoverCard content={<span>Tooltip text</span>}>
+ * <HoverCard content={<PreviewActions />}>
  *   <button>Hover me</button>
  * </HoverCard>
  */
 export function HoverCard(props: HoverCardProps) {
-  // Controlled open: mirror Kobalte's hover-driven state via onOpenChange, then
-  // gate it on `disabled` so the card hides immediately when suppressed — even
-  // if it was already open when `disabled` flipped true.
-  const [hovered, setHovered] = createSignal(false);
-  const open = () => hovered() && !props.disabled;
-
   return (
     <Show when={!isTouchDevice()} fallback={props.children}>
-      <KobalteTooltip
-        open={open()}
-        onOpenChange={setHovered}
+      <CoreHoverCard
+        trigger={props.children}
+        content={
+          <Surface
+            class={cn(
+              'flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word bg-tooltip',
+              props.contentClass
+            )}
+            depth={3}
+          >
+            {props.content}
+          </Surface>
+        }
         placement={props.placement ?? 'bottom'}
         overflowPadding={16}
         fitViewport={true}
@@ -45,27 +55,12 @@ export function HoverCard(props: HoverCardProps) {
         openDelay={250}
         flip={true}
         gutter={4}
-      >
-        <KobalteTooltip.Trigger
-          class={cn('inline-flex items-center', props.triggerClass)}
-          as={props.as ?? 'div'}
-        >
-          {props.children}
-        </KobalteTooltip.Trigger>
-        <KobalteTooltip.Portal>
-          <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
-            <Surface
-              class={cn(
-                'flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word bg-tooltip',
-                props.contentClass
-              )}
-              depth={3}
-            >
-              {props.content}
-            </Surface>
-          </KobalteTooltip.Content>
-        </KobalteTooltip.Portal>
-      </KobalteTooltip>
+        contentClass="max-w-[calc(100vw-32px)]"
+        triggerClass={cn('inline-flex items-center', props.triggerClass)}
+        triggerAs={props.as ?? 'div'}
+        disabled={props.disabled}
+        chokeGroup={props.chokeGroup}
+      />
     </Show>
   );
 }

@@ -64,24 +64,12 @@ type Args = {
 
 /**
  * The agent harness service. Replicated in every environment: each replica
- * claims the sessions whose live actors it holds through a fenced Postgres
- * lease, and a command landing on the wrong replica is forwarded task-to-task
- * over the private network (`POST /internal/agent-sessions/{id}/command`,
- * internal-key authenticated) - which is why the service security group
- * allows itself ingress on the service port. The Kafka consumer group splits
- * partitions across live tasks; the lease plus forwarding is what makes that
- * split correct.
+ * claims the sessions whose live actors it holds through Postgres ownership,
+ * and commands are broadcast through the shared Redis deployment so the
+ * responsible replica can execute them. The Kafka consumer group splits
+ * partitions across live tasks; ownership plus Redis routing is what makes
+ * that split correct.
  *
- * Deploys roll (min healthy 100%, max 200%): the outgoing tasks keep serving
- * until their replacements pass health checks, so the control API and egress
- * proxy stay up instead of blacking out for the old tasks' sandbox cleanup.
- * A deploy therefore doubles the replica count for its duration rather than
- * introducing coexistence - replicas coexist all the time, and the lease is
- * what makes both the steady state and the overlap correct. A command routed
- * to a new task for a session whose live actor is still on an old one
- * self-heals through resume. Live sessions already restart across every
- * deploy (`shutdown_all` stops each sandbox), so the overlap narrows the
- * blast radius rather than widening it.
  */
 export class AgentHarnessService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
@@ -344,9 +332,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
-        // Rolling replace: the old task serves until the new one is healthy
-        // (see the class doc comment for the overlap semantics). A failed
-        // deploy rolls back with the old task still up rather than at zero.
         deploymentMinimumHealthyPercent: 100,
         deploymentMaximumPercent: 200,
         // Every environment runs two, so dev stays prod-shaped: forwarding is
@@ -527,24 +512,6 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         securityGroupId: serviceSg.id,
         description: 'Allow inbound traffic from the service ALB',
         referencedSecurityGroupId: serviceAlbSg.id,
-        fromPort: serviceContainerPort,
-        toPort: serviceContainerPort,
-        ipProtocol: 'tcp',
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    // Replica-to-replica command forwarding: a task that consumed a command
-    // for a session another replica manages POSTs it directly to that
-    // replica's private address, bypassing the load balancer.
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-peer-in`,
-      {
-        securityGroupId: serviceSg.id,
-        description:
-          'Allow harness replicas to forward session commands to each other',
-        referencedSecurityGroupId: serviceSg.id,
         fromPort: serviceContainerPort,
         toPort: serviceContainerPort,
         ipProtocol: 'tcp',

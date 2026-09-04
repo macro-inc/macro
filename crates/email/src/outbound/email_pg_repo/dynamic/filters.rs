@@ -40,6 +40,7 @@ pub(super) fn has_thread_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::NotificationDone(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
+            | EmailLiteral::ViewedAt(_)
             | EmailLiteral::Property(_),
         ) => true,
         filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => false,
@@ -62,6 +63,7 @@ pub(super) fn has_message_literals(ast: &Expr<EmailLiteral>) -> bool {
             | EmailLiteral::NotificationDone(_)
             | EmailLiteral::CreatedAt(_)
             | EmailLiteral::UpdatedAt(_)
+            | EmailLiteral::ViewedAt(_)
             | EmailLiteral::Property(_),
         ) => false,
         filter_ast::ExprFrame::Literal(_) => true,
@@ -181,47 +183,149 @@ fn build_address_text_match(
     }
 }
 
+fn build_message_literal_predicate(
+    literal: &EmailLiteral,
+    resolved: &ResolvedFilters,
+) -> SqlFragment {
+    match literal {
+        EmailLiteral::Sender(email) => {
+            build_address_predicate_on_m(AddressKind::Sender, email, resolved)
+        }
+        EmailLiteral::Recipient(email) => {
+            build_address_predicate_on_m(AddressKind::Recipient, email, resolved)
+        }
+        EmailLiteral::Cc(email) => build_address_predicate_on_m(AddressKind::Cc, email, resolved),
+        EmailLiteral::Bcc(email) => build_address_predicate_on_m(AddressKind::Bcc, email, resolved),
+        _ => unreachable!("expected a message-level email literal"),
+    }
+}
+
+fn build_thread_literal_predicate(
+    literal: &EmailLiteral,
+    sort_ts_field: &str,
+    thread_alias: &str,
+    history_alias: &str,
+) -> SqlFragment {
+    match literal {
+        EmailLiteral::ThreadId(id) => {
+            let mut f = SqlFragment::raw(format!("{thread_alias}.id = "));
+            f.extend(SqlFragment::bind_uuid(*id));
+            f
+        }
+        EmailLiteral::Owner(id) => {
+            let mut f = SqlFragment::raw(format!("{thread_alias}.link_id = "));
+            f.extend(SqlFragment::bind_uuid(*id));
+            f
+        }
+        EmailLiteral::ProjectId(id) => {
+            let mut f = SqlFragment::raw(format!("{thread_alias}.project_id = "));
+            f.extend(SqlFragment::bind_string(id.clone()));
+            f
+        }
+        // Denormalized flag maintained at attachment ingest — deriving this
+        // from email_attachments at query time is prohibitively slow.
+        EmailLiteral::CalendarOnly(true) => {
+            SqlFragment::raw(format!("{thread_alias}.has_calendar_attachment"))
+        }
+        EmailLiteral::CalendarOnly(false) => SqlFragment::raw("TRUE"),
+        // Denormalized importance flag maintained by update_thread_metadata
+        // (sync_thread_signal_flag) and the email_filters resync fan-out.
+        EmailLiteral::Importance(true) => SqlFragment::raw(format!("{thread_alias}.is_signal")),
+        EmailLiteral::Importance(false) => {
+            SqlFragment::raw(format!("(NOT {thread_alias}.is_signal)"))
+        }
+        EmailLiteral::CreatedAt(lit) => date_predicate(&format!("{thread_alias}.created_at"), lit),
+        EmailLiteral::UpdatedAt(lit) => date_predicate(sort_ts_field, lit),
+        EmailLiteral::ViewedAt(lit) => date_predicate(&format!("{history_alias}.updated_at"), lit),
+        EmailLiteral::Property(lit) => build_thread_property_predicate(lit, thread_alias),
+        EmailLiteral::NotificationSeen(true) => {
+            SqlFragment::raw(format!("{thread_alias}.is_read = TRUE"))
+        }
+        EmailLiteral::NotificationSeen(false) => {
+            SqlFragment::raw(format!("{thread_alias}.is_read = FALSE"))
+        }
+        // These literals are handled outside the thread/message predicate.
+        EmailLiteral::NotificationDone(_) | EmailLiteral::Shared(_) => SqlFragment::raw("TRUE"),
+        EmailLiteral::Sender(_)
+        | EmailLiteral::Cc(_)
+        | EmailLiteral::Bcc(_)
+        | EmailLiteral::Recipient(_) => unreachable!("expected a thread-level email literal"),
+    }
+}
+
+/// Builds the full filter for one candidate `(thread, message)` pair. Keeping
+/// the original boolean tree inside one correlated message probe preserves
+/// single-message semantics through mixed-level OR and NOT expressions.
+fn build_candidate_pair_predicate(
+    ast: &Expr<EmailLiteral>,
+    sort_ts_field: &str,
+    resolved: &ResolvedFilters,
+) -> SqlFragment {
+    ast.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) => SqlFragment::and(a, b),
+        filter_ast::ExprFrame::Or(a, b) => SqlFragment::or(a, b),
+        filter_ast::ExprFrame::Not(a) => SqlFragment::not(a),
+        filter_ast::ExprFrame::Literal(literal) => match literal {
+            EmailLiteral::Sender(_)
+            | EmailLiteral::Cc(_)
+            | EmailLiteral::Bcc(_)
+            | EmailLiteral::Recipient(_) => build_message_literal_predicate(&literal, resolved),
+            _ => build_thread_literal_predicate(&literal, sort_ts_field, "t", "uh"),
+        },
+    })
+}
+
+/// Lowers a thread-level literal inside the per-message LATERAL as a scalar
+/// correlated predicate. A scalar subquery intentionally preserves SQL NULL
+/// semantics under NOT (notably for threads without a ViewedAt history row).
+fn build_correlated_thread_predicate(literal: &EmailLiteral, sort_ts_field: &str) -> SqlFragment {
+    if matches!(
+        literal,
+        EmailLiteral::NotificationDone(_) | EmailLiteral::Shared(_)
+    ) {
+        return SqlFragment::raw("TRUE");
+    }
+
+    let thread_alias = "email_filter_thread";
+    let history_alias = "email_filter_history";
+    let correlated_sort_ts_field = sort_ts_field.replace("t.", &format!("{thread_alias}."));
+    let predicate = build_thread_literal_predicate(
+        literal,
+        &correlated_sort_ts_field,
+        thread_alias,
+        history_alias,
+    );
+
+    let mut f = SqlFragment::raw("(SELECT ");
+    f.extend(predicate);
+    f.push_raw(format!(" FROM email_threads {thread_alias}"));
+    if matches!(literal, EmailLiteral::ViewedAt(_)) {
+        f.push_raw(format!(
+            " LEFT JOIN email_user_history {history_alias} \
+             ON {history_alias}.thread_id = {thread_alias}.id \
+             AND {history_alias}.link_id = {thread_alias}.link_id"
+        ));
+    }
+    f.push_raw(format!(" WHERE {thread_alias}.id = m.thread_id)"));
+    f
+}
+
 pub(super) fn build_message_email_filter(
     ast: &Expr<EmailLiteral>,
     resolved: &ResolvedFilters,
+    sort_ts_field: &str,
 ) -> SqlFragment {
     let fragment = ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => SqlFragment::and(a, b),
         filter_ast::ExprFrame::Or(a, b) => SqlFragment::or(a, b),
         filter_ast::ExprFrame::Not(a) => SqlFragment::not(a),
-
-        filter_ast::ExprFrame::Literal(
-            EmailLiteral::ThreadId(_) | EmailLiteral::Owner(_) | EmailLiteral::ProjectId(_),
-        ) => SqlFragment::raw("TRUE"),
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::Sender(email)) => {
-            build_address_predicate_on_m(AddressKind::Sender, &email, resolved)
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::Recipient(email)) => {
-            build_address_predicate_on_m(AddressKind::Recipient, &email, resolved)
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::Cc(email)) => {
-            build_address_predicate_on_m(AddressKind::Cc, &email, resolved)
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::Bcc(email)) => {
-            build_address_predicate_on_m(AddressKind::Bcc, &email, resolved)
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(_)) => SqlFragment::raw("TRUE"),
-        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationDone(_)) => {
-            SqlFragment::raw("TRUE")
-        }
-        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationSeen(_)) => {
-            SqlFragment::raw("TRUE")
-        }
-        filter_ast::ExprFrame::Literal(EmailLiteral::Shared(_)) => SqlFragment::raw("TRUE"),
-        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(_)) => SqlFragment::raw("TRUE"),
-        filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(_)) => SqlFragment::raw("TRUE"),
-        filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(_)) => SqlFragment::raw("TRUE"),
-        filter_ast::ExprFrame::Literal(EmailLiteral::Property(_)) => SqlFragment::raw("TRUE"),
+        filter_ast::ExprFrame::Literal(literal) => match literal {
+            EmailLiteral::Sender(_)
+            | EmailLiteral::Cc(_)
+            | EmailLiteral::Bcc(_)
+            | EmailLiteral::Recipient(_) => build_message_literal_predicate(&literal, resolved),
+            _ => build_correlated_thread_predicate(&literal, sort_ts_field),
+        },
     });
 
     fragment.with_and_prefix()
@@ -386,7 +490,11 @@ pub(super) fn build_thread_message_exists_filter(
         f.extend(view_message_filter);
     }
     if has_message_literals(ast) {
-        f.extend(build_message_email_filter(ast, resolved));
+        f.extend(build_message_email_filter(
+            ast,
+            resolved,
+            get_sort_timestamp_field(view),
+        ));
     }
     f.push_raw(")");
     f
@@ -819,83 +927,33 @@ impl MatchingThreadsCtes {
     }
 }
 
-/// Builds thread-level SQL WHERE conditions. Message-level literals map to TRUE.
+/// Builds thread-level SQL WHERE conditions. When the tree contains message
+/// literals, the complete expression is evaluated inside one correlated
+/// message predicate instead of replacing those literals with `TRUE`.
 pub(super) fn build_thread_email_filter(
     ast: &Expr<EmailLiteral>,
     sort_ts_field: &str,
+    resolved: &ResolvedFilters,
 ) -> SqlFragment {
-    let fragment = ast.collapse_frames(|frame| match frame {
-        filter_ast::ExprFrame::And(a, b) => SqlFragment::and(a, b),
-        filter_ast::ExprFrame::Or(a, b) => SqlFragment::or(a, b),
-        filter_ast::ExprFrame::Not(a) => SqlFragment::not(a),
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::ThreadId(id)) => {
-            let mut f = SqlFragment::raw("t.id = ");
-            f.extend(SqlFragment::bind_uuid(id));
-            f
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::Owner(id)) => {
-            let mut f = SqlFragment::raw("t.link_id = ");
-            f.extend(SqlFragment::bind_uuid(id));
-            f
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::ProjectId(id)) => {
-            let mut f = SqlFragment::raw("t.project_id = ");
-            f.extend(SqlFragment::bind_string(id));
-            f
-        }
-
-        // Denormalized flag maintained at attachment ingest — deriving this
-        // from email_attachments at query time is prohibitively slow.
-        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(true)) => {
-            SqlFragment::raw("t.has_calendar_attachment")
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::CalendarOnly(false)) => {
-            SqlFragment::raw("TRUE")
-        }
-
-        // Denormalized importance flag maintained by update_thread_metadata
-        // (sync_thread_signal_flag) and the email_filters resync fan-out.
-        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(true)) => {
-            SqlFragment::raw("t.is_signal")
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::Importance(false)) => {
-            SqlFragment::raw("(NOT t.is_signal)")
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::CreatedAt(ref lit)) => {
-            date_predicate("t.created_at", lit)
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::UpdatedAt(ref lit)) => {
-            date_predicate(sort_ts_field, lit)
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::Property(ref lit)) => {
-            build_thread_property_predicate(lit)
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationSeen(true)) => {
-            SqlFragment::raw("t.is_read = TRUE")
-        }
-
-        filter_ast::ExprFrame::Literal(EmailLiteral::NotificationSeen(false)) => {
-            SqlFragment::raw("t.is_read = FALSE")
-        }
-
-        filter_ast::ExprFrame::Literal(
-            EmailLiteral::Sender(_)
-            | EmailLiteral::Cc(_)
-            | EmailLiteral::Bcc(_)
-            | EmailLiteral::Recipient(_)
-            | EmailLiteral::NotificationDone(_)
-            | EmailLiteral::Shared(_),
-        ) => SqlFragment::raw("TRUE"),
-    });
+    let fragment = if has_message_literals(ast) {
+        let mut f = SqlFragment::raw(
+            "EXISTS (SELECT 1 FROM email_messages m WHERE m.thread_id = t.id AND ",
+        );
+        f.extend(build_trash_check(resolved));
+        f.push_raw(" AND ");
+        f.extend(build_candidate_pair_predicate(ast, sort_ts_field, resolved));
+        f.push_raw(")");
+        f
+    } else {
+        ast.collapse_frames(|frame| match frame {
+            filter_ast::ExprFrame::And(a, b) => SqlFragment::and(a, b),
+            filter_ast::ExprFrame::Or(a, b) => SqlFragment::or(a, b),
+            filter_ast::ExprFrame::Not(a) => SqlFragment::not(a),
+            filter_ast::ExprFrame::Literal(literal) => {
+                build_thread_literal_predicate(&literal, sort_ts_field, "t", "uh")
+            }
+        })
+    };
 
     fragment.with_and_prefix()
 }
@@ -903,20 +961,20 @@ pub(super) fn build_thread_email_filter(
 /// Entity-property predicate for a candidate thread: EXISTS against
 /// `entity_properties` keyed on the thread id. A literal typed to a
 /// non-thread entity can never match a thread, so it renders FALSE.
-fn build_thread_property_predicate(lit: &PropertiesLiteral) -> SqlFragment {
+fn build_thread_property_predicate(lit: &PropertiesLiteral, thread_alias: &str) -> SqlFragment {
     if lit
         .entity_type
         .is_some_and(|et| et != PropertyEntityType::Thread)
     {
         return SqlFragment::raw("FALSE");
     }
-    let mut f = SqlFragment::raw(
+    let mut f = SqlFragment::raw(format!(
         r#"EXISTS (
                 SELECT 1 FROM entity_properties ep_prop
-                WHERE ep_prop.entity_id = t.id::text
+                WHERE ep_prop.entity_id = {thread_alias}.id::text
                 AND ep_prop.entity_type = 'THREAD'
                 AND ep_prop.property_definition_id = "#,
-    );
+    ));
     f.extend(SqlFragment::bind_uuid(lit.property_definition_id));
     match &lit.value {
         PropertyMatchValue::SelectOption(option_id) => {

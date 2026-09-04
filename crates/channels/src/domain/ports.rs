@@ -672,7 +672,18 @@ pub trait ChannelService: Send + Sync + 'static {
     /// `owner`; ownership and permissions are unchanged.
     fn create_system_channel(
         &self,
+        owner: MacroUserIdStr<'static>,
+        req: CreateChannelRequest,
+    ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
+        self.create_channel_on_behalf(owner, bot_id::MACRO_SYSTEM_BOT_ID, req)
+    }
+
+    /// Create a channel owned by `owner` with Created attributed to `actor`
+    /// acting for that owner. Ownership and permissions stay with `owner`.
+    fn create_channel_on_behalf(
+        &self,
         _owner: MacroUserIdStr<'static>,
+        _actor: BotId,
         _req: CreateChannelRequest,
     ) -> impl Future<Output = Result<CreateChannelResponse, ChannelMutationErr>> + Send {
         async move {

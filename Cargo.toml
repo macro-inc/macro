@@ -142,6 +142,7 @@ apollo-parser = "0.8"
 agent-client-protocol = { git = "https://github.com/agentclientprotocol/rust-sdk", rev = "8769d16d10e0c9fa7e662ee18424a4313b06ea88", features = [
   "unstable_elicitation",
 ] }
+arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
 askama = "0.14"
 async-graphql = "7.2.1"
 async-lock = "3"
@@ -278,6 +279,7 @@ serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 serde_yaml = "0.9"
+shell-words = "1.1.1"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
@@ -313,6 +315,7 @@ tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
+tui-input = { version = "0.14.0", default-features = false }
 # Pin the official upstream revision used by the browser cache. Cache writes use
 # deferred transactions so browser WASM does not initialize Turso's temp database.
 turso_core = { git = "https://github.com/tursodatabase/turso", rev = "79163249538197d01dec5ea7f65519454ed792e2", default-features = false }
@@ -336,6 +339,7 @@ wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
 web-sys = "0.3"
 web-time = "1.1.0"
+webbrowser = { version = "=1.2.2", features = ["hardened"] }
 worker = "0.8.1"
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [
@@ -361,6 +365,7 @@ url = "2.5.0"
 zip = "=2.4.2"
 ammonia = "4.1.4"
 html-escape = "0.2"
+subtle = "2.6.1"
 
 # Retain Rust DWARF for local cache profiling while keeping release-level LLVM
 # optimization. wasm-pack's custom profile metadata prevents the final

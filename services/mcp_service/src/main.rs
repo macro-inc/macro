@@ -42,7 +42,7 @@ async fn main() -> anyhow::Result<()> {
     // Create the MCP service with authenticated tool handler
     let mcp_service = StreamableHttpService::new(
         move || {
-            let tools = ai_tools::mcp_tools();
+            let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
             Ok(AuthenticatedToolService::new(
                 tools.toolset,
                 context.tool_context.clone(),
