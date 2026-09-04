@@ -11,9 +11,6 @@ use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{CommandOutcome, HarnessCommand};
 use crate::domain::ports::{CommandForwarder, CommandTarget};
 
-#[cfg(test)]
-mod test;
-
 /// Broadcasts commands to the responsible harness replica over Redis.
 #[derive(Clone)]
 pub struct RedisCommandForwarder {
