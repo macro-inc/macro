@@ -34,8 +34,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "auth-service",
-		dev: "https://auth-service-dev.macro.com/api-doc/openapi.json",
-		prod: "https://auth-service.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/auth/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/auth/api-doc/openapi.json",
 		local: "http://localhost:8080/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-auth/",
 		orvalKey: "authService",
