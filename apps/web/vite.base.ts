@@ -180,6 +180,9 @@ export const createAppViteConfig = (): UserConfigFn => {
           // NIX_TAURI_ALIAS
         ],
         dedupe: [
+          // Keep Loro resolution here: tsconfig path aliases cache a versioned
+          // URL that goes stale when Vite rebuilds dependencies, splitting the
+          // app and workspace packages across separate WASM instances.
           'loro-crdt',
           'solid-js',
           '@codingame/monaco-vscode-api',

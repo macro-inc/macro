@@ -1,64 +1,51 @@
-import { watchTouchDrag } from '@channel/touch-drag';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import {
   createScrollIntentTracker,
   type ScrollDirection,
 } from '@core/util/scroll-intent';
-import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
-import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import type { CacheSnapshot, ScrollToIndexOpts } from 'virtua/unstable_core';
+import { Key } from '@solid-primitives/keyed';
+import {
+  createVirtualizer,
+  defaultRangeExtractor,
+  elementScroll,
+  measureElement,
+  observeElementOffset,
+  observeElementRect,
+  type Range,
+  type ScrollToOptions,
+  type VirtualItem,
+} from '@tanstack/solid-virtual';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  type JSX,
+  on,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
+import { createScrollLifecycle } from './create-scroll-lifecycle';
+
+type ScrollAlignment = NonNullable<ScrollToOptions['align']>;
 
 const BASE_ITEM_SIZE = 96;
-const BASE_BUFFER_SIZE = 500;
+const OVERSCAN = 6;
 
-type ScrollAlignment = ScrollToIndexOpts['align'];
-
-export type ThreadListScrollTarget =
-  | { tag: 'top'; align?: ScrollAlignment }
-  | { tag: 'bottom'; align?: ScrollAlignment }
-  | { tag: 'index'; index: number; align?: ScrollAlignment }
-  | { tag: 'id'; id: string; align?: ScrollAlignment };
-
-type InitialScrollTarget =
-  | ThreadListScrollTarget
-  | { tag: 'offset'; scrollOffset: number };
-
-export function defaultThreadListTargetFromMessage(
-  targetMessageId: string | undefined
-): ThreadListScrollTarget {
-  if (targetMessageId) {
-    return {
-      tag: 'id',
-      id: targetMessageId,
-    };
-  }
-  return DEFAULT_INITIAL_SCROLL_TARGET;
-}
+export type ThreadListInitialPosition =
+  | { type: 'latest' }
+  | { type: 'element'; id: string }
+  | { type: 'restore'; snapshot: ThreadListScrollSnapshot };
 
 export type ThreadListNavigation = {
-  scrollTo: (target: ThreadListScrollTarget) => boolean;
-  scrollToIndex: (index: number, opts?: { align?: ScrollAlignment }) => boolean;
-  scrollByDelta: (delta: number, opts?: { align?: ScrollAlignment }) => boolean;
-  scrollToTop: (align?: ScrollAlignment) => boolean;
-  scrollToBottom: (align?: ScrollAlignment) => boolean;
-  scrollToId: (id: string, opts?: { align?: ScrollAlignment }) => boolean;
-  navigatePrevious: () => boolean;
-  navigateNext: () => boolean;
-  isNearBottom: () => boolean;
-  /** Position a descendant using Virtua's measured coordinate space. */
-  scrollToElementInItem: (
+  scrollToLatest: () => boolean;
+  scrollToMessage: (
     id: string,
-    itemElement: HTMLElement,
-    targetElement: HTMLElement
+    options?: { align?: ScrollAlignment; userIntent?: ScrollDirection }
   ) => boolean;
-  /**
-   * Signal that a user-initiated navigation is about to cause a
-   * programmatic scroll. Call this before `scrollToId` etc. from
-   * hotkey handlers so the resulting scroll is treated as user-driven
-   * for pagination purposes.
-   */
-  markUserIntent: (direction: ScrollDirection) => void;
+  /** Center a mounted message or reply inside the unobscured viewport. */
+  scrollToElement: (element: HTMLElement) => boolean;
 };
 
 export type ThreadListScrollState = {
@@ -72,11 +59,11 @@ export type ThreadListScrollState = {
 
 export type ThreadListScrollSnapshot = {
   scrollOffset: number;
-  virtualCache?: CacheSnapshot;
+  measurements?: VirtualItem[];
   isNearBottom: boolean;
 };
 
-export type FullFrameThreadListScrollInsets = {
+type ScrollInsets = {
   /** Space reserved before the first message (e.g. status bar + floating header). */
   start: number;
   /** Space reserved after the last message (e.g. floating input + dock). */
@@ -84,737 +71,432 @@ export type FullFrameThreadListScrollInsets = {
 };
 
 type ThreadListProps = {
-  /** Identifies the channel scroll surface when multiple splits are mounted. */
-  channelId?: string;
   keys: Accessor<string[]>;
   children: (item: { id: string }) => JSX.Element;
-  initialScrollTarget?: ThreadListScrollTarget;
-  /** A kept-mounted descendant owns the targeted initial viewport movement. */
-  initialScrollHandledByTargetElement?: boolean;
+  initialPosition?: ThreadListInitialPosition;
   onScrollNearTop?: () => void;
   onScrollNearBottom?: () => void;
-  onNavigationReady?: (navigation: ThreadListNavigation) => void;
-  onScrollStateChange?: (state: ThreadListScrollState) => void;
-  initialScrollSnapshot?: ThreadListScrollSnapshot;
-  onScrollSnapshotChange?: (snapshot: ThreadListScrollSnapshot) => void;
-  shift?: Accessor<boolean>;
-  prepend?: Accessor<boolean>;
-  /** Item indexes that must remain mounted during nested-message navigation. */
-  keepMounted?: Accessor<readonly number[]>;
+  /** Physical gestures and keyboard navigation supersede pending page jumps. */
+  onUserNavigation?: () => void;
+  /** Called after initial layout; its optional cleanup releases the handle. */
+  onReady?: (navigation: ThreadListNavigation) => void | (() => void);
+  /** State and snapshot describe the same committed position. */
+  onScroll?: (
+    state: ThreadListScrollState,
+    snapshot: ThreadListScrollSnapshot | undefined
+  ) => void;
+  /** Follow live messages only when the loaded window includes the latest page. */
+  followOnAppend?: boolean;
+  /** Keep this thread mounted while its message or reply is being positioned. */
+  targetId?: string;
   /**
    * For full-frame insets where the scroll surface spans the whole screen and content
-   * scrolls behind the floating chrome. Rendered as scroll-content padding and fed to
-   * virtua via `startMargin` + per-align scroll offsets.
+   * scrolls behind the floating chrome. Included in virtual measurements and navigation.
    */
-  fullFrameScrollInsets?: Accessor<FullFrameThreadListScrollInsets>;
+  insets?: ScrollInsets;
 };
 
 const NEAR_TOP_THRESHOLD = 800;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
-// After an imperative scroll-to-bottom, hold the viewport at the true bottom for
-// this long. virtua targets a scroll offset from its cached item sizes and stops
-// correcting ~150ms after the last measurement, and the scroller runs with
-// `overflow-anchor: none`, so a last message that grows afterwards (a loading
-// image or video, a new reaction, an opening reply input) is left cut off. The
-// re-pin window absorbs that late growth so a single action lands fully down.
-const SCROLL_TO_BOTTOM_SETTLE_MS = 1000;
-
-// How long the kept-mounted target row gets to put the target on screen before
-// the virtualizer positions it instead. Longer than the target scroller's
-// retry budget for a measured viewport, so the precise element scroll always
-// wins when it can run at all. While the viewport is still unmeasured the
-// fallback re-arms instead of firing: the scroller is legitimately waiting for
-// a box, and an index scroll would be computed against the same zero viewport.
-const TARGET_ELEMENT_FALLBACK_MS = 1500;
-
-export const DEFAULT_INITIAL_SCROLL_TARGET: ThreadListScrollTarget = {
-  tag: 'bottom',
-  align: 'end',
-};
-
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(value, max));
 
-export function getTargetAlign(
-  target: ThreadListScrollTarget
-): ScrollAlignment {
-  if (target.align) return target.align;
-  switch (target.tag) {
-    case 'top':
-      return 'start';
-    case 'bottom':
-      return 'end';
-    case 'index':
-    case 'id':
-      return 'center';
-  }
-}
-
-const NO_SCROLL_INSETS: FullFrameThreadListScrollInsets = { start: 0, end: 0 };
+const NO_SCROLL_INSETS: ScrollInsets = { start: 0, end: 0 };
 
 export function ThreadList(props: ThreadListProps) {
-  const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
-  const [isNearBottom, setIsNearBottom] = createSignal(true);
-  const [didInitialScroll, setDidInitialScroll] = createSignal(false);
-  const [scrollEl, setScrollEl] = createSignal<HTMLDivElement>();
-
-  const insets = () => props.fullFrameScrollInsets?.() ?? NO_SCROLL_INSETS;
-
-  /**
-   * Correction so alignment targets the inset-adjusted usable viewport
-   * (below the floating header, above the floating bottom chrome) instead
-   * of the physical scroll viewport. Derived against virtua's scrollToIndex
-   * math with `startMargin = insets().start`.
-   */
-  const insetAlignOffset = (align: ScrollAlignment): number => {
-    const { start, end } = insets();
-    switch (align) {
-      case 'start':
-        return -start;
-      case 'end':
-        return end;
-      case 'center':
-        return (end - start) / 2;
-      default:
-        return 0;
-    }
-  };
-
+  // Publish the ref on mount: Solid template nodes can still belong to an
+  // inert document (no defaultView) when the ref callback runs.
   let scrollRef: HTMLDivElement | undefined;
+  let contentRef: HTMLDivElement | undefined;
+  const [scrollEl, setScrollEl] = createSignal<HTMLDivElement>();
+  const [viewportSize, setViewportSize] = createSignal(0);
+  const insets = () => props.insets ?? NO_SCROLL_INSETS;
+  // Capture each key array so the previous virtualizer options still describe
+  // the previous page while TanStack resolves its prepend anchor.
+  const getItemKey = createMemo(() => {
+    const keys = [...props.keys()];
+    return (index: number) => keys[index];
+  });
+  const scrollIntent = createScrollIntentTracker(() => {
+    lifecycle.send('user-scroll');
+    props.onUserNavigation?.();
+  });
+  const initialPosition = props.initialPosition ?? { type: 'latest' };
+  const snapshot =
+    initialPosition.type === 'restore' ? initialPosition.snapshot : undefined;
+  // Seed the first range with cached sizes too: tall saved rows can put the
+  // actual end far beyond the default estimate, before any DOM is measured.
+  const initialSizes = new Map(
+    snapshot?.measurements?.map(({ key, size }) => [key, size])
+  );
+  let programmaticOffset: number | undefined;
+  let userScrollActive = false;
+  let stateQueued = false;
   let nearTopFired = false;
   let nearBottomFired = false;
-  let previousScrollOffset: number | undefined;
+  let previousScrollOffset = snapshot?.scrollOffset ?? 0;
   let explicitScrollDownDistance = 0;
-  let cancelPinToBottom: (() => void) | undefined;
+  let releaseNavigation: void | (() => void);
 
-  const scrollIntent = createScrollIntentTracker();
-
-  let initialScrollStarted = false;
-  let initialScrollRetried = false;
-  let initialScrollTarget: InitialScrollTarget = DEFAULT_INITIAL_SCROLL_TARGET;
-  let targetElementFallbackTimer: number | undefined;
-
-  const clearTargetElementFallback = () => {
-    if (targetElementFallbackTimer === undefined) return;
-    window.clearTimeout(targetElementFallbackTimer);
-    targetElementFallbackTimer = undefined;
-  };
-
-  const resetInitialScroll = () => {
-    initialScrollStarted = false;
-    initialScrollRetried = false;
-    initialScrollTarget = DEFAULT_INITIAL_SCROLL_TARGET;
-    clearTargetElementFallback();
-  };
-
-  const resolveTargetIndex = (target: ThreadListScrollTarget): number => {
-    const keys = props.keys();
-    const maxIndex = keys.length - 1;
-    if (maxIndex < 0) return -1;
-
-    switch (target.tag) {
-      case 'top':
-        return 0;
-      case 'bottom':
-        return maxIndex;
-      case 'index':
-        return clamp(target.index, 0, maxIndex);
-      case 'id': {
-        const idx = keys.indexOf(target.id);
-        return idx === -1 ? -1 : idx;
-      }
-    }
-  };
-
-  const scrollToTarget = (
-    handle: VirtualizerHandle,
-    target: ThreadListScrollTarget,
-    options: { cancelPin?: boolean } = {}
-  ): boolean => {
-    const index = resolveTargetIndex(target);
-    if (index < 0) return false;
-    // A deliberate navigation to a specific target aborts an in-flight
-    // pinToBottom settle loop, which would otherwise yank the view back to the
-    // bottom frame-by-frame and strand the target (e.g. opening a channel at
-    // latest, then clicking a message/thread row within its settle window).
-    // pinToBottom opts out so it doesn't cancel the loop it is establishing.
-    if (options.cancelPin !== false) cancelPinToBottom?.();
-    const align = getTargetAlign(target);
-    handle.scrollToIndex(index, { align, offset: insetAlignOffset(align) });
-    return true;
-  };
-
-  const scrollToInitialTarget = (
-    handle: VirtualizerHandle,
-    target: InitialScrollTarget
-  ): boolean => {
-    if (target.tag !== 'offset') return scrollToTarget(handle, target);
-
-    handle.scrollTo(target.scrollOffset);
-    return true;
-  };
-
-  // DOM-based so the scroll insets are accounted for — virtua's scrollSize
-  // only covers its own items, not the inset padding around them.
-  const getDistanceFromBottom = (handle: VirtualizerHandle): number => {
-    if (scrollRef) {
-      return Math.max(
-        0,
-        scrollRef.scrollHeight - scrollRef.clientHeight - scrollRef.scrollTop
-      );
-    }
-    return handle.scrollSize - handle.viewportSize - handle.scrollOffset;
-  };
-
-  const isScrollPositionCorrect = (
-    handle: VirtualizerHandle,
-    target: InitialScrollTarget
-  ): boolean => {
-    switch (target.tag) {
-      case 'offset':
-        return Math.abs(handle.scrollOffset - target.scrollOffset) <= 1;
-      case 'bottom':
-        return getDistanceFromBottom(handle) <= NEAR_BOTTOM_THRESHOLD;
-      case 'top':
-        return handle.scrollOffset <= NEAR_BOTTOM_THRESHOLD;
-      case 'id':
-      case 'index': {
-        const targetIndex = resolveTargetIndex(target);
-        if (targetIndex < 0) return true; // target gone, nothing to verify
-        // Correct when the target item intersects the usable viewport.
-        // Comparing item indexes against the top-of-viewport item breaks for
-        // center/end alignment — a target near the end of the list rests in
-        // the lower half of the viewport, so a fixed index distance from the
-        // top item reports a perfect landing as a miss.
-        const itemTop = handle.getItemOffset(targetIndex);
-        const itemBottom = itemTop + handle.getItemSize(targetIndex);
-        const viewportTop = handle.scrollOffset + insets().start;
-        const viewportBottom =
-          handle.scrollOffset + handle.viewportSize - insets().end;
-        return itemBottom > viewportTop && itemTop < viewportBottom;
-      }
-    }
-  };
-
-  const getCurrentIndex = (handle: VirtualizerHandle): number => {
-    const itemCount = props.keys().length;
-    if (!itemCount) return -1;
-    return clamp(
-      handle.findItemIndex(handle.scrollOffset + insets().start),
-      0,
-      itemCount - 1
-    );
-  };
-
-  const emitScrollState = (
-    handle: VirtualizerHandle,
-    isScrollingDown: boolean
-  ) => {
-    if (!props.onScrollStateChange) return;
-    const distanceFromTop = handle.scrollOffset;
-    const distanceFromBottom = getDistanceFromBottom(handle);
-    props.onScrollStateChange({
-      didInitialScroll: didInitialScroll(),
-      isNearBottom: distanceFromBottom <= NEAR_BOTTOM_THRESHOLD,
-      isScrollingDown,
-      distanceFromTop,
-      distanceFromBottom,
-      viewportSize: handle.viewportSize,
+  // Publish after Solid has committed the virtual rows and spacer height.
+  // Geometry notifications also cover reactions, streamed content and resizes
+  // that do not produce a browser scroll event.
+  const scheduleScrollState = () => {
+    if (stateQueued) return;
+    stateQueued = true;
+    queueMicrotask(() => {
+      stateQueued = false;
+      if (!lifecycle.isDisposed()) emitScrollState();
     });
   };
 
-  /** Mark the initial scroll as complete and broadcast the scroll state. */
-  const completeInitialScroll = (handle: VirtualizerHandle) => {
-    setDidInitialScroll(true);
-    emitScrollState(handle, false);
-    emitScrollSnapshot(handle);
-  };
-
-  const emitScrollSnapshot = (handle: VirtualizerHandle) => {
-    props.onScrollSnapshotChange?.({
-      scrollOffset: handle.scrollOffset,
-      virtualCache: handle.cache,
-      isNearBottom: getDistanceFromBottom(handle) <= NEAR_BOTTOM_THRESHOLD,
-    });
-  };
-
-  // Scroll to the newest message, then keep re-pinning to the true bottom for a
-  // short window so late-settling content can't leave the last message cut off.
-  // Aborts on a real scroll gesture (wheel up or touch drag), not on taps.
-  const pinToBottom = (handle: VirtualizerHandle): boolean => {
-    cancelPinToBottom?.();
-
-    const didScroll = scrollToTarget(
-      handle,
-      { tag: 'bottom', align: 'end' },
-      { cancelPin: false }
-    );
-    const el = scrollRef;
-    if (!didScroll || !el) return didScroll;
-
-    let rafId = 0;
-    const start = performance.now();
-    const virtualContent = Array.from(el.children).find(
-      (child): child is HTMLElement =>
-        child instanceof HTMLElement && child.style.contain.includes('size')
-    );
-    const resizeObserver = virtualContent
-      ? new ResizeObserver(() => {
-          if (getDistanceFromBottom(handle) > 1) el.scrollTop = el.scrollHeight;
-        })
-      : undefined;
-    if (virtualContent) resizeObserver?.observe(virtualContent);
-
-    const stop = () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      resizeObserver?.disconnect();
-      el.removeEventListener('wheel', onWheel);
-      unwatchDrag();
-      if (cancelPinToBottom === stop) cancelPinToBottom = undefined;
-    };
-
-    function onWheel(event: WheelEvent) {
-      if (event.deltaY < 0) stop();
-    }
-
-    el.addEventListener('wheel', onWheel, { passive: true });
-    // A press on a message, reply button, or reaction is not a scroll and must
-    // not cancel pinning. Only a wheel-up or a touch drag is the user scrolling.
-    const unwatchDrag = watchTouchDrag(el, stop);
-    cancelPinToBottom = stop;
-
-    const tick = () => {
-      if (getDistanceFromBottom(handle) > 1) el.scrollTop = el.scrollHeight;
-      if (performance.now() - start >= SCROLL_TO_BOTTOM_SETTLE_MS) {
-        stop();
-        return;
+  const lifecycle = createScrollLifecycle({
+    hasLayout: () => viewportSize() > 0 && props.keys().length > 0,
+    waitForElement: initialPosition.type === 'element',
+    positionInitial: () => {
+      // Restored history has already been positioned by initialOffset. Replaying
+      // its offset here would undo corrections for rows measured during mount.
+      if (!snapshot || snapshot.isNearBottom) {
+        virtualizer.scrollToEnd();
       }
-      rafId = requestAnimationFrame(tick);
-    };
-    rafId = requestAnimationFrame(tick);
-
-    return true;
-  };
-
-  const createNavigation = (
-    handle: VirtualizerHandle
-  ): ThreadListNavigation => ({
-    scrollTo: (target) => scrollToTarget(handle, target),
-
-    scrollToIndex: (index, opts = {}) =>
-      scrollToTarget(handle, { tag: 'index', index, align: opts.align }),
-
-    scrollByDelta: (delta, opts = {}) => {
-      const current = getCurrentIndex(handle);
-      if (current < 0) return false;
-      return scrollToTarget(handle, {
-        tag: 'index',
-        index: current + delta,
-        align: opts.align,
-      });
     },
-
-    scrollToTop: (align = 'start') =>
-      scrollToTarget(handle, { tag: 'top', align }),
-
-    scrollToBottom: () => pinToBottom(handle),
-
-    scrollToId: (id, opts = {}) =>
-      scrollToTarget(handle, { tag: 'id', id, align: opts.align }),
-
-    navigatePrevious: () => {
-      const current = getCurrentIndex(handle);
-      if (current <= 0) return false;
-      return scrollToTarget(handle, { tag: 'index', index: current - 1 });
+    positionFallback: () => {
+      if (
+        initialPosition.type === 'element' &&
+        !scrollToMessage(initialPosition.id)
+      ) {
+        virtualizer.scrollToEnd();
+      }
     },
-
-    navigateNext: () => {
-      const current = getCurrentIndex(handle);
-      if (current < 0) return false;
-      return scrollToTarget(handle, { tag: 'index', index: current + 1 });
+    onReady: () => {
+      releaseNavigation = props.onReady?.(navigation);
     },
-
-    isNearBottom,
-
-    scrollToElementInItem: (id, itemElement, targetElement) => {
-      const index = props.keys().indexOf(id);
-      if (index === -1) return false;
-      // Nothing has been measured yet (an app launched into a squished
-      // viewport). Every offset below would be computed against a zero
-      // viewport, so report failure instead of moving to a meaningless place.
-      if (handle.viewportSize <= 0) return false;
-
-      cancelPinToBottom?.();
-      const itemRect = itemElement.getBoundingClientRect();
-      const targetRect = targetElement.getBoundingClientRect();
-      const targetCenter =
-        handle.getItemOffset(index) +
-        (targetRect.top - itemRect.top) +
-        targetRect.height / 2;
-      const { start, end } = insets();
-      const usableViewportCenter =
-        start + (handle.viewportSize - start - end) / 2;
-      // The DOM scroll range includes the full-frame inset spacers; Virtua's
-      // scrollSize only covers its own items.
-      const maxScrollOffset = scrollRef
-        ? scrollRef.scrollHeight - scrollRef.clientHeight
-        : handle.scrollSize - handle.viewportSize;
-      handle.scrollTo(
-        clamp(
-          targetCenter - usableViewportCenter,
-          0,
-          Math.max(0, maxScrollOffset)
-        )
-      );
-      return true;
-    },
-
-    markUserIntent: scrollIntent.markUserIntent,
   });
 
-  function beginInitialTargetScroll(
-    handle: VirtualizerHandle,
-    target: InitialScrollTarget
-  ) {
-    initialScrollTarget = target;
-
-    console.debug('ThreadList: scrollOnMount', {
-      target,
-      itemCount: props.keys().length,
-      scrollOffset: handle.scrollOffset,
-      scrollSize: handle.scrollSize,
-      viewportSize: handle.viewportSize,
-    });
-
-    const didScroll =
-      target.tag === 'bottom'
-        ? pinToBottom(handle)
-        : scrollToInitialTarget(handle, target);
-
-    if (!didScroll) {
-      // Empty list or target not found — nothing to verify.
-      console.debug(
-        'ThreadList: target not resolvable, completing immediately'
-      );
-      completeInitialScroll(handle);
-      return;
-    }
-
-    // If no actual scrolling was needed (content fits in viewport),
-    // onScrollEnd will never fire. Use a RAF to detect this case and
-    // finalize immediately.
-    requestAnimationFrame(() => {
-      if (didInitialScroll()) return;
-      if (isScrollPositionCorrect(handle, target)) {
-        console.debug(
-          'ThreadList: position already correct (RAF fallback), completing'
-        );
-        completeInitialScroll(handle);
+  const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
+    // Do not consume initialOffset against an empty query result. Enabling
+    // with the first page lets TanStack render the latest rows immediately.
+    get enabled() {
+      return props.keys().length > 0;
+    },
+    get count() {
+      return props.keys().length;
+    },
+    getScrollElement: () => scrollEl() ?? null,
+    get getItemKey() {
+      return getItemKey();
+    },
+    estimateSize: () => BASE_ITEM_SIZE,
+    overscan: OVERSCAN,
+    // A restored snapshot or a newly remounted message can have a different
+    // height. The default sync path returns cached sizes, exposing the old
+    // layout until ResizeObserver fires. Read mounted rows before first paint.
+    measureElement: (element, entry, instance) =>
+      entry ? measureElement(element, entry, instance) : element.offsetHeight,
+    // Measure outside ResizeObserver delivery: committing row/sizer geometry
+    // inside its callback can leave undelivered notifications in WebKit.
+    useAnimationFrameWithResizeObserver: true,
+    useScrollendEvent: true,
+    anchorTo: 'end',
+    get followOnAppend() {
+      return lifecycle.isReady() && (props.followOnAppend ?? true);
+    },
+    scrollEndThreshold: NEAR_BOTTOM_THRESHOLD,
+    get paddingStart() {
+      return insets().start;
+    },
+    get paddingEnd() {
+      return insets().end;
+    },
+    get scrollPaddingStart() {
+      return insets().start;
+    },
+    get scrollPaddingEnd() {
+      return insets().end;
+    },
+    initialMeasurementsCache: snapshot?.measurements,
+    initialOffset: () =>
+      snapshot && !snapshot.isNearBottom
+        ? snapshot.scrollOffset
+        : initialPosition.type === 'latest' || (snapshot?.isNearBottom ?? false)
+          ? props
+              .keys()
+              .reduce(
+                (total, key) =>
+                  total + (initialSizes.get(key) ?? BASE_ITEM_SIZE),
+                insets().start + insets().end
+              )
+          : 0,
+    get rangeExtractor() {
+      const index =
+        props.targetId === undefined
+          ? -1
+          : props.keys().indexOf(props.targetId);
+      return (range: Range) => {
+        const indexes = defaultRangeExtractor(range);
+        if (index < 0 || index >= range.count || indexes.includes(index))
+          return indexes;
+        return [...indexes, index].sort((a, b) => a - b);
+      };
+    },
+    scrollToFn: (offset, options, instance) => {
+      // Size corrections happen before the Solid adapter publishes its new
+      // total. Commit the sizer first so the browser cannot clamp the requested
+      // scroll to the old range (especially with padding below a growing row).
+      if (contentRef) {
+        contentRef.style.height = `${Math.max(viewportSize(), instance.getTotalSize())}px`;
       }
-    });
-  }
-
-  let disposed = false;
-
-  // A preview-pane mount can hand over the virtualizer before layout, with a
-  // zero-height viewport — the initial scroll then lands wherever and always
-  // needs the onScrollEnd retry. Wait (bounded) for a measured viewport.
-  function scrollOnMountWhenMeasured(
-    handle: VirtualizerHandle,
-    framesLeft = 30
-  ) {
-    if (disposed || initialScrollStarted) return;
-    if (handle.viewportSize > 0 || framesLeft <= 0) {
-      scrollOnMount(handle);
-      return;
-    }
-    requestAnimationFrame(() =>
-      scrollOnMountWhenMeasured(handle, framesLeft - 1)
-    );
-  }
-
-  const getInitialScrollTarget = (): InitialScrollTarget => {
-    const snapshot = props.initialScrollSnapshot;
-    if (snapshot) {
-      return snapshot.isNearBottom
-        ? DEFAULT_INITIAL_SCROLL_TARGET
-        : { tag: 'offset', scrollOffset: snapshot.scrollOffset };
-    }
-
-    return props.initialScrollTarget ?? DEFAULT_INITIAL_SCROLL_TARGET;
-  };
-
-  // Virtua publishes its handle before ResizeObserver has populated
-  // `viewportSize`. Waiting for that measurement before doing anything leaves
-  // an overflowing channel visibly parked at scrollTop=0 for one or more
-  // frames. A bottom target is safe to issue immediately: with a zero viewport
-  // Virtua overshoots the final offset and the browser clamps it to the DOM's
-  // current maximum, putting the first painted frame at the bottom. The normal
-  // measured pass below still corrects the exact end alignment afterwards.
-  const prepositionInitialBottom = (handle: VirtualizerHandle) => {
-    const target = getInitialScrollTarget();
-    if (target.tag === 'bottom') pinToBottom(handle);
-  };
-
-  function scrollOnMount(handle: VirtualizerHandle) {
-    if (initialScrollStarted) return;
-    initialScrollStarted = true;
-    if (props.initialScrollHandledByTargetElement) {
-      // The kept-mounted target row owns the viewport movement, so nothing is
-      // scrolled here and the list is still sitting where it mounted — the top
-      // of the loaded window. Arm a fallback in case that element scroll never
-      // lands (a row that never mounts, a scroller that gives up on an
-      // unmeasured viewport): a channel opened at a message must never be left
-      // at the top of its history.
-      initialScrollTarget = getInitialScrollTarget();
-      completeInitialScroll(handle);
-      armTargetElementFallback(handle, initialScrollTarget);
-      return;
-    }
-    beginInitialTargetScroll(handle, getInitialScrollTarget());
-  }
-
-  /**
-   * Positions the initial target through the virtualizer if the target element
-   * has not put it on screen by `TARGET_ELEMENT_FALLBACK_MS`. Deliberately
-   * coarse: landing on the target's row beats staying at the top.
-   */
-  function armTargetElementFallback(
-    handle: VirtualizerHandle,
-    target: InitialScrollTarget
-  ) {
-    clearTargetElementFallback();
-    if (target.tag !== 'id' && target.tag !== 'index') return;
-    targetElementFallbackTimer = window.setTimeout(() => {
-      targetElementFallbackTimer = undefined;
-      if (disposed) return;
-      // The target is no longer pending: it either landed or the user took the
-      // scroll over (a drag releases it). Either way there is nothing to
-      // rescue, and moving the viewport now would be a yank.
-      if (!props.initialScrollHandledByTargetElement) return;
-      if (scrollIntent.isUserInteracting()) return;
-      // No viewport to position against yet. The element scroller is still
-      // waiting for one (it holds the target for longer than this), and an
-      // index scroll here would land against the same zero viewport — so wait
-      // for a box rather than move somewhere meaningless.
-      if (handle.viewportSize <= 0) {
-        armTargetElementFallback(handle, target);
-        return;
-      }
-      if (resolveTargetIndex(target) < 0) {
-        // The target never made it into the loaded window. No scroll can reach it, and staying where
-        // the list mounted means the top of history, so show the latest
-        // instead — the same answer the missing-message path gives.
-        console.debug(
-          'ThreadList: target never loaded, falling back to latest',
-          {
-            target,
-            scrollOffset: handle.scrollOffset,
-          }
-        );
-        pinToBottom(handle);
-        return;
-      }
-      if (isScrollPositionCorrect(handle, target)) return;
-      console.debug('ThreadList: target element never landed, falling back', {
-        target,
-        scrollOffset: handle.scrollOffset,
-        viewportSize: handle.viewportSize,
-      });
-      scrollToTarget(handle, target);
-    }, TARGET_ELEMENT_FALLBACK_MS);
-  }
-
-  const handleScrollEnd = () => {
-    if (didInitialScroll()) return;
-
-    const handle = virtualHandle();
-    if (!handle) return;
-
-    if (isScrollPositionCorrect(handle, initialScrollTarget)) {
-      console.debug('ThreadList: onScrollEnd confirmed position, completing', {
-        scrollOffset: handle.scrollOffset,
-        distanceFromBottom: getDistanceFromBottom(handle),
-      });
-      completeInitialScroll(handle);
-      return;
-    }
-
-    if (!initialScrollRetried) {
-      initialScrollRetried = true;
-      console.debug('ThreadList: initial scroll missed target, retrying', {
-        target: initialScrollTarget,
-        scrollOffset: handle.scrollOffset,
-        scrollSize: handle.scrollSize,
-        viewportSize: handle.viewportSize,
-        distanceFromBottom: getDistanceFromBottom(handle),
-      });
-      requestAnimationFrame(() => {
-        const offsetBeforeRetry = handle.scrollOffset;
-        const retryScrolled =
-          initialScrollTarget.tag === 'bottom'
-            ? pinToBottom(handle)
-            : scrollToInitialTarget(handle, initialScrollTarget);
-        if (!retryScrolled) {
-          // Target disappeared between mount and retry — finalize now since
-          // no scroll events will fire to trigger another onScrollEnd.
-          completeInitialScroll(handle);
-          return;
+      // A deferred prepend has already advanced the logical offset while
+      // the DOM is still at the old position. Positive corrections in that
+      // state must start at the DOM offset; normal corrections (including
+      // shrink clamping) still use TanStack's requested offset.
+      const domOffset = instance.scrollElement?.scrollTop ?? offset;
+      const deferredPrepend =
+        (options.adjustments ?? 0) > 0 &&
+        offset > domOffset + 1.5 &&
+        (userScrollActive || scrollIntent.isUserInteracting());
+      elementScroll(deferredPrepend ? domOffset : offset, options, instance);
+      programmaticOffset =
+        options.behavior === 'smooth'
+          ? undefined
+          : instance.scrollElement?.scrollTop;
+    },
+    observeElementOffset: (instance, callback) =>
+      observeElementOffset(instance, (offset, isScrolling) => {
+        // An instant navigation/correction is not touch momentum. Reporting
+        // its scroll event as momentum makes iOS defer size compensation and
+        // replay it after scrollToIndex has already reconciled the same sizes.
+        const isOwnScroll =
+          programmaticOffset !== undefined &&
+          Math.abs(offset - programmaticOffset) < 1.5;
+        programmaticOffset = undefined;
+        if (isScrolling && !isOwnScroll) userScrollActive = true;
+        callback(offset, isScrolling && !isOwnScroll);
+        // Keep the gesture active while the end callback flushes any deferred
+        // correction, including momentum lasting past the input-event timeout.
+        if (!isScrolling || isOwnScroll) userScrollActive = false;
+      }),
+    observeElementRect: (instance, callback) =>
+      observeElementRect(instance, (rect) => {
+        const previousHeight = instance.scrollRect?.height ?? 0;
+        const wasAtEnd =
+          instance.getTotalSize() -
+            previousHeight -
+            (instance.scrollOffset ?? 0) <=
+          NEAR_BOTTOM_THRESHOLD;
+        callback(rect);
+        setViewportSize(rect.height);
+        scheduleScrollState();
+        // The core anchors item resizes; viewport resizes (composer, keyboard,
+        // split pane) need an explicit end scroll when previously pinned.
+        if (previousHeight > 0 && previousHeight !== rect.height && wasAtEnd) {
+          instance.scrollToEnd();
         }
-        // A retry that lands on the current position moves nothing, so no
-        // scroll events (and no onScrollEnd) follow. Finalize on the next
-        // frame or `didInitialScroll` stays false for the life of the mount,
-        // deadlocking everything gated on it (target navigation, scroll
-        // pagination, goToLatest).
-        requestAnimationFrame(() => {
-          if (didInitialScroll()) return;
-          if (handle.scrollOffset !== offsetBeforeRetry) return;
-          console.debug(
-            'ThreadList: retry did not move the scroll, completing'
-          );
-          completeInitialScroll(handle);
-        });
-      });
-      return;
-    }
-    console.warn(
-      'ThreadList: initial scroll did not reach target after retry',
-      {
-        target: initialScrollTarget,
-        scrollOffset: handle.scrollOffset,
-        scrollSize: handle.scrollSize,
-        viewportSize: handle.viewportSize,
-        distanceFromBottom: getDistanceFromBottom(handle),
-      }
-    );
-    completeInitialScroll(handle);
+      }),
+    onChange: scheduleScrollState,
+  });
+
+  const shortListOffset = () =>
+    Math.max(0, viewportSize() - virtualizer.getTotalSize());
+  // The adapter mutates its store by index. Snapshot those values and let Key
+  // own each row's accessor by message ID, including while a row is removed.
+  // A lookup into a shared map can disappear before queued row effects run.
+  const virtualItems = createMemo(() =>
+    virtualizer.getVirtualItems().map((item) => ({ ...item }))
+  );
+
+  const scrollToMessage = (
+    id: string,
+    align: ScrollAlignment = 'center'
+  ): boolean => {
+    const index = props.keys().indexOf(id);
+    if (index < 0) return false;
+    virtualizer.scrollToIndex(index, { align });
+    scheduleScrollState();
+    return true;
   };
 
-  const handleScroll = () => {
-    const handle = virtualHandle();
-    if (!handle) {
-      console.warn(
-        'Channel.ThreadList: handle scroll but the handle is undefined'
+  const canNavigate = () =>
+    lifecycle.isReady() &&
+    scrollEl()?.isConnected &&
+    (scrollEl()?.clientHeight ?? 0) > 0;
+
+  const navigation: ThreadListNavigation = {
+    scrollToLatest: () => {
+      if (!canNavigate() || !props.keys().length) return false;
+      lifecycle.send('navigate');
+      virtualizer.scrollToEnd();
+      scheduleScrollState();
+      return true;
+    },
+    scrollToMessage: (id, options) => {
+      if (!canNavigate() || !props.keys().includes(id)) return false;
+      lifecycle.send('navigate');
+      if (options?.userIntent) scrollIntent.markUserIntent(options.userIntent);
+      return scrollToMessage(id, options?.align);
+    },
+    scrollToElement: (targetElement) => {
+      const el = scrollEl();
+      if (!canNavigate() || !el || !el.contains(targetElement)) return false;
+      lifecycle.send('navigate');
+      // Both rects come from the same committed layout, including short-list
+      // bottom alignment and floating chrome. No stale estimate is involved.
+      const targetRect = targetElement.getBoundingClientRect();
+      const scrollRect = el.getBoundingClientRect();
+      const { start, end } = insets();
+      const targetCenter =
+        el.scrollTop + targetRect.top - scrollRect.top + targetRect.height / 2;
+      virtualizer.scrollToOffset(
+        clamp(
+          targetCenter - (start + (el.clientHeight - start - end) / 2),
+          0,
+          Math.max(0, el.scrollHeight - el.clientHeight)
+        )
       );
-      return;
-    }
+      scheduleScrollState();
+      return true;
+    },
+  };
 
-    const distanceFromTop = handle.scrollOffset;
-    const distanceFromBottom = getDistanceFromBottom(handle);
-
+  function emitScrollState() {
+    const el = scrollEl();
+    if (!el) return;
+    // This microtask runs after synchronous row measurements, before paint.
+    lifecycle.send('layout');
+    const distanceFromTop = el.scrollTop;
+    const distanceFromBottom = virtualizer.getDistanceFromEnd();
     const nearTop = distanceFromTop <= NEAR_TOP_THRESHOLD;
     const nearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
-
-    setIsNearBottom(nearBottom);
-    let nextIsScrollingDown = false;
-
-    if (previousScrollOffset !== undefined) {
-      const delta = handle.scrollOffset - previousScrollOffset;
-      // Accumulate downward scroll distance only during user interaction
-      // and only when the user is scrolling down. Used by the scroll-to-bottom overlay.
-      if (
-        scrollIntent.isUserInteracting() &&
-        delta > 0 &&
-        scrollIntent.lastDirection() === 'down'
-      ) {
-        explicitScrollDownDistance += delta;
-      } else {
-        explicitScrollDownDistance = 0;
-      }
-      nextIsScrollingDown =
-        explicitScrollDownDistance >= EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE;
-    }
-    previousScrollOffset = handle.scrollOffset;
-    emitScrollState(handle, nextIsScrollingDown);
-    emitScrollSnapshot(handle);
-
-    if (!didInitialScroll()) return;
-
-    // Only trigger pagination callbacks when the user is actively
-    // interacting with the scroll surface. This prevents synthetic
-    // scroll events from the virtualizer (content resizes, layout
-    // reflows, shift adjustments) from incorrectly loading more pages.
     const hasUserIntent = scrollIntent.isUserInteracting();
-
+    const delta = distanceFromTop - previousScrollOffset;
+    if (delta !== 0) {
+      explicitScrollDownDistance =
+        hasUserIntent && delta > 0 && scrollIntent.lastDirection() === 'down'
+          ? explicitScrollDownDistance + delta
+          : 0;
+    }
+    previousScrollOffset = distanceFromTop;
+    const state: ThreadListScrollState = {
+      didInitialScroll: lifecycle.isReady(),
+      isNearBottom: nearBottom,
+      isScrollingDown:
+        explicitScrollDownDistance >= EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE,
+      distanceFromTop,
+      distanceFromBottom,
+      viewportSize: el.clientHeight,
+    };
+    // Capture both before invoking callers, which may synchronously navigate.
+    const snapshot = state.didInitialScroll
+      ? {
+          scrollOffset: distanceFromTop,
+          measurements: virtualizer.takeSnapshot(),
+          isNearBottom: nearBottom,
+        }
+      : undefined;
+    props.onScroll?.(state, snapshot);
+    if (!lifecycle.isReady()) return;
     if (nearTop && !nearTopFired && hasUserIntent) {
       nearTopFired = true;
       props.onScrollNearTop?.();
-    } else if (!nearTop) {
-      nearTopFired = false;
-    }
-
+    } else if (!nearTop) nearTopFired = false;
     if (nearBottom && !nearBottomFired && hasUserIntent) {
       nearBottomFired = true;
       props.onScrollNearBottom?.();
-    } else if (!nearBottom) {
-      nearBottomFired = false;
-    }
-  };
+    } else if (!nearBottom) nearBottomFired = false;
+  }
 
+  // Floating chrome can resize without resizing the scroll viewport. Compare
+  // against the old content extent before following the new inset to latest.
+  createEffect(
+    on(insets, (current, previous) => {
+      if (!previous || !lifecycle.isReady()) return;
+      const delta = current.start + current.end - previous.start - previous.end;
+      const previousDistance =
+        virtualizer.getTotalSize() -
+        delta -
+        viewportSize() -
+        (virtualizer.scrollOffset ?? 0);
+      if (delta !== 0 && previousDistance <= NEAR_BOTTOM_THRESHOLD) {
+        virtualizer.scrollToEnd();
+      }
+      scheduleScrollState();
+    })
+  );
+
+  onMount(() => {
+    // Suspense can construct a channel in an inert template document and
+    // insert it in a later task. Bind only after adoption into the live DOM.
+    const attachmentObserver = new MutationObserver(connect);
+    function connect() {
+      if (!scrollRef?.isConnected) return;
+      attachmentObserver.disconnect();
+      setScrollEl(scrollRef);
+      scheduleScrollState();
+    }
+    attachmentObserver.observe(document, { childList: true, subtree: true });
+    connect();
+    onCleanup(() => attachmentObserver.disconnect());
+  });
   onCleanup(() => {
-    disposed = true;
-    cancelPinToBottom?.();
-    clearTargetElementFallback();
+    lifecycle.send('dispose');
+    releaseNavigation?.();
   });
 
   return (
     <>
       <div
-        ref={(el) => {
-          scrollRef = el;
-          setScrollEl(el);
-        }}
+        ref={scrollRef}
         data-channel-scroll
-        data-channel-id={props.channelId}
-        data-channel-scroll-inset-start={insets().start}
-        data-channel-scroll-inset-end={insets().end}
         class="scrollbar-hidden px-2"
         {...scrollIntent.handlers}
+        onScroll={scheduleScrollState}
         style={{
           width: '100%',
+          height: '100%',
           'overflow-y': 'auto',
           'overflow-anchor': 'none',
-          height: '100%',
-          display: 'flex',
-          'flex-direction': 'column',
         }}
       >
-        {/* Spacer div for full-frame inset. */}
         <div
-          aria-hidden
-          style={{ height: `${insets().start}px`, 'flex-shrink': 0 }}
-        />
-        <div style="flex-grow: 1" />
-        <Virtualizer
-          cache={props.initialScrollSnapshot?.virtualCache}
-          ref={(ref) => {
-            if (!ref) return;
-            setVirtualHandle(ref);
-            if (props.onNavigationReady) {
-              props.onNavigationReady(createNavigation(ref));
-            }
-            resetInitialScroll();
-            prepositionInitialBottom(ref);
-            scrollOnMountWhenMeasured(ref);
+          ref={contentRef}
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: `${Math.max(viewportSize(), virtualizer.getTotalSize())}px`,
           }}
-          scrollRef={scrollRef}
-          startMargin={insets().start}
-          itemSize={BASE_ITEM_SIZE}
-          bufferSize={BASE_BUFFER_SIZE}
-          keepMounted={props.keepMounted?.()}
-          data={props.keys()}
-          onScroll={handleScroll}
-          onScrollEnd={handleScrollEnd}
-          shift={props.shift?.() ?? false}
         >
-          {(key) => props.children({ id: key })}
-        </Virtualizer>
-        {/* Spacer div for full-frame inset. */}
-        <div
-          aria-hidden
-          style={{ height: `${insets().end}px`, 'flex-shrink': 0 }}
-        />
+          <Key each={virtualItems()} by="key">
+            {(item) => {
+              const id = String(item().key);
+              let row: HTMLDivElement | undefined;
+              createEffect(
+                on(
+                  () => item().index,
+                  () => {
+                    if (row) virtualizer.measureElement(row);
+                  }
+                )
+              );
+              return (
+                <div
+                  ref={row}
+                  data-index={item().index}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${item().start + shortListOffset()}px)`,
+                    'overflow-anchor': 'none',
+                  }}
+                >
+                  {props.children({ id })}
+                </div>
+              );
+            }}
+          </Key>
+        </div>
       </div>
       <CustomScrollbar scrollContainer={scrollEl} />
     </>

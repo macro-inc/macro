@@ -61,7 +61,9 @@ const SCROLL_DOWN_KEYS = new Set(['ArrowDown', 'PageDown', 'End', ' ']);
  * }
  * ```
  */
-export function createScrollIntentTracker(): ScrollIntentTracker {
+export function createScrollIntentTracker(
+  onUserIntent?: () => void
+): ScrollIntentTracker {
   let isPointerDown = false;
   let activeUntil = 0;
   let direction: ScrollDirection | undefined;
@@ -69,6 +71,7 @@ export function createScrollIntentTracker(): ScrollIntentTracker {
   const markUserIntent = (dir: ScrollDirection) => {
     direction = dir;
     activeUntil = Math.max(activeUntil, Date.now() + INTERACTION_TIMEOUT_MS);
+    onUserIntent?.();
   };
 
   const isUserInteracting = (now = Date.now()) =>
@@ -88,6 +91,7 @@ export function createScrollIntentTracker(): ScrollIntentTracker {
       // Touch interactions always indicate scroll intent (finger drag)
       if (event.pointerType === 'touch') {
         isPointerDown = true;
+        onUserIntent?.();
         return;
       }
       // For mouse/pen, only track scrollbar drags. Scrollbar clicks
@@ -97,6 +101,7 @@ export function createScrollIntentTracker(): ScrollIntentTracker {
       // interactions within the scroll container.
       if (event.target === event.currentTarget) {
         isPointerDown = true;
+        onUserIntent?.();
       }
     },
     onPointerUp: endPointer,

@@ -10,7 +10,7 @@ import type { ThreadListNavigation } from './ThreadList';
 
 type CreateChannelHotkeysOptions = {
   selection: MessageSelection;
-  navigation: Accessor<ThreadListNavigation | undefined>;
+  scrollToMessage: ThreadListNavigation['scrollToMessage'];
   messageById: Accessor<Map<string, ApiChannelMessage>>;
   getMessageActions: (message: MessageData) => MessageActions | undefined;
   userId: Accessor<string | undefined>;
@@ -74,8 +74,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectPrevious();
       if (id) {
-        options.navigation()?.markUserIntent('up');
-        options.navigation()?.scrollToId(id, { align: 'nearest' });
+        options.scrollToMessage(id, { align: 'auto', userIntent: 'up' });
       }
       return true;
     },
@@ -89,8 +88,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectNext();
       if (id) {
-        options.navigation()?.markUserIntent('down');
-        options.navigation()?.scrollToId(id, { align: 'nearest' });
+        options.scrollToMessage(id, { align: 'auto', userIntent: 'down' });
       } else {
         inputEl?.querySelector<HTMLElement>('[contenteditable]')?.focus();
       }
@@ -104,7 +102,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     description: 'Go to latest message',
     keyDownHandler: () => {
       options.selection.clear();
-      options.navigation()?.markUserIntent('down');
       options.onGoToBottom();
       return true;
     },
@@ -201,8 +198,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectPrevious();
       if (id) {
-        options.navigation()?.markUserIntent('up');
-        options.navigation()?.scrollToId(id, { align: 'nearest' });
+        options.scrollToMessage(id, { align: 'auto', userIntent: 'up' });
         messageListEl?.focus();
       }
       return true;
