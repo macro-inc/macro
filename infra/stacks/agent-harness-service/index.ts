@@ -45,12 +45,6 @@ const macroApiTokenPrivateKeyArn = aws.secretsmanager
 
 const MACRO_API_TOKENS = getMacroApiToken();
 
-const MACRO_CACHE = aws.secretsmanager
-  .getSecretVersionOutput({
-    secretId: config.require('macro_cache_secret_key'),
-  })
-  .apply((secret) => secret.secretString);
-
 // ── AI tools infra ───────────────────────────────────────────────────────────
 
 const aiTools =
@@ -114,10 +108,6 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
     {
       name: 'ENVIRONMENT',
       value: stack,
-    },
-    {
-      name: 'REDIS_URI',
-      value: pulumi.interpolate`redis://${MACRO_CACHE}`,
     },
     // Datadog
     {

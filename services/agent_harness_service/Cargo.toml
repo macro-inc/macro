@@ -35,6 +35,7 @@ aws-sdk-kms = { workspace = true }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
+doppler-config = { workspace = true }
 entity_access = { path = "../../crates/entity_access" }
 futures = { workspace = true }
 github = { path = "../../crates/github", default-features = false, features = [
