@@ -1,0 +1,8 @@
+mutation ReorderFavorites($input: ReorderFavoritesInput!) {
+  reorderFavorites(input: $input) {
+    __typename
+    entityType
+    entityId
+    sortOrder
+  }
+}

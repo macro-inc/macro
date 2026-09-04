@@ -1,9 +1,17 @@
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import { storageServiceClient } from '@service-storage/client';
 import type { AddFavoriteRequest } from '@service-storage/generated/schemas/addFavoriteRequest';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { FavoritesList } from '@service-storage/generated/schemas/favoritesList';
+import {
+  type ReorderFavoritesResult,
+  reorderFavorites,
+} from '@service-storage/graphql-favorites';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 
@@ -203,7 +211,7 @@ type ReorderFavoritesArgs = {
   favorites: { entityType: FavoriteEntityType; entityId: string }[];
 };
 type ReorderFavoritesCallbacks = MutationCallbacks<
-  void,
+  ReorderFavoritesResult,
   Error,
   ReorderFavoritesArgs,
   FavoriteMutationContext
@@ -213,18 +221,19 @@ export function useReorderFavoritesMutation(
   callbacks?: ReorderFavoritesCallbacks
 ) {
   return useMutation(() => ({
-    mutationFn: async (args: ReorderFavoritesArgs) => {
+    // The GraphQL cache must see the mutation while offline so it can durably
+    // queue the optimistic transaction instead of TanStack pausing it in RAM.
+    networkMode: isFeatureEnabled(enableGraphqlSoup) ? 'always' : 'online',
+    mutationFn: async (
+      args: ReorderFavoritesArgs
+    ): Promise<ReorderFavoritesResult> => {
       // Entities the user has not favorited (e.g. an optimistic row whose add
       // is still in flight) are ignored by the backend.
-      if (args.favorites.length === 0) return;
-      await throwOnErr(() =>
-        storageServiceClient.favorites.reorderFavorites({
-          favorites: args.favorites,
-        })
-      );
+      if (args.favorites.length === 0) return { kind: 'committed' };
+      return await reorderFavorites({ favorites: args.favorites });
     },
     ...withCallbacks<
-      void,
+      ReorderFavoritesResult,
       Error,
       ReorderFavoritesArgs,
       FavoriteMutationContext
@@ -270,7 +279,13 @@ export function useReorderFavoritesMutation(
         onError: (_error, _args, context) => {
           context?.rollback();
         },
-        onSettled: () => invalidateFavorites(),
+        // A queued GraphQL mutation owns the optimistic order until replay.
+        // Refetching the REST list while offline would only hide that state.
+        onSettled: (result, error) => {
+          if (error || result?.kind === 'committed') {
+            return invalidateFavorites();
+          }
+        },
       },
       callbacks
     ),
