@@ -200,6 +200,7 @@ export const useSettingsState = () => {
   };
 
   const closeSettings = () => {
+    setConnectionsRest(null);
     if (isSoloSettings()) {
       navigate(settingsReturnTo() ?? DEFAULT_ROUTE, { replace: true });
       return;
@@ -257,7 +258,7 @@ export const useSettingsState = () => {
         return;
       }
       // Docked and already focused → close it.
-      manager?.removeSplit(settingsSplit.id);
+      closeSettings();
       return;
     }
 
