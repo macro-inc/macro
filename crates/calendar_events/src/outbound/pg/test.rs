@@ -4947,3 +4947,196 @@ async fn retiring_the_primary_copy_promotes_the_shared_copy(pool: PgPool) {
         "the schedule follows the surviving copy's reminders"
     );
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_user_edit_through_the_shared_copy_moves_the_schedule_but_keeps_primary_content(
+    pool: PgPool,
+) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "writer", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    // The member drags the event while viewing the shared calendar. Google
+    // confirms the move on that copy; the entity's schedule must follow it
+    // even though the copy is not canonical.
+    let moved_start = starts_at + Duration::hours(2);
+    let mut echo = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        moved_start,
+    );
+    echo.event.sequence = 1;
+    echo.event.updated_at = starts_at + Duration::hours(1);
+    let outcome = repo
+        .upsert_event(CalendarEventWrite::UserMutation(echo))
+        .await
+        .unwrap();
+    assert_eq!(outcome.change, CalendarEventChange::Updated);
+
+    let content = entity_content(&pool, event_id).await;
+    assert_primary_content(&content);
+    let rows = repo
+        .list_occurrences(member, range_around(moved_start), None, 10)
+        .await
+        .unwrap();
+    let (event, occurrence) = rows.first().expect("the moved occurrence lists");
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        occurrence.time,
+        EventTime::Timed {
+            starts_at: moved_start,
+            ends_at: moved_start + Duration::hours(1),
+            time_zone: None,
+        }
+    );
+    assert_eq!(
+        event.title, "OOO",
+        "content still comes from the primary copy"
+    );
+    assert_eq!(
+        scheduled_firings(&pool, event_id).await,
+        vec![(
+            moved_start.to_rfc3339(),
+            30,
+            moved_start - Duration::minutes(30)
+        )],
+        "reminders follow the new time with the primary copy's offset"
+    );
+
+    // A plain sync of the shared copy with the same schedule stays a
+    // non-canonical write and leaves everything alone.
+    let mut resync = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        moved_start,
+    );
+    resync.event.sequence = 1;
+    resync.event.updated_at = starts_at + Duration::hours(2);
+    repo.upsert_event_fixture(resync).await.unwrap();
+    assert_primary_content(&entity_content(&pool, event_id).await);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn canonical_selection_skips_copies_on_deleted_calendars(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    insert_user(&pool, member).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = grant_and_provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let uid = "teo-ooo@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
+
+    // The primary calendar disappears while its source row still exists.
+    // Reads already ignore it, so writes must too: the next shared-copy sync
+    // promotes the live copy instead of freezing the entity on the dead one.
+    sqlx::query!(
+        "UPDATE calendars SET is_deleted = true WHERE id = $1",
+        primary_calendar_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut resync = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        starts_at,
+    );
+    resync.event.updated_at += Duration::hours(1);
+    repo.upsert_event_fixture(resync).await.unwrap();
+
+    let content = entity_content(&pool, event_id).await;
+    assert_eq!(
+        (
+            content.title.as_str(),
+            content.event_type.as_str(),
+            content.is_read_only
+        ),
+        ("[teo] OOO", "default", true)
+    );
+    let target = repo
+        .get_event_mutation_target(member, event_id, None)
+        .await
+        .unwrap()
+        .expect("the live copy is the mutation target");
+    assert_eq!(target.calendar_id, shared_calendar_id);
+    let rows = repo
+        .list_occurrences(member, range_around(starts_at), None, 10)
+        .await
+        .unwrap();
+    assert_eq!(rows[0].0.calendar_id, Some(shared_calendar_id));
+    assert_eq!(
+        rows[0]
+            .0
+            .sources
+            .iter()
+            .map(|source| source.calendar_id)
+            .collect::<Vec<_>>(),
+        vec![shared_calendar_id]
+    );
+
+    // Retiring the shared copy now finds no live source and removes the entity
+    // rather than resurrecting the deleted calendar's copy.
+    let retired = repo
+        .remove_google_source(account_id, shared_calendar_id, &format!("provider-{uid}"))
+        .await
+        .unwrap();
+    assert_eq!(
+        retired,
+        vec![RetiredCalendarEvent {
+            event_id,
+            owner_id: member.to_string(),
+            deleted: true,
+        }]
+    );
+}

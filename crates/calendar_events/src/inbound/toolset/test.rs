@@ -503,6 +503,7 @@ async fn update_converts_input_into_a_domain_patch() {
 
     let tool = UpdateCalendarEvent {
         event_id,
+        calendar_id: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: Some("Renamed".to_string()),
@@ -543,6 +544,7 @@ async fn update_maps_out_of_office_settings_into_the_patch() {
 
     let tool = UpdateCalendarEvent {
         event_id,
+        calendar_id: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: None,
@@ -580,6 +582,7 @@ async fn update_passes_the_selected_occurrence_scope() {
 
     let tool = UpdateCalendarEvent {
         event_id,
+        calendar_id: None,
         scope: UpdateScopeInput::ThisEvent,
         recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
         title: None,
@@ -615,6 +618,7 @@ async fn scoped_update_requires_a_recurrence_id() {
 
     let tool = UpdateCalendarEvent {
         event_id: Uuid::from_u128(11),
+        calendar_id: None,
         scope: UpdateScopeInput::ThisEvent,
         recurrence_id: None,
         title: Some("Renamed".to_string()),
@@ -642,6 +646,7 @@ async fn series_update_rejects_a_stray_recurrence_id() {
 
     let tool = UpdateCalendarEvent {
         event_id: Uuid::from_u128(11),
+        calendar_id: None,
         scope: UpdateScopeInput::All,
         recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
         title: Some("Renamed".to_string()),
@@ -666,6 +671,7 @@ async fn update_carries_reminders_into_the_patch() {
 
     let tool = UpdateCalendarEvent {
         event_id: Uuid::from_u128(11),
+        calendar_id: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: None,
@@ -710,6 +716,7 @@ async fn rsvp_alone_answers_without_patching() {
 
     let tool = UpdateCalendarEvent {
         event_id,
+        calendar_id: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: None,
@@ -743,6 +750,7 @@ async fn rsvp_follows_the_occurrence_scope_of_the_call() {
 
     let tool = UpdateCalendarEvent {
         event_id: Uuid::from_u128(11),
+        calendar_id: None,
         scope: UpdateScopeInput::ThisEvent,
         recurrence_id: Some("2026-08-18T20:00:00+00:00".to_string()),
         title: None,
@@ -777,6 +785,7 @@ async fn update_answers_after_applying_the_patch() {
 
     let tool = UpdateCalendarEvent {
         event_id: Uuid::from_u128(11),
+        calendar_id: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: None,
@@ -805,6 +814,7 @@ async fn update_without_a_change_or_an_rsvp_is_rejected() {
 
     let tool = UpdateCalendarEvent {
         event_id: Uuid::from_u128(11),
+        calendar_id: None,
         scope: UpdateScopeInput::All,
         recurrence_id: None,
         title: None,
@@ -830,6 +840,7 @@ async fn scoped_deletion_requires_a_recurrence_id() {
 
     let tool = DeleteCalendarEvent {
         event_id: Uuid::from_u128(11),
+        calendar_id: None,
         scope: DeletionScopeInput::ThisEvent,
         recurrence_id: None,
     };
@@ -845,6 +856,7 @@ async fn deletion_passes_the_selected_scope() {
 
     let tool = DeleteCalendarEvent {
         event_id,
+        calendar_id: None,
         scope: DeletionScopeInput::ThisAndFollowing,
         recurrence_id: Some("2026-08-20T17:00:00+00:00".to_string()),
     };

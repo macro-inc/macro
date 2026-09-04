@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendar_events\n        SET status = $2,\n            starts_at = $3,\n            ends_at = $4,\n            start_date = $5,\n            end_date = $6,\n            time_zone = $7,\n            recurrence_lines = $8,\n            organizer_email = $9,\n            organizer_name = $10,\n            conference_url = $11,\n            conference_provider = $12,\n            updated_at = GREATEST(calendar_events.updated_at, $13)\n        WHERE id = $1\n        RETURNING event_type, reminders_use_default, reminder_overrides\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "event_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "reminders_use_default",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "reminder_overrides",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Date",
+        "Date",
+        "Text",
+        "TextArray",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b6a4afd65d7d48cf52f2471e5ccdd11c7174837bc03c1842a5cfaa0f219fc65c"
+}

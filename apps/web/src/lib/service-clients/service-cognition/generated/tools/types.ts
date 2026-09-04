@@ -2339,6 +2339,10 @@ export interface DeleteCalendarEvent {
    * The event's id, from ListCalendarEvents or CreateCalendarEvent.
    */
   eventId: string;
+  /**
+   * The `calendarId` of the copy to delete, from its ListCalendarEvents entry, for an event synced from more than one calendar. Omit to delete the event's primary copy.
+   */
+  calendarId?: string | null;
   scope?: DeletionScopeInput;
   /**
    * The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event" and "this_and_following".
@@ -5239,6 +5243,10 @@ export interface UpdateCalendarEvent {
    * The event's id, from ListCalendarEvents or CreateCalendarEvent.
    */
   eventId: string;
+  /**
+   * The `calendarId` of the copy to update, from its ListCalendarEvents entry, for an event synced from more than one calendar. Omit to update the event's primary copy.
+   */
+  calendarId?: string | null;
   scope: UpdateScopeInput;
   /**
    * The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event"; omit for "all".
