@@ -536,9 +536,9 @@ export function ChannelsRail(props: {
                               !state.expandedGroups.channels && '-rotate-90'
                             )}
                           />
-                          <span class="min-w-0 flex-1 truncate">Channels</span>
+                          <span class="min-w-0 truncate">Channels</span>
                           <Show when={unreadTeamChannelCount() > 0}>
-                            <span class="text-xxs tabular-nums">
+                            <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none tabular-nums text-accent-contrast">
                               {unreadTeamChannelCount()}
                             </span>
                           </Show>
@@ -630,9 +630,9 @@ export function ChannelsRail(props: {
                                 '-rotate-90'
                             )}
                           />
-                          <span class="min-w-0 flex-1 truncate">DMs</span>
+                          <span class="min-w-0 truncate">DMs</span>
                           <Show when={unreadDirectMessageCount() > 0}>
-                            <span class="text-xxs tabular-nums">
+                            <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none tabular-nums text-accent-contrast">
                               {unreadDirectMessageCount()}
                             </span>
                           </Show>
@@ -825,15 +825,12 @@ export function ChannelsRail(props: {
                           <ChannelIcon />
                         </span>
                         <Show when={unreadTeamChannelCount() > 0}>
-                          <span class="text-xxs absolute right-0.5 top-0 tabular-nums">
+                          <span class="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none text-accent-contrast ring-2 ring-surface">
                             {unreadTeamChannelCount()}
                           </span>
                         </Show>
                       </button>
                     </CollapsibleSection.Header>
-                    <div class="w-full px-2">
-                      <div class="border-t border-edge-muted" />
-                    </div>
                     <CollapsibleSection.Content
                       open={state.expandedGroups.channels}
                       contentRef={setSectionScrollRoot('channels')}
@@ -899,15 +896,12 @@ export function ChannelsRail(props: {
                           <ChatTeardropIcon />
                         </span>
                         <Show when={unreadDirectMessageCount() > 0}>
-                          <span class="text-xxs absolute right-0.5 top-0 tabular-nums">
+                          <span class="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none text-accent-contrast ring-2 ring-surface">
                             {unreadDirectMessageCount()}
                           </span>
                         </Show>
                       </button>
                     </CollapsibleSection.Header>
-                    <div class="w-full px-2">
-                      <div class="border-t border-edge-muted" />
-                    </div>
                     <CollapsibleSection.Content
                       open={state.expandedGroups.direct_messages}
                       contentRef={setSectionScrollRoot('direct_messages')}
