@@ -9,6 +9,19 @@ export function mcpAuthAttemptKey(url: string): string {
   }
 }
 
+export function clearMcpAuthAttempts(): void {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(AUTH_ATTEMPT_PREFIX)) keys.push(key);
+    }
+    for (const key of keys) localStorage.removeItem(key);
+  } catch {
+    return;
+  }
+}
+
 export function readMcpAuthAttempted(url: string): boolean {
   try {
     return localStorage.getItem(mcpAuthAttemptKey(url)) === '1';
