@@ -20,7 +20,7 @@ import { PropertyCaret } from '@property/extractors/PropertyCaret';
 import { PropertyPill } from '@property/extractors/PropertyPill';
 import type { EntityProperty } from '@property/types';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
-import { cn, Layer, Select, Tooltip } from '@ui';
+import { cn, Layer, Select } from '@ui';
 import { type Accessor, createMemo, createSignal, For, Show } from 'solid-js';
 import {
   formatReminderOffset,
@@ -128,30 +128,26 @@ function ReadOnlyEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
       flip
       slide
     >
-      <Tooltip label="View event guests" placement="bottom">
-        <Popover.Trigger
-          disabled={props.disabled}
-          aria-label="Guests"
-          aria-readonly="true"
-          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+      <Popover.Trigger
+        disabled={props.disabled}
+        aria-label="Guests"
+        aria-readonly="true"
+        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+      >
+        <Show when={!props.hideIcon}>
+          <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        </Show>
+        <span
+          class={cn(
+            'min-w-0 truncate',
+            PROPERTY_VALUE_CLASS,
+            props.selected.length > 0 ? 'text-current' : 'text-ink-extra-muted'
+          )}
         >
-          <Show when={!props.hideIcon}>
-            <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-          </Show>
-          <span
-            class={cn(
-              'min-w-0 truncate',
-              PROPERTY_VALUE_CLASS,
-              props.selected.length > 0
-                ? 'text-current'
-                : 'text-ink-extra-muted'
-            )}
-          >
-            {guestPropertyLabel(props.selected)}
-          </span>
-          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
-        </Popover.Trigger>
-      </Tooltip>
+          {guestPropertyLabel(props.selected)}
+        </span>
+        <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+      </Popover.Trigger>
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content class="z-action-menu w-72 max-w-[calc(100vw-1rem)] rounded-xl border border-edge bg-menu p-1.5 text-sm shadow-menu menu-open-animation">
@@ -227,32 +223,26 @@ function EditableEventComposerGuestsPill(props: EventComposerGuestsPillProps) {
 function GuestsPillTrigger(props: EventComposerGuestsPillProps) {
   const ctx = useProperty();
   return (
-    <Tooltip
-      label="Add guests to this event"
-      placement="bottom"
-      disabled={ctx.editorOpen() || props.disabled}
+    <PropertyPill
+      aria-label="Guests"
+      aria-expanded={ctx.editorOpen()}
+      data-expanded={ctx.editorOpen() ? '' : undefined}
+      class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
     >
-      <PropertyPill
-        aria-label="Guests"
-        aria-expanded={ctx.editorOpen()}
-        data-expanded={ctx.editorOpen() ? '' : undefined}
-        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+      <Show when={!props.hideIcon}>
+        <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+      </Show>
+      <span
+        class={cn(
+          'min-w-0 truncate',
+          PROPERTY_VALUE_CLASS,
+          props.selected.length > 0 ? 'text-current' : 'text-ink-extra-muted'
+        )}
       >
-        <Show when={!props.hideIcon}>
-          <UsersIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-        </Show>
-        <span
-          class={cn(
-            'min-w-0 truncate',
-            PROPERTY_VALUE_CLASS,
-            props.selected.length > 0 ? 'text-current' : 'text-ink-extra-muted'
-          )}
-        >
-          {guestPropertyLabel(props.selected)}
-        </span>
-        <PropertyCaret class="text-ink-extra-muted" />
-      </PropertyPill>
-    </Tooltip>
+        {guestPropertyLabel(props.selected)}
+      </span>
+      <PropertyCaret class="text-ink-extra-muted" />
+    </PropertyPill>
   );
 }
 
@@ -326,27 +316,25 @@ export function EventComposerLocationPill(
       flip
       slide
     >
-      <Tooltip label="Set the event location" placement="bottom">
-        <Popover.Trigger
-          disabled={props.disabled}
-          aria-label="Location"
-          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+      <Popover.Trigger
+        disabled={props.disabled}
+        aria-label="Location"
+        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+      >
+        <Show when={!props.hideIcon}>
+          <MapPinIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        </Show>
+        <span
+          class={cn(
+            'min-w-0 truncate',
+            PROPERTY_VALUE_CLASS,
+            props.value ? 'text-current' : 'text-ink-extra-muted'
+          )}
         >
-          <Show when={!props.hideIcon}>
-            <MapPinIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-          </Show>
-          <span
-            class={cn(
-              'min-w-0 truncate',
-              PROPERTY_VALUE_CLASS,
-              props.value ? 'text-current' : 'text-ink-extra-muted'
-            )}
-          >
-            {props.value || 'Add location'}
-          </span>
-          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
-        </Popover.Trigger>
-      </Tooltip>
+          {props.value || 'Add location'}
+        </span>
+        <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+      </Popover.Trigger>
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
@@ -420,30 +408,28 @@ export function EventComposerConferencePill(
       optionTextValue="label"
       disabled={props.disabled}
     >
-      <Tooltip label="Set event video conferencing" placement="bottom">
-        <Select.Trigger
-          aria-label="Video conferencing"
-          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
-        >
-          <VideoCameraIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-          <Select.Value<EventComposerConferenceOption>>
-            {(selectState) => (
-              <span
-                class={cn(
-                  'truncate',
-                  PROPERTY_VALUE_CLASS,
-                  props.value === 'none' && 'text-ink-extra-muted'
-                )}
-              >
-                {props.value === 'none'
-                  ? 'Add meeting link'
-                  : selectState.selectedOption().label}
-              </span>
-            )}
-          </Select.Value>
-          <Select.Icon />
-        </Select.Trigger>
-      </Tooltip>
+      <Select.Trigger
+        aria-label="Video conferencing"
+        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+      >
+        <VideoCameraIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        <Select.Value<EventComposerConferenceOption>>
+          {(selectState) => (
+            <span
+              class={cn(
+                'truncate',
+                PROPERTY_VALUE_CLASS,
+                props.value === 'none' && 'text-ink-extra-muted'
+              )}
+            >
+              {props.value === 'none'
+                ? 'Add meeting link'
+                : selectState.selectedOption().label}
+            </span>
+          )}
+        </Select.Value>
+        <Select.Icon />
+      </Select.Trigger>
       <Select.Content>
         <Select.Listbox />
       </Select.Content>
@@ -547,26 +533,24 @@ export function EventComposerRemindersPill(
         </Select.Item>
       )}
     >
-      <Tooltip label="Set event notifications" placement="bottom">
-        <Select.Trigger
-          aria-label="Notifications"
-          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
-        >
-          <BellSimpleIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-          <Select.Value<EventComposerSelectOption>>
-            {(selectState) => (
-              <span class={cn('truncate', PROPERTY_VALUE_CLASS)}>
-                {reminderPropertyLabel(
-                  selectState
-                    .selectedOptions()
-                    .map((option) => Number(option.value))
-                )}
-              </span>
-            )}
-          </Select.Value>
-          <Select.Icon />
-        </Select.Trigger>
-      </Tooltip>
+      <Select.Trigger
+        aria-label="Notifications"
+        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+      >
+        <BellSimpleIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        <Select.Value<EventComposerSelectOption>>
+          {(selectState) => (
+            <span class={cn('truncate', PROPERTY_VALUE_CLASS)}>
+              {reminderPropertyLabel(
+                selectState
+                  .selectedOptions()
+                  .map((option) => Number(option.value))
+              )}
+            </span>
+          )}
+        </Select.Value>
+        <Select.Icon />
+      </Select.Trigger>
       <Select.Content class="w-56 p-0">
         <div class="flex items-center justify-between border-edge-muted border-b px-3 py-2 text-xs text-ink-muted">
           <span>Choose reminders</span>
@@ -607,21 +591,19 @@ export function EventComposerRecurrencePill(
       optionDisabled={() => props.readOnly === true}
       disabled={props.disabled}
     >
-      <Tooltip label="Set how this event repeats" placement="bottom">
-        <Select.Trigger
-          aria-label="Repeats"
-          aria-readonly={props.readOnly || undefined}
-          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48')}
-        >
-          <Show when={!props.hideIcon}>
-            <RepeatIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-          </Show>
-          <Select.Value<EventComposerSelectOption>>
-            {(selectState) => selectState.selectedOption().label}
-          </Select.Value>
-          <Select.Icon />
-        </Select.Trigger>
-      </Tooltip>
+      <Select.Trigger
+        aria-label="Repeats"
+        aria-readonly={props.readOnly || undefined}
+        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48')}
+      >
+        <Show when={!props.hideIcon}>
+          <RepeatIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        </Show>
+        <Select.Value<EventComposerSelectOption>>
+          {(selectState) => selectState.selectedOption().label}
+        </Select.Value>
+        <Select.Icon />
+      </Select.Trigger>
       <Select.Content>
         <Select.Listbox />
       </Select.Content>
@@ -653,19 +635,17 @@ export function EventComposerCalendarPill(
       optionDisabled={() => props.readOnly === true}
       disabled={props.disabled}
     >
-      <Tooltip label="Choose the calendar for this event" placement="bottom">
-        <Select.Trigger
-          aria-label="Calendar"
-          aria-readonly={props.readOnly || undefined}
-          class={cn(PROPERTY_TRIGGER_CLASS, 'w-40')}
-        >
-          <CalendarDotsIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-          <Select.Value<EventEditorCalendarOption>>
-            {(selectState) => selectState.selectedOption().label}
-          </Select.Value>
-          <Select.Icon />
-        </Select.Trigger>
-      </Tooltip>
+      <Select.Trigger
+        aria-label="Calendar"
+        aria-readonly={props.readOnly || undefined}
+        class={cn(PROPERTY_TRIGGER_CLASS, 'w-40')}
+      >
+        <CalendarDotsIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        <Select.Value<EventEditorCalendarOption>>
+          {(selectState) => selectState.selectedOption().label}
+        </Select.Value>
+        <Select.Icon />
+      </Select.Trigger>
       <Select.Content>
         <Select.Listbox />
       </Select.Content>
@@ -721,22 +701,17 @@ export function EventComposerKindPill(props: EventComposerKindPillProps) {
       optionDisabled={() => props.readOnly === true}
       disabled={props.disabled}
     >
-      <Tooltip
-        label="Choose between a regular event and marking yourself out of office"
-        placement="bottom"
+      <Select.Trigger
+        aria-label="Event kind"
+        aria-readonly={props.readOnly || undefined}
+        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48')}
       >
-        <Select.Trigger
-          aria-label="Event kind"
-          aria-readonly={props.readOnly || undefined}
-          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48')}
-        >
-          <SquaresFourIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-          <Select.Value<EventComposerKindOption>>
-            {(selectState) => selectState.selectedOption().label}
-          </Select.Value>
-          <Select.Icon />
-        </Select.Trigger>
-      </Tooltip>
+        <SquaresFourIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        <Select.Value<EventComposerKindOption>>
+          {(selectState) => selectState.selectedOption().label}
+        </Select.Value>
+        <Select.Icon />
+      </Select.Trigger>
       <Select.Content>
         <Select.Listbox />
       </Select.Content>
@@ -791,25 +766,20 @@ export function EventComposerDeclinePill(props: EventComposerDeclinePillProps) {
       placeholder="Decline settings"
       disabled={props.disabled}
     >
-      <Tooltip
-        label="Choose which conflicting meetings Google declines while you are away"
-        placement="bottom"
+      <Select.Trigger
+        aria-label="Decline meetings"
+        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
       >
-        <Select.Trigger
-          aria-label="Decline meetings"
-          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
-        >
-          <CalendarXIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-          <Select.Value<EventComposerDeclineOption>>
-            {(selectState) => (
-              <span class={cn('truncate', PROPERTY_VALUE_CLASS)}>
-                {selectState.selectedOption().label}
-              </span>
-            )}
-          </Select.Value>
-          <Select.Icon />
-        </Select.Trigger>
-      </Tooltip>
+        <CalendarXIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        <Select.Value<EventComposerDeclineOption>>
+          {(selectState) => (
+            <span class={cn('truncate', PROPERTY_VALUE_CLASS)}>
+              {selectState.selectedOption().label}
+            </span>
+          )}
+        </Select.Value>
+        <Select.Icon />
+      </Select.Trigger>
       <Select.Content>
         <Select.Listbox />
       </Select.Content>
@@ -839,28 +809,23 @@ export function EventComposerDeclineMessagePill(
       flip
       slide
     >
-      <Tooltip
-        label="Set the reply sent to declined meeting organizers"
-        placement="bottom"
+      <Popover.Trigger
+        disabled={props.disabled}
+        aria-label="Decline message"
+        class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
       >
-        <Popover.Trigger
-          disabled={props.disabled}
-          aria-label="Decline message"
-          class={cn(PROPERTY_TRIGGER_CLASS, 'max-w-48 overflow-hidden')}
+        <ChatTextIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
+        <span
+          class={cn(
+            'min-w-0 truncate',
+            PROPERTY_VALUE_CLASS,
+            props.value ? 'text-current' : 'text-ink-extra-muted'
+          )}
         >
-          <ChatTextIcon class="size-3.5 shrink-0 text-ink-extra-muted" />
-          <span
-            class={cn(
-              'min-w-0 truncate',
-              PROPERTY_VALUE_CLASS,
-              props.value ? 'text-current' : 'text-ink-extra-muted'
-            )}
-          >
-            {props.value || 'Add decline message'}
-          </span>
-          <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
-        </Popover.Trigger>
-      </Tooltip>
+          {props.value || 'Add decline message'}
+        </span>
+        <CaretDownIcon class="size-3 shrink-0 text-ink-extra-muted" />
+      </Popover.Trigger>
       <Popover.Portal>
         <Layer depth={3}>
           <Popover.Content
