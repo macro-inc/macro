@@ -2303,6 +2303,41 @@ async fn create_system_channel_event_uses_system_actor() {
     ));
 }
 
+#[tokio::test]
+async fn create_channel_on_behalf_attributes_created_to_the_bot() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|owner@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.create_channel_on_behalf(
+        macro_id("macro|owner@test.com"),
+        bot_id::MACRO_AI_BOT_ID,
+        crate::domain::models::CreateChannelRequest {
+            name: Some("Planning".to_string()),
+            channel_type: ChannelType::Private,
+            team_id: None,
+            auto_join_team: false,
+            participants: HashSet::from([macro_id("macro|teo@macro.com")]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelCreated {
+            actor,
+            on_behalf_of: Some(owner),
+            channel_name: Some(name),
+            ..
+        }] if actor == &Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID)
+            && owner.as_ref() == "macro|owner@test.com"
+            && name == "Planning"
+    ));
+}
+
 /// Signup on main called `create_channel(Sender::new_from_user(owner))`.
 /// That is the path that made "Created # Macro Support x …" render as You.
 #[tokio::test]

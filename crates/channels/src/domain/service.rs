@@ -344,9 +344,20 @@ where
         owner: MacroUserIdStr<'static>,
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        self.create_channel_on_behalf(owner, bot_id::MACRO_SYSTEM_BOT_ID, req)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn create_channel_on_behalf(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        actor: BotId,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         self.create_owned_channel(
             owner.clone(),
-            Sender::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID),
+            Sender::new_from_bot(actor),
             Some(owner),
             req,
         )
@@ -1881,6 +1892,15 @@ where
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         ChannelServiceImpl::create_system_channel(self, owner, req).await
+    }
+
+    async fn create_channel_on_behalf(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        actor: BotId,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        ChannelServiceImpl::create_channel_on_behalf(self, owner, actor, req).await
     }
 
     #[tracing::instrument(err, skip(self, user_id))]
