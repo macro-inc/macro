@@ -214,7 +214,7 @@ export function SlimChannelOption(props: ChannelOptionProps) {
         <Show when={props.unread}>
           <span
             aria-label="Unread"
-            class="absolute right-1.5 top-1 size-2 rounded-full bg-accent"
+            class="absolute right-0.5 top-0.5 size-2.5 rounded-full bg-accent ring-2 ring-surface"
           />
         </Show>
       </button>
@@ -395,7 +395,7 @@ export function SlimConversationCard(props: ConversationCardProps) {
           <Show when={props.unread}>
             <span
               aria-label="Unread"
-              class="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-accent ring-2 ring-surface"
+              class="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-accent ring-2 ring-surface"
             />
           </Show>
         </span>
