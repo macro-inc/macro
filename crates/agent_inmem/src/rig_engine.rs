@@ -122,11 +122,10 @@ async fn drive_turn(
         reviewer,
     } = request;
 
-    // The chat host's toolset: its user tools (`SendEmail`,
+    // Chat's tools with the session's prompt: the user tools (`SendEmail`,
     // `CreateCalendarEvent`) defer to the user, and this runtime finishes
-    // them in the turn through `reviewer` - the session's review card is the
-    // composer chat's `AiHost::Chat` doc promises.
-    let tools = tools_for(AiHost::Chat);
+    // them in the turn through `reviewer`.
+    let tools = tools_for(AiHost::AgentSession);
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
     let system_prompt = system_prompt(
         &tools.prompt,
