@@ -34,12 +34,20 @@ pub enum EgressError {
     #[error("nothing is served at that path: {0}")]
     Unroutable(String),
 
-    /// The owner has no server under this slug. Also covers a server the
-    /// owner has since disabled or disconnected: from the sandbox's side
-    /// those are the same fact, and distinguishing them would report on the
-    /// owner's settings to code the model wrote.
-    #[error("no connected MCP server named {0}")]
+    /// Nothing can be addressed under this slug for the owner - not even
+    /// unconnected. With Pipedream every valid slug is addressable, so this
+    /// is reserved for a resolver that genuinely has nowhere to send the
+    /// call. An app the owner has not connected is not an error: its
+    /// `tools/call` is answered with a result saying so, and everything else
+    /// is forwarded for them.
+    #[error("no MCP server named {0}")]
     UnknownServer(McpServerSlug),
+
+    /// A request body the proxy had to read was bigger than it will read.
+    /// Only reachable on the path that answers `tools/call` for an
+    /// unconnected app; every other request streams through unread.
+    #[error("request body exceeds what the proxy will read")]
+    RequestTooLarge,
 
     /// We cannot mint a credential for the session's repository: our GitHub
     /// App is not installed on it, or the installation belongs to somebody
