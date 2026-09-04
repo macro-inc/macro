@@ -54,7 +54,8 @@ pill to primary calendars, and shows a `Decline meetings` pill (`Don't decline m
 When editing an existing event the kind is read-only (Google treats it as immutable), and an
 out-of-office event's decline settings can still be changed — they read as unset because the
 provider does not report the stored ones. Out-of-office events render on the grid as solid
-chips filled with their calendar color (like Google), unlike regular events' outlined chips.
+chips filled with their calendar color (like Google), unlike regular events' outlined chips,
+and their details card shows an `Out of office` line under the schedule.
 
 Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
 `<name>: <event title>`. The side panel's `Team out of office` section (shown only when the
