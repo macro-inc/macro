@@ -1,7 +1,7 @@
 //! Handing a sandbox its one secret, and telling opencode where to spend it.
 //!
 //! Two adapter concerns the domain has no business with: minting a token, and
-//! listing the owner's Pipedream-connected apps, which needs their rows.
+//! listing the owner's connected apps, which needs their rows.
 //!
 //! Both the minting and the hashing are `agent_egress`'s, not a second
 //! implementation of either. The two ends of this token are written in
@@ -9,9 +9,13 @@
 //! each end reads at runtime as "every request from every sandbox is
 //! unauthenticated".
 
-use agent_egress::domain::model::{McpServerSlug, RepoSlug, SessionToken};
+use agent_egress::domain::model::{
+    AdvertisedMcp, CustomMcpId, McpServerSlug, RepoSlug, SessionToken,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_client::domain::ports::McpServerStore;
 use pipedream_mcp::domain::ports::ConnectionStore;
+use std::collections::HashSet;
 use std::sync::Arc;
 use url::Url;
 
@@ -29,69 +33,126 @@ mod test;
 const GITHUB_HOST: &str = "github.com";
 
 /// Mints session tokens and gathers the MCP servers a sandbox may dial.
-pub struct EgressProvisioner<Connections> {
+pub struct EgressProvisioner<Connections, Native> {
     connections: Arc<Connections>,
+    native: Option<Arc<Native>>,
     base_url: String,
 }
 
-impl<Connections> EgressProvisioner<Connections>
+impl<Connections, Native> EgressProvisioner<Connections, Native>
 where
     Connections: ConnectionStore,
+    Native: McpServerStore,
 {
-    /// Build the provisioner over the Pipedream connection store and the
-    /// egress proxy's public address.
-    pub fn new(connections: Arc<Connections>, base_url: impl Into<String>) -> Self {
+    /// Build the provisioner over the Pipedream connection store, optional
+    /// native MCP store, and the egress proxy's public address.
+    pub fn new(
+        connections: Arc<Connections>,
+        native: Option<Arc<Native>>,
+        base_url: impl Into<String>,
+    ) -> Self {
         Self {
             connections,
+            native,
             base_url: base_url.into().trim_end_matches('/').to_owned(),
         }
     }
 
-    /// The slugs of the owner's enabled Pipedream connections, verbatim.
+    /// The owner's enabled Pipedream slugs, then authenticated custom servers.
     ///
-    /// `app_slug`, exactly as the proxy resolves it - the same value at both
-    /// ends by equality is what makes a server entry dialable, and there is
-    /// no derivation for the two to disagree over. Macro's own server is not
-    /// in the list: every session has it, on its own route. An app the owner
-    /// turned off is left out here as well as refused by the proxy: an agent
-    /// that can see a server in its list will try it, and a tool call that
-    /// always fails is worse than a tool that is absent.
-    async fn slugs(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<McpServerSlug>> {
+    /// Pipedream `app_slug` is taken verbatim. Custom servers use a slugified
+    /// ACP name, or `custom-{id}` when that name is empty, reserved, or taken.
+    /// Macro's own server is not in the list. Disabled or unauthenticated
+    /// native rows are left out.
+    async fn advertised(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<AdvertisedMcp>> {
         let records = self.connections.list(owner).await.map_err(|error| {
             HarnessError::Egress(rootcause::report!(
                 "could not list Pipedream connections: {error:?}"
             ))
         })?;
 
-        let slugs: Vec<McpServerSlug> = records
-            .into_iter()
-            .filter(|record| record.enabled)
-            .filter_map(|record| {
-                let slug = McpServerSlug::parse(&record.app_slug);
-                if slug.is_none() {
-                    // An app slug the strict parse refuses could never be
-                    // dialed - the proxy would refuse the same path segment -
-                    // so leaving it out is the only honest rendering.
-                    tracing::warn!(
-                        %owner,
-                        app_slug = %record.app_slug,
-                        "a Pipedream connection's app slug is not a valid path segment; skipped"
-                    );
+        let mut servers = Vec::new();
+        let mut taken = HashSet::new();
+        for record in records {
+            if !record.enabled {
+                continue;
+            }
+            let Some(slug) = McpServerSlug::parse(&record.app_slug) else {
+                tracing::warn!(
+                    %owner,
+                    app_slug = %record.app_slug,
+                    "a Pipedream connection's app slug is not a valid path segment; skipped"
+                );
+                continue;
+            };
+            taken.insert(slug.as_str().to_owned());
+            servers.push(AdvertisedMcp::Pipedream(slug));
+        }
+
+        if let Some(native) = &self.native {
+            let records = native.list(owner).await.map_err(|error| {
+                HarnessError::Egress(rootcause::report!(
+                    "could not list native MCP servers: {error:?}"
+                ))
+            })?;
+            for record in records {
+                if !(record.enabled && record.credentials.is_some()) {
+                    continue;
                 }
-                slug
-            })
-            .collect();
+                let id = CustomMcpId::from_url(&record.url);
+                let name = acp_name(&record.server_name, &id, &taken);
+                taken.insert(name.clone());
+                servers.push(AdvertisedMcp::Custom { id, name });
+            }
+        }
+
         tracing::debug!(
-            mcp_servers = slugs.len(),
+            mcp_servers = servers.len(),
             "advertising the owner's connected MCP servers"
         );
-        Ok(slugs)
+        Ok(servers)
     }
 }
 
-impl<Connections> SandboxEgressProvisioner for EgressProvisioner<Connections>
+fn acp_name(server_name: &str, id: &CustomMcpId, taken: &HashSet<String>) -> String {
+    let slug = slugify(server_name);
+    if slug.is_empty() || slug == "macro" || taken.contains(&slug) {
+        format!("custom-{id}")
+    } else {
+        slug
+    }
+}
+
+fn slugify(name: &str) -> String {
+    let mut result = String::with_capacity(name.len());
+    let mut prev_sep = false;
+    for character in name.chars() {
+        let to_push = if character.is_ascii_alphabetic() {
+            character.to_ascii_lowercase()
+        } else if character.is_ascii_digit() || character == '_' || character == '-' {
+            character
+        } else if character.is_whitespace() {
+            '-'
+        } else {
+            continue;
+        };
+        if to_push == '-' {
+            if !prev_sep && !result.is_empty() {
+                result.push('-');
+                prev_sep = true;
+            }
+        } else {
+            result.push(to_push);
+            prev_sep = false;
+        }
+    }
+    result.trim_matches('-').to_owned()
+}
+
+impl<Connections, Native> SandboxEgressProvisioner for EgressProvisioner<Connections, Native>
 where
     Connections: ConnectionStore,
+    Native: McpServerStore,
 {
     #[tracing::instrument(err, skip(self), fields(%session, %owner))]
     async fn provision(
@@ -112,7 +173,7 @@ where
             sandbox: SandboxEgress {
                 base_url: self.base_url.clone(),
                 session_token: token.as_str().to_owned(),
-                mcp_servers: self.slugs(owner).await?,
+                mcp_servers: self.advertised(owner).await?,
             },
         })
     }
@@ -126,7 +187,7 @@ where
         Ok(SandboxEgress {
             base_url: self.base_url.clone(),
             session_token,
-            mcp_servers: self.slugs(owner).await?,
+            mcp_servers: self.advertised(owner).await?,
         })
     }
 }

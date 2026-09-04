@@ -22,6 +22,7 @@ use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, WithMacroMcp};
 use agent_egress::outbound::mcp_credentials::PipedreamMcpCredentials;
+use agent_egress::outbound::native_mcp::WithNativeMcp;
 use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{
@@ -113,6 +114,59 @@ struct AgentHarnessConsumerGroup;
 
 impl GroupName for AgentHarnessConsumerGroup {
     const GROUP_NAME: &'static str = "agent-harness-service";
+}
+
+/// Native MCP rows, or empty when the encryption key is missing.
+///
+/// One type so the credential stack always wraps [`WithNativeMcp`] instead of
+/// branching the egress service construction.
+#[derive(Clone)]
+struct NativeMcpStore(Option<mcp_client::outbound::pg_server_repo::PgServerRepo>);
+
+impl mcp_client::domain::ports::McpServerStore for NativeMcpStore {
+    type Err = sqlx::Error;
+
+    async fn save(
+        &self,
+        record: &mcp_client::domain::models::McpServerRecord,
+    ) -> Result<(), Self::Err> {
+        match &self.0 {
+            Some(store) => store.save(record).await,
+            None => Ok(()),
+        }
+    }
+
+    async fn load(
+        &self,
+        user_id: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        server_url: &str,
+    ) -> Result<Option<mcp_client::domain::models::McpServerRecord>, Self::Err> {
+        match &self.0 {
+            Some(store) => store.load(user_id, server_url).await,
+            None => Ok(None),
+        }
+    }
+
+    async fn delete(
+        &self,
+        user_id: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        server_url: &str,
+    ) -> Result<(), Self::Err> {
+        match &self.0 {
+            Some(store) => store.delete(user_id, server_url).await,
+            None => Ok(()),
+        }
+    }
+
+    async fn list(
+        &self,
+        user_id: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Result<Vec<mcp_client::domain::models::McpServerRecord>, Self::Err> {
+        match &self.0 {
+            Some(store) => store.list(user_id).await,
+            None => Ok(Vec::new()),
+        }
+    }
 }
 
 macro_event_broker::declare_topics!(DeclaredMacroEvent: AgentSessionMacroEvent);
@@ -495,6 +549,30 @@ async fn run() -> anyhow::Result<()> {
     // keep in sync. The rows hold no secrets - Pipedream owns the grants.
     let mcp_connections = Arc::new(PgConnectionRepo::new(pool.clone()));
 
+    // Same encryption key cognition uses for `mcp_servers`. Missing or
+    // unusable leaves custom MCP off so deploy does not die before Doppler
+    // carries the secret; Pipedream-only egress still works.
+    let native_mcp = match config.mcp_credentials_key_secret_name.as_str() {
+        Some(secret) => match mcp_client::domain::models::AesKey::try_from(secret) {
+            Ok(key) => Some(mcp_client::outbound::pg_server_repo::PgServerRepo::new(
+                pool.clone(),
+                key,
+            )),
+            Err(error) => {
+                tracing::warn!(
+                    error = ?error,
+                    "MCP credentials key is unusable; custom MCP egress is off"
+                );
+                None
+            }
+        },
+        None => {
+            tracing::warn!("MCP_CREDENTIALS_KEY_SECRET_NAME is unset; custom MCP egress is off");
+            None
+        }
+    };
+    let native_store = NativeMcpStore(native_mcp);
+
     // The client that addresses Pipedream's remote MCP server, built from the
     // same credentials `document_cognition_service` uses.
     let pipedream = PipedreamClient::new(PipedreamConfig {
@@ -517,7 +595,11 @@ async fn run() -> anyhow::Result<()> {
         HarnessKeyedConnections::new(PgHarnessBindings::new(pool.clone()), Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
-        EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
+        EgressProvisioner::new(
+            Arc::clone(&mcp_connections),
+            Some(Arc::new(native_store.clone())),
+            config.egress_base_url.clone(),
+        ),
         HttpCommandForwarder::new(config.internal_api_key.clone())
             .map_err(|error| anyhow::anyhow!("failed to build the command forwarder: {error}"))?,
         defaults,
@@ -622,7 +704,10 @@ async fn run() -> anyhow::Result<()> {
     // signed inline with the same key authentication_service holds; what this
     // process hands out is always single-user and minutes from expiry.
     let mcp_credentials = WithMacroMcp::new(
-        PipedreamMcpCredentials::new(mcp_connections, pipedream),
+        WithNativeMcp::new(
+            PipedreamMcpCredentials::new(mcp_connections, pipedream),
+            native_store,
+        ),
         MacroApiTokenSigner::new(
             pool.clone(),
             config.macro_api_token_issuer.as_ref(),

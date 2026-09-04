@@ -37,6 +37,7 @@ github = { path = "../../crates/github", default-features = false, features = [
   "ports",
   "sync",
 ] }
+mcp_client = { path = "../../crates/mcp_client" }
 pipedream_mcp = { path = "../../crates/pipedream_mcp" }
 url = { workspace = true }
 contacts = { path = "../../crates/contacts" }

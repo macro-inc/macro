@@ -53,6 +53,11 @@ used in chat and channels; they serialize as `<m-document-mention>` tags in the 
 the agent sees. Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread).
 
+A Coding Agent session can use Connections Pipedream apps and authenticated custom
+MCP servers. They appear as MCP servers on the session and are proxied through
+egress; the sandbox never receives raw OAuth tokens. Chat Agent (`/app/chat/...`)
+loads both stacks in-process.
+
 - Sending is never blocked by a running turn. A prompt sent mid-turn is queued
   **server-side** and dispatches automatically when the current turn ends, one per turn.
   The queue holds at most 50 entries; past that a send is refused with an error rather

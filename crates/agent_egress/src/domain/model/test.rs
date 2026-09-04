@@ -16,6 +16,36 @@ fn names(headers: &HeaderMap) -> Vec<&str> {
     headers.keys().map(HeaderName::as_str).collect()
 }
 
+/// The custom id is the first 8 bytes of SHA-256(url), lowercase hex. Both
+/// ends derive it the same way, so a stored URL and a path segment meet by
+/// equality and nothing is left to normalize.
+#[test]
+fn custom_id_is_the_first_sixteen_hex_chars_of_sha256() {
+    let id = CustomMcpId::from_url("https://mcp.example.com/mcp");
+    assert_eq!(id.as_str().len(), 16);
+    assert_eq!(id.as_str(), &id.as_str().to_ascii_lowercase());
+    assert!(
+        id.as_str()
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    );
+    assert_eq!(CustomMcpId::parse(id.as_str()), Some(id.clone()));
+    assert_eq!(
+        CustomMcpId::from_url("https://mcp.example.com/mcp"),
+        CustomMcpId::from_url("https://mcp.example.com/mcp")
+    );
+}
+
+#[test]
+fn custom_id_parse_rejects_rather_than_repairs() {
+    let id = CustomMcpId::from_url("https://mcp.example.com/mcp");
+    assert_eq!(CustomMcpId::parse(&id.as_str().to_ascii_uppercase()), None);
+    assert_eq!(CustomMcpId::parse(&id.as_str()[..15]), None);
+    assert_eq!(CustomMcpId::parse(&format!("{}a", id.as_str())), None);
+    assert_eq!(CustomMcpId::parse("not-a-hex-id!!!!"), None);
+    assert_eq!(CustomMcpId::parse(""), None);
+}
+
 /// A slug is a Pipedream `app_slug`, taken as-is: repairing input would let a
 /// sandbox name one server and reach another, and there is no derivation for
 /// the two ends to disagree over.

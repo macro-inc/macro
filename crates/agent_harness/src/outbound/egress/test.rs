@@ -1,7 +1,13 @@
 use super::*;
+use agent_egress::domain::model::{AdvertisedMcp, CustomMcpId};
+use mcp_client::domain::models::{McpServerRecord, StoredCredentials};
 
 fn slug(name: &str) -> McpServerSlug {
     McpServerSlug::parse(name).expect("a valid app slug")
+}
+
+fn pipedream(name: &str) -> AdvertisedMcp {
+    AdvertisedMcp::Pipedream(slug(name))
 }
 
 #[test]
@@ -89,6 +95,7 @@ async fn lists_enabled_app_slugs_verbatim() {
             connection("datadog", false),
             connection("Not A Slug!", true),
         ])),
+        None::<Arc<FixedNative>>,
         "https://egress.macro.com",
     );
 
@@ -116,6 +123,7 @@ async fn lists_enabled_app_slugs_verbatim() {
 async fn restore_wraps_an_existing_token_in_a_fresh_listing() {
     let provisioner = EgressProvisioner::new(
         Arc::new(FixedConnections(vec![connection("linear", true)])),
+        None::<Arc<FixedNative>>,
         "https://egress.macro.com",
     );
 
@@ -140,7 +148,7 @@ fn egress(slugs: &[&str]) -> SandboxEgress {
     SandboxEgress {
         base_url: "https://egress.macro.com".to_owned(),
         session_token: "session-token".to_owned(),
-        mcp_servers: slugs.iter().map(|name| slug(name)).collect(),
+        mcp_servers: slugs.iter().map(|name| pipedream(name)).collect(),
     }
 }
 
@@ -227,6 +235,100 @@ fn the_egress_environment_does_not_print_its_secrets() {
         [
             "MACRO_EGRESS_URL".to_owned(),
             "MACRO_SESSION_TOKEN".to_owned()
+        ]
+    );
+}
+
+struct FixedNative(Vec<McpServerRecord>);
+
+impl McpServerStore for FixedNative {
+    type Err = std::convert::Infallible;
+
+    async fn save(&self, _record: &McpServerRecord) -> Result<(), Self::Err> {
+        unreachable!("provisioning never writes")
+    }
+
+    async fn load(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _server_url: &str,
+    ) -> Result<Option<McpServerRecord>, Self::Err> {
+        unreachable!("provisioning lists, never loads one")
+    }
+
+    async fn delete(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+        _server_url: &str,
+    ) -> Result<(), Self::Err> {
+        unreachable!("provisioning never deletes")
+    }
+
+    async fn list(
+        &self,
+        _user_id: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<McpServerRecord>, Self::Err> {
+        Ok(self.0.clone())
+    }
+}
+
+fn native_record(
+    url: &str,
+    server_name: &str,
+    enabled: bool,
+    credentialed: bool,
+) -> McpServerRecord {
+    McpServerRecord {
+        user_id: MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+        url: url.to_owned(),
+        server_name: server_name.to_owned(),
+        credentials: credentialed
+            .then(|| StoredCredentials::new("client-id".to_owned(), None, vec![], None)),
+        enabled,
+    }
+}
+
+/// An enabled, credentialed native URL is advertised on `/mcp-custom/{id}`.
+/// Disabled or unauthenticated rows are omitted.
+#[tokio::test]
+async fn advertises_authenticated_native_servers_on_their_own_route() {
+    let live = "https://mcp.example.com/mcp";
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![connection("linear", true)])),
+        Some(Arc::new(FixedNative(vec![
+            native_record(live, "Example Server", true, true),
+            native_record("https://disabled.example/mcp", "Disabled", false, true),
+            native_record("https://public.example/mcp", "Public", true, false),
+        ]))),
+        "https://egress.macro.com",
+    );
+
+    let provisioned = provisioner
+        .provision(
+            AgentSessionId::new(),
+            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            "https://github.com/macro-inc/macro",
+        )
+        .await
+        .expect("provisioned");
+
+    let entries: Vec<(String, String)> = provisioned.sandbox.server_entries().collect();
+    let id = CustomMcpId::from_url(live);
+    assert_eq!(
+        entries,
+        [
+            (
+                "macro".to_owned(),
+                "https://egress.macro.com/mcp-macro".to_owned()
+            ),
+            (
+                "linear".to_owned(),
+                "https://egress.macro.com/mcp/linear".to_owned()
+            ),
+            (
+                "example-server".to_owned(),
+                format!("https://egress.macro.com/mcp-custom/{id}")
+            ),
         ]
     );
 }

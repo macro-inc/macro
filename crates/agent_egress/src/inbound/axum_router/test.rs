@@ -128,6 +128,23 @@ async fn routes_a_slug_to_an_mcp_target() {
     );
 }
 
+#[tokio::test]
+async fn routes_a_hex_id_to_a_custom_mcp_target() {
+    let id = CustomMcpId::from_url("https://mcp.example.com/mcp");
+    let service = SpyService::accepting();
+    let response = call(
+        &service,
+        get(&format!("/mcp-custom/{id}"), Some("Bearer session")),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert_eq!(
+        service.targets(),
+        [EgressTarget::McpServer(McpDestination::Custom(id))]
+    );
+}
+
 /// git speaks to us through a credential helper, which can only present a
 /// token as a Basic password. Both spellings have to reach the same session.
 #[tokio::test]
