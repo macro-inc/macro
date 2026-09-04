@@ -2,6 +2,7 @@ import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/
 import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
@@ -153,15 +154,20 @@ export function ChannelOption(props: ChannelOptionProps) {
       role="treeitem"
       tabIndex={-1}
       class={cn(
-        'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent',
+        'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent touch:focus-visible:ring-0',
         props.channel.channelType === 'direct_message'
           ? 'min-h-10 py-2'
           : 'h-8',
-        props.selected && 'bg-active text-ink',
-        !props.selected && props.focused && 'bg-hover text-ink',
+        props.selected && !isTouchDevice() && 'bg-active text-ink',
+        (!props.selected || isTouchDevice()) && 'text-ink-muted',
         !props.selected &&
+          !isTouchDevice() &&
+          props.focused &&
+          'bg-hover text-ink',
+        !props.selected &&
+          !isTouchDevice() &&
           !props.focused &&
-          'text-ink-muted hover:bg-hover hover:text-ink'
+          'hover:bg-hover hover:text-ink'
       )}
       aria-current={props.selected ? 'page' : undefined}
       onClick={props.onActivate}
@@ -196,12 +202,17 @@ export function SlimChannelOption(props: ChannelOptionProps) {
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'relative flex size-10 min-h-10 items-center justify-center rounded-full text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent',
-          props.selected && 'bg-active text-ink',
-          !props.selected && props.focused && 'bg-hover text-ink',
+          'relative flex size-10 min-h-10 items-center justify-center rounded-full text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent touch:focus-visible:ring-0',
+          props.selected && !isTouchDevice() && 'bg-active text-ink',
+          (!props.selected || isTouchDevice()) && 'text-ink-muted',
           !props.selected &&
+            !isTouchDevice() &&
+            props.focused &&
+            'bg-hover text-ink',
+          !props.selected &&
+            !isTouchDevice() &&
             !props.focused &&
-            'text-ink-muted hover:bg-hover hover:text-ink'
+            'hover:bg-hover hover:text-ink'
         )}
         aria-current={props.selected ? 'page' : undefined}
         onClick={props.onActivate}
@@ -224,7 +235,9 @@ export function SlimChannelOption(props: ChannelOptionProps) {
 
 type ConversationCardProps = {
   id: string;
+  class?: string;
   channel: ChannelEntity;
+  showLatestMessage?: boolean;
   senderId?: string;
   mentionedCurrentUser: boolean;
   unread: boolean;
@@ -275,15 +288,28 @@ export function ConversationCard(props: ConversationCardProps) {
       role="treeitem"
       tabIndex={-1}
       class={cn(
-        'w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-        props.selected && 'bg-active',
-        !props.selected && props.focused && 'bg-hover',
-        !props.selected && !props.focused && 'bg-transparent hover:bg-hover'
+        'w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent touch:focus-visible:ring-0',
+        props.selected && !isTouchDevice() && 'bg-active',
+        !props.selected &&
+          !isTouchDevice() &&
+          props.focused &&
+          'bg-hover',
+        (!props.selected || isTouchDevice()) && 'bg-transparent',
+        !props.selected &&
+          !isTouchDevice() &&
+          !props.focused &&
+          'hover:bg-hover',
+        props.class
       )}
       aria-current={props.selected ? 'page' : undefined}
       onClick={props.onActivate}
     >
-      <div class="flex min-w-0 items-start gap-3 overflow-hidden">
+      <div
+        class={cn(
+          'flex min-w-0 gap-3 overflow-hidden',
+          props.showLatestMessage === false ? 'items-center' : 'items-start'
+        )}
+      >
         <ChannelAvatar channel={props.channel} size="md" />
         <div class="min-w-0 flex-1 overflow-hidden">
           <span class="flex min-w-0 items-center gap-2">
@@ -309,7 +335,7 @@ export function ConversationCard(props: ConversationCardProps) {
                   label={formatDetailedTimestamp(createdAt())}
                   placement="top"
                 >
-                  <span class="shrink-0 text-xxs text-ink-extra-muted">
+                  <span class="shrink-0 text-xs text-ink-extra-muted">
                     <Entity.Timestamp
                       entity={props.channel}
                       overrideTimeStamp={createdAt()}
@@ -319,46 +345,54 @@ export function ConversationCard(props: ConversationCardProps) {
               )}
             </Show>
           </span>
-          <Show
-            when={latestRootMessage()?.threadId || props.mentionedCurrentUser}
-          >
-            <span class="flex min-w-0 items-center gap-2 text-xxs leading-4 text-ink-extra-muted">
-              <Show when={latestRootMessage()?.threadId}>
-                <span
-                  class="flex shrink-0 items-center gap-1"
-                  title="Reply in thread"
-                >
-                  <ReplyIcon class="size-3" />
-                  <span>Reply</span>
-                </span>
-              </Show>
-              <Show when={props.mentionedCurrentUser}>
-                <span class="flex shrink-0 items-center gap-1 text-accent">
-                  <AtIcon class="size-3" />
-                  <span>Mentioned you</span>
-                </span>
-              </Show>
-            </span>
-          </Show>
-          <div class="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-xs leading-4">
-            <span class="shrink-0 font-medium text-ink-muted">
-              <MessageSenderName id={props.senderId} />:
-            </span>
+          <Show when={props.showLatestMessage !== false}>
             <Show
-              when={latestRootMessage()?.content.trim()}
-              fallback={
-                <span class="min-w-0 flex-1 text-ink-extra-muted">
-                  No messages yet
-                </span>
-              }
+              when={latestRootMessage()?.threadId || props.mentionedCurrentUser}
             >
-              {(content) => (
-                <div class="min-w-0 flex-1 truncate text-ink-muted [&_*]:my-0 [&_*]:truncate">
-                  <StaticMarkdown markdown={content()} singleLine />
-                </div>
-              )}
+              <span class="flex min-w-0 items-center gap-2 text-xxs leading-4 text-ink-extra-muted">
+                <Show when={latestRootMessage()?.threadId}>
+                  <span
+                    class="flex shrink-0 items-center gap-1"
+                    title="Reply in thread"
+                  >
+                    <ReplyIcon class="size-3" />
+                    <span>Reply</span>
+                  </span>
+                </Show>
+                <Show when={props.mentionedCurrentUser}>
+                  <span class="flex shrink-0 items-center gap-1 text-accent">
+                    <AtIcon class="size-3" />
+                    <span>Mentioned you</span>
+                  </span>
+                </Show>
+              </span>
             </Show>
-          </div>
+            <div class="flex min-w-0 items-center gap-1 overflow-hidden whitespace-nowrap text-xs leading-4">
+              <Show
+                when={latestRootMessage()}
+                fallback={
+                  <span class="min-w-0 flex-1 text-ink-extra-muted">
+                    No messages yet
+                  </span>
+                }
+              >
+                {(message) => (
+                  <>
+                    <span class="shrink-0 font-medium text-ink-muted">
+                      <MessageSenderName id={props.senderId} />:
+                    </span>
+                    <Show when={message().content.trim()}>
+                      {(content) => (
+                        <div class="min-w-0 flex-1 truncate text-ink-muted [&_*]:my-0 [&_*]:truncate">
+                          <StaticMarkdown markdown={content()} singleLine />
+                        </div>
+                      )}
+                    </Show>
+                  </>
+                )}
+              </Show>
+            </div>
+          </Show>
         </div>
       </div>
     </div>
@@ -378,10 +412,17 @@ export function SlimConversationCard(props: ConversationCardProps) {
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'flex size-10 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
-          props.selected && 'bg-active',
-          !props.selected && props.focused && 'bg-hover',
-          !props.selected && !props.focused && 'bg-transparent hover:bg-hover'
+          'flex size-10 items-center justify-center rounded-full outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent touch:focus-visible:ring-0',
+          props.selected && !isTouchDevice() && 'bg-active',
+          !props.selected &&
+            !isTouchDevice() &&
+            props.focused &&
+            'bg-hover',
+          (!props.selected || isTouchDevice()) && 'bg-transparent',
+          !props.selected &&
+            !isTouchDevice() &&
+            !props.focused &&
+            'hover:bg-hover'
         )}
         aria-current={props.selected ? 'page' : undefined}
         onClick={props.onActivate}

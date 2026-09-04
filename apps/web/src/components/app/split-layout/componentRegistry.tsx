@@ -50,10 +50,8 @@ import {
   createRenderEffect,
   type JSXElement,
   lazy,
-  Match,
   onMount,
   Show,
-  Switch,
 } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
@@ -67,7 +65,9 @@ function usePageViewTracking(pageTitle: string) {
   });
 }
 
-function useNewAppViews() {
+function useNewAppViews(options?: {
+  enabledLayout?: () => 'legacy' | 'composable';
+}) {
   const panel = useSplitPanelOrThrow();
   const posthog = usePosthog();
   const flag = useFeatureFlag(enableNewAppViews);
@@ -78,7 +78,9 @@ function useNewAppViews() {
   createRenderEffect(() => {
     if (!ready()) return;
     panel.handle.updateMeta?.({
-      splitPanelLayout: enabled() ? 'composable' : 'legacy',
+      splitPanelLayout: enabled()
+        ? (options?.enabledLayout?.() ?? 'composable')
+        : 'legacy',
     });
   });
 
@@ -470,7 +472,9 @@ function LegacyChannelsView() {
 }
 
 function FeatureGatedChannelsView() {
-  const newAppViews = useNewAppViews();
+  const newAppViews = useNewAppViews({
+    enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+  });
 
   return (
     <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
@@ -484,16 +488,7 @@ function FeatureGatedChannelsView() {
 function RegisteredChannelsView() {
   usePageViewTracking('channels');
 
-  return (
-    <Switch>
-      <Match when={isTouchDevice()}>
-        <LegacyChannelsView />
-      </Match>
-      <Match when={!isTouchDevice()}>
-        <FeatureGatedChannelsView />
-      </Match>
-    </Switch>
-  );
+  return <FeatureGatedChannelsView />;
 }
 
 registerComponent('channels', withAuth(RegisteredChannelsView));

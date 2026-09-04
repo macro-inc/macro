@@ -5,7 +5,6 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import { useViewTabHotkeys } from '@app/components/view-shell';
-import { useVisibleIncomingCalls } from '@app/features/block-call/sidebar/incoming-calls';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import {
@@ -24,7 +23,6 @@ import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { useActiveCallsQuery } from '@queries/call/call';
 import { Key } from '@solid-primitives/keyed';
 import { Button, cn, Dropdown, Hotkey, Tabs } from '@ui';
 import {
@@ -41,13 +39,13 @@ import {
 import { useChannelsView } from '../../channels-view-context';
 import type { ChannelsGroup, ChannelsTab } from '../../types';
 import {
-  type ChannelCallStatus,
   ChannelOption,
   ConversationCard,
   SlimChannelOption,
   SlimConversationCard,
 } from './ChannelRailItems';
 import { CollapsibleSection, CreateRailAction } from './ChannelsRailSection';
+import { useChannelCallState } from './useChannelCallState';
 import { useChannelRailActivity } from './useChannelRailActivity';
 
 const CHANNEL_TABS = [
@@ -181,50 +179,11 @@ export function ChannelsRail(props: {
   const currentUserId = useUserId();
   const listDomId = createUniqueId();
   const sectionScrollRoots: Partial<Record<ChannelsGroup, HTMLDivElement>> = {};
-  const activeCallsQuery = useActiveCallsQuery();
-  const incomingCalls = useVisibleIncomingCalls();
-  const callActivity = createMemo(() => {
-    const calls = new Map<
-      string,
-      {
-        callId: string;
-        channelId: string;
-        status: ChannelCallStatus;
-      }
-    >();
-
-    for (const call of incomingCalls()) {
-      calls.set(call.callId, { ...call, status: 'incoming' });
-    }
-    for (const call of activeCallsQuery.data ?? []) {
-      if (calls.has(call.callId)) continue;
-      calls.set(call.callId, { ...call, status: 'active' });
-    }
-
-    return [...calls.values()];
-  });
+  const { callActivity, incomingCallIds, callStatuses } = useChannelCallState();
   const channelActivity = useChannelRailActivity(
     () => props.channels,
     callActivity
   );
-  const incomingCallIds = createMemo(
-    () =>
-      new Map(
-        incomingCalls().map((call) => [call.channelId, call.callId] as const)
-      )
-  );
-  const callStatuses = createMemo(() => {
-    const statuses = new Map<string, ChannelCallStatus>();
-
-    for (const call of activeCallsQuery.data ?? []) {
-      statuses.set(call.channelId, 'active');
-    }
-    for (const call of incomingCalls()) {
-      statuses.set(call.channelId, 'incoming');
-    }
-
-    return statuses;
-  });
   const unreadChannelIds = channelActivity.unreadChannelIds;
   const unreadTeamChannelCount = () => channelActivity.unreadCount('channels');
   const unreadDirectMessageCount = () =>
