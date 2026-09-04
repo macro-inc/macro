@@ -3092,7 +3092,7 @@ export interface CalendarEventListItem {
    * one, primary first. Pass a copy's `calendarId` to UpdateCalendarEvent
    * or DeleteCalendarEvent to address that copy instead of the primary.
    */
-  copies: CalendarEventCopyItem[];
+  copies?: CalendarEventCopyItem[];
 }
 /**
  * One calendar's copy of an event synced from several calendars.

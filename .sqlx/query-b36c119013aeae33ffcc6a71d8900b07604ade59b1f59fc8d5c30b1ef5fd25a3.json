@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            source.event_id,\n            source.calendar_id AS \"calendar_id!\",\n            source.title,\n            source.description,\n            source.location,\n            source.event_type,\n            source.visibility,\n            source.transparency,\n            source.is_read_only,\n            source.reminders_use_default,\n            source.reminder_overrides,\n            source.creator_email,\n            source.creator_name\n        FROM calendar_event_sources source\n        JOIN calendars calendar ON calendar.id = source.calendar_id\n        JOIN calendar_accounts account ON account.id = source.account_id\n        WHERE source.event_id = ANY($1)\n          AND NOT calendar.is_deleted\n          AND account.sync_status <> 'disabled'\n        ORDER BY\n            source.event_id,\n            calendar.is_primary DESC,\n            (calendar.access_role IN ('owner', 'writer')) DESC,\n            source.source_sequence DESC,\n            source.source_updated_at DESC,\n            source.id DESC\n        ",
+  "query": "\n        SELECT\n            source.event_id,\n            source.calendar_id AS \"calendar_id!\",\n            source.title,\n            source.description,\n            source.location,\n            source.event_type,\n            source.visibility,\n            source.transparency,\n            source.is_read_only,\n            source.reminders_use_default,\n            source.reminder_overrides,\n            source.creator_email,\n            source.creator_name\n        FROM calendar_event_sources source\n        JOIN calendars calendar ON calendar.id = source.calendar_id\n        JOIN calendar_accounts account ON account.id = source.account_id\n        WHERE source.event_id = ANY($1)\n          AND NOT calendar.is_deleted\n          AND account.sync_status <> 'disabled'\n        ORDER BY\n            source.event_id,\n            calendar.is_primary DESC,\n            (calendar.access_role IN ('owner', 'writer')) DESC NULLS LAST,\n            source.source_sequence DESC,\n            source.source_updated_at DESC,\n            source.id DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -90,5 +90,5 @@
       true
     ]
   },
-  "hash": "2cf010d686b688b718510a9e85985693d33c0c5311947ebc7c500ded54edaf1d"
+  "hash": "b36c119013aeae33ffcc6a71d8900b07604ade59b1f59fc8d5c30b1ef5fd25a3"
 }

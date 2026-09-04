@@ -76,7 +76,7 @@ pub struct CalendarEventListItem {
     /// Every calendar carrying a copy of this event when there is more than
     /// one, primary first. Pass a copy's `calendarId` to UpdateCalendarEvent
     /// or DeleteCalendarEvent to address that copy instead of the primary.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub copies: Vec<CalendarEventCopyItem>,
 }
 

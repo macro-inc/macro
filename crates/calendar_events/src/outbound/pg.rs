@@ -3553,7 +3553,7 @@ async fn fetch_source_contents(
         ORDER BY
             source.event_id,
             calendar.is_primary DESC,
-            (calendar.access_role IN ('owner', 'writer')) DESC,
+            (calendar.access_role IN ('owner', 'writer')) DESC NULLS LAST,
             source.source_sequence DESC,
             source.source_updated_at DESC,
             source.id DESC

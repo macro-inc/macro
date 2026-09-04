@@ -5585,6 +5585,92 @@ async fn a_writable_copy_outranks_a_fresher_reader_copy_without_a_primary(pool: 
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_writable_copy_outranks_a_fresher_copy_whose_calendar_role_is_unknown(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    insert_user(&pool, member).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, _primary_calendar_id) = grant_and_provider_ids(&repo, link_id).await;
+    let secondary_calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "secondary".to_string(),
+                name: "Projects".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("owner".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let unknown_role_calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "c_shared@group.calendar.google.com".to_string(),
+                name: "Macro Vacation".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: None,
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
+    let uid = "projects@example.com";
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+
+    let mut own_copy = reminder_upsert(
+        member,
+        link_id,
+        (account_id, secondary_calendar_id),
+        uid,
+        starts_at,
+        EventReminders::default(),
+    );
+    own_copy.event.title = "Planning".to_string();
+    own_copy.event.is_read_only = false;
+    let event_id = repo.upsert_event_fixture(own_copy).await.unwrap();
+    let mut unknown_role_copy = shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, unknown_role_calendar_id),
+        uid,
+        starts_at,
+    );
+    unknown_role_copy.event.title = "[teo] Planning".to_string();
+    repo.upsert_event_fixture(unknown_role_copy).await.unwrap();
+
+    let content = entity_content(&pool, event_id).await;
+    assert_eq!(content.title, "Planning");
+    assert!(!content.is_read_only, "the writable copy is canonical");
+    let target = repo
+        .get_event_mutation_target(member, event_id, None)
+        .await
+        .unwrap()
+        .expect("owner sees the mutation target");
+    assert_eq!(target.calendar_id, secondary_calendar_id);
+    let (event, _) = listed_event(&repo, member, starts_at).await;
+    assert_eq!(event.calendar_id, Some(secondary_calendar_id));
+    assert_eq!(
+        event
+            .sources
+            .iter()
+            .map(|copy| copy.calendar_id)
+            .collect::<Vec<_>>(),
+        vec![secondary_calendar_id, unknown_role_calendar_id]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn retiring_an_unrelated_copy_keeps_a_fresher_schedule_written_through_another(pool: PgPool) {
     let member = "macro|teo@example.com";
     let link_id = insert_link(&pool, member).await;
