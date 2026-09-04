@@ -13,7 +13,11 @@ import {
   setShowLinkPreviews,
   showLinkPreviews,
 } from '../link-preview-visibility';
-import { extractUnfurlableUrls, shouldRenderUnfurl } from '../link-previews';
+import {
+  extractUnfurlableUrls,
+  reservedPreviewImageSize,
+  shouldRenderUnfurl,
+} from '../link-previews';
 import { Root } from '../Root';
 import type { MessageData } from '../types';
 
@@ -26,6 +30,8 @@ type MockUnfurlData =
         title: string;
         description?: string;
         image_url?: string;
+        image_width?: number;
+        image_height?: number;
         favicon_url?: string;
       };
       _createdAt: Date;
@@ -170,6 +176,42 @@ describe('shouldRenderUnfurl', () => {
   });
 });
 
+describe('reservedPreviewImageSize', () => {
+  const url = 'https://example.com/a';
+
+  it('returns nothing without an image', () => {
+    expect(
+      reservedPreviewImageSize({ url, title: 'A', image_url: undefined })
+    ).toBeUndefined();
+  });
+
+  it('scales known Open Graph dimensions into the preview cap', () => {
+    const box = reservedPreviewImageSize({
+      url,
+      title: 'A',
+      image_url: 'https://example.com/og.png',
+      image_width: 1200,
+      image_height: 630,
+    });
+    expect(box).toEqual({
+      width: 448,
+      height: 235,
+      known: true,
+    });
+  });
+
+  it('reserves a landscape box when the page omitted dimensions', () => {
+    const box = reservedPreviewImageSize({
+      url,
+      title: 'A',
+      image_url: 'https://example.com/og.png',
+    });
+    expect(box?.known).toBe(false);
+    expect(box?.width).toBe(448);
+    expect(box?.height).toBe(235);
+  });
+});
+
 const baseMessage: MessageData = {
   id: 'message-1',
   content: 'hello',
@@ -231,6 +273,52 @@ describe('LinkPreviews', () => {
     const { container } = renderPreviews(`${loading} ${errored}`);
 
     expect(container.querySelector('[data-link-preview]')).toBeNull();
+  });
+
+  it('reserves the preview image box before the image loads', () => {
+    const url = 'https://example.com/og-image';
+    unfurlResults.set(url, {
+      type: 'success',
+      data: {
+        url,
+        title: 'Has Image',
+        image_url: 'https://example.com/og.png',
+        image_width: 1200,
+        image_height: 630,
+      },
+      _createdAt: new Date(),
+    });
+
+    const { container } = renderPreviews(url);
+    const slot = container.querySelector('[data-link-preview-image]');
+    const placeholder = container.querySelector(
+      '[data-link-preview-image-placeholder]'
+    );
+    expect(slot).not.toBeNull();
+    expect((slot as HTMLElement).style.width).toBe('448px');
+    expect(placeholder).not.toBeNull();
+    expect((placeholder as HTMLElement).style.height).toBe('235px');
+  });
+
+  it('reserves a landscape image box when Open Graph omitted dimensions', () => {
+    const url = 'https://example.com/og-no-dims';
+    unfurlResults.set(url, {
+      type: 'success',
+      data: {
+        url,
+        title: 'No Dims',
+        image_url: 'https://example.com/og.png',
+      },
+      _createdAt: new Date(),
+    });
+
+    const { container } = renderPreviews(url);
+    const placeholder = container.querySelector(
+      '[data-link-preview-image-placeholder]'
+    );
+    expect(placeholder).not.toBeNull();
+    expect((placeholder as HTMLElement).style.width).toBe('448px');
+    expect((placeholder as HTMLElement).style.height).toBe('235px');
   });
 
   it('renders no card for an unfurl with no usable metadata', () => {

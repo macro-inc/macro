@@ -1,4 +1,5 @@
 import { getWebOrigin } from '@core/util/webOrigin';
+import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 
 /** Slack previews ~2 links per message, Discord up to 5; we split the middle. */
@@ -129,4 +130,42 @@ export function extractUnfurlableUrls(content: string): string[] {
 export function shouldRenderUnfurl(unfurl: GetUnfurlResponse): boolean {
   if (unfurl.description || unfurl.image_url) return true;
   return Boolean(unfurl.title) && unfurl.title !== unfurl.url;
+}
+
+/** Tailwind `max-w-md` on the preview column. */
+export const LINK_PREVIEW_IMAGE_MAX_WIDTH = 448;
+/** Tailwind `max-h-64` on the preview image. */
+export const LINK_PREVIEW_IMAGE_MAX_HEIGHT = 256;
+/** Open Graph default landscape when the page omitted image dimensions. */
+const DEFAULT_PREVIEW_ASPECT = 1.91;
+
+type UnfurlImageFields = Pick<GetUnfurlResponse, 'image_url'> & {
+  image_width?: number | null;
+  image_height?: number | null;
+};
+
+/**
+ * Pixel box reserved for a preview image before the bytes decode — the
+ * attachment pattern: known OG dims when present, otherwise a landscape
+ * placeholder so the channel row does not grow on load.
+ */
+export function reservedPreviewImageSize(
+  unfurl: UnfurlImageFields
+): { width: number; height: number; known: boolean } | undefined {
+  if (!unfurl.image_url) return undefined;
+  const constrained = constrainImageDimensions(
+    unfurl.image_width ?? undefined,
+    unfurl.image_height ?? undefined,
+    LINK_PREVIEW_IMAGE_MAX_WIDTH,
+    LINK_PREVIEW_IMAGE_MAX_HEIGHT
+  );
+  if (constrained) return { ...constrained, known: true };
+
+  const fallback = constrainImageDimensions(
+    Math.round(LINK_PREVIEW_IMAGE_MAX_HEIGHT * DEFAULT_PREVIEW_ASPECT),
+    LINK_PREVIEW_IMAGE_MAX_HEIGHT,
+    LINK_PREVIEW_IMAGE_MAX_WIDTH,
+    LINK_PREVIEW_IMAGE_MAX_HEIGHT
+  );
+  return fallback ? { ...fallback, known: false } : undefined;
 }

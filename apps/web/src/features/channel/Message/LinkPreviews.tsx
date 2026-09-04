@@ -1,9 +1,11 @@
+import { MediaImage } from '@channel/Media/MediaImage';
 import { isOwnMessage } from '@channel/Thread/utils/message-actions';
 import { useUserId } from '@core/context/user';
 import { useUnfurl } from '@core/signal/unfurl';
 import { extractDomain, openExternalUrl } from '@core/util/url';
 import GlobeIcon from '@phosphor/globe-simple.svg';
 import XIcon from '@phosphor/x.svg';
+import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import { useRemoveLinkPreviewMutation } from '@queries/channel/message';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
@@ -17,7 +19,11 @@ import {
   showLinkPreviews,
   unhideLinkPreview,
 } from './link-preview-visibility';
-import { extractUnfurlableUrls, shouldRenderUnfurl } from './link-previews';
+import {
+  extractUnfurlableUrls,
+  reservedPreviewImageSize,
+  shouldRenderUnfurl,
+} from './link-previews';
 
 function openLink(url: string): JSX.EventHandler<HTMLElement, MouseEvent> {
   return (e) => {
@@ -35,9 +41,9 @@ function LinkPreviewCard(props: {
   onHide?: () => void;
 }) {
   const [faviconFailed, setFaviconFailed] = createSignal(false);
-  const [imageFailed, setImageFailed] = createSignal(false);
   const [hovered, setHovered] = createSignal(false);
   const domain = () => extractDomain(props.unfurled.url);
+  const imageBox = () => reservedPreviewImageSize(props.unfurled);
 
   return (
     <div
@@ -96,23 +102,43 @@ function LinkPreviewCard(props: {
           {props.unfurled.description}
         </p>
       </Show>
-      <Show when={props.unfurled.image_url && !imageFailed()}>
-        {(_) => (
+      <Show when={imageBox()}>
+        {(box) => (
           <a
             href={props.unfurled.url}
             target="_blank"
             rel="noopener"
-            class="mt-1 self-start"
+            class="mt-1 block self-start overflow-hidden rounded-md"
+            style={{ width: `${box().width}px` }}
             draggable={false}
             onClick={openLink(props.unfurled.url)}
+            data-link-preview-image
           >
-            <img
+            <MediaImage.Image
               src={proxyResource(props.unfurled.image_url!)}
-              class="max-h-64 w-auto max-w-full rounded-md border border-edge-muted"
-              crossorigin="anonymous"
-              alt={props.unfurled.title}
-              draggable={false}
-              on:error={() => setImageFailed(true)}
+              width={box().width}
+              height={box().height}
+              class={cn(
+                'w-full rounded-md border border-edge-muted',
+                box().known ? 'object-contain' : 'object-cover'
+              )}
+              style={{
+                'aspect-ratio': `${box().width} / ${box().height}`,
+                'max-width': `${box().width}px`,
+                height: `${box().height}px`,
+              }}
+              fallback={
+                <div
+                  class="flex items-center justify-center rounded-md border border-edge-muted bg-surface"
+                  style={{
+                    width: `${box().width}px`,
+                    height: `${box().height}px`,
+                  }}
+                  data-link-preview-image-placeholder
+                >
+                  <Spinner class="size-4 animate-spin" />
+                </div>
+              }
             />
           </a>
         )}
