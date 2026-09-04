@@ -363,6 +363,26 @@ async fn with_asking_agent<Out>(
     answer: agent_client_protocol::schema::v1::ElicitationAction,
     scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
 ) -> (Vec<SessionNotification>, Vec<CreateElicitationRequest>, Out) {
+    with_asking_engine(
+        Arc::new(ScriptedEngine::new(vec![])),
+        answer,
+        Duration::ZERO,
+        scenario,
+    )
+    .await
+}
+
+/// [`with_asking_agent`] over `engine`, with the client taking `delay` to
+/// answer each question - the user's think time.
+async fn with_asking_engine<Engine, Out>(
+    engine: Arc<Engine>,
+    answer: agent_client_protocol::schema::v1::ElicitationAction,
+    delay: Duration,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
+) -> (Vec<SessionNotification>, Vec<CreateElicitationRequest>, Out)
+where
+    Engine: TurnEngine,
+{
     use agent_client_protocol::schema::v1::{
         ClientCapabilities, CreateElicitationResponse, ElicitationCapabilities,
         ElicitationFormCapabilities,
@@ -377,7 +397,7 @@ async fn with_asking_agent<Out>(
     let state = Arc::new(AgentState {
         session_id,
         owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
-        engine: Arc::new(ScriptedEngine::new(vec![])),
+        engine,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
@@ -404,9 +424,20 @@ async fn with_asking_agent<Out>(
         .on_receive_request(
             {
                 let asked = Arc::clone(&asked);
-                async move |request: CreateElicitationRequest, responder, _connection| {
+                async move |request: CreateElicitationRequest, responder, connection| {
                     asked.lock().unwrap().push(request);
-                    responder.respond(CreateElicitationResponse::new(answer.clone()))
+                    if delay.is_zero() {
+                        return responder.respond(CreateElicitationResponse::new(answer.clone()));
+                    }
+                    // Answer off the dispatch loop so the delay does not hold
+                    // up the notifications the agent keeps sending meanwhile.
+                    let answer = answer.clone();
+                    connection.spawn(async move {
+                        tokio::time::sleep(delay).await;
+                        let _ = responder.respond(CreateElicitationResponse::new(answer));
+                        Ok(())
+                    })?;
+                    Ok(())
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -565,6 +596,93 @@ async fn ask_reports_a_decline_and_a_free_text_question_has_no_options() {
     };
     assert!(field.one_of.is_none(), "free text has no options");
     assert_eq!(spoken(&notifications), "You declined to answer.");
+}
+
+/// An engine whose one tool asks the user a question through the turn's
+/// user-input port and then says the answer - `AskUser` reduced to the part
+/// the ACP surface cares about.
+struct AskingEngine;
+
+impl TurnEngine for AskingEngine {
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            let requester = request
+                .user_input
+                .expect("the client advertised forms, so the turn can ask");
+            let outcome = requester
+                .ask(UserInputRequest {
+                    question: "Which colour?".to_owned(),
+                    options: Vec::new(),
+                })
+                .await;
+            let text = match outcome {
+                Ok(UserInputOutcome::Answered(answer)) => format!("You said {answer}."),
+                Ok(other) => format!("{other:?}"),
+                Err(error) => error.to_string(),
+            };
+            let _ = parts.send(Ok(StreamPart::Content(text))).await;
+        });
+        receiver
+    }
+}
+
+/// A user who takes longer than the idle timeout to answer is not a hung
+/// turn: the question holds the timeout off, and the turn finishes on the
+/// answer rather than being stopped for producing nothing meanwhile.
+#[tokio::test(start_paused = true)]
+async fn a_turn_waiting_on_the_user_outlasts_the_idle_timeout() {
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue,
+    };
+    use std::collections::BTreeMap;
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([(
+            ASK_FIELD.to_owned(),
+            ElicitationContentValue::String("teal".to_owned()),
+        )])));
+    let (notifications, asked, response) = with_asking_engine(
+        Arc::new(AskingEngine),
+        answer,
+        TURN_IDLE_TIMEOUT * 3,
+        async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "pick a colour for me"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        },
+    )
+    .await;
+
+    assert_eq!(asked.len(), 1, "the tool asked once");
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(spoken(&notifications), "You said teal.");
+}
+
+/// The timeout still guards a turn that is silent with nothing asked.
+#[tokio::test(start_paused = true)]
+async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
+    let (notifications, response) =
+        with_agent(Arc::new(HangingEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "hang"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+    assert!(
+        spoken(&notifications).contains("produced nothing"),
+        "got {:?}",
+        spoken(&notifications)
+    );
 }
 
 #[tokio::test]

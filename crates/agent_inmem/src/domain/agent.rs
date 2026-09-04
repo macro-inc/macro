@@ -9,7 +9,7 @@
 //! [`RuntimeAttachment::solo`]: agent_session::domain::connection::RuntimeAttachment::solo
 
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -46,6 +46,11 @@ mod test;
 
 /// A turn that produces nothing for this long is treated as hung and
 /// cancelled, so it cannot wedge the session's turn lock forever.
+///
+/// Time spent waiting on the user is not idleness: while a question the turn
+/// asked is outstanding ([`AwaitingUser`]), the timeout re-arms instead of
+/// cancelling, however long the user takes. The question ends with an answer,
+/// a stop, or the connection going away.
 const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 
 /// What this agent calls itself in the `initialize` response. The fold
@@ -187,15 +192,44 @@ impl AgentState {
     }
 }
 
+/// How many questions a turn currently has out to the user. Shared between
+/// the turn's requester, which counts each question it is waiting on, and the
+/// turn loop, which reads it to tell "waiting on the user" from "hung".
+#[derive(Default)]
+struct AwaitingUser(AtomicUsize);
+
+impl AwaitingUser {
+    fn is_waiting(&self) -> bool {
+        self.0.load(Ordering::Acquire) > 0
+    }
+
+    /// Count one outstanding question until the guard drops - on an answer,
+    /// an error, or the asking future being cancelled.
+    fn begin(&self) -> AwaitingGuard<'_> {
+        self.0.fetch_add(1, Ordering::AcqRel);
+        AwaitingGuard(self)
+    }
+}
+
+struct AwaitingGuard<'a>(&'a AwaitingUser);
+
+impl Drop for AwaitingGuard<'_> {
+    fn drop(&mut self) {
+        self.0.0.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 /// ACP-backed user-input port for one connected session.
 struct AcpUserInputRequester {
     connection: ConnectionTo<Client>,
     session_id: SessionId,
+    awaiting: Arc<AwaitingUser>,
 }
 
 #[async_trait]
 impl UserInputRequester for AcpUserInputRequester {
     async fn ask(&self, request: UserInputRequest) -> Result<UserInputOutcome, UserInputError> {
+        let _waiting = self.awaiting.begin();
         let options = request.options;
         let mut field = StringPropertySchema::new().title("Answer");
         if !options.is_empty() {
@@ -254,11 +288,13 @@ fn user_input_requester(
     state: &AgentState,
     connection: &ConnectionTo<Client>,
     session_id: SessionId,
+    awaiting: &Arc<AwaitingUser>,
 ) -> Option<SharedUserInputRequester> {
     state.client_renders_forms.load(Ordering::Relaxed).then(|| {
         Arc::new(AcpUserInputRequester {
             connection: connection.clone(),
             session_id,
+            awaiting: Arc::clone(awaiting),
         }) as SharedUserInputRequester
     })
 }
@@ -436,7 +472,8 @@ async fn run_turn(
         model,
         instructions,
     } = state.turn_input(&prompt);
-    let user_input = user_input_requester(state, connection, acp_session_id.clone());
+    let awaiting = Arc::new(AwaitingUser::default());
+    let user_input = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
         owner: state.owner.clone(),
         model,
@@ -471,6 +508,10 @@ async fn run_turn(
                 break;
             }
             Ok(None) => break,
+            // Silence while a question is out is the user thinking, not the
+            // turn hanging; the tool that asked resumes the stream when they
+            // answer.
+            Err(_) if awaiting.is_waiting() => continue,
             Err(_) => {
                 failure = Some(format!(
                     "the turn produced nothing for {} seconds and was stopped",
@@ -546,6 +587,9 @@ async fn run_ask(
     let requester = AcpUserInputRequester {
         connection: connection.clone(),
         session_id: acp_session_id.clone(),
+        // `/ask` has no idle timeout to hold off: it waits on the answer
+        // directly rather than through the turn loop.
+        awaiting: Arc::new(AwaitingUser::default()),
     };
     let text = match requester.ask(UserInputRequest { question, options }).await {
         Ok(UserInputOutcome::Answered(value)) => format!("You answered: {value}"),
