@@ -15,7 +15,7 @@ import {
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { compareDateDesc } from '@core/util/date';
+import { compareDateDesc, type DateValue } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
 import ChannelIcon from '@icon/wide-channel.svg';
@@ -26,8 +26,10 @@ import ChatsIcon from '@phosphor/chats-circle.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Tabs } from '@ui';
 import {
+  type Accessor,
   createEffect,
   createMemo,
+  createSignal,
   createUniqueId,
   Match,
   on,
@@ -114,6 +116,118 @@ const conversationRow = (
 const rowKeyForChannel = (channelId: string) => `channel:${channelId}`;
 const rowKeyForSection = (group: ChannelsGroup) => `section:${group}`;
 
+const channelGroup = (channel: ChannelEntity): ChannelsGroup =>
+  channel.channelType === 'direct_message' ? 'direct_messages' : 'channels';
+
+function useChannelRailActivity(channels: Accessor<readonly ChannelEntity[]>) {
+  const notificationSource = useGlobalNotificationSource();
+  const [activityChannelIds, setActivityChannelIds] = createSignal<
+    Partial<Record<ChannelsGroup, string>>
+  >({});
+  const channelsById = createMemo(
+    () => new Map(channels().map((channel) => [channel.id, channel]))
+  );
+
+  const notificationActivity = createMemo(() => {
+    const unreadChannelIds = new Set<string>();
+    const unreadCounts: Record<ChannelsGroup, number> = {
+      channels: 0,
+      direct_messages: 0,
+    };
+    const latestChannelIds: Partial<Record<ChannelsGroup, string>> = {};
+    const notifications = [...notificationSource.notifications()].sort((a, b) =>
+      compareDateDesc(a.created_at, b.created_at)
+    );
+
+    for (const notification of notifications) {
+      if (
+        notification.entity_type !== 'channel' ||
+        notificationIsRead(notification)
+      ) {
+        continue;
+      }
+
+      const isFirstUnreadForChannel = !unreadChannelIds.has(
+        notification.entity_id
+      );
+      unreadChannelIds.add(notification.entity_id);
+
+      const channel = channelsById().get(notification.entity_id);
+      if (!channel) continue;
+
+      const group = channelGroup(channel);
+      if (isFirstUnreadForChannel) unreadCounts[group] += 1;
+      latestChannelIds[group] ??= channel.id;
+    }
+
+    return { latestChannelIds, unreadChannelIds, unreadCounts };
+  });
+
+  const recordActivity = (channel: ChannelEntity) => {
+    const group = channelGroup(channel);
+    setActivityChannelIds((current) => ({
+      ...current,
+      [group]: channel.id,
+    }));
+  };
+
+  onCleanup(
+    notificationSource.subscribe((notification) => {
+      if (
+        notification.entity_type !== 'channel' ||
+        notificationIsRead(notification)
+      ) {
+        return;
+      }
+
+      const channel = channelsById().get(notification.entity_id);
+      if (channel) recordActivity(channel);
+    })
+  );
+
+  let latestMessageTimes = new Map<string, DateValue | undefined>();
+  createEffect(() => {
+    const nextMessageTimes = new Map<string, DateValue | undefined>();
+
+    for (const channel of channels()) {
+      const nextMessageTime = channel.latestRootMessage?.createdAt;
+      nextMessageTimes.set(channel.id, nextMessageTime);
+
+      if (
+        latestMessageTimes.has(channel.id) &&
+        nextMessageTime !== undefined &&
+        nextMessageTime !== latestMessageTimes.get(channel.id)
+      ) {
+        recordActivity(channel);
+      }
+    }
+
+    latestMessageTimes = nextMessageTimes;
+  });
+
+  const targetChannelId = (group: ChannelsGroup) =>
+    activityChannelIds()[group] ??
+    notificationActivity().latestChannelIds[group];
+
+  const clearTarget = (group: ChannelsGroup, channelId: string) => {
+    if (targetChannelId(group) !== channelId) return;
+
+    setActivityChannelIds((current) =>
+      current[group] === channelId
+        ? { ...current, [group]: undefined }
+        : current
+    );
+  };
+
+  return {
+    clearTarget,
+    targetChannelId,
+    unreadChannelIds: () => notificationActivity().unreadChannelIds,
+    unreadCount: (group: ChannelsGroup) =>
+      notificationActivity().unreadCounts[group],
+  };
+}
+
 /** V2 Chat navigation rail with Browse and Recents destinations. */
 export function ChannelsRail(props: {
   channels: ChannelEntity[];
@@ -123,9 +237,13 @@ export function ChannelsRail(props: {
     useChannelsView();
   const panel = useSplitPanelOrThrow();
   const currentUserId = useUserId();
-  const notificationSource = useGlobalNotificationSource();
   const listDomId = createUniqueId();
   const sectionScrollRoots: Partial<Record<ChannelsGroup, HTMLDivElement>> = {};
+  const channelActivity = useChannelRailActivity(() => props.channels);
+  const unreadChannelIds = channelActivity.unreadChannelIds;
+  const unreadTeamChannelCount = () => channelActivity.unreadCount('channels');
+  const unreadDirectMessageCount = () =>
+    channelActivity.unreadCount('direct_messages');
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -135,36 +253,11 @@ export function ChannelsRail(props: {
     setActiveId: setTab,
   });
 
-  const unreadChannelIds = createMemo(() => {
-    const ids = new Set<string>();
-
-    for (const notification of notificationSource.notifications()) {
-      if (
-        notification.entity_type === 'channel' &&
-        !notificationIsRead(notification)
-      ) {
-        ids.add(notification.entity_id);
-      }
-    }
-
-    return ids;
-  });
-
   const teamChannels = createMemo(() =>
     props.channels.filter((channel) => channel.channelType !== 'direct_message')
   );
   const directMessages = createMemo(() =>
     props.channels.filter((channel) => channel.channelType === 'direct_message')
-  );
-  const unreadTeamChannelCount = createMemo(
-    () =>
-      teamChannels().filter((channel) => unreadChannelIds().has(channel.id))
-        .length
-  );
-  const unreadDirectMessageCount = createMemo(
-    () =>
-      directMessages().filter((channel) => unreadChannelIds().has(channel.id))
-        .length
   );
   const recentConversations = createMemo(() =>
     props.channels
@@ -221,6 +314,26 @@ export function ChannelsRail(props: {
   );
 
   const domIdForRow = (rowId: string) => `${listDomId}-${rowId}`;
+  const activityTargetId = (group: ChannelsGroup) => {
+    const channelId = channelActivity.targetChannelId(group);
+    return channelId === undefined
+      ? undefined
+      : domIdForRow(rowKeyForChannel(channelId));
+  };
+  const clearVisibleActivity = (
+    group: ChannelsGroup,
+    visibleTargetId: string
+  ) => {
+    const channelId = channelActivity.targetChannelId(group);
+    if (
+      channelId === undefined ||
+      domIdForRow(rowKeyForChannel(channelId)) !== visibleTargetId
+    ) {
+      return;
+    }
+
+    channelActivity.clearTarget(group, channelId);
+  };
   let listRoot: HTMLDivElement | undefined;
   const setSectionScrollRoot =
     (group: ChannelsGroup) => (element: HTMLDivElement) => {
@@ -364,7 +477,7 @@ export function ChannelsRail(props: {
     >
       <Switch>
         <Match when={props.mode === 'full'}>
-          <div class="flex min-h-8 shrink-0 items-center px-4">
+          <div class="flex shrink-0 items-center px-4">
             <SplitPanel.ControlGroup>
               <SplitPanel.CloseButton />
               <SplitPanel.BackButton />
@@ -406,7 +519,10 @@ export function ChannelsRail(props: {
             <Switch>
               <Match when={state.tab === 'browse'}>
                 <div class="flex h-full min-h-0 flex-col gap-3 px-4">
-                  <CollapsibleSection.Root open={state.expandedGroups.channels}>
+                  <CollapsibleSection.Root
+                    open={state.expandedGroups.channels}
+                    fillAvailable={!state.expandedGroups.direct_messages}
+                  >
                     <CollapsibleSection.Header
                       focused={
                         list.focus.key() === rowKeyForSection('channels')
@@ -449,6 +565,11 @@ export function ChannelsRail(props: {
                       open={state.expandedGroups.channels}
                       contentRef={setSectionScrollRoot('channels')}
                       class="flex min-h-0 flex-col gap-0.5"
+                      activityTargetId={activityTargetId('channels')}
+                      activityLabel="New activity"
+                      onActivityVisible={(targetId) =>
+                        clearVisibleActivity('channels', targetId)
+                      }
                     >
                       <Show
                         when={teamChannels().length > 0}
@@ -483,6 +604,7 @@ export function ChannelsRail(props: {
 
                   <CollapsibleSection.Root
                     open={state.expandedGroups.direct_messages}
+                    fillAvailable={!state.expandedGroups.channels}
                   >
                     <CollapsibleSection.Header
                       focused={
@@ -533,6 +655,11 @@ export function ChannelsRail(props: {
                       open={state.expandedGroups.direct_messages}
                       contentRef={setSectionScrollRoot('direct_messages')}
                       class="flex min-h-0 flex-col gap-0.5"
+                      activityTargetId={activityTargetId('direct_messages')}
+                      activityLabel="New activity"
+                      onActivityVisible={(targetId) =>
+                        clearVisibleActivity('direct_messages', targetId)
+                      }
                     >
                       <Show
                         when={directMessages().length > 0}
@@ -656,6 +783,7 @@ export function ChannelsRail(props: {
                 <div class="flex h-full min-h-0 flex-col gap-3 px-2">
                   <CollapsibleSection.Root
                     open={state.expandedGroups.channels}
+                    fillAvailable={!state.expandedGroups.direct_messages}
                     class="items-center"
                   >
                     <CollapsibleSection.Header
@@ -695,6 +823,10 @@ export function ChannelsRail(props: {
                       contentRef={setSectionScrollRoot('channels')}
                       containerClass="w-full"
                       class="flex min-h-0 w-full flex-col items-center gap-0.5"
+                      activityTargetId={activityTargetId('channels')}
+                      onActivityVisible={(targetId) =>
+                        clearVisibleActivity('channels', targetId)
+                      }
                     >
                       <div class="flex justify-center">
                         <CreateRailAction
@@ -729,6 +861,7 @@ export function ChannelsRail(props: {
 
                   <CollapsibleSection.Root
                     open={state.expandedGroups.direct_messages}
+                    fillAvailable={!state.expandedGroups.channels}
                     class="items-center"
                   >
                     <CollapsibleSection.Header
@@ -770,6 +903,10 @@ export function ChannelsRail(props: {
                       contentRef={setSectionScrollRoot('direct_messages')}
                       containerClass="w-full"
                       class="flex min-h-0 w-full flex-col items-center gap-0.5"
+                      activityTargetId={activityTargetId('direct_messages')}
+                      onActivityVisible={(targetId) =>
+                        clearVisibleActivity('direct_messages', targetId)
+                      }
                     >
                       <div class="flex justify-center">
                         <CreateRailAction
