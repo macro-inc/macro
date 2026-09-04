@@ -44,23 +44,24 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 
     let port = state.config.port;
     let environment = state.config.environment;
-    let app = api_router(state.clone())
-        .layer(cors.clone())
-        .layer(DefaultBodyLimit::disable())
-        .layer(RequestBodyLimitLayer::new(1024 * 1024 * 1024)) // 1GB
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
-                .layer(axum::middleware::from_fn_with_state(
-                    ServiceNameState {
-                        service_name: VersionedApiServiceName::DocumentCognitionService,
-                    },
-                    validate_api_version,
-                )),
-        )
-        .merge(health::router().layer(cors))
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
-    let app = mount_at_root_and_prefix(app);
+    let app = mount_at_root_and_prefix(
+        api_router(state.clone())
+            .layer(cors.clone())
+            .layer(DefaultBodyLimit::disable())
+            .layer(RequestBodyLimitLayer::new(1024 * 1024 * 1024)) // 1GB
+            .layer(
+                ServiceBuilder::new()
+                    .layer(TraceLayer::new_for_http())
+                    .layer(axum::middleware::from_fn_with_state(
+                        ServiceNameState {
+                            service_name: VersionedApiServiceName::DocumentCognitionService,
+                        },
+                        validate_api_version,
+                    )),
+            )
+            .merge(health::router().layer(cors)),
+    )
+    .merge(swagger_ui());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -80,6 +81,15 @@ fn mount_at_root_and_prefix(inner: Router) -> Router {
     Router::new()
         .merge(inner.clone())
         .nest(GATEWAY_PATH_PREFIX, inner)
+}
+
+fn swagger_ui() -> Router {
+    Router::new()
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(SwaggerUi::new("/cognition/docs").url(
+            "/cognition/api-doc/openapi.json",
+            swagger::ApiDoc::openapi(),
+        ))
 }
 
 fn api_router(api_context: ApiContext) -> Router {

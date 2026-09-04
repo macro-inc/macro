@@ -36,3 +36,14 @@ async fn unprefixed_unknown_path_is_not_rewritten_onto_the_prefix() {
         StatusCode::NOT_FOUND
     );
 }
+
+#[tokio::test]
+async fn openapi_is_served_at_root_and_gateway_prefix() {
+    for path in ["/api-doc/openapi.json", "/cognition/api-doc/openapi.json"] {
+        assert_eq!(
+            get_status(swagger_ui(), path).await,
+            StatusCode::OK,
+            "{path}"
+        );
+    }
+}
