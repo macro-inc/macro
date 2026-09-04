@@ -41,10 +41,6 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
-    "agent_acp_probe": [
-      "crates/agent_acp_probe",
-      "crates/workspace-hack"
-    ],
     "agent_egress": [
       "crates/activity",
       "crates/agent",
@@ -1781,7 +1777,6 @@
     "coding_agent_worker": [
       "crates/activity",
       "crates/agent",
-      "crates/agent_acp_probe",
       "crates/agent_fold",
       "crates/agent_runtime_protocol",
       "crates/agent_session",

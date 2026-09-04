@@ -169,18 +169,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "agent_acp_probe"
-version = "0.1.0"
-dependencies = [
- "agent-client-protocol",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "workspace-hack",
-]
-
-[[package]]
 name = "agent_egress"
 version = "0.1.0"
 dependencies = [
@@ -3571,7 +3559,6 @@ name = "coding_agent_worker"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
- "agent_acp_probe",
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
@@ -3597,6 +3584,7 @@ dependencies = [
  "serde",
  "serde_json",
  "strum 0.27.2",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
