@@ -8,26 +8,32 @@ import { ToggleSwitch } from '@ui/components/ToggleSwitch';
 import { cn } from '@ui/utils/classname';
 import { createSignal, createUniqueId } from 'solid-js';
 import { formatLocalDate, parseLocalDate } from '../../utils/calendar-date';
+import { dateLabelFormatter, EventTimeInput } from './EventDateTimeInputs';
 import {
-  dateLabelFormatter,
-  EventTimeInput,
+  DAY_TIME_OPTIONS,
+  dayOffsetBetween,
+  type EventTimeOption,
+  endTimeOptions,
+  endValueFor,
+  formatTimeValue,
+  selectedTimeOptionId,
   splitLocalDateTime,
-  timeLabelFormatter,
+  withinEndTimeWindow,
   withLocalDate,
   withLocalTime,
-} from './EventDateTimeInputs';
-
-function formatTime(value: string) {
-  const [hour, minute] = value.split(':').map(Number);
-  if (hour === undefined || minute === undefined) return 'Time';
-  return timeLabelFormatter.format(new Date(2000, 0, 1, hour, minute));
-}
+} from './event-time-options';
 
 interface EventDateTimeDropdownProps {
   id: string;
   label: 'Start' | 'End';
   value: string;
   allDay: boolean;
+  /**
+   * Range start the offered times are measured from, present on the end
+   * field: its options carry the duration they produce and roll into the
+   * following day past midnight.
+   */
+  anchorStart?: string;
   onDateChange: (value: string) => void;
   onTimeChange: (value: string) => void;
   fieldDisabled?: boolean;
@@ -45,9 +51,34 @@ function EventDateTimeDropdown(props: EventDateTimeDropdownProps) {
     const dateLabel = date
       ? dateLabelFormatter.format(date)
       : `${props.label} date`;
-    return props.allDay
-      ? dateLabel
-      : `${dateLabel} ${formatTime(parts().time)}`;
+    if (props.allDay) return dateLabel;
+    return `${dateLabel} ${formatTimeValue(parts().time) ?? 'Time'}`;
+  };
+  const anchor = () => {
+    const start = props.anchorStart;
+    if (!start || !withinEndTimeWindow(start, props.value)) return undefined;
+    return start;
+  };
+  const timeOptions = () => {
+    const start = anchor();
+    return start
+      ? endTimeOptions(splitLocalDateTime(start).time)
+      : DAY_TIME_OPTIONS;
+  };
+  const selectedTimeId = () => {
+    const start = anchor();
+    return selectedTimeOptionId(
+      parts().time,
+      start ? dayOffsetBetween(start, props.value) : 0
+    );
+  };
+  const changeTime = (option: EventTimeOption) => {
+    const start = anchor();
+    props.onTimeChange(
+      start
+        ? endValueFor(start, option)
+        : withLocalTime(props.value, option.value)
+    );
   };
 
   return (
@@ -124,7 +155,9 @@ function EventDateTimeDropdown(props: EventDateTimeDropdownProps) {
                   id={props.id}
                   label={`${props.label} time`}
                   value={parts().time}
-                  onChange={props.onTimeChange}
+                  options={timeOptions()}
+                  selectedId={selectedTimeId()}
+                  onChange={changeTime}
                   disabled={props.fieldDisabled || props.allDay}
                 />
               </div>
@@ -167,9 +200,7 @@ export function EventDateTimeRangeFields(props: EventDateTimeRangeFieldsProps) {
               props.allDay ? date : withLocalDate(props.start, date)
             )
           }
-          onTimeChange={(time) =>
-            props.onStartChange(withLocalTime(props.start, time))
-          }
+          onTimeChange={props.onStartChange}
           fieldDisabled={props.startDisabled}
           invalid={props.invalid}
           describedBy={props.describedBy}
@@ -187,14 +218,13 @@ export function EventDateTimeRangeFields(props: EventDateTimeRangeFieldsProps) {
           label="End"
           value={props.end}
           allDay={props.allDay}
+          anchorStart={props.allDay ? undefined : props.start}
           onDateChange={(date) =>
             props.onEndChange(
               props.allDay ? date : withLocalDate(props.end, date)
             )
           }
-          onTimeChange={(time) =>
-            props.onEndChange(withLocalTime(props.end, time))
-          }
+          onTimeChange={props.onEndChange}
           fieldDisabled={props.endDisabled}
           invalid={props.invalid}
           describedBy={props.describedBy}
