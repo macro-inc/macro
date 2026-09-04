@@ -422,6 +422,9 @@ export function runCreateAction(
     case 'agent': {
       const { openWithSplit } = useSplitLayout();
       setCreateMenuOpen(false, false);
+      // No focus to arm here: the block focuses its own composer while the
+      // create is in flight, which stays correct when a second session opens
+      // beside a first.
       openWithSplit(
         { type: 'agent', id: startPendingSession() },
         { referredFrom: 'launcher', preferNewSplit: shouldInsert }
@@ -451,7 +454,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     // The pre-agent-session chat, kept on `a` for anyone the new agent flag
-    // has not reached. Mutually exclusive with the Coding Agent entry below:
+    // has not reached. Mutually exclusive with the Agent entry below:
     // both bind `a`, and exactly one is ever enabled.
     label: 'Agent',
     icon: WideStar,
@@ -488,10 +491,11 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Coding Agent',
+    label: 'Agent',
     icon: Robot,
     description: 'Create agent session',
-    launcherHint: 'Sandboxed coding session',
+    launcherHint: 'Dedicated Agent Session',
+    focusesOwnDestination: true,
     keywords: ['new', 'make', 'add', 'agent', 'code', 'coder', 'session'],
     blockName: 'agent',
     hotkeyToken: TOKENS.create.agent,
@@ -711,7 +715,6 @@ export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal(
   false,
   { id: 'launcher' }
 );
-
 type LauncherMenuItemProps = {
   creatableBlock: CreatableBlock;
   selected?: boolean;
@@ -767,6 +770,8 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
 type LauncherInnerProps = {
   onClose: (shouldReturnFocus?: boolean) => void;
+  /** An entry ran, as opposed to the menu being dismissed. */
+  onItemRun?: (item: CreatableBlock) => void;
   blocks?: CreatableBlock[];
 };
 
@@ -818,6 +823,7 @@ export const LauncherInner = (props: LauncherInnerProps) => {
     if (!item) return false;
 
     trackLauncherItemUsage(item);
+    props.onItemRun?.(item);
     item.keyDownHandler();
     props.onClose(shouldReturnFocus);
 
@@ -1106,11 +1112,23 @@ type LauncherProps = {
 };
 
 export const Launcher = (props: LauncherProps) => {
+  // Set for the one close that follows a hand-off entry, and read as the
+  // dialog unmounts. A dismissal never sets it, so Escape and overlay clicks
+  // keep the restore that returns the keyboard to the pane behind the menu.
+  let handingOffFocus = false;
+
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal"></Dialog.Overlay>
-        <Dialog.Content class="[--color-surface:var(--color-dialog)]">
+        <Dialog.Content
+          class="[--color-surface:var(--color-dialog)]"
+          onCloseAutoFocus={(event) => {
+            if (!handingOffFocus) return;
+            handingOffFocus = false;
+            event.preventDefault();
+          }}
+        >
           <div
             class={cn(
               'fixed top-0 bottom-(--virtual-keyboard-height,0) inset-x-0 z-modal w-screen flex justify-center px-2',
@@ -1123,6 +1141,9 @@ export const Launcher = (props: LauncherProps) => {
             }}
           >
             <LauncherInner
+              onItemRun={(item) => {
+                handingOffFocus = item.focusesOwnDestination ?? false;
+              }}
               onClose={(shouldReturnFocus) =>
                 props.onOpenChange(false, shouldReturnFocus)
               }

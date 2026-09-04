@@ -10,6 +10,8 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
 import { Button, SendButton, Surface } from '@ui';
@@ -168,7 +170,7 @@ export function AgentInput(props: AgentInputProps) {
               placeholder={
                 props.placeholder ?? 'Message the agent, @mention anything'
               }
-              autofocus={props.autofocus}
+              autofocus={!isMobile() && !isTouchDevice() && props.autofocus}
             />
           </div>
 
