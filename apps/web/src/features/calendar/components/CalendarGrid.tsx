@@ -157,9 +157,15 @@ export function CalendarGrid(props: CalendarGridProps) {
       const emphasized = occurrenceIds.some((id) =>
         props.emphasizedEventIds?.has(id)
       );
+      const classNames = [
+        ...(emphasized ? ['calendar-event-emphasized'] : []),
+        ...(event.eventType === 'out_of_office'
+          ? ['calendar-event-out-of-office']
+          : []),
+      ];
       return {
         ...mapped,
-        classNames: emphasized ? ['calendar-event-emphasized'] : undefined,
+        classNames: classNames.length > 0 ? classNames : undefined,
         startEditable: props.onEventTimeChange ? mapped.startEditable : false,
         durationEditable: props.onEventTimeChange
           ? mapped.durationEditable

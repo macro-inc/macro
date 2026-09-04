@@ -525,6 +525,41 @@
 	--fc-event-text-color: var(--color-ink-muted);
 }
 
+/* Out-of-office chips fill solid with their calendar color, matching how
+   Google Calendar renders the type. */
+.calendar-view .fc .fc-event.calendar-event-out-of-office {
+	--fc-event-bg-color: var(--event-calendar-color, var(--color-calendar));
+	--fc-event-text-color: var(--color-surface);
+}
+
+/* The month grid's dot treatment sets its colors directly rather than
+   through the event variables, so the solid fill must too. A selected chip
+   keeps its usual accent rendering. */
+.calendar-view
+	.fc
+	.fc-dayGridMonth-view
+	.fc-daygrid-dot-event.calendar-event-out-of-office:not(
+		:has(.calendar-event-content-selected)
+	) {
+	background-color: var(--fc-event-bg-color);
+	color: var(--fc-event-text-color);
+}
+
+/* A color bar and response dot carry no signal on a chip already filled
+   with the calendar color. */
+.calendar-view .fc .calendar-event-out-of-office .calendar-event-color-bar,
+.calendar-view .fc .calendar-event-out-of-office .calendar-event-response-dot {
+	display: none;
+}
+
+.calendar-view
+	.fc
+	.calendar-event-out-of-office
+	.calendar-event-content-with-color-bar
+	.calendar-event-content-layout {
+	padding-left: 3px;
+}
+
 .calendar-view .fc .fc-event:hover {
 	z-index: 4;
 }
@@ -548,13 +583,31 @@
 		.fc
 		.fc-event:hover:not(.fc-event-mirror):not(
 			.calendar-multi-day-selection-preview-event
-		):not(:has(.calendar-event-content-selected)) {
+		):not(.calendar-event-out-of-office):not(
+			:has(.calendar-event-content-selected)
+		) {
 		--fc-event-bg-color: color-mix(
 			in oklch,
 			var(--event-calendar-color, var(--color-calendar)) 18%,
 			var(--color-surface)
 		);
 		--fc-event-text-color: var(--color-ink);
+		box-shadow:
+			0 0 0 1px
+			color-mix(
+				in oklch,
+				var(--event-calendar-color, var(--color-calendar)) 55%,
+				transparent
+			);
+	}
+
+	/* A solid out-of-office chip keeps its fill on hover; the ring alone
+	   signals the affordance. */
+	.calendar-view
+		.fc
+		.fc-event.calendar-event-out-of-office:hover:not(
+			:has(.calendar-event-content-selected)
+		) {
 		box-shadow:
 			0 0 0 1px
 			color-mix(
@@ -601,7 +654,9 @@
 	.calendar-view
 		.fc
 		.fc-dayGridMonth-view
-		.fc-daygrid-dot-event:hover:not(:has(.calendar-event-content-selected)) {
+		.fc-daygrid-dot-event:hover:not(.calendar-event-out-of-office):not(
+			:has(.calendar-event-content-selected)
+		) {
 		--fc-event-bg-color: color-mix(
 			in oklch,
 			var(--event-calendar-color, var(--color-calendar)) 16%,
