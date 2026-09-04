@@ -1,7 +1,10 @@
 //! The seam between the ACP surface and the agentic loop that serves it.
 
+use std::sync::Arc;
+
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
+use ai_tools::user_tool_review::UserToolReviewer;
 use macro_user_id::user_id::MacroUserIdStr;
 use mcp_toolset::RemoteMcpToolSet;
 use tokio::sync::mpsc;
@@ -32,6 +35,11 @@ pub struct TurnRequest {
     /// User-input capability for model-callable tools. Absent when the ACP
     /// client did not advertise form elicitation.
     pub user_input: Option<SharedUserInputRequester>,
+    /// Puts a user tool's call (`SendEmail`, `CreateCalendarEvent`) to the
+    /// user for review mid-turn, so the tool is finished - run as edited, or
+    /// rejected - before the model reads its result. Absent for the same
+    /// reason as `user_input`; a pending call then stays pending.
+    pub reviewer: Option<Arc<dyn UserToolReviewer>>,
 }
 
 /// Runs one conversational turn and streams its parts back.
