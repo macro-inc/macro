@@ -148,6 +148,7 @@ fn default_reminders_stay_out_of_serialized_projections() {
         owner_id: "macro|projection@example.com".to_string(),
         ical_uid: "projection@example.com".to_string(),
         calendar_id: None,
+        sources: Vec::new(),
         title: "Projection".to_string(),
         description: None,
         location: None,

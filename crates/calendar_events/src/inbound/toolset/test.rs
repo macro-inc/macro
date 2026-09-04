@@ -75,6 +75,7 @@ fn sample_event(recurrence_lines: Vec<String>) -> crate::domain::models::Calenda
         owner_id: "macro|owner@example.com".to_string(),
         ical_uid: "uid-1".to_string(),
         calendar_id: Some(Uuid::from_u128(9)),
+        sources: Vec::new(),
         title: "Standup".to_string(),
         description: Some("Daily sync".to_string()),
         location: Some("Room 1".to_string()),
@@ -177,6 +178,7 @@ impl CalendarMutationService for MockMutations {
         &self,
         _requester_id: &str,
         event_id: Uuid,
+        _calendar_id: Option<Uuid>,
         patch: CalendarEventPatch,
         scope: CalendarUpdateScope,
     ) -> Result<crate::domain::models::CalendarEvent, CalendarMutationError> {
@@ -188,6 +190,7 @@ impl CalendarMutationService for MockMutations {
         &self,
         _requester_id: &str,
         event_id: Uuid,
+        _calendar_id: Option<Uuid>,
         scope: CalendarDeletionScope,
     ) -> Result<(), CalendarMutationError> {
         self.deleted.lock().unwrap().push((event_id, scope));
@@ -198,6 +201,7 @@ impl CalendarMutationService for MockMutations {
         &self,
         _requester_id: &str,
         event_id: Uuid,
+        _calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
     ) -> Result<crate::domain::models::CalendarEvent, CalendarMutationError> {

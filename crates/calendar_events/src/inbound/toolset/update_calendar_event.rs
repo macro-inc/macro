@@ -290,7 +290,7 @@ where
             Some(
                 service_context
                     .mutations
-                    .update_event(&requester_id, self.event_id, patch, scope.clone())
+                    .update_event(&requester_id, self.event_id, None, patch, scope.clone())
                     .await
                     .map_err(|error| mutation_tool_error("update the calendar event", error))?,
             )
@@ -306,7 +306,7 @@ where
                 };
                 service_context
                     .mutations
-                    .respond_to_event(&requester_id, self.event_id, rsvp.into(), rsvp_scope)
+                    .respond_to_event(&requester_id, self.event_id, None, rsvp.into(), rsvp_scope)
                     .await
                     .map_err(|error| {
                         let action = if patched.is_some() {

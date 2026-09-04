@@ -662,6 +662,13 @@ const CALENDAR_EVENTS_BODY = {
       override_names: {
         type: 'text',
       },
+      // The title of every provider copy of the event, the canonical one
+      // included. A shared calendar's re-import of a member's event carries
+      // its own title (`[teo] OOO` beside the member's `OOO`), and the
+      // query matches either field so both spellings find the one entity.
+      source_names: {
+        type: 'text',
+      },
       owner_id: {
         type: 'keyword',
         index: true,

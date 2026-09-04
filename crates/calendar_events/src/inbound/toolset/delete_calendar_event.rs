@@ -123,7 +123,7 @@ where
 
         service_context
             .mutations
-            .delete_event(&requester_id, self.event_id, scope)
+            .delete_event(&requester_id, self.event_id, None, scope)
             .await
             .map_err(|error| mutation_tool_error("delete the calendar event", error))?;
 

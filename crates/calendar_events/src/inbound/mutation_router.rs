@@ -152,6 +152,9 @@ pub struct CreateCalendarEventRequest {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateCalendarEventRequest {
+    /// Calendar whose copy of the event is patched, for an event synced from
+    /// more than one calendar. Omit to patch the canonical copy.
+    pub calendar_id: Option<Uuid>,
     /// Replacement title; an empty string clears it.
     pub title: Option<String>,
     /// Replacement description; an empty string clears it.
@@ -226,6 +229,9 @@ pub enum CalendarDeletionScopeParam {
 #[into_params(parameter_in = Query)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteCalendarEventQuery {
+    /// Calendar whose copy of the event is deleted, for an event synced from
+    /// more than one calendar. Omit to delete the canonical copy.
+    pub calendar_id: Option<Uuid>,
     /// Deletion scope; defaults to the entire event or series.
     #[serde(default)]
     pub scope: CalendarDeletionScopeParam,
@@ -251,6 +257,9 @@ pub enum CalendarRsvpScopeParam {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RsvpCalendarEventRequest {
+    /// Calendar whose copy of the event is answered, for an event synced
+    /// from more than one calendar. Omit to answer on the canonical copy.
+    pub calendar_id: Option<Uuid>,
     /// The response to record for the connected account.
     pub response: AttendeeResponseStatus,
     /// How much of a recurring series the response covers. Omit to let
@@ -543,6 +552,7 @@ where
         .update_event(
             user.authorization.user.macro_user_id.as_ref(),
             event_id,
+            request.calendar_id,
             patch,
             scope,
         )
@@ -600,6 +610,7 @@ where
         .delete_event(
             user.authorization.user.macro_user_id.as_ref(),
             event_id,
+            query.calendar_id,
             scope,
         )
         .await?;
@@ -650,6 +661,7 @@ where
         .respond_to_event(
             user.authorization.user.macro_user_id.as_ref(),
             event_id,
+            request.calendar_id,
             request.response,
             scope,
         )
