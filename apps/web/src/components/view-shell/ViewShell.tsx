@@ -268,8 +268,17 @@ function Root(props: ViewShellRootProps) {
  * Sizing region for navigation. Renders a div, not aside.
  * ViewSidebar.Root inside keeps the landmark.
  */
-function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+type ViewShellAsideProps = JSX.HTMLAttributes<HTMLDivElement> & {
+  /** Called with the solved aside width after a drag or keyboard resize. */
+  onWidthChangeEnd?: (width: number) => void;
+};
+
+function Aside(props: ViewShellAsideProps) {
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'onWidthChangeEnd',
+  ]);
   const ws = useViewShellInternal();
   const redistributionPreferredSize = () => {
     const layout = ws.aside.layout();
@@ -302,6 +311,7 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
       redistributionPreferredSize={redistributionPreferredSize()}
       target={{ kind: 'px', px: ws.aside.layout().width }}
       collapsed={() => ws.aside.isCollapsed()}
+      onSizeChangeEnd={local.onWidthChangeEnd}
     >
       <div
         {...rest}

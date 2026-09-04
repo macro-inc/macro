@@ -16,13 +16,14 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { createMemo, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
 import { ChannelsRail } from './components/rail/ChannelsRail';
+import {
+  CHANNELS_MAX_RAIL_WIDTH,
+  CHANNELS_MIN_RAIL_WIDTH,
+  CHANNELS_NARROW_RAIL_WIDTH,
+} from './constants';
 import type { ChannelsViewStateOptions } from './types';
 
 const SIDEBAR_CHANNEL_LIMIT = 100;
-const NARROW_RAIL_WIDTH = 64;
-const DEFAULT_RAIL_WIDTH = 360;
-const MIN_RAIL_WIDTH = 224;
-const MAX_RAIL_WIDTH = 420;
 
 export type ChannelsViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -32,7 +33,7 @@ export type ChannelsViewProps = {
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
-  const { state } = useChannelsView();
+  const { state, setAsideWidth } = useChannelsView();
   const [workspace, setWorkspace] = createSignal<HTMLDivElement>();
   const workspaceSize = createElementSize(workspace);
   const breakpoints = createSizeBreakpoints(
@@ -43,14 +44,14 @@ function ChannelsViewRoot() {
   const railLayout = () =>
     railMode() === 'slim'
       ? {
-          width: NARROW_RAIL_WIDTH,
-          min: NARROW_RAIL_WIDTH,
-          max: NARROW_RAIL_WIDTH,
+          width: CHANNELS_NARROW_RAIL_WIDTH,
+          min: CHANNELS_NARROW_RAIL_WIDTH,
+          max: CHANNELS_NARROW_RAIL_WIDTH,
         }
       : {
-          width: DEFAULT_RAIL_WIDTH,
-          min: MIN_RAIL_WIDTH,
-          max: MAX_RAIL_WIDTH,
+          width: state.asideWidth,
+          min: CHANNELS_MIN_RAIL_WIDTH,
+          max: CHANNELS_MAX_RAIL_WIDTH,
         };
 
   const channelsQuery = useSoupAstItemsQuery(
@@ -94,7 +95,11 @@ function ChannelsViewRoot() {
                 main={{ min: 224 }}
                 resizable={railMode() === 'full'}
               >
-                <ViewShell.Aside>
+                <ViewShell.Aside
+                  onWidthChangeEnd={(width) => {
+                    if (railMode() === 'full') setAsideWidth(width);
+                  }}
+                >
                   <ChannelsRail channels={channels()} mode={railMode()} />
                 </ViewShell.Aside>
                 <ViewShell.Main class="overflow-hidden">

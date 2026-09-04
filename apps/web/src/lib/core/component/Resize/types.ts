@@ -56,6 +56,10 @@ export type ResizeZoneCtx = {
   size: () => number;
   sizeOf: (id: PanelId) => () => number;
   offsetOf: (id: PanelId) => () => number;
+  registerSizeChangeEndHandler: (
+    id: PanelId,
+    handler: (size: number) => void
+  ) => () => void;
   canFit: (panel: Partial<PanelConfig>) => boolean;
   /** Swap two registered panels without changing their sizing intent. */
   swap: (firstId: PanelId, secondId: PanelId) => void;

@@ -4,6 +4,10 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import { createStore, type Store } from 'solid-js/store';
+import {
+  CHANNELS_DEFAULT_RAIL_WIDTH,
+  clampChannelsRailWidth,
+} from './constants';
 import { createChannelsViewPersistence } from './persistence';
 import type {
   ChannelsGroup,
@@ -21,6 +25,7 @@ export type ChannelsViewContext = {
   setTab: (tab: ChannelsTab) => void;
   setSelectedChannelId: (channelId: string | undefined) => void;
   setGroupOpen: (group: ChannelsGroup, open: boolean) => void;
+  setAsideWidth: (width: number) => void;
 };
 
 export const [ChannelsViewProvider, useChannelsView] =
@@ -38,12 +43,16 @@ export const [ChannelsViewProvider, useChannelsView] =
             channels: initial.expandedGroups?.channels ?? true,
             direct_messages: initial.expandedGroups?.direct_messages ?? true,
           },
+          asideWidth: clampChannelsRailWidth(
+            initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
+          ),
         }),
         createChannelsViewPersistence({
           handle: panel.handle,
           userId,
           restoreEntryState: props.initialState === undefined,
           restoreLocalState: props.initialState === undefined,
+          restorePreferences: initial.asideWidth === undefined,
         })
       );
 
@@ -53,6 +62,8 @@ export const [ChannelsViewProvider, useChannelsView] =
         setSelectedChannelId: (channelId) =>
           setState('selectedChannelId', channelId),
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),
+        setAsideWidth: (width) =>
+          setState('asideWidth', clampChannelsRailWidth(width)),
       };
     }
   );

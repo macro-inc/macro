@@ -6,6 +6,7 @@ export type ChannelsViewState = {
   tab: ChannelsTab;
   selectedChannelId?: string;
   expandedGroups: Record<ChannelsGroup, boolean>;
+  asideWidth: number;
 };
 
 export type ChannelsViewStateOptions = Partial<
