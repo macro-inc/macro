@@ -15329,6 +15329,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "soup_query_tool"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "apollo-compiler",
+ "async-graphql",
+ "async-trait",
+ "chrono",
+ "document_sub_type",
+ "email",
+ "filter_ast",
+ "graphql_properties",
+ "graphql_soup_filter_input",
+ "item_filters",
+ "macro_user_id",
+ "models_pagination",
+ "models_properties",
+ "models_soup",
+ "non_empty",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "soup",
+ "system_properties",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "soup_realtime"
 version = "0.1.0"
 dependencies = [

@@ -45,6 +45,7 @@ members = [
   "crates/graphql_properties",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/soup_query_tool",
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
