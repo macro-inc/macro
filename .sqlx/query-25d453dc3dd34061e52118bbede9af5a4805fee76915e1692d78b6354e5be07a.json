@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, instructions,\n                acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE thread_id = $1 AND bot_id = $2\n            ORDER BY agent_session.created_at DESC\n            LIMIT 1\n            ",
+  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, sandbox_size, instructions,\n                acp_session_id, status, status_event_name, egress_token_hash,\n                mcp_scope, mcp_servers\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)\n            RETURNING\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                -- A row being created cannot have an external identity yet.\n                NULL::TEXT AS \"external_provider?\", NULL::TEXT AS \"external_id?\",\n                NULL::TEXT AS \"external_name?\", NULL::TEXT AS \"external_url?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -65,51 +65,61 @@
       },
       {
         "ordinal": 12,
-        "name": "acp_session_id",
+        "name": "mcp_scope",
         "type_info": "Text"
       },
       {
         "ordinal": 13,
-        "name": "status",
-        "type_info": "Text"
+        "name": "mcp_servers",
+        "type_info": "Jsonb"
       },
       {
         "ordinal": 14,
-        "name": "status_event_name",
+        "name": "acp_session_id",
         "type_info": "Text"
       },
       {
         "ordinal": 15,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
+        "name": "status_event_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 17,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 18,
         "name": "modified_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 17,
+        "ordinal": 19,
         "name": "thread_channel_id?",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 18,
+        "ordinal": 20,
         "name": "external_provider?",
         "type_info": "Text"
       },
       {
-        "ordinal": 19,
+        "ordinal": 21,
         "name": "external_id?",
         "type_info": "Text"
       },
       {
-        "ordinal": 20,
+        "ordinal": 22,
         "name": "external_name?",
         "type_info": "Text"
       },
       {
-        "ordinal": 21,
+        "ordinal": 23,
         "name": "external_url?",
         "type_info": "Text"
       }
@@ -117,7 +127,22 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Uuid"
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb"
       ]
     },
     "nullable": [
@@ -133,17 +158,19 @@
       false,
       false,
       true,
+      false,
+      false,
       true,
       false,
       true,
       false,
       false,
       null,
-      false,
-      false,
-      true,
-      true
+      null,
+      null,
+      null,
+      null
     ]
   },
-  "hash": "5a3dd1831370d60a05f9cda9a1a8608daa8c7fe4f252320f6f3224517dc9019a"
+  "hash": "25d453dc3dd34061e52118bbede9af5a4805fee76915e1692d78b6354e5be07a"
 }

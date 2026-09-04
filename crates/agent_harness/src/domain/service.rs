@@ -8,7 +8,8 @@ use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::SessionManagement;
 use agent_session::domain::model::{
-    AgentSession, AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId, SandboxSize,
+    AgentMcpServers, AgentSession, AgentSessionId, AuthorKind, CreateAgentSessionParams, MessageId,
+    SandboxSize,
 };
 use agent_session::domain::ports::{
     AcceptedControl, AgentSessionNotificationRecipient, AgentSessionQueueChanged,
@@ -582,6 +583,8 @@ where
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,
                 instructions: request.instructions,
+                // No egress, so no MCP servers of ours to select from.
+                mcp_servers: AgentMcpServers::OwnerConnections,
                 // No sandbox: the runtime dials in and reaches the network on
                 // its operator's own terms, so there is no egress token.
                 egress_token_hash: None,
@@ -637,7 +640,12 @@ where
         let egress = self
             .inner
             .egress
-            .provision(session_id, &request.owner, &defaults.repo_url)
+            .provision(
+                session_id,
+                &request.owner,
+                &defaults.repo_url,
+                &AgentMcpServers::OwnerConnections,
+            )
             .await
             .map_err(into_session_error)?;
         let session = self
@@ -656,6 +664,8 @@ where
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
                 instructions: request.instructions,
+                // A fixed system agent has no configuration to select from.
+                mcp_servers: AgentMcpServers::OwnerConnections,
                 egress_token_hash: Some(egress.session_token_hash),
             })
             .await?;
@@ -1118,6 +1128,7 @@ where
         &self,
         session_id: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
+        selection: &AgentMcpServers,
     ) -> Result<Vec<agent_client_protocol::schema::v1::McpServer>> {
         let Some(session_token) = self.containers.session_token(session_id).await? else {
             tracing::debug!("container holds no egress token; restoring no MCP servers");
@@ -1125,7 +1136,7 @@ where
         };
         Ok(self
             .egress
-            .restore(owner, session_token)
+            .restore(owner, session_token, selection)
             .await?
             .acp_servers())
     }
@@ -1170,7 +1181,7 @@ where
             if effect == SandboxResizeEffect::Restart {
                 let container = self.containers.resume(session_id).await?;
                 let mcp_servers = self
-                    .resumed_mcp_servers(session_id, &session.owner_id)
+                    .resumed_mcp_servers(session_id, &session.owner_id, &session.mcp_servers)
                     .await?;
                 self.sessions
                     .attach_session(
@@ -1214,7 +1225,7 @@ where
         // credentials, so there is nowhere else it could correctly come from.
         let egress = self
             .egress
-            .provision(session_id, &origin.sender, &repo_url)
+            .provision(session_id, &origin.sender, &repo_url, &runtime.mcp_servers)
             .await?;
 
         self.sessions
@@ -1234,6 +1245,9 @@ where
                 // was said in the channel, and nothing there states how the
                 // runtime should work.
                 instructions: None,
+                // Snapshotted so the proxy enforces exactly what this attach
+                // advertised, for as long as the session lives.
+                mcp_servers: runtime.mcp_servers.clone(),
                 egress_token_hash: Some(egress.session_token_hash),
                 // This open came from the trigger pipeline seeing the mention.
             })
@@ -1323,7 +1337,7 @@ where
                 if AgentKind::for_session(session.bot_id, &session.harness).is_managed() {
                     let container = self.containers.resume(session_id).await?;
                     let mcp_servers = self
-                        .resumed_mcp_servers(session_id, &session.owner_id)
+                        .resumed_mcp_servers(session_id, &session.owner_id, &session.mcp_servers)
                         .await?;
                     self.sessions
                         .attach_session(

@@ -17,7 +17,7 @@ use agent_runtime_protocol::domain::{
 };
 use agent_session::PROTOCOL_VERSION;
 use agent_session::domain::model::{
-    AgentSessionId, CreateAgentSessionParams, Message, SandboxSize,
+    AgentMcpServers, AgentSessionId, CreateAgentSessionParams, Message, SandboxSize,
 };
 use agent_session::domain::ports::{
     AgentSessionLogRepo as _, AgentSessionNotificationRecipient as _, AgentSessionRepo as _,
@@ -78,6 +78,7 @@ fn open_command() -> OpenSession {
             model: "agent-model".to_owned(),
             harness: "opencode".to_owned(),
             instructions: String::new(),
+            mcp_servers: AgentMcpServers::OwnerConnections,
         },
         origin: MentionOrigin {
             channel_id: macro_uuid::generate_uuid_v7(),
@@ -415,6 +416,7 @@ async fn disconnected_session(
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
             instructions: None,
+            mcp_servers: Default::default(),
             egress_token_hash: None,
         },
     )
@@ -487,6 +489,42 @@ async fn open_creates_announces_and_delivers_the_mention() {
             "@claude fix the failing test"
         ))]]
     );
+}
+
+/// The agent's MCP selection is snapshotted onto the session row at open, so
+/// the proxy enforces exactly what this attach advertised for as long as the
+/// session lives, whatever the agent is edited to later.
+#[tokio::test]
+async fn open_snapshots_the_agents_mcp_selection_onto_the_session() {
+    let (service, repo, containers, _announcer, _runtimes) = harness();
+    let mut command = open_command();
+    let selection = AgentMcpServers::Selected {
+        servers: vec![agent_session::domain::model::AgentMcpServer {
+            app_slug: "linear".to_owned(),
+            server_name: "Linear".to_owned(),
+        }],
+    };
+    command.runtime.mcp_servers = selection.clone();
+    let id = AgentSessionId::new();
+
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        loop {
+            if containers.spawned() == 1 {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        let container = containers
+            .container(session_of(&containers))
+            .expect("the spawned container is findable");
+        complete_handshake(&container).await;
+    };
+    let (opened, ()) = tokio::join!(open, drive);
+    opened.expect("open should succeed");
+
+    let session = repo.get(id).await.expect("the session row exists");
+    assert_eq!(session.mcp_servers, selection);
 }
 
 #[tokio::test]

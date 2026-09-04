@@ -7,7 +7,7 @@ mod test;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
+    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
     CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress, ReplicaId,
     SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
 };
@@ -111,6 +111,8 @@ struct AgentSessionRow {
     workspace: String,
     sandbox_size: String,
     instructions: Option<String>,
+    mcp_scope: String,
+    mcp_servers: serde_json::Value,
     acp_session_id: Option<String>,
     external_provider: Option<String>,
     external_id: Option<String>,
@@ -142,6 +144,11 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             workspace: row.workspace,
             sandbox_size: parse_sandbox_size(&row.sandbox_size)?,
             instructions: row.instructions,
+            mcp_servers: AgentMcpServers::from_columns(
+                &row.mcp_scope,
+                serde_json::from_value(row.mcp_servers)
+                    .context("agent session has unparseable mcp servers")?,
+            )?,
             acp_session_id: row.acp_session_id.map(Into::into),
             external: row
                 .external_provider
@@ -173,8 +180,11 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             workspace,
             sandbox_size,
             instructions,
+            mcp_servers,
             egress_token_hash,
         } = params;
+        let mcp_servers_json = serde_json::to_value(mcp_servers.servers())
+            .context("serialize agent session mcp servers")?;
 
         // The session row and its access grants land together: a crash between
         // the two would leave a session nobody - not even its owner -
@@ -192,13 +202,14 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             INSERT INTO agent_session (
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, workspace, sandbox_size, instructions,
-                acp_session_id, status, status_event_name, egress_token_hash
+                acp_session_id, status, status_event_name, egress_token_hash,
+                mcp_scope, mcp_servers
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
             RETURNING
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, instructions,
-                acp_session_id, status,
+                mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -221,6 +232,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             status,
             status_event_name,
             egress_token_hash,
+            mcp_servers.scope_str(),
+            mcp_servers_json,
         )
         .fetch_one(&mut *transaction)
         .await
@@ -289,7 +302,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, instructions,
-                acp_session_id, status,
+                mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -322,7 +335,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, instructions,
-                acp_session_id, status,
+                mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -361,7 +374,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, instructions,
-                acp_session_id, status,
+                mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
@@ -393,7 +406,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, instructions,
-                acp_session_id, status,
+                mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",

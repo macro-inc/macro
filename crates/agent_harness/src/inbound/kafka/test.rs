@@ -1,5 +1,5 @@
 use agent_runtime_protocol::domain::action::AgentAction;
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 use agent_trigger::domain::broker_events::{
     AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata, ChannelKind,
     ExistingAgentSessionEvent, NewAgentSessionEvent,
@@ -27,6 +27,7 @@ fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
         }
         .to_owned(),
         instructions: "configured instructions".to_owned(),
+        mcp_servers: AgentMcpServers::OwnerConnections,
     })
 }
 

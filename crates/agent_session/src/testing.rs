@@ -6,7 +6,7 @@
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
-    AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
+    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, ChannelSession, ClaimOutcome,
     CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
     ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
     SessionStatus, StoredAgentSessionLog,
@@ -135,6 +135,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             workspace: params.workspace,
             sandbox_size: params.sandbox_size,
             instructions: params.instructions,
+            mcp_servers: params.mcp_servers,
             acp_session_id: None,
             external: None,
             status: SessionStatus::default(),
@@ -549,6 +550,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
         workspace: "/workspace".to_string(),
         sandbox_size: SandboxSize::Default,
         instructions: None,
+        mcp_servers: AgentMcpServers::OwnerConnections,
         acp_session_id: None,
         external: None,
         status: SessionStatus::NoMessages,

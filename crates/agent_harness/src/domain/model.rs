@@ -3,7 +3,7 @@
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
 use agent_egress::domain::model::McpServerSlug;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
+use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -130,6 +130,8 @@ pub struct AgentRuntimeConfig {
     pub harness: String,
     /// Configured agent instructions, reserved for a dedicated runtime transport.
     pub instructions: String,
+    /// Which Pipedream MCP servers the agent's sessions are handed.
+    pub mcp_servers: AgentMcpServers,
 }
 
 /// Whether a user belongs to the Macro staff domain - the egress crate's
@@ -344,9 +346,10 @@ pub struct SandboxEgress {
     pub base_url: String,
     /// The session token, presented on every proxied call.
     pub session_token: String,
-    /// The owner's connected MCP servers, by the slug the proxy resolves.
-    /// Macro's own server is not listed: every session has it, on its own
-    /// route.
+    /// The MCP servers to advertise, by the slug the proxy resolves: the
+    /// owner's connected apps, or the agent's selected apps whether or not
+    /// the owner has connected them. Macro's own server is not listed: every
+    /// session has it, on its own route.
     pub mcp_servers: Vec<McpServerSlug>,
 }
 
@@ -401,8 +404,7 @@ impl SandboxEgress {
     }
 
     /// Every server the session may dial, as `(name, url)` pairs: Macro's own
-    /// server first, then the owner's connected apps under their Pipedream
-    /// slugs.
+    /// server first, then the advertised apps under their Pipedream slugs.
     ///
     /// The one enumeration behind both renderings - [`Self::acp_servers`] and
     /// the Cursor API's - so the two can never advertise different sets.

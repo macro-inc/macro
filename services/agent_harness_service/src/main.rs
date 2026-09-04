@@ -52,7 +52,7 @@ use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::outbound::rig_engine::RigTurnEngine;
 use agent_runtime_directory::PgAgentRuntimeDirectory;
-use agent_session::domain::model::ReplicaId;
+use agent_session::domain::model::{AgentMcpServers, ReplicaId};
 use agent_session::domain::ports::{NoOpRealtime, SessionOwnership as _};
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
@@ -321,6 +321,7 @@ async fn run() -> anyhow::Result<()> {
             model: config.harness_model.clone(),
             harness: config.harness_slug.clone(),
             instructions: String::new(),
+            mcp_servers: AgentMcpServers::OwnerConnections,
         },
     )];
     if let Some(inmem_bot) = inmem_bot {
@@ -331,6 +332,7 @@ async fn run() -> anyhow::Result<()> {
                 model: config.inmem_model.clone(),
                 harness: config.inmem_harness_slug.clone(),
                 instructions: String::new(),
+                mcp_servers: AgentMcpServers::OwnerConnections,
             },
         ));
     }
@@ -341,6 +343,7 @@ async fn run() -> anyhow::Result<()> {
             model: config.harness_model.clone(),
             harness: "cursor".to_owned(),
             instructions: String::new(),
+            mcp_servers: AgentMcpServers::OwnerConnections,
         },
     ));
     let runtime_directory =

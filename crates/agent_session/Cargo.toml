@@ -36,7 +36,7 @@ macro_service_urls = { path = "../macro_service_urls" }
 macro_user_id =  { path = "../macro_user_id", features = ["sqlx"] }
 utoipa = { workspace = true }
 rootcause = { workspace = true }
-sqlx = { workspace = true }
+sqlx = { workspace = true, features = ["json"] }
 chrono = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }

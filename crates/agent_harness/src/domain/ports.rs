@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agent_session::domain::connection::RuntimeAttachment;
-use agent_session::domain::model::{AgentSessionId, SandboxSize};
+use agent_session::domain::model::{AgentMcpServers, AgentSessionId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
 use harness_id::HarnessId;
@@ -184,23 +184,30 @@ pub trait RuntimeConnections: Send + Sync + 'static {
 pub trait SandboxEgressProvisioner: Send + Sync + 'static {
     /// The egress environment for one session, on behalf of `owner`, and the
     /// hash its session row must carry for that environment to mean anything.
+    ///
+    /// `selection` is the session's MCP policy: under
+    /// [`AgentMcpServers::OwnerConnections`] the owner's enabled apps are
+    /// advertised; under [`AgentMcpServers::Selected`] exactly the listed
+    /// apps are, connected or not.
     fn provision(
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
         repo_url: &str,
+        selection: &AgentMcpServers,
     ) -> impl Future<Output = Result<ProvisionedEgress>> + Send;
 
     /// The egress environment rebuilt around a token that already exists.
     ///
     /// For reattaching to a sandbox that was spawned earlier: the sandbox
     /// still holds its raw token (the row holds only the hash), so nothing is
-    /// minted - but the owner's connected servers are listed fresh, so an app
+    /// minted - but the servers are listed fresh, so an app the owner
     /// connected since the spawn is advertised on the next attach.
     fn restore(
         &self,
         owner: &MacroUserIdStr<'static>,
         session_token: String,
+        selection: &AgentMcpServers,
     ) -> impl Future<Output = Result<SandboxEgress>> + Send;
 }
 
