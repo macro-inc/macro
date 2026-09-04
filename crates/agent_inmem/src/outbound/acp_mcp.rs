@@ -7,7 +7,9 @@ use http::header::{AUTHORIZATION, HeaderName, HeaderValue};
 use mcp_toolset::{ConnectedServer, RemoteMcpToolSet, client_info};
 use rmcp::ServiceExt as _;
 use rmcp::transport::StreamableHttpClientTransport;
-use rmcp::transport::streamable_http_client::StreamableHttpClientTransportConfig;
+use rmcp::transport::streamable_http_client::{
+    StreamableHttpClient, StreamableHttpClientTransportConfig,
+};
 
 use crate::domain::mcp::McpToolConnector;
 
@@ -45,17 +47,22 @@ fn place_header(name: &str, value: &str) -> Option<HeaderPlacement> {
 ///
 /// Each entry is dialed exactly as handed over: its URL is the egress proxy
 /// and its `Authorization` header is the session token, so this process holds
-/// no upstream credential any more than a sandbox does.
-#[derive(Clone, Default)]
-pub struct AcpMcpConnector {
-    http: reqwest::Client,
+/// no upstream credential any more than a sandbox does. What carries the
+/// request is the `Client` - in production
+/// [`EgressMcpClient`](super::egress_mcp::EgressMcpClient), which hands it
+/// to the proxy's service without a socket.
+#[derive(Clone)]
+pub struct AcpMcpConnector<Client> {
+    client: Client,
 }
 
-impl AcpMcpConnector {
-    /// A connector sharing one HTTP client across every server it dials.
-    #[must_use]
-    pub fn new() -> Self {
-        Self::default()
+impl<Client> AcpMcpConnector<Client>
+where
+    Client: StreamableHttpClient + Send + Sync,
+{
+    /// A connector sharing one client across every server it dials.
+    pub fn new(client: Client) -> Self {
+        Self { client }
     }
 
     async fn connect_one(&self, server: McpServerHttp) -> Option<ConnectedServer> {
@@ -76,7 +83,7 @@ impl AcpMcpConnector {
         }
         config.custom_headers = custom;
 
-        let transport = StreamableHttpClientTransport::with_client(self.http.clone(), config);
+        let transport = StreamableHttpClientTransport::with_client(self.client.clone(), config);
         match client_info().serve(transport).await {
             Ok(client) => Some(ConnectedServer {
                 name: server.name,
@@ -92,7 +99,10 @@ impl AcpMcpConnector {
     }
 }
 
-impl McpToolConnector for AcpMcpConnector {
+impl<Client> McpToolConnector for AcpMcpConnector<Client>
+where
+    Client: StreamableHttpClient + Send + Sync,
+{
     #[tracing::instrument(skip_all, fields(servers = servers.len()))]
     async fn connect(&self, servers: Vec<McpServerHttp>) -> Option<RemoteMcpToolSet> {
         if servers.is_empty() {

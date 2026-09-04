@@ -638,6 +638,27 @@ pub enum McpDestination {
     Connected(McpServerSlug),
 }
 
+/// The route Macro's own MCP server is served on.
+pub const MACRO_MCP_PATH: &str = "/mcp-macro";
+
+/// The route prefix a connected app's slug follows.
+pub const CONNECTED_MCP_PATH_PREFIX: &str = "/mcp/";
+
+impl McpDestination {
+    /// Read a destination off a proxy URL's path.
+    ///
+    /// This is how an in-process client names its server: it is handed the
+    /// same egress URLs a sandbox is, so it reads them the same way the
+    /// router does rather than being told the answer a second way.
+    pub fn from_path(path: &str) -> Option<Self> {
+        if path == MACRO_MCP_PATH {
+            return Some(Self::Macro);
+        }
+        let slug = path.strip_prefix(CONNECTED_MCP_PATH_PREFIX)?;
+        McpServerSlug::parse(slug).map(Self::Connected)
+    }
+}
+
 /// A resolved destination and the credential to reach it with.
 ///
 /// The fields are private and the constructors validate, so a credential

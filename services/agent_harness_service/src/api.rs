@@ -52,14 +52,14 @@ fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
 /// No CORS layer and no Swagger: nothing browses this. Its only client is a
 /// sandbox, and its only credential is a session token.
 pub async fn serve_egress<Service>(
-    service: Service,
+    service: std::sync::Arc<Service>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
 where
     Service: EgressService + 'static,
 {
-    let app = egress_router(EgressRouterState::new(std::sync::Arc::new(service)));
+    let app = egress_router(EgressRouterState::new(service));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await

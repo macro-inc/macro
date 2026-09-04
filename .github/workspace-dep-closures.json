@@ -395,6 +395,7 @@
     "agent_inmem": [
       "crates/activity",
       "crates/agent",
+      "crates/agent_egress",
       "crates/agent_fold",
       "crates/agent_inmem",
       "crates/agent_runtime_protocol",
@@ -436,7 +437,9 @@
       "crates/filter_ast",
       "crates/foreign_entity",
       "crates/frecency",
+      "crates/fusionauth",
       "crates/generic_email_domains",
+      "crates/github",
       "crates/harness_id",
       "crates/harness_token",
       "crates/import",

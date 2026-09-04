@@ -2,6 +2,7 @@
 //! manager.
 
 pub mod acp_mcp;
+pub mod egress_mcp;
 pub mod log_frames;
 pub mod manager;
 pub mod rig_engine;
