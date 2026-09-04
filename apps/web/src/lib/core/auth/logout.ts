@@ -1,3 +1,4 @@
+import { clearMcpAuthAttempts } from '@app/features/settings/mcp-auth-attempt';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -43,6 +44,7 @@ export async function clearLocalAuthSession() {
   // Queued mutations are user intent; never allow them to replay under a
   // subsequent account sharing this anonymous device cache scope.
   await clearRegisteredCaches();
+  clearMcpAuthAttempts();
 }
 
 export function useLogout() {

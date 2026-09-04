@@ -2,6 +2,7 @@ import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockAlias, BlockName } from '@core/block';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import { settingsSplitSegmentCount } from '@core/constant/settingsConnectionsUrl';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   type Accessor,
@@ -33,6 +34,7 @@ export function decodePairs(segments: string[]): SplitContent[] {
       // threaded through content params. See `contentUrlSegments` in
       // layoutManager for the matching encode.
       pairs.push({ type: 'component', id: 'settings' });
+      i += settingsSplitSegmentCount(id, segments[i + 2]) - 2;
     } else if (type === 'component') {
       pairs.push({ type: 'component', id });
     } else {

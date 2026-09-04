@@ -21,7 +21,7 @@ import { useEmailLinksQuery } from '@queries/email/link';
  * the one thing this prompt must never do.
  *
  * Closing the prompt sticks across reloads. Nothing is broken while calendar
- * is off, so re-asking every load is just nagging — Settings › Email keeps a
+ * is off, so re-asking every load is just nagging. Connections › Google keeps a
  * per-inbox "Enable calendar" button for whenever the user wants it.
  */
 export function CalendarPermissionPrompt() {

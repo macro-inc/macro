@@ -3,6 +3,11 @@ import {
   PREVIEW_QUERY_PARAM,
   remapPreviewQueryForRemovedSplit,
 } from '@components/app/split-layout/previewPersistence';
+import {
+  CONNECTIONS_TAB_SLUG,
+  isConnectionsRestToken,
+  settingsSplitSegmentCount,
+} from './settingsConnectionsUrl';
 
 /**
  * Parse a base-relative app URL. The base only anchors parsing — inputs come
@@ -40,7 +45,11 @@ export const stripSettingsSplitFromUrl = (urlString: string): string => {
       (type === 'component' && segments[i + 1] === 'settings')
     ) {
       removedSplitIndex = i / 2;
-      segments.splice(i, 2);
+      const consume =
+        type === 'settings'
+          ? settingsSplitSegmentCount(segments[i + 1] ?? '', segments[i + 2])
+          : 2;
+      segments.splice(i, consume);
       break;
     }
   }
@@ -71,10 +80,17 @@ export const stripSettingsSplitFromUrl = (urlString: string): string => {
  */
 export const appendSettingsSplitToUrl = (
   urlString: string,
-  settingsTabSlug: string
+  settingsTabSlug: string,
+  connectionsRest?: string | null
 ): string => {
   const url = parseUrl(urlString);
   const base = url.pathname.replace(/\/$/, '');
-  url.pathname = `${base}/settings/${settingsTabSlug}`;
+  const rest =
+    settingsTabSlug === CONNECTIONS_TAB_SLUG &&
+    connectionsRest &&
+    isConnectionsRestToken(connectionsRest)
+      ? `/${connectionsRest}`
+      : '';
+  url.pathname = `${base}/settings/${settingsTabSlug}${rest}`;
   return toRelativeUrl(url);
 };

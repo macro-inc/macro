@@ -5,6 +5,7 @@ import { getNativeMobilePlatform } from '@core/util/platform';
 import IconGoogle from '@icon/macro-google.svg';
 import GithubIcon from '@icon/mcp-github.svg';
 import {
+  githubLinkStartFailureMessage,
   invalidateGithubLinkStatus,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
@@ -42,12 +43,8 @@ export function OnboardingConnectAccounts() {
 
   const githubLinked = () =>
     debugGithubConnected() || githubLink.data?.status === 'linked';
-  const githubLabel = () => {
-    const username = debugGithubConnected()
-      ? DEBUG_FAKE_GITHUB_USERNAME
-      : githubLink.data?.username;
-    return username ? `@${username}` : 'GitHub';
-  };
+  const githubLabel = () =>
+    debugGithubConnected() ? `@${DEBUG_FAKE_GITHUB_USERNAME}` : 'GitHub';
 
   const hasConnectedAccounts = () =>
     (linksQuery.data?.links.length ?? 0) > 0 || githubLinked();
@@ -97,7 +94,9 @@ export function OnboardingConnectAccounts() {
       toast.success('GitHub connected');
     } catch (error) {
       console.error('connect github failed', error);
-      toast.failure('Failed to connect GitHub');
+      toast.failure(
+        githubLinkStartFailureMessage(error, 'Failed to connect GitHub')
+      );
     }
   };
 

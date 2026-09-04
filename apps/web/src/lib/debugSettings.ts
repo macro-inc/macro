@@ -28,7 +28,7 @@ export const DEBUG_SETTINGS: DebugSettingDef[] = [
     key: DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES,
     label: 'Force empty states',
     description:
-      'Short-circuits sidebar nav views to their empty state regardless of content, for debugging empty states.',
+      'Short-circuits sidebar nav views and Connections to their empty state regardless of content.',
   },
 ];
 

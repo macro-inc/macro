@@ -21,14 +21,7 @@ const mocks = vi.hoisted(() => ({
     },
     isPlaceholderData: false,
   },
-  models: {
-    data: {
-      models: [{ id: 'default-model', displayName: 'Default Model' }],
-    },
-  },
-  save: vi.fn(),
-  disconnect: vi.fn(),
-  setDefaultModel: vi.fn(),
+  selectTab: vi.fn(),
   toastSuccess: vi.fn(),
   toastFailure: vi.fn(),
 }));
@@ -57,18 +50,11 @@ const harnessMocks = vi.hoisted(() => ({
 
 vi.mock('@queries/auth/cursor-api-key', () => ({
   useCursorApiKeyStatusQuery: () => mocks.status,
-  useSaveCursorApiKey: () => ({
-    mutateAsync: mocks.save,
-    isPending: false,
-  }),
-  useDisconnectCursorApiKey: () => ({
-    mutateAsync: mocks.disconnect,
-    isPending: false,
-  }),
-  useCursorModelsQuery: () => mocks.models,
-  useSetCursorDefaultModel: () => ({
-    mutateAsync: mocks.setDefaultModel,
-    isPending: false,
+}));
+
+vi.mock('@core/constant/SettingsState', () => ({
+  useSettingsState: () => ({
+    selectTab: mocks.selectTab,
   }),
 }));
 
@@ -140,8 +126,6 @@ beforeEach(() => {
     updatedAt: null,
   };
   mocks.status.isPlaceholderData = false;
-  mocks.save.mockResolvedValue(undefined);
-  mocks.disconnect.mockResolvedValue(undefined);
   harnessMocks.query.data = [];
   harnessMocks.query.isError = false;
   harnessMocks.pairing.isError = false;
@@ -155,94 +139,53 @@ describe('Harness', () => {
     render(() => <Harness />);
 
     expect(screen.getByRole('heading', { name: 'In-memory' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Cursor/ })).toBeTruthy();
     expect(
       screen.getByRole('heading', { name: 'Bring your own agent' })
     ).toBeTruthy();
     expect(screen.getByText(/This is not a coding harness/)).toBeTruthy();
   });
 
-  it('validates and saves a Cursor API key', async () => {
-    render(() => <Harness />);
-
-    const apiKeyInput = screen.getByLabelText('API key');
-    const saveButton = screen.getByRole('button', { name: 'Save' });
-
-    expect(apiKeyInput).toHaveProperty('type', 'password');
-    expect(saveButton).toHaveProperty('disabled', true);
-
-    fireEvent.input(apiKeyInput, { target: { value: 'not-a-cursor-key' } });
-    fireEvent.click(saveButton);
-
-    expect(mocks.save).not.toHaveBeenCalled();
-    expect(mocks.toastFailure).toHaveBeenCalledWith(
-      'Cursor API keys start with crsr_'
-    );
-
-    fireEvent.input(apiKeyInput, { target: { value: '  crsr_example  ' } });
-    fireEvent.click(saveButton);
-
-    await waitFor(() => {
-      expect(mocks.save).toHaveBeenCalledWith('crsr_example');
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Cursor connected');
-      expect(apiKeyInput).toHaveProperty('value', '');
-    });
-  });
-
-  it('shows connection status, the default model picker, and disconnect for connected Cursor', async () => {
+  it('shows Connected on the Cursor row when the key is registered', () => {
     mocks.status.data = {
       registered: true,
       defaultModelId: null,
       updatedAt: '2026-08-27T12:00:00Z',
     };
+    mocks.status.isPlaceholderData = false;
 
     render(() => <Harness />);
 
-    expect(screen.getByText('Connected')).toBeTruthy();
+    const cursorRow = screen.getByRole('button', { name: /Cursor/ });
+    expect(within(cursorRow).getByText('Connected')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
-    expect(screen.getByText(/does not revoke it in Cursor/)).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText('Default model'), {
-      target: { value: 'default-model' },
-    });
-    await waitFor(() => {
-      expect(mocks.setDefaultModel).toHaveBeenCalledWith('default-model');
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');
-    });
-
-    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
-
-    await waitFor(() => {
-      expect(mocks.disconnect).toHaveBeenCalledOnce();
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Cursor disconnected');
-    });
+    fireEvent.click(cursorRow);
+    expect(mocks.selectTab).toHaveBeenCalledWith('Connected');
   });
 
-  it('does not flash the API key form while connection status loads', () => {
-    mocks.status.isPlaceholderData = true;
-
+  it('hides Connected on the Cursor row when the key is missing', () => {
     render(() => <Harness />);
 
-    expect(screen.getByText('Loading…')).toBeTruthy();
-    expect(screen.queryByLabelText('API key')).toBeNull();
+    const cursorRow = screen.getByRole('button', { name: /Cursor/ });
+    expect(within(cursorRow).queryByText('Connected')).toBeNull();
   });
 
   it('links the empty BYOA list to the setup documentation', () => {
     render(() => <Harness />);
 
-    expect(screen.getByText('No agents connected')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Setup guide/ })).toHaveProperty(
       'href',
       'https://docs.macro.com/AI/bring-your-own'
     );
   });
 
-  it('offers "Enter pairing code" in the header and empty state', () => {
+  it('offers one "Enter pairing code" button when no agents are connected', () => {
     render(() => <Harness />);
 
     expect(
       screen.getAllByRole('button', { name: 'Enter pairing code' })
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 
   it('renders a registered harness row', () => {
@@ -255,6 +198,9 @@ describe('Harness', () => {
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
     expect(screen.getByText(/Last connected /)).toBeTruthy();
     expect(screen.queryByText('Never connected')).toBeNull();
+    expect(
+      screen.getAllByRole('button', { name: 'Enter pairing code' })
+    ).toHaveLength(1);
   });
 
   it('shows a disconnected private harness that never connected', () => {

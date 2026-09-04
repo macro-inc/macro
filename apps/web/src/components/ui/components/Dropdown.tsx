@@ -202,7 +202,7 @@ function DropdownContent(props: DropdownContentProps) {
       >
         <KobalteDropdownMenu.Content
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu bg-menu',
+            'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu bg-menu max-h-[var(--kb-popper-content-available-height,70dvh)] overflow-y-auto overscroll-contain',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -276,7 +276,7 @@ function DropdownGroupLabel(props: DropdownGroupLabelProps) {
   return (
     <KobalteDropdownMenu.GroupLabel
       class={cn(
-        'px-2 h-7 flex items-center text-xs text-ink-extra-muted',
+        'sticky top-0 z-1 bg-menu px-2 h-7 flex items-center text-xs text-ink-extra-muted',
         local.class
       )}
       {...rest}

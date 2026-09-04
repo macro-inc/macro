@@ -15,7 +15,7 @@ import { createSignal, lazy, Show, Suspense } from 'solid-js';
 const SignatureEditor = lazy(() => import('./SignatureEditor'));
 
 // Unsaved signature drafts and per-inbox expanded state, keyed by link id and
-// held at module scope. The settings panel unmounts the Connected Accounts tab
+// held at module scope. The settings panel unmounts the Connections tab
 // when you switch away (and the links query can recreate an inbox row on
 // refetch); keeping this outside that subtree means tabbing away and back no
 // longer closes the editor or discards unsaved edits.
@@ -25,6 +25,29 @@ const [signatureDrafts, setSignatureDrafts] = createSignal<
 const [signatureExpanded, setSignatureExpanded] = createSignal<
   Record<string, boolean>
 >({});
+
+/** Current unsaved draft HTML for an inbox, or `null` if none. */
+export function signatureDraft(linkId: string): string | null {
+  return signatureDrafts()[linkId] ?? null;
+}
+
+/** Writes or clears an inbox's unsaved draft. */
+export function setSignatureDraft(linkId: string, html: string | null): void {
+  setSignatureDrafts((prev) => {
+    if (html === null) {
+      const next = { ...prev };
+      delete next[linkId];
+      return next;
+    }
+    return { ...prev, [linkId]: html };
+  });
+}
+
+/** Whether an inbox has an unsaved draft that differs from persisted HTML. */
+export function isSignatureDirty(linkId: string, persisted: string): boolean {
+  const draft = signatureDraft(linkId);
+  return draft != null && draft !== persisted;
+}
 
 /** Whether an inbox's signature editor is expanded (reactive). */
 export function isSignatureExpanded(linkId: string): boolean {
@@ -71,6 +94,45 @@ function saveSignatureErrorMessage(error: Error): string {
   return 'Unable to save images. Use the image button to add images.';
 }
 
+type PersistSignatureMutate = (
+  vars: { linkId: string; settings: { signature: string } },
+  callbacks: {
+    onSuccess: (data: { settings: { signature?: string | null } }) => void;
+    onError: (error: Error) => void;
+  }
+) => void;
+
+/** Same mutate path for the editor Save button and the Connections row action. */
+export function persistSignatureDraft(input: {
+  linkId: string;
+  mutate: PersistSignatureMutate;
+  setEditorContent?: (html: string) => void;
+  onError?: (message: string) => void;
+  onSaved?: () => void;
+}): void {
+  const next = signatureDraft(input.linkId);
+  if (next === null) return;
+  input.mutate(
+    { linkId: input.linkId, settings: { signature: next } },
+    {
+      onSuccess: (data) => {
+        setSignatureDraft(input.linkId, null);
+        input.setEditorContent?.(data.settings.signature ?? '');
+        toast.success('Signature saved');
+        input.onSaved?.();
+      },
+      onError: (error) => {
+        const message = saveSignatureErrorMessage(error);
+        if (input.onError) {
+          input.onError(message);
+          return;
+        }
+        toast.failure(message);
+      },
+    }
+  );
+}
+
 /**
  * Per-inbox signature editor. Reads the persisted signature from the links
  * query (no extra fetch) into the Quill editor, tracks an unsaved draft, and
@@ -79,21 +141,9 @@ function saveSignatureErrorMessage(error: Error): string {
  */
 export function SignatureSection(props: { link: EmailLink }) {
   const signature = useEmailSignature(() => props.link.id);
-  // Draft lives in the module-level store (keyed by link id) so it survives the
-  // settings tab unmounting; `null` means "no unsaved edit".
-  const draft = () => signatureDrafts()[props.link.id] ?? null;
-  const setDraft = (html: string | null) =>
-    setSignatureDrafts((prev) => {
-      if (html === null) {
-        const next = { ...prev };
-        delete next[props.link.id];
-        return next;
-      }
-      return { ...prev, [props.link.id]: html };
-    });
-
+  const draft = () => signatureDraft(props.link.id);
   const persisted = () => signature() ?? '';
-  const isDirty = () => draft() !== null && draft() !== persisted();
+  const isDirty = () => isSignatureDirty(props.link.id, persisted());
   // Enabled when there's a saved signature or unsaved draft text to clear — so
   // "Remove" stays available even after the user manually empties the editor.
   const hasContent = () => persisted().length > 0 || (draft()?.length ?? 0) > 0;
@@ -109,25 +159,13 @@ export function SignatureSection(props: { link: EmailLink }) {
   const [saveError, setSaveError] = createSignal<string | null>(null);
 
   const saveSignature = () => {
-    const next = draft();
-    if (next === null) return;
     setSaveError(null);
-    updateSettings.mutate(
-      { linkId: props.link.id, settings: { signature: next } },
-      {
-        onSuccess: (data) => {
-          setDraft(null);
-          editorApi?.setContent(data.settings.signature ?? '');
-          toast.success('Signature saved');
-        },
-        // The backend rejects the whole patch (HTTP 422, nothing persisted) when
-        // a signature has images that won't render for recipients — e.g. pasted
-        // from another webmail account, so reachable only by that session. Show
-        // the (long) message inline below the buttons and keep the draft so the
-        // user can re-add those images and retry.
-        onError: (error) => setSaveError(saveSignatureErrorMessage(error)),
-      }
-    );
+    persistSignatureDraft({
+      linkId: props.link.id,
+      mutate: (vars, callbacks) => updateSettings.mutate(vars, callbacks),
+      setEditorContent: (html) => editorApi?.setContent(html),
+      onError: setSaveError,
+    });
   };
 
   // Clears the stored signature. Sending an empty string is the backend's
@@ -138,7 +176,7 @@ export function SignatureSection(props: { link: EmailLink }) {
       { linkId: props.link.id, settings: { signature: '' } },
       {
         onSuccess: () => {
-          setDraft(null);
+          setSignatureDraft(props.link.id, null);
           editorApi?.setContent('');
           toast.success('Signature removed');
         },
@@ -159,7 +197,7 @@ export function SignatureSection(props: { link: EmailLink }) {
   };
 
   return (
-    <div class="flex flex-col gap-3 rounded-xl border border-edge-muted p-3">
+    <div class="flex flex-col gap-3">
       {/* Editing (Quill) is desktop-only; on mobile the section still offers
           the replies/forwards toggle and Remove, with a pointer to desktop. */}
       <Show
@@ -181,7 +219,7 @@ export function SignatureSection(props: { link: EmailLink }) {
           <SignatureEditor
             value={draft() ?? persisted()}
             onInput={(html) => {
-              setDraft(html);
+              setSignatureDraft(props.link.id, html);
               setSaveError(null);
             }}
             onReady={(api) => {
@@ -192,7 +230,7 @@ export function SignatureSection(props: { link: EmailLink }) {
       </Show>
       {/* Stacks on narrow screens so the toggle label and buttons never
           crowd each other onto wrapped lines. */}
-      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div class="flex flex-col gap-3 px-3 sm:flex-row sm:items-center sm:justify-between">
         <ToggleSwitch
           checked={props.link.settings.signature_on_replies_forwards ?? false}
           onChange={setOnRepliesForwards}
@@ -226,7 +264,9 @@ export function SignatureSection(props: { link: EmailLink }) {
         </div>
       </div>
       <Show when={saveError()}>
-        {(msg) => <p class="text-right text-sm text-failure-ink">{msg()}</p>}
+        {(msg) => (
+          <p class="px-3 text-right text-sm text-failure-ink">{msg()}</p>
+        )}
       </Show>
     </div>
   );

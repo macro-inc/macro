@@ -1,0 +1,486 @@
+import {
+  TurnOffCalendarDialog,
+  type TurnOffCalendarTarget,
+} from '@app/features/calendar/components/TurnOffCalendarDialog';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { toast } from '@core/component/Toast/Toast';
+import {
+  enableEmailSignatures,
+  enableMultiInbox,
+} from '@core/constant/featureFlags';
+import { useEmail, useUserId } from '@core/context/user';
+import { useAddInboxFlow } from '@core/email-link';
+import {
+  useEmailLinksQuery,
+  useRemoveInboxMutation,
+} from '@queries/email/link';
+import { useUpdateEmailSettingsMutation } from '@queries/email/settings';
+import type { ConsentScopes } from '@service-auth/client';
+import type { Link as EmailLink } from '@service-email/generated/schemas';
+import { Button, Dialog, Panel } from '@ui';
+import { createSignal, For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
+import { InboxSyncStatus } from '../inbox-sync-status';
+import { ConnectAction } from '../integration-ui';
+import {
+  IntegrationRow,
+  SettingsCard,
+  SettingsPage,
+  SettingsRow,
+  SettingsSection,
+} from '../primitives';
+import {
+  clearSignatureState,
+  isSignatureDirty,
+  isSignatureExpanded,
+  persistSignatureDraft,
+  SignatureSection,
+  toggleSignatureExpanded,
+} from '../SignatureSection';
+import {
+  finishSignatureRow,
+  signatureRowAction,
+  signatureRowLabel,
+} from '../signature-row-action';
+import { ConnectionRowActions } from './connection-more';
+import {
+  type Capability,
+  type ConnectionsModel,
+  capabilitiesFor,
+} from './model';
+import { providerIcon } from './provider-meta';
+import { closeConnectionsProvider } from './view-state';
+
+export function GoogleProvider(props: { model: ConnectionsModel }) {
+  const userId = useUserId();
+  const accountEmail = useEmail();
+  const rows = () => capabilitiesFor(props.model, 'google');
+  const inboxEmails = () => [...new Set(rows().map((row) => row.account))];
+  const inboxScope = (email: string) =>
+    rows().find((row) => row.account === email)?.scope ?? 'personal';
+  const inboxCapIds = (email: string) =>
+    rows()
+      .filter((row) => row.account === email)
+      .map((row) => row.id);
+  const capById = (id: string) => rows().find((row) => row.id === id);
+
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
+  const startAddInbox = useAddInboxFlow();
+  const emailLinks = useEmailLinksQuery();
+  const linkById = (id: string | undefined): EmailLink | undefined =>
+    id ? emailLinkList().find((link) => link.id === id) : undefined;
+  const removeInbox = useRemoveInboxMutation({
+    onSuccess: (_data, linkId) => {
+      clearSignatureState(linkId);
+      toast.success('Inbox removed');
+    },
+    onError: () => toast.failure('Failed to remove inbox. Please try again.'),
+  });
+  const [pending, setPending] = createSignal(false);
+  const [calendarTarget, setCalendarTarget] =
+    createSignal<TurnOffCalendarTarget | null>(null);
+  const [removeTarget, setRemoveTarget] = createSignal<{
+    id: string;
+    email: string;
+    isOwn: boolean;
+  } | null>(null);
+
+  const connect = async (scopes?: ConsentScopes) => {
+    if (pending()) return;
+    setPending(true);
+    try {
+      await startAddInbox(scopes ? { scopes } : undefined);
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const linkIdFor = (capability: Capability) => capability.linkId;
+
+  const emailLinkList = () =>
+    emailLinks.isSuccess ? (emailLinks.data.links ?? []) : [];
+
+  const disabledPrimaryEmail = () => {
+    const email = accountEmail();
+    if (!email) return undefined;
+    const links = emailLinkList();
+    const hasPrimary = links.some(
+      (link) => link.is_primary && link.macro_id === userId()
+    );
+    if (hasPrimary || links.length === 0) return undefined;
+    return email;
+  };
+
+  return (
+    <SettingsPage
+      title="Google"
+      icon={providerIcon('google')}
+      onBack={closeConnectionsProvider}
+    >
+      <Show
+        when={inboxEmails().length > 0}
+        fallback={
+          <SettingsSection title="Your Connections">
+            <SettingsCard>
+              <IntegrationRow
+                title="Gmail"
+                description="Read, organize, and act on your email."
+              >
+                <ConnectAction
+                  label="Connect"
+                  onClick={() => void connect()}
+                  disabled={pending()}
+                />
+              </IntegrationRow>
+            </SettingsCard>
+          </SettingsSection>
+        }
+      >
+        <For each={inboxEmails()}>
+          {(email) => (
+            <SettingsSection
+              title={<span class="ph-no-capture truncate">{email}</span>}
+              description={
+                inboxScope(email) === 'shared' ? 'Shared' : undefined
+              }
+            >
+              <SettingsCard>
+                <For each={inboxCapIds(email)}>
+                  {(capId) => (
+                    <Show when={capById(capId)}>
+                      {(row) => (
+                        <GoogleInboxCapability
+                          row={row()}
+                          link={linkById(linkIdFor(row()))}
+                          pending={pending()}
+                          removing={removeInbox.isPending}
+                          onConnect={() =>
+                            void connect(
+                              row().kind === 'calendar' ? 'calendar' : 'gmail'
+                            )
+                          }
+                          onReconnect={() => void connect()}
+                          onRemoveGmail={() => {
+                            const linkId = linkIdFor(row());
+                            if (!linkId) return;
+                            setRemoveTarget({
+                              id: linkId,
+                              email: row().account,
+                              isOwn: row().scope === 'personal',
+                            });
+                          }}
+                          onTurnOffCalendar={() => {
+                            const linkId = linkIdFor(row());
+                            if (!linkId) return;
+                            setCalendarTarget({
+                              linkId,
+                              emailAddress: row().account,
+                            });
+                          }}
+                        />
+                      )}
+                    </Show>
+                  )}
+                </For>
+              </SettingsCard>
+            </SettingsSection>
+          )}
+        </For>
+        <Show when={disabledPrimaryEmail()}>
+          {(email) => (
+            <SettingsSection
+              title={<span class="ph-no-capture truncate">{email()}</span>}
+            >
+              <SettingsCard>
+                <IntegrationRow
+                  title="Gmail"
+                  description="Sync disabled"
+                  facts="Primary · Disabled"
+                  muted
+                >
+                  <ConnectAction
+                    label="Enable"
+                    variant="neutral"
+                    onClick={() => void connect()}
+                    disabled={pending()}
+                  />
+                </IntegrationRow>
+              </SettingsCard>
+            </SettingsSection>
+          )}
+        </Show>
+      </Show>
+
+      <Show when={rows().length > 0 && multiInboxFlag().enabled}>
+        <ConnectAction
+          label="Add another Google account"
+          onClick={() => void connect()}
+          disabled={pending()}
+        />
+      </Show>
+
+      <TurnOffCalendarDialog
+        target={calendarTarget()}
+        onClose={() => setCalendarTarget(null)}
+      />
+
+      <Dialog
+        open={removeTarget() !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoveTarget(null);
+        }}
+        position="center"
+        visibleScrim
+        class="w-120"
+      >
+        <Panel depth={2} class="rounded-xl">
+          <Panel.Header class="px-6">
+            <Dialog.Title class="text-ink text-sm font-semibold">
+              Remove inbox
+            </Dialog.Title>
+          </Panel.Header>
+          <Panel.Body class="p-6 font-sans flex flex-col gap-3">
+            <Dialog.Description class="text-ink-muted text-sm/tight font-normal">
+              <Show
+                when={removeTarget()?.isOwn}
+                fallback={
+                  <>
+                    Remove access to{' '}
+                    <span class="ph-no-capture text-ink">
+                      {removeTarget()?.email}
+                    </span>
+                    ? The inbox and its data stay with its owner.
+                  </>
+                }
+              >
+                Remove{' '}
+                <span class="ph-no-capture text-ink">
+                  {removeTarget()?.email}
+                </span>
+                ? This clears all of its email data from Macro and cannot be
+                undone.
+              </Show>
+            </Dialog.Description>
+            <div class="pt-3 justify-end items-center gap-3 inline-flex">
+              <Button
+                variant="outline"
+                depth={3}
+                onClick={() => setRemoveTarget(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                depth={3}
+                onClick={() => {
+                  const target = removeTarget();
+                  if (!target) return;
+                  setRemoveTarget(null);
+                  removeInbox.mutate(target.id);
+                }}
+              >
+                Remove
+              </Button>
+            </div>
+          </Panel.Body>
+        </Panel>
+      </Dialog>
+    </SettingsPage>
+  );
+}
+
+function GoogleInboxCapability(props: {
+  row: Capability;
+  link: EmailLink | undefined;
+  pending: boolean;
+  removing: boolean;
+  onConnect: () => void;
+  onReconnect: () => void;
+  onRemoveGmail: () => void;
+  onTurnOffCalendar: () => void;
+}) {
+  const signaturesFlag = useFeatureFlag(enableEmailSignatures);
+  const updateSettings = useUpdateEmailSettingsMutation();
+  const isGmail = () => props.row.kind === 'gmail';
+  const isOwn = () => props.row.scope === 'personal';
+  const showSignature = () =>
+    Boolean(
+      props.link &&
+        isGmail() &&
+        isOwn() &&
+        signaturesFlag().enabled &&
+        isSignatureExpanded(props.link.id)
+    );
+  const signatureSectionId = () =>
+    props.link ? `signature-section-${props.link.id}` : undefined;
+  const persistedSignature = () => props.link?.settings.signature ?? '';
+  const signatureAction = () => {
+    const id = props.link?.id;
+    if (!id) return 'edit' as const;
+    return signatureRowAction(
+      isSignatureExpanded(id),
+      isSignatureDirty(id, persistedSignature())
+    );
+  };
+  const finishSignature = (linkId: string) => {
+    finishSignatureRow({
+      action: signatureAction(),
+      save: () =>
+        persistSignatureDraft({
+          linkId,
+          mutate: (vars, callbacks) => updateSettings.mutate(vars, callbacks),
+          onSaved: () => {
+            if (isSignatureExpanded(linkId)) toggleSignatureExpanded(linkId);
+          },
+        }),
+      toggle: () => toggleSignatureExpanded(linkId),
+    });
+  };
+
+  const capabilityRow = () => (
+    <IntegrationRow
+      title={props.row.title}
+      description={props.row.outcome}
+      facts={
+        isGmail() && props.link ? (
+          <InboxSyncStatus link={props.link} />
+        ) : undefined
+      }
+      muted={props.row.status === 'off'}
+    >
+      <GoogleCapabilityActions
+        row={props.row}
+        link={props.link}
+        pending={props.pending}
+        removing={props.removing}
+        onConnect={props.onConnect}
+        onReconnect={props.onReconnect}
+        onRemoveGmail={props.onRemoveGmail}
+        onTurnOffCalendar={props.onTurnOffCalendar}
+      />
+    </IntegrationRow>
+  );
+
+  return (
+    <Show when={isGmail()} fallback={capabilityRow()}>
+      <div>
+        {capabilityRow()}
+        <Show
+          when={isOwn() && signaturesFlag().enabled ? props.link : undefined}
+        >
+          {(link) => (
+            <>
+              <SettingsRow
+                label="Signature"
+                description="Added to messages you send from this inbox."
+                align="start"
+                class="min-h-0 py-3 pl-10"
+              >
+                <Button
+                  variant="outline"
+                  size="sm"
+                  depth={3}
+                  disabled={
+                    signatureAction() === 'save' && updateSettings.isPending
+                  }
+                  onClick={() => finishSignature(link().id)}
+                  aria-label={`${signatureRowLabel(signatureAction())} signature for ${link().email_address}`}
+                  aria-expanded={showSignature()}
+                  aria-controls={signatureSectionId()}
+                >
+                  {signatureRowLabel(signatureAction())}
+                </Button>
+              </SettingsRow>
+              <Show when={showSignature()}>
+                <div id={signatureSectionId()} class="pr-6 pb-5 pl-10">
+                  <SignatureSection link={link()} />
+                </div>
+              </Show>
+            </>
+          )}
+        </Show>
+      </div>
+    </Show>
+  );
+}
+
+function GoogleCapabilityActions(props: {
+  row: Capability;
+  link: EmailLink | undefined;
+  pending: boolean;
+  removing: boolean;
+  onConnect: () => void;
+  onReconnect: () => void;
+  onRemoveGmail: () => void;
+  onTurnOffCalendar: () => void;
+}) {
+  const isOwn = () => props.row.scope === 'personal';
+  const isCalendar = () => props.row.kind === 'calendar';
+  const canRevoke = () => !isCalendar() || isOwn();
+  const canTurnOffCalendarWithData = () =>
+    isCalendar() &&
+    isOwn() &&
+    Boolean(
+      props.link?.has_calendar_data && props.link.needs_calendar_permission
+    );
+  const disconnectItem = {
+    label: 'Disconnect',
+    danger: true,
+    onSelect: isCalendar() ? props.onTurnOffCalendar : props.onRemoveGmail,
+    disabled: !isCalendar() && props.removing,
+    icon: 'disconnect' as const,
+  };
+  const reconnectItem = {
+    label: 'Reconnect',
+    onSelect: props.onReconnect,
+    disabled: props.pending,
+    icon: 'reconnect' as const,
+  };
+
+  return match(props.row.status)
+    .with('action-required', () => (
+      <ConnectionRowActions
+        primary={
+          <ConnectAction
+            label="Reconnect"
+            onClick={props.onReconnect}
+            disabled={props.pending}
+          />
+        }
+        items={canRevoke() ? [reconnectItem, disconnectItem] : []}
+      />
+    ))
+    .with('connected', () => (
+      <ConnectionRowActions
+        items={canRevoke() ? [reconnectItem, disconnectItem] : []}
+      />
+    ))
+    .with('off', () => (
+      <ConnectionRowActions
+        primary={
+          isOwn() && isCalendar() ? (
+            <ConnectAction
+              label="Enable"
+              variant="neutral"
+              onClick={props.onConnect}
+              disabled={props.pending}
+            />
+          ) : undefined
+        }
+        items={canRevoke() ? [reconnectItem, disconnectItem] : []}
+      />
+    ))
+    .with('not-connected', () => (
+      <ConnectionRowActions
+        primary={
+          <ConnectAction
+            label={isCalendar() ? 'Enable calendar' : 'Connect'}
+            onClick={props.onConnect}
+            disabled={props.pending}
+          />
+        }
+        items={canTurnOffCalendarWithData() ? [disconnectItem] : []}
+      />
+    ))
+    .exhaustive();
+}

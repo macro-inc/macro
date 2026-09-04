@@ -7,13 +7,12 @@ import type {
 } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
-import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
+import { settingsUrlSegments } from '@core/constant/settingsUrlSegments';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
-import { activeTabId } from '@core/signal/settingsTab';
 import { useFocusLock } from '@core/util/createControlledOpenSignal';
 import {
   type Accessor,
@@ -114,7 +113,7 @@ function getAliasOrType(content: SplitContent): string {
  */
 function contentUrlSegments(content: SplitContent): string[] {
   if (content.type === 'component' && content.id === 'settings') {
-    return ['settings', settingsTabToSlug(activeTabId())];
+    return settingsUrlSegments();
   }
   return [getAliasOrType(content), content.id].map(String);
 }

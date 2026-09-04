@@ -87,6 +87,7 @@ export function useCursorModelsQuery(enabled: () => boolean) {
       throwOnErr(async () => await authServiceClient.listCursorModels()),
     enabled: enabled(),
     staleTime: 5 * 60 * 1000,
+    placeholderData: { models: [] },
   }));
 }
 

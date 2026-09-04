@@ -200,7 +200,10 @@ export default function SignatureEditor(props: {
       },
     });
     setHtml(props.value);
-    quill.on('text-change', () => props.onInput(currentHtml()));
+    quill.on('text-change', (_d, _o, source) => {
+      if (source === 'silent') return;
+      props.onInput(currentHtml());
+    });
     teardownResizer = setupImageResizer(quill);
     props.onReady?.({ setContent: (html) => setHtml(html) });
 

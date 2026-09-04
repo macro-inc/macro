@@ -70,6 +70,7 @@ snapshot to a file) plus a feed of "You edited/created X" entries.
 
 Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
 `Draft an email`, `Search & research`), and the ubiquitous `Ask AI` composer.
+The connect-inbox empty state opens Connections at Google.
 
 ## Settings — `/app/settings/<section>`
 
@@ -77,9 +78,43 @@ Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
-Workspace → `Team`, `Tags`, `CRM`, `Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; `Log out`.
+Workspace → `Team`, `Tags`, `CRM`, `Connections` (Connected / Discover), `Macro MCP`
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE; signposts
+inbound connectors to Connections Discover). Connections signposts outbound
+Macro MCP to `Macro MCP`. `Bots`; Agents → `Agents`, `Harness` (gated by
+enable-chat-v3-agents). `Log out`.
+`/app/settings/harness?pair=` still mounts Harness so pairing works.
+BYOA pairing is one "Enter pairing code" button under the section description.
+The Harness Cursor row opens Connections Cursor (`/app/settings/connections/cursor`) and shows Connected when the Cursor key is registered.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
+The compact/narrow tab dropdown uses the same General / Workspace / Agents / Admin groups as the left nav.
+
+## Settings — Connections — `/app/settings/connections`
+
+`Connected` lists mapped providers with a capability summary. Custom MCP grants sit in
+a second section. Discover's Add custom MCP saves name and URL only. Connect
+on that Connected row starts OAuth. More holds Disable, Rename, Reconnect,
+and Disconnect. An unauthenticated custom MCP shows Remove, not Disconnect.
+The row lists host plus path and drops query params. A failed connect sits
+under the URL. Connect and Enable stay on the row when that is the job.
+Reconnect also sits on the row when auth is broken. No status lights on rows. Off is
+shown by Enable, not a muted dot. Unmatched
+Pipedream leftovers stay with the providers.
+Empty state offers Google first, then GitHub, Linear, Notion,
+Slack, Cursor. `Discover` searches the Pipedream catalog. Browse rows that
+are not added yet connect on a click of the whole row. Featured cards are
+Google, GitHub, Linear, Notion, Slack, Cursor. Click a provider for its page: Google
+(Gmail + Calendar per inbox, no Docs; Gmail shows dest sync status. Signature
+nests under Gmail for an owned inbox), GitHub (account, Configure app for
+repos, AI),
+Linear / Notion / Slack (Pipedream AI, Off is enable/disable), Cursor (API key
++ default model). Discover is `/app/settings/connections/discover`. A provider
+is `/app/settings/connections/<provider>` (`github`, `google`, `cursor`, …).
+Opening a Featured card from Discover writes `discover-<provider>` so Back
+returns to Discover. Those are path tokens under the Connections tab, not extra Settings tabs.
+Connections signposts Macro MCP to
+the `Macro MCP` tab (`/app/settings/mcp-server`). That tab signposts inbound
+connectors to Discover.
 
 ## Notifications
 

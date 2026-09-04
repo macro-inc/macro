@@ -73,7 +73,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
         label: 'Connections',
         icon: CpuIcon,
       },
-      { tab: 'Agent', label: 'MCP server', icon: PlugIcon },
+      { tab: 'Agent', label: 'Macro MCP', icon: PlugIcon },
       { tab: 'Bots', label: 'Bots', icon: BotIcon },
     ],
   },
@@ -120,8 +120,6 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Tags: 'tags',
   CRM: 'crm',
   Connected: 'connections',
-  Email: 'email',
-  GitHub: 'github',
   Admin: 'admin',
 };
 

@@ -1,9 +1,21 @@
-import { throwOnErr } from '@core/util/result';
+import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { queryClient } from '@queries/client';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { authServiceClient } from '@service-auth/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { authKeys } from './keys';
+
+export const GITHUB_TOO_MANY_PENDING_LINKS_MESSAGE =
+  'Too many connections are already in progress. Try again in 24 hours.';
+
+export function githubLinkStartFailureMessage(
+  error: unknown,
+  fallback: string
+): string {
+  return thrownResultErrorHasCode(error, 'TOO_MANY_PENDING_LINKS')
+    ? GITHUB_TOO_MANY_PENDING_LINKS_MESSAGE
+    : fallback;
+}
 
 const GITHUB_LINK_STATUS_STALE_TIME = 5 * 60 * 1000;
 
@@ -14,9 +26,6 @@ export type GithubLinkStatus =
 
 export type GithubLink = {
   status: GithubLinkStatus;
-  // Populated once auth-service includes the linked account handle on
-  // /link/github/status.
-  username?: string;
 };
 
 type UseGithubLinkStatusQueryOptions = {
@@ -33,15 +42,10 @@ export async function fetchGithubLinkStatus(): Promise<GithubLink> {
   const response = await authServiceClient.checkGithubLinkStatus();
 
   if (response.isOk()) {
-    const username =
-      (response.value as { github_username?: string | null }).github_username ??
-      undefined;
-
     return {
       status: response.value.reauthentication_required
         ? 'reauthentication_required'
         : 'linked',
-      username,
     };
   }
 

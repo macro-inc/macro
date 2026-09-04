@@ -63,6 +63,17 @@ describe('stripSettingsSplitFromUrl', () => {
   it('falls back to the default route when settings was the only split', () => {
     expect(stripSettingsSplitFromUrl('/settings/account')).toBe(DEFAULT_ROUTE);
   });
+
+  it('strips a Connections rest token with the settings split', () => {
+    expect(
+      stripSettingsSplitFromUrl(
+        '/component/inbox/settings/connections/discover'
+      )
+    ).toBe('/component/inbox');
+    expect(stripSettingsSplitFromUrl('/settings/connections/github')).toBe(
+      DEFAULT_ROUTE
+    );
+  });
 });
 
 describe('appendSettingsSplitToUrl', () => {
@@ -79,5 +90,11 @@ describe('appendSettingsSplitToUrl', () => {
     expect(appendSettingsSplitToUrl('/component/inbox/', 'account')).toBe(
       '/component/inbox/settings/account'
     );
+  });
+
+  it('appends a Connections rest token after the connections slug', () => {
+    expect(
+      appendSettingsSplitToUrl('/component/inbox', 'connections', 'discover')
+    ).toBe('/component/inbox/settings/connections/discover');
   });
 });

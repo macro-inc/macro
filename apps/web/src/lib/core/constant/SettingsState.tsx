@@ -4,6 +4,10 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  connectionsRest,
+  setConnectionsRest,
+} from '@core/signal/connectionsRest';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import { useLocation, useNavigate } from '@solidjs/router';
 import { createMemo, createSignal } from 'solid-js';
@@ -34,8 +38,6 @@ export type SettingsTab =
   | 'Tags'
   | 'CRM'
   | 'Connected'
-  | 'Email'
-  | 'GitHub'
   | 'Admin';
 
 // Where "Back to app" (and move-to-split) should return to: the layout the user
@@ -169,6 +171,7 @@ export const useSettingsState = () => {
   // explicit navigation needed, whether settings is solo or docked alongside
   // other splits.
   const selectTab = (tab: SettingsTab) => {
+    if (tab !== 'Connected') setConnectionsRest(null);
     setActiveTabId(tab);
   };
 
@@ -197,6 +200,7 @@ export const useSettingsState = () => {
   };
 
   const closeSettings = () => {
+    setConnectionsRest(null);
     if (isSoloSettings()) {
       navigate(settingsReturnTo() ?? DEFAULT_ROUTE, { replace: true });
       return;
@@ -220,7 +224,11 @@ export const useSettingsState = () => {
       settingsReturnTo() ?? DEFAULT_ROUTE
     );
     navigate(
-      appendSettingsSplitToUrl(returnTo, settingsTabToSlug(activeTabId()))
+      appendSettingsSplitToUrl(
+        returnTo,
+        settingsTabToSlug(activeTabId()),
+        connectionsRest()
+      )
     );
   };
 
@@ -250,7 +258,7 @@ export const useSettingsState = () => {
         return;
       }
       // Docked and already focused → close it.
-      manager?.removeSplit(settingsSplit.id);
+      closeSettings();
       return;
     }
 

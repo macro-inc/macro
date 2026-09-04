@@ -14,11 +14,16 @@ import {
   settingsTabFromSplitPath,
   useSettingsState,
 } from '@core/constant/SettingsState';
+import { connectionsRestFromPath } from '@core/constant/settingsConnectionsUrl';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import {
+  connectionsRest,
+  setConnectionsRest,
+} from '@core/signal/connectionsRest';
 import { activeTabId, setActiveTabId } from '@core/signal/settingsTab';
 import ArrowsIn from '@phosphor/arrows-in.svg';
 import ArrowsOut from '@phosphor/arrows-out.svg';
@@ -42,8 +47,8 @@ import { Agent } from './Agent';
 import { Agents } from './Agents';
 import { ApiKeys } from './ApiKeys';
 import { Appearance } from './Appearance';
-import { ConnectedAccounts } from './ConnectedAccounts';
 import { Crm } from './Crm';
+import { ConnectionsPage } from './connections/ConnectionsPage';
 import { Harness } from './Harness';
 import { MobileApp } from './MobileApp';
 import { Notifications } from './Notifications';
@@ -74,6 +79,8 @@ export function SettingsPanelComponentWrapper() {
   createRenderEffect(() => {
     const tab = settingsTabFromSplitPath(location.pathname);
     if (tab && untrack(activeTabId) !== tab) setActiveTabId(tab);
+    const rest = connectionsRestFromPath(location.pathname);
+    if (untrack(connectionsRest) !== rest) setConnectionsRest(rest);
   });
   return <SettingsPanel variant={isSoloSettings() ? 'fullscreen' : 'split'} />;
 }
@@ -97,10 +104,11 @@ export function SettingsPanel(props: SettingsPanelProps) {
 
   const variant = () => props.variant ?? 'split';
 
-  // A tab's content renders only when it's both selected and still available
-  // (gating lives solely in the settings tab config).
-  const isCurrentTab = (tab: SettingsTab) =>
-    activeTabId() === tab && isAvailable(tab);
+  const isCurrentTab = (tab: SettingsTab) => {
+    if (activeTabId() !== tab) return false;
+    if (tab === 'Harness' || tab === 'Agents') return true;
+    return isAvailable(tab);
+  };
 
   // Responsive state, driven by the panel's own width (see breakpoints above).
   const [panelWidth, setPanelWidth] = createSignal(Number.POSITIVE_INFINITY);
@@ -218,6 +226,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const tabItems = () =>
     flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }));
 
+  const tabGroups = () =>
+    groups().map((group) => ({
+      label: group.label,
+      items: group.items.map((tab) => ({ value: tab.tab, label: tab.label })),
+    }));
+
   // "Back to app" — the close affordance for solo settings. Laid out like a nav row.
   const backToApp = () => (
     <button
@@ -283,7 +297,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             <Show when={compact()}>
               <div class="mx-2 shrink-0">
                 <TabsInsetDropdown
-                  list={tabItems()}
+                  groups={tabGroups()}
                   value={activeTabId()}
                   onChange={handleTabChange}
                 />
@@ -374,7 +388,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <div class="flex shrink-0 items-center gap-2 h-13 px-2 border-b border-ink/[0.05]">
                   {backToApp()}
                   <TabsInsetDropdown
-                    list={tabItems()}
+                    groups={tabGroups()}
                     value={activeTabId()}
                     onChange={handleTabChange}
                   />
@@ -429,7 +443,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 </Show>
                 <Show when={isCurrentTab('Connected')}>
                   <Suspense>
-                    <ConnectedAccounts />
+                    <ConnectionsPage />
                   </Suspense>
                 </Show>
                 <Show when={isCurrentTab('Mobile App')}>
