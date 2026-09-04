@@ -161,7 +161,7 @@ pub fn channel_bot_tools() -> ToolSetWithPrompt {
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt {
         toolset,
-        prompt: Box::new(&prompt::TOOL_USE_PROMPT),
+        prompt: Box::new(&prompt::DIRECT_TOOL_USE_PROMPT),
     }
 }
 
@@ -177,7 +177,7 @@ pub fn mcp_tools() -> ToolSetWithPrompt {
     let toolset = Arc::new(toolset);
     ToolSetWithPrompt {
         toolset,
-        prompt: Box::new(&prompt::TOOL_USE_PROMPT),
+        prompt: Box::new(&prompt::DIRECT_TOOL_USE_PROMPT),
     }
 }
 
