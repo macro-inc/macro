@@ -86,10 +86,16 @@ fn mount_at_root_and_prefix(inner: Router) -> Router {
 fn swagger_ui() -> Router {
     Router::new()
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
-        .merge(SwaggerUi::new("/cognition/docs").url(
-            "/cognition/api-doc/openapi.json",
-            swagger::ApiDoc::openapi(),
+        .merge(SwaggerUi::new(format!("{GATEWAY_PATH_PREFIX}/docs")).url(
+            format!("{GATEWAY_PATH_PREFIX}/api-doc/openapi.json"),
+            prefixed_openapi(),
         ))
+}
+
+fn prefixed_openapi() -> utoipa::openapi::OpenApi {
+    let mut openapi = swagger::ApiDoc::openapi();
+    openapi.servers = Some(vec![utoipa::openapi::Server::new(GATEWAY_PATH_PREFIX)]);
+    openapi
 }
 
 fn api_router(api_context: ApiContext) -> Router {

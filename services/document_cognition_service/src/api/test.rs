@@ -3,6 +3,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use http_body_util::BodyExt;
 use tower::ServiceExt;
 
 async fn get_status(app: Router, path: &str) -> StatusCode {
@@ -46,4 +47,26 @@ async fn openapi_is_served_at_root_and_gateway_prefix() {
             "{path}"
         );
     }
+}
+
+#[tokio::test]
+async fn prefixed_openapi_declares_the_cognition_server() {
+    let response = swagger_ui()
+        .oneshot(
+            Request::builder()
+                .uri("/cognition/api-doc/openapi.json")
+                .method("GET")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let spec: serde_json::Value =
+        serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(
+        spec["servers"][0]["url"].as_str(),
+        Some(GATEWAY_PATH_PREFIX)
+    );
 }
