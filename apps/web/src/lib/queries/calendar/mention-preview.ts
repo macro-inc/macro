@@ -24,12 +24,13 @@ export function invalidateCalendarEventPreviews(eventId?: string): void {
   } else {
     queryClient.invalidateQueries({
       queryKey: previewKeys._def,
-      // The key carries no type, so a preview still without data has an
-      // unknown one. It may be an in-flight calendar chip fetch racing this
-      // change, so it refetches too rather than caching a pre-change answer.
+      // The key carries no type, so an entry without data has an unknown
+      // one: undefined while a first fetch is in flight, null for a cached
+      // channel-message-context miss under this same prefix. Refetch both
+      // rather than letting a pre-change answer land as fresh.
       predicate: (query) => {
-        const data = query.state.data as PreviewItem | undefined;
-        return data === undefined || data.type === 'calendar_event';
+        const data = query.state.data as PreviewItem | null | undefined;
+        return data == null || data.type === 'calendar_event';
       },
     });
   }
