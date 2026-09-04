@@ -37,6 +37,7 @@ const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const CH3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c03);
+const CH5_NO_ACTIVITY: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c05);
 const TEAM_A: Uuid = Uuid::from_u128(0x11111111_1111_1111_1111_111111111111);
 const TEAM_A_AUTO_ACTIVE: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c11);
 const TEAM_A_AUTO_LEFT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c12);
@@ -107,6 +108,15 @@ fn channel_filter(literal: ChannelLiteral) -> LiteralTree<ChannelLiteral> {
     Some(Arc::new(Expr::val(literal)))
 }
 
+fn channel_list_fixture_viewed_at(channel_id: Uuid) -> Option<DateTime<Utc>> {
+    match channel_id {
+        CH1 => Some("2024-01-01T00:00:00Z".parse().unwrap()),
+        CH3 => Some("2024-01-04T00:00:00Z".parse().unwrap()),
+        CH5_NO_ACTIVITY => None,
+        id => panic!("unexpected channel {id}"),
+    }
+}
+
 fn channel_list_sort_timestamp(
     channel: &ChannelWithParticipants,
     sort: SimpleSortMethod,
@@ -114,11 +124,12 @@ fn channel_list_sort_timestamp(
     match sort {
         SimpleSortMethod::CreatedAt => channel.channel.created_at,
         SimpleSortMethod::UpdatedAt => channel.channel.updated_at,
-        SimpleSortMethod::ViewedAt | SimpleSortMethod::ViewedUpdated => match channel.channel.id {
-            CH1 => "2024-01-01T00:00:00Z".parse().unwrap(),
-            CH3 => "2024-01-04T00:00:00Z".parse().unwrap(),
-            id => panic!("unexpected channel {id}"),
-        },
+        SimpleSortMethod::ViewedAt => {
+            channel_list_fixture_viewed_at(channel.channel.id).unwrap_or_default()
+        }
+        SimpleSortMethod::ViewedUpdated => {
+            channel_list_fixture_viewed_at(channel.channel.id).unwrap_or(channel.channel.updated_at)
+        }
     }
 }
 
@@ -282,10 +293,13 @@ async fn channel_list_cursor_pagination_matches_unpaginated_results(pool: Pool<P
     let repo = repo(pool);
 
     for (sort, expected_ids) in [
-        (SimpleSortMethod::CreatedAt, vec![CH3, CH1]),
-        (SimpleSortMethod::UpdatedAt, vec![CH1, CH3]),
-        (SimpleSortMethod::ViewedAt, vec![CH3, CH1]),
-        (SimpleSortMethod::ViewedUpdated, vec![CH3, CH1]),
+        (SimpleSortMethod::CreatedAt, vec![CH3, CH5_NO_ACTIVITY, CH1]),
+        (SimpleSortMethod::UpdatedAt, vec![CH1, CH5_NO_ACTIVITY, CH3]),
+        (SimpleSortMethod::ViewedAt, vec![CH3, CH1, CH5_NO_ACTIVITY]),
+        (
+            SimpleSortMethod::ViewedUpdated,
+            vec![CH3, CH5_NO_ACTIVITY, CH1],
+        ),
     ] {
         let unpaginated = repo
             .get_user_channels_with_participants(
@@ -324,6 +338,11 @@ async fn channel_list_cursor_pagination_matches_unpaginated_results(pool: Pool<P
                 break;
             };
             assert_eq!(page.len(), 1);
+            assert_eq!(
+                Some(last.channel.id),
+                expected_ids.get(paginated.len()).copied(),
+                "one-row {sort:?} page was out of order"
+            );
 
             query = Query::Cursor(Cursor {
                 id: last.channel.id,
@@ -360,7 +379,9 @@ async fn channel_list_cursor_pagination_matches_unpaginated_results(pool: Pool<P
                     (USER_B.to_string(), ParticipantRole::Admin),
                     (USER_C.to_string(), ParticipantRole::Member),
                 ],
-                CH3 => vec![(USER_A.to_string(), ParticipantRole::Owner)],
+                CH3 | CH5_NO_ACTIVITY => {
+                    vec![(USER_A.to_string(), ParticipantRole::Owner)]
+                }
                 id => panic!("unexpected channel {id}"),
             };
             assert_eq!(participant_roles(actual), expected_participants);
