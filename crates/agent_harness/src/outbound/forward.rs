@@ -9,7 +9,7 @@ use agent_session::domain::model::{AgentSessionId, ReplicaAddress};
 use reqwest::StatusCode;
 
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::{CommandOutcome, HarnessCommand};
+use crate::domain::model::{CommandOutcome, ForwardedCommand};
 use crate::domain::ports::CommandForwarder;
 
 /// Header carrying the deployment's shared internal key, as
@@ -56,7 +56,7 @@ impl CommandForwarder for HttpCommandForwarder {
         &self,
         target: &ReplicaAddress,
         session: AgentSessionId,
-        command: HarnessCommand,
+        command: ForwardedCommand,
     ) -> Result<CommandOutcome> {
         let url = format!(
             "{}/internal/agent-sessions/{}/command",

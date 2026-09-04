@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH runtime AS MATERIALIZED (\n                SELECT harness_id\n                FROM harness_runtime_lease\n                WHERE harness_id = $3 AND replica_id = $2 AND connection_id = $4\n                  AND pending_until > now()\n                FOR UPDATE\n            )\n            UPDATE agent_session\n            SET manager_replica_id = $2,\n                manager_fence = manager_fence + 1,\n                modified_at = now()\n            WHERE id = $1\n              AND EXISTS (SELECT 1 FROM runtime)\n              AND (manager_replica_id IS NULL OR manager_replica_id = $2)\n            RETURNING manager_fence\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "manager_fence",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fb9ca3aa9120f1b2801c10faa4d6550aec3680e7b2fcbd5d6373f903e62753a0"
+}

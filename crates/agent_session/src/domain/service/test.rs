@@ -424,6 +424,18 @@ impl SessionOwnership for BlockingPromptLogs {
         self.repo.claim(session, replica).await
     }
 
+    async fn claim_for_runtime(
+        &self,
+        session: AgentSessionId,
+        replica: ReplicaId,
+        harness: harness_id::HarnessId,
+        connection_id: macro_uuid::Uuid,
+    ) -> Result<ClaimOutcome> {
+        self.repo
+            .claim_for_runtime(session, replica, harness, connection_id)
+            .await
+    }
+
     async fn release(&self, claim: &SessionClaim) -> Result<()> {
         self.repo.release(claim).await
     }

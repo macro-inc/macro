@@ -374,6 +374,16 @@ impl SessionOwnership for InMemoryAgentSessionRepo {
         }))
     }
 
+    async fn claim_for_runtime(
+        &self,
+        session: AgentSessionId,
+        replica: ReplicaId,
+        _harness: harness_id::HarnessId,
+        _connection_id: macro_uuid::Uuid,
+    ) -> Result<ClaimOutcome> {
+        self.claim(session, replica).await
+    }
+
     async fn release(&self, claim: &SessionClaim) -> Result<()> {
         let mut leases = self
             .leases

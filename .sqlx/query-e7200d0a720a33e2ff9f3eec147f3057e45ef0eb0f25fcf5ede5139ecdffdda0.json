@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO bots (id, kind, owner_user_id, name, handle) VALUES ($1, 'owned', 'owner@localhost', 'bot', 'bot')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e7200d0a720a33e2ff9f3eec147f3057e45ef0eb0f25fcf5ede5139ecdffdda0"
+}

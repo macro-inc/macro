@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT last_connected_at IS NOT NULL AS \"connected!\", last_disconnected_at IS NOT NULL AS \"disconnected!\" FROM harnesses WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "connected!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 1,
+        "name": "disconnected!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "5a8663e7dc58d7700575540f5fe0762beb6d3904a20361ddfd59b00cb2bd5409"
+}

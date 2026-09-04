@@ -5,7 +5,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use agent_session::domain::connection::RuntimeAttachment;
-use agent_session::domain::model::{AgentSessionId, ReplicaAddress, SandboxSize};
+use agent_session::domain::model::{AgentSessionId, ReplicaAddress, ReplicaId, SandboxSize};
 use agent_session::domain::ports::AgentConnector;
 use bot_id::BotId;
 use harness_id::HarnessId;
@@ -14,8 +14,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{HarnessError, Result};
 use super::model::{
-    AgentRuntimeConfig, CommandOutcome, HarnessCommand, PriorChannelMessage, ProvisionedEgress,
-    SandboxEgress, SessionAnnouncement, SpawnContainer,
+    AgentRuntimeConfig, CommandOutcome, ForwardedCommand, PriorChannelMessage, ProvisionedEgress,
+    RuntimeOwner, SandboxEgress, SessionAnnouncement, SpawnContainer,
 };
 use super::sandbox::SandboxResizeEffect;
 
@@ -34,7 +34,7 @@ pub trait CommandForwarder: Send + Sync + 'static {
         &self,
         target: &ReplicaAddress,
         session: AgentSessionId,
-        command: HarnessCommand,
+        command: ForwardedCommand,
     ) -> impl Future<Output = Result<CommandOutcome>> + Send;
 }
 
@@ -49,7 +49,7 @@ impl CommandForwarder for NoPeers {
         &self,
         target: &ReplicaAddress,
         session: AgentSessionId,
-        _command: HarnessCommand,
+        _command: ForwardedCommand,
     ) -> Result<CommandOutcome> {
         Err(HarnessError::Forward(rootcause::report!(
             "this deployment has no command forwarding, yet {target} manages session {session}"
@@ -72,21 +72,109 @@ pub trait HarnessBindings: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
 }
 
-/// Durable attach/detach bookkeeping for harness runtime connections.
-///
-/// The registry itself is in-process liveness; this is what lets the rest of
-/// the product (the harness settings page) see whether a daemon is up.
-/// Methods take `Arc<Self>` and return owned futures so the registry can fire
-/// them from its own background tasks.
-pub trait HarnessPresence: Send + Sync + 'static {
-    /// A runtime attached for this harness.
-    fn connected(self: Arc<Self>, harness: HarnessId) -> Pin<Box<dyn Future<Output = ()> + Send>>;
-
-    /// This harness's runtime connection closed.
-    fn disconnected(
-        self: Arc<Self>,
+/// Durable, exclusive ownership of externally hosted runtime sockets.
+pub trait RuntimeLease: Send + Sync + 'static {
+    /// Claim a harness socket token, returning false when a fresh owner exists.
+    fn claim(
+        &self,
         harness: HarnessId,
-    ) -> Pin<Box<dyn Future<Output = ()> + Send>>;
+        replica: ReplicaId,
+        connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<bool>> + Send>>;
+    /// Promote this exact pending claim before publishing its socket locally.
+    fn activate(
+        &self,
+        harness: HarnessId,
+        replica: ReplicaId,
+        connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<bool>> + Send>>;
+    /// Release this exact token, never a newer redial.
+    fn release(
+        &self,
+        harness: HarnessId,
+        replica: ReplicaId,
+        connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>>;
+    /// Find a fresh owner for a harness. The local registry waits briefly for
+    /// a pending owner to finish its WebSocket upgrade before declaring it
+    /// disconnected.
+    fn owner(
+        &self,
+        harness: HarnessId,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Option<RuntimeOwner>>> + Send>>;
+}
+
+impl<T: RuntimeLease + ?Sized> RuntimeLease for Arc<T> {
+    fn claim(
+        &self,
+        harness: HarnessId,
+        replica: ReplicaId,
+        connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<bool>> + Send>> {
+        (**self).claim(harness, replica, connection_id)
+    }
+
+    fn activate(
+        &self,
+        harness: HarnessId,
+        replica: ReplicaId,
+        connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<bool>> + Send>> {
+        (**self).activate(harness, replica, connection_id)
+    }
+
+    fn release(
+        &self,
+        harness: HarnessId,
+        replica: ReplicaId,
+        connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>> {
+        (**self).release(harness, replica, connection_id)
+    }
+
+    fn owner(
+        &self,
+        harness: HarnessId,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Option<RuntimeOwner>>> + Send>> {
+        (**self).owner(harness)
+    }
+}
+
+/// A lease directory for isolated tests and single-process tooling.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoRuntimeLease;
+
+impl RuntimeLease for NoRuntimeLease {
+    fn claim(
+        &self,
+        _harness: HarnessId,
+        _replica: ReplicaId,
+        _connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<bool>> + Send>> {
+        Box::pin(async { Ok(true) })
+    }
+    fn activate(
+        &self,
+        _harness: HarnessId,
+        _replica: ReplicaId,
+        _connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<bool>> + Send>> {
+        Box::pin(async { Ok(true) })
+    }
+    fn release(
+        &self,
+        _harness: HarnessId,
+        _replica: ReplicaId,
+        _connection_id: macro_uuid::Uuid,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send>> {
+        Box::pin(async { Ok(()) })
+    }
+    fn owner(
+        &self,
+        _harness: HarnessId,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<Option<RuntimeOwner>>> + Send>> {
+        Box::pin(async { Ok(None) })
+    }
 }
 
 /// Resolves the runtime configuration for a bot that may receive agent
@@ -160,7 +248,7 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         &self,
         bot: BotId,
         session: AgentSessionId,
-    ) -> impl Future<Output = Option<RuntimeAttachment<Self::Connector>>> + Send;
+    ) -> impl Future<Output = Option<RuntimeBinding<Self::Connector>>> + Send;
 
     /// The harness a bot's sessions currently bind to, without attaching
     /// anything. `None` for an unbound bot. Same resolution as [`bind`], for
@@ -170,6 +258,31 @@ pub trait RuntimeConnections: Send + Sync + 'static {
         &self,
         bot: BotId,
     ) -> impl Future<Output = anyhow::Result<Option<HarnessId>>> + Send;
+
+    /// The fresh owner for a harness's runtime socket.
+    fn runtime_owner(
+        &self,
+        harness: HarnessId,
+    ) -> impl Future<Output = anyhow::Result<Option<RuntimeOwner>>> + Send;
+
+    /// Whether this process holds the locally attached socket for `harness`.
+    fn owns_runtime(&self, harness: HarnessId, owner: &RuntimeOwner) -> bool;
+
+    /// Whether `owner` names this replica, including a socket still upgrading.
+    fn is_local_runtime_owner(&self, owner: &RuntimeOwner) -> bool;
+
+    /// Whether missing durable ownership must block external command execution.
+    fn requires_runtime_owner(&self) -> bool;
+}
+
+/// A session attachment and the exact durable socket authorizing its claim.
+pub struct RuntimeBinding<Connector> {
+    /// Session-scoped transport attachment.
+    pub attachment: RuntimeAttachment<Connector>,
+    /// Harness owning the shared socket.
+    pub harness: HarnessId,
+    /// Exact shared socket token, nil when durable routing is disabled.
+    pub connection_id: macro_uuid::Uuid,
 }
 
 /// Mints the one secret a sandbox is given, and the config that points it at

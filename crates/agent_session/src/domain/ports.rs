@@ -306,6 +306,15 @@ pub trait SessionOwnership: Send + Sync + 'static {
         replica: ReplicaId,
     ) -> impl Future<Output = Result<ClaimOutcome>> + Send;
 
+    /// Claim only while `replica` owns the exact external runtime socket.
+    fn claim_for_runtime(
+        &self,
+        session: AgentSessionId,
+        replica: ReplicaId,
+        harness: harness_id::HarnessId,
+        connection_id: macro_uuid::Uuid,
+    ) -> impl Future<Output = Result<ClaimOutcome>> + Send;
+
     /// Release a claim this replica holds. Conditional on the claim's fence
     /// still being current: releasing after having been superseded is a
     /// no-op, never a theft of the successor's claim. A session already

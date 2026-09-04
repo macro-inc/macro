@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session session SET manager_replica_id = NULL WHERE session.manager_replica_id = $1 AND EXISTS ( SELECT 1 FROM agent_configs config WHERE config.bot_id = session.bot_id AND config.harness_id = $2 )",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "332b95da89e45b1a6a3bfacb88b8ab34e47e89e27b019e3e9d6d4089f37d7051"
+}

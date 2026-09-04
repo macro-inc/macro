@@ -2153,12 +2153,57 @@ struct RecordingForwarder {
     calls: Arc<Mutex<Vec<(String, AgentSessionId)>>>,
 }
 
+struct PeerOwnedExternalRuntime {
+    inner: TestConnections,
+    owner: Arc<Mutex<crate::domain::model::RuntimeOwner>>,
+    local: bool,
+}
+
+impl crate::domain::ports::RuntimeConnections for PeerOwnedExternalRuntime {
+    type Connector = <TestConnections as crate::domain::ports::RuntimeConnections>::Connector;
+
+    async fn bind(
+        &self,
+        bot: BotId,
+        session: AgentSessionId,
+    ) -> Option<crate::domain::ports::RuntimeBinding<Self::Connector>> {
+        crate::domain::ports::RuntimeConnections::bind(&self.inner, bot, session).await
+    }
+
+    async fn bound_harness(&self, bot: BotId) -> anyhow::Result<Option<harness_id::HarnessId>> {
+        crate::domain::ports::RuntimeConnections::bound_harness(&self.inner, bot).await
+    }
+
+    async fn runtime_owner(
+        &self,
+        _harness: harness_id::HarnessId,
+    ) -> anyhow::Result<Option<crate::domain::model::RuntimeOwner>> {
+        Ok(Some(self.owner.lock().unwrap().clone()))
+    }
+
+    fn owns_runtime(
+        &self,
+        _harness: harness_id::HarnessId,
+        _owner: &crate::domain::model::RuntimeOwner,
+    ) -> bool {
+        self.local && self.owner.lock().unwrap().connection_id == _owner.connection_id
+    }
+
+    fn is_local_runtime_owner(&self, _owner: &crate::domain::model::RuntimeOwner) -> bool {
+        self.local
+    }
+
+    fn requires_runtime_owner(&self) -> bool {
+        true
+    }
+}
+
 impl crate::domain::ports::CommandForwarder for RecordingForwarder {
     async fn forward(
         &self,
         target: &agent_session::domain::model::ReplicaAddress,
         session: AgentSessionId,
-        _command: HarnessCommand,
+        _command: crate::domain::model::ForwardedCommand,
     ) -> crate::domain::error::Result<CommandOutcome> {
         self.calls
             .lock()
@@ -2181,13 +2226,39 @@ impl crate::domain::ports::CommandForwarder for DyingPeerForwarder {
         &self,
         _target: &agent_session::domain::model::ReplicaAddress,
         _session: AgentSessionId,
-        _command: HarnessCommand,
+        _command: crate::domain::model::ForwardedCommand,
     ) -> crate::domain::error::Result<CommandOutcome> {
         use agent_session::domain::ports::SessionOwnership as _;
         self.repo.release(&self.claim).await.expect("peer releases");
         Err(HarnessError::Forward(rootcause::report!(
             "the peer went away"
         )))
+    }
+}
+
+#[derive(Clone)]
+struct MovingRuntimeForwarder {
+    owner: Arc<Mutex<crate::domain::model::RuntimeOwner>>,
+    next_owner: crate::domain::model::RuntimeOwner,
+    calls: Arc<Mutex<Vec<String>>>,
+}
+
+impl crate::domain::ports::CommandForwarder for MovingRuntimeForwarder {
+    async fn forward(
+        &self,
+        target: &agent_session::domain::model::ReplicaAddress,
+        _session: AgentSessionId,
+        _command: crate::domain::model::ForwardedCommand,
+    ) -> crate::domain::error::Result<CommandOutcome> {
+        let mut calls = self.calls.lock().unwrap();
+        calls.push(target.as_str().to_owned());
+        if calls.len() == 1 {
+            *self.owner.lock().unwrap() = self.next_owner.clone();
+            return Err(HarnessError::Forward(rootcause::report!(
+                "the runtime moved"
+            )));
+        }
+        Ok(CommandOutcome::Completed)
     }
 }
 
@@ -2253,6 +2324,122 @@ async fn commands_for_a_peer_managed_session_forward_to_its_address() {
     assert!(
         repo.get(id).await.is_ok(),
         "the delete ran on the peer, not here"
+    );
+}
+
+#[tokio::test]
+async fn first_command_for_an_unmanaged_external_session_routes_to_runtime_owner() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = agent_session::testing::test_agent_session(AgentSessionId::new());
+    let id = session.id;
+    repo.insert_session(session);
+    let forwarder = RecordingForwarder::default();
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+        ),
+        MockContainerManager::new(),
+        AnnouncerMock::new(),
+        PeerOwnedExternalRuntime {
+            inner: TestConnections::new(MirrorBindings, RuntimeRegistry::new()),
+            owner: Arc::new(Mutex::new(crate::domain::model::RuntimeOwner {
+                replica: agent_session::domain::model::ReplicaId::mint(),
+                connection_id: macro_uuid::Uuid::new_v4(),
+                pending_until: None,
+                address: Some(agent_session::domain::model::ReplicaAddress::new(
+                    "http://10.0.0.8:8100",
+                )),
+            })),
+            local: false,
+        },
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        forwarder.clone(),
+        SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        },
+    );
+
+    service
+        .execute(id, HarnessCommand::Deliver(forward_message("first prompt")))
+        .await
+        .expect("the runtime owner handles the first command");
+
+    assert_eq!(
+        forwarder.calls.lock().unwrap().clone(),
+        vec![("http://10.0.0.8:8100".to_owned(), id)]
+    );
+    assert!(
+        repo.get(id).await.is_ok(),
+        "the command did not run locally"
+    );
+}
+
+#[tokio::test]
+async fn first_command_retries_when_the_runtime_owner_moves_mid_forward() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = agent_session::testing::test_agent_session(AgentSessionId::new());
+    let id = session.id;
+    repo.insert_session(session);
+    let owner = Arc::new(Mutex::new(crate::domain::model::RuntimeOwner {
+        replica: agent_session::domain::model::ReplicaId::mint(),
+        connection_id: macro_uuid::Uuid::new_v4(),
+        pending_until: None,
+        address: Some(agent_session::domain::model::ReplicaAddress::new(
+            "http://10.0.0.8:8100",
+        )),
+    }));
+    let next_owner = crate::domain::model::RuntimeOwner {
+        replica: owner.lock().unwrap().replica,
+        connection_id: macro_uuid::Uuid::new_v4(),
+        pending_until: None,
+        address: Some(agent_session::domain::model::ReplicaAddress::new(
+            "http://10.0.0.9:8100",
+        )),
+    };
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(repo.clone(), FoldedMessageService::new(repo), NoOpRealtime),
+        MockContainerManager::new(),
+        AnnouncerMock::new(),
+        PeerOwnedExternalRuntime {
+            inner: TestConnections::new(MirrorBindings, RuntimeRegistry::new()),
+            owner: Arc::clone(&owner),
+            local: false,
+        },
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        MovingRuntimeForwarder {
+            owner,
+            next_owner,
+            calls: Arc::clone(&calls),
+        },
+        SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        },
+    );
+
+    service
+        .execute(id, HarnessCommand::Deliver(forward_message("first prompt")))
+        .await
+        .expect("the new runtime owner handles the retry");
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        [
+            "http://10.0.0.8:8100".to_owned(),
+            "http://10.0.0.9:8100".to_owned(),
+        ]
     );
 }
 

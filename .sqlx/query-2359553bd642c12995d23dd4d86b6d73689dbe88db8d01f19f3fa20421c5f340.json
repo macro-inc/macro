@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO harnesses (id, name, owner_user_id, created_by) VALUES ($1, 'test', 'owner@localhost', 'owner@localhost')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2359553bd642c12995d23dd4d86b6d73689dbe88db8d01f19f3fa20421c5f340"
+}

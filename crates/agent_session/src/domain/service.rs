@@ -171,6 +171,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
     where
         Connector: AgentConnector;
 
+    /// Attach while atomically conditioning the session claim on a runtime lease.
+    fn attach_runtime_session<Connector>(
+        &self,
+        id: AgentSessionId,
+        attachment: RuntimeAttachment<Connector>,
+        harness: harness_id::HarnessId,
+        connection_id: macro_uuid::Uuid,
+    ) -> impl Future<Output = Result<()>> + Send
+    where
+        Connector: AgentConnector;
+
     /// Deliver an action through the session's active transport, under the
     /// action id it will carry onto the wire.
     fn send_action(
@@ -679,6 +690,40 @@ where
                     );
                 })
                 .ok();
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    async fn attach_runtime_session<Connector>(
+        &self,
+        id: AgentSessionId,
+        attachment: RuntimeAttachment<Connector>,
+        harness: harness_id::HarnessId,
+        connection_id: macro_uuid::Uuid,
+    ) -> Result<()>
+    where
+        Connector: AgentConnector,
+    {
+        let reservation = self.reserve_attach(id).await?;
+        let claim = match self
+            .repo
+            .claim_for_runtime(id, self.replica, harness, connection_id)
+            .await?
+        {
+            ClaimOutcome::Claimed(claim) => claim,
+            ClaimOutcome::ManagedElsewhere(_) => {
+                return Err(AgentSessionError::ManagedElsewhere(id));
+            }
+        };
+        let activated = async {
+            let session = self.repo.get(id).await?;
+            self.activate_reserved(session, attachment, reservation, claim)
+                .await
+        }
+        .await;
+        if let Err(error) = activated {
+            self.repo.release(&claim).await.ok();
             return Err(error);
         }
         Ok(())

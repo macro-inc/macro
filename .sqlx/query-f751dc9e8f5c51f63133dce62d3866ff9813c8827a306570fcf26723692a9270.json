@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE harness_runtime_lease SET pending_until = now() - interval '1 second'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "f751dc9e8f5c51f63133dce62d3866ff9813c8827a306570fcf26723692a9270"
+}
