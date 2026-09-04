@@ -181,7 +181,8 @@ function htmlText(html: string): string {
   );
 }
 
-function EmailDraft(props: { email: SendEmail; inFlight: boolean }) {
+/** The email as drafted, read-only: recipients, subject, body. */
+export function EmailDraft(props: { email: SendEmail; inFlight: boolean }) {
   const body = createMemo(() => emailBody(props.email.body));
   const recipients = () =>
     [
@@ -251,7 +252,8 @@ function attendeeLabel(attendee: AttendeeInput): string {
   return attendee.isOptional ? `${attendee.email} (optional)` : attendee.email;
 }
 
-function EventDraft(props: { event: CreateCalendarEvent }) {
+/** The event as drafted, read-only: when, where, who, repeats, notes. */
+export function EventDraft(props: { event: CreateCalendarEvent }) {
   const rows = () =>
     [
       ['When', eventWhen(props.event.time)],

@@ -2,6 +2,7 @@ import type { MagicChipStatus } from '@macro-inc/lexical-core';
 import type {
   FoldedMessage,
   MessagePart,
+  PendingElicitation,
   ToolName,
 } from '@service-agent-fold/generated/types';
 import { match } from 'ts-pattern';
@@ -18,19 +19,39 @@ export type MagicChipActivity = {
 };
 
 /**
+ * A question the agent is waiting on, as the chip offers it: the live slot
+ * from the session's metadata, and whether this viewer is the one who may
+ * answer (the session's owner) or is watching someone else be asked.
+ */
+export type MagicChipQuestion = {
+  question: PendingElicitation;
+  canAnswer: boolean;
+  /** Who the chip is waiting on when it is not the viewer. */
+  ownerName: string;
+};
+
+/**
  * The one state the chip renders.
  *
- * Three, in the order a turn passes through them: an activity line while the
- * agent works with nothing to show, the answer as it is written with the
- * activity line still under it, and the answer alone once the turn ends.
+ * Four: an activity line while the agent works with nothing to show, the
+ * answer as it is written with the activity line still under it, a question
+ * the agent has stopped to ask (with whatever answer it had written so far
+ * above it), and the answer alone once the turn ends.
  */
 export type MagicChipPresentation =
   | { kind: 'working'; activity: MagicChipActivity }
   | { kind: 'answering'; markdown: string; activity: MagicChipActivity }
+  | { kind: 'asking'; markdown: string; asking: MagicChipQuestion }
   | { kind: 'settled'; markdown: string };
 
 export type MagicChipPresentationInput = {
   persistedStatus: MagicChipStatus;
+  /**
+   * The question the session is blocked on, when it belongs to this chip's
+   * turn. The chip is a turn's surface, so a question asked in a later turn
+   * is that turn's chip's to show.
+   */
+  asking?: MagicChipQuestion;
   /**
    * Freshest lifecycle event seen on the live log stream, as its wire string.
    * A stopgap for {@link persistedStatus} being a snapshot from when the chip
@@ -316,11 +337,16 @@ function answerMarkdown(response: FoldedMessage | undefined): string {
 export function deriveMagicChipPresentation(
   input: MagicChipPresentationInput
 ): MagicChipPresentation {
-  const { response, prompt, latestEvent, persistedStatus } = input;
+  const { response, prompt, latestEvent, persistedStatus, asking } = input;
 
   const markdown = answerMarkdown(response);
   if (response?.stop?.kind === 'end_turn' && markdown) {
     return { kind: 'settled', markdown };
+  }
+  // A question the agent is waiting on outranks whatever else the turn is
+  // doing: nothing moves until it is answered.
+  if (asking) {
+    return { kind: 'asking', markdown, asking };
   }
 
   // Best available answer first: how the turn ended, then what it is doing,
