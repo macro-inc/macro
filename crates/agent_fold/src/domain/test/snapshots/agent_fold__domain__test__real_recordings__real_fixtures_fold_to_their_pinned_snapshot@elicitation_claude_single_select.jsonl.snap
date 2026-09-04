@@ -118,6 +118,7 @@ input_file: crates/agent_fold/fixtures/real/elicitation_claude_single_select.jso
                             "What is the best colour?": String("blue"),
                         },
                     ),
+                    tool_outcome: None,
                 },
                 Text {
                     text: "Blue it is.",

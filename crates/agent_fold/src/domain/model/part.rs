@@ -10,6 +10,7 @@ use super::elicitation::{ElicitationOutcome, ElicitationRequest, ElicitationRequ
 use super::permission::{PermissionOption, PermissionOutcome};
 use super::plan::PlanEntry;
 use super::tool::{ToolDetail, ToolName, ToolStatus};
+use super::user_tool::UserToolOutcome;
 
 /// A unit of renderable content.
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
@@ -83,6 +84,13 @@ pub enum MessagePart {
         /// option through its tool result). Absent otherwise.
         #[specta(type = specta_typescript::Unknown)]
         reported: Option<serde_json::Value>,
+        /// For a user tool's review ([`ElicitationRequest::UserTool`]): how
+        /// the tool itself ended once the user answered - run with the
+        /// reviewed draft, rejected, or failed - read from the absorbed
+        /// call's later updates. Absent until the tool reports, and for
+        /// every other kind of question.
+        #[serde(rename = "toolOutcome")]
+        tool_outcome: Option<UserToolOutcome>,
     },
 }
 

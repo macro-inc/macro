@@ -32,6 +32,24 @@ pub enum ElicitationRequest {
         /// Where the user is sent.
         url: String,
     },
+    /// A Macro user tool (`SendEmail`, `CreateCalendarEvent`) paused for the
+    /// user's review: the agent drafted the call and asks before it runs.
+    ///
+    /// Recognized from the call the form is scoped to - a tool this fold
+    /// already knows as a user tool - or from `_meta.macro.userTool`, which
+    /// Macro's own agent stamps. The draft is the call's arguments whole,
+    /// so a client with the tool's own composer renders that and answers
+    /// with the whole edited draft; `schema` is the flat form the agent also
+    /// sent, for a client without one.
+    UserTool {
+        /// The tool, by Macro's name.
+        tool: String,
+        /// The call's arguments - the tool's own JSON.
+        #[specta(type = specta_typescript::Unknown)]
+        draft: Box<serde_json::Value>,
+        /// The restricted form describing the draft's flat fields.
+        schema: Box<ElicitationSchema>,
+    },
     /// A mode this fold does not know. Kept raw so nothing is lost; a
     /// renderer must not treat it as form or url.
     Unrecognized {
