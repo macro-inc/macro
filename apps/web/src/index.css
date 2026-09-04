@@ -699,6 +699,23 @@ html[data-theme-light='false'] {
   50%      { transform: scale(0.6); opacity: 0.5; }
 }
 
+@keyframes incoming-call-shake {
+  0%, 60%, 100% { transform: rotate(0); }
+  10%, 30%, 50% { transform: rotate(-12deg); }
+  20%, 40%      { transform: rotate(12deg); }
+}
+
+.incoming-call-shake {
+  transform-origin: center;
+  animation: incoming-call-shake 1.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .incoming-call-shake {
+    animation: none;
+  }
+}
+
 /* Big hammer fix for cursor pointer. */
 @utility cursor-pointer {
   cursor: default;

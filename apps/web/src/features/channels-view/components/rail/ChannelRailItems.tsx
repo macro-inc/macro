@@ -5,9 +5,39 @@ import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
+import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
+import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
 import { cn, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { channelInitials, formatDetailedTimestamp } from '../../utils';
+
+export type ChannelCallStatus = 'active' | 'incoming';
+
+function ChannelCallIndicator(props: {
+  status: ChannelCallStatus | undefined;
+  class?: string;
+}) {
+  return (
+    <Show when={props.status}>
+      {(status) => (
+        <span
+          aria-label={status() === 'incoming' ? 'Incoming call' : 'Active call'}
+          class={cn(
+            'flex size-4 shrink-0 items-center justify-center text-accent',
+            props.class
+          )}
+        >
+          <Show
+            when={status() === 'incoming'}
+            fallback={<PhoneCallIcon class="size-full" />}
+          >
+            <PhoneIncomingIcon class="incoming-call-shake size-full" />
+          </Show>
+        </span>
+      )}
+    </Show>
+  );
+}
 
 function ChannelAvatar(props: { channel: ChannelEntity; size?: 'sm' | 'md' }) {
   const sizeClass = () =>
@@ -64,6 +94,7 @@ type ChannelOptionProps = {
   id: string;
   channel: ChannelEntity;
   unread: boolean;
+  callStatus?: ChannelCallStatus;
   selected: boolean;
   focused: boolean;
   onActivate: () => void;
@@ -94,6 +125,7 @@ export function ChannelOption(props: ChannelOptionProps) {
       <span class="min-w-0 flex-1 truncate text-sm font-medium">
         {props.channel.name}
       </span>
+      <ChannelCallIndicator status={props.callStatus} />
       <Show when={props.unread}>
         <span
           aria-label="Unread"
@@ -124,6 +156,10 @@ export function SlimChannelOption(props: ChannelOptionProps) {
         onClick={props.onActivate}
       >
         <SlimChannelAvatar channel={props.channel} />
+        <ChannelCallIndicator
+          status={props.callStatus}
+          class="absolute bottom-0 right-0 rounded-full bg-inset p-0.5"
+        />
         <Show when={props.unread}>
           <span
             aria-label="Unread"
@@ -141,6 +177,7 @@ type ConversationCardProps = {
   senderId?: string;
   mentionedCurrentUser: boolean;
   unread: boolean;
+  callStatus?: ChannelCallStatus;
   selected: boolean;
   focused: boolean;
   onActivate: () => void;
@@ -207,6 +244,7 @@ export function ConversationCard(props: ConversationCardProps) {
             <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
               {props.channel.name}
             </span>
+            <ChannelCallIndicator status={props.callStatus} />
             <Show when={latestRootMessage()?.createdAt}>
               {(createdAt) => (
                 <Tooltip
@@ -292,6 +330,10 @@ export function SlimConversationCard(props: ConversationCardProps) {
       >
         <span class="relative">
           <SlimChannelAvatar channel={props.channel} />
+          <ChannelCallIndicator
+            status={props.callStatus}
+            class="absolute -bottom-0.5 -right-0.5 rounded-full bg-inset p-0.5"
+          />
           <Show when={props.unread}>
             <span
               aria-label="Unread"
