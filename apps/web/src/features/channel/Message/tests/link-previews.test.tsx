@@ -177,18 +177,12 @@ describe('shouldRenderUnfurl', () => {
 });
 
 describe('reservedPreviewImageSize', () => {
-  const url = 'https://example.com/a';
-
   it('returns nothing without an image', () => {
-    expect(
-      reservedPreviewImageSize({ url, title: 'A', image_url: undefined })
-    ).toBeUndefined();
+    expect(reservedPreviewImageSize({ image_url: undefined })).toBeUndefined();
   });
 
   it('scales known Open Graph dimensions into the preview cap', () => {
     const box = reservedPreviewImageSize({
-      url,
-      title: 'A',
       image_url: 'https://example.com/og.png',
       image_width: 1200,
       image_height: 630,
@@ -202,8 +196,6 @@ describe('reservedPreviewImageSize', () => {
 
   it('reserves a landscape box when the page omitted dimensions', () => {
     const box = reservedPreviewImageSize({
-      url,
-      title: 'A',
       image_url: 'https://example.com/og.png',
     });
     expect(box?.known).toBe(false);
