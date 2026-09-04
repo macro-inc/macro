@@ -2,6 +2,7 @@ import { ViewShell } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createEffect, onMount, Suspense } from 'solid-js';
@@ -41,7 +42,11 @@ function InboxViewRoot() {
       <StaticMarkdownContext>
         <SplitPanel.Root>
           <SplitPanel.Body>
-            <ViewShell.Root aside={false} main={{ min: 224 }}>
+            <ViewShell.Root
+              aside={false}
+              main={{ min: 224 }}
+              class={isTouchDevice() ? undefined : 'bg-inset'}
+            >
               <ViewShell.Main>
                 <InboxHeader>
                   <InboxTabs />
