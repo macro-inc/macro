@@ -664,6 +664,7 @@ dependencies = [
  "serde_json",
  "skills",
  "soup",
+ "soup_query_tool",
  "sqlx",
  "sqs_client",
  "strum 0.27.2",
@@ -15331,6 +15332,36 @@ dependencies = [
  "serde",
  "soup",
  "thiserror 2.0.18",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "soup_query_tool"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "apollo-compiler",
+ "async-graphql",
+ "async-trait",
+ "email",
+ "graphql_properties",
+ "graphql_soup_filter_input",
+ "item_filters",
+ "macro_user_id",
+ "models_pagination",
+ "models_properties",
+ "models_soup",
+ "non_empty",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "soup",
+ "system_properties",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
  "uuid",
  "workspace-hack",
 ]

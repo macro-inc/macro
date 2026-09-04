@@ -38,11 +38,11 @@ Common operations (look up each system label's id via ListLabels first):\n\
 - Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)\n\
 - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)\n\
 \n\
-`thread_id` is the email thread UUID (the same id returned by ListEntities, search results, \
+`thread_id` is the email thread UUID (the same id returned by QuerySoup, search results, \
 or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name."
 )]
 pub struct UpdateThreadLabels {
-    /// The ID of the email thread to modify. Same UUID returned by ListEntities, search, or GetThread.
+    /// The ID of the email thread to modify. Same UUID returned by QuerySoup, search, or GetThread.
     pub thread_id: Uuid,
     /// The UUID of the label to add or remove. Obtain this by calling ListLabels and looking up the label by name — do not pass the label name here.
     pub label_id: Uuid,

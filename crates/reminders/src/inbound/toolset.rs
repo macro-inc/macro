@@ -213,8 +213,8 @@ fn reminder_error(error: ReminderError) -> ToolCallError {
 /// Entity types a reminder can be attached to.
 ///
 /// Deliberately narrower than [`EntityType`], which covers plenty of things a
-/// reminder has no business pointing at. The names match the ones `ListEntities`
-/// uses so the model sees one vocabulary across tools.
+/// reminder has no business pointing at. Chat is `ai_chat` here (the reminder
+/// attach vocabulary); QuerySoup lists the same items as GraphQL `CHAT`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ReminderEntityType {

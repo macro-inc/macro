@@ -44,5 +44,10 @@ fn skills_render_non_empty_titled_markdown() {
         assert!(!content.trim().is_empty());
         // StaticPrompt renders as a markdown section titled with the name.
         assert!(content.starts_with(&format!("# {}", skill.name)));
+        assert!(
+            !content.contains("ListEntities"),
+            "{} still names ListEntities",
+            skill.slug
+        );
     }
 }

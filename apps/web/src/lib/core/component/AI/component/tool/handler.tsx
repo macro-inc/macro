@@ -32,6 +32,7 @@ import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
 import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
+import { describeSoupHandler } from './DescribeSoup';
 import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
@@ -42,7 +43,6 @@ import {
   importNotionPageHandler,
   listImportEntitiesHandler,
 } from './ImportTools';
-import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
 import { listTagsHandler } from './ListTags';
@@ -59,6 +59,7 @@ import {
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
 } from './Properties';
+import { querySoupHandler } from './QuerySoup';
 import { readActivityHandler } from './ReadActivity';
 import { readCallRecordHandler } from './ReadCallRecord';
 import {
@@ -119,7 +120,6 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,
   ListImportEntities: listImportEntitiesHandler,
-  ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
   ListSkills: listSkillsHandler,
@@ -141,10 +141,12 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateTag: createTagHandler,
   DeleteReminder: deleteReminderHandler,
   DeleteTag: deleteTagHandler,
+  DescribeSoup: describeSoupHandler,
   EditDocument: editDocumentHandler,
   EditTag: editTagHandler,
   GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,
+  QuerySoup: querySoupHandler,
   ReadActivity: readActivityHandler,
   ReadCallRecord: readCallRecordHandler,
   ReadChannelMessageContext: readChannelMessageContextHandler,

@@ -78,10 +78,10 @@ fn macro_mcp_calls_fold_to_macro_and_user_tool_details() {
     );
 
     let (name, status, detail) = tools[2];
-    assert_eq!(name, "ListEntities");
+    assert_eq!(name, "QuerySoup");
     assert_eq!(status, ToolStatus::Failed);
     let ToolDetail::Macro { output, error, .. } = detail else {
-        panic!("ListEntities folds to a Macro detail: {detail:?}");
+        panic!("QuerySoup folds to a Macro detail: {detail:?}");
     };
     assert_eq!(
         error.as_deref(),

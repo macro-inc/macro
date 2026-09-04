@@ -1,0 +1,291 @@
+---
+title: QuerySoup
+description: "Browse the user's Macro workspace (the unified inbox) by writing a GraphQL query against the schema below. This is the tool for \"catch me up\", \"what happened today\", \"list my tasks\", \"important emails since Friday\", recent items by kind, by project, by tag, or by time window. It reads; it cannot change anything. For finding an item by words in its name or body use NameSearch/ContentSearch.  Rules - Exactly one `query` operation. Mutations and subscriptions do not exist here. - The schema below is the shared part. Each kind's filter literal and output   fields come from DescribeSoup (topics DOCUMENT, EMAIL_THREAD, …, PROPERTIES).   Call it once per kind you filter on or select fields of; the result stays in   the conversation. `items { id displayName }` needs no slice. - Filters are per kind: an item of kind K passes if K's tree is absent or matches.   Inputs marked @oneOf take exactly one field. Date windows are   `and: { left: { literal: { updatedAt: { gte: $a } } }, right: { literal: { updatedAt: { lt: $b } } } }`   on document, project, chat and email trees; other kinds are cut by sortMethod + limit. - Macro tasks are DOCUMENT items with subType TASK. Use `taskFilter` for   status, assignee, and priority — do not invent property definition ids. - Tags: filter by label with input.tags (ListTags shows them); results carry   tags { label scope }. Status/Priority values come back as option ids. - Prefer emailPreset: SIGNAL for \"important\"/\"signal\" email; keep emailView as   inbox (or omit it). For a user label pass emailView: \"user:<name>\". - There is no cursor. If hasMore is true, tighten filters or raise limit (≤500). - Select `id` on every `items` selection so results can be linked. - Alias `soup` to ask two questions in one call (max 5). Example: activity and   signal email.   Schema (shared types; DescribeSoup adds each kind's filter literal and output fields) ```graphql \"GraphQL input representing the date literal.\" input GraphqlDateLiteral @oneOf { 	\"The gt option.\" 	gt: String 	\"The lt option.\" 	lt: String 	\"The gte option.\" 	gte: String 	\"The lte option.\" 	lte: String }  \"`input GraphqlEmailFilterAst` minus `crmScope`.\" input GraphqlEmailFilterAst { 	tree: GraphqlEmailExpr }  \"`input GraphqlEntityFilterAst` minus CRM and reminder trees.\" input GraphqlEntityFilterAst { 	documentFilter: GraphqlDocumentExpr 	projectFilter: GraphqlProjectExpr 	chatFilter: GraphqlChatExpr 	emailFilter: GraphqlEmailFilterAst 	channelFilter: GraphqlChannelExpr 	channelThreadFilter: GraphqlChannelThreadExpr 	callFilter: GraphqlCallExpr 	calendarEventFilter: GraphqlCalendarEventExpr 	foreignEntityFilter: GraphqlForeignEntityExpr 	propertiesFilter: GraphqlFilterPropertiesExpr }  \"Sort field. Default UPDATED_AT.\" enum GraphqlSimpleSortMethod { 	\"Most recently viewed.\" 	VIEWED_AT 	\"Creation timestamp.\" 	CREATED_AT 	\"Update timestamp.\" 	UPDATED_AT 	\"Viewed, falling back to updated.\" 	VIEWED_UPDATED }  \"Sort direction. Default DESC.\" enum GraphqlSortDirection { 	\"Oldest first.\" 	ASC 	\"Newest first.\" 	DESC }  \"`enum GraphqlSoupEntityType`, curated to the nine kinds this tool serves.\" enum GraphqlSoupEntityType { 	\"A Macro document, including tasks, snippets, and skills.\" 	DOCUMENT 	\"An AI chat.\" 	CHAT 	\"A project.\" 	PROJECT 	\"An email thread.\" 	EMAIL_THREAD 	\"A channel.\" 	CHANNEL 	\"A channel thread root.\" 	CHANNEL_MESSAGE 	\"A call record.\" 	CALL 	\"A calendar event.\" 	CALENDAR_EVENT 	\"A connected foreign record.\" 	FOREIGN_ENTITY }  type Query { 	\"\"\" 	The user's unified inbox: one page of items they can access. Omit 	`input` for the 50 most recently updated items of every kind. 	\"\"\" 	soup(input: SoupQueryInput): SoupQueryPage! }  \"High-level email filter preset.\" enum SoupEmailPreset { 	\"Important and not shared.\" 	SIGNAL }  \"`interface SoupEntity`.\" interface SoupEntity { 	id: ID! 	entityType: GraphqlSoupEntityType! 	displayName: String 	tags: [SoupTag!]! 	properties: [GraphqlProperty!]! }  \"`input SoupQueryInput`. Every field optional.\" input SoupQueryInput { 	\"Kinds to return. Omit for all.\" 	entityTypes: [GraphqlSoupEntityType!] 	\"Per-kind filter trees. DescribeSoup shows each kind's literal.\" 	filters: GraphqlEntityFilterAst 	\"Task sugar over the well-known Status / Assignees / Priority properties.\" 	taskFilter: TaskFilter 	\"Default UPDATED_AT.\" 	sortMethod: GraphqlSimpleSortMethod 	\"Default DESC.\" 	sortDirection: GraphqlSortDirection 	\"Default 50, max 500.\" 	limit: Int 	\"SIGNAL = important threads, shared threads excluded.\" 	emailPreset: SoupEmailPreset 	\"Mailbox view: inbox, sent, drafts, starred, all, important, other, or user:<label>.\" 	emailView: String 	\"Restrict email results to one connected inbox by address.\" 	inbox: String 	\"Only items carrying these tags, by label.\" 	tags: [SoupTagFilterInput!] 	\"ANY unless set.\" 	tagsMatch: SoupTagMatch }  \"`type SoupQueryPage`.\" type SoupQueryPage { 	items: [SoupEntity!]! 	\"True when limit cut the list.\" 	hasMore: Boolean! 	\"One line of counts, and whether results were truncated.\" 	summary: String! }  \"`type SoupTag`.\" type SoupTag { 	label: String! 	scope: SoupTagScope! }  \"One tag selector by label.\" input SoupTagFilterInput { 	label: String! 	scope: SoupTagScope }  \"How multiple tag filters combine.\" enum SoupTagMatch { 	\"At least one tag.\" 	ANY 	\"Every tag.\" 	ALL }  \"Whose tag set a label came from.\" enum SoupTagScope { 	\"The caller's personal tags.\" 	PERSONAL 	\"A team tag set.\" 	TEAM }  \"\"\" Tasks by status, assignee, and priority. No property ids needed. Date windows go in `filters.documentFilter` like every other kind. \"\"\" input TaskFilter { 	\"Status options to include.\" 	status: [TaskStatus!] 	\"Priority options to include.\" 	priority: [TaskPriority!] 	\"Tasks assigned to the current user.\" 	assignedToMe: Boolean 	\"Assignees as `macro|<email>` refs or plain emails.\" 	assignedTo: [String!] }  \"System task priority.\" enum TaskPriority { 	\"Low.\" 	LOW 	\"Medium.\" 	MEDIUM 	\"High.\" 	HIGH 	\"Urgent.\" 	URGENT }  \"System task status.\" enum TaskStatus { 	\"Not started.\" 	NOT_STARTED 	\"In progress.\" 	IN_PROGRESS 	\"In review.\" 	IN_REVIEW 	\"Completed.\" 	COMPLETED 	\"Canceled.\" 	CANCELED } ```  Examples ```graphql # Tasks assigned to me that are not completed query OpenTasks {   soup(input: {     entityTypes: [DOCUMENT]     taskFilter: { status: [NOT_STARTED, IN_PROGRESS, IN_REVIEW], assignedToMe: true }   }) {     summary     hasMore     items { id displayName ... on GraphqlSoupDocument { updatedAt } }   } }  # Important email since a timestamp (emailFilter literal from DescribeSoup EMAIL_THREAD) query Signal($since: String!) {   soup(input: {     emailPreset: SIGNAL     filters: { emailFilter: { tree: { literal: { updatedAt: { gte: $since } } } } }   }) {     hasMore     items { id ... on GraphqlSoupEmailThread { name senderName snippet isRead updatedAt } }   } }  # Catch me up: recent activity plus signal email query CatchMeUp($since: String!) {   activity: soup(input: {     filters: {       documentFilter: { literal: { updatedAt: { gte: $since } } }       projectFilter: { literal: { updatedAt: { gte: $since } } }       chatFilter: { literal: { updatedAt: { gte: $since } } }       emailFilter: { tree: { literal: { updatedAt: { gte: $since } } } }     }     limit: 100   }) {     summary     hasMore     items { __typename id displayName tags { label } }   }   signal: soup(input: { emailPreset: SIGNAL, limit: 15 }) {     items { id ... on GraphqlSoupEmailThread { name snippet senderName } }   } }  ```"
+---
+
+# QuerySoup
+
+Browse the user's Macro workspace (the unified inbox) by writing a GraphQL query
+against the schema below. This is the tool for "catch me up", "what happened
+today", "list my tasks", "important emails since Friday", recent items by kind,
+by project, by tag, or by time window. It reads; it cannot change anything.
+For finding an item by words in its name or body use NameSearch/ContentSearch.
+
+Rules
+- Exactly one `query` operation. Mutations and subscriptions do not exist here.
+- The schema below is the shared part. Each kind's filter literal and output
+  fields come from DescribeSoup (topics DOCUMENT, EMAIL_THREAD, …, PROPERTIES).
+  Call it once per kind you filter on or select fields of; the result stays in
+  the conversation. `items { id displayName }` needs no slice.
+- Filters are per kind: an item of kind K passes if K's tree is absent or matches.
+  Inputs marked @oneOf take exactly one field. Date windows are
+  `and: { left: { literal: { updatedAt: { gte: $a } } }, right: { literal: { updatedAt: { lt: $b } } } }`
+  on document, project, chat and email trees; other kinds are cut by sortMethod + limit.
+- Macro tasks are DOCUMENT items with subType TASK. Use `taskFilter` for
+  status, assignee, and priority — do not invent property definition ids.
+- Tags: filter by label with input.tags (ListTags shows them); results carry
+  tags { label scope }. Status/Priority values come back as option ids.
+- Prefer emailPreset: SIGNAL for "important"/"signal" email; keep emailView as
+  inbox (or omit it). For a user label pass emailView: "user:<name>".
+- There is no cursor. If hasMore is true, tighten filters or raise limit (≤500).
+- Select `id` on every `items` selection so results can be linked.
+- Alias `soup` to ask two questions in one call (max 5). Example: activity and
+  signal email.
+
+
+Schema (shared types; DescribeSoup adds each kind's filter literal and output fields)
+```graphql
+"GraphQL input representing the date literal."
+input GraphqlDateLiteral @oneOf {
+	"The gt option."
+	gt: String
+	"The lt option."
+	lt: String
+	"The gte option."
+	gte: String
+	"The lte option."
+	lte: String
+}
+
+"`input GraphqlEmailFilterAst` minus `crmScope`."
+input GraphqlEmailFilterAst {
+	tree: GraphqlEmailExpr
+}
+
+"`input GraphqlEntityFilterAst` minus CRM and reminder trees."
+input GraphqlEntityFilterAst {
+	documentFilter: GraphqlDocumentExpr
+	projectFilter: GraphqlProjectExpr
+	chatFilter: GraphqlChatExpr
+	emailFilter: GraphqlEmailFilterAst
+	channelFilter: GraphqlChannelExpr
+	channelThreadFilter: GraphqlChannelThreadExpr
+	callFilter: GraphqlCallExpr
+	calendarEventFilter: GraphqlCalendarEventExpr
+	foreignEntityFilter: GraphqlForeignEntityExpr
+	propertiesFilter: GraphqlFilterPropertiesExpr
+}
+
+"Sort field. Default UPDATED_AT."
+enum GraphqlSimpleSortMethod {
+	"Most recently viewed."
+	VIEWED_AT
+	"Creation timestamp."
+	CREATED_AT
+	"Update timestamp."
+	UPDATED_AT
+	"Viewed, falling back to updated."
+	VIEWED_UPDATED
+}
+
+"Sort direction. Default DESC."
+enum GraphqlSortDirection {
+	"Oldest first."
+	ASC
+	"Newest first."
+	DESC
+}
+
+"`enum GraphqlSoupEntityType`, curated to the nine kinds this tool serves."
+enum GraphqlSoupEntityType {
+	"A Macro document, including tasks, snippets, and skills."
+	DOCUMENT
+	"An AI chat."
+	CHAT
+	"A project."
+	PROJECT
+	"An email thread."
+	EMAIL_THREAD
+	"A channel."
+	CHANNEL
+	"A channel thread root."
+	CHANNEL_MESSAGE
+	"A call record."
+	CALL
+	"A calendar event."
+	CALENDAR_EVENT
+	"A connected foreign record."
+	FOREIGN_ENTITY
+}
+
+type Query {
+	"""
+	The user's unified inbox: one page of items they can access. Omit
+	`input` for the 50 most recently updated items of every kind.
+	"""
+	soup(input: SoupQueryInput): SoupQueryPage!
+}
+
+"High-level email filter preset."
+enum SoupEmailPreset {
+	"Important and not shared."
+	SIGNAL
+}
+
+"`interface SoupEntity`."
+interface SoupEntity {
+	id: ID!
+	entityType: GraphqlSoupEntityType!
+	displayName: String
+	tags: [SoupTag!]!
+	properties: [GraphqlProperty!]!
+}
+
+"`input SoupQueryInput`. Every field optional."
+input SoupQueryInput {
+	"Kinds to return. Omit for all."
+	entityTypes: [GraphqlSoupEntityType!]
+	"Per-kind filter trees. DescribeSoup shows each kind's literal."
+	filters: GraphqlEntityFilterAst
+	"Task sugar over the well-known Status / Assignees / Priority properties."
+	taskFilter: TaskFilter
+	"Default UPDATED_AT."
+	sortMethod: GraphqlSimpleSortMethod
+	"Default DESC."
+	sortDirection: GraphqlSortDirection
+	"Default 50, max 500."
+	limit: Int
+	"SIGNAL = important threads, shared threads excluded."
+	emailPreset: SoupEmailPreset
+	"Mailbox view: inbox, sent, drafts, starred, all, important, other, or user:<label>."
+	emailView: String
+	"Restrict email results to one connected inbox by address."
+	inbox: String
+	"Only items carrying these tags, by label."
+	tags: [SoupTagFilterInput!]
+	"ANY unless set."
+	tagsMatch: SoupTagMatch
+}
+
+"`type SoupQueryPage`."
+type SoupQueryPage {
+	items: [SoupEntity!]!
+	"True when limit cut the list."
+	hasMore: Boolean!
+	"One line of counts, and whether results were truncated."
+	summary: String!
+}
+
+"`type SoupTag`."
+type SoupTag {
+	label: String!
+	scope: SoupTagScope!
+}
+
+"One tag selector by label."
+input SoupTagFilterInput {
+	label: String!
+	scope: SoupTagScope
+}
+
+"How multiple tag filters combine."
+enum SoupTagMatch {
+	"At least one tag."
+	ANY
+	"Every tag."
+	ALL
+}
+
+"Whose tag set a label came from."
+enum SoupTagScope {
+	"The caller's personal tags."
+	PERSONAL
+	"A team tag set."
+	TEAM
+}
+
+"""
+Tasks by status, assignee, and priority. No property ids needed. Date
+windows go in `filters.documentFilter` like every other kind.
+"""
+input TaskFilter {
+	"Status options to include."
+	status: [TaskStatus!]
+	"Priority options to include."
+	priority: [TaskPriority!]
+	"Tasks assigned to the current user."
+	assignedToMe: Boolean
+	"Assignees as `macro|<email>` refs or plain emails."
+	assignedTo: [String!]
+}
+
+"System task priority."
+enum TaskPriority {
+	"Low."
+	LOW
+	"Medium."
+	MEDIUM
+	"High."
+	HIGH
+	"Urgent."
+	URGENT
+}
+
+"System task status."
+enum TaskStatus {
+	"Not started."
+	NOT_STARTED
+	"In progress."
+	IN_PROGRESS
+	"In review."
+	IN_REVIEW
+	"Completed."
+	COMPLETED
+	"Canceled."
+	CANCELED
+}
+```
+
+Examples
+```graphql
+# Tasks assigned to me that are not completed
+query OpenTasks {
+  soup(input: {
+    entityTypes: [DOCUMENT]
+    taskFilter: { status: [NOT_STARTED, IN_PROGRESS, IN_REVIEW], assignedToMe: true }
+  }) {
+    summary
+    hasMore
+    items { id displayName ... on GraphqlSoupDocument { updatedAt } }
+  }
+}
+
+# Important email since a timestamp (emailFilter literal from DescribeSoup EMAIL_THREAD)
+query Signal($since: String!) {
+  soup(input: {
+    emailPreset: SIGNAL
+    filters: { emailFilter: { tree: { literal: { updatedAt: { gte: $since } } } } }
+  }) {
+    hasMore
+    items { id ... on GraphqlSoupEmailThread { name senderName snippet isRead updatedAt } }
+  }
+}
+
+# Catch me up: recent activity plus signal email
+query CatchMeUp($since: String!) {
+  activity: soup(input: {
+    filters: {
+      documentFilter: { literal: { updatedAt: { gte: $since } } }
+      projectFilter: { literal: { updatedAt: { gte: $since } } }
+      chatFilter: { literal: { updatedAt: { gte: $since } } }
+      emailFilter: { tree: { literal: { updatedAt: { gte: $since } } } }
+    }
+    limit: 100
+  }) {
+    summary
+    hasMore
+    items { __typename id displayName tags { label } }
+  }
+  signal: soup(input: { emailPreset: SIGNAL, limit: 15 }) {
+    items { id ... on GraphqlSoupEmailThread { name snippet senderName } }
+  }
+}
+
+```
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `query` | string | Yes | GraphQL document with exactly one `query` operation against the schema in this tool's description. |
+| `variables` | object | No | Values for the document's $variables, as a JSON object. |

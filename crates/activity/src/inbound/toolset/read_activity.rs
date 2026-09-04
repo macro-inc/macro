@@ -23,7 +23,7 @@ const MAX_ACTIVITY_RESULTS: u32 = 100;
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ReadActivity",
-    description = "Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated."
+    description = "Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use QuerySoup for those. Returns at most 100 activities and reports when the result was truncated."
 )]
 pub struct ReadActivity {
     /// Inclusive start of the time range.

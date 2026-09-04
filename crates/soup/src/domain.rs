@@ -1,3 +1,6 @@
+#[cfg(feature = "ports")]
+/// Agent-facing listing policy shared by AI tools.
+pub mod agent_listing;
 /// Domain model types for soup requests, responses, grouping, and errors.
 pub mod models;
 #[cfg(feature = "ports")]

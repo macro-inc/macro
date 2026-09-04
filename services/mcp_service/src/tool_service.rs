@@ -111,7 +111,7 @@ where
              Use ReadContent, ReadMetadata, and ReadThread to read them. \
              Use CreateDocument to create new documents. \
              Use EditDocument to edit existing documents. \
-             Use ListEntities to browse recent items.\n\n{}",
+             Use QuerySoup to browse recent items.\n\n{}",
             prompt::mcp_instructions(base_url),
         ));
         info

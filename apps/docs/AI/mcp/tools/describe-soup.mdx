@@ -1,0 +1,14 @@
+---
+title: DescribeSoup
+description: "Return the QuerySoup schema for one or more topics: a kind's filter literal (what goes inside `filters.<kind>Filter: { literal: … }`) and its output type (what you can select under `... on GraphqlSoup<Kind>`), or PROPERTIES for `properties { … }` and `propertiesFilter`. QuerySoup's own description only carries the shared types, so call this before writing a query that filters on or selects fields of a kind you have not seen the schema for in this conversation. Cheap and read-only; ask for every topic you need in one call."
+---
+
+# DescribeSoup
+
+Return the QuerySoup schema for one or more topics: a kind's filter literal (what goes inside `filters.<kind>Filter: { literal: … }`) and its output type (what you can select under `... on GraphqlSoup<Kind>`), or PROPERTIES for `properties { … }` and `propertiesFilter`. QuerySoup's own description only carries the shared types, so call this before writing a query that filters on or selects fields of a kind you have not seen the schema for in this conversation. Cheap and read-only; ask for every topic you need in one call.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `topics` | (`"DOCUMENT"` \| `"CHAT"` \| `"PROJECT"` \| `"EMAIL_THREAD"` \| `"CHANNEL"` \| `"CHANNEL_MESSAGE"` \| `"CALL"` \| `"CALENDAR_EVENT"` \| `"FOREIGN_ENTITY"` \| `"PROPERTIES"`)[] | Yes | Topics to describe, e.g. ["DOCUMENT", "EMAIL_THREAD"] or ["PROPERTIES"]. |

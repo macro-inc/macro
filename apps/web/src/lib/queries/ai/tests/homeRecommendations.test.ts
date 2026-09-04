@@ -48,8 +48,8 @@ describe('buildRecommendationPrompt', () => {
   check('requests active notifications', 'done false');
   check('does not use a notification seen filter', 'no seen filter');
   check('excludes emails from notification state', 'Never use notification');
-  check('requires the canonical email source', 'ListEntities exactly once');
-  check('requests active inbox emails', 'emailView "inbox"');
+  check('requires the canonical email source', 'QuerySoup exactly once');
+  check('requests active inbox emails', 'emailView: "inbox"');
   check('uses canonical email inbox state', 'inboxVisible determines');
   check('uses direct email read state', 'isRead is its read state');
   check("does not recommend the user's drafts", 'Skip email drafts');
@@ -88,7 +88,7 @@ describe('buildRecommendationPrompt', () => {
 
   it(`bounds each source to ${TRIAGE_INPUT_LIMIT} items`, () => {
     expect(
-      prompt.match(new RegExp(`limit ${TRIAGE_INPUT_LIMIT}`, 'g'))
+      prompt.match(new RegExp(`limit[: ]+${TRIAGE_INPUT_LIMIT}`, 'g'))
     ).toHaveLength(2);
   });
 });

@@ -69,7 +69,7 @@ pub struct ReadCallRecordResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "ReadCallRecord",
-    description = "Retrieve the transcript for a specific call record. Use ListEntities with includeTypes: [\"call\"] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListEntities. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/\"you\"."
+    description = "Retrieve the transcript for a specific call record. Use QuerySoup with entityTypes: [CALL] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from QuerySoup. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/\"you\"."
 )]
 pub struct ReadCallRecord {
     #[schemars(description = "The id of the call whose transcript you want to retrieve.")]

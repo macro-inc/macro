@@ -40,9 +40,9 @@ repeating one, say so rather than creating a single reminder and implying it rep
 \n\
 ## Attaching to an item\n\
 \n\
-Pass `entityType` and `entityId` together, using ids from ListEntities, GetThread, or search. \
+Pass `entityType` and `entityId` together, using ids from QuerySoup, GetThread, or search. \
 The user must already have access to what you attach. `entityType` accepts exactly these \
-values, and a type not on the list cannot be attached even if ListEntities returns it:\n\
+values, and a type not on the list cannot be attached even if QuerySoup returns it:\n\
 \n\
 - `document` — a Macro document\n\
 - `ai_chat` — an AI chat conversation\n\

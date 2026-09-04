@@ -187,4 +187,11 @@ mod tests {
         assert!(in_app.contains("non-Markdown documents"));
         assert!(in_app.contains("apply to your own conversational replies only"));
     }
+
+    #[test]
+    fn composed_prompts_do_not_name_list_entities() {
+        assert!(!BASE_PROMPT.to_string().contains("ListEntities"));
+        assert!(!TOOL_USE_PROMPT.to_string().contains("ListEntities"));
+        assert!(!mcp_instructions("https://macro.com").contains("ListEntities"));
+    }
 }

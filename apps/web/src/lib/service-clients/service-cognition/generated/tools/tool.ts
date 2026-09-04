@@ -61,6 +61,10 @@ type ToolParserMap = {
     response: types.DeleteReminderResponse;
   };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
+  DescribeSoup: {
+    call: types.DescribeSoup;
+    response: types.DescribeSoupResponse;
+  };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
@@ -100,10 +104,6 @@ type ToolParserMap = {
   ListCompanies: {
     call: types.ListCompanies;
     response: types.ListCompaniesResponse;
-  };
-  ListEntities: {
-    call: types.ListEntities;
-    response: types.ListEntitiesResponse;
   };
   ListImportEntities: {
     call: types.ListImportEntities;
@@ -147,6 +147,7 @@ type ToolParserMap = {
     response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  QuerySoup: { call: types.QuerySoup; response: types.QuerySoupData };
   ReadActivity: {
     call: types.ReadActivity;
     response: types.ReadActivityResponse;
@@ -283,6 +284,10 @@ const toolParserMap = {
     response: schemas.DeleteReminderResponse,
   },
   DeleteTag: { call: schemas.DeleteTag, response: schemas.DeleteTagResponse },
+  DescribeSoup: {
+    call: schemas.DescribeSoup,
+    response: schemas.DescribeSoupResponse,
+  },
   DisplayResults: {
     call: schemas.DisplayResults,
     response: schemas.DisplayResultsResponse,
@@ -325,10 +330,6 @@ const toolParserMap = {
   ListCompanies: {
     call: schemas.ListCompanies,
     response: schemas.ListCompaniesResponse,
-  },
-  ListEntities: {
-    call: schemas.ListEntities,
-    response: schemas.ListEntitiesResponse,
   },
   ListImportEntities: {
     call: schemas.ListImportEntities,
@@ -384,6 +385,7 @@ const toolParserMap = {
     call: schemas.NameSearch,
     response: schemas.SearchToolResponse,
   },
+  QuerySoup: { call: schemas.QuerySoup, response: schemas.QuerySoupData },
   ReadActivity: {
     call: schemas.ReadActivity,
     response: schemas.ReadActivityResponse,
@@ -537,6 +539,10 @@ type ToolDataMap = {
     response: types.DeleteReminderResponse;
   };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
+  DescribeSoup: {
+    call: types.DescribeSoup;
+    response: types.DescribeSoupResponse;
+  };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
@@ -576,10 +582,6 @@ type ToolDataMap = {
   ListCompanies: {
     call: types.ListCompanies;
     response: types.ListCompaniesResponse;
-  };
-  ListEntities: {
-    call: types.ListEntities;
-    response: types.ListEntitiesResponse;
   };
   ListImportEntities: {
     call: types.ListImportEntities;
@@ -623,6 +625,7 @@ type ToolDataMap = {
     response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  QuerySoup: { call: types.QuerySoup; response: types.QuerySoupData };
   ReadActivity: {
     call: types.ReadActivity;
     response: types.ReadActivityResponse;

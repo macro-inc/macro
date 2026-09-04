@@ -1,0 +1,42 @@
+# Tasks assigned to me that are not completed
+query OpenTasks {
+  soup(input: {
+    entityTypes: [DOCUMENT]
+    taskFilter: { status: [NOT_STARTED, IN_PROGRESS, IN_REVIEW], assignedToMe: true }
+  }) {
+    summary
+    hasMore
+    items { id displayName ... on GraphqlSoupDocument { updatedAt } }
+  }
+}
+
+# Important email since a timestamp (emailFilter literal from DescribeSoup EMAIL_THREAD)
+query Signal($since: String!) {
+  soup(input: {
+    emailPreset: SIGNAL
+    filters: { emailFilter: { tree: { literal: { updatedAt: { gte: $since } } } } }
+  }) {
+    hasMore
+    items { id ... on GraphqlSoupEmailThread { name senderName snippet isRead updatedAt } }
+  }
+}
+
+# Catch me up: recent activity plus signal email
+query CatchMeUp($since: String!) {
+  activity: soup(input: {
+    filters: {
+      documentFilter: { literal: { updatedAt: { gte: $since } } }
+      projectFilter: { literal: { updatedAt: { gte: $since } } }
+      chatFilter: { literal: { updatedAt: { gte: $since } } }
+      emailFilter: { tree: { literal: { updatedAt: { gte: $since } } } }
+    }
+    limit: 100
+  }) {
+    summary
+    hasMore
+    items { __typename id displayName tags { label } }
+  }
+  signal: soup(input: { emailPreset: SIGNAL, limit: 15 }) {
+    items { id ... on GraphqlSoupEmailThread { name snippet senderName } }
+  }
+}

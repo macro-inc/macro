@@ -13,8 +13,8 @@ static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to catch up
 Run these lookups, in parallel where possible:
 
 1. `ListNotifications` with `seen: false` for unseen notifications, and once more with no filters for recent context. Notifications are the primary "what needs my attention" signal.
-2. `ListEntities` sorted by `recently_updated` for workspace activity (documents, channels, emails, calls) since the user was last active. If the user gives a window ("since Friday", "this morning"), apply it with `df`/`ef` updatedAt bounds; otherwise default to the last 24 hours.
-3. `ListEntities` with `emailPreset: "signal"` for important unread email threads.
+2. `QuerySoup` for workspace activity (documents, channels, emails, calls) since the user was last active. Default sort is updatedAt DESC. If the user gives a window ("since Friday", "this morning"), put `updatedAt: { gte: $since }` on the document/project/chat/email trees; otherwise default to the last 24 hours. Alias two `soup` fields when you also need signal email.
+3. `QuerySoup` with `emailPreset: SIGNAL` for important unread email threads.
 
 For each channel or thread that surfaced, read just enough to summarize accurately: `ReadChannelMessages` / `ReadChannelThread` for channels, `ReadThread` for emails. Do not read items the user has clearly already handled.
 

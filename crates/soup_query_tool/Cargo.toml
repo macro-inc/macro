@@ -1,0 +1,33 @@
+[package]
+edition = "2024"
+name = "soup_query_tool"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+ai_toolset = { path = "../ai_toolset" }
+anyhow = { workspace = true }
+apollo-compiler = { workspace = true }
+async-graphql = { workspace = true }
+async-trait = { workspace = true }
+email = { path = "../email", features = ["ports"] }
+graphql_properties = { path = "../graphql_properties" }
+graphql_soup_filter_input = { path = "../graphql_soup_filter_input", features = ["server"] }
+item_filters = { path = "../item_filters" }
+macro_user_id = { path = "../macro_user_id" }
+models_pagination = { path = "../models_pagination" }
+models_properties = { path = "../models_properties" }
+models_soup = { path = "../models_soup" }
+non_empty = { path = "../non_empty" }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+soup = { path = "../soup", features = ["ai_tools"] }
+system_properties = { path = "../system_properties" }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

@@ -48,19 +48,19 @@ pass `thread_id` so the policy applies to the inbox that owns that thread, which
 matters for delegated or secondary inboxes. Otherwise pass `inbox` (an inbox email \
 address from ListInboxes) to name one, or omit both to use the primary inbox.\n\
 \n\
-Get `sender_email` from GetThread (`from.email`) or ListEntities (`sender_email`); \
+Get `sender_email` from GetThread (`from.email`) or QuerySoup (`senderEmail`); \
 do not guess addresses. Calling again with a different policy overwrites the \
 previous one. Repeating a call with the same arguments is safe."
 )]
 /// Set where future mail from a sender lands in one inbox.
 pub struct SetSenderPolicy {
     /// The sender's email address, e.g. `from.email` on a GetThread message or
-    /// `sender_email` on a ListEntities email row. Exact address, not a domain.
+    /// `senderEmail` on a QuerySoup email thread. Exact address, not a domain.
     pub sender_email: String,
     /// Where future mail from this sender lands: `signal`, `noise`, or `block`.
     pub policy: ToolSenderPolicy,
     /// Apply the policy to the inbox that owns this thread (same UUID returned
-    /// by ListEntities, search, or GetThread). Takes precedence over `inbox`.
+    /// by QuerySoup, search, or GetThread). Takes precedence over `inbox`.
     #[serde(default)]
     pub thread_id: Option<Uuid>,
     /// Apply the policy to a specific inbox by its email address (from

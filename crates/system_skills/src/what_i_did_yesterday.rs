@@ -14,7 +14,7 @@ Compute the day's bounds in the user's timezone first: yesterday runs from 00:00
 
 Run these in parallel:
 
-1. **Macro workspace** — `ListEntities` sorted by `recently_updated` with a `df` updatedAt window for the day: documents edited, projects touched, calls joined. Query tasks separately with `df` subtype task plus the same window, filtering Status = Completed and Assignees = the user, to find tasks they finished.
+1. **Macro workspace** — `QuerySoup` with document/project `updatedAt` bounds for the day: documents edited, projects touched, calls joined. Query tasks separately with `taskFilter: { status: [COMPLETED], assignedToMe: true, updatedAt: { from, until } }` (tasks are DOCUMENT + subType TASK).
 2. **Conversations** — from the entities that surfaced, note channels and email threads the user was active in; use `ReadChannelMessages` / `ReadThread` only where needed to attribute what the user actually said or sent, not just what changed around them.
 3. **GitHub and other integrations** — `SearchTools` with queries like "github commits", "github pull requests", "github reviews", then call the loaded tools scoped to the user and the day: commits pushed, PRs opened or merged, reviews given. Repeat for other connected trackers that record the user's work (e.g. Linear issues closed). If no integration matches, say so rather than silently omitting that source.
 

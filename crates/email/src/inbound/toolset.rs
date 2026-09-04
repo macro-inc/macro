@@ -26,58 +26,22 @@ pub use send_email::{SendEmail, SendEmailResponse};
 pub use set_sender_policy::{SetSenderPolicy, SetSenderPolicyResponse, ToolSenderPolicy};
 pub use update_thread_labels::{UpdateThreadLabels, UpdateThreadLabelsResponse};
 
-/// The caller's default inbox: the primary link they own. Falls back to any
-/// link they own, then any accessible inbox. `caller_macro_id` is the caller's
-/// own macro id (e.g. `macro|user@example.com`).
+/// The caller's default inbox. See [`Link::caller_primary`].
 pub fn caller_primary_inbox<'a>(inboxes: &'a [Link], caller_macro_id: &str) -> Option<&'a Link> {
-    inboxes
-        .iter()
-        .find(|l| l.is_primary && l.macro_id.to_string() == caller_macro_id)
-        .or_else(|| {
-            inboxes
-                .iter()
-                .find(|l| l.macro_id.to_string() == caller_macro_id)
-        })
-        .or_else(|| inboxes.first())
+    Link::caller_primary(inboxes, caller_macro_id)
 }
 
-/// Resolve an optional inbox selector (an inbox's email address) against the
-/// caller's accessible inboxes. `None` resolves to the caller's primary inbox.
-/// Errors when the address matches no accessible inbox, so a caller can never
-/// scope to an inbox they don't have.
+/// Tool-facing wrapper over [`Link::resolve_selector`]: the same resolution,
+/// with the domain error mapped to a [`ToolCallError`].
 pub fn resolve_inbox_selector<'a>(
     inboxes: &'a [Link],
     caller_macro_id: &str,
     requested: Option<&str>,
 ) -> Result<&'a Link, ToolCallError> {
-    let Some(addr) = requested.map(str::trim).filter(|s| !s.is_empty()) else {
-        return caller_primary_inbox(inboxes, caller_macro_id).ok_or_else(|| ToolCallError {
-            description: "No email account is linked for this user.".to_string(),
-            internal_error: anyhow::anyhow!("no accessible inboxes"),
-        });
-    };
-
-    let mut matches = inboxes
-        .iter()
-        .filter(|l| l.email_address.0.as_ref().eq_ignore_ascii_case(addr));
-    match (matches.next(), matches.next()) {
-        (Some(link), None) => Ok(link),
-        (Some(_), Some(_)) => Err(ToolCallError {
-            description: format!("Multiple connected inboxes match \"{addr}\"; cannot pick one."),
-            internal_error: anyhow::anyhow!("ambiguous inbox selector: {addr}"),
-        }),
-        (None, _) => Err(ToolCallError {
-            description: format!(
-                "No connected inbox matches \"{addr}\". Connected inboxes: {}.",
-                inboxes
-                    .iter()
-                    .map(|l| l.email_address.0.as_ref())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            internal_error: anyhow::anyhow!("unknown inbox selector: {addr}"),
-        }),
-    }
+    Link::resolve_selector(inboxes, caller_macro_id, requested).map_err(|error| ToolCallError {
+        description: error.to_string(),
+        internal_error: anyhow::anyhow!(error),
+    })
 }
 
 /// Service context for email AI tools.

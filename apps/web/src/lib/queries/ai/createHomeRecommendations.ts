@@ -16,7 +16,7 @@ const FAST_MODEL = 'anthropic/claude-haiku-4-5';
 /**
  * Fast + smart recommendation projections. The static prompt instructs the
  * agent to gather non-email items through ListNotifications and emails through
- * ListEntities, which preserves each entity type's canonical inbox semantics.
+ * QuerySoup, which preserves each entity type's canonical inbox semantics.
  *
  * Two projections share one prompt and schema and differ only in model: the
  * fast one (Haiku, free tier) generates inline for immediate paint; the smart
