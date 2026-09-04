@@ -1,12 +1,12 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT sequence, schedule_updated_at FROM calendar_events WHERE id = $1",
+  "query": "SELECT schedule_source_id, schedule_updated_at FROM calendar_events WHERE id = $1",
   "describe": {
     "columns": [
       {
         "ordinal": 0,
-        "name": "sequence",
-        "type_info": "Int4"
+        "name": "schedule_source_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 1,
@@ -20,9 +20,9 @@
       ]
     },
     "nullable": [
-      false,
+      true,
       false
     ]
   },
-  "hash": "28d4c87ed777b22093a591f9703e8d7bc955a5d9d823471e25b807fec5f5f04e"
+  "hash": "c0ba4a4e05265b6ab06b1f0c3bd4fec7daa320c01f004e2e60c89c82b0a1d0a9"
 }

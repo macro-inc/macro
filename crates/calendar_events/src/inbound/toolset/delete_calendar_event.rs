@@ -58,9 +58,9 @@ pub struct DeleteCalendarEvent {
 
     /// Calendar whose copy of the event is deleted.
     #[schemars(
-        description = "The `calendarId` of the copy to delete, from its ListCalendarEvents entry, \
-                       for an event synced from more than one calendar. Omit to delete the \
-                       event's primary copy."
+        description = "The `calendarId` of the copy to delete, from the `copies` of its \
+                       ListCalendarEvents entry, for an event synced from more than one \
+                       calendar. Omit to delete the event's primary copy."
     )]
     #[serde(default)]
     pub calendar_id: Option<uuid::Uuid>,

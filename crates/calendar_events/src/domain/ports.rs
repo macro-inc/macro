@@ -597,7 +597,7 @@ pub trait CalendarMutationService: Send + Sync + 'static {
 
     /// Patch an event at its provider — the whole event or series, or one
     /// occurrence of a recurring series — and persist the echo. `calendar_id`
-    /// selects which copy of a multi-calendar event is patched; `None`
+    /// selects which copy of a multi-calendar event is patched. `None`
     /// addresses the canonical source.
     fn update_event(
         &self,

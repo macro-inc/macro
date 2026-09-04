@@ -2340,7 +2340,7 @@ export interface DeleteCalendarEvent {
    */
   eventId: string;
   /**
-   * The `calendarId` of the copy to delete, from its ListCalendarEvents entry, for an event synced from more than one calendar. Omit to delete the event's primary copy.
+   * The `calendarId` of the copy to delete, from the `copies` of its ListCalendarEvents entry, for an event synced from more than one calendar. Omit to delete the event's primary copy.
    */
   calendarId?: string | null;
   scope?: DeletionScopeInput;
@@ -3087,6 +3087,29 @@ export interface CalendarEventListItem {
    * Calendar the event belongs to, when known.
    */
   calendarId?: string | null;
+  /**
+   * Every calendar carrying a copy of this event when there is more than
+   * one, primary first. Pass a copy's `calendarId` to UpdateCalendarEvent
+   * or DeleteCalendarEvent to address that copy instead of the primary.
+   */
+  copies: CalendarEventCopyItem[];
+}
+/**
+ * One calendar's copy of an event synced from several calendars.
+ */
+export interface CalendarEventCopyItem {
+  /**
+   * Calendar holding this copy.
+   */
+  calendarId: string;
+  /**
+   * The copy's own title.
+   */
+  title: string;
+  /**
+   * Whether that calendar prohibits modifying the copy.
+   */
+  isReadOnly: boolean;
 }
 /**
  * List the calendars the user can see across their connected inboxes, with each calendar's `calendarId`, display name, owning inbox address, and whether it is primary and writable.
@@ -5244,7 +5267,7 @@ export interface UpdateCalendarEvent {
    */
   eventId: string;
   /**
-   * The `calendarId` of the copy to update, from its ListCalendarEvents entry, for an event synced from more than one calendar. Omit to update the event's primary copy.
+   * The `calendarId` of the copy to update, from the `copies` of its ListCalendarEvents entry, for an event synced from more than one calendar. Omit to update the event's primary copy.
    */
   calendarId?: string | null;
   scope: UpdateScopeInput;

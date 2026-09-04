@@ -677,7 +677,7 @@ impl CalendarRepository for PgCalendarRepository {
         // path entirely so rebuilds cost reads, not occurrence churn.
         let existing = sqlx::query!(
             r#"
-            SELECT event_id, normalized_payload
+            SELECT event_id, normalized_payload, source_sequence
             FROM calendar_event_sources
             WHERE source_kind = 'google'
               AND account_id = $1
@@ -691,7 +691,7 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_optional(&mut *tx)
         .await
         .map_err(report)?;
-        if let Some(row) = existing {
+        if let Some(row) = &existing {
             let incoming =
                 serde_json::to_value(StoredSourceProjection::from(&upsert)).map_err(report)?;
             if canonical_projection(&row.normalized_payload) == canonical_projection(&incoming) {
@@ -704,6 +704,10 @@ impl CalendarRepository for PgCalendarRepository {
             }
         }
 
+        let incoming_sequence = db_sequence(upsert.event.sequence)?;
+        let copy_advanced = existing
+            .as_ref()
+            .is_none_or(|row| incoming_sequence > row.source_sequence);
         let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&upsert.event.time);
 
         // The entity row is created by whichever source arrives first and
@@ -720,7 +724,6 @@ impl CalendarRepository for PgCalendarRepository {
                 creator_email, creator_name,
                 conference_url, conference_provider, sequence, is_read_only,
                 canonical_source_kind,
-                canonical_source_updated_at,
                 reminders_use_default, reminder_overrides,
                 created_at, updated_at, schedule_updated_at
             )
@@ -730,7 +733,7 @@ impl CalendarRepository for PgCalendarRepository {
                 $11, $12, $13, $14, $15,
                 $16, $17, $18,
                 $28, $29,
-                $19, $27, $20, $21, $22, $24,
+                $19, $27, $20, $21, $22,
                 $25, $26,
                 $23, $24, $24
             )
@@ -756,7 +759,7 @@ impl CalendarRepository for PgCalendarRepository {
             upsert.event.organizer_email.as_deref(),
             upsert.event.organizer_name.as_deref(),
             upsert.event.conference_url.as_deref(),
-            db_sequence(upsert.event.sequence)?,
+            incoming_sequence,
             upsert.event.is_read_only,
             source_kind,
             upsert.event.created_at,
@@ -801,36 +804,36 @@ impl CalendarRepository for PgCalendarRepository {
             });
         };
 
-        // Only the canonical source — the primary calendar's copy, else the
-        // freshest — writes the entity's content and projections. A shared
-        // calendar's re-import of a member's own event records its copy and
-        // leaves the entity to the primary. A user edit made through another
-        // copy still lands its schedule: Google confirmed it for the meeting,
-        // and waiting for the primary to sync would show the edit as lost.
+        // Content always follows the canonical copy. The schedule follows
+        // whichever copy last wrote it: the canonical copy takes it when that
+        // copy is new to Macro, advanced its own sequence, or is at least as
+        // fresh as the write it replaces, a user edit through another copy
+        // lands when it is at least that fresh, and the copy that wrote the
+        // schedule keeps writing it until then.
         let canonical = canonical_source(&mut tx, event_id).await?;
+        let schedule = schedule_owner(&mut tx, event_id).await?;
         let projection = StoredSourceProjection::from(&upsert);
-        if canonical.as_ref().map(|canonical| canonical.source_id) == Some(source_id) {
-            // Decided before the content write below records this copy's
-            // sequence on the entity, or an advanced sequence could never
-            // register as fresher. The schedule a user edit landed through
-            // another copy is newer than what the canonical copy last synced;
-            // an older state of the canonical copy must not undo it, only a
-            // fresher one.
-            let schedule_fresh = schedule_is_fresh(&mut tx, event_id, &projection.event).await?;
-            apply_content_projection(
-                &mut tx,
-                event_id,
-                &projection,
-                source_kind,
-                upsert.event.updated_at,
-            )
-            .await?;
-            if schedule_fresh {
-                apply_schedule_projection(&mut tx, event_id, &projection).await?;
-            }
-            rebuild_entity_reminder_firings(&mut tx, event_id, Some(source.calendar_id)).await?;
+        let is_canonical =
+            canonical.as_ref().map(|canonical| canonical.source_id) == Some(source_id);
+        let owns_schedule = schedule.source_id == Some(source_id);
+        let writes_schedule = if is_canonical {
+            owns_schedule || copy_advanced || upsert.event.updated_at >= schedule.updated_at
         } else if user_mutation {
-            apply_schedule_projection(&mut tx, event_id, &projection).await?;
+            upsert.event.updated_at >= schedule.updated_at
+        } else {
+            owns_schedule
+        };
+        if is_canonical {
+            apply_content_projection(&mut tx, event_id, &projection, source_kind).await?;
+        }
+        if writes_schedule {
+            if is_canonical {
+                apply_schedule_projection(&mut tx, event_id, source_id, &projection).await?;
+            } else {
+                apply_time_projection(&mut tx, event_id, source_id, &projection).await?;
+            }
+        }
+        if is_canonical || writes_schedule {
             rebuild_entity_reminder_firings(
                 &mut tx,
                 event_id,
@@ -1610,10 +1613,9 @@ impl CalendarRepository for PgCalendarRepository {
         event_id: Uuid,
         calendar_id: Option<Uuid>,
     ) -> Result<Option<CalendarEventMutationTarget>, Report> {
-        // Without a calendar, rank Google sources exactly like canonical
-        // selection so mutations address the copy the entity is projected
-        // from; with one, address that calendar's copy, whose own access role
-        // decides whether it can be edited.
+        // Without a calendar, address the canonical copy the entity is
+        // projected from. With one, address that calendar's copy, whose own
+        // access role decides whether it can be edited.
         let row = sqlx::query!(
             r#"
             SELECT
@@ -1639,7 +1641,11 @@ impl CalendarRepository for PgCalendarRepository {
             WHERE event.id = $1
               AND NOT calendar.is_deleted
               AND account.sync_status <> 'disabled'
-              AND ($3::uuid IS NULL OR source.calendar_id = $3)
+              AND CASE
+                    WHEN $3::uuid IS NULL
+                        THEN source.id = calendar_event_canonical_source_id(event.id)
+                    ELSE source.calendar_id = $3
+                  END
               AND (
                     event.owner_id = $2
                     OR EXISTS (
@@ -1650,10 +1656,8 @@ impl CalendarRepository for PgCalendarRepository {
                     )
               )
             ORDER BY
-                calendar.is_primary DESC,
                 source.source_sequence DESC,
                 source.source_updated_at DESC,
-                source.last_seen_at DESC,
                 source.id DESC
             LIMIT 1
             "#,
@@ -2767,11 +2771,11 @@ struct CanonicalSource {
     calendar_id: Uuid,
 }
 
-/// The source whose content the entity carries: the primary calendar's copy
-/// when the account syncs one, else the freshest, on a live calendar of an
-/// enabled account like the read path. Every write path ranks through here so
-/// the entity, its mutation target, and its reminder schedule always agree on
-/// which copy is canonical.
+/// The source whose content the entity carries, ranked by
+/// `calendar_event_canonical_source_id`: the primary calendar's copy, else a
+/// copy the grant can write, else the freshest, on a live calendar of an
+/// enabled account. Every ranking site goes through that function so the
+/// entity, the mutation target, the reminder schedule, and the listing agree.
 async fn canonical_source(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
@@ -2780,18 +2784,7 @@ async fn canonical_source(
         r#"
         SELECT source.id, source.calendar_id AS "calendar_id!"
         FROM calendar_event_sources source
-        JOIN calendars calendar ON calendar.id = source.calendar_id
-        JOIN calendar_accounts account ON account.id = source.account_id
-        WHERE source.event_id = $1
-          AND NOT calendar.is_deleted
-          AND account.sync_status <> 'disabled'
-        ORDER BY
-            calendar.is_primary DESC,
-            source.source_sequence DESC,
-            source.source_updated_at DESC,
-            source.last_seen_at DESC,
-            source.id DESC
-        LIMIT 1
+        WHERE source.id = calendar_event_canonical_source_id($1)
         "#,
         event_id,
     )
@@ -2804,35 +2797,36 @@ async fn canonical_source(
     }))
 }
 
-/// Whether a copy's projection may replace the schedule the entity carries:
-/// the copy's own sequence advanced, or its provider stamp is at least as
-/// recent as the schedule's. A user edit made through another copy stamps
-/// the entity with that edit's time, so an older state of the canonical copy
-/// leaves it alone until the canonical copy itself changes.
-async fn schedule_is_fresh(
+/// The copy that last wrote the entity's schedule and that write's provider
+/// stamp. The copy is absent when it has since been retired.
+struct ScheduleOwner {
+    source_id: Option<Uuid>,
+    updated_at: DateTime<Utc>,
+}
+
+async fn schedule_owner(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
-    event: &CalendarEvent,
-) -> Result<bool, Report> {
-    let entity = sqlx::query!(
-        r#"SELECT sequence, schedule_updated_at FROM calendar_events WHERE id = $1"#,
+) -> Result<ScheduleOwner, Report> {
+    let row = sqlx::query!(
+        r#"SELECT schedule_source_id, schedule_updated_at FROM calendar_events WHERE id = $1"#,
         event_id,
     )
     .fetch_one(&mut **tx)
     .await
     .map_err(report)?;
-    Ok(db_sequence(event.sequence)? > entity.sequence
-        || event.updated_at >= entity.schedule_updated_at)
+    Ok(ScheduleOwner {
+        source_id: row.schedule_source_id,
+        updated_at: row.schedule_updated_at,
+    })
 }
 
-/// Rewrite the entity's copy-specific content from its canonical copy and
-/// record that copy as canonical.
+/// Rewrite the entity's copy-specific content from its canonical copy.
 async fn apply_content_projection(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
     projection: &StoredSourceProjection,
     source_kind: &str,
-    source_updated_at: DateTime<Utc>,
 ) -> Result<(), Report> {
     sqlx::query!(
         r#"
@@ -2848,11 +2842,10 @@ async fn apply_content_projection(
             sequence = $10,
             is_read_only = $11,
             canonical_source_kind = $12,
-            canonical_source_updated_at = $13,
-            reminders_use_default = $14,
-            reminder_overrides = $15,
-            created_at = $16,
-            updated_at = GREATEST(calendar_events.updated_at, $17)
+            reminders_use_default = $13,
+            reminder_overrides = $14,
+            created_at = $15,
+            updated_at = GREATEST(calendar_events.updated_at, $16)
         WHERE id = $1
         "#,
         event_id,
@@ -2867,7 +2860,6 @@ async fn apply_content_projection(
         db_sequence(projection.event.sequence)?,
         projection.event.is_read_only,
         source_kind,
-        source_updated_at,
         projection.event.reminders.use_default,
         serde_json::to_value(&projection.event.reminders.overrides).map_err(report)?,
         projection.event.created_at,
@@ -2879,13 +2871,13 @@ async fn apply_content_projection(
     Ok(())
 }
 
-/// Rewrite the entity's schedule — status, time, recurrence, organizer,
-/// conference, attendees, overrides, and occurrences — from one copy's
-/// projection and stamp it with that copy's provider update time, leaving the
-/// canonical copy's content untouched.
+/// Rewrite the whole schedule the canonical copy owns: status, time,
+/// recurrence, organizer, conference, attendees, overrides, and occurrences.
+/// Records the copy as the schedule's writer with its provider stamp.
 async fn apply_schedule_projection(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
+    source_id: Uuid,
     projection: &StoredSourceProjection,
 ) -> Result<(), Report> {
     let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&projection.event.time);
@@ -2903,8 +2895,9 @@ async fn apply_schedule_projection(
             organizer_name = $10,
             conference_url = $11,
             conference_provider = $12,
-            schedule_updated_at = $13,
-            updated_at = GREATEST(calendar_events.updated_at, $13)
+            schedule_source_id = $13,
+            schedule_updated_at = $14,
+            updated_at = GREATEST(calendar_events.updated_at, $14)
         WHERE id = $1
         "#,
         event_id,
@@ -2922,6 +2915,7 @@ async fn apply_schedule_projection(
             .event
             .conference_provider
             .map(ConferenceProvider::as_str),
+        source_id,
         projection.event.updated_at,
     )
     .execute(&mut **tx)
@@ -2938,10 +2932,60 @@ async fn apply_schedule_projection(
     .await
 }
 
+/// Rewrite the time shape a non-canonical copy carries for the meeting:
+/// status, time, recurrence, overrides, and occurrences. Attendees,
+/// organizer, and conference stay the canonical copy's. Records the copy as
+/// the schedule's writer with its provider stamp.
+async fn apply_time_projection(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+    source_id: Uuid,
+    projection: &StoredSourceProjection,
+) -> Result<(), Report> {
+    let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&projection.event.time);
+    sqlx::query!(
+        r#"
+        UPDATE calendar_events
+        SET status = $2,
+            starts_at = $3,
+            ends_at = $4,
+            start_date = $5,
+            end_date = $6,
+            time_zone = $7,
+            recurrence_lines = $8,
+            schedule_source_id = $9,
+            schedule_updated_at = $10,
+            updated_at = GREATEST(calendar_events.updated_at, $10)
+        WHERE id = $1
+        "#,
+        event_id,
+        projection.event.status.as_str(),
+        starts_at,
+        ends_at,
+        start_date,
+        end_date,
+        time_zone,
+        &projection.event.recurrence_lines,
+        source_id,
+        projection.event.updated_at,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?;
+    replace_overrides(tx, event_id, &projection.overrides).await?;
+    replace_occurrences(
+        tx,
+        event_id,
+        &projection.event.owner_id,
+        &projection.occurrences,
+    )
+    .await
+}
+
 /// Rebuild the entity's reminder firings from the content and occurrences it
 /// now carries, resolving calendar defaults against the canonical copy's
-/// calendar, so alerts keep following the canonical copy's settings whichever
-/// copy last moved the schedule.
+/// calendar, so alerts follow the canonical copy's settings whichever copy
+/// last moved the schedule.
 async fn rebuild_entity_reminder_firings(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
@@ -2978,21 +3022,25 @@ async fn rebuild_entity_reminder_firings(
     .await
 }
 
-/// Rewrite the entity wholesale — content, schedule, and reminder firings —
-/// from one copy's projection, used when a retired canonical copy hands the
-/// entity to the next best one and no schedule it carried can be trusted over
-/// the survivor's. Runs inside the caller's transaction so the entity can
-/// never disagree with the copy it mirrors.
+/// Rewrite the entity from the copy that inherits it after a retirement.
+/// Content always follows it. The schedule follows it unless another
+/// surviving copy wrote a fresher one, which is how a user's edit made
+/// through a copy outlives the retirement of an unrelated third copy.
 async fn apply_canonical_projection(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
+    source_id: Uuid,
     projection: &StoredSourceProjection,
     source_kind: &str,
-    source_updated_at: DateTime<Utc>,
     calendar_id: Option<Uuid>,
 ) -> Result<(), Report> {
-    apply_content_projection(tx, event_id, projection, source_kind, source_updated_at).await?;
-    apply_schedule_projection(tx, event_id, projection).await?;
+    apply_content_projection(tx, event_id, projection, source_kind).await?;
+    let schedule = schedule_owner(tx, event_id).await?;
+    if schedule.source_id.is_none_or(|owner| owner == source_id)
+        || projection.event.updated_at >= schedule.updated_at
+    {
+        apply_schedule_projection(tx, event_id, source_id, projection).await?;
+    }
     rebuild_entity_reminder_firings(tx, event_id, calendar_id).await
 }
 
@@ -3031,23 +3079,12 @@ async fn restore_best_source_or_delete(
     let source = sqlx::query!(
         r#"
         SELECT
+            source.id,
             source.source_kind,
-            source.source_updated_at,
             source.normalized_payload,
             source.calendar_id
         FROM calendar_event_sources source
-        JOIN calendars calendar ON calendar.id = source.calendar_id
-        JOIN calendar_accounts account ON account.id = source.account_id
-        WHERE source.event_id = $1
-          AND NOT calendar.is_deleted
-          AND account.sync_status <> 'disabled'
-        ORDER BY
-            calendar.is_primary DESC,
-            source.source_sequence DESC,
-            source.source_updated_at DESC,
-            source.last_seen_at DESC,
-            source.id DESC
-        LIMIT 1
+        WHERE source.id = calendar_event_canonical_source_id($1)
         "#,
         event_id,
     )
@@ -3071,9 +3108,9 @@ async fn restore_best_source_or_delete(
     apply_canonical_projection(
         tx,
         event_id,
+        source.id,
         &projection,
         &source.source_kind,
-        source.source_updated_at,
         source.calendar_id,
     )
     .await?;
@@ -3396,10 +3433,10 @@ async fn rebuild_event_reminder_firings(
 /// Rebuild the firing schedule for every event whose canonical source lives
 /// on one calendar, after its default reminders or time zone changed.
 /// Set-based because a defaults change fans out to every `useDefault` event
-/// on the calendar. Both statements rank sources exactly like
-/// `canonical_source`: an event that also holds a secondary copy on this
-/// calendar keeps the schedule its canonical calendar derived, so a shared
-/// calendar's defaults never reach a member's own event.
+/// on the calendar. Both statements key on the canonical copy, so an event
+/// that also holds a secondary copy on this calendar keeps the schedule its
+/// canonical calendar derived and a shared calendar's defaults never reach a
+/// member's own event.
 async fn rebuild_calendar_reminder_firings(
     tx: &mut Transaction<'_, Postgres>,
     calendar_id: Uuid,
@@ -3415,18 +3452,7 @@ async fn rebuild_calendar_reminder_firings(
           AND (
               SELECT canonical.calendar_id
               FROM calendar_event_sources canonical
-              JOIN calendars canonical_calendar ON canonical_calendar.id = canonical.calendar_id
-              JOIN calendar_accounts canonical_account ON canonical_account.id = canonical.account_id
-              WHERE canonical.event_id = firing.event_id
-                AND NOT canonical_calendar.is_deleted
-                AND canonical_account.sync_status <> 'disabled'
-              ORDER BY
-                  canonical_calendar.is_primary DESC,
-                  canonical.source_sequence DESC,
-                  canonical.source_updated_at DESC,
-                  canonical.last_seen_at DESC,
-                  canonical.id DESC
-              LIMIT 1
+              WHERE canonical.id = calendar_event_canonical_source_id(firing.event_id)
           ) = $1
         "#,
         calendar_id,
@@ -3471,18 +3497,7 @@ async fn rebuild_calendar_reminder_firings(
           AND (
               SELECT canonical.calendar_id
               FROM calendar_event_sources canonical
-              JOIN calendars canonical_calendar ON canonical_calendar.id = canonical.calendar_id
-              JOIN calendar_accounts canonical_account ON canonical_account.id = canonical.account_id
-              WHERE canonical.event_id = event.id
-                AND NOT canonical_calendar.is_deleted
-                AND canonical_account.sync_status <> 'disabled'
-              ORDER BY
-                  canonical_calendar.is_primary DESC,
-                  canonical.source_sequence DESC,
-                  canonical.source_updated_at DESC,
-                  canonical.last_seen_at DESC,
-                  canonical.id DESC
-              LIMIT 1
+              WHERE canonical.id = calendar_event_canonical_source_id(event.id)
           ) = $1
           AND event.status <> 'cancelled'
           AND NOT occurrence.is_cancelled
@@ -3502,9 +3517,10 @@ async fn rebuild_calendar_reminder_firings(
     Ok(())
 }
 
-/// Every active copy of each event, canonical first: the primary calendar's
-/// copy, then the freshest. Copies on deleted calendars or disabled accounts
-/// are omitted, mirroring what the calendar list shows.
+/// Every active copy of each event in canonical order, the same keys
+/// `calendar_event_canonical_source_id` ranks by: the primary calendar's
+/// copy, then writable copies, then the freshest. Copies on deleted calendars
+/// or disabled accounts are omitted, mirroring what the calendar list shows.
 async fn fetch_source_contents(
     pool: &PgPool,
     event_ids: &[Uuid],
@@ -3537,9 +3553,9 @@ async fn fetch_source_contents(
         ORDER BY
             source.event_id,
             calendar.is_primary DESC,
+            (calendar.access_role IN ('owner', 'writer')) DESC,
             source.source_sequence DESC,
             source.source_updated_at DESC,
-            source.last_seen_at DESC,
             source.id DESC
         "#,
         event_ids,
@@ -3991,8 +4007,8 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
         // Matching the firing row exactly — including `fire_at` — is what
         // makes a stale message safe: a moved event replaced its schedule
         // rows, and this then finds nothing rather than alerting at a time
-        // that no longer exists. The canonical-source lateral ranks copies
-        // like `canonical_source` and skips deleted calendars and
+        // that no longer exists. Joining the canonical copy through
+        // `calendar_event_canonical_source_id` skips deleted calendars and
         // disabled accounts like the read path, so losing the calendar that
         // owns the schedule stops its alerts.
         // The grace bound is re-applied here because firing rows outlive the
@@ -4009,7 +4025,7 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
                 occurrence.ends_at,
                 occurrence.start_date,
                 occurrence.end_date,
-                canonical_source.calendar_time_zone AS "calendar_time_zone?",
+                canonical_calendar.time_zone AS "calendar_time_zone?",
                 CASE WHEN EXISTS (
                         SELECT 1
                         FROM calendar_event_overrides override
@@ -4042,22 +4058,10 @@ impl CalendarReminderDispatchRepo for PgCalendarRepository {
             JOIN calendar_event_occurrences occurrence
                 ON occurrence.event_id = firing.event_id
                AND occurrence.occurrence_key = firing.occurrence_key
-            JOIN LATERAL (
-                SELECT calendar.time_zone AS calendar_time_zone
-                FROM calendar_event_sources source
-                JOIN calendars calendar ON calendar.id = source.calendar_id
-                JOIN calendar_accounts account ON account.id = source.account_id
-                WHERE source.event_id = event.id
-                  AND NOT calendar.is_deleted
-                  AND account.sync_status <> 'disabled'
-                ORDER BY
-                    calendar.is_primary DESC,
-                    source.source_sequence DESC,
-                    source.source_updated_at DESC,
-                    source.last_seen_at DESC,
-                    source.id DESC
-                LIMIT 1
-            ) canonical_source ON true
+            JOIN calendar_event_sources canonical_source
+                ON canonical_source.id = calendar_event_canonical_source_id(event.id)
+            JOIN calendars canonical_calendar
+                ON canonical_calendar.id = canonical_source.calendar_id
             WHERE firing.event_id = $1
               AND firing.occurrence_key = $2
               AND firing.minutes_before = $3

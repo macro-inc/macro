@@ -1827,6 +1827,13 @@ export const ListCalendarEventsResponse = z.object({
       conferenceUrl: z.union([z.string(), z.null()]).optional(),
       isReadOnly: z.boolean(),
       calendarId: z.union([z.string().uuid(), z.null()]).optional(),
+      copies: z.array(
+        z.object({
+          calendarId: z.string().uuid(),
+          title: z.string(),
+          isReadOnly: z.boolean(),
+        })
+      ),
     })
   ),
   truncated: z.boolean(),

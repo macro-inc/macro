@@ -28,11 +28,42 @@ ALTER TABLE calendar_event_sources
     ADD COLUMN creator_email text,
     ADD COLUMN creator_name text;
 
--- The provider update stamp of the schedule the entity currently carries.
--- A canonical copy's sync replaces the schedule only when it is at least this
--- fresh or its own sequence advanced, so a user's edit made through another
--- copy is not undone by an older state of the canonical copy.
+-- Ranks one event's copies and returns the canonical one: the primary
+-- calendar's copy, else a copy the grant can write, else the freshest, on a
+-- live calendar of an enabled account. Every ranking site calls this so the
+-- entity content, the mutation target, the reminder schedule, and the
+-- listing order agree on which copy is canonical.
+CREATE FUNCTION calendar_event_canonical_source_id(target_event_id uuid)
+RETURNS uuid
+LANGUAGE sql
+STABLE
+AS $$
+    SELECT source.id
+    FROM calendar_event_sources source
+    JOIN calendars calendar ON calendar.id = source.calendar_id
+    JOIN calendar_accounts account ON account.id = source.account_id
+    WHERE source.event_id = target_event_id
+      AND NOT calendar.is_deleted
+      AND account.sync_status <> 'disabled'
+    ORDER BY
+        calendar.is_primary DESC,
+        (calendar.access_role IN ('owner', 'writer')) DESC,
+        source.source_sequence DESC,
+        source.source_updated_at DESC,
+        source.id DESC
+    LIMIT 1
+$$;
+
+-- Which copy last wrote the entity's schedule (status, time, recurrence,
+-- occurrences, and for the canonical copy also attendees, organizer, and
+-- conference) and that write's provider update stamp. The canonical copy
+-- takes the schedule when it is new to Macro, advanced its own sequence, or
+-- is at least this fresh, a user edit through another copy lands when it is
+-- at least this fresh, and the writing copy keeps writing it until then.
+-- Retiring the writing copy hands the schedule back to the canonical one.
 ALTER TABLE calendar_events
+    ADD COLUMN schedule_source_id uuid
+        REFERENCES calendar_event_sources(id) ON DELETE SET NULL,
     ADD COLUMN schedule_updated_at timestamptz NOT NULL DEFAULT now();
 
 UPDATE calendar_events SET schedule_updated_at = canonical_source_updated_at;
@@ -76,41 +107,14 @@ SET title = COALESCE(normalized_payload -> 'event' ->> 'title', ''),
     creator_name = normalized_payload -> 'event' ->> 'creatorName';
 
 -- Entities with more than one source hold whichever copy synced last. Rewrite
--- them from the canonical source under the new rule (primary calendar first,
--- then freshest) so the primary copy's type, access, availability,
--- visibility, and reminders are restored without waiting for a resync.
+-- them from the canonical copy so the primary copy's type, access,
+-- availability, visibility, and reminders are restored without waiting for a
+-- resync.
 WITH multi_source AS (
     SELECT event_id
     FROM calendar_event_sources
     GROUP BY event_id
     HAVING count(*) > 1
-),
-canonical AS (
-    SELECT DISTINCT ON (source.event_id)
-        source.event_id,
-        source.title,
-        source.description,
-        source.location,
-        source.event_type,
-        source.visibility,
-        source.transparency,
-        source.is_read_only,
-        source.reminders_use_default,
-        source.reminder_overrides,
-        source.creator_email,
-        source.creator_name,
-        source.source_sequence,
-        source.source_updated_at
-    FROM calendar_event_sources source
-    JOIN multi_source ON multi_source.event_id = source.event_id
-    JOIN calendars calendar ON calendar.id = source.calendar_id
-    ORDER BY
-        source.event_id,
-        calendar.is_primary DESC,
-        source.source_sequence DESC,
-        source.source_updated_at DESC,
-        source.last_seen_at DESC,
-        source.id DESC
 )
 UPDATE calendar_events event
 SET title = canonical.title,
@@ -124,11 +128,18 @@ SET title = canonical.title,
     reminder_overrides = canonical.reminder_overrides,
     creator_email = canonical.creator_email,
     creator_name = canonical.creator_name,
-    sequence = canonical.source_sequence,
-    canonical_source_updated_at = canonical.source_updated_at,
+    sequence = canonical.source_sequence
+FROM calendar_event_sources canonical
+JOIN multi_source ON multi_source.event_id = canonical.event_id
+WHERE event.id = canonical.event_id
+  AND canonical.id = calendar_event_canonical_source_id(event.id);
+
+-- Every entity's schedule is attributed to its canonical copy.
+UPDATE calendar_events event
+SET schedule_source_id = canonical.id,
     schedule_updated_at = canonical.source_updated_at
-FROM canonical
-WHERE event.id = canonical.event_id;
+FROM calendar_event_sources canonical
+WHERE canonical.id = calendar_event_canonical_source_id(event.id);
 
 -- The firing schedule of a rewritten entity may have been built from the
 -- other copy's reminders. Rebuild it from the restored configuration and the
@@ -151,7 +162,7 @@ WITH multi_source AS (
     HAVING count(*) > 1
 ),
 canonical_calendar AS (
-    SELECT DISTINCT ON (source.event_id)
+    SELECT
         source.event_id,
         calendar.default_reminders,
         CASE
@@ -165,13 +176,7 @@ canonical_calendar AS (
     FROM calendar_event_sources source
     JOIN multi_source ON multi_source.event_id = source.event_id
     JOIN calendars calendar ON calendar.id = source.calendar_id
-    ORDER BY
-        source.event_id,
-        calendar.is_primary DESC,
-        source.source_sequence DESC,
-        source.source_updated_at DESC,
-        source.last_seen_at DESC,
-        source.id DESC
+    WHERE source.id = calendar_event_canonical_source_id(source.event_id)
 )
 INSERT INTO calendar_event_reminder_firings (
     event_id, occurrence_key, minutes_before, fire_at
@@ -208,3 +213,7 @@ WHERE event.status <> 'cancelled'
         occurrence.start_date::timestamp AT TIME ZONE canonical_calendar.anchor_zone
       ) - make_interval(mins => offsets.minutes) > now() - interval '1 day'
 ON CONFLICT (event_id, occurrence_key, minutes_before) DO NOTHING;
+
+-- The canonical copy's stamp had one reader, the old cross-copy precedence
+-- guard, which the per-copy freshness rules above replace.
+ALTER TABLE calendar_events DROP COLUMN canonical_source_updated_at;

@@ -105,9 +105,9 @@ pub struct UpdateCalendarEvent {
 
     /// Calendar whose copy of the event is updated.
     #[schemars(
-        description = "The `calendarId` of the copy to update, from its ListCalendarEvents entry, \
-                       for an event synced from more than one calendar. Omit to update the \
-                       event's primary copy."
+        description = "The `calendarId` of the copy to update, from the `copies` of its \
+                       ListCalendarEvents entry, for an event synced from more than one \
+                       calendar. Omit to update the event's primary copy."
     )]
     #[serde(default)]
     pub calendar_id: Option<uuid::Uuid>,
