@@ -46,7 +46,8 @@ carry a small RSS icon.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
-conferencing, and location pills, forces a timed (not all-day) range, restricts the calendar
+conferencing, and location pills and the description field (Google rejects them on this
+type), forces a timed (not all-day) range, restricts the calendar
 pill to primary calendars, and shows a `Decline meetings` pill (`Don't decline meetings` /
 `Decline new meetings` / `Decline all meetings`) plus, when declining, an optional
 `Decline message` pill; a warning note discloses the away/auto-decline effect before saving.

@@ -1268,6 +1268,23 @@ async fn create_out_of_office_rejects_all_day_spans_and_attendees() {
             .await,
         Err(CalendarMutationError::InvalidInput(_))
     ));
+
+    let with_description = service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    );
+    let mut description_draft = out_of_office_draft();
+    description_draft.description = Some("Back Monday".to_string());
+    assert!(matches!(
+        with_description
+            .create_event("macro|user", None, None, description_draft)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
 }
 
 #[tokio::test]

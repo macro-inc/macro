@@ -168,32 +168,37 @@ export function EventForm(props: EventFormProps) {
               class="h-9 w-full bg-transparent px-2 text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
             />
 
-            <div class="h-12 overflow-y-auto">
-              <MarkdownTextarea
-                type="calendar"
-                initialHtml={calendarDescriptionToEditorHtml(
-                  initialDescription
-                )}
-                editable={() => !fieldIsDisabled('description')}
-                onInitialized={(editor) => {
-                  loadedDescription = exportCalendarDescription(editor);
-                }}
-                onChange={(_markdown, editor) => {
-                  if (!editor) return;
-                  const next = exportCalendarDescription(editor);
-                  controller.setField(
-                    'description',
-                    next === loadedDescription ? initialDescription : next
-                  );
-                }}
-                placeholder="Add description..."
-                portalScope="local"
-                domRef={(element) =>
-                  element.setAttribute('aria-label', 'Description')
-                }
-                class="h-full w-full bg-transparent px-2 text-sm text-ink outline-none"
-              />
-            </div>
+            {/* Google rejects a description on an out-of-office event. The
+                editor re-initializes from the kind switch's reset state, so
+                what it shows always matches what a save submits. */}
+            <Show when={!isOutOfOffice()}>
+              <div class="h-12 overflow-y-auto">
+                <MarkdownTextarea
+                  type="calendar"
+                  initialHtml={calendarDescriptionToEditorHtml(
+                    initialDescription
+                  )}
+                  editable={() => !fieldIsDisabled('description')}
+                  onInitialized={(editor) => {
+                    loadedDescription = exportCalendarDescription(editor);
+                  }}
+                  onChange={(_markdown, editor) => {
+                    if (!editor) return;
+                    const next = exportCalendarDescription(editor);
+                    controller.setField(
+                      'description',
+                      next === loadedDescription ? initialDescription : next
+                    );
+                  }}
+                  placeholder="Add description..."
+                  portalScope="local"
+                  domRef={(element) =>
+                    element.setAttribute('aria-label', 'Description')
+                  }
+                  class="h-full w-full bg-transparent px-2 text-sm text-ink outline-none"
+                />
+              </div>
+            </Show>
           </div>
 
           <div class="flex min-w-0 flex-wrap items-center gap-2">

@@ -200,6 +200,7 @@ describe('out of office', () => {
         title: 'Away',
         guests: 'guest@example.com',
         location: 'HQ',
+        description: 'Send help',
         conference: 'google_meet',
       },
       { calendarOptions: MIXED_CALENDARS }
@@ -217,6 +218,7 @@ describe('out of office', () => {
     });
     expect(values?.guestEmails).toEqual([]);
     expect(values?.location).toBe('');
+    expect(values?.description).toBe('');
     expect(values?.conference).toBeUndefined();
     expect(values?.calendarId).toBe('primary-1');
   });

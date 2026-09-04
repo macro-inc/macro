@@ -286,7 +286,7 @@ export function createCalendarEventFormController(
       ? []
       : selectedGuests().map(guestEmail),
     location: blanksHiddenFields(isOutOfOffice()) ? '' : state().location,
-    description: state().description,
+    description: blanksHiddenFields(isOutOfOffice()) ? '' : state().description,
     conference: blanksHiddenFields(isOutOfOffice())
       ? 'none'
       : state().conference,
@@ -307,7 +307,7 @@ export function createCalendarEventFormController(
       calendarId: initialValue().calendarId ?? options.calendarOptions()[0]?.id,
       guestEmails: blanks ? [] : initialGuestEmails(),
       location: blanks ? '' : initialValue().location,
-      description: initialValue().description,
+      description: blanks ? '' : initialValue().description,
       conference: blanks ? 'none' : initialValue().conference,
       reminderMinutes: normalizedReminderMinutes(initialReminderMinutes()),
       ...outOfOfficeSnapshotFields(initialValue()),
@@ -376,10 +376,13 @@ export function createCalendarEventFormController(
     if (kind === 'out_of_office') {
       // Google requires a timed span, so the switch leaves all-day mode. The
       // hidden guest, location, and conference values stay in state for a
-      // switch back; a save while out of office never submits them.
+      // switch back; a save while out of office never submits them. The
+      // description resets instead: its editor re-initializes from the
+      // initial value when it reappears, so kept edits would be invisible.
       replaceState({
         ...convertTimesForAllDay(state(), false),
         eventType: 'out_of_office',
+        description: initialValue().description,
         outOfOffice: state().outOfOffice ?? {
           autoDeclineMode: 'decline_none',
           declineMessage: '',
@@ -462,7 +465,9 @@ export function createCalendarEventFormController(
         ? []
         : selectedGuests().map(guestEmail),
       location: blanksHiddenFields(isOutOfOffice()) ? '' : current.location,
-      description: current.description,
+      description: blanksHiddenFields(isOutOfOffice())
+        ? ''
+        : current.description,
       ...(conference ? { conference } : {}),
       ...(reminders ? { reminders } : {}),
       ...(outOfOffice ? { outOfOffice } : {}),
