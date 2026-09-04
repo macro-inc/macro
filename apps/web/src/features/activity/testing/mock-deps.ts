@@ -32,7 +32,6 @@ export function createMockActivityDeps(
       linkParams: () => undefined,
     }),
     propertyDefinition: () => () => undefined,
-    timeZone: () => 'UTC',
     ...overrides,
     graphqlMock,
   };

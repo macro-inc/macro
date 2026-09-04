@@ -1,13 +1,12 @@
+import { useUserId } from '@core/context/user';
+import { tryMacroId, useDisplayName } from '@core/user';
+import { useAllProperties } from '@property/editor/hooks/useAllProperties';
+import { usePropertyEntityDisplay } from '@property/hooks';
 import type { PropertyDefinitionDomain } from '@property/types';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';
-import {
-  type Accessor,
-  createContext,
-  type JSX,
-  type ParentProps,
-  useContext,
-} from 'solid-js';
+import { type Accessor, createContext, type JSX, useContext } from 'solid-js';
 
 /** Resolved display for one referenced entity: name, icon, and link target. */
 export type EntityDisplay = {
@@ -27,11 +26,11 @@ export type OpenEntityTarget = {
 };
 
 /**
- * The ambient capabilities every activity surface needs the same way. The
- * app wires the real implementations in `app-deps.tsx`; tests hand in
- * mocks. Per-surface policy (what a click opens) is a callback prop, not a
- * dep. No file under `queries/`, `state/`, `components/`, or `views/`
- * imports these capabilities directly.
+ * The ambient capabilities activity reads the same way on every surface.
+ * Production resolves them from the app below; tests swap them through
+ * `ActivityDepsProvider`. Per-surface policy (what a click opens) is a
+ * callback prop, not a dep. No file under `queries/`, `state/`,
+ * `components/`, or `views/` imports these capabilities directly.
  */
 export type ActivityDeps = {
   /** GraphQL client for the activity queries. */
@@ -52,28 +51,36 @@ export type ActivityDeps = {
   propertyDefinition: (
     propertyId: Accessor<string | undefined>
   ) => Accessor<PropertyDefinitionDomain | undefined>;
-  /** IANA time zone used to bucket the overview heatmap. */
-  timeZone: () => string;
 };
 
 const ActivityDepsContext = createContext<ActivityDeps>();
 
-export function ActivityDepsProvider(
-  props: ParentProps<{ deps: ActivityDeps }>
-) {
-  return (
-    <ActivityDepsContext.Provider value={props.deps}>
-      {props.children}
-    </ActivityDepsContext.Provider>
-  );
-}
+/** Test seam. Production never mounts this; `useActivityDeps` falls back to the app. */
+export const ActivityDepsProvider = ActivityDepsContext.Provider;
 
 export function useActivityDeps(): ActivityDeps {
-  const deps = useContext(ActivityDepsContext);
-  if (!deps) {
-    throw new Error(
-      'useActivityDeps must be used within an ActivityDepsProvider'
-    );
-  }
-  return deps;
+  return useContext(ActivityDepsContext) ?? appActivityDeps();
+}
+
+function appActivityDeps(): ActivityDeps {
+  const userId = useUserId();
+  return {
+    graphql: () => getGraphqlSoupClient(),
+    currentUserId: () => userId() ?? '',
+    displayName: (actorId) => {
+      const id = tryMacroId(actorId());
+      if (!id) return () => undefined;
+      const [name] = useDisplayName(id, { emailFallback: 'local-part' });
+      return name;
+    },
+    entityDisplay: (entityId, entityType) =>
+      usePropertyEntityDisplay(entityId, entityType),
+    propertyDefinition: (propertyId) => {
+      const definitions = useAllProperties();
+      return () => {
+        const id = propertyId();
+        return id ? definitions().find((def) => def.id === id) : undefined;
+      };
+    },
+  };
 }

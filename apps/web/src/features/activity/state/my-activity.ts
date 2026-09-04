@@ -28,7 +28,7 @@ export type MyActivityState = {
  * refetch never blanks rows the user is reading.
  */
 export function createMyActivityState(
-  deps: Pick<ActivityDeps, 'graphql' | 'timeZone'>
+  deps: Pick<ActivityDeps, 'graphql'>
 ): MyActivityState {
   const overviewQuery = createMyActivityOverviewQuery(deps, {
     enabled: () => true,

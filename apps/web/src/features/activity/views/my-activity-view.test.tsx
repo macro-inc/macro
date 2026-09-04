@@ -18,13 +18,28 @@ vi.mock(
   })
 );
 
+// Module-load quarantine, not a dependency substitute: the connection-gateway
+// websocket connects when imported, which jsdom cannot do.
+vi.mock('@service-connection/websocket', () => ({
+  ws: { send() {}, addEventListener() {}, removeEventListener() {} },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect() {},
+  createConnectionWebsocketEffect() {},
+  parseWebsocketPayload: () => undefined,
+}));
+
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { send() {}, addEventListener() {}, removeEventListener() {} },
+  createWebSocketJob: () => Promise.reject(new Error('no websocket in tests')),
+}));
+
 afterEach(cleanup);
 
 function renderView() {
   const deps = createMockActivityDeps();
   const onOpen = vi.fn();
   const result = render(() => (
-    <ActivityDepsProvider deps={deps}>
+    <ActivityDepsProvider value={deps}>
       <MyActivityView onOpen={onOpen} />
     </ActivityDepsProvider>
   ));

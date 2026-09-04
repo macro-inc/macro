@@ -33,6 +33,21 @@ vi.mock('@app/features/activity/open-entity-in-split', () => ({
   openEntityInSplit: vi.fn(),
 }));
 
+// Module-load quarantine, not a dependency substitute: the connection-gateway
+// websocket connects when imported, which jsdom cannot do.
+vi.mock('@service-connection/websocket', () => ({
+  ws: { send() {}, addEventListener() {}, removeEventListener() {} },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect() {},
+  createConnectionWebsocketEffect() {},
+  parseWebsocketPayload: () => undefined,
+}));
+
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { send() {}, addEventListener() {}, removeEventListener() {} },
+  createWebSocketJob: () => Promise.reject(new Error('no websocket in tests')),
+}));
+
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({
@@ -71,7 +86,7 @@ function renderTool(
   };
 
   return render(() => (
-    <ActivityDepsProvider deps={deps}>
+    <ActivityDepsProvider value={deps}>
       <Dynamic
         component={
           readActivityHandler.render as Component<Record<string, unknown>>

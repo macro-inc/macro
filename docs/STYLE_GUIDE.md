@@ -251,12 +251,14 @@ TypeScript · `[ui]` UI / UX conventions
   out; no queries, state, or navigation), and `views/` (compose deps, state, and
   components). Every ambient capability the feature needs the same way on every
   surface (GraphQL client, viewer id, display names, entity display, property
-  definitions, time zone) is a field on one `Deps` type in `deps.ts`, provided
-  through a context provider; `app-deps.ts` is the only production wiring and is
-  mounted once at the app root. Behavior that varies per surface (what a row
-  click opens) is a callback prop from the host, not a dep, so an inert surface
-  simply omits it. Tests provide mocks through the same provider, so `state/` runs
-  under `createRoot` against a mock client and `views/` render without `vi.mock`.
+  definitions) is a field on one `Deps` type in `deps.ts`. `useDeps()` reads an
+  optional context and falls back to the app wiring defined in the same file, so
+  production mounts no provider; tests mount `DepsProvider` with mocks. Keep the
+  record to what the feature must swap in tests; a value derivable from the
+  environment (time zone) or already shaped for one consumer is not a dep.
+  Behavior that varies per surface (what a row click opens) is a callback prop
+  from the host, so an inert surface simply omits it. `state/` runs under
+  `createRoot` against a mock client and `views/` render without `vi.mock`.
   The import graph is one-way: `core` → `queries` → `state` → `views` and
   `core` → `components` → `views`; `components` may import types from `deps.ts`.
   Feature flags gate mounting at the root and stay outside deps. To adopt, add

@@ -35,7 +35,7 @@ describe('createMyActivityState', () => {
       input: { limit: 50, cursor: null },
     });
     expect(graphql.latest('MyActivityOverview').variables).toEqual({
-      input: { timeZone: 'UTC' },
+      input: { timeZone: expect.any(String) },
     });
   });
 

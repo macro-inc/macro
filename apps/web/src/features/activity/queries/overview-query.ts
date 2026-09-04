@@ -9,8 +9,12 @@ import type { ActivityOverview } from '../core/event';
 import type { ActivityDeps } from '../deps';
 import { decodeActivityOverview } from './decode';
 
+function browserTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+}
+
 export function createMyActivityOverviewQuery(
-  deps: Pick<ActivityDeps, 'graphql' | 'timeZone'>,
+  deps: Pick<ActivityDeps, 'graphql'>,
   options: { enabled: Accessor<boolean> }
 ) {
   return createUrqlQuery<
@@ -21,7 +25,7 @@ export function createMyActivityOverviewQuery(
     query: MyActivityOverviewDocument,
     client: deps.graphql(),
     variables: {
-      input: { timeZone: deps.timeZone() },
+      input: { timeZone: browserTimeZone() },
     },
     enabled: options.enabled(),
     requestPolicy: 'cache-and-network',
