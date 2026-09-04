@@ -5226,8 +5226,9 @@ async fn an_older_canonical_resync_cannot_undo_a_user_edit_made_through_another_
         )]
     );
 
-    // Google propagates the move to the primary copy, advancing its sequence;
-    // that fresher canonical state owns the schedule again.
+    // The primary copy itself changes, advancing its sequence. Its provider
+    // stamp is still older than the edit's, but a change to the canonical copy
+    // owns the schedule again regardless of the clock.
     let mut fresh_primary = member_primary_upsert(
         member,
         link_id,
@@ -5236,7 +5237,7 @@ async fn an_older_canonical_resync_cannot_undo_a_user_edit_made_through_another_
         moved_start + Duration::hours(1),
     );
     fresh_primary.event.sequence = 1;
-    fresh_primary.event.updated_at = starts_at + Duration::hours(2);
+    fresh_primary.event.updated_at = starts_at + Duration::minutes(45);
     repo.upsert_event_fixture(fresh_primary).await.unwrap();
     let rows = repo
         .list_occurrences(member, range_around(moved_start), None, 10)

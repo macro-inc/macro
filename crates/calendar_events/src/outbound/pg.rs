@@ -810,6 +810,13 @@ impl CalendarRepository for PgCalendarRepository {
         let canonical = canonical_source(&mut tx, event_id).await?;
         let projection = StoredSourceProjection::from(&upsert);
         if canonical.as_ref().map(|canonical| canonical.source_id) == Some(source_id) {
+            // Decided before the content write below records this copy's
+            // sequence on the entity, or an advanced sequence could never
+            // register as fresher. The schedule a user edit landed through
+            // another copy is newer than what the canonical copy last synced;
+            // an older state of the canonical copy must not undo it, only a
+            // fresher one.
+            let schedule_fresh = schedule_is_fresh(&mut tx, event_id, &projection.event).await?;
             apply_content_projection(
                 &mut tx,
                 event_id,
@@ -818,10 +825,7 @@ impl CalendarRepository for PgCalendarRepository {
                 upsert.event.updated_at,
             )
             .await?;
-            // The schedule a user edit landed through another copy is newer
-            // than what the canonical copy last synced; an older state of the
-            // canonical copy must not undo it, only a fresher one.
-            if schedule_is_fresh(&mut tx, event_id, &projection.event).await? {
+            if schedule_fresh {
                 apply_schedule_projection(&mut tx, event_id, &projection).await?;
             }
             rebuild_entity_reminder_firings(&mut tx, event_id, Some(source.calendar_id)).await?;
