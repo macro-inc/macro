@@ -8,8 +8,9 @@
 //! tools a user's agent actually gets. This crate owns that rule:
 //!
 //! 1. Load both stacks' connectors.
-//! 2. If the user has any Pipedream connectors, use only those.
-//! 3. Otherwise, use the native connectors.
+//! 2. If both have rows, serve both (Pipedream first on name collision).
+//! 3. If only Pipedream has rows, serve those.
+//! 4. Otherwise serve native (empty when neither has rows).
 
 use ai_toolset::{
     AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ToolInfo, ToolResult,
@@ -37,13 +38,19 @@ pub struct ConnectorRef<'a> {
     pub native_server_url: &'a str,
 }
 
-/// The MCP tools loaded for a user — from exactly one stack, per the
-/// selection rule above.
+/// The MCP tools loaded for a user. Both stacks can be present at once.
 pub enum UserMcpTools {
     /// Tools served by Pipedream's remote MCP server.
     Pipedream(PipedreamToolSet),
     /// Tools served by directly-connected (native) MCP servers.
     Native(McpToolSet),
+    /// Both stacks. Pipedream is tried first on name collision.
+    Both {
+        /// Pipedream-served tools.
+        pipedream: PipedreamToolSet,
+        /// Native-served tools.
+        native: McpToolSet,
+    },
 }
 
 impl UserMcpTools {
@@ -52,6 +59,7 @@ impl UserMcpTools {
         match self {
             UserMcpTools::Pipedream(tools) => tools.is_empty(),
             UserMcpTools::Native(tools) => tools.is_empty(),
+            UserMcpTools::Both { pipedream, native } => pipedream.is_empty() && native.is_empty(),
         }
     }
 
@@ -60,11 +68,16 @@ impl UserMcpTools {
         match self {
             UserMcpTools::Pipedream(tools) => tools.searchable_catalog(),
             UserMcpTools::Native(tools) => tools.searchable_catalog(),
+            UserMcpTools::Both { pipedream, native } => {
+                let mut catalog = pipedream.searchable_catalog();
+                catalog.extend(native.searchable_catalog());
+                catalog
+            }
         }
     }
 }
 
-impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
+impl<Context: Clone + Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
     fn try_tool_call<'a>(
         &'a self,
         context: Context,
@@ -81,6 +94,19 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
             UserMcpTools::Native(tools) => {
                 tools.try_tool_call(context, request_context, tool_name, json)
             }
+            UserMcpTools::Both { pipedream, native } => Box::pin(async move {
+                match pipedream
+                    .try_tool_call(context.clone(), request_context.clone(), tool_name, json)
+                    .await
+                {
+                    Err(ToolSetError::NotFound(_)) => {
+                        native
+                            .try_tool_call(context, request_context, tool_name, json)
+                            .await
+                    }
+                    other => other,
+                }
+            }),
         }
     }
 
@@ -88,13 +114,28 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
         match self {
             UserMcpTools::Pipedream(tools) => ToolSet::<Context>::request_schemas(tools),
             UserMcpTools::Native(tools) => ToolSet::<Context>::request_schemas(tools),
+            UserMcpTools::Both { pipedream, native } => {
+                let mut schemas =
+                    ToolSet::<Context>::request_schemas(pipedream).unwrap_or_default();
+                schemas.extend(ToolSet::<Context>::request_schemas(native).unwrap_or_default());
+                (!schemas.is_empty()).then_some(schemas)
+            }
         }
+    }
+
+    fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        self.catalog()
     }
 
     fn searchable_toolset_names(&self) -> Vec<String> {
         match self {
             UserMcpTools::Pipedream(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
             UserMcpTools::Native(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
+            UserMcpTools::Both { pipedream, native } => {
+                let mut names = ToolSet::<Context>::searchable_toolset_names(pipedream);
+                names.extend(ToolSet::<Context>::searchable_toolset_names(native));
+                names
+            }
         }
     }
 
@@ -106,6 +147,10 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
             UserMcpTools::Native(tools) => {
                 ToolSet::<Context>::routing_description(tools, tool_name)
             }
+            UserMcpTools::Both { pipedream, native } => {
+                ToolSet::<Context>::routing_description(pipedream, tool_name)
+                    .or_else(|| ToolSet::<Context>::routing_description(native, tool_name))
+            }
         }
     }
 }
@@ -113,7 +158,7 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
 /// Port for consumers (imports, onboarding) that need per-connector tools
 /// or connection state without knowing which stack serves them.
 pub trait ConnectorSelect: Send + Sync + 'static {
-    /// Load the user's full MCP toolset (all connectors, one stack).
+    /// Load the user's full MCP toolset (all connectors on either stack).
     fn user_toolset(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -127,8 +172,7 @@ pub trait ConnectorSelect: Send + Sync + 'static {
         connector: ConnectorRef<'_>,
     ) -> impl Future<Output = anyhow::Result<Option<UserMcpTools>>> + Send;
 
-    /// Whether the user has this connector, on whichever stack the
-    /// selection rule picks for them.
+    /// Whether the user has this connector on either stack.
     fn connector_connected(
         &self,
         user: &MacroUserIdStr<'static>,
@@ -196,19 +240,26 @@ where
     #[tracing::instrument(skip_all)]
     async fn user_toolset(&self, user: &MacroUserIdStr<'static>) -> UserMcpTools {
         let pipedream = self.pipedream_connections(user).await;
-        if !pipedream.is_empty() {
-            return UserMcpTools::Pipedream(
-                PipedreamToolSet::new(&pipedream, self.pipedream_connection.clone()).await,
-            );
-        }
-
         let native = self
             .native_store
             .list(user)
             .await
             .inspect_err(|e| tracing::warn!(error = ?e, "failed to list native MCP servers"))
             .unwrap_or_default();
-        UserMcpTools::Native(McpToolSet::new(&native, self.native_store.clone()).await)
+
+        match (pipedream.is_empty(), native.is_empty()) {
+            (false, false) => UserMcpTools::Both {
+                pipedream: PipedreamToolSet::new(&pipedream, self.pipedream_connection.clone())
+                    .await,
+                native: McpToolSet::new(&native, self.native_store.clone()).await,
+            },
+            (false, true) => UserMcpTools::Pipedream(
+                PipedreamToolSet::new(&pipedream, self.pipedream_connection.clone()).await,
+            ),
+            (true, _) => {
+                UserMcpTools::Native(McpToolSet::new(&native, self.native_store.clone()).await)
+            }
+        }
     }
 
     #[tracing::instrument(skip(self, user), err)]
@@ -218,16 +269,11 @@ where
         connector: ConnectorRef<'_>,
     ) -> anyhow::Result<Option<UserMcpTools>> {
         let pipedream = self.pipedream_connections(user).await;
-        if !pipedream.is_empty() {
-            // The user is on the Pipedream stack: native connectors are
-            // ignored even if this particular app isn't connected there.
-            let matching: Vec<_> = pipedream
-                .into_iter()
-                .filter(|c| c.app_slug == connector.pipedream_app_slug)
-                .collect();
-            if matching.is_empty() {
-                return Ok(None);
-            }
+        let matching: Vec<_> = pipedream
+            .into_iter()
+            .filter(|c| c.app_slug == connector.pipedream_app_slug)
+            .collect();
+        if !matching.is_empty() {
             return Ok(Some(UserMcpTools::Pipedream(
                 PipedreamToolSet::new(&matching, self.pipedream_connection.clone()).await,
             )));
@@ -256,10 +302,11 @@ where
         connector: ConnectorRef<'_>,
     ) -> anyhow::Result<bool> {
         let pipedream = self.pipedream_connections(user).await;
-        if !pipedream.is_empty() {
-            return Ok(pipedream
-                .iter()
-                .any(|c| c.app_slug == connector.pipedream_app_slug));
+        if pipedream
+            .iter()
+            .any(|c| c.app_slug == connector.pipedream_app_slug)
+        {
+            return Ok(true);
         }
 
         let native = self
@@ -290,7 +337,7 @@ impl<T> CombinedToolSet<T> {
     }
 }
 
-impl<T: Send + Sync + 'static> ToolSet<T> for CombinedToolSet<T> {
+impl<T: Clone + Send + Sync + 'static> ToolSet<T> for CombinedToolSet<T> {
     fn try_tool_call<'a>(
         &'a self,
         context: T,
@@ -333,3 +380,6 @@ impl<T: Send + Sync + 'static> ToolSet<T> for CombinedToolSet<T> {
         }
     }
 }
+
+#[cfg(test)]
+mod test;
