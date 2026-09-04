@@ -1,3 +1,5 @@
+import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/incoming-calls';
+import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -5,9 +7,10 @@ import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
+import XIcon from '@phosphor/x.svg';
 import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
-import { cn, Tooltip } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import { Show } from 'solid-js';
 import { channelInitials, formatDetailedTimestamp } from '../../utils';
 
@@ -33,6 +36,48 @@ function ChannelCallIndicator(props: {
           >
             <PhoneIncomingIcon class="incoming-call-shake size-full" />
           </Show>
+        </span>
+      )}
+    </Show>
+  );
+}
+
+function IncomingCallActions(props: {
+  callId: string | undefined;
+  channelId: string;
+}) {
+  return (
+    <Show when={props.callId}>
+      {(callId) => (
+        <span class="flex shrink-0 items-center gap-1">
+          <Button
+            variant="success"
+            size="icon-xs"
+            class="rounded-md"
+            label="Accept incoming call"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void joinChannelCall(props.channelId);
+            }}
+          >
+            <PhoneIncomingIcon class="incoming-call-shake size-3" />
+          </Button>
+          <Button
+            variant="danger"
+            size="icon-xs"
+            class="rounded-md"
+            label="Decline incoming call"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              dismissIncomingCallEverywhere(callId());
+            }}
+          >
+            <XIcon class="size-3" />
+          </Button>
         </span>
       )}
     </Show>
@@ -95,6 +140,7 @@ type ChannelOptionProps = {
   channel: ChannelEntity;
   unread: boolean;
   callStatus?: ChannelCallStatus;
+  incomingCallId?: string;
   selected: boolean;
   focused: boolean;
   onActivate: () => void;
@@ -102,9 +148,8 @@ type ChannelOptionProps = {
 
 export function ChannelOption(props: ChannelOptionProps) {
   return (
-    <button
+    <div
       id={props.id}
-      type="button"
       role="treeitem"
       tabIndex={-1}
       class={cn(
@@ -125,14 +170,20 @@ export function ChannelOption(props: ChannelOptionProps) {
       <span class="min-w-0 flex-1 truncate text-sm font-medium">
         {props.channel.name}
       </span>
-      <ChannelCallIndicator status={props.callStatus} />
+      <ChannelCallIndicator
+        status={props.incomingCallId ? undefined : props.callStatus}
+      />
+      <IncomingCallActions
+        callId={props.incomingCallId}
+        channelId={props.channel.id}
+      />
       <Show when={props.unread}>
         <span
           aria-label="Unread"
           class="size-2 shrink-0 rounded-full bg-accent"
         />
       </Show>
-    </button>
+    </div>
   );
 }
 
@@ -178,6 +229,7 @@ type ConversationCardProps = {
   mentionedCurrentUser: boolean;
   unread: boolean;
   callStatus?: ChannelCallStatus;
+  incomingCallId?: string;
   selected: boolean;
   focused: boolean;
   onActivate: () => void;
@@ -244,7 +296,13 @@ export function ConversationCard(props: ConversationCardProps) {
             <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
               {props.channel.name}
             </span>
-            <ChannelCallIndicator status={props.callStatus} />
+            <ChannelCallIndicator
+              status={props.incomingCallId ? undefined : props.callStatus}
+            />
+            <IncomingCallActions
+              callId={props.incomingCallId}
+              channelId={props.channel.id}
+            />
             <Show when={latestRootMessage()?.createdAt}>
               {(createdAt) => (
                 <Tooltip

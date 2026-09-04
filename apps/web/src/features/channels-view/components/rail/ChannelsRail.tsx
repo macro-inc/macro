@@ -181,9 +181,38 @@ export function ChannelsRail(props: {
   const currentUserId = useUserId();
   const listDomId = createUniqueId();
   const sectionScrollRoots: Partial<Record<ChannelsGroup, HTMLDivElement>> = {};
-  const channelActivity = useChannelRailActivity(() => props.channels);
   const activeCallsQuery = useActiveCallsQuery();
   const incomingCalls = useVisibleIncomingCalls();
+  const callActivity = createMemo(() => {
+    const calls = new Map<
+      string,
+      {
+        callId: string;
+        channelId: string;
+        status: ChannelCallStatus;
+      }
+    >();
+
+    for (const call of incomingCalls()) {
+      calls.set(call.callId, { ...call, status: 'incoming' });
+    }
+    for (const call of activeCallsQuery.data ?? []) {
+      if (calls.has(call.callId)) continue;
+      calls.set(call.callId, { ...call, status: 'active' });
+    }
+
+    return [...calls.values()];
+  });
+  const channelActivity = useChannelRailActivity(
+    () => props.channels,
+    callActivity
+  );
+  const incomingCallIds = createMemo(
+    () =>
+      new Map(
+        incomingCalls().map((call) => [call.channelId, call.callId] as const)
+      )
+  );
   const callStatuses = createMemo(() => {
     const statuses = new Map<string, ChannelCallStatus>();
 
@@ -525,7 +554,7 @@ export function ChannelsRail(props: {
                       contentRef={setSectionScrollRoot('channels')}
                       class="flex min-h-0 flex-col gap-0.5"
                       activityTargetId={activityTargetId('channels')}
-                      activityLabel="New activity"
+                      activityLabel={channelActivity.targetLabel('channels')}
                       onActivityVisible={(targetId) =>
                         clearVisibleActivity('channels', targetId)
                       }
@@ -545,6 +574,9 @@ export function ChannelsRail(props: {
                               channel={channel()}
                               unread={unreadChannelIds().has(channel().id)}
                               callStatus={callStatuses().get(channel().id)}
+                              incomingCallId={incomingCallIds().get(
+                                channel().id
+                              )}
                               selected={
                                 state.selectedChannelId === channel().id
                               }
@@ -612,7 +644,9 @@ export function ChannelsRail(props: {
                       contentRef={setSectionScrollRoot('direct_messages')}
                       class="flex min-h-0 flex-col gap-0.5"
                       activityTargetId={activityTargetId('direct_messages')}
-                      activityLabel="New activity"
+                      activityLabel={channelActivity.targetLabel(
+                        'direct_messages'
+                      )}
                       onActivityVisible={(targetId) =>
                         clearVisibleActivity('direct_messages', targetId)
                       }
@@ -635,6 +669,9 @@ export function ChannelsRail(props: {
                               channel={channel()}
                               unread={unreadChannelIds().has(channel().id)}
                               callStatus={callStatuses().get(channel().id)}
+                              incomingCallId={incomingCallIds().get(
+                                channel().id
+                              )}
                               selected={
                                 state.selectedChannelId === channel().id
                               }
@@ -675,6 +712,7 @@ export function ChannelsRail(props: {
                           mentionedCurrentUser={mentionsCurrentUser(channel())}
                           unread={unreadChannelIds().has(channel().id)}
                           callStatus={callStatuses().get(channel().id)}
+                          incomingCallId={incomingCallIds().get(channel().id)}
                           selected={state.selectedChannelId === channel().id}
                           focused={
                             list.focus.key() === rowKeyForChannel(channel().id)
