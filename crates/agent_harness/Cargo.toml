@@ -26,7 +26,6 @@ channels = { path = "../channels", features = ["ports"] }
 lexical_client = { path = "../lexical_client" }
 dashmap = { workspace = true }
 futures = { workspace = true }
-hmac = { workspace = true }
 kafka_util = { path = "../kafka_util" }
 macro_env_var = { path = "../macro_env_var" }
 pipedream_mcp = { path = "../pipedream_mcp" }
@@ -43,7 +42,6 @@ rustls = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [
   "macros",

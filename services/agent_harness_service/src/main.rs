@@ -457,7 +457,7 @@ async fn run() -> anyhow::Result<()> {
         prompt_context,
         prompt_composer,
         EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
-        RedisCommandForwarder::new(redis.clone(), config.internal_api_key.clone()),
+        RedisCommandForwarder::new(redis.clone()),
         defaults,
     ));
     // Close the loop: turn ends observed by the session actors drain the
@@ -466,7 +466,6 @@ async fn run() -> anyhow::Result<()> {
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
     let runtime_command_runtimes = Arc::clone(&runtimes);
-    let runtime_command_api_key = config.internal_api_key.clone();
     let (runtime_commands_ready, mut runtime_commands_readiness) =
         tokio::sync::watch::channel(false);
     let runtime_commands = tokio::spawn(async move {
@@ -475,7 +474,6 @@ async fn run() -> anyhow::Result<()> {
             if let Err(error) = consume_runtime_commands(
                 runtime_command_redis.clone(),
                 replica,
-                runtime_command_api_key.clone(),
                 {
                     let runtimes = Arc::clone(&runtime_command_runtimes);
                     Arc::new(move |harness| runtimes.is_connected(harness))

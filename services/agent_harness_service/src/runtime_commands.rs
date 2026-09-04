@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use agent_harness::domain::service::ForwardedCommands;
 use agent_harness::outbound::forward::{
-    RuntimeCommandRequest, RuntimeCommandResponse, RuntimeCommandTarget,
-    SignedRuntimeCommandResponse, command_channel, response_channel,
+    COMMAND_CHANNEL, RuntimeCommandRequest, RuntimeCommandResponse, RuntimeCommandResponseEnvelope,
+    RuntimeCommandTarget, response_channel,
 };
 use agent_session::domain::model::ReplicaId;
 use futures::StreamExt as _;
@@ -20,7 +20,6 @@ mod test;
 pub(crate) async fn consume_runtime_commands<Harness>(
     redis: redis::Client,
     replica: ReplicaId,
-    internal_api_key: String,
     connected: Arc<dyn Fn(HarnessId) -> bool + Send + Sync>,
     harness_service: Arc<Harness>,
     ready: tokio::sync::watch::Sender<bool>,
@@ -29,9 +28,7 @@ where
     Harness: ForwardedCommands,
 {
     let mut subscriber = redis.get_async_pubsub().await?;
-    subscriber
-        .subscribe(command_channel(&internal_api_key))
-        .await?;
+    subscriber.subscribe(COMMAND_CHANNEL).await?;
     ready.send_replace(true);
     let mut requests = subscriber.into_on_message();
     while let Some(request) = requests.next().await {
@@ -49,14 +46,9 @@ where
                 continue;
             }
         };
-        if !request.verify(&internal_api_key) {
-            tracing::warn!("dropping unauthenticated runtime command broadcast");
-            continue;
-        }
         let redis = redis.clone();
         let harness_service = Arc::clone(&harness_service);
         let connected = Arc::clone(&connected);
-        let internal_api_key = internal_api_key.clone();
         let span = request.processing_span();
         tokio::spawn(
             async move {
@@ -97,11 +89,7 @@ where
                     RuntimeCommandResponse::Declined
                 };
                 let publish = async {
-                    let response = SignedRuntimeCommandResponse::new(
-                        request_id,
-                        response,
-                        &internal_api_key,
-                    );
+                    let response = RuntimeCommandResponseEnvelope::new(request_id, response);
                     let response = serde_json::to_string(&response)?;
                     let mut publisher = redis.get_multiplexed_async_connection().await?;
                     publisher

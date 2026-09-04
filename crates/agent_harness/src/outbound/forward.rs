@@ -3,10 +3,8 @@
 use agent_session::domain::model::AgentSessionId;
 use futures::StreamExt as _;
 use harness_id::HarnessId;
-use hmac::{Hmac, Mac as _};
 use opentelemetry::propagation::{Extractor, Injector};
 use redis::AsyncCommands as _;
-use sha2::{Digest as _, Sha256};
 use std::collections::BTreeMap;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
@@ -21,16 +19,12 @@ mod test;
 #[derive(Clone)]
 pub struct RedisCommandForwarder {
     redis: redis::Client,
-    internal_api_key: String,
 }
 
 impl RedisCommandForwarder {
     /// Build a Redis command forwarder.
-    pub fn new(redis: redis::Client, internal_api_key: String) -> Self {
-        Self {
-            redis,
-            internal_api_key,
-        }
+    pub fn new(redis: redis::Client) -> Self {
+        Self { redis }
     }
 }
 
@@ -58,9 +52,7 @@ impl CommandForwarder for RedisCommandForwarder {
             session,
             command,
             trace_context: current_trace_context(),
-            signature: String::new(),
         };
-        let request = request.signed(&self.internal_api_key);
         let payload = serde_json::to_string(&request)
             .map_err(|error| forward_error("serialize command request", error))?;
         let mut publisher = self
@@ -69,7 +61,7 @@ impl CommandForwarder for RedisCommandForwarder {
             .await
             .map_err(|error| forward_error("open command publisher", error))?;
         let subscribers = publisher
-            .publish::<_, _, usize>(command_channel(&self.internal_api_key), payload)
+            .publish::<_, _, usize>(COMMAND_CHANNEL, payload)
             .await
             .map_err(|error| forward_error("publish command request", error))?;
         if subscribers == 0 {
@@ -82,9 +74,9 @@ impl CommandForwarder for RedisCommandForwarder {
                 let payload: String = response
                     .get_payload()
                     .map_err(|error| forward_error("read command response", error))?;
-                let response = serde_json::from_str::<SignedRuntimeCommandResponse>(&payload)
+                let response = serde_json::from_str::<RuntimeCommandResponseEnvelope>(&payload)
                     .map_err(|error| forward_error("deserialize command response", error))?;
-                if !response.verify(request_id, &self.internal_api_key) {
+                if response.request_id != request_id {
                     continue;
                 }
                 match response.response {
@@ -109,22 +101,15 @@ impl CommandForwarder for RedisCommandForwarder {
     }
 }
 
-/// Return the deployment-scoped Redis command channel.
-pub fn command_channel(key: &str) -> String {
-    let digest = Sha256::digest(key.as_bytes());
-    let namespace = digest[..8]
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect::<String>();
-    format!("agent-harness.runtime-command.{namespace}")
-}
+/// Redis channel broadcasting runtime commands to every harness replica.
+pub const COMMAND_CHANNEL: &str = "agent-harness.runtime-commands";
 
 /// Return the private response channel for one command request.
 pub fn response_channel(request_id: macro_uuid::Uuid) -> String {
     format!("agent-harness.runtime-command.response.{request_id}")
 }
 
-/// An authenticated command broadcast received from another replica.
+/// A command broadcast received from another replica.
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct RuntimeCommandRequest {
     request_id: macro_uuid::Uuid,
@@ -133,7 +118,6 @@ pub struct RuntimeCommandRequest {
     command: HarnessCommand,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     trace_context: BTreeMap<String, String>,
-    signature: String,
 }
 
 /// The process-local destination selected by the command sender.
@@ -147,24 +131,6 @@ pub enum RuntimeCommandTarget {
 }
 
 impl RuntimeCommandRequest {
-    fn signed(mut self, key: &str) -> Self {
-        self.signature = sign_json(
-            &(self.request_id, &self.target, self.session, &self.command),
-            key,
-        );
-        self
-    }
-
-    /// Verify that the command was signed by a deployment peer.
-    #[must_use]
-    pub fn verify(&self, key: &str) -> bool {
-        verify_json(
-            &(self.request_id, &self.target, self.session, &self.command),
-            &self.signature,
-            key,
-        )
-    }
-
     /// The unique ID used to claim and answer this command.
     #[must_use]
     pub fn request_id(&self) -> macro_uuid::Uuid {
@@ -217,38 +183,20 @@ pub enum RuntimeCommandResponse {
     Declined,
 }
 
-/// An authenticated response to one command request.
+/// A response correlated to one command request.
 #[derive(serde::Serialize, serde::Deserialize)]
-pub struct SignedRuntimeCommandResponse {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    request_id: Option<macro_uuid::Uuid>,
+pub struct RuntimeCommandResponseEnvelope {
+    request_id: macro_uuid::Uuid,
     response: RuntimeCommandResponse,
-    // Retained during the rolling protocol transition for older requesters.
-    signature: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    request_signature: Option<String>,
 }
 
-impl SignedRuntimeCommandResponse {
-    /// Sign a response for both legacy and request-bound verifiers.
+impl RuntimeCommandResponseEnvelope {
+    /// Correlate a response to its command request.
     #[must_use]
-    pub fn new(request_id: macro_uuid::Uuid, response: RuntimeCommandResponse, key: &str) -> Self {
+    pub fn new(request_id: macro_uuid::Uuid, response: RuntimeCommandResponse) -> Self {
         Self {
-            request_signature: Some(sign_json(&(request_id, &response), key)),
-            signature: sign_json(&response, key),
-            request_id: Some(request_id),
+            request_id,
             response,
-        }
-    }
-
-    fn verify(&self, request_id: macro_uuid::Uuid, key: &str) -> bool {
-        match (self.request_id, self.request_signature.as_deref()) {
-            (Some(response_request_id), Some(signature)) => {
-                response_request_id == request_id
-                    && verify_json(&(response_request_id, &self.response), signature, key)
-            }
-            (None, None) => verify_json(&self.response, &self.signature, key),
-            _ => false,
         }
     }
 }
@@ -296,32 +244,6 @@ fn runtime_command_span(request: &RuntimeCommandRequest) -> tracing::Span {
     });
     let _ = span.set_parent(parent);
     span
-}
-
-fn sign_json(value: &impl serde::Serialize, key: &str) -> String {
-    let payload = serde_json::to_vec(value).expect("command bus values are serializable");
-    let mut mac = Hmac::<Sha256>::new_from_slice(key.as_bytes()).expect("HMAC accepts any key");
-    mac.update(&payload);
-    base64::Engine::encode(
-        &base64::engine::general_purpose::STANDARD,
-        mac.finalize().into_bytes(),
-    )
-}
-
-fn verify_json(value: &impl serde::Serialize, signature: &str, key: &str) -> bool {
-    let Ok(payload) = serde_json::to_vec(value) else {
-        return false;
-    };
-    let Ok(signature) =
-        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, signature)
-    else {
-        return false;
-    };
-    let Ok(mut mac) = Hmac::<Sha256>::new_from_slice(key.as_bytes()) else {
-        return false;
-    };
-    mac.update(&payload);
-    mac.verify_slice(&signature).is_ok()
 }
 
 fn forward_error(operation: &'static str, error: impl std::fmt::Display) -> HarnessError {

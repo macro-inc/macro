@@ -57,7 +57,6 @@ fn harness_id() -> HarnessId {
 #[tokio::test]
 async fn a_command_executes_on_exactly_one_responsible_replica() {
     let redis = redis_client();
-    let key = macro_uuid::Uuid::new_v4().to_string();
     let origin = ReplicaId::mint();
     let peer = ReplicaId::mint();
     let origin_harness = harness(false);
@@ -66,7 +65,6 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
     let origin_consumer = tokio::spawn(consume_runtime_commands(
         redis.clone(),
         origin,
-        key.clone(),
         Arc::new(|_| false),
         Arc::clone(&origin_harness),
         origin_ready,
@@ -75,7 +73,6 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
     let peer_consumer = tokio::spawn(consume_runtime_commands(
         redis.clone(),
         peer,
-        key.clone(),
         Arc::new(|_| false),
         Arc::clone(&peer_harness),
         peer_ready,
@@ -83,7 +80,7 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
     ready(&mut origin_readiness).await;
     ready(&mut peer_readiness).await;
 
-    let outcome = RedisCommandForwarder::new(redis, key)
+    let outcome = RedisCommandForwarder::new(redis)
         .forward(
             AgentSessionId::TEST_A,
             HarnessCommand::Delete,
@@ -102,21 +99,19 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
 #[tokio::test]
 async fn a_responsible_replicas_error_returns_immediately() {
     let redis = redis_client();
-    let key = macro_uuid::Uuid::new_v4().to_string();
     let replica = ReplicaId::mint();
     let harness = harness(true);
     let (ready_tx, mut readiness) = tokio::sync::watch::channel(false);
     let consumer = tokio::spawn(consume_runtime_commands(
         redis.clone(),
         replica,
-        key.clone(),
         Arc::new(|_| false),
         harness,
         ready_tx,
     ));
     ready(&mut readiness).await;
 
-    let error = RedisCommandForwarder::new(redis, key)
+    let error = RedisCommandForwarder::new(redis)
         .forward(
             AgentSessionId::TEST_A,
             HarnessCommand::Delete,
@@ -132,13 +127,11 @@ async fn a_responsible_replicas_error_returns_immediately() {
 #[tokio::test]
 async fn all_replicas_declining_returns_disconnected_immediately() {
     let redis = redis_client();
-    let key = macro_uuid::Uuid::new_v4().to_string();
     let harness = harness(false);
     let (ready_tx, mut readiness) = tokio::sync::watch::channel(false);
     let consumer = tokio::spawn(consume_runtime_commands(
         redis.clone(),
         ReplicaId::mint(),
-        key.clone(),
         Arc::new(|_| false),
         harness,
         ready_tx,
@@ -146,7 +139,7 @@ async fn all_replicas_declining_returns_disconnected_immediately() {
     ready(&mut readiness).await;
 
     let target = harness_id();
-    let error = RedisCommandForwarder::new(redis, key)
+    let error = RedisCommandForwarder::new(redis)
         .forward(
             AgentSessionId::TEST_A,
             HarnessCommand::Delete,
@@ -165,7 +158,6 @@ async fn all_replicas_declining_returns_disconnected_immediately() {
 #[tokio::test]
 async fn overlapping_harness_connections_execute_once() {
     let redis = redis_client();
-    let key = macro_uuid::Uuid::new_v4().to_string();
     let first = harness(false);
     let second = harness(false);
     let target = harness_id();
@@ -173,7 +165,6 @@ async fn overlapping_harness_connections_execute_once() {
     let first_consumer = tokio::spawn(consume_runtime_commands(
         redis.clone(),
         ReplicaId::mint(),
-        key.clone(),
         Arc::new(move |harness| harness == target),
         Arc::clone(&first),
         first_ready,
@@ -182,7 +173,6 @@ async fn overlapping_harness_connections_execute_once() {
     let second_consumer = tokio::spawn(consume_runtime_commands(
         redis.clone(),
         ReplicaId::mint(),
-        key.clone(),
         Arc::new(move |harness| harness == target),
         Arc::clone(&second),
         second_ready,
@@ -190,7 +180,7 @@ async fn overlapping_harness_connections_execute_once() {
     ready(&mut first_readiness).await;
     ready(&mut second_readiness).await;
 
-    RedisCommandForwarder::new(redis, key)
+    RedisCommandForwarder::new(redis)
         .forward(
             AgentSessionId::TEST_A,
             HarnessCommand::Delete,
