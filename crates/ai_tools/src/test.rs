@@ -45,6 +45,25 @@ fn frontend_schemas_build() {
 }
 
 #[test]
+fn list_entities_is_not_a_registered_tool() {
+    let json = all_tool_frontend_schemas()
+        .to_json_pretty()
+        .expect("frontend schemas serialize");
+    let schemas: serde_json::Value = serde_json::from_str(&json).expect("valid schema json");
+    let names: Vec<&str> = schemas["tools"]
+        .as_array()
+        .expect("tools array")
+        .iter()
+        .filter_map(|tool| tool["name"].as_str())
+        .collect();
+    assert!(
+        !names.contains(&"ListEntities"),
+        "ListEntities must stay deleted"
+    );
+    assert!(names.contains(&"QuerySoup"), "QuerySoup must be registered");
+}
+
+#[test]
 fn frontend_schemas_distinguish_user_tool_response_types() {
     let json = all_tool_frontend_schemas()
         .to_json_pretty()

@@ -151,7 +151,20 @@ fn project_response(response: async_graphql::Response) -> ToolResult<QuerySoupDa
     Ok(QuerySoupData(object))
 }
 
-fn describe_errors(errors: &[async_graphql::ServerError]) -> String {
+/// Compact REST keys from the deleted ListEntities tool, mapped to GraphQL names.
+const COMPACT_KEYS: &[(&str, &str)] = &[
+    ("dst", "subType"),
+    ("ua", "updatedAt"),
+    ("propf", "filters.propertiesFilter or taskFilter"),
+    ("df", "filters.documentFilter"),
+    ("ef", "filters.emailFilter"),
+    ("pd", "propertyDefinitionId"),
+    ("et", "entityTypes"),
+    ("so", "sortMethod"),
+    ("er", "entityRef"),
+];
+
+pub(crate) fn describe_errors(errors: &[async_graphql::ServerError]) -> String {
     let joined = errors
         .iter()
         .map(|error| {
@@ -165,6 +178,14 @@ fn describe_errors(errors: &[async_graphql::ServerError]) -> String {
                 message.push_str(
                     " QuerySoup does not list reminders or CRM companies; use ListReminders / ListCompanies.",
                 );
+            }
+            for (compact, graphql) in COMPACT_KEYS {
+                let quoted = format!("\"{compact}\"");
+                if message.contains(&quoted) {
+                    message.push_str(&format!(
+                        " `{compact}` is a deleted ListEntities key; write `{graphql}`."
+                    ));
+                }
             }
             message
         })

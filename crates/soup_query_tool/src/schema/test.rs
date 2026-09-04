@@ -30,10 +30,34 @@ fn subscription_is_unrepresentable() {
 #[test]
 fn schema_has_no_mutation_root() {
     let sdl = compact_sdl();
-    assert!(!sdl.contains("type Mutation"));
-    assert!(!sdl.contains("deleteEntitiesPermanently"));
-    assert!(!sdl.contains("CRM_COMPANY"));
-    assert!(!sdl.contains("REMINDER"));
+    for forbidden in [
+        "type Mutation",
+        "type Subscription",
+        "deleteEntitiesPermanently",
+        "CompleteMutationRoot",
+        "CRM_COMPANY",
+        "REMINDER",
+        "nextCursor",
+        "continuation",
+    ] {
+        assert!(
+            !sdl.contains(forbidden),
+            "query-only SDL must not contain {forbidden}"
+        );
+    }
+}
+
+#[tokio::test]
+async fn compact_keys_name_the_graphql_field() {
+    let response = SCHEMA
+        .execute("{ soup(input: { dst: TASK }) { items { id } } }")
+        .await;
+    assert!(!response.errors.is_empty());
+    let message = crate::tool::describe_errors(&response.errors);
+    assert!(
+        message.contains("`dst` is a deleted ListEntities key; write `subType`."),
+        "{message}"
+    );
 }
 
 #[tokio::test]
