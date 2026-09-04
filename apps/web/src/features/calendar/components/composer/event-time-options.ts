@@ -176,12 +176,28 @@ export function withinEndTimeWindow(start: string, end: string) {
   return elapsed <= MAX_EVENT_MINUTES;
 }
 
-/** The end value an end-time option resolves to, relative to `start`. */
+/**
+ * The end value an end-time option resolves to, relative to `start`. A clock
+ * time that would land at or before the start rolls into the following day:
+ * the picker lists no such option, so this only ever describes a time typed
+ * by hand, and an end before its own start is never what the typing meant.
+ */
 export function endValueFor(
   start: string,
   option: Pick<EventTimeOption, 'value' | 'dayOffset'>
 ) {
-  const startDate = parseLocalDate(splitLocalDateTime(start).date);
+  const { date, time } = splitLocalDateTime(start);
+  const startDate = parseLocalDate(date);
   if (!startDate) return withLocalTime(start, option.value);
-  return `${formatLocalDate(addDays(startDate, option.dayOffset))}T${option.value}`;
+
+  const startMinutes = parseTimeValue(time);
+  const optionMinutes = parseTimeValue(option.value);
+  const rollsOver =
+    option.dayOffset === 0 &&
+    startMinutes !== undefined &&
+    optionMinutes !== undefined &&
+    optionMinutes <= startMinutes;
+
+  const dayOffset = rollsOver ? 1 : option.dayOffset;
+  return `${formatLocalDate(addDays(startDate, dayOffset))}T${option.value}`;
 }

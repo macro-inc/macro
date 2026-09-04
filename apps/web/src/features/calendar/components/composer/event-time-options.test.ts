@@ -8,6 +8,7 @@ import {
   parseTimeValue,
   resolveTimeOption,
   selectedTimeOptionId,
+  splitLocalDateTime,
   withinEndTimeWindow,
 } from './event-time-options';
 
@@ -138,6 +139,55 @@ describe('endValueFor', () => {
     expect(
       endValueFor('2026-03-10T09:00', { value: '17:00', dayOffset: 0 })
     ).toBe('2026-03-10T17:00');
+  });
+
+  it('rolls a hand-typed time that would precede the start', () => {
+    expect(
+      endValueFor('2026-03-10T20:00', { value: '09:07', dayOffset: 0 })
+    ).toBe('2026-03-11T09:07');
+  });
+
+  it('rolls a hand-typed time that equals the start', () => {
+    expect(
+      endValueFor('2026-03-10T20:00', { value: '20:00', dayOffset: 0 })
+    ).toBe('2026-03-11T20:00');
+  });
+});
+
+describe('an end that has fallen behind its start', () => {
+  const START = '2026-03-10T20:00';
+  const END = '2026-03-10T09:00';
+
+  it('still offers the durations measured from the start', () => {
+    expect(withinEndTimeWindow(START, END)).toBe(true);
+
+    const options = endTimeOptions(splitLocalDateTime(START).time);
+    expect(options[0]).toMatchObject({ value: '20:15', detail: '15min' });
+    expect(options.find((option) => option.value === '09:00')).toMatchObject({
+      dayOffset: 1,
+      detail: '13h',
+    });
+  });
+
+  it('highlights nothing, since no offered option describes it', () => {
+    const options = endTimeOptions(splitLocalDateTime(START).time);
+    const selected = selectedTimeOptionId(
+      splitLocalDateTime(END).time,
+      dayOffsetBetween(START, END)
+    );
+
+    expect(options.some((option) => option.id === selected)).toBe(false);
+  });
+
+  it('lands the next morning once a time is chosen or typed', () => {
+    const options = endTimeOptions(splitLocalDateTime(START).time);
+
+    expect(endValueFor(START, resolveTimeOption(options, '09:00'))).toBe(
+      '2026-03-11T09:00'
+    );
+    expect(endValueFor(START, resolveTimeOption(options, '09:07'))).toBe(
+      '2026-03-11T09:07'
+    );
   });
 });
 
