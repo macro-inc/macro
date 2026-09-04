@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use subtle::ConstantTimeEq;
 use tracing::error;
 use worker::Error;
 
@@ -87,13 +88,13 @@ pub fn decode_jwt(
             {
                 // sholud we warn when false?
                 Some(internal_key) => {
-                    let res = internal_key == secrets.internal_api_secret;
+                    let res: bool = internal_key
+                        .as_bytes()
+                        .ct_eq(secrets.internal_api_secret.as_bytes())
+                        .into();
+
                     if !res {
-                        error!(
-                            "provided header: {internal_key}
-did not match expected value: {}",
-                            secrets.internal_api_secret
-                        );
+                        error!("provided header: {internal_key} did not match expected value");
                     }
                     res
                 }

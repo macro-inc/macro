@@ -15982,6 +15982,7 @@ dependencies = [
  "matchit 0.8.4",
  "serde",
  "serde_json",
+ "subtle",
  "sync_service_bebop_schema",
  "time",
  "tracing",
