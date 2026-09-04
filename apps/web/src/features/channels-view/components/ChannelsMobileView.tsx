@@ -9,7 +9,6 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import type { SoupAstItemsQuery } from '@queries/soup/items';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
-  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
@@ -105,15 +104,6 @@ export function ChannelsMobileView(props: {
 
     loadNextPage();
   }
-
-  createEffect(() => {
-    visibleChannels().length;
-    props.source.hasNextPage;
-    props.source.isFetching;
-    props.source.isFetchingNextPage;
-
-    queueMicrotask(checkNearEnd);
-  });
 
   const mentionsCurrentUser = (channel: ChannelEntity) => {
     const userId = currentUserId()?.toLocaleLowerCase();
