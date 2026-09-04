@@ -33,6 +33,8 @@ pub enum UserInputError {
     RequestFailed(String),
     /// The client accepted the form without returning its answer.
     MissingAnswer,
+    /// The client returned a value outside the requested field schema.
+    InvalidAnswer(String),
 }
 
 impl std::fmt::Display for UserInputError {
@@ -41,6 +43,9 @@ impl std::fmt::Display for UserInputError {
             Self::Unsupported => f.write_str("the client does not support form elicitation"),
             Self::RequestFailed(message) => write!(f, "the client refused the question: {message}"),
             Self::MissingAnswer => f.write_str("the client accepted without returning an answer"),
+            Self::InvalidAnswer(message) => {
+                write!(f, "the client returned an invalid answer: {message}")
+            }
         }
     }
 }
