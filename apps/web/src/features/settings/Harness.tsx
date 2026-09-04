@@ -74,7 +74,7 @@ export function Harness() {
   const cursorConnected = () =>
     !cursorStatus.isPlaceholderData && (cursorStatus.data?.registered ?? false);
 
-  const connected = () => harnessesQuery.data ?? [];
+  const pairedAgents = () => harnessesQuery.data ?? [];
 
   return (
     <SettingsPage
@@ -152,9 +152,9 @@ export function Harness() {
               Enter pairing code
             </Button>
 
-            <Show when={connected().length > 0}>
+            <Show when={pairedAgents().length > 0}>
               <div class="mt-4 flex flex-col">
-                <For each={connected()}>
+                <For each={pairedAgents()}>
                   {(harness) => (
                     <div class="flex items-center justify-between gap-4 py-3">
                       <div class="min-w-0">
@@ -189,7 +189,7 @@ export function Harness() {
               </div>
             </Show>
             <Show when={harnessesQuery.isError}>
-              <p class="px-4 py-3 text-xs text-negative">
+              <p class="py-3 text-xs text-negative">
                 Could not load your harnesses. Try refreshing this page.
               </p>
             </Show>
