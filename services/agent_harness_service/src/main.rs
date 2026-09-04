@@ -102,6 +102,7 @@ use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::Instrument as _;
 
 use runtime_commands::consume_runtime_commands;
@@ -112,6 +113,8 @@ use runtime_commands::consume_runtime_commands;
 /// split partitions between them and each miss half its events; fine while
 /// exactly one harness deployment exists.
 struct AgentHarnessConsumerGroup;
+
+const RUNTIME_COMMAND_CONSUMER_ATTEMPTS: usize = 5;
 
 impl GroupName for AgentHarnessConsumerGroup {
     const GROUP_NAME: &'static str = "agent-harness-service";
@@ -469,23 +472,29 @@ async fn run() -> anyhow::Result<()> {
     let (runtime_commands_ready, mut runtime_commands_readiness) =
         tokio::sync::watch::channel(false);
     let runtime_commands = tokio::spawn(async move {
-        loop {
-            runtime_commands_ready.send_replace(false);
-            if let Err(error) = consume_runtime_commands(
-                runtime_command_redis.clone(),
-                replica,
-                {
-                    let runtimes = Arc::clone(&runtime_command_runtimes);
-                    Arc::new(move |harness| runtimes.is_connected(harness))
-                },
-                runtime_command_harness.clone(),
-                runtime_commands_ready.clone(),
-            )
-            .await
-            {
-                tracing::error!(error = ?error, "runtime command Redis consumer stopped; retrying");
-                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-            }
+        let result = Retry::start(
+            FixedInterval::new(std::time::Duration::from_secs(1))
+                .take(RUNTIME_COMMAND_CONSUMER_ATTEMPTS - 1),
+            || {
+                runtime_commands_ready.send_replace(false);
+                consume_runtime_commands(
+                    runtime_command_redis.clone(),
+                    replica,
+                    {
+                        let runtimes = Arc::clone(&runtime_command_runtimes);
+                        Arc::new(move |harness| runtimes.is_connected(harness))
+                    },
+                    runtime_command_harness.clone(),
+                    runtime_commands_ready.clone(),
+                )
+            },
+        )
+        .await;
+        if let Err(error) = result {
+            tracing::error!(
+                error = ?error,
+                "runtime command Redis consumer stopped after five attempts"
+            );
         }
     });
     tokio::time::timeout(

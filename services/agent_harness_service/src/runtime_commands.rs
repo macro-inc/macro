@@ -89,5 +89,5 @@ where
             .instrument(span),
         );
     }
-    Ok(())
+    anyhow::bail!("runtime command Redis subscription ended")
 }

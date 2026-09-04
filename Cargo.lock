@@ -339,6 +339,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "tokio",
+ "tokio-retry",
  "tokio-util",
  "tower 0.5.3",
  "tracing",

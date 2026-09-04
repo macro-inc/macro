@@ -2,9 +2,8 @@
 
 use agent_session::domain::model::AgentSessionId;
 use harness_id::HarnessId;
-use opentelemetry::propagation::{Extractor, Injector};
 use redis::AsyncCommands as _;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 use crate::domain::error::{HarnessError, Result};
@@ -63,8 +62,8 @@ pub struct RuntimeCommandRequest {
     target: RuntimeCommandTarget,
     session: AgentSessionId,
     command: HarnessCommand,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    trace_context: BTreeMap<String, String>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    trace_context: HashMap<String, String>,
 }
 
 /// The process-local destination selected by the command sender.
@@ -78,7 +77,7 @@ pub enum RuntimeCommandTarget {
 }
 
 impl RuntimeCommandRequest {
-    /// The unique ID used to claim and answer this command.
+    /// The unique ID used to claim and trace this command.
     #[must_use]
     pub fn request_id(&self) -> macro_uuid::Uuid {
         self.request_id
@@ -118,32 +117,13 @@ impl From<CommandTarget> for RuntimeCommandTarget {
     }
 }
 
-#[derive(Default)]
-struct TraceContext(BTreeMap<String, String>);
-
-impl Injector for TraceContext {
-    fn set(&mut self, key: &str, value: String) {
-        self.0.insert(key.to_owned(), value);
-    }
-}
-
-impl Extractor for TraceContext {
-    fn get(&self, key: &str) -> Option<&str> {
-        self.0.get(key).map(String::as_str)
-    }
-
-    fn keys(&self) -> Vec<&str> {
-        self.0.keys().map(String::as_str).collect()
-    }
-}
-
-fn current_trace_context() -> BTreeMap<String, String> {
+fn current_trace_context() -> HashMap<String, String> {
     let context = tracing::Span::current().context();
-    let mut carrier = TraceContext::default();
+    let mut carrier = HashMap::new();
     opentelemetry::global::get_text_map_propagator(|propagator| {
         propagator.inject_context(&context, &mut carrier);
     });
-    carrier.0
+    carrier
 }
 
 fn runtime_command_span(request: &RuntimeCommandRequest) -> tracing::Span {
@@ -157,7 +137,7 @@ fn runtime_command_span(request: &RuntimeCommandRequest) -> tracing::Span {
         agent.session.id = %request.session,
     );
     let parent = opentelemetry::global::get_text_map_propagator(|propagator| {
-        propagator.extract(&TraceContext(request.trace_context.clone()))
+        propagator.extract(&request.trace_context)
     });
     let _ = span.set_parent(parent);
     span
