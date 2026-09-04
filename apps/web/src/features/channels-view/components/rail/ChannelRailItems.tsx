@@ -198,15 +198,15 @@ export function ConversationCard(props: ConversationCardProps) {
         <ChannelAvatar channel={props.channel} size="md" />
         <div class="min-w-0 flex-1 overflow-hidden">
           <span class="flex min-w-0 items-center gap-2">
-            <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
-              {props.channel.name}
-            </span>
             <Show when={props.unread}>
               <span
                 aria-label="Unread"
                 class="size-2 shrink-0 rounded-full bg-accent"
               />
             </Show>
+            <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
+              {props.channel.name}
+            </span>
             <Show when={latestRootMessage()?.createdAt}>
               {(createdAt) => (
                 <Tooltip

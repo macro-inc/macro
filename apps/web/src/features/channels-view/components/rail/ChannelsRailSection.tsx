@@ -145,18 +145,12 @@ export const CollapsibleSection = {
 
 export function CreateRailAction(props: {
   label: string;
-  slim?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
-      class={cn(
-        'flex shrink-0 items-center justify-center text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent',
-        props.slim &&
-          'size-10 rounded-full border border-edge-muted bg-transparent',
-        !props.slim && 'size-7 rounded-lg'
-      )}
+      class="flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
       aria-label={props.label}
       onClick={props.onClick}
     >

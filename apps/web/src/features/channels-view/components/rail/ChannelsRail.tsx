@@ -16,16 +16,19 @@ import { useUserId } from '@core/context/user';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { compareDateDesc } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
+import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import ChannelIcon from '@icon/wide-channel.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { Key } from '@solid-primitives/keyed';
-import { cn, Tabs } from '@ui';
+import { Button, cn, Dropdown, Tabs } from '@ui';
 import {
   createEffect,
   createMemo,
+  createSignal,
   createUniqueId,
   Match,
   on,
@@ -113,9 +116,65 @@ const conversationRow = (
 const rowKeyForChannel = (channelId: string) => `channel:${channelId}`;
 const rowKeyForSection = (group: ChannelsGroup) => `section:${group}`;
 
+const openDirectMessagePicker = () => {
+  CommandState.clearQuery();
+  CommandState.setCategoryFilter('dms');
+  CommandState.open();
+};
+
+function RailModeButton(props: {
+  mode: 'full' | 'slim';
+  onModeChange: (mode: 'full' | 'slim') => void;
+}) {
+  const expanded = () => props.mode === 'full';
+  const [hovering, setHovering] = createSignal(false);
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      label={expanded() ? 'Collapse chat rail' : 'Expand chat rail'}
+      tooltipPlacement={expanded() ? 'bottom' : 'right'}
+      onClick={() => props.onModeChange(expanded() ? 'slim' : 'full')}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      <AnimatedSquareSidebarIcon class="size-4" triggerAnimation={hovering()} />
+    </Button>
+  );
+}
+
+function SlimCreateMenu() {
+  return (
+    <Dropdown placement="right-start" gutter={8}>
+      <Dropdown.Trigger
+        variant="outline"
+        size="icon-sm"
+        class="size-10 rounded-full bg-transparent"
+        label="Create conversation"
+      >
+        <PlusIcon class="size-4" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-44">
+        <Dropdown.Group>
+          <Dropdown.Item onSelect={() => openNewChannelModal()}>
+            <ChannelIcon class="size-4 shrink-0" />
+            <span>Create channel</span>
+          </Dropdown.Item>
+          <Dropdown.Item onSelect={openDirectMessagePicker}>
+            <ChatTeardropIcon class="size-4 shrink-0" />
+            <span>Start direct message</span>
+          </Dropdown.Item>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
+
 export function ChannelsRail(props: {
   channels: ChannelEntity[];
   mode: 'full' | 'slim';
+  onModeChange: (mode: 'full' | 'slim') => void;
 }) {
   const { state, setGroupOpen, setSelectedChannelId, setTab } =
     useChannelsView();
@@ -357,24 +416,27 @@ export function ChannelsRail(props: {
   return (
     <aside
       aria-label="Chat navigation"
-      class="flex size-full min-h-0 flex-col bg-inset pb-5 pt-2"
+      class="flex size-full min-h-0 flex-col gap-3 bg-inset pb-5 pt-2"
     >
       <Switch>
         <Match when={props.mode === 'full'}>
-          <div class="flex shrink-0 items-center px-4">
-            <SplitPanel.ControlGroup>
-              <SplitPanel.CloseButton />
-              <SplitPanel.BackButton />
-              <SplitPanel.ForwardButton />
-            </SplitPanel.ControlGroup>
-          </div>
-          <div class="flex shrink-0 items-center px-4 pt-3">
-            <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
-              Chat
-            </h1>
-          </div>
-
-          <div class="shrink-0 px-4 pt-3">
+          <div class="flex shrink-0 flex-col gap-3 px-4">
+            <div class="flex h-8 items-center">
+              <SplitPanel.ControlGroup>
+                <SplitPanel.CloseButton />
+                <SplitPanel.BackButton />
+                <SplitPanel.ForwardButton />
+              </SplitPanel.ControlGroup>
+            </div>
+            <div class="flex h-8 items-center gap-2">
+              <RailModeButton
+                mode={props.mode}
+                onModeChange={props.onModeChange}
+              />
+              <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
+                Chat
+              </h1>
+            </div>
             <Tabs
               aria-label="Chat sidebar views"
               fullWidth
@@ -396,7 +458,7 @@ export function ChannelsRail(props: {
             tabIndex={-1}
             aria-activedescendant={activeDescendant()}
             class={cn(
-              'scrollbar-hidden min-h-0 flex-1 pt-3 outline-none',
+              'scrollbar-hidden min-h-0 flex-1 outline-none',
               state.tab === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
             )}
           >
@@ -527,11 +589,7 @@ export function ChannelsRail(props: {
                       <div data-section-action="" class="pr-1">
                         <CreateRailAction
                           label="Start direct message"
-                          onClick={() => {
-                            CommandState.clearQuery();
-                            CommandState.setCategoryFilter('dms');
-                            CommandState.open();
-                          }}
+                          onClick={openDirectMessagePicker}
                         />
                       </div>
                     </CollapsibleSection.Header>
@@ -618,36 +676,37 @@ export function ChannelsRail(props: {
           </div>
         </Match>
         <Match when={props.mode === 'slim'}>
-          <div class="flex shrink-0 justify-center px-2 pb-2">
-            <SplitPanel.ControlGroup>
-              <div class="grid w-12 grid-cols-2 justify-items-center">
-                <div class="col-span-2">
-                  <SplitPanel.CloseButton size="icon-sm" />
-                </div>
-                <div>
-                  <SplitPanel.BackButton size="icon-sm" />
-                </div>
-                <div>
-                  <SplitPanel.ForwardButton size="icon-sm" />
-                </div>
-              </div>
-            </SplitPanel.ControlGroup>
-          </div>
-          <div class="shrink-0 px-3">
-            <Tabs
-              aria-label="Chat sidebar views"
-              class="h-[76px] flex-col"
-              itemClass="h-auto min-h-0 w-full"
-              labelClass="size-full p-0"
-              fullWidth
-              list={SLIM_CHANNEL_TABS}
-              value={state.tab}
-              onChange={(value) => {
-                if (value !== 'browse' && value !== 'recents') return;
+          <div class="flex shrink-0 flex-col items-center gap-3 px-2">
+            <div class="flex h-8 items-center justify-center">
+              <SplitPanel.ControlGroup>
+                <SplitPanel.CloseButton size="icon-sm" />
+              </SplitPanel.ControlGroup>
+            </div>
+            <div class="flex h-8 items-center justify-center">
+              <RailModeButton
+                mode={props.mode}
+                onModeChange={props.onModeChange}
+              />
+            </div>
+            <div class="w-full px-1">
+              <Tabs
+                aria-label="Chat sidebar views"
+                class="h-[76px] flex-col"
+                itemClass="h-auto min-h-0 w-full"
+                labelClass="size-full p-0"
+                fullWidth
+                list={SLIM_CHANNEL_TABS}
+                value={state.tab}
+                onChange={(value) => {
+                  if (value !== 'browse' && value !== 'recents') return;
 
-                setTab(value);
-              }}
-            />
+                  setTab(value);
+                }}
+              />
+            </div>
+            <div class="flex w-full justify-center">
+              <SlimCreateMenu />
+            </div>
           </div>
 
           <div
@@ -658,7 +717,7 @@ export function ChannelsRail(props: {
             tabIndex={-1}
             aria-activedescendant={activeDescendant()}
             class={cn(
-              'scrollbar-hidden min-h-0 flex-1 pt-3 outline-none',
+              'scrollbar-hidden min-h-0 flex-1 outline-none',
               state.tab === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
             )}
           >
@@ -712,13 +771,6 @@ export function ChannelsRail(props: {
                         clearVisibleActivity('channels', targetId)
                       }
                     >
-                      <div class="flex justify-center">
-                        <CreateRailAction
-                          label="Create channel"
-                          slim
-                          onClick={() => openNewChannelModal()}
-                        />
-                      </div>
                       <Show when={teamChannels().length > 0}>
                         <Key each={teamChannels()} by={(channel) => channel.id}>
                           {(channel) => (
@@ -792,17 +844,6 @@ export function ChannelsRail(props: {
                         clearVisibleActivity('direct_messages', targetId)
                       }
                     >
-                      <div class="flex justify-center">
-                        <CreateRailAction
-                          label="Start direct message"
-                          slim
-                          onClick={() => {
-                            CommandState.clearQuery();
-                            CommandState.setCategoryFilter('dms');
-                            CommandState.open();
-                          }}
-                        />
-                      </div>
                       <Show when={directMessages().length > 0}>
                         <Key
                           each={directMessages()}

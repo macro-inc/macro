@@ -40,7 +40,11 @@ function ChannelsViewRoot() {
     () => workspaceSize.width ?? undefined,
     { narrow: 720 }
   );
-  const railMode = () => (breakpoints.narrow() ? 'slim' : 'full');
+  const [railModeOverride, setRailModeOverride] = createSignal<
+    'full' | 'slim'
+  >();
+  const railMode = () =>
+    railModeOverride() ?? (breakpoints.narrow() ? 'slim' : 'full');
   const railLayout = () =>
     railMode() === 'slim'
       ? {
@@ -100,7 +104,11 @@ function ChannelsViewRoot() {
                     if (railMode() === 'full') setAsideWidth(width);
                   }}
                 >
-                  <ChannelsRail channels={channels()} mode={railMode()} />
+                  <ChannelsRail
+                    channels={channels()}
+                    mode={railMode()}
+                    onModeChange={setRailModeOverride}
+                  />
                 </ViewShell.Aside>
                 <ViewShell.Main class="overflow-hidden">
                   <Show
@@ -125,6 +133,14 @@ function ChannelsViewRoot() {
                           selectedEntity={channel()}
                           orchestrator={orchestrator}
                           splitPanelContext={panel}
+                          headerLeading={
+                            <Show when={railMode() === 'slim'}>
+                              <SplitPanel.ControlGroup class="mr-1">
+                                <SplitPanel.BackButton />
+                                <SplitPanel.ForwardButton />
+                              </SplitPanel.ControlGroup>
+                            </Show>
+                          }
                         />
                       </Suspense>
                     )}
