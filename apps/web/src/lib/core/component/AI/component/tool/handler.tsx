@@ -32,6 +32,7 @@ import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
 import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import { deleteTagHandler } from './DeleteTag';
+import { describeSoupHandler } from './DescribeSoup';
 import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
 import { editTagHandler } from './EditTag';
@@ -140,6 +141,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateTag: createTagHandler,
   DeleteReminder: deleteReminderHandler,
   DeleteTag: deleteTagHandler,
+  DescribeSoup: describeSoupHandler,
   EditDocument: editDocumentHandler,
   EditTag: editTagHandler,
   GetThread: getThreadHandler,

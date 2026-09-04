@@ -61,6 +61,35 @@ fn list_entities_is_not_a_registered_tool() {
         "ListEntities must stay deleted"
     );
     assert!(names.contains(&"QuerySoup"), "QuerySoup must be registered");
+    assert!(
+        names.contains(&"DescribeSoup"),
+        "DescribeSoup must be registered alongside QuerySoup"
+    );
+}
+
+/// The QuerySoup card must stay small; the per-kind schema is fetched on
+/// demand through DescribeSoup.
+#[test]
+fn query_soup_card_is_bounded() {
+    use ai_toolset::ToolSet;
+    let schemas = all_tools()
+        .toolset
+        .request_schemas()
+        .expect("provider request schemas");
+    let card = schemas
+        .iter()
+        .find(|schema| schema.name == "QuerySoup")
+        .expect("QuerySoup request schema");
+    let json = serde_json::to_string(&card.schema).expect("schema serializes");
+    assert!(
+        json.len() < 10_000,
+        "QuerySoup request schema is {} chars",
+        json.len()
+    );
+    assert!(
+        !json.contains("input GraphqlEmailLiteral"),
+        "kind literals belong in DescribeSoup slices, not the card"
+    );
 }
 
 #[test]

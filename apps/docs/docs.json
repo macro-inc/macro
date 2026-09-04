@@ -88,6 +88,7 @@
               "AI/mcp/tools/delete-import-entity",
               "AI/mcp/tools/delete-reminder",
               "AI/mcp/tools/delete-tag",
+              "AI/mcp/tools/describe-soup",
               "AI/mcp/tools/display-results",
               "AI/mcp/tools/edit-document",
               "AI/mcp/tools/edit-tag",

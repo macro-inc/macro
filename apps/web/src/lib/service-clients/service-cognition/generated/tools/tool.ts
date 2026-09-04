@@ -61,6 +61,10 @@ type ToolParserMap = {
     response: types.DeleteReminderResponse;
   };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
+  DescribeSoup: {
+    call: types.DescribeSoup;
+    response: types.DescribeSoupResponse;
+  };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;
@@ -280,6 +284,10 @@ const toolParserMap = {
     response: schemas.DeleteReminderResponse,
   },
   DeleteTag: { call: schemas.DeleteTag, response: schemas.DeleteTagResponse },
+  DescribeSoup: {
+    call: schemas.DescribeSoup,
+    response: schemas.DescribeSoupResponse,
+  },
   DisplayResults: {
     call: schemas.DisplayResults,
     response: schemas.DisplayResultsResponse,
@@ -531,6 +539,10 @@ type ToolDataMap = {
     response: types.DeleteReminderResponse;
   };
   DeleteTag: { call: types.DeleteTag; response: types.DeleteTagResponse };
+  DescribeSoup: {
+    call: types.DescribeSoup;
+    response: types.DescribeSoupResponse;
+  };
   DisplayResults: {
     call: types.DisplayResults;
     response: types.DisplayResultsResponse;

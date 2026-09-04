@@ -1450,6 +1450,42 @@ export const DeleteTagResponse = z.object({
   message: z.string(),
 });
 
+export const DescribeSoup = z.object({
+  topics: z.array(
+    z.any().superRefine((x, ctx) => {
+      const schemas = [
+        z.literal('DOCUMENT'),
+        z.literal('CHAT'),
+        z.literal('PROJECT'),
+        z.literal('EMAIL_THREAD'),
+        z.literal('CHANNEL'),
+        z.literal('CHANNEL_MESSAGE'),
+        z.literal('CALL'),
+        z.literal('CALENDAR_EVENT'),
+        z.literal('FOREIGN_ENTITY'),
+        z.literal('PROPERTIES'),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    })
+  ),
+});
+
+export const DescribeSoupResponse = z.object({ sdl: z.string() });
+
 export const DisplayResults = z.object({ view: z.any() });
 
 export const DisplayResultsResponse = z.object({ message: z.string() });

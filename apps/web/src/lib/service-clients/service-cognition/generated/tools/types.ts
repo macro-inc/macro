@@ -271,6 +271,21 @@ export type TagColor =
  */
 export type DeletionScopeInput = 'all' | 'this_event' | 'this_and_following';
 /**
+ * A slice of the QuerySoup schema, named like the `GraphqlSoupEntityType`
+ * value it describes, plus `PROPERTIES`.
+ */
+export type SoupSchemaTopic =
+  | 'DOCUMENT'
+  | 'CHAT'
+  | 'PROJECT'
+  | 'EMAIL_THREAD'
+  | 'CHANNEL'
+  | 'CHANNEL_MESSAGE'
+  | 'CALL'
+  | 'CALENDAR_EVENT'
+  | 'FOREIGN_ENTITY'
+  | 'PROPERTIES';
+/**
  * User-facing notification categories used for list filtering.
  */
 export type NotificationCategory =
@@ -2218,6 +2233,24 @@ export interface DeleteTagResponse {
   message: string;
 }
 /**
+ * Return the QuerySoup schema for one or more topics: a kind's filter literal (what goes inside `filters.<kind>Filter: { literal: … }`) and its output type (what you can select under `... on GraphqlSoup<Kind>`), or PROPERTIES for `properties { … }` and `propertiesFilter`. QuerySoup's own description only carries the shared types, so call this before writing a query that filters on or selects fields of a kind you have not seen the schema for in this conversation. Cheap and read-only; ask for every topic you need in one call.
+ */
+export interface DescribeSoup {
+  /**
+   * Topics to describe, e.g. ["DOCUMENT", "EMAIL_THREAD"] or ["PROPERTIES"].
+   */
+  topics: SoupSchemaTopic[];
+}
+/**
+ * SDL for the requested topics, in the order asked.
+ */
+export interface DescribeSoupResponse {
+  /**
+   * GraphQL SDL. Types already on QuerySoup's card are not repeated.
+   */
+  sdl: string;
+}
+/**
  * Present results to the user as a rich view. The `view` argument is a dynamic-UI view object (a title plus an ordered list of widgets) following the dynamic-UI schema provided to you. The view is rendered immediately in the chat; this tool returns as soon as it is dispatched.
  */
 export interface DisplayResults {
@@ -3579,10 +3612,15 @@ export interface NameSearch {
  *
  * Rules
  * - Exactly one `query` operation. Mutations and subscriptions do not exist here.
+ * - The schema below is the shared part. Each kind's filter literal and output
+ *   fields come from DescribeSoup (topics DOCUMENT, EMAIL_THREAD, …, PROPERTIES).
+ *   Call it once per kind you filter on or select fields of; the result stays in
+ *   the conversation. `items { id displayName }` needs no slice.
  * - Filters are per kind: an item of kind K passes if K's tree is absent or matches.
- *   Date windows (createdAt/updatedAt) exist on document, project, chat and email
- *   trees only; other kinds are cut by sortMethod + limit.
- * - Macro tasks are DOCUMENT items with subType TASK. Prefer `taskFilter` for
+ *   Inputs marked @oneOf take exactly one field. Date windows are
+ *   `and: { left: { literal: { updatedAt: { gte: $a } } }, right: { literal: { updatedAt: { lt: $b } } } }`
+ *   on document, project, chat and email trees; other kinds are cut by sortMethod + limit.
+ * - Macro tasks are DOCUMENT items with subType TASK. Use `taskFilter` for
  *   status, assignee, and priority — do not invent property definition ids.
  * - Tags: filter by label with input.tags (ListTags shows them); results carry
  *   tags { label scope }. Status/Priority values come back as option ids.
@@ -3592,259 +3630,10 @@ export interface NameSearch {
  * - Select `id` on every `items` selection so results can be linked.
  * - Alias `soup` to ask two questions in one call (max 5). Example: activity and
  *   signal email.
- * - Anything not shown: { __type(name: "GraphqlEmailLiteral") { inputFields { name type { name ofType { name } } } } }
  *
  *
- * Schema
+ * Schema (shared types; DescribeSoup adds each kind's filter literal and output fields)
  * ```graphql
- * "Half-open RFC 3339 window: `from <= t < until`."
- * input DateRange {
- * 	"Inclusive start."
- * 	from: String
- * 	"Exclusive end."
- * 	until: String
- * }
- *
- * "A Boolean property value."
- * type GraphqlBooleanPropertyValue {
- * 	"The stored Boolean."
- * 	value: Boolean!
- * }
- *
- * "The two operands of a recursive `CalendarEventFilterExpr` binary expression."
- * input GraphqlCalendarEventBinaryExpr {
- * 	"Left expression."
- * 	left: GraphqlCalendarEventExpr!
- * 	"Right expression."
- * 	right: GraphqlCalendarEventExpr!
- * }
- *
- * "A recursive `CalendarEventFilterExpr` filter expression."
- * input GraphqlCalendarEventExpr @oneOf {
- * 	"Both expressions must match."
- * 	and: GraphqlCalendarEventBinaryExpr
- * 	"Either expression may match."
- * 	or: GraphqlCalendarEventBinaryExpr
- * 	"Negate an expression."
- * 	not: GraphqlCalendarEventExpr
- * 	"Match a literal."
- * 	literal: GraphqlCalendarEventLiteral
- * }
- *
- * "GraphQL input representing a calendar event literal."
- * input GraphqlCalendarEventLiteral @oneOf {
- * 	"Canonical event id."
- * 	id: ID
- * 	"Event status."
- * 	status: String
- * 	"Master start must be before this RFC3339 instant."
- * 	startsBefore: String
- * 	"Master end must be after this RFC3339 instant."
- * 	endsAfter: String
- * 	"Attendee email."
- * 	attendee: String
- * 	"Organizer email."
- * 	organizer: String
- * 	"Notification done state for the requester."
- * 	notificationDone: Boolean
- * 	"Notification seen state for the requester."
- * 	notificationSeen: Boolean
- * }
- *
- * "The two operands of a recursive `CallFilterExpr` binary expression."
- * input GraphqlCallBinaryExpr {
- * 	"Left expression."
- * 	left: GraphqlCallExpr!
- * 	"Right expression."
- * 	right: GraphqlCallExpr!
- * }
- *
- * "A recursive `CallFilterExpr` filter expression."
- * input GraphqlCallExpr @oneOf {
- * 	"Both expressions must match."
- * 	and: GraphqlCallBinaryExpr
- * 	"Either expression may match."
- * 	or: GraphqlCallBinaryExpr
- * 	"Negate an expression."
- * 	not: GraphqlCallExpr
- * 	"Match a literal."
- * 	literal: GraphqlCallLiteral
- * }
- *
- * "GraphQL input representing the call literal."
- * input GraphqlCallLiteral @oneOf {
- * 	"The call id option."
- * 	callId: ID
- * 	"The channel id option."
- * 	channelId: ID
- * 	"The speaker option."
- * 	speaker: String
- * 	"The status option."
- * 	status: GraphqlCallStatus
- * 	"The attended option."
- * 	attended: Boolean
- * }
- *
- * "GraphQL input representing the call status."
- * enum GraphqlCallStatus {
- * 	"The attended option."
- * 	ATTENDED
- * 	"The missed option."
- * 	MISSED
- * 	"The unattended option."
- * 	UNATTENDED
- * }
- *
- * "The two operands of a recursive `ChannelFilterExpr` binary expression."
- * input GraphqlChannelBinaryExpr {
- * 	"Left expression."
- * 	left: GraphqlChannelExpr!
- * 	"Right expression."
- * 	right: GraphqlChannelExpr!
- * }
- *
- * "A recursive `ChannelFilterExpr` filter expression."
- * input GraphqlChannelExpr @oneOf {
- * 	"Both expressions must match."
- * 	and: GraphqlChannelBinaryExpr
- * 	"Either expression may match."
- * 	or: GraphqlChannelBinaryExpr
- * 	"Negate an expression."
- * 	not: GraphqlChannelExpr
- * 	"Match a literal."
- * 	literal: GraphqlChannelLiteral
- * }
- *
- * "GraphQL input representing the channel literal."
- * input GraphqlChannelLiteral @oneOf {
- * 	"The thread id option."
- * 	threadId: ID
- * 	"The mention option."
- * 	mention: String
- * 	"The organization id option."
- * 	organizationId: Int
- * 	"The team id option."
- * 	teamId: ID
- * 	"The channel id option."
- * 	channelId: ID
- * 	"The sender option."
- * 	sender: String
- * 	"The channel type option."
- * 	channelType: GraphqlChannelTypeFilter
- * 	"The importance option."
- * 	importance: Boolean
- * 	"""
- * 	The is participant option. Filters by whether the requesting user is an
- * 	active participant; its presence widens the candidate set to team channels
- * 	of the user's teams they have not joined.
- * 	"""
- * 	isParticipant: Boolean
- * 	"The notification done option."
- * 	notificationDone: Boolean
- * 	"The notification seen option."
- * 	notificationSeen: Boolean
- * }
- *
- * "The two operands of a recursive `ChannelThreadFilterExpr` binary expression."
- * input GraphqlChannelThreadBinaryExpr {
- * 	"Left expression."
- * 	left: GraphqlChannelThreadExpr!
- * 	"Right expression."
- * 	right: GraphqlChannelThreadExpr!
- * }
- *
- * "A recursive `ChannelThreadFilterExpr` filter expression."
- * input GraphqlChannelThreadExpr @oneOf {
- * 	"Both expressions must match."
- * 	and: GraphqlChannelThreadBinaryExpr
- * 	"Either expression may match."
- * 	or: GraphqlChannelThreadBinaryExpr
- * 	"Negate an expression."
- * 	not: GraphqlChannelThreadExpr
- * 	"Match a literal."
- * 	literal: GraphqlChannelThreadLiteral
- * }
- *
- * "GraphQL input representing the channel thread literal."
- * input GraphqlChannelThreadLiteral @oneOf {
- * 	"The thread id option."
- * 	threadId: ID
- * 	"The channel id option."
- * 	channelId: ID
- * 	"The root sender option."
- * 	rootSender: String
- * 	"The participant option."
- * 	participant: String
- * 	"The notification done option."
- * 	notificationDone: Boolean
- * 	"The notification seen option."
- * 	notificationSeen: Boolean
- * }
- *
- * "GraphQL input representing the channel type filter."
- * enum GraphqlChannelTypeFilter {
- * 	"The public option."
- * 	PUBLIC
- * 	"The private option."
- * 	PRIVATE
- * 	"The direct message option."
- * 	DIRECT_MESSAGE
- * 	"The team option."
- * 	TEAM
- * }
- *
- * "The two operands of a recursive `ChatFilterExpr` binary expression."
- * input GraphqlChatBinaryExpr {
- * 	"Left expression."
- * 	left: GraphqlChatExpr!
- * 	"Right expression."
- * 	right: GraphqlChatExpr!
- * }
- *
- * "A recursive `ChatFilterExpr` filter expression."
- * input GraphqlChatExpr @oneOf {
- * 	"Both expressions must match."
- * 	and: GraphqlChatBinaryExpr
- * 	"Either expression may match."
- * 	or: GraphqlChatBinaryExpr
- * 	"Negate an expression."
- * 	not: GraphqlChatExpr
- * 	"Match a literal."
- * 	literal: GraphqlChatLiteral
- * }
- *
- * "GraphQL input representing the chat literal."
- * input GraphqlChatLiteral @oneOf {
- * 	"The project id option."
- * 	projectId: ID
- * 	"The role option."
- * 	role: GraphqlChatRole
- * 	"The chat id option."
- * 	chatId: ID
- * 	"The owner option."
- * 	owner: String
- * 	"The importance option."
- * 	importance: Boolean
- * 	"The notification done option."
- * 	notificationDone: Boolean
- * 	"The notification seen option."
- * 	notificationSeen: Boolean
- * 	"The created at option."
- * 	createdAt: GraphqlDateLiteral
- * 	"The updated at option."
- * 	updatedAt: GraphqlDateLiteral
- * }
- *
- * "GraphQL input representing the chat role."
- * enum GraphqlChatRole {
- * 	"The user option."
- * 	USER
- * 	"The system option."
- * 	SYSTEM
- * 	"The assistant option."
- * 	ASSISTANT
- * }
- *
  * "GraphQL input representing the date literal."
  * input GraphqlDateLiteral @oneOf {
  * 	"The gt option."
@@ -3857,137 +3646,9 @@ export interface NameSearch {
  * 	lte: String
  * }
  *
- * "A date-time property value."
- * type GraphqlDatePropertyValue {
- * 	"The stored date-time formatted as RFC 3339."
- * 	value: String!
- * }
- *
- * "The two operands of a recursive `DocumentFilterExpr` binary expression."
- * input GraphqlDocumentBinaryExpr {
- * 	"Left expression."
- * 	left: GraphqlDocumentExpr!
- * 	"Right expression."
- * 	right: GraphqlDocumentExpr!
- * }
- *
- * "A recursive `DocumentFilterExpr` filter expression."
- * input GraphqlDocumentExpr @oneOf {
- * 	"Both expressions must match."
- * 	and: GraphqlDocumentBinaryExpr
- * 	"Either expression may match."
- * 	or: GraphqlDocumentBinaryExpr
- * 	"Negate an expression."
- * 	not: GraphqlDocumentExpr
- * 	"Match a literal."
- * 	literal: GraphqlDocumentLiteral
- * }
- *
- * "GraphQL input representing the document literal."
- * input GraphqlDocumentLiteral @oneOf {
- * 	"The file type option."
- * 	fileType: String
- * 	"The id option."
- * 	id: ID
- * 	"The project id option."
- * 	projectId: ID
- * 	"The owner option."
- * 	owner: String
- * 	"The importance option."
- * 	importance: Boolean
- * 	"The notification done option."
- * 	notificationDone: Boolean
- * 	"The notification seen option."
- * 	notificationSeen: Boolean
- * 	"The include cbm atm nc option."
- * 	includeCbmAtmNc: Boolean
- * 	"The sub type option."
- * 	subType: GraphqlDocumentSubType
- * 	"The file assoc option."
- * 	fileAssoc: String
- * 	"The is email attachment option."
- * 	isEmailAttachment: Boolean
- * 	"The created at option."
- * 	createdAt: GraphqlDateLiteral
- * 	"The updated at option."
- * 	updatedAt: GraphqlDateLiteral
- * }
- *
- * "GraphQL input representing the document sub type."
- * enum GraphqlDocumentSubType {
- * 	"The task option."
- * 	TASK
- * 	"The snippet option."
- * 	SNIPPET
- * 	"The skill option."
- * 	SKILL
- * }
- *
- * "The two operands of a recursive `EmailFilterExpr` binary expression."
- * input GraphqlEmailBinaryExpr {
- * 	"Left expression."
- * 	left: GraphqlEmailExpr!
- * 	"Right expression."
- * 	right: GraphqlEmailExpr!
- * }
- *
- * "A recursive `EmailFilterExpr` filter expression."
- * input GraphqlEmailExpr @oneOf {
- * 	"Both expressions must match."
- * 	and: GraphqlEmailBinaryExpr
- * 	"Either expression may match."
- * 	or: GraphqlEmailBinaryExpr
- * 	"Negate an expression."
- * 	not: GraphqlEmailExpr
- * 	"Match a literal."
- * 	literal: GraphqlEmailLiteral
- * }
- *
  * "`input GraphqlEmailFilterAst` minus `crmScope`."
  * input GraphqlEmailFilterAst {
  * 	tree: GraphqlEmailExpr
- * }
- *
- * "GraphQL input representing the email literal."
- * input GraphqlEmailLiteral @oneOf {
- * 	"The sender option."
- * 	sender: GraphqlEmailValue
- * 	"The cc option."
- * 	cc: GraphqlEmailValue
- * 	"The bcc option."
- * 	bcc: GraphqlEmailValue
- * 	"The recipient option."
- * 	recipient: GraphqlEmailValue
- * 	"The thread id option."
- * 	threadId: ID
- * 	"The owner option."
- * 	owner: ID
- * 	"The project id option."
- * 	projectId: String
- * 	"The importance option."
- * 	importance: Boolean
- * 	"The notification done option."
- * 	notificationDone: Boolean
- * 	"The notification seen option."
- * 	notificationSeen: Boolean
- * 	"The shared option."
- * 	shared: GraphqlSharedEmailFilter
- * 	"The calendar only option."
- * 	calendarOnly: Boolean
- * 	"The created at option."
- * 	createdAt: GraphqlDateLiteral
- * 	"The updated at option."
- * 	updatedAt: GraphqlDateLiteral
- * }
- *
- * "GraphQL input representing the email value."
- * input GraphqlEmailValue @oneOf {
- * 	"The partial option."
- * 	partial: String
- * 	"The complete option."
- * 	complete: String
- * 	"The domain option."
- * 	domain: String
  * }
  *
  * "`input GraphqlEntityFilterAst` minus CRM and reminder trees."
@@ -4004,220 +3665,6 @@ export interface NameSearch {
  * 	propertiesFilter: GraphqlFilterPropertiesExpr
  * }
  *
- * "An entity-reference property value."
- * type GraphqlEntityReferencePropertyValue {
- * 	"The referenced entities."
- * 	references: [GraphqlPropertyEntityReference!]!
- * }
- *
- * "The two operands of a recursive `PropertiesFilterExpr` binary expression."
- * input GraphqlFilterPropertiesBinaryExpr {
- * 	"Left expression."
- * 	left: GraphqlFilterPropertiesExpr!
- * 	"Right expression."
- * 	right: GraphqlFilterPropertiesExpr!
- * }
- *
- * "A recursive `PropertiesFilterExpr` filter expression."
- * input GraphqlFilterPropertiesExpr @oneOf {
- * 	"Both expressions must match."
- * 	and: GraphqlFilterPropertiesBinaryExpr
- * 	"Either expression may match."
- * 	or: GraphqlFilterPropertiesBinaryExpr
- * 	"Negate an expression."
- * 	not: GraphqlFilterPropertiesExpr
- * 	"Match a literal."
- * 	literal: GraphqlFilterPropertiesLiteral
- * }
- *
- * "GraphQL input for matching a property value on an entity."
- * input GraphqlFilterPropertiesLiteral {
- * 	"Property definition id to match."
- * 	propertyDefinitionId: ID!
- * 	"Optional entity type scope for the property match."
- * 	entityType: GraphqlPropertyEntityType
- * 	"Value to compare against the property."
- * 	value: GraphqlFilterPropertyMatchValue!
- * }
- *
- * "GraphQL input value used when matching a property."
- * input GraphqlFilterPropertyMatchValue @oneOf {
- * 	"Select option id to match."
- * 	selectOption: ID
- * 	"Entity reference id to match."
- * 	entityRef: ID
- * }
- *
- * "The two operands of a recursive `ForeignEntityFilterExpr` binary expression."
- * input GraphqlForeignEntityBinaryExpr {
- * 	"Left expression."
- * 	left: GraphqlForeignEntityExpr!
- * 	"Right expression."
- * 	right: GraphqlForeignEntityExpr!
- * }
- *
- * "A recursive `ForeignEntityFilterExpr` filter expression."
- * input GraphqlForeignEntityExpr @oneOf {
- * 	"Both expressions must match."
- * 	and: GraphqlForeignEntityBinaryExpr
- * 	"Either expression may match."
- * 	or: GraphqlForeignEntityBinaryExpr
- * 	"Negate an expression."
- * 	not: GraphqlForeignEntityExpr
- * 	"Match a literal."
- * 	literal: GraphqlForeignEntityLiteral
- * }
- *
- * "GraphQL input representing the foreign entity literal."
- * input GraphqlForeignEntityLiteral @oneOf {
- * 	"The id option."
- * 	id: ID
- * 	"The foreign entity id option."
- * 	foreignEntityId: String
- * 	"The foreign entity source option."
- * 	foreignEntitySource: String
- * 	"The includes me option."
- * 	includesMe: Boolean
- * 	"The notification done option."
- * 	notificationDone: Boolean
- * 	"The notification seen option."
- * 	notificationSeen: Boolean
- * }
- *
- * "A link property value."
- * type GraphqlLinkPropertyValue {
- * 	"The stored URLs."
- * 	urls: [String!]!
- * }
- *
- * "A numeric property value."
- * type GraphqlNumberPropertyValue {
- * 	"The stored number."
- * 	value: Float!
- * }
- *
- * "The two operands of a recursive `ProjectFilterExpr` binary expression."
- * input GraphqlProjectBinaryExpr {
- * 	"Left expression."
- * 	left: GraphqlProjectExpr!
- * 	"Right expression."
- * 	right: GraphqlProjectExpr!
- * }
- *
- * "A recursive `ProjectFilterExpr` filter expression."
- * input GraphqlProjectExpr @oneOf {
- * 	"Both expressions must match."
- * 	and: GraphqlProjectBinaryExpr
- * 	"Either expression may match."
- * 	or: GraphqlProjectBinaryExpr
- * 	"Negate an expression."
- * 	not: GraphqlProjectExpr
- * 	"Match a literal."
- * 	literal: GraphqlProjectLiteral
- * }
- *
- * "GraphQL input representing the project literal."
- * input GraphqlProjectLiteral @oneOf {
- * 	"The project id option."
- * 	projectId: ID
- * 	"The project id self option."
- * 	projectIdSelf: ID
- * 	"The owner option."
- * 	owner: String
- * 	"The importance option."
- * 	importance: Boolean
- * 	"The notification done option."
- * 	notificationDone: Boolean
- * 	"The notification seen option."
- * 	notificationSeen: Boolean
- * 	"The created at option."
- * 	createdAt: GraphqlDateLiteral
- * 	"The updated at option."
- * 	updatedAt: GraphqlDateLiteral
- * }
- *
- * type GraphqlProperty {
- * 	propertyDefinitionId: ID!
- * 	displayName: String!
- * 	dataType: GraphqlPropertyDataType!
- * 	value: GraphqlPropertyValue
- * }
- *
- * "A property definition's supported value type."
- * enum GraphqlPropertyDataType {
- * 	"Boolean true/false values."
- * 	BOOLEAN
- * 	"Date and time values."
- * 	DATE
- * 	"Numeric values."
- * 	NUMBER
- * 	"String or text values."
- * 	STRING
- * 	"A select property with numeric options."
- * 	SELECT_NUMBER
- * 	"A select property with string options."
- * 	SELECT_STRING
- * 	"User- or team-scoped colored labels."
- * 	TAG
- * 	"References to other entities."
- * 	ENTITY
- * 	"URL values."
- * 	LINK
- * }
- *
- * "An entity reference stored in a property value."
- * type GraphqlPropertyEntityReference {
- * 	"The referenced entity's identifier."
- * 	entityId: String!
- * 	"The referenced entity's property-domain type."
- * 	entityType: GraphqlPropertyEntityType!
- * 	"The specific message identifier when the reference targets a thread message."
- * 	specificMessageId: ID
- * }
- *
- * "An entity type supported by the properties domain."
- * enum GraphqlPropertyEntityType {
- * 	"Calendar event entity."
- * 	CALENDAR_EVENT
- * 	"Call record entity."
- * 	CALL_RECORD
- * 	"Channel entity."
- * 	CHANNEL
- * 	"Chat entity."
- * 	CHAT
- * 	"Company entity."
- * 	COMPANY
- * 	"Document entity."
- * 	DOCUMENT
- * 	"Project entity."
- * 	PROJECT
- * 	"Task entity."
- * 	TASK
- * 	"Thread entity."
- * 	THREAD
- * 	"User entity."
- * 	USER
- * }
- *
- * "A property value represented by a type-safe GraphQL union."
- * union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
- *
- * "A select-option property value."
- * type GraphqlSelectOptionPropertyValue {
- * 	"The selected option identifiers."
- * 	optionIds: [ID!]!
- * }
- *
- * "GraphQL input representing the shared email filter."
- * enum GraphqlSharedEmailFilter {
- * 	"The exclude option."
- * 	EXCLUDE
- * 	"The include option."
- * 	INCLUDE
- * 	"The only option."
- * 	ONLY
- * }
- *
  * "Sort field. Default UPDATED_AT."
  * enum GraphqlSimpleSortMethod {
  * 	"Most recently viewed."
@@ -4230,166 +3677,12 @@ export interface NameSearch {
  * 	VIEWED_UPDATED
  * }
  *
- * "`type GraphqlSkillSubType`."
- * type GraphqlSkillSubType {
- * 	nothing: Boolean!
- * }
- *
- * "`type GraphqlSnippetSubType`."
- * type GraphqlSnippetSubType {
- * 	nothing: Boolean!
- * }
- *
  * "Sort direction. Default DESC."
  * enum GraphqlSortDirection {
  * 	"Oldest first."
  * 	ASC
  * 	"Newest first."
  * 	DESC
- * }
- *
- * "`type GraphqlSoupCalendarEvent`."
- * type GraphqlSoupCalendarEvent implements SoupEntity {
- * 	id: ID!
- * 	entityType: GraphqlSoupEntityType!
- * 	displayName: String
- * 	tags: [SoupTag!]!
- * 	properties: [GraphqlProperty!]!
- * 	title: String!
- * 	description: String
- * 	location: String
- * 	status: String!
- * 	ownerId: String!
- * 	time: JSON!
- * 	conferenceUrl: String
- * 	conferenceProvider: String
- * 	createdAt: String!
- * 	updatedAt: String!
- * }
- *
- * "`type GraphqlSoupCall`."
- * type GraphqlSoupCall implements SoupEntity {
- * 	id: ID!
- * 	entityType: GraphqlSoupEntityType!
- * 	displayName: String
- * 	tags: [SoupTag!]!
- * 	properties: [GraphqlProperty!]!
- * 	name: String
- * 	summary: String
- * 	channelId: ID!
- * 	channelName: String
- * 	createdBy: String!
- * 	status: String!
- * 	attended: Boolean!
- * 	participantCount: Int!
- * 	startedAt: String!
- * 	endedAt: String
- * 	durationMs: Int
- * }
- *
- * "`type GraphqlSoupChannel`."
- * type GraphqlSoupChannel implements SoupEntity {
- * 	id: ID!
- * 	entityType: GraphqlSoupEntityType!
- * 	displayName: String
- * 	tags: [SoupTag!]!
- * 	properties: [GraphqlProperty!]!
- * 	name: String
- * 	channelType: String!
- * 	ownerId: String!
- * 	teamId: ID
- * 	isParticipant: Boolean!
- * 	participantCount: Int!
- * 	latestMessage: GraphqlSoupChannelMessagePreview
- * 	createdAt: String!
- * 	updatedAt: String!
- * 	viewedAt: String
- * 	interactedAt: String
- * }
- *
- * "`type GraphqlSoupChannelMessage`."
- * type GraphqlSoupChannelMessage implements SoupEntity {
- * 	id: ID!
- * 	entityType: GraphqlSoupEntityType!
- * 	displayName: String
- * 	tags: [SoupTag!]!
- * 	properties: [GraphqlProperty!]!
- * 	channelId: ID!
- * 	senderId: String!
- * 	content: String!
- * 	replyCount: Int!
- * 	createdAt: String!
- * 	updatedAt: String!
- * 	effectiveUpdatedAt: String!
- * }
- *
- * "`type GraphqlSoupChannelMessagePreview`."
- * type GraphqlSoupChannelMessagePreview {
- * 	messageId: ID!
- * 	threadId: ID
- * 	senderId: String!
- * 	content: String!
- * 	createdAt: String!
- * }
- *
- * "`type GraphqlSoupChat`."
- * type GraphqlSoupChat implements SoupEntity {
- * 	id: ID!
- * 	entityType: GraphqlSoupEntityType!
- * 	displayName: String
- * 	tags: [SoupTag!]!
- * 	properties: [GraphqlProperty!]!
- * 	name: String!
- * 	ownerId: String!
- * 	projectId: ID
- * 	createdAt: String!
- * 	updatedAt: String!
- * 	viewedAt: String
- * }
- *
- * "`type GraphqlSoupDocument`."
- * type GraphqlSoupDocument implements SoupEntity {
- * 	id: ID!
- * 	entityType: GraphqlSoupEntityType!
- * 	displayName: String
- * 	tags: [SoupTag!]!
- * 	properties: [GraphqlProperty!]!
- * 	name: String!
- * 	ownerId: String!
- * 	fileType: String
- * 	projectId: ID
- * 	subType: GraphqlSoupDocumentSubType
- * 	createdAt: String!
- * 	updatedAt: String!
- * 	viewedAt: String
- * }
- *
- * "`union GraphqlSoupDocumentSubType`."
- * union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType
- *
- * "`type GraphqlSoupEmailThread`."
- * type GraphqlSoupEmailThread implements SoupEntity {
- * 	id: ID!
- * 	entityType: GraphqlSoupEntityType!
- * 	displayName: String
- * 	tags: [SoupTag!]!
- * 	properties: [GraphqlProperty!]!
- * 	name: String
- * 	snippet: String
- * 	senderName: String
- * 	senderEmail: String
- * 	inboxVisible: Boolean!
- * 	isRead: Boolean!
- * 	isDraft: Boolean!
- * 	isImportant: Boolean!
- * 	ownerId: String!
- * 	projectId: ID
- * 	attachmentCount: Int!
- * 	participantCount: Int!
- * 	sortTs: String!
- * 	createdAt: String!
- * 	updatedAt: String!
- * 	viewedAt: String
  * }
  *
  * "`enum GraphqlSoupEntityType`, curated to the nine kinds this tool serves."
@@ -4414,52 +3707,12 @@ export interface NameSearch {
  * 	FOREIGN_ENTITY
  * }
  *
- * "`type GraphqlSoupForeignEntity`."
- * type GraphqlSoupForeignEntity implements SoupEntity {
- * 	id: ID!
- * 	entityType: GraphqlSoupEntityType!
- * 	displayName: String
- * 	tags: [SoupTag!]!
- * 	properties: [GraphqlProperty!]!
- * 	foreignEntityId: String!
- * 	foreignEntitySource: String!
- * 	sourceMetadata: JSON!
- * 	createdAt: String!
- * 	updatedAt: String!
- * }
- *
- * "`type GraphqlSoupProject`."
- * type GraphqlSoupProject implements SoupEntity {
- * 	id: ID!
- * 	entityType: GraphqlSoupEntityType!
- * 	displayName: String
- * 	tags: [SoupTag!]!
- * 	properties: [GraphqlProperty!]!
- * 	name: String!
- * 	ownerId: String!
- * 	parentId: ID
- * 	createdAt: String!
- * 	updatedAt: String!
- * 	viewedAt: String
- * }
- *
- * "A string property value."
- * type GraphqlStringPropertyValue {
- * 	"The stored string."
- * 	value: String!
- * }
- *
- * "`type GraphqlTaskSubType`."
- * type GraphqlTaskSubType {
- * 	isCompleted: Boolean!
- * }
- *
- * "A scalar that can represent any JSON value."
- * scalar JSON
- *
  * type Query {
- * 	"The user's unified inbox: one page of items they can access."
- * 	soup(input: SoupQueryInput! = {entityTypes: null, filters: null, taskFilter: null, sortMethod: null, sortDirection: null, limit: null, emailPreset: null, emailView: null, inbox: null, tags: null, tagsMatch: null}): SoupQueryPage!
+ * 	"""
+ * 	The user's unified inbox: one page of items they can access. Omit
+ * 	`input` for the 50 most recently updated items of every kind.
+ * 	"""
+ * 	soup(input: SoupQueryInput): SoupQueryPage!
  * }
  *
  * "High-level email filter preset."
@@ -4477,11 +3730,11 @@ export interface NameSearch {
  * 	properties: [GraphqlProperty!]!
  * }
  *
- * "`input SoupQueryInput`. Every field optional; `Default` gives `= {}`."
+ * "`input SoupQueryInput`. Every field optional."
  * input SoupQueryInput {
  * 	"Kinds to return. Omit for all."
  * 	entityTypes: [GraphqlSoupEntityType!]
- * 	"Per-kind filter trees."
+ * 	"Per-kind filter trees. DescribeSoup shows each kind's literal."
  * 	filters: GraphqlEntityFilterAst
  * 	"Task sugar over the well-known Status / Assignees / Priority properties."
  * 	taskFilter: TaskFilter
@@ -4540,7 +3793,10 @@ export interface NameSearch {
  * 	TEAM
  * }
  *
- * "Tasks by status, assignee, priority, and date. No property ids needed."
+ * """
+ * Tasks by status, assignee, and priority. No property ids needed. Date
+ * windows go in `filters.documentFilter` like every other kind.
+ * """
  * input TaskFilter {
  * 	"Status options to include."
  * 	status: [TaskStatus!]
@@ -4548,12 +3804,8 @@ export interface NameSearch {
  * 	priority: [TaskPriority!]
  * 	"Tasks assigned to the current user."
  * 	assignedToMe: Boolean
- * 	"Assignee entity refs (`macro|<email>`) or emails."
+ * 	"Assignees as `macro|<email>` refs or plain emails."
  * 	assignedTo: [String!]
- * 	"Updated-at window."
- * 	updatedAt: DateRange
- * 	"Created-at window."
- * 	createdAt: DateRange
  * }
  *
  * "System task priority."
@@ -4581,17 +3833,6 @@ export interface NameSearch {
  * 	"Canceled."
  * 	CANCELED
  * }
- *
- * "Directs the executor to include this field or fragment only when the `if` argument is true."
- * directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
- * "Indicates that an Input Object is a OneOf Input Object (and thus requires exactly one of its field be provided)"
- * directive @oneOf on INPUT_OBJECT
- * "Directs the executor to skip this field or fragment when the `if` argument is true."
- * directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
- * schema {
- * 	query: Query
- * }
- *
  * ```
  *
  * Examples
@@ -4600,7 +3841,6 @@ export interface NameSearch {
  * query OpenTasks {
  *   soup(input: {
  *     entityTypes: [DOCUMENT]
- *     filters: { documentFilter: { literal: { subType: TASK } } }
  *     taskFilter: { status: [NOT_STARTED, IN_PROGRESS, IN_REVIEW], assignedToMe: true }
  *   }) {
  *     summary
@@ -4609,7 +3849,7 @@ export interface NameSearch {
  *   }
  * }
  *
- * # Important email since a timestamp
+ * # Important email since a timestamp (emailFilter literal from DescribeSoup EMAIL_THREAD)
  * query Signal($since: String!) {
  *   soup(input: {
  *     emailPreset: SIGNAL
