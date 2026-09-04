@@ -56,6 +56,13 @@ out-of-office event's decline settings can still be changed — they read as uns
 provider does not report the stored ones. Out-of-office events render on the grid as solid
 chips filled with their calendar color (like Google), unlike regular events' outlined chips,
 and their details card shows an `Out of office` line under the schedule.
+An event that Google carries on several of an account's calendars (a shared calendar's
+re-import of a member's own event, for example) renders as one chip. The chip takes the
+copy belonging to the first calendar that is on, preferring the account's primary: its
+title, color, reminders, and editability. Hiding that calendar switches the chip to the
+other copy rather than removing it; the event disappears only once every calendar it is
+on is hidden. The details popover and the editor act on the displayed copy, so editing or
+deleting it targets that calendar's event at Google.
 
 Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
 `<name>: <event title>`. The side panel's `Team out of office` section (shown only when the

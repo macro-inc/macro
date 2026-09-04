@@ -107,6 +107,7 @@ export function useEventEditor(props: UseEventEditorProps) {
 
       update.mutate({
         eventId: event.eventId,
+        calendarId: event.calendarId,
         patch: {
           title: values.title,
           time: values.time,

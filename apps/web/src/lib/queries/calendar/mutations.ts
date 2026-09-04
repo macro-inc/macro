@@ -64,6 +64,8 @@ function patchEventItems(
 
 export interface RsvpCalendarEventArgs {
   eventId: string;
+  /** Calendar whose copy of the event is answered; omit for the canonical copy. */
+  calendarId?: string;
   response: Exclude<AttendeeResponseStatus, 'needs_action'>;
   /** How much of a recurring series to answer for; defaults to all of it. */
   scope?: CalendarRsvpScope;
@@ -186,6 +188,7 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
     mutationFn: async (args: RsvpCalendarEventArgs) =>
       await throwOnErr(() =>
         emailClient.rsvpCalendarEvent(args.eventId, {
+          calendarId: args.calendarId,
           response: args.response,
           scope: args.scope,
           recurrenceId: args.recurrenceId,
@@ -264,6 +267,8 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
 
 export interface DeleteCalendarEventArgs {
   eventId: string;
+  /** Calendar whose copy of the event is deleted; omit for the canonical copy. */
+  calendarId?: string;
   /** How much of a recurring series to remove; defaults to all of it. */
   scope?: CalendarDeletionScope;
   /** Original-start key of the occurrence a scoped deletion targets. */
@@ -301,6 +306,7 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
     mutationFn: async (args: DeleteCalendarEventArgs) =>
       await throwOnErr(() =>
         emailClient.deleteCalendarEvent(args.eventId, {
+          calendarId: args.calendarId,
           scope: args.scope,
           recurrenceId: args.recurrenceId,
         })
@@ -329,7 +335,9 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
 
 export interface UpdateCalendarEventArgs {
   eventId: string;
-  patch: UpdateCalendarEventRequest;
+  /** Calendar whose copy of the event is patched; omit for the canonical copy. */
+  calendarId?: string;
+  patch: Omit<UpdateCalendarEventRequest, 'calendarId'>;
 }
 
 type UpdateCallbacks = MutationCallbacks<
@@ -339,27 +347,53 @@ type UpdateCallbacks = MutationCallbacks<
   CalendarMutationContext
 >;
 
+/** The per-copy fields a patch rewrites on one copy of the event. */
+function applyCopyPatch<
+  T extends Pick<
+    CalendarEventEntity,
+    'title' | 'description' | 'location' | 'reminders'
+  >,
+>(copy: T, patch: UpdateCalendarEventArgs['patch']): T {
+  const next = { ...copy };
+  if (patch.title !== undefined && patch.title !== null) {
+    next.title = patch.title;
+  }
+  if (patch.description !== undefined) {
+    next.description = patch.description;
+  }
+  if (patch.location !== undefined) {
+    next.location = patch.location;
+  }
+  if (patch.reminders !== undefined && patch.reminders !== null) {
+    next.reminders = patch.reminders;
+  }
+  return next;
+}
+
 /**
- * Applies the field patch to a cached item. Times are only patched through
- * to standalone occurrences — recurring expansion is the provider's job, so
- * recurring series keep their cached instances until the refetch lands.
+ * Applies the field patch to a cached item. Per-copy fields land on the
+ * addressed copy — the named calendar's, else the canonical (first) one —
+ * and on the entity when that copy is canonical, mirroring how the server
+ * records them. Times are only patched through to standalone occurrences —
+ * recurring expansion is the provider's job, so recurring series keep their
+ * cached instances until the refetch lands.
  */
 function applyEventPatch(
   item: CalendarOccurrenceItem,
-  patch: UpdateCalendarEventRequest
+  args: UpdateCalendarEventArgs
 ): CalendarOccurrenceItem {
-  const event = { ...item.event };
-  if (patch.title !== undefined && patch.title !== null) {
-    event.title = patch.title;
-  }
-  if (patch.description !== undefined) {
-    event.description = patch.description;
-  }
-  if (patch.location !== undefined) {
-    event.location = patch.location;
-  }
-  if (patch.reminders !== undefined && patch.reminders !== null) {
-    event.reminders = patch.reminders;
+  const { patch } = args;
+  const sources = item.event.sources ?? [];
+  const targetCalendarId = args.calendarId ?? sources[0]?.calendarId;
+  const patchesCanonical =
+    sources.length === 0 || targetCalendarId === sources[0]?.calendarId;
+  const event = patchesCanonical
+    ? applyCopyPatch(item.event, patch)
+    : { ...item.event };
+  if (sources.length > 0) {
+    event.sources = sources.map((copy) =>
+      copy.calendarId === targetCalendarId ? applyCopyPatch(copy, patch) : copy
+    );
   }
   const time = patch.time ?? undefined;
   const isStandalone =
@@ -381,7 +415,10 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
   return useMutation(() => ({
     mutationFn: async (args: UpdateCalendarEventArgs) =>
       await throwOnErr(() =>
-        emailClient.updateCalendarEvent(args.eventId, args.patch)
+        emailClient.updateCalendarEvent(args.eventId, {
+          ...args.patch,
+          calendarId: args.calendarId,
+        })
       ),
     ...withCallbacks<
       CalendarEventEntity,
@@ -392,9 +429,7 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
       {
         onMutate: (args) =>
           patchOccurrenceCaches(
-            patchEventItems(args.eventId, (item) =>
-              applyEventPatch(item, args.patch)
-            )
+            patchEventItems(args.eventId, (item) => applyEventPatch(item, args))
           ),
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: (_data, _error, args) => {

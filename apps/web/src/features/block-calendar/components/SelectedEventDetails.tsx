@@ -305,6 +305,7 @@ function DeleteEventDialog(
     const effectiveScope = isRecurring() ? scope() : 'all';
     deleteEvent.mutate({
       eventId: props.event.eventId,
+      calendarId: props.event.calendarId,
       scope: effectiveScope,
       recurrenceId:
         effectiveScope === 'all'

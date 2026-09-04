@@ -9,6 +9,7 @@ import { type Accessor, createMemo } from 'solid-js';
 import {
   type CalendarEvent,
   type CalendarSource,
+  isCalendarEventVisible,
   mapCalendarOccurrence,
 } from '../types';
 import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
@@ -49,23 +50,25 @@ export function useCalendarOccurrenceData(
       };
     }
   );
+  // Each occurrence shows the copy of the event that belongs to a calendar
+  // the viewer has on, so toggling a calendar re-maps rather than filters.
   const events = createMemo(() => {
     if (!isRangeSupported()) return [];
     const sourceById = options.sourceById?.();
     return (occurrencesQuery.data?.items ?? []).map((item) =>
-      mapCalendarOccurrence(
-        item,
-        item.event.calendarId != null
-          ? sourceById?.get(item.event.calendarId)
-          : undefined
-      )
+      mapCalendarOccurrence(item, {
+        sourceById,
+        isSourceVisible: options.isSourceVisible,
+      })
     );
   });
-  const visibleEvents = createMemo(() =>
-    events().filter(
-      (event) => options.isSourceVisible?.(event.calendar.id) !== false
-    )
-  );
+  const visibleEvents = createMemo(() => {
+    const isSourceVisible = options.isSourceVisible;
+    if (!isSourceVisible) return events();
+    return events().filter((event) =>
+      isCalendarEventVisible(event, isSourceVisible)
+    );
+  });
   const eventsById = createMemo(
     () => new Map(events().map((event) => [event.id, event]))
   );

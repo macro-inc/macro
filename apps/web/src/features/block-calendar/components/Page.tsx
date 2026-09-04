@@ -305,7 +305,7 @@ export function Page(props: {
     }
 
     updateEventTime.mutate(
-      { eventId: event.eventId, patch: { time } },
+      { eventId: event.eventId, calendarId: event.calendarId, patch: { time } },
       {
         onError: (error) => {
           change.revert();

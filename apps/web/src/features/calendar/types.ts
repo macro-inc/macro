@@ -1,5 +1,7 @@
 import type { EventInput } from '@fullcalendar/core';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
+import type { CalendarEvent as CalendarEventEntity } from '@service-storage/generated/schemas/calendarEvent';
+import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
@@ -51,7 +53,7 @@ export interface CalendarEvent {
   recurrenceId?: string;
   /** Whether this materialized occurrence was cancelled. */
   isCancelled: boolean;
-  /** Whether the canonical event source is read-only. */
+  /** Whether the displayed copy's calendar prohibits editing it. */
   isReadOnly: boolean;
   /** Direct conference join URL, when available. */
   conferenceUrl?: string;
@@ -74,8 +76,18 @@ export interface CalendarEvent {
   reminders?: EventReminders;
   /** Provider event type; absent means a regular event. */
   eventType?: EventType;
-  /** Canonical calendar entity id, for resolving default reminders. */
+  /**
+   * Calendar of the displayed copy: the first visible one of the event's
+   * copies, preferring the primary. Mutations address this copy, and its
+   * calendar's defaults resolve the event's reminders.
+   */
   calendarId?: string;
+  /**
+   * Every visible calendar this event is synced from. A shared calendar can
+   * re-import an event a member also owns, so one event belongs to several
+   * calendars at once and stays visible while any of them is shown.
+   */
+  sourceCalendarIds: string[];
   /** Raw recurrence rules attached to the canonical event. */
   recurrenceLines: string[];
   /** Original IANA timezone for a timed occurrence. */
@@ -107,10 +119,53 @@ function optionalText(value: string | null | undefined) {
   return value ?? undefined;
 }
 
-/** Maps one backend occurrence projection into the calendar event model. */
+/** How an occurrence is attributed to the calendars the viewer is showing. */
+export interface CalendarOccurrenceMappingOptions {
+  sourceById?: ReadonlyMap<string, CalendarSource>;
+  isSourceVisible?: (sourceId: string) => boolean;
+}
+
+/**
+ * The copy of an event to display: the first copy whose calendar is shown,
+ * in the server's canonical-first order (primary calendar, then freshest),
+ * falling back to the canonical copy when none of them is shown.
+ */
+export function selectEventSource(
+  event: Pick<CalendarEventEntity, 'sources'>,
+  isSourceVisible?: (sourceId: string) => boolean
+): CalendarEventSourceContent | undefined {
+  const sources = event.sources ?? [];
+  return (
+    sources.find((source) => isSourceVisible?.(source.calendarId) !== false) ??
+    sources[0]
+  );
+}
+
+/**
+ * Whether an event renders under a per-source visibility predicate: it
+ * stays visible while any of its calendars is shown. The displayed calendar
+ * is the fallback for events without copy data.
+ */
+export function isCalendarEventVisible(
+  event: Pick<CalendarEvent, 'calendar' | 'sourceCalendarIds'>,
+  isSourceVisible: (sourceId: string) => boolean
+): boolean {
+  const sourceIds =
+    event.sourceCalendarIds.length > 0
+      ? event.sourceCalendarIds
+      : [event.calendar.id];
+  return sourceIds.some((id) => isSourceVisible(id));
+}
+
+/**
+ * Maps one backend occurrence projection into the calendar event model,
+ * showing the copy that belongs to a calendar the viewer has on. The entity
+ * itself carries the canonical copy's content, so an event with no copy
+ * data reads the same as its first copy.
+ */
 export function mapCalendarOccurrence(
   item: CalendarOccurrenceItem,
-  source: CalendarSource = DEFAULT_CALENDAR_SOURCE
+  options: CalendarOccurrenceMappingOptions = {}
 ): CalendarEvent {
   const { event, occurrence } = item;
   const time = occurrence.time;
@@ -118,6 +173,12 @@ export function mapCalendarOccurrence(
     time.kind === 'timed'
       ? { allDay: false, start: time.startsAt, end: time.endsAt }
       : { allDay: true, start: time.startDate, end: time.endDate };
+  const selected = selectEventSource(event, options.isSourceVisible);
+  const content = selected ?? event;
+  const calendarId = selected?.calendarId ?? event.calendarId ?? undefined;
+  const source =
+    (calendarId ? options.sourceById?.get(calendarId) : undefined) ??
+    DEFAULT_CALENDAR_SOURCE;
 
   return {
     ...range,
@@ -127,24 +188,25 @@ export function mapCalendarOccurrence(
     recurrenceId: occurrence.recurrenceId ?? undefined,
     recurrenceLines: event.recurrenceLines ?? [],
     isCancelled: occurrence.isCancelled,
-    isReadOnly: event.isReadOnly,
+    isReadOnly: content.isReadOnly,
     conferenceUrl: event.conferenceUrl ?? undefined,
     conferenceProvider:
       (event.conferenceProvider as ConferenceProvider | null | undefined) ??
       undefined,
     organizerName: event.organizerName ?? undefined,
     organizerEmail: event.organizerEmail ?? undefined,
-    creatorName: optionalText(event.creatorName),
-    creatorEmail: optionalText(event.creatorEmail),
+    creatorName: optionalText(content.creatorName),
+    creatorEmail: optionalText(content.creatorEmail),
     attendees: event.attendees ?? [],
-    reminders: event.reminders ?? undefined,
-    eventType: event.eventType ?? undefined,
-    calendarId: event.calendarId ?? undefined,
+    reminders: content.reminders ?? undefined,
+    eventType: content.eventType ?? undefined,
+    calendarId,
+    sourceCalendarIds: (event.sources ?? []).map((copy) => copy.calendarId),
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
-    title: event.title,
+    title: content.title,
     calendar: source,
-    location: event.location ?? undefined,
-    description: event.description ?? undefined,
+    location: content.location ?? undefined,
+    description: content.description ?? undefined,
   };
 }
 
@@ -163,7 +225,10 @@ export function mapCalendarEventToFullCalendar(
   const interactionEditable = timeEditable && allDayRange === undefined;
 
   return {
-    id: event.id,
+    // FullCalendar re-applies the calendar color only when an event remounts,
+    // so a chip that switches to another copy (its calendar was hidden) keys
+    // a fresh event; extendedProps keeps the stable occurrence id.
+    id: JSON.stringify([event.id, event.calendar.id, event.calendar.color]),
     title: event.title,
     start: allDayRange?.start ?? event.start,
     end: allDayRange?.end ?? event.end,

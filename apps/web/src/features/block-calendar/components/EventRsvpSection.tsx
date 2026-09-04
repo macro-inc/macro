@@ -65,6 +65,7 @@ export function EventRsvpSection(props: {
   ) => {
     rsvp.mutate({
       eventId: props.event.eventId,
+      calendarId: props.event.calendarId,
       response,
       scope: effectiveScope,
       recurrenceId:
