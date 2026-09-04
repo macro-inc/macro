@@ -837,6 +837,7 @@ export function ChannelsRail(props: {
                       containerClass="w-full"
                       class="flex min-h-0 w-full flex-col items-center gap-0.5"
                       activityTargetId={activityTargetId('channels')}
+                      activityTooltip
                       onActivityVisible={(targetId) =>
                         clearVisibleActivity('channels', targetId)
                       }
@@ -908,6 +909,7 @@ export function ChannelsRail(props: {
                       containerClass="w-full"
                       class="flex min-h-0 w-full flex-col items-center gap-0.5"
                       activityTargetId={activityTargetId('direct_messages')}
+                      activityTooltip
                       onActivityVisible={(targetId) =>
                         clearVisibleActivity('direct_messages', targetId)
                       }
