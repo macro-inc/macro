@@ -539,7 +539,9 @@ export function Channel(props: ChannelProps) {
       if (!messagesQuery.isSuccess || messagesQuery.hasPreviousPage)
         return false;
       // The message index can still contain the old page during a query reset.
-      const latestMessageId = messagesQuery.data?.pages[0]?.items[0]?.id;
+      const latestMessageId = messagesQuery.data?.pages.find(
+        (page) => page.items.length > 0
+      )?.items[0]?.id;
       return (
         latestMessageId !== undefined &&
         messageIndex.keys.at(-1) === latestMessageId &&
