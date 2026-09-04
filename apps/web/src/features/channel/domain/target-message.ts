@@ -1,310 +1,235 @@
-import { match } from 'ts-pattern';
+import type { MachineDef, Transition } from '@macro-inc/machine';
+
+/**
+ * Target-message navigation (deep link / click-to-message) as a state machine.
+ *
+ * Pure: no solid-js, no timers, no cache. The runner in
+ * `../Channel/create-target-message-controller.ts` owns the flash timer, the
+ * readiness memo, and cache restoration. This module owns every decision
+ * about what a navigation means.
+ *
+ * Lifecycle:  navigate → targeting → flashing → idle
+ *
+ * Only occurrences change state: a navigation, a scroll acknowledgement from
+ * ChannelThread, the flash timer, a release, a reset. Whether the ThreadList
+ * is *ready* (navigation handle present, initial scroll done, target in the
+ * loaded window) is a condition over inputs the runner owns, so it is not a
+ * state — it is passed into the selectors that depend on it.
+ *
+ * The ChannelThread contract this encodes (Channel.tsx derives ChannelThread's
+ * props from `pendingScrollTargetId` and `pendingTargetReplyId`):
+ *
+ * - A root-only target (`replyId` absent) is positioned by ChannelThread as
+ *   soon as it sees `pendingScrollTargetId`, and acked with `root-scroll-done`.
+ * - A nested target (`replyId` present) must not scroll the whole row first.
+ *   ChannelThread scrolls the reply's measured element only once
+ *   `pendingScrollTargetId` clears while `pendingTargetReplyId` is set. That
+ *   clearing is readiness itself, so the reply scroll is the only viewport
+ *   movement, and ChannelThread never acks the root row of a nested target.
+ *
+ * `loadAround` is pagination context, not control state: it selects which
+ * messages query Channel.tsx reads from and survives highlight release so
+ * pagination isn't disturbed. Only `reset` and a successful restore clear it.
+ * The restore is issued when the scroll is acknowledged — the one occurrence
+ * at which the row is guaranteed mounted and the around data present.
+ */
 
 export type Target = {
-  messageId: string;
-  replyId?: string;
+  readonly messageId: string;
+  readonly replyId?: string | undefined;
 };
 
-export type Control =
-  | { t: 'idle' }
-  | { t: 'loading'; target: Target }
-  | { t: 'awaiting-viewport'; target: Target }
-  | { t: 'scrolling'; target: Target; rootDone: boolean }
-  | { t: 'flashing'; target: Target };
+type WithLoadAround = { readonly loadAround: string | undefined };
 
-export type MachineState = {
-  control: Control;
-  loadAround: string | undefined;
-};
+export type State = WithLoadAround &
+  (
+    | { readonly t: 'idle' }
+    /** Navigated; the target's scroll has not been acknowledged. */
+    | { readonly t: 'targeting'; readonly target: Target }
+    /** Positioned. Highlight is showing; released when the flash elapses. */
+    | { readonly t: 'flashing'; readonly target: Target }
+  );
 
-export type TargetEvent =
+export type Event =
+  /**
+   * `targetLoaded`: the message is already in the loaded window.
+   * `ready`: the ThreadList is ready for the *current* target (see runner);
+   * needed only for the dedupe rule, which mirrors `pendingScrollTargetId`.
+   */
   | {
-      t: 'navigate';
-      messageId: string;
-      replyId?: string;
-      targetLoaded: boolean;
+      readonly t: 'navigate';
+      readonly target: Target;
+      readonly targetLoaded: boolean;
+      readonly ready: boolean;
     }
-  | { t: 'target-loaded' }
-  | { t: 'viewport-ready' }
-  | { t: 'root-scroll-done'; messageId: string }
-  | { t: 'reply-scroll-done'; messageId: string; replyId: string }
-  | { t: 'flash-elapsed'; messageId: string }
-  | { t: 'release'; messageId: string }
-  | { t: 'pagination-restored' }
-  | { t: 'reset' };
+  | { readonly t: 'root-scroll-done'; readonly messageId: string }
+  | {
+      readonly t: 'reply-scroll-done';
+      readonly messageId: string;
+      readonly replyId: string;
+    }
+  | { readonly t: 'flash-elapsed' }
+  /** The around-query's data was promoted to the default query. */
+  | { readonly t: 'pagination-restored' }
+  /** Release the highlight if it still points at `messageId`; leaves `loadAround` alone. */
+  | { readonly t: 'release'; readonly messageId: string }
+  /** Channel changed. Clears everything including `loadAround`. */
+  | { readonly t: 'reset' };
 
-export type Command =
-  | { t: 'schedule-flash'; messageId: string }
-  | { t: 'cancel-flash' }
-  | { t: 'restore-default-pagination'; loadAround: string };
-
-type Reduction = {
-  state: MachineState;
-  commands: Command[];
+export type Command = {
+  readonly t: 'restore-default-pagination';
+  readonly loadAround: string;
 };
 
-export const idleState: MachineState = {
-  control: { t: 'idle' },
-  loadAround: undefined,
+type Result = Transition<State, Command> | undefined;
+
+const RESET: Transition<State, Command> = {
+  state: { t: 'idle', loadAround: undefined },
 };
 
-export function makeTarget(messageId: string, replyId?: string): Target {
-  return replyId === undefined ? { messageId } : { messageId, replyId };
-}
-
-function unchanged(state: MachineState): Reduction {
-  return { state, commands: [] };
-}
-
-function changed(state: MachineState, commands: Command[] = []): Reduction {
-  return { state, commands };
-}
-
-function controlTarget(control: Control): Target | undefined {
-  return match(control)
-    .with({ t: 'idle' }, () => undefined)
-    .with({ t: 'loading' }, ({ target }) => target)
-    .with({ t: 'awaiting-viewport' }, ({ target }) => target)
-    .with({ t: 'scrolling' }, ({ target }) => target)
-    .with({ t: 'flashing' }, ({ target }) => target)
-    .exhaustive();
-}
-
-export function initialState(input: {
-  messageId?: string;
-  replyId?: string;
-  targetLoaded?: boolean;
-}): MachineState {
-  if (input.messageId === undefined) return idleState;
-
-  const target = makeTarget(input.messageId, input.replyId);
+function navigate(s: State, e: Extract<Event, { t: 'navigate' }>): Result {
   return {
-    control: input.targetLoaded
-      ? { t: 'awaiting-viewport', target }
-      : { t: 'loading', target },
-    loadAround: input.messageId,
+    state: {
+      t: 'targeting',
+      target: e.target,
+      // A target already inside the loaded window keeps the current around
+      // anchor, so a rapid second navigation doesn't re-center pagination
+      // while the first around-query is still in flight. This was a
+      // documented hack; it is now a table row with a test.
+      loadAround: e.targetLoaded ? s.loadAround : e.target.messageId,
+    },
   };
 }
 
-function reduceNavigate(
-  state: MachineState,
-  event: Extract<TargetEvent, { t: 'navigate' }>
-): Reduction {
-  const currentTarget = controlTarget(state.control);
-  const sameTarget =
-    currentTarget?.messageId === event.messageId &&
-    currentTarget?.replyId === event.replyId;
-  if (sameTarget && pendingScrollTargetId(state) === event.messageId) {
-    return unchanged(state);
-  }
+/** Scroll acknowledged: flash, and promote the around window if one is anchored. */
+function flash(s: Extract<State, { t: 'targeting' }>): Result {
+  return {
+    state: { t: 'flashing', target: s.target, loadAround: s.loadAround },
+    commands:
+      s.loadAround === undefined
+        ? []
+        : [{ t: 'restore-default-pagination', loadAround: s.loadAround }],
+  };
+}
 
-  const target = makeTarget(event.messageId, event.replyId);
-  if (!event.targetLoaded) {
-    return changed(
-      {
-        control: { t: 'loading', target },
-        loadAround: event.messageId,
-      },
-      [{ t: 'cancel-flash' }]
-    );
-  }
+function release(s: State): Result {
+  return { state: { t: 'idle', loadAround: s.loadAround } };
+}
 
-  return changed(
-    {
-      control: { t: 'awaiting-viewport', target },
-      loadAround: state.loadAround,
+function clearLoadAround(s: State): Result {
+  return { state: { ...s, loadAround: undefined } };
+}
+
+const isSameTarget = (a: Target, b: Target) =>
+  a.messageId === b.messageId && a.replyId === b.replyId;
+
+const isRoot = (t: Target) => t.replyId === undefined;
+
+export const targetMessageDef: MachineDef<State, Event, Command> = {
+  idle: {
+    on: (s, e) => {
+      switch (e.t) {
+        case 'navigate':
+          return navigate(s, e);
+        case 'pagination-restored':
+          return clearLoadAround(s);
+        case 'reset':
+          return RESET;
+        default:
+          return undefined;
+      }
     },
-    [{ t: 'cancel-flash' }]
-  );
-}
+  },
 
-function reduceTargetLoaded(state: MachineState): Reduction {
-  return match(state.control)
-    .with({ t: 'idle' }, () => unchanged(state))
-    .with({ t: 'loading' }, ({ target }) =>
-      changed({
-        control: { t: 'awaiting-viewport', target },
-        loadAround: state.loadAround,
-      })
-    )
-    .with({ t: 'awaiting-viewport' }, () => unchanged(state))
-    .with({ t: 'scrolling' }, () => unchanged(state))
-    .with({ t: 'flashing' }, () => unchanged(state))
-    .exhaustive();
-}
+  targeting: {
+    on: (s, e) => {
+      switch (e.t) {
+        case 'navigate':
+          return isSameTarget(s.target, e.target) &&
+            pendingScrollTargetId(s, e.ready) !== undefined
+            ? undefined
+            : navigate(s, e);
 
-function reduceViewportReady(state: MachineState): Reduction {
-  return match(state.control)
-    .with({ t: 'idle' }, () => unchanged(state))
-    .with({ t: 'loading' }, () => unchanged(state))
-    .with({ t: 'awaiting-viewport' }, ({ target }) =>
-      changed(
-        {
-          control: {
-            t: 'scrolling',
-            target,
-            rootDone: target.replyId !== undefined,
-          },
-          loadAround: state.loadAround,
-        },
-        state.loadAround === undefined
-          ? []
-          : [
-              {
-                t: 'restore-default-pagination',
-                loadAround: state.loadAround,
-              },
-            ]
-      )
-    )
-    .with({ t: 'scrolling' }, () => unchanged(state))
-    .with({ t: 'flashing' }, () => unchanged(state))
-    .exhaustive();
-}
+        case 'root-scroll-done':
+          return isRoot(s.target) && e.messageId === s.target.messageId
+            ? flash(s)
+            : undefined;
 
-function reduceRootScrollDone(
-  state: MachineState,
-  event: Extract<TargetEvent, { t: 'root-scroll-done' }>
-): Reduction {
-  return match(state.control)
-    .with({ t: 'idle' }, () => unchanged(state))
-    .with({ t: 'loading' }, () => unchanged(state))
-    .with({ t: 'awaiting-viewport' }, () => unchanged(state))
-    .with({ t: 'scrolling' }, ({ target }) => {
-      if (
-        target.replyId !== undefined ||
-        target.messageId !== event.messageId
-      ) {
-        return unchanged(state);
+        case 'reply-scroll-done':
+          return e.messageId === s.target.messageId &&
+            e.replyId === s.target.replyId
+            ? flash(s)
+            : undefined;
+
+        case 'pagination-restored':
+          return clearLoadAround(s);
+        case 'release':
+          return e.messageId === s.target.messageId ? release(s) : undefined;
+        case 'reset':
+          return RESET;
+        default:
+          return undefined;
       }
+    },
+  },
 
-      return changed(
-        {
-          control: { t: 'flashing', target },
-          loadAround: state.loadAround,
-        },
-        [{ t: 'schedule-flash', messageId: target.messageId }]
-      );
-    })
-    .with({ t: 'flashing' }, () => unchanged(state))
-    .exhaustive();
-}
-
-function reduceReplyScrollDone(
-  state: MachineState,
-  event: Extract<TargetEvent, { t: 'reply-scroll-done' }>
-): Reduction {
-  return match(state.control)
-    .with({ t: 'idle' }, () => unchanged(state))
-    .with({ t: 'loading' }, () => unchanged(state))
-    .with({ t: 'awaiting-viewport' }, () => unchanged(state))
-    .with({ t: 'scrolling' }, ({ target }) => {
-      if (
-        target.messageId !== event.messageId ||
-        target.replyId !== event.replyId
-      ) {
-        return unchanged(state);
+  flashing: {
+    on: (s, e) => {
+      switch (e.t) {
+        case 'navigate':
+          return navigate(s, e);
+        case 'flash-elapsed':
+          return release(s);
+        case 'pagination-restored':
+          return clearLoadAround(s);
+        case 'release':
+          return e.messageId === s.target.messageId ? release(s) : undefined;
+        case 'reset':
+          return RESET;
+        default:
+          return undefined;
       }
+    },
+  },
+};
 
-      return changed(
-        {
-          control: { t: 'flashing', target },
-          loadAround: state.loadAround,
-        },
-        [{ t: 'schedule-flash', messageId: target.messageId }]
-      );
-    })
-    .with({ t: 'flashing' }, () => unchanged(state))
-    .exhaustive();
+export function initialState(init: {
+  readonly messageId?: string | undefined;
+  readonly replyId?: string | undefined;
+}): State {
+  if (init.messageId === undefined) return { t: 'idle', loadAround: undefined };
+  return {
+    t: 'targeting',
+    target: { messageId: init.messageId, replyId: init.replyId },
+    loadAround: init.messageId,
+  };
 }
 
-function reduceFlashElapsed(
-  state: MachineState,
-  event: Extract<TargetEvent, { t: 'flash-elapsed' }>
-): Reduction {
-  return match(state.control)
-    .with({ t: 'idle' }, () => unchanged(state))
-    .with({ t: 'loading' }, () => unchanged(state))
-    .with({ t: 'awaiting-viewport' }, () => unchanged(state))
-    .with({ t: 'scrolling' }, () => unchanged(state))
-    .with({ t: 'flashing' }, ({ target }) =>
-      target.messageId === event.messageId
-        ? changed({ control: { t: 'idle' }, loadAround: state.loadAround })
-        : unchanged(state)
-    )
-    .exhaustive();
-}
+export const activeTargetMessageId = (s: State): string | undefined =>
+  s.t === 'idle' ? undefined : s.target.messageId;
 
-function reduceRelease(
-  state: MachineState,
-  event: Extract<TargetEvent, { t: 'release' }>
-): Reduction {
-  const target = controlTarget(state.control);
-  if (target?.messageId !== event.messageId) return unchanged(state);
+export const activeTargetMessageReplyId = (s: State): string | undefined =>
+  s.t === 'idle' ? undefined : s.target.replyId;
 
-  return changed({ control: { t: 'idle' }, loadAround: state.loadAround }, [
-    { t: 'cancel-flash' },
-  ]);
-}
+/**
+ * The root row ChannelThread should position, if any. A root-only target is
+ * pending until acknowledged. A nested target's root row is pending only
+ * until the ThreadList is ready; readiness clears it so the reply scroll can
+ * begin.
+ */
+export const pendingScrollTargetId = (
+  s: State,
+  ready: boolean
+): string | undefined =>
+  s.t === 'targeting' && (isRoot(s.target) || !ready)
+    ? s.target.messageId
+    : undefined;
 
-export function reduce(state: MachineState, event: TargetEvent): Reduction {
-  return match(event)
-    .with({ t: 'navigate' }, (next) => reduceNavigate(state, next))
-    .with({ t: 'target-loaded' }, () => reduceTargetLoaded(state))
-    .with({ t: 'viewport-ready' }, () => reduceViewportReady(state))
-    .with({ t: 'root-scroll-done' }, (next) =>
-      reduceRootScrollDone(state, next)
-    )
-    .with({ t: 'reply-scroll-done' }, (next) =>
-      reduceReplyScrollDone(state, next)
-    )
-    .with({ t: 'flash-elapsed' }, (next) => reduceFlashElapsed(state, next))
-    .with({ t: 'release' }, (next) => reduceRelease(state, next))
-    .with({ t: 'pagination-restored' }, () =>
-      changed({ control: state.control, loadAround: undefined })
-    )
-    .with({ t: 'reset' }, () => changed(idleState, [{ t: 'cancel-flash' }]))
-    .exhaustive();
-}
+/** The reply ChannelThread should position once the root row clears. */
+export const pendingTargetReplyId = (s: State): string | undefined =>
+  s.t === 'targeting' ? s.target.replyId : undefined;
 
-export function activeTargetMessageId(state: MachineState): string | undefined {
-  return controlTarget(state.control)?.messageId;
-}
-
-export function activeTargetMessageReplyId(
-  state: MachineState
-): string | undefined {
-  return controlTarget(state.control)?.replyId;
-}
-
-export function loadAroundMessageId(state: MachineState): string | undefined {
-  return state.loadAround;
-}
-
-export function pendingScrollTargetId(state: MachineState): string | undefined {
-  return match(state.control)
-    .with({ t: 'idle' }, () => undefined)
-    .with({ t: 'loading' }, ({ target }) => target.messageId)
-    .with({ t: 'awaiting-viewport' }, ({ target }) => target.messageId)
-    .with({ t: 'scrolling', rootDone: false }, ({ target }) => target.messageId)
-    .with({ t: 'scrolling', rootDone: true }, () => undefined)
-    .with({ t: 'flashing' }, () => undefined)
-    .exhaustive();
-}
-
-export function pendingTargetReplyId(state: MachineState): string | undefined {
-  return match(state.control)
-    .with({ t: 'idle' }, () => undefined)
-    .with({ t: 'loading' }, ({ target }) => target.replyId)
-    .with({ t: 'awaiting-viewport' }, ({ target }) => target.replyId)
-    .with({ t: 'scrolling' }, ({ target }) => target.replyId)
-    .with({ t: 'flashing' }, () => undefined)
-    .exhaustive();
-}
-
-export function hasPendingElementScroll(state: MachineState): boolean {
-  return (
-    pendingScrollTargetId(state) !== undefined ||
-    pendingTargetReplyId(state) !== undefined
-  );
-}
+/** Any scroll still owed to the target (root or reply). Used by Channel.tsx for keep-mounted. */
+export const hasPendingElementScroll = (s: State, ready: boolean): boolean =>
+  pendingScrollTargetId(s, ready) !== undefined ||
+  pendingTargetReplyId(s) !== undefined;

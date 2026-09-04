@@ -1,474 +1,373 @@
+import { simulate, step } from '@macro-inc/machine';
 import { describe, expect, it } from 'vitest';
 import {
   activeTargetMessageId,
   activeTargetMessageReplyId,
   type Command,
+  type Event,
   hasPendingElementScroll,
-  idleState,
   initialState,
-  loadAroundMessageId,
-  type MachineState,
-  makeTarget,
   pendingScrollTargetId,
   pendingTargetReplyId,
-  reduce,
+  type State,
   type Target,
-  type TargetEvent,
+  targetMessageDef,
 } from './target-message';
 
-const loading = (
-  value: Target,
-  loadAround: string | undefined = value.messageId
-): MachineState => ({
-  control: { t: 'loading', target: value },
+const ROOT: Target = { messageId: 'm1', replyId: undefined };
+const NESTED: Target = { messageId: 'm1', replyId: 'r1' };
+const OTHER: Target = { messageId: 'm2', replyId: undefined };
+
+const idle = (loadAround?: string): State => ({ t: 'idle', loadAround });
+const targeting = (target: Target, loadAround?: string): State => ({
+  t: 'targeting',
+  target,
+  loadAround,
+});
+const flashing = (target: Target, loadAround?: string): State => ({
+  t: 'flashing',
+  target,
   loadAround,
 });
 
-const awaitingViewport = (
-  value: Target,
-  loadAround: string | undefined = value.messageId
-): MachineState => ({
-  control: { t: 'awaiting-viewport', target: value },
+const nav = (target: Target, targetLoaded: boolean, ready = false): Event => ({
+  t: 'navigate',
+  target,
+  targetLoaded,
+  ready,
+});
+const rootDone = (messageId = 'm1'): Event => ({
+  t: 'root-scroll-done',
+  messageId,
+});
+const replyDone = (messageId = 'm1', replyId = 'r1'): Event => ({
+  t: 'reply-scroll-done',
+  messageId,
+  replyId,
+});
+const RESTORED: Event = { t: 'pagination-restored' };
+const ELAPSED: Event = { t: 'flash-elapsed' };
+const RESET: Event = { t: 'reset' };
+const release = (messageId = 'm1'): Event => ({ t: 'release', messageId });
+
+const RESTORE = (loadAround: string): Command => ({
+  t: 'restore-default-pagination',
   loadAround,
 });
 
-const scrolling = (
-  value: Target,
-  rootDone = false,
-  loadAround: string | undefined = value.messageId
-): MachineState => ({
-  control: { t: 'scrolling', target: value, rootDone },
-  loadAround,
+type Expected = { state: State; commands?: Command[] } | undefined;
+
+function check(from: State, event: Event, expected: Expected) {
+  const result = step(targetMessageDef, from, event);
+  if (expected === undefined) {
+    expect(result).toBeUndefined();
+    return;
+  }
+  expect(result?.state).toEqual(expected.state);
+  expect(result?.commands ?? []).toEqual(expected.commands ?? []);
+}
+
+describe('navigate', () => {
+  it.each<[string, State, Event, Expected]>([
+    [
+      'unloaded target anchors pagination on itself',
+      idle(),
+      nav(ROOT, false),
+      { state: targeting(ROOT, 'm1') },
+    ],
+    [
+      'loaded target keeps the existing anchor (rapid-navigation rule)',
+      idle('m0'),
+      nav(ROOT, true),
+      { state: targeting(ROOT, 'm0') },
+    ],
+    [
+      'loaded target with no anchor leaves it unset',
+      idle(),
+      nav(ROOT, true),
+      { state: targeting(ROOT, undefined) },
+    ],
+    [
+      'same root target while pending dedupes',
+      targeting(ROOT),
+      nav(ROOT, true),
+      undefined,
+    ],
+    [
+      'same root target dedupes even once ready (root row still pending)',
+      targeting(ROOT),
+      nav(ROOT, true, true),
+      undefined,
+    ],
+    [
+      'same nested target before readiness dedupes',
+      targeting(NESTED),
+      nav(NESTED, true, false),
+      undefined,
+    ],
+    [
+      'same nested target after readiness re-navigates (root row no longer pending)',
+      targeting(NESTED, 'm1'),
+      nav(NESTED, true, true),
+      { state: targeting(NESTED, 'm1') },
+    ],
+    [
+      'different reply on the same message is a new target',
+      targeting(ROOT),
+      nav(NESTED, true),
+      { state: targeting(NESTED, undefined) },
+    ],
+    [
+      'navigating during a flash re-targets (timer is disposed by the runner)',
+      flashing(ROOT, 'm1'),
+      nav(ROOT, true),
+      { state: targeting(ROOT, 'm1') },
+    ],
+    [
+      'superseding a pending target re-anchors when the new one is unloaded',
+      targeting(ROOT, 'm1'),
+      nav(OTHER, false),
+      { state: targeting(OTHER, 'm2') },
+    ],
+  ])('%s', (_name, from, event, expected) => check(from, event, expected));
 });
 
-const flashing = (
-  value: Target,
-  loadAround: string | undefined = value.messageId
-): MachineState => ({
-  control: { t: 'flashing', target: value },
-  loadAround,
+describe('root-scroll-done', () => {
+  it.each<[string, State, Event, Expected]>([
+    [
+      'root-only target → flashing, restoring the anchored window',
+      targeting(ROOT, 'm1'),
+      rootDone(),
+      { state: flashing(ROOT, 'm1'), commands: [RESTORE('m1')] },
+    ],
+    [
+      'root-only target without an anchor → flashing, nothing to restore',
+      targeting(ROOT),
+      rootDone(),
+      { state: flashing(ROOT) },
+    ],
+    ['wrong row is ignored', targeting(ROOT), rootDone('m9'), undefined],
+    [
+      'nested target ignores a root ack (its root row is never positioned)',
+      targeting(NESTED),
+      rootDone(),
+      undefined,
+    ],
+    ['ignored while flashing', flashing(ROOT), rootDone(), undefined],
+    ['ignored while idle', idle(), rootDone(), undefined],
+  ])('%s', (_name, from, event, expected) => check(from, event, expected));
 });
 
-const noAround = (state: MachineState): MachineState => ({
-  ...state,
-  loadAround: undefined,
+describe('reply-scroll-done', () => {
+  it.each<[string, State, Event, Expected]>([
+    [
+      'nested target → flashing, restoring the anchored window',
+      targeting(NESTED, 'm1'),
+      replyDone(),
+      { state: flashing(NESTED, 'm1'), commands: [RESTORE('m1')] },
+    ],
+    [
+      'wrong reply is ignored',
+      targeting(NESTED),
+      replyDone('m1', 'r9'),
+      undefined,
+    ],
+    [
+      'wrong message is ignored',
+      targeting(NESTED),
+      replyDone('m9', 'r1'),
+      undefined,
+    ],
+    [
+      'root-only target ignores a reply ack',
+      targeting(ROOT),
+      replyDone(),
+      undefined,
+    ],
+    ['ignored while flashing', flashing(NESTED), replyDone(), undefined],
+  ])('%s', (_name, from, event, expected) => check(from, event, expected));
 });
 
-const result = (
-  state: MachineState,
-  commands: Command[] = []
-): ReturnType<typeof reduce> => ({
-  state,
-  commands,
+describe('pagination-restored', () => {
+  it.each<[string, State]>([
+    ['idle', idle('m1')],
+    ['targeting', targeting(ROOT, 'm1')],
+    ['flashing', flashing(ROOT, 'm1')],
+  ])(
+    'clears the anchor and preserves everything else while %s',
+    (_name, from) => {
+      check(from, RESTORED, { state: { ...from, loadAround: undefined } });
+    }
+  );
 });
 
-const check = (
-  state: MachineState,
-  event: TargetEvent,
-  expected: ReturnType<typeof reduce>
-) => expect(reduce(state, event)).toEqual(expected);
+describe('flash-elapsed', () => {
+  it('releases the highlight and keeps the pagination anchor', () =>
+    check(flashing(ROOT, 'm1'), ELAPSED, { state: idle('m1') }));
+
+  it.each<[string, State]>([
+    ['idle', idle()],
+    ['targeting', targeting(ROOT)],
+  ])('is ignored while %s (no timer exists there)', (_name, from) =>
+    check(from, ELAPSED, undefined)
+  );
+});
+
+describe('release', () => {
+  it.each<[string, State, Event, Expected]>([
+    [
+      'matching targeting → idle, anchor kept',
+      targeting(ROOT, 'm1'),
+      release(),
+      { state: idle('m1') },
+    ],
+    [
+      'matching flashing → idle',
+      flashing(ROOT, 'm1'),
+      release(),
+      { state: idle('m1') },
+    ],
+    ['non-matching is ignored', flashing(ROOT), release('m9'), undefined],
+    ['idle is ignored', idle('m1'), release(), undefined],
+  ])('%s', (_name, from, event, expected) => check(from, event, expected));
+});
+
+describe('reset', () => {
+  it.each<[string, State]>([
+    ['idle', idle('m1')],
+    ['targeting', targeting(NESTED, 'm1')],
+    ['flashing', flashing(ROOT, 'm1')],
+  ])('clears everything including the anchor from %s', (_name, from) =>
+    check(from, RESET, { state: idle() })
+  );
+});
+
+describe('selectors — the ChannelThread contract', () => {
+  const channelThreadProps = (s: State, ready: boolean) => {
+    const scroll = pendingScrollTargetId(s, ready);
+    const reply = pendingTargetReplyId(s);
+    return {
+      targetMessageId: reply === undefined ? scroll : undefined,
+      targetReplyId: scroll === undefined ? reply : undefined,
+    };
+  };
+
+  it.each<
+    [
+      string,
+      State,
+      boolean,
+      {
+        scroll?: string;
+        reply?: string;
+        message?: string;
+        replyProp?: string;
+        any: boolean;
+      },
+    ]
+  >([
+    ['idle: nothing', idle(), true, { any: false }],
+    [
+      'root, not ready: ChannelThread positions the row',
+      targeting(ROOT),
+      false,
+      { scroll: 'm1', message: 'm1', any: true },
+    ],
+    [
+      'root, ready: still positions the row (readiness does not clear a root target)',
+      targeting(ROOT),
+      true,
+      { scroll: 'm1', message: 'm1', any: true },
+    ],
+    [
+      'nested, not ready: both set, so ChannelThread stays idle',
+      targeting(NESTED),
+      false,
+      { scroll: 'm1', reply: 'r1', any: true },
+    ],
+    [
+      'nested, ready: root cleared, reply scroll begins',
+      targeting(NESTED),
+      true,
+      { reply: 'r1', replyProp: 'r1', any: true },
+    ],
+    ['flashing: nothing pending', flashing(NESTED), true, { any: false }],
+  ])('%s', (_name, s, ready, expected) => {
+    expect(pendingScrollTargetId(s, ready)).toBe(expected.scroll);
+    expect(pendingTargetReplyId(s)).toBe(expected.reply);
+    expect(hasPendingElementScroll(s, ready)).toBe(expected.any);
+    expect(channelThreadProps(s, ready)).toEqual({
+      targetMessageId: expected.message,
+      targetReplyId: expected.replyProp,
+    });
+  });
+
+  it('exposes the active target in every non-idle state', () => {
+    for (const s of [targeting(NESTED), flashing(NESTED)]) {
+      expect(activeTargetMessageId(s)).toBe('m1');
+      expect(activeTargetMessageReplyId(s)).toBe('r1');
+    }
+    expect(activeTargetMessageId(idle())).toBeUndefined();
+    expect(activeTargetMessageReplyId(idle())).toBeUndefined();
+  });
+});
 
 describe('initialState', () => {
-  it.each([
-    {
-      name: 'has no target',
-      input: {},
-      expected: idleState,
-    },
-    {
-      name: 'starts loading around the initial root',
-      input: { messageId: 'message-a' },
-      expected: loading(makeTarget('message-a')),
-    },
-    {
-      name: 'starts loading around the initial nested target',
-      input: { messageId: 'message-a', replyId: 'reply-a' },
-      expected: loading(makeTarget('message-a', 'reply-a')),
-    },
-    {
-      name: 'starts awaiting-viewport when the constructor knows the target is loaded',
-      input: { messageId: 'message-a', targetLoaded: true },
-      expected: awaitingViewport(makeTarget('message-a')),
-    },
-  ])('$name', ({ input, expected }) => {
-    expect(initialState(input)).toEqual(expected);
-  });
+  it('starts idle without a target', () =>
+    expect(initialState({})).toEqual(idle()));
+
+  it('starts targeting and anchored on an initial target', () =>
+    expect(initialState({ messageId: 'm1', replyId: 'r1' })).toEqual(
+      targeting(NESTED, 'm1')
+    ));
 });
 
-describe('reduce', () => {
-  const transitionRows = [
-    {
-      name: 'dedupes the same target while its root scroll is pending',
-      state: loading(makeTarget('message-a', 'reply-a')),
-      event: {
-        t: 'navigate' as const,
-        messageId: 'message-a',
-        replyId: 'reply-a',
-        targetLoaded: false,
-      },
-      expected: result(loading(makeTarget('message-a', 'reply-a'))),
-    },
-    {
-      name: 'navigates to a missing target and replaces loadAround',
-      state: flashing(makeTarget('message-a'), 'message-a'),
-      event: {
-        t: 'navigate' as const,
-        messageId: 'message-b',
-        targetLoaded: false,
-      },
-      expected: result(loading(makeTarget('message-b'), 'message-b'), [
-        { t: 'cancel-flash' },
-      ]),
-    },
-    {
-      name: 'navigates to a loaded target and preserves loadAround',
-      state: flashing(makeTarget('message-a'), 'message-a'),
-      event: {
-        t: 'navigate' as const,
-        messageId: 'message-b',
-        targetLoaded: true,
-      },
-      expected: result(awaitingViewport(makeTarget('message-b'), 'message-a'), [
-        { t: 'cancel-flash' },
-      ]),
-    },
-    {
-      name: 'moves a loaded target to viewport waiting',
-      state: loading(makeTarget('message-a'), 'message-a'),
-      event: { t: 'target-loaded' as const },
-      expected: result(awaitingViewport(makeTarget('message-a'), 'message-a')),
-    },
-    {
-      name: 'starts root scrolling when the viewport is ready',
-      state: awaitingViewport(makeTarget('message-a'), 'message-a'),
-      event: { t: 'viewport-ready' as const },
-      expected: result(scrolling(makeTarget('message-a'), false, 'message-a'), [
-        {
-          t: 'restore-default-pagination',
-          loadAround: 'message-a',
-        },
-      ]),
-    },
-    {
-      name: 'starts flashing after the matching root scroll completes',
-      state: scrolling(makeTarget('message-a'), false, 'message-a'),
-      event: { t: 'root-scroll-done' as const, messageId: 'message-a' },
-      expected: result(flashing(makeTarget('message-a'), 'message-a'), [
-        { t: 'schedule-flash', messageId: 'message-a' },
-      ]),
-    },
-    {
-      name: 'starts flashing after the matching reply scroll completes',
-      state: scrolling(makeTarget('message-a', 'reply-a'), true, 'message-a'),
-      event: {
-        t: 'reply-scroll-done' as const,
-        messageId: 'message-a',
-        replyId: 'reply-a',
-      },
-      expected: result(
-        flashing(makeTarget('message-a', 'reply-a'), 'message-a'),
-        [{ t: 'schedule-flash', messageId: 'message-a' }]
-      ),
-    },
-    {
-      name: 'releases a flashing target when its flash elapses',
-      state: flashing(makeTarget('message-a'), 'message-a'),
-      event: { t: 'flash-elapsed' as const, messageId: 'message-a' },
-      expected: result({ ...idleState, loadAround: 'message-a' }),
-    },
-    {
-      name: 'ignores a flash completion for another target',
-      state: flashing(makeTarget('message-a'), 'message-a'),
-      event: { t: 'flash-elapsed' as const, messageId: 'message-b' },
-      expected: result(flashing(makeTarget('message-a'), 'message-a')),
-    },
-    {
-      name: 'ignores a root scroll completion for another target',
-      state: scrolling(makeTarget('message-a'), false, 'message-a'),
-      event: { t: 'root-scroll-done' as const, messageId: 'message-b' },
-      expected: result(scrolling(makeTarget('message-a'), false, 'message-a')),
-    },
-    {
-      name: 'resets the machine and clears loadAround',
-      state: flashing(makeTarget('message-a'), 'message-a'),
-      event: { t: 'reset' as const },
-      expected: result(idleState, [{ t: 'cancel-flash' }]),
-    },
-    {
-      name: 'releases the matching active target',
-      state: loading(makeTarget('message-a'), 'message-a'),
-      event: { t: 'release' as const, messageId: 'message-a' },
-      expected: result({ ...idleState, loadAround: 'message-a' }, [
-        { t: 'cancel-flash' },
-      ]),
-    },
-    {
-      name: 'ignores a release for another target',
-      state: loading(makeTarget('message-a'), 'message-a'),
-      event: { t: 'release' as const, messageId: 'message-b' },
-      expected: result(loading(makeTarget('message-a'), 'message-a')),
-    },
-    {
-      name: 'clears loadAround after pagination restoration',
-      state: scrolling(makeTarget('message-a'), false, 'message-a'),
-      event: { t: 'pagination-restored' as const },
-      expected: result(noAround(scrolling(makeTarget('message-a'), false))),
-    },
-    {
-      name: 'ignores root-scroll-done before scrolling',
-      state: loading(makeTarget('message-a')),
-      event: { t: 'root-scroll-done' as const, messageId: 'message-a' },
-      expected: result(loading(makeTarget('message-a'))),
-    },
-    {
-      name: 'ignores root-scroll-done while awaiting-viewport',
-      state: awaitingViewport(makeTarget('message-a', 'reply-a')),
-      event: { t: 'root-scroll-done' as const, messageId: 'message-a' },
-      expected: result(awaitingViewport(makeTarget('message-a', 'reply-a'))),
-    },
-  ];
-
-  it.each(transitionRows)('$name', ({ state, event, expected }) => {
-    check(state, event, expected);
-  });
-
-  it('marks a nested root complete when the viewport is ready', () => {
-    check(
-      noAround(awaitingViewport(makeTarget('message-a', 'reply-a'))),
-      { t: 'viewport-ready' },
-      result(noAround(scrolling(makeTarget('message-a', 'reply-a'), true)))
-    );
-  });
-
-  it('does not clear loadAround while requesting default pagination', () => {
-    check(
-      awaitingViewport(makeTarget('message-a'), 'message-a'),
-      { t: 'viewport-ready' },
-      result(scrolling(makeTarget('message-a'), false, 'message-a'), [
-        {
-          t: 'restore-default-pagination',
-          loadAround: 'message-a',
-        },
-      ])
-    );
-  });
-
-  it('keeps the first loadAround during rapid navigation to a loaded target', () => {
-    const first = reduce(idleState, {
-      t: 'navigate',
-      messageId: 'message-a',
-      targetLoaded: false,
-    });
-    expect(first).toEqual(
-      result(loading(makeTarget('message-a'), 'message-a'), [
-        { t: 'cancel-flash' },
-      ])
+describe('sequences', () => {
+  const states = (run: ReturnType<typeof simulate<State, Event, Command>>) =>
+    run.steps.map((s) =>
+      s.result === 'ignored' ? 'ignored' : s.result.state.t
     );
 
-    check(
-      first.state,
-      {
-        t: 'navigate',
-        messageId: 'message-b',
-        targetLoaded: true,
-      },
-      result(awaitingViewport(makeTarget('message-b'), 'message-a'), [
-        { t: 'cancel-flash' },
-      ])
-    );
+  it('root-only deep link: ack → flash (restoring) → release', () => {
+    const run = simulate(targetMessageDef, initialState({ messageId: 'm1' }), [
+      rootDone(),
+      RESTORED,
+      ELAPSED,
+    ]);
+    expect(run.commands).toEqual([RESTORE('m1')]);
+    expect(states(run)).toEqual(['flashing', 'flashing', 'idle']);
+    expect(run.state).toEqual(idle());
   });
 
-  it('ignores a stale flash completion after navigation', () => {
-    const navigated = reduce(flashing(makeTarget('message-a'), 'message-a'), {
-      t: 'navigate',
-      messageId: 'message-b',
-      targetLoaded: false,
-    });
-
-    check(
-      navigated.state,
-      { t: 'flash-elapsed', messageId: 'message-a' },
-      result(navigated.state)
+  it('nested deep link: reply ack → flash (restoring) → release; a root ack is ignored', () => {
+    const run = simulate(
+      targetMessageDef,
+      initialState({ messageId: 'm1', replyId: 'r1' }),
+      [rootDone(), replyDone(), RESTORED, ELAPSED]
     );
+    expect(states(run)).toEqual(['ignored', 'flashing', 'flashing', 'idle']);
+    expect(run.commands).toEqual([RESTORE('m1')]);
+    expect(run.state).toEqual(idle());
   });
 
-  const mismatchedScrollRows = [
-    {
-      name: 'root message id',
-      state: scrolling(makeTarget('message-a'), false),
-      event: { t: 'root-scroll-done' as const, messageId: 'message-b' },
-    },
-    {
-      name: 'root completion after nested rootDone',
-      state: scrolling(makeTarget('message-a', 'reply-a'), true),
-      event: { t: 'root-scroll-done' as const, messageId: 'message-a' },
-    },
-    {
-      name: 'reply message id',
-      state: scrolling(makeTarget('message-a', 'reply-a'), true),
-      event: {
-        t: 'reply-scroll-done' as const,
-        messageId: 'message-b',
-        replyId: 'reply-a',
-      },
-    },
-    {
-      name: 'reply id',
-      state: scrolling(makeTarget('message-a', 'reply-a'), true),
-      event: {
-        t: 'reply-scroll-done' as const,
-        messageId: 'message-a',
-        replyId: 'reply-b',
-      },
-    },
-    {
-      name: 'reply completion for a root target',
-      state: scrolling(makeTarget('message-a'), false),
-      event: {
-        t: 'reply-scroll-done' as const,
-        messageId: 'message-a',
-        replyId: 'reply-a',
-      },
-    },
-  ];
+  it('rapid navigation: a loaded second target keeps the first anchor in flight', () => {
+    const run = simulate(targetMessageDef, idle(), [
+      nav({ messageId: 'a' }, false),
+      nav({ messageId: 'b' }, true),
+    ]);
+    expect(run.state).toEqual(targeting({ messageId: 'b' }, 'a'));
+  });
 
-  it.each(mismatchedScrollRows)(
-    'ignores a mismatched $name completion',
-    ({ state, event }) => {
-      check(state, event, result(state));
-    }
-  );
+  it('a failed restore leaves the anchor so the around-query stays the source', () => {
+    const run = simulate(targetMessageDef, targeting(ROOT, 'm1'), [
+      rootDone(),
+      ELAPSED,
+    ]);
+    expect(run.state).toEqual(idle('m1'));
+  });
 
-  const pendingDedupeStates = [
-    loading(makeTarget('message-a', 'reply-a')),
-    awaitingViewport(makeTarget('message-a', 'reply-a')),
-    scrolling(makeTarget('message-a', 'reply-a'), false),
-  ];
-
-  it.each(pendingDedupeStates)(
-    'dedupes same-target navigation while pending %#',
-    (state) => {
-      check(
-        state,
-        {
-          t: 'navigate',
-          messageId: 'message-a',
-          replyId: 'reply-a',
-          targetLoaded: true,
-        },
-        result(state)
-      );
-    }
-  );
-
-  const nonDedupeRows = [
-    {
-      name: 'flashing',
-      state: flashing(makeTarget('message-a', 'reply-a')),
-    },
-    {
-      name: 'nested root completion',
-      state: scrolling(makeTarget('message-a', 'reply-a'), true),
-    },
-  ];
-
-  it.each(nonDedupeRows)(
-    'does not dedupe same-target navigation during $name',
-    ({ state }) => {
-      check(
-        state,
-        {
-          t: 'navigate',
-          messageId: 'message-a',
-          replyId: 'reply-a',
-          targetLoaded: true,
-        },
-        result(
-          awaitingViewport(makeTarget('message-a', 'reply-a'), 'message-a'),
-          [{ t: 'cancel-flash' }]
-        )
-      );
-    }
-  );
-
-  const wrongControlRows = [
-    {
-      state: idleState,
-      event: { t: 'target-loaded' as const },
-    },
-    {
-      state: loading(makeTarget('message-a')),
-      event: { t: 'viewport-ready' as const },
-    },
-    {
-      state: awaitingViewport(makeTarget('message-a', 'reply-a')),
-      event: {
-        t: 'reply-scroll-done' as const,
-        messageId: 'message-a',
-        replyId: 'reply-a',
-      },
-    },
-  ];
-
-  it.each(wrongControlRows)(
-    'ignores an event in the wrong control state %#',
-    ({ state, event }) => {
-      check(state, event, result(state));
-    }
-  );
-});
-
-describe('selectors', () => {
-  const selectorRows = [
-    {
-      name: 'idle',
-      state: idleState,
-      expected: [undefined, undefined, undefined, undefined, undefined],
-      pendingElement: false,
-    },
-    {
-      name: 'loading',
-      state: loading(makeTarget('message-a', 'reply-a')),
-      expected: ['message-a', 'reply-a', 'message-a', 'message-a', 'reply-a'],
-      pendingElement: true,
-    },
-    {
-      name: 'awaiting viewport',
-      state: awaitingViewport(makeTarget('message-a', 'reply-a')),
-      expected: ['message-a', 'reply-a', 'message-a', 'message-a', 'reply-a'],
-      pendingElement: true,
-    },
-    {
-      name: 'scrolling a root',
-      state: scrolling(makeTarget('message-a'), false),
-      expected: ['message-a', undefined, 'message-a', 'message-a', undefined],
-      pendingElement: true,
-    },
-    {
-      name: 'scrolling a reply',
-      state: scrolling(makeTarget('message-a', 'reply-a'), true),
-      expected: ['message-a', 'reply-a', 'message-a', undefined, 'reply-a'],
-      pendingElement: true,
-    },
-    {
-      name: 'flashing',
-      state: flashing(makeTarget('message-a', 'reply-a')),
-      expected: ['message-a', 'reply-a', 'message-a', undefined, undefined],
-      pendingElement: false,
-    },
-  ];
-
-  it.each(selectorRows)(
-    'returns values for $name',
-    ({ state, expected, pendingElement }) => {
-      expect([
-        activeTargetMessageId(state),
-        activeTargetMessageReplyId(state),
-        loadAroundMessageId(state),
-        pendingScrollTargetId(state),
-        pendingTargetReplyId(state),
-      ]).toEqual(expected);
-      expect(hasPendingElementScroll(state)).toBe(pendingElement);
-    }
-  );
+  it('channel change mid-flight resets everything', () => {
+    const run = simulate(targetMessageDef, targeting(NESTED, 'm1'), [RESET]);
+    expect(run.state).toEqual(idle());
+  });
 });

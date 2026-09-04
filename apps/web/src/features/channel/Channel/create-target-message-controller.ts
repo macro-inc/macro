@@ -1,31 +1,30 @@
+import { createMachine } from '@macro-inc/machine';
 import {
   type ChannelMessagesData,
   getChannelMessagesQueryKey,
 } from '@queries/channel/channel-messages';
 import { queryClient } from '@queries/client';
-import {
-  type Accessor,
-  createEffect,
-  createSignal,
-  on,
-  onCleanup,
-} from 'solid-js';
-import { match } from 'ts-pattern';
+import { type Accessor, onCleanup, untrack } from 'solid-js';
 import {
   activeTargetMessageId,
   activeTargetMessageReplyId,
   type Command,
+  type Event,
   hasPendingElementScroll,
   initialState,
-  loadAroundMessageId,
-  type MachineState,
   pendingScrollTargetId,
   pendingTargetReplyId,
-  reduce,
-  type TargetEvent,
+  type State,
+  targetMessageDef,
 } from '../domain/target-message';
 import type { ThreadListNavigation } from './ThreadList';
 
+/**
+ * How long a navigation target keeps its accent highlight after its scroll
+ * has positioned it on screen. When the flash elapses the target releases
+ * itself; highlights owned by other state (e.g. the unified input's reply
+ * binding) are unaffected.
+ */
 export const TARGETED_MESSAGE_FLASH_MS = 1000;
 
 type CreateTargetMessageControllerOptions = {
@@ -35,12 +34,10 @@ type CreateTargetMessageControllerOptions = {
   messageKeys: Accessor<string[]>;
   navigation: Accessor<ThreadListNavigation | undefined>;
   /**
-   * Whether the ThreadList has completed its initial scroll.
-   *
-   * The controller defers pending scroll execution until this returns `true`
-   * so that a `goToMessage` call that fires while the initial scroll is still
-   * in progress does not get overridden by the initial-scroll retry logic
-   * inside ThreadList.
+   * Whether the ThreadList has completed its initial scroll. Target
+   * positioning waits for this so a `goToMessage` that fires mid-initial-scroll
+   * isn't overridden by ThreadList's retry logic, which validates against the
+   * *original* scroll target.
    */
   didInitialScroll: Accessor<boolean>;
 };
@@ -49,116 +46,100 @@ export type TargetMessageController = ReturnType<
   typeof createTargetMessageController
 >;
 
+/**
+ * Runner for the target-message machine. All decisions live in
+ * `domain/target-message.ts`; this file owns the three things that touch the
+ * world: the flash timer, cache restoration, and the readiness condition.
+ * No effects: readiness is a derivation the selectors consume.
+ */
 export function createTargetMessageController(
   options: CreateTargetMessageControllerOptions
 ) {
-  const [state, setState] = createSignal<MachineState>(
-    initialState({
+  const machine = createMachine<State, Event, Command>({
+    initial: initialState({
       messageId: options.initialTargetMessageId,
       replyId: options.initialTargetMessageReplyId,
-    })
-  );
+    }),
+    def: targetMessageDef,
 
-  let flashTimeout: ReturnType<typeof setTimeout> | undefined;
+    scopes: {
+      flashing: (_s, dispatch) => {
+        const timer = setTimeout(
+          () => dispatch({ t: 'flash-elapsed' }),
+          TARGETED_MESSAGE_FLASH_MS
+        );
+        onCleanup(() => clearTimeout(timer));
+      },
+    },
 
-  const cancelFlash = () => {
-    if (flashTimeout === undefined) return;
-    clearTimeout(flashTimeout);
-    flashTimeout = undefined;
-  };
-
-  const runCommands = (commands: Command[]) => {
-    for (const command of commands) {
-      match(command)
-        .with({ t: 'cancel-flash' }, () => {
-          cancelFlash();
-        })
-        .with({ t: 'schedule-flash' }, ({ messageId }) => {
-          cancelFlash();
-          flashTimeout = setTimeout(() => {
-            flashTimeout = undefined;
-            dispatch({ t: 'flash-elapsed', messageId });
-          }, TARGETED_MESSAGE_FLASH_MS);
-        })
-        .with({ t: 'restore-default-pagination' }, ({ loadAround }) => {
+    execute: (cmd, dispatch) => {
+      switch (cmd.t) {
+        case 'restore-default-pagination': {
           const restored = restoreDefaultChannelPaginationAfterTargetLoad(
             options.channelId(),
-            loadAround
+            cmd.loadAround
           );
           if (restored) dispatch({ t: 'pagination-restored' });
-        })
-        .exhaustive();
-    }
-  };
-
-  const dispatch = (event: TargetEvent) => {
-    const { state: next, commands } = reduce(state(), event);
-    setState(next);
-    runCommands(commands);
-  };
-
-  onCleanup(cancelFlash);
-
-  createEffect(
-    on(
-      [() => state().control, options.messageKeys],
-      ([control, messageKeys]) => {
-        if (
-          control.t === 'loading' &&
-          messageKeys.includes(control.target.messageId)
-        ) {
-          dispatch({ t: 'target-loaded' });
         }
       }
-    )
-  );
+    },
 
-  createEffect(
-    on(
-      [() => state().control, options.navigation, options.didInitialScroll],
-      ([control, navigation, didInitialScroll]) => {
-        if (
-          control.t === 'awaiting-viewport' &&
-          navigation &&
-          didInitialScroll
-        ) {
-          dispatch({ t: 'viewport-ready' });
-        }
-      }
-    )
-  );
+    inspect: import.meta.env.DEV
+      ? (from, e, result) =>
+          console.debug('target-message', {
+            from: from.t,
+            event: e.t,
+            to: result === 'ignored' ? 'ignored' : result.state.t,
+          })
+      : undefined,
+  });
+
+  const state = machine.state;
+
+  // A function, not a memo: Channel.tsx constructs this controller before
+  // `messageIndex` exists, so eagerly reading `messageKeys` would throw.
+  // Accessors run after setup and track these inputs from there.
+  const ready = () => {
+    const s = state();
+    return (
+      s.t === 'targeting' &&
+      options.navigation() !== undefined &&
+      options.didInitialScroll() &&
+      options.messageKeys().includes(s.target.messageId)
+    );
+  };
 
   return {
     activeTargetMessageId: () => activeTargetMessageId(state()),
     activeTargetMessageReplyId: () => activeTargetMessageReplyId(state()),
-    loadAroundMessageId: () => loadAroundMessageId(state()),
-    pendingScrollTargetId: () => pendingScrollTargetId(state()),
+    loadAroundMessageId: () => state().loadAround,
+    pendingScrollTargetId: () => pendingScrollTargetId(state(), ready()),
     pendingTargetReplyId: () => pendingTargetReplyId(state()),
-    hasPendingElementScroll: () => hasPendingElementScroll(state()),
+    hasPendingElementScroll: () => hasPendingElementScroll(state(), ready()),
 
-    goToMessage: (messageId: string, replyId?: string) => {
-      dispatch({
+    goToMessage: (messageId: string, replyId?: string) =>
+      machine.dispatch({
         t: 'navigate',
-        messageId,
-        replyId,
-        targetLoaded: options.messageKeys().includes(messageId),
-      });
-    },
-    completePendingScroll: (messageId: string) => {
-      dispatch({ t: 'root-scroll-done', messageId });
-    },
-    completePendingReplyScroll: (messageId: string, replyId: string) => {
-      dispatch({ t: 'reply-scroll-done', messageId, replyId });
-    },
-    clearActiveTarget: (messageId: string) => {
-      dispatch({ t: 'release', messageId });
-    },
-    reset: () => {
-      dispatch({ t: 'reset' });
-    },
+        target: { messageId, replyId },
+        targetLoaded: untrack(() => options.messageKeys().includes(messageId)),
+        ready: untrack(ready),
+      }),
+    completePendingScroll: (messageId: string) =>
+      machine.dispatch({ t: 'root-scroll-done', messageId }),
+    completePendingReplyScroll: (messageId: string, replyId: string) =>
+      machine.dispatch({ t: 'reply-scroll-done', messageId, replyId }),
+    clearActiveTarget: (messageId: string) =>
+      machine.dispatch({ t: 'release', messageId }),
+    reset: () => machine.dispatch({ t: 'reset' }),
   };
 }
 
+/**
+ * Promote the around-query's data to the default channel query once the
+ * target has been positioned, so subsequent pagination continues from the
+ * loaded window instead of refetching from the bottom. Returns whether
+ * anything was restored. Idempotent: the around variant is removed on success.
+ */
 export function restoreDefaultChannelPaginationAfterTargetLoad(
   channelId: string,
   loadAroundMessageId: string | undefined
