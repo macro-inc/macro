@@ -155,7 +155,7 @@ describe('Harness', () => {
 
     render(() => <Harness />);
 
-    expect(screen.getByText('Connected')).toBeTruthy();
+    expect(screen.queryByText('Connected')).toBeNull();
     expect(screen.queryByLabelText('API key')).toBeNull();
     expect(screen.getByText(/live in Connections/)).toBeTruthy();
 

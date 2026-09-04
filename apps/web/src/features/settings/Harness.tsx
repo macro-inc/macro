@@ -5,7 +5,6 @@ import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
-import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
@@ -34,8 +33,6 @@ function lastConnectedText(harness: RegisteredHarness): string {
 /** Settings UI for choosing and configuring the available agent harnesses. */
 export function Harness() {
   const { selectTab } = useSettingsState();
-  const cursorStatus = useCursorApiKeyStatusQuery();
-  const cursorRegistered = () => cursorStatus.data?.registered ?? false;
   const harnessesQuery = useHarnessesQuery();
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const [pairingDialog, setPairingDialog] = createSignal<{
@@ -103,11 +100,6 @@ export function Harness() {
           <div class="min-w-0 flex-1">
             <div class="flex items-center gap-2">
               <h2 class="text-sm font-medium text-ink">Cursor</h2>
-              <Show when={cursorRegistered()}>
-                <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
-                  Connected
-                </span>
-              </Show>
             </div>
             <p class="mt-1 text-sm text-ink-muted">
               Use your Cursor account to run agent sessions in Macro. The API

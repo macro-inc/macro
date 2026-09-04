@@ -16,7 +16,11 @@ export function useNativeMcpActions() {
     authorize,
     update,
     remove,
-    startAuth: (url: string, name: string) => {
+    startAuth: (
+      url: string,
+      name: string,
+      extras?: { onStarted?: () => void; onFailed?: () => void }
+    ) => {
       const popup = reserveOauthPopup();
       authorize.mutate(
         { server_url: url, server_name: name },
@@ -24,10 +28,12 @@ export function useNativeMcpActions() {
           onSuccess: (result) => {
             assignOauthUrl(popup, result.authorization_url);
             writeMcpAuthAttempted(url, true);
+            extras?.onStarted?.();
           },
           onError: () => {
             popup?.close();
             writeMcpAuthAttempted(url, true);
+            extras?.onFailed?.();
             toast.failure('Failed to start authorization');
           },
         }

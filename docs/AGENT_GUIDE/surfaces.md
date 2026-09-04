@@ -88,7 +88,7 @@ mounts Harness so pairing works.
 
 ## Settings — Connections — `/app/settings/connections`
 
-`Connected` lists mapped providers (ready-of-total). Custom MCP grants sit in
+`Connected` lists mapped providers with a capability summary. Custom MCP grants sit in
 a second section. Discover's Add custom MCP saves name and URL only. Connect
 on that Connected row starts OAuth. More holds Disable, Rename, Reconnect,
 and Disconnect. An unauthenticated custom MCP shows Remove, not Disconnect.
@@ -107,7 +107,8 @@ repos, AI),
 Linear / Notion / Slack (Pipedream AI, Off is enable/disable), Cursor (API key
 + default model). Discover is `/app/settings/connections/discover`. A provider
 is `/app/settings/connections/<provider>` (`github`, `google`, `cursor`, …).
-Those are path tokens under the Connections tab, not extra Settings tabs.
+Opening a Featured card from Discover writes `discover-<provider>` so Back
+returns to Discover. Those are path tokens under the Connections tab, not extra Settings tabs.
 Connections signposts Macro MCP to
 the `Macro MCP` tab (`/app/settings/mcp-server`). That tab signposts inbound
 connectors to Discover.

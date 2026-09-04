@@ -100,14 +100,14 @@ describe('LeftoverRow native MCP auth', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
 
     expect(screen.getByText('Last attempt failed')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Try Again' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeTruthy();
   });
 
   it('shows Last attempt failed for a persisted prior attempt', () => {
     writeMcpAuthAttempted(leftover.url, true);
     render(() => <LeftoverRow leftover={leftover} />);
     expect(screen.getByText('Last attempt failed')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Try Again' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Connect' })).toBeTruthy();
   });
 
   it('clears a persisted attempt after the server authenticates', () => {

@@ -2,16 +2,11 @@ import { toast } from '@core/component/Toast/Toast';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
 import {
-  useDeleteMcpServerMutation,
-  useStartMcpAuthMutation,
-  useUpdateMcpServerMutation,
-} from '@queries/mcp-servers';
-import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
 } from '@queries/pipedream-connectors';
 import { Button, Dialog, Panel } from '@ui';
-import { createEffect, createSignal, type JSX, Show } from 'solid-js';
+import { createEffect, createSignal, type JSX, on, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { ConnectAction } from '../integration-ui';
 import {
@@ -27,8 +22,8 @@ import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
-import { assignOauthUrl, reserveOauthPopup } from './mcp-oauth';
 import type { Leftover } from './model';
+import { useNativeMcpActions } from './native-actions';
 
 function leftoverDisabled(leftover: Leftover): boolean {
   return match(leftover)
@@ -43,9 +38,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
   );
   const [renaming, setRenaming] = createSignal(false);
   const [nameDraft, setNameDraft] = createSignal('');
-  const updateNative = useUpdateMcpServerMutation();
-  const deleteNative = useDeleteMcpServerMutation();
-  const authorize = useStartMcpAuthMutation();
+  const native = useNativeMcpActions();
   const updatePipedream = useUpdatePipedreamConnectionMutation();
   const deletePipedream = useDeletePipedreamConnectionMutation();
   const [attempted, setAttempted] = createSignal(
@@ -65,19 +58,24 @@ export function LeftoverRow(props: { leftover: Leftover }) {
           : { app_slug: '', display_name: props.leftover.title },
     });
 
-  createEffect(() => {
-    const leftover = props.leftover;
-    if (leftover.kind !== 'native-mcp') return;
-    if (leftover.authenticated && attempted()) {
-      writeMcpAuthAttempted(leftover.url, false);
-      setAttempted(false);
-    }
-  });
+  createEffect(
+    on(
+      () => {
+        const leftover = props.leftover;
+        return leftover.kind === 'native-mcp' && leftover.authenticated
+          ? leftover.url
+          : null;
+      },
+      (url) => {
+        if (url) writeMcpAuthAttempted(url, false);
+      }
+    )
+  );
 
   const busy = () =>
-    updateNative.isPending ||
-    deleteNative.isPending ||
-    authorize.isPending ||
+    native.update.isPending ||
+    native.remove.isPending ||
+    native.authorize.isPending ||
     updatePipedream.isPending ||
     deletePipedream.isPending ||
     pipedreamConnectBusy();
@@ -87,15 +85,15 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     return (
       leftover.kind === 'native-mcp' &&
       !leftover.authenticated &&
-      attempted() &&
-      !justStarted()
+      !justStarted() &&
+      attempted()
     );
   };
 
   const toggle = () => {
     match(props.leftover)
       .with({ kind: 'native-mcp' }, (leftover) => {
-        updateNative.mutate(
+        native.update.mutate(
           { url: leftover.url, enabled: !leftover.enabled },
           { onError: () => toast.failure('Failed to update server') }
         );
@@ -115,7 +113,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     const fail = connected ? 'Failed to disconnect' : 'Failed to remove';
     match(leftover)
       .with({ kind: 'native-mcp' }, (row) => {
-        deleteNative.mutate(
+        native.remove.mutate(
           { url: row.url },
           {
             onSuccess: () => toast.success(ok),
@@ -138,25 +136,16 @@ export function LeftoverRow(props: { leftover: Leftover }) {
   const startAuth = () => {
     const leftover = props.leftover;
     if (leftover.kind !== 'native-mcp') return;
-    const popup = reserveOauthPopup();
-    authorize.mutate(
-      { server_url: leftover.url, server_name: leftover.title },
-      {
-        onSuccess: (result) => {
-          assignOauthUrl(popup, result.authorization_url);
-          writeMcpAuthAttempted(leftover.url, true);
-          setAttempted(true);
-          setJustStarted(true);
-        },
-        onError: () => {
-          popup?.close();
-          writeMcpAuthAttempted(leftover.url, true);
-          setAttempted(true);
-          setJustStarted(false);
-          toast.failure('Failed to start authorization');
-        },
-      }
-    );
+    native.startAuth(leftover.url, leftover.title, {
+      onStarted: () => {
+        setAttempted(true);
+        setJustStarted(true);
+      },
+      onFailed: () => {
+        setAttempted(true);
+        setJustStarted(false);
+      },
+    });
   };
 
   const askRemove = (connected: boolean) =>
@@ -180,7 +169,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
     if (leftover.kind !== 'native-mcp') return;
     const name = nameDraft().trim();
     if (!name) return;
-    updateNative.mutate(
+    native.update.mutate(
       { url: leftover.url, server_name: name },
       {
         onSuccess: () => setRenaming(false),
@@ -226,7 +215,7 @@ export function LeftoverRow(props: { leftover: Leftover }) {
         <ConnectionRowActions
           primary={
             <ConnectAction
-              label={connectionFailed() ? 'Try Again' : 'Connect'}
+              label="Connect"
               onClick={startAuth}
               disabled={busy()}
             />
@@ -371,10 +360,10 @@ export function LeftoverRow(props: { leftover: Leftover }) {
                 variant="accent"
                 size="sm"
                 depth={3}
-                disabled={!nameDraft().trim() || updateNative.isPending}
+                disabled={!nameDraft().trim() || native.update.isPending}
                 onClick={saveRename}
               >
-                {updateNative.isPending ? 'Saving...' : 'Save'}
+                {native.update.isPending ? 'Saving...' : 'Save'}
               </Button>
             </div>
           </Panel.Body>
