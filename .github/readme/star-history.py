@@ -2,7 +2,7 @@
 from datetime import date
 
 # Cumulative star counts from the GitHub stargazers API (starred_at timestamps),
-# sampled through 2026-08-18 09:02 UTC, where the total was 3608.
+# sampled through 2026-09-04 12:26 UTC, where the total was 4198.
 SERIES = [
     (date(2025, 11, 18), 0),
     (date(2025, 11, 28), 4),
@@ -50,14 +50,31 @@ SERIES = [
     (date(2026, 8, 15), 3262),
     (date(2026, 8, 16), 3399),
     (date(2026, 8, 17), 3553),
-    (date(2026, 8, 18), 3608),
+    (date(2026, 8, 18), 3649),
+    (date(2026, 8, 19), 3758),
+    (date(2026, 8, 20), 3851),
+    (date(2026, 8, 21), 3926),
+    (date(2026, 8, 22), 3958),
+    (date(2026, 8, 23), 3983),
+    (date(2026, 8, 24), 4009),
+    (date(2026, 8, 25), 4032),
+    (date(2026, 8, 26), 4047),
+    (date(2026, 8, 27), 4063),
+    (date(2026, 8, 28), 4082),
+    (date(2026, 8, 29), 4092),
+    (date(2026, 8, 30), 4112),
+    (date(2026, 8, 31), 4144),
+    (date(2026, 9, 1), 4171),
+    (date(2026, 9, 2), 4179),
+    (date(2026, 9, 3), 4192),
+    (date(2026, 9, 4), 4198),
 ]
 
 W, H = 1100, 560
 L, R, T, B = 76, 52, 112, 62           # plot padding
 PX0, PX1 = L, W - R
 PY0, PY1 = T, H - B
-YMAX = 4000
+YMAX = 4500
 LATEST = SERIES[-1][1]
 ORANGE = "#f26a1b"
 
@@ -108,7 +125,8 @@ def star(cx, cy, r):
 
 MONTHS = [(date(2025, 12, 1), "Dec"), (date(2026, 1, 1), "Jan"), (date(2026, 2, 1), "Feb"),
           (date(2026, 3, 1), "Mar"), (date(2026, 4, 1), "Apr"), (date(2026, 5, 1), "May"),
-          (date(2026, 6, 1), "Jun"), (date(2026, 7, 1), "Jul"), (date(2026, 8, 1), "Aug")]
+          (date(2026, 6, 1), "Jun"), (date(2026, 7, 1), "Jul"), (date(2026, 8, 1), "Aug"),
+          (date(2026, 9, 1), "Sep")]
 
 FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
 
