@@ -171,7 +171,8 @@ impl ChannelService for ToolTestChannelService {
         _actor_org_id: Option<i64>,
         req: CreateChannelRequest,
     ) -> Result<CreateChannelResponse, ChannelMutationErr> {
-        self.record_created(actor, actor.as_user().cloned(), req)
+        let on_behalf_of = actor.as_user().cloned();
+        self.record_created(actor, on_behalf_of, req)
     }
 
     async fn create_channel_on_behalf(
