@@ -85,6 +85,7 @@ Macro MCP to `Macro MCP`. `Bots`; Agents → `Agents`, `Harness` (gated by
 enable-chat-v3-agents). `Log out`.
 `/app/settings/harness?pair=` still mounts Harness so pairing works.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
+The compact/narrow tab dropdown uses the same General / Workspace / Agents / Admin groups as the left nav.
 
 ## Settings — Connections — `/app/settings/connections`
 

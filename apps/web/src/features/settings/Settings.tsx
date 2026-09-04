@@ -226,6 +226,12 @@ export function SettingsPanel(props: SettingsPanelProps) {
   const tabItems = () =>
     flatTabs().map((tab) => ({ value: tab.tab, label: tab.label }));
 
+  const tabGroups = () =>
+    groups().map((group) => ({
+      label: group.label,
+      items: group.items.map((tab) => ({ value: tab.tab, label: tab.label })),
+    }));
+
   // "Back to app" — the close affordance for solo settings. Laid out like a nav row.
   const backToApp = () => (
     <button
@@ -291,7 +297,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
             <Show when={compact()}>
               <div class="mx-2 shrink-0">
                 <TabsInsetDropdown
-                  list={tabItems()}
+                  groups={tabGroups()}
                   value={activeTabId()}
                   onChange={handleTabChange}
                 />
@@ -382,7 +388,7 @@ export function SettingsPanel(props: SettingsPanelProps) {
                 <div class="flex shrink-0 items-center gap-2 h-13 px-2 border-b border-ink/[0.05]">
                   {backToApp()}
                   <TabsInsetDropdown
-                    list={tabItems()}
+                    groups={tabGroups()}
                     value={activeTabId()}
                     onChange={handleTabChange}
                   />
