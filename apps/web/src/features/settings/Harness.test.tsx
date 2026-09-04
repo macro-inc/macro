@@ -146,38 +146,46 @@ describe('Harness', () => {
     expect(screen.getByText(/This is not a coding harness/)).toBeTruthy();
   });
 
-  it('signposts Cursor key and model management to Connections', () => {
+  it('shows Connected on the Cursor row when the key is registered', () => {
     mocks.status.data = {
       registered: true,
       defaultModelId: null,
       updatedAt: '2026-08-27T12:00:00Z',
     };
+    mocks.status.isPlaceholderData = false;
 
     render(() => <Harness />);
 
-    expect(screen.queryByText('Connected')).toBeNull();
+    const cursorRow = screen.getByRole('button', { name: /Cursor/ });
+    expect(within(cursorRow).getByText('Connected')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: /Cursor/ }));
+    fireEvent.click(cursorRow);
     expect(mocks.selectTab).toHaveBeenCalledWith('Connected');
+  });
+
+  it('hides Connected on the Cursor row when the key is missing', () => {
+    render(() => <Harness />);
+
+    const cursorRow = screen.getByRole('button', { name: /Cursor/ });
+    expect(within(cursorRow).queryByText('Connected')).toBeNull();
   });
 
   it('links the empty BYOA list to the setup documentation', () => {
     render(() => <Harness />);
 
-    expect(screen.getByText('No agents connected')).toBeTruthy();
     expect(screen.getByRole('link', { name: /Setup guide/ })).toHaveProperty(
       'href',
       'https://docs.macro.com/AI/bring-your-own'
     );
   });
 
-  it('offers "Enter pairing code" in the header and empty state', () => {
+  it('offers one "Enter pairing code" button when no agents are connected', () => {
     render(() => <Harness />);
 
     expect(
       screen.getAllByRole('button', { name: 'Enter pairing code' })
-    ).toHaveLength(2);
+    ).toHaveLength(1);
   });
 
   it('renders a registered harness row', () => {
@@ -190,6 +198,9 @@ describe('Harness', () => {
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
     expect(screen.getByText(/Last connected /)).toBeTruthy();
     expect(screen.queryByText('Never connected')).toBeNull();
+    expect(
+      screen.getAllByRole('button', { name: 'Enter pairing code' })
+    ).toHaveLength(1);
   });
 
   it('shows a disconnected private harness that never connected', () => {

@@ -5,6 +5,7 @@ import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
@@ -34,6 +35,7 @@ function lastConnectedText(harness: RegisteredHarness): string {
 /** Settings UI for choosing and configuring the available agent harnesses. */
 export function Harness() {
   const { selectTab } = useSettingsState();
+  const cursorStatus = useCursorApiKeyStatusQuery();
   const harnessesQuery = useHarnessesQuery();
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const [pairingDialog, setPairingDialog] = createSignal<{
@@ -69,6 +71,11 @@ export function Harness() {
     selectTab('Connected');
   };
 
+  const cursorConnected = () =>
+    !cursorStatus.isPlaceholderData && (cursorStatus.data?.registered ?? false);
+
+  const connected = () => harnessesQuery.data ?? [];
+
   return (
     <SettingsPage
       title="Harness"
@@ -103,104 +110,89 @@ export function Harness() {
             icon={providerIcon('cursor')}
             title="Cursor"
             description="Use your Cursor account to run agent sessions in Macro."
+            status={
+              cursorConnected() ? (
+                <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
+                  Connected
+                </span>
+              ) : undefined
+            }
           >
             <CaretRightIcon class="size-4 text-ink-extra-muted" />
           </IntegrationRow>
         </button>
 
-        <section class="flex gap-4 px-6 py-5">
+        <section class="flex items-start gap-4 px-6 py-5">
           <HarnessIcon>
             <TerminalWindowIcon />
           </HarnessIcon>
           <div class="min-w-0 flex-1">
-            <div class="flex items-center justify-between gap-4">
-              <h2 class="text-sm font-medium text-ink">Bring your own agent</h2>
-              <div class="flex shrink-0 items-center gap-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  depth={3}
-                  onClick={() => setPairingDialog({})}
-                >
-                  Enter pairing code
-                </Button>
-                <a
-                  href={BYOA_DOCS_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
-                >
-                  Setup guide
-                  <ArrowUpRightIcon class="size-3.5 opacity-70" />
-                </a>
-              </div>
-            </div>
+            <h2 class="text-sm font-medium text-ink">Bring your own agent</h2>
             <p class="mt-1 text-sm text-ink-muted">
               Install macrod on your computer to connect Claude or another
-              compatible agent.
-            </p>
-
-            <div class="mt-5">
-              <div class="text-xs font-medium text-ink-muted">
-                Connected agents
-              </div>
-              <For
-                each={harnessesQuery.data ?? []}
-                fallback={
-                  <div class="flex flex-col items-center py-6 text-center">
-                    <p class="text-sm text-ink">No agents connected</p>
-                    <p class="mt-1 text-xs text-ink-extra-muted">
-                      Agents connected through macrod will appear here.
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      depth={3}
-                      class="mt-3"
-                      onClick={() => setPairingDialog({})}
-                    >
-                      Enter pairing code
-                    </Button>
-                  </div>
-                }
+              compatible agent.{' '}
+              <a
+                href={BYOA_DOCS_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-flex items-center gap-1 font-medium text-ink-muted outline-none hover:text-ink focus-visible:bg-ink/6"
               >
-                {(harness) => (
-                  <div class="flex items-center justify-between gap-4 px-4 py-3">
-                    <div class="min-w-0">
-                      <div class="flex min-w-0 items-center gap-2">
-                        <p class="truncate text-sm text-ink">{harness.name}</p>
-                        <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium uppercase text-ink-extra-muted">
-                          {harness.owner.type === 'team' ? 'Team' : 'Private'}
-                        </span>
-                        <StatusDot
-                          state={
-                            harness.connected ? 'connected' : 'disconnected'
-                          }
-                          label={
-                            harness.connected ? 'Connected' : 'Disconnected'
-                          }
-                        />
+                Setup guide
+                <ArrowUpRightIcon class="size-3.5 opacity-70" />
+              </a>
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              depth={3}
+              class="mt-3"
+              onClick={() => setPairingDialog({})}
+            >
+              Enter pairing code
+            </Button>
+
+            <Show when={connected().length > 0}>
+              <div class="mt-4 flex flex-col">
+                <For each={connected()}>
+                  {(harness) => (
+                    <div class="flex items-center justify-between gap-4 py-3">
+                      <div class="min-w-0">
+                        <div class="flex min-w-0 items-center gap-2">
+                          <p class="truncate text-sm text-ink">
+                            {harness.name}
+                          </p>
+                          <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium uppercase text-ink-extra-muted">
+                            {harness.owner.type === 'team' ? 'Team' : 'Private'}
+                          </span>
+                          <StatusDot
+                            state={
+                              harness.connected ? 'connected' : 'disconnected'
+                            }
+                            label={
+                              harness.connected ? 'Connected' : 'Disconnected'
+                            }
+                          />
+                        </div>
+                        <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
+                          {lastConnectedText(harness)}
+                        </p>
                       </div>
-                      <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
-                        {lastConnectedText(harness)}
-                      </p>
+                      <ConnectAction
+                        label="Remove"
+                        variant="danger"
+                        onClick={() => setRemovingHarness(harness)}
+                      />
                     </div>
-                    <ConnectAction
-                      label="Remove"
-                      variant="danger"
-                      onClick={() => setRemovingHarness(harness)}
-                    />
-                  </div>
-                )}
-              </For>
-              <Show when={harnessesQuery.isError}>
-                <p class="px-4 py-3 text-xs text-negative">
-                  Could not load your harnesses. Try refreshing this page.
-                </p>
-              </Show>
-            </div>
+                  )}
+                </For>
+              </div>
+            </Show>
+            <Show when={harnessesQuery.isError}>
+              <p class="px-4 py-3 text-xs text-negative">
+                Could not load your harnesses. Try refreshing this page.
+              </p>
+            </Show>
           </div>
         </section>
       </SettingsCard>
