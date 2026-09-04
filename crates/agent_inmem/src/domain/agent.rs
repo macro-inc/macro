@@ -16,20 +16,25 @@ use std::time::Duration;
 use agent::types::{AssistantMessagePart, ChatMessage};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, CreateElicitationRequest,
-    ElicitationAction, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption,
-    Implementation, InitializeRequest, InitializeResponse, Meta, NewSessionRequest,
-    NewSessionResponse, PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
-    SessionCapabilities, SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
-    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
-    StringPropertySchema, ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate,
-    ToolCallUpdateFields, ToolKind,
+    AgentCapabilities, BooleanPropertySchema, CancelNotification, ContentBlock, ContentChunk,
+    CreateElicitationRequest, ElicitationAction, ElicitationFormMode, ElicitationPropertySchema,
+    ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
+    InitializeResponse, IntegerPropertySchema, Meta, NewSessionRequest, NewSessionResponse,
+    NumberPropertySchema, OtherElicitationPropertySchema, PromptRequest, PromptResponse,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionId,
+    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, StopReason, StringFormat, StringPropertySchema,
+    ToolCall as AcpToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields,
+    ToolKind,
 };
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
 use agent_runtime_protocol::domain::action::{COMPACT_COMMAND, MODEL_CONFIG_ID};
 use agent_session::domain::model::AgentSessionId;
+use ai_tools::user_tool_review::{
+    ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
+};
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
@@ -219,11 +224,141 @@ impl Drop for AwaitingGuard<'_> {
     }
 }
 
-/// ACP-backed user-input port for one connected session.
+/// ACP-backed user-input port for one connected session: the one place this
+/// agent sends `elicitation/create`, whether a tool is asking a question
+/// (`AskUser`, [`UserInputRequester`]) or a user tool wants its call reviewed
+/// ([`UserToolReviewer`]).
 struct AcpUserInputRequester {
     connection: ConnectionTo<Client>,
     session_id: SessionId,
     awaiting: Arc<AwaitingUser>,
+}
+
+/// The key under `_meta.macro` naming the user tool an elicitation reviews,
+/// so a Macro client can render the tool's own composer instead of the form.
+const USER_TOOL_META_KEY: &str = "userTool";
+
+/// The custom property type carrying the whole edited draft as a JSON string
+/// (`_`-prefixed, as ACP reserves for implementation-specific extensions).
+const JSON_PROPERTY_TYPE: &str = "_macro/json";
+
+#[async_trait]
+impl UserToolReviewer for AcpUserInputRequester {
+    async fn review(&self, request: ReviewRequest) -> Result<ReviewOutcome, ReviewError> {
+        let _waiting = self.awaiting.begin();
+        let scope = ElicitationSessionScope::new(self.session_id.clone())
+            .tool_call_id(ToolCallId::new(request.tool_call_id.as_str()));
+        // The name lets a Macro client pick the tool's composer; the draft
+        // rides along so the fold has it even when the call the review is
+        // scoped to is not one it opened.
+        let mut ours = serde_json::Map::new();
+        ours.insert(
+            USER_TOOL_META_KEY.to_owned(),
+            serde_json::json!({ "name": request.tool_name, "draft": request.draft }),
+        );
+        let mut meta = Meta::new();
+        meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
+        let elicitation = CreateElicitationRequest::new(
+            ElicitationFormMode::new(scope, review_form_schema(&request.form)),
+            request.message,
+        )
+        .meta(meta);
+
+        let response = self
+            .connection
+            .send_request(elicitation)
+            .block_task()
+            .await
+            .map_err(|error| ReviewError::Unavailable(error.to_string()))?;
+        Ok(match response.action {
+            ElicitationAction::Accept(accept) => ReviewOutcome::Accepted(
+                accept
+                    .content
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|(name, value)| {
+                        serde_json::to_value(value).ok().map(|value| (name, value))
+                    })
+                    .collect(),
+            ),
+            ElicitationAction::Decline => ReviewOutcome::Declined,
+            ElicitationAction::Cancel => ReviewOutcome::Cancelled,
+            _ => {
+                return Err(ReviewError::Failed(
+                    "the client returned an unknown elicitation action".to_owned(),
+                ));
+            }
+        })
+    }
+}
+
+/// A review form as ACP's restricted schema. Fields are the draft's flat
+/// arguments with their current values as defaults; the draft field is the
+/// `_macro/json` extension a Macro client fills from its own composer.
+fn review_form_schema(form: &ReviewForm) -> ElicitationSchema {
+    let mut schema = ElicitationSchema::new().title(form.title.clone());
+    for field in &form.fields {
+        let required = form.required.contains(&field.name);
+        let property: ElicitationPropertySchema = match &field.kind {
+            ReviewFieldKind::Text { default, format } => StringPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(default.clone())
+                .format(format.as_deref().and_then(string_format))
+                .into(),
+            ReviewFieldKind::Boolean { default } => BooleanPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(*default)
+                .into(),
+            ReviewFieldKind::Number { default } => NumberPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(*default)
+                .into(),
+            ReviewFieldKind::Integer { default } => IntegerPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .default_value(*default)
+                .into(),
+            ReviewFieldKind::Choice { options, default } => StringPropertySchema::new()
+                .title(field.name.clone())
+                .description(field.description.clone())
+                .enum_values(options.clone())
+                .default_value(default.clone())
+                .into(),
+            ReviewFieldKind::Json => {
+                let mut fields = std::collections::BTreeMap::new();
+                fields.insert(
+                    "title".to_owned(),
+                    serde_json::Value::String(field.name.clone()),
+                );
+                if let Some(description) = &field.description {
+                    fields.insert(
+                        "description".to_owned(),
+                        serde_json::Value::String(description.clone()),
+                    );
+                }
+                ElicitationPropertySchema::Other(OtherElicitationPropertySchema::new(
+                    JSON_PROPERTY_TYPE,
+                    fields,
+                ))
+            }
+        };
+        schema = schema.property(field.name.clone(), property, required);
+    }
+    schema
+}
+
+/// ACP's string format for a JSON Schema `format`, for the ones it names.
+fn string_format(format: &str) -> Option<StringFormat> {
+    match format {
+        "email" => Some(StringFormat::Email),
+        "uri" => Some(StringFormat::Uri),
+        "date" => Some(StringFormat::Date),
+        "date-time" => Some(StringFormat::DateTime),
+        _ => None,
+    }
 }
 
 #[async_trait]
@@ -284,18 +419,21 @@ impl UserInputRequester for AcpUserInputRequester {
     }
 }
 
+/// The turn's way of reaching the user, when the client can show a form.
+/// `None` means no question and no review can be asked this turn: `AskUser`
+/// is not offered, and a user tool's pending answer stays pending.
 fn user_input_requester(
     state: &AgentState,
     connection: &ConnectionTo<Client>,
     session_id: SessionId,
     awaiting: &Arc<AwaitingUser>,
-) -> Option<SharedUserInputRequester> {
+) -> Option<Arc<AcpUserInputRequester>> {
     state.client_renders_forms.load(Ordering::Relaxed).then(|| {
         Arc::new(AcpUserInputRequester {
             connection: connection.clone(),
             session_id,
             awaiting: Arc::clone(awaiting),
-        }) as SharedUserInputRequester
+        })
     })
 }
 
@@ -473,14 +611,17 @@ async fn run_turn(
         instructions,
     } = state.turn_input(&prompt);
     let awaiting = Arc::new(AwaitingUser::default());
-    let user_input = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
+    let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
         owner: state.owner.clone(),
         model,
         instructions,
         messages,
         cancel: cancel.clone(),
-        user_input,
+        user_input: requester
+            .clone()
+            .map(|requester| requester as SharedUserInputRequester),
+        reviewer: requester.map(|requester| requester as Arc<dyn UserToolReviewer>),
     });
 
     let mut accumulator = StreamAccumulator::new();

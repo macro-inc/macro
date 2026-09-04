@@ -7,6 +7,14 @@
 //! prompt (immediately before any session instructions), and the owner's
 //! memory, with usage recorded per turn against the session owner.
 //!
+//! User tools (`SendEmail`, `CreateCalendarEvent`) are the chat host's
+//! deferring ones, finished inside the turn: the turn's [`TurnRequest`]
+//! carries a reviewer over the ACP connection, and the agent loop's
+//! user-tool finisher puts each pending call to it - the session renders the
+//! elicitation - then runs or rejects the tool before the model reads the
+//! result. Without a reviewer (a client with no form support) a pending call
+//! stays pending, as in chat.
+//!
 //! This is also where a session's own instructions become a system prompt.
 //! Nothing has to be transported for it - the loop runs in this process - which
 //! is why the in-memory runtime is the one provider that needs no wire format
@@ -15,6 +23,7 @@
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart};
+use ai_tools::user_tool_review::user_tool_finisher;
 use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
 use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
 use axum::extract::FromRef;
@@ -110,8 +119,13 @@ async fn drive_turn(
         messages,
         cancel,
         user_input,
+        reviewer,
     } = request;
 
+    // The chat host's toolset: its user tools (`SendEmail`,
+    // `CreateCalendarEvent`) defer to the user, and this runtime finishes
+    // them in the turn through `reviewer` - the session's review card is the
+    // composer chat's `AiHost::Chat` doc promises.
     let tools = tools_for(AiHost::Chat);
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
     let system_prompt = system_prompt(
@@ -125,12 +139,10 @@ async fn drive_turn(
     // add the one tool that needs the active ACP connection.
     let base_tools = Arc::into_inner(tools.toolset)
         .expect("tools_for should return a fresh, uniquely owned collection");
-    let toolset = tools_for_turn(base_tools, user_input.is_some());
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(toolset);
-    let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
-    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner);
+    let toolset = Arc::new(tools_for_turn(base_tools, user_input.is_some()));
+    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
     // Carry the feature on the context so tool-spawned subagents attribute to it.
-    let mut tool_context = base_context;
+    let mut tool_context = base_context.clone();
     tool_context.usage_context = usage_ctx.clone();
     let tool_context = InMemToolContext {
         base: tool_context,
@@ -138,6 +150,18 @@ async fn drive_turn(
             requester: user_input,
         },
     };
+
+    let mut agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
+    if let Some(reviewer) = reviewer {
+        agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(
+            Arc::clone(&toolset),
+            tool_context.clone(),
+            owner,
+            reviewer,
+            cancel.clone(),
+        ));
+    }
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = toolset;
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
         .await;

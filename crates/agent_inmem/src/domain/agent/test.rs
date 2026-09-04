@@ -664,6 +664,165 @@ async fn a_turn_waiting_on_the_user_outlasts_the_idle_timeout() {
     assert_eq!(spoken(&notifications), "You said teal.");
 }
 
+/// An engine whose turn puts one user tool call to the reviewer and says what
+/// came back - the agent loop's finisher reduced to the ACP surface.
+struct ReviewingEngine;
+
+impl TurnEngine for ReviewingEngine {
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            let reviewer = request
+                .reviewer
+                .expect("the client advertised forms, so the turn can ask for a review");
+            let outcome = reviewer
+                .review(ReviewRequest {
+                    tool_name: "CreateCalendarEvent".to_owned(),
+                    tool_call_id: "toolu_7".to_owned(),
+                    message: "Create calendar event?".to_owned(),
+                    draft: serde_json::json!({"title": "Q3 sync", "addGoogleMeet": false}),
+                    form: ReviewForm {
+                        title: Some("Create calendar event".to_owned()),
+                        fields: vec![
+                            ai_tools::user_tool_review::ReviewField {
+                                name: "title".to_owned(),
+                                description: Some("The event title.".to_owned()),
+                                kind: ReviewFieldKind::Text {
+                                    default: Some("Q3 sync".to_owned()),
+                                    format: None,
+                                },
+                            },
+                            ai_tools::user_tool_review::ReviewField {
+                                name: "addGoogleMeet".to_owned(),
+                                description: None,
+                                kind: ReviewFieldKind::Boolean {
+                                    default: Some(false),
+                                },
+                            },
+                            ai_tools::user_tool_review::ReviewField {
+                                name: "draft".to_owned(),
+                                description: None,
+                                kind: ReviewFieldKind::Json,
+                            },
+                        ],
+                        required: vec!["title".to_owned()],
+                    },
+                })
+                .await;
+            let text = match outcome {
+                Ok(ReviewOutcome::Accepted(content)) => format!(
+                    "accepted {}",
+                    serde_json::to_string(&content).expect("content serializes")
+                ),
+                Ok(other) => format!("{other:?}"),
+                Err(error) => error.to_string(),
+            };
+            let _ = parts.send(Ok(StreamPart::Content(text))).await;
+        });
+        receiver
+    }
+}
+
+/// A user tool's review goes out as a tool-call-scoped form elicitation the
+/// fold and a Macro client can recognize: the draft's flat fields with their
+/// values as defaults, the `_macro/json` draft field, and `_meta.macro.userTool`
+/// naming the tool. The accepted content comes back as submitted.
+#[tokio::test]
+async fn a_user_tool_review_is_a_tool_scoped_form_elicitation_naming_the_tool() {
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue, ElicitationMode,
+        ElicitationPropertySchema, ElicitationScope,
+    };
+    use std::collections::BTreeMap;
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([
+            (
+                "title".to_owned(),
+                ElicitationContentValue::String("Q3 planning".to_owned()),
+            ),
+            (
+                "addGoogleMeet".to_owned(),
+                ElicitationContentValue::Boolean(true),
+            ),
+        ])));
+    let (notifications, asked, response) = with_asking_engine(
+        Arc::new(ReviewingEngine),
+        answer,
+        Duration::ZERO,
+        async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "create the event"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        },
+    )
+    .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(asked.len(), 1, "one review was asked");
+    let request = &asked[0];
+    assert_eq!(request.message, "Create calendar event?");
+    let ElicitationMode::Form(form) = &request.mode else {
+        panic!("a form was asked");
+    };
+    let ElicitationScope::Session(scope) = &form.scope else {
+        panic!("session scoped");
+    };
+    assert_eq!(
+        scope.tool_call_id.as_ref().map(|id| id.0.as_ref()),
+        Some("toolu_7"),
+        "the elicitation names the call it reviews"
+    );
+    let user_tool = request
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get(META_NAMESPACE))
+        .and_then(|ours| ours.get(USER_TOOL_META_KEY))
+        .expect("_meta.macro.userTool names the tool under review");
+    assert_eq!(
+        user_tool.get("name").and_then(|name| name.as_str()),
+        Some("CreateCalendarEvent"),
+        "a Macro client learns which tool's composer to show"
+    );
+    assert_eq!(
+        user_tool.get("draft"),
+        Some(&serde_json::json!({"title": "Q3 sync", "addGoogleMeet": false})),
+        "and has the draft whether or not it opened the call"
+    );
+    let schema = &form.requested_schema;
+    assert_eq!(schema.title.as_deref(), Some("Create calendar event"));
+    let ElicitationPropertySchema::String(title) = &schema.properties["title"] else {
+        panic!("title is a string field");
+    };
+    assert_eq!(title.default.as_deref(), Some("Q3 sync"));
+    assert_eq!(title.description.as_deref(), Some("The event title."));
+    let ElicitationPropertySchema::Boolean(meet) = &schema.properties["addGoogleMeet"] else {
+        panic!("addGoogleMeet is a boolean field");
+    };
+    assert_eq!(meet.default, Some(false));
+    let ElicitationPropertySchema::Other(draft) = &schema.properties["draft"] else {
+        panic!(
+            "the draft is a custom field, got {:?}",
+            schema.properties["draft"]
+        );
+    };
+    assert_eq!(draft.type_, JSON_PROPERTY_TYPE);
+    assert_eq!(
+        schema.required.as_deref(),
+        Some(&["title".to_owned()][..]),
+        "the draft field is never required"
+    );
+    assert_eq!(
+        spoken(&notifications),
+        r#"accepted {"addGoogleMeet":true,"title":"Q3 planning"}"#
+    );
+}
+
 /// The timeout still guards a turn that is silent with nothing asked.
 #[tokio::test(start_paused = true)]
 async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
