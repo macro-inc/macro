@@ -23,8 +23,6 @@ pub(crate) mod swagger;
 #[cfg(test)]
 mod test;
 
-/// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
-/// alongside `/` so the dedicated ALB keeps working during cutover.
 const GATEWAY_PATH_PREFIX: &str = "/email";
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
