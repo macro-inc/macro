@@ -31,6 +31,10 @@ pub struct TurnRequest {
 /// scripted engine, and production plugs in
 /// [`crate::outbound::rig_engine::RigTurnEngine`].
 pub trait TurnEngine: Send + Sync + 'static {
+    /// Model ids this engine deployment can run and therefore advertises over
+    /// ACP. The order is the picker order.
+    fn supported_models(&self) -> &[&str];
+
     /// Start the turn. Parts arrive on the returned receiver; the stream
     /// ending is the turn ending, and an `Err` item is a turn-fatal failure.
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>>;

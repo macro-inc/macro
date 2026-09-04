@@ -78,8 +78,18 @@ list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team`, `Tags`, `CRM`, `Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; `Log out`.
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`,
+`Agents`, `Harness`; `Log out`.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
+
+`Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
+The model list is loaded live and independently for In-memory, connected Cursor, and every
+registered macrod harness. A harness can show `Loading models…`, an unsupported message, or
+a retryable error without hiding the other harnesses. Editing preserves a saved model that
+is no longer offered and labels it `saved, unavailable`.
+
+`Harness` configures Cursor and paired macrod runtimes. Cursor's default-model picker uses
+the same live model discovery and retains its existing save action.
 
 ## Notifications
 

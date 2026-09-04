@@ -44,5 +44,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
-serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

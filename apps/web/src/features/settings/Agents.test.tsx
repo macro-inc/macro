@@ -20,14 +20,6 @@ const cursorMocks = vi.hoisted(() => ({
       updatedAt: null as string | null,
     },
   },
-  models: {
-    data: {
-      models: [
-        { id: 'cursor-small', displayName: 'Cursor Small' },
-        { id: 'cursor-large', displayName: 'Cursor Large' },
-      ],
-    },
-  },
 }));
 
 const agentMocks = vi.hoisted(() => ({
@@ -47,8 +39,68 @@ const agentMocks = vi.hoisted(() => ({
 
 vi.mock('@queries/auth/cursor-api-key', () => ({
   useCursorApiKeyStatusQuery: () => cursorMocks.status,
-  useCursorModelsQuery: () => cursorMocks.models,
 }));
+
+const modelMocks = vi.hoisted(() => ({
+  queries: {} as Record<
+    string,
+    {
+      data?: {
+        status: 'available' | 'unsupported';
+        currentModel?: string | null;
+        models: { id: string; name: string; description?: string | null }[];
+      };
+      isPending: boolean;
+      isError: boolean;
+      isSuccess: boolean;
+      refetch: ReturnType<typeof vi.fn>;
+    }
+  >,
+}));
+
+function modelTargetKey(target: {
+  harness: string;
+  harnessId?: string;
+}): string {
+  return `${target.harness}:${target.harnessId ?? ''}`;
+}
+
+function successfulModels(
+  models: { id: string; name: string }[],
+  currentModel = models[0]?.id
+) {
+  return {
+    data: {
+      status: 'available' as const,
+      currentModel,
+      models,
+    },
+    isPending: false,
+    isError: false,
+    isSuccess: true,
+    refetch: vi.fn(),
+  };
+}
+
+vi.mock('@queries/agents/models', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@queries/agents/models')>();
+  return {
+    ...actual,
+    useAgentModelsQueries: (
+      targets: () => { harness: string; harnessId?: string }[]
+    ) =>
+      targets().map(
+        (target) =>
+          modelMocks.queries[modelTargetKey(target)] ?? {
+            isPending: true,
+            isError: false,
+            isSuccess: false,
+            refetch: vi.fn(),
+          }
+      ),
+  };
+});
 
 const harnessMocks = vi.hoisted(() => ({
   query: {
@@ -123,6 +175,12 @@ beforeEach(() => {
   agentMocks.currentTeam = { team: { id: 'team-1' } };
   agentMocks.isTeamOwner = false;
   harnessMocks.query.data = [];
+  modelMocks.queries = {
+    'in-memory:': successfulModels([
+      { id: Model.sonnet5, name: 'Claude Sonnet 4.5' },
+      { id: Model.opus5, name: 'Claude Opus 4.5' },
+    ]),
+  };
 });
 
 const MACROD_HARNESS = {
@@ -519,6 +577,10 @@ describe('Agents', () => {
       registered: true,
       updatedAt: '2026-08-27T12:00:00Z',
     };
+    modelMocks.queries['cursor:'] = successfulModels([
+      { id: 'cursor-small', name: 'Cursor Small' },
+      { id: 'cursor-large', name: 'Cursor Large' },
+    ]);
 
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
@@ -551,8 +613,76 @@ describe('Agents', () => {
     ).toBeTruthy();
   });
 
-  it('swaps the model select for a free-text input seeded with default for macrod harnesses', () => {
+  it('keeps loading, error, and unsupported states independent per harness', () => {
+    cursorMocks.status.data = {
+      registered: true,
+      updatedAt: '2026-08-27T12:00:00Z',
+    };
+    const loadingHarness = {
+      ...MACROD_HARNESS,
+      id: '4f1c9d2e-8a4b-4c5d-9e6f-1a2b3c4d5e70',
+      name: 'Loading box',
+    };
+    harnessMocks.query.data = [MACROD_HARNESS, loadingHarness];
+    const retry = vi.fn();
+    modelMocks.queries['cursor:'] = {
+      isPending: false,
+      isError: true,
+      isSuccess: false,
+      refetch: retry,
+    };
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = {
+      data: { status: 'unsupported', models: [] },
+      isPending: false,
+      isError: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    };
+    modelMocks.queries[`macrod:${loadingHarness.id}`] = {
+      isPending: true,
+      isError: false,
+      isSuccess: false,
+      refetch: vi.fn(),
+    };
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    const dialog = screen.getByRole('dialog');
+    const harness = within(dialog).getByLabelText('Harness');
+
+    expect(
+      within(dialog).getByRole('option', { name: 'Claude Sonnet 4.5' })
+    ).toBeTruthy();
+
+    fireEvent.change(harness, { target: { value: 'cursor' } });
+    expect(
+      within(dialog).getByText(/Could not load models for Cursor/)
+    ).toBeTruthy();
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Retry models for Cursor' })
+    );
+    expect(retry).toHaveBeenCalledOnce();
+
+    fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
+    expect(
+      within(dialog).getByText(
+        'Model selection is unsupported by this harness.'
+      )
+    ).toBeTruthy();
+
+    fireEvent.change(harness, { target: { value: loadingHarness.id } });
+    expect(within(dialog).getByText('Loading models…')).toBeTruthy();
+  });
+
+  it('uses the discovered model selector for macrod harnesses', () => {
     harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels(
+      [
+        { id: 'claude-code', name: 'Claude Code' },
+        { id: 'codex', name: 'Codex' },
+      ],
+      'codex'
+    );
 
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
@@ -562,12 +692,63 @@ describe('Agents', () => {
     fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
 
     const defaultModel = within(dialog).getByLabelText('Default model');
-    expect(defaultModel.tagName).toBe('INPUT');
-    expect(defaultModel).toHaveProperty('value', 'default');
+    expect(defaultModel.tagName).toBe('SELECT');
+    expect(defaultModel).toHaveProperty('value', 'codex');
+    expect(within(defaultModel).getAllByRole('option')).toHaveLength(2);
+  });
+
+  it('falls back to the first advertised model when current is absent', () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels(
+      [
+        { id: 'claude-code', name: 'Claude Code' },
+        { id: 'codex', name: 'Codex' },
+      ],
+      'retired-model'
+    );
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+      target: { value: MACROD_HARNESS.id },
+    });
+
+    expect(within(dialog).getByLabelText('Default model')).toHaveProperty(
+      'value',
+      'claude-code'
+    );
+  });
+
+  it('shows the current model when an available catalog has no options', () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels(
+      [],
+      'provider-default'
+    );
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+      target: { value: MACROD_HARNESS.id },
+    });
+
+    const defaultModel = within(dialog).getByLabelText('Default model');
+    expect(defaultModel).toHaveProperty('value', 'provider-default');
+    expect(
+      within(defaultModel).getByRole('option', {
+        name: 'provider-default (unavailable)',
+      })
+    ).toBeTruthy();
   });
 
   it('submits macrod agents with the macrod slug and harness id', async () => {
     harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels(
+      [{ id: 'claude-code', name: 'Claude Code' }],
+      'claude-code'
+    );
 
     render(() => <Agents />);
     fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
@@ -588,7 +769,7 @@ describe('Agents', () => {
         avatarUrl: undefined,
         channelIds: [],
         channelScope: 'all',
-        defaultModel: 'default',
+        defaultModel: 'claude-code',
         handle: 'bug-fixer',
         harness: 'macrod',
         harnessId: MACROD_HARNESS.id,
@@ -599,8 +780,46 @@ describe('Agents', () => {
     });
   });
 
+  it('preserves and labels a saved model missing from the fresh catalog', () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'in-memory',
+        default_model: 'retired-model',
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+
+    const defaultModel = within(screen.getByRole('dialog')).getByLabelText(
+      'Default model'
+    );
+    expect(defaultModel).toHaveProperty('value', 'retired-model');
+    expect(
+      within(defaultModel).getByRole('option', {
+        name: 'retired-model (saved, unavailable)',
+      })
+    ).toBeTruthy();
+  });
+
   it('preselects the bound macrod harness when editing', () => {
     harnessMocks.query.data = [MACROD_HARNESS];
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels([
+      { id: 'default', name: 'Harness default' },
+    ]);
     agentMocks.query.data = [
       {
         bot: {
@@ -632,7 +851,7 @@ describe('Agents', () => {
       MACROD_HARNESS.id
     );
     const defaultModel = within(dialog).getByLabelText('Default model');
-    expect(defaultModel.tagName).toBe('INPUT');
+    expect(defaultModel.tagName).toBe('SELECT');
     expect(defaultModel).toHaveProperty('value', 'default');
   });
 });

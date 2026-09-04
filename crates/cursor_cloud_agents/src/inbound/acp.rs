@@ -28,7 +28,8 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::model::{McpHeader, McpServer, McpTransport, ModelFamily};
+use crate::domain::model::{McpHeader, McpServer, McpTransport};
+use crate::domain::model_options::{MODEL_CONFIG_ID, cursor_model_config_options};
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use crate::domain::service::CursorSessionService;
 use agent_client_protocol::schema::ProtocolVersion;
@@ -37,9 +38,7 @@ use agent_client_protocol::schema::v1::{
     CloseSessionRequest, CloseSessionResponse, ContentBlock, Error as AcpError, HttpHeader,
     Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
     McpCapabilities, McpServer as AcpMcpServer, NewSessionRequest, NewSessionResponse,
-    PromptCapabilities, PromptRequest, PromptResponse, SessionConfigGroupId, SessionConfigId,
-    SessionConfigKind, SessionConfigOption, SessionConfigSelect, SessionConfigSelectGroup,
-    SessionConfigSelectOption, SessionConfigSelectOptions, SessionConfigValueId, SessionId,
+    PromptCapabilities, PromptRequest, PromptResponse, SessionConfigOption, SessionId,
     SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
     SetSessionConfigOptionResponse,
 };
@@ -49,19 +48,6 @@ use agent_client_protocol::{
 };
 use std::sync::{Arc, OnceLock};
 use tokio_util::compat::{TokioAsyncReadCompatExt as _, TokioAsyncWriteCompatExt as _};
-
-/// The ACP config-option id for a session's model.
-///
-/// Defined here rather than shared with the Macro harness: this crate is a
-/// standalone ACP agent (see the `cursor_cloud_agents` binary) and must not
-/// depend on its embedder. `"model"` is the id every ACP client looks for, and
-/// the harness uses the same literal for the same reason.
-const MODEL_CONFIG_ID: &str = "model";
-
-/// Cursor's own "let the server pick" model (`GET /v1/models` lists it as
-/// `default`, displayed "Auto") — the select's resting value when nothing has
-/// been chosen.
-const AUTO_MODEL_ID: &str = "default";
 
 /// Delivers session updates as `session/update` notifications on the ACP
 /// connection.
@@ -500,46 +486,7 @@ where
     //
     // If Cursor ever drops the entry there is no honest resting value, and no
     // picker beats one resting on a guess.
-    let current = current.or_else(|| {
-        models
-            .iter()
-            .find(|model| model.id == AUTO_MODEL_ID)
-            .map(|model| model.id.clone())
-    });
-    let Some(current) = current else {
-        return Vec::new();
-    };
-    let select_option = |model: &crate::domain::model::CursorModel| {
-        SessionConfigSelectOption::new(
-            SessionConfigValueId::new(model.id.clone()),
-            model.display_name.clone(),
-        )
-    };
-    let families = ModelFamily::group(&models);
-    let options = if ModelFamily::is_informative(&families) {
-        SessionConfigSelectOptions::Grouped(
-            families
-                .iter()
-                .map(|family| {
-                    SessionConfigSelectGroup::new(
-                        SessionConfigGroupId::new(family.id.clone()),
-                        family.name.clone(),
-                        family.models.iter().map(select_option).collect(),
-                    )
-                })
-                .collect(),
-        )
-    } else {
-        SessionConfigSelectOptions::Ungrouped(models.iter().map(select_option).collect())
-    };
-    vec![SessionConfigOption::new(
-        SessionConfigId::new(MODEL_CONFIG_ID),
-        "Model",
-        SessionConfigKind::Select(SessionConfigSelect::new(
-            SessionConfigValueId::new(current),
-            options,
-        )),
-    )]
+    cursor_model_config_options(&models, current)
 }
 
 /// Concatenate a prompt's content blocks into the single string Cursor takes.

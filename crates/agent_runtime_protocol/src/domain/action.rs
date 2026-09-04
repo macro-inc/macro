@@ -186,7 +186,9 @@ impl AgentAction {
             return Some(Self::SetModel(action));
         }
 
-        let ToRuntimeMessage::Acp(AcpMessage(frame)) = message;
+        let ToRuntimeMessage::Acp(AcpMessage(frame)) = message else {
+            return None;
+        };
         match frame {
             RawJsonRpcMessage::Request(request)
                 if PromptRequest::matches_method(&request.method) =>

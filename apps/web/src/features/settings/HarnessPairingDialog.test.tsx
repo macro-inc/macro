@@ -38,6 +38,9 @@ vi.mock('@queries/harnesses/harnesses', () => ({
     get isError() {
       return Boolean(code()) && mocks.pairing.isError;
     },
+    get isSuccess() {
+      return Boolean(code()) && !mocks.pairing.isError;
+    },
     get error() {
       return mocks.pairing.isError ? new Error('gone') : null;
     },

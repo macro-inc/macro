@@ -79,7 +79,6 @@ async fn pairing_walks_create_approve_claim_exactly_once(pool: PgPool) {
         row.details.requested_scope,
         Some(RequestedHarnessScope::Team)
     );
-
     let harness = repo
         .approve_pairing("KX7M-4QHD", new_harness())
         .await

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use agent_client_protocol::Channel as AcpChannel;
 use agent_client_protocol::{RawJsonRpcMessage, TransportFrame};
@@ -191,4 +192,96 @@ async fn official_acp_client_and_agent_connect_directly_to_exposed_channels() {
             .is_cancelled(),
         "the long-lived agent driver should only be stopped explicitly"
     );
+}
+
+struct ProbeHandler;
+
+impl ModelProbeHandler for ProbeHandler {
+    async fn probe(
+        &self,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::SessionConfigOption>, String> {
+        Ok(Vec::new())
+    }
+}
+
+#[tokio::test]
+async fn runtime_answers_each_model_probe_with_its_correlation_id() {
+    let (mut service, runtime_channel) = Channel::duplex();
+    let (_runtime, _runtime_acp) =
+        RuntimeConnection::connect_with_model_probe_handler(runtime_channel, ProbeHandler);
+    let request_id = crate::domain::schema::v0::ModelProbeId::from_string("probe-a".to_owned());
+
+    service
+        .tx
+        .send(ToRuntimeMessage::ModelProbeRequest {
+            request_id: request_id.clone(),
+        })
+        .expect("request should send");
+    let response = timeout(Duration::from_secs(1), service.rx.recv())
+        .await
+        .expect("probe response should not hang")
+        .expect("runtime should remain connected");
+
+    assert!(matches!(
+        response,
+        ToServerMessage::ModelProbeResponse {
+            request_id: actual,
+            result: crate::domain::schema::v0::ModelProbeResult::Available { config_options },
+        } if actual == request_id && config_options.is_empty()
+    ));
+}
+
+struct ConcurrentProbeHandler {
+    started: Arc<AtomicUsize>,
+    release: Arc<tokio::sync::Notify>,
+}
+
+impl ModelProbeHandler for ConcurrentProbeHandler {
+    async fn probe(
+        &self,
+    ) -> Result<Vec<agent_client_protocol::schema::v1::SessionConfigOption>, String> {
+        self.started.fetch_add(1, Ordering::SeqCst);
+        self.release.notified().await;
+        Ok(Vec::new())
+    }
+}
+
+#[tokio::test]
+async fn runtime_model_probes_fan_out_without_serializing() {
+    let (mut service, runtime_channel) = Channel::duplex();
+    let started = Arc::new(AtomicUsize::new(0));
+    let release = Arc::new(tokio::sync::Notify::new());
+    let (_runtime, _runtime_acp) = RuntimeConnection::connect_with_model_probe_handler(
+        runtime_channel,
+        ConcurrentProbeHandler {
+            started: Arc::clone(&started),
+            release: Arc::clone(&release),
+        },
+    );
+
+    for id in ["probe-a", "probe-b"] {
+        service
+            .tx
+            .send(ToRuntimeMessage::ModelProbeRequest {
+                request_id: crate::domain::schema::v0::ModelProbeId::from_string(id.to_owned()),
+            })
+            .expect("request should send");
+    }
+    timeout(Duration::from_secs(1), async {
+        while started.load(Ordering::SeqCst) != 2 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("both probes should start while neither can finish");
+    release.notify_waiters();
+
+    for _ in 0..2 {
+        assert!(matches!(
+            timeout(Duration::from_secs(1), service.rx.recv())
+                .await
+                .expect("response should not hang"),
+            Some(ToServerMessage::ModelProbeResponse { .. })
+        ));
+    }
 }

@@ -12,6 +12,7 @@
 //! the agent's raw ACP traffic.
 
 use agent_client_protocol::RawJsonRpcMessage;
+use agent_client_protocol::schema::v1::SessionConfigOption;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use specta::Type;
 use specta_typescript::Unknown;
@@ -102,6 +103,55 @@ pub struct AcpMessage(
     #[specta(type = std::collections::HashMap<String, Unknown>)] pub RawJsonRpcMessage,
 );
 
+/// Correlation id for one connection-level model probe.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
+#[serde(transparent)]
+pub struct ModelProbeId(String);
+
+impl ModelProbeId {
+    /// Allocate a globally unique probe id.
+    #[must_use]
+    pub fn new() -> Self {
+        Self(macro_uuid::generate_uuid_v7().to_string())
+    }
+
+    /// Construct an id from its wire representation.
+    #[must_use]
+    pub fn from_string(value: String) -> Self {
+        Self(value)
+    }
+
+    /// Borrow the wire representation.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Default for ModelProbeId {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// The result of probing a fresh ACP subprocess.
+#[derive(Debug, Clone, Serialize, Deserialize, Type)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum ModelProbeResult {
+    /// The raw options returned by `session/new`.
+    Available {
+        /// Session configuration options exactly as the agent returned them.
+        #[serde(rename = "configOptions")]
+        #[specta(type = Vec<Unknown>)]
+        config_options: Vec<SessionConfigOption>,
+    },
+    /// A safe, operator-actionable failure description.
+    Error {
+        /// Failure text safe to return across the runtime connection.
+        message: String,
+    },
+}
+
 /// Agent Service to Agent Runtime traffic on the logical protocol stream.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "type", rename_all = "camelCase")]
@@ -109,6 +159,12 @@ pub struct AcpMessage(
 pub enum ToRuntimeMessage {
     /// An ACP message routed to the hosted agent.
     Acp(AcpMessage),
+    /// Probe a separate fresh agent process for its session configuration.
+    ModelProbeRequest {
+        /// Correlates this request with exactly one response.
+        #[serde(rename = "requestId")]
+        request_id: ModelProbeId,
+    },
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.
@@ -123,5 +179,13 @@ pub enum ToServerMessage {
         /// The event name.
         #[specta(type = String)]
         event: SystemEvent,
+    },
+    /// The answer to one connection-level model probe.
+    ModelProbeResponse {
+        /// Correlates this response with exactly one request.
+        #[serde(rename = "requestId")]
+        request_id: ModelProbeId,
+        /// Raw options or a safe failure.
+        result: ModelProbeResult,
     },
 }
