@@ -45,7 +45,9 @@ export function CursorProvider() {
   const setCursorDefaultModel = useSetCursorDefaultModel();
   const models = () => cursorModels.data?.models ?? [];
   const modelsLoading = () =>
-    cursorRegistered() && !cursorModels.isError && cursorModels.isPending;
+    cursorRegistered() &&
+    !cursorModels.isError &&
+    (cursorModels.isPending || cursorModels.isPlaceholderData);
   const selectedModelId = () => {
     const id = cursorStatus.data?.defaultModelId;
     const list = models();

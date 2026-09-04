@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   models: {
     isSuccess: true,
     isPending: false,
+    isPlaceholderData: false,
     isError: false,
     data: {
       models: [{ id: 'default-model', displayName: 'Default Model' }],
@@ -74,6 +75,7 @@ beforeEach(() => {
   mocks.status.isPlaceholderData = false;
   mocks.models.isSuccess = true;
   mocks.models.isPending = false;
+  mocks.models.isPlaceholderData = false;
   mocks.models.isError = false;
   mocks.models.data = {
     models: [{ id: 'default-model', displayName: 'Default Model' }],
@@ -171,6 +173,25 @@ describe('CursorProvider', () => {
     const picker = document.getElementById('cursor-default-model');
     expect(picker).toBeTruthy();
     expect(picker).toHaveProperty('disabled', true);
+    expect(picker?.getAttribute('aria-busy')).toBe('true');
+    expect(screen.getByRole('status', { name: 'Loading models' })).toBeTruthy();
+  });
+
+  it('shows Loading models while the roster placeholder is still empty', () => {
+    mocks.status.data = {
+      registered: true,
+      defaultModelId: null,
+      updatedAt: '2026-08-27T12:00:00Z',
+    };
+    mocks.models.isPending = false;
+    mocks.models.isPlaceholderData = true;
+    mocks.models.data = { models: [] };
+
+    render(() => <CursorProvider />);
+
+    expect(screen.queryByText('No models available.')).toBeNull();
+    const picker = document.getElementById('cursor-default-model');
+    expect(picker).toBeTruthy();
     expect(picker?.getAttribute('aria-busy')).toBe('true');
     expect(screen.getByRole('status', { name: 'Loading models' })).toBeTruthy();
   });
