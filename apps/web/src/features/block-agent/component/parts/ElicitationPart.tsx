@@ -262,11 +262,26 @@ function LiveUserTool(props: {
       </Match>
       <Match when={typed()?.name === 'SendEmail' && typed()}>
         {(tool) => (
-          <EmailDraftComposer
-            initialData={tool().data as SendEmail}
-            sink={sink<SendEmail>()}
-            debugName={`agent-review:${props.toolCall}`}
-          />
+          <div class="flex flex-col gap-2">
+            <EmailDraftComposer
+              initialData={tool().data as SendEmail}
+              sink={sink<SendEmail>()}
+              debugName={`agent-review:${props.toolCall}`}
+            />
+            {/* The email composer has only Send; the calendar one answers a
+                decline through the sink's `onReject`. Without this the turn
+                could only be refused from the chip, or by stopping it. */}
+            <div class="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="xs"
+                disabled={props.locked}
+                onClick={() => void props.onRespond({ action: 'decline' })}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
         )}
       </Match>
     </Switch>
