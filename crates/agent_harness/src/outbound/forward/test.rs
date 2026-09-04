@@ -23,17 +23,3 @@ fn a_request_with_trace_context_round_trips() {
     assert_eq!(decoded.request_id(), request.request_id());
     assert_eq!(decoded.trace_context, request.trace_context);
 }
-
-#[test]
-fn a_response_carries_its_request_id() {
-    let request_id = macro_uuid::Uuid::new_v4();
-    let response = RuntimeCommandResponseEnvelope::new(
-        request_id,
-        RuntimeCommandResponse::Completed(CommandOutcome::Completed),
-    );
-    let payload = serde_json::to_string(&response).expect("response serializes");
-    let decoded: RuntimeCommandResponseEnvelope =
-        serde_json::from_str(&payload).expect("response deserializes");
-
-    assert_eq!(decoded.request_id, request_id);
-}

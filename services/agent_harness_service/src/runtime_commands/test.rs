@@ -43,6 +43,16 @@ async fn ready(readiness: &mut tokio::sync::watch::Receiver<bool>) {
     .expect("readiness channel remains open");
 }
 
+async fn wait_for_calls(harness: &RecordingHarness, expected: usize) {
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while harness.calls.load(Ordering::SeqCst) != expected {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("command is processed");
+}
+
 fn harness(fails: bool) -> Arc<RecordingHarness> {
     Arc::new(RecordingHarness {
         calls: AtomicUsize::new(0),
@@ -90,14 +100,14 @@ async fn a_command_executes_on_exactly_one_responsible_replica() {
         .unwrap();
 
     assert_eq!(outcome, CommandOutcome::Completed);
+    wait_for_calls(&peer_harness, 1).await;
     assert_eq!(origin_harness.calls.load(Ordering::SeqCst), 0);
-    assert_eq!(peer_harness.calls.load(Ordering::SeqCst), 1);
     origin_consumer.abort();
     peer_consumer.abort();
 }
 
 #[tokio::test]
-async fn a_responsible_replicas_error_returns_immediately() {
+async fn a_responsible_replicas_error_does_not_fail_the_publish() {
     let redis = redis_client();
     let replica = ReplicaId::mint();
     let harness = harness(true);
@@ -106,26 +116,27 @@ async fn a_responsible_replicas_error_returns_immediately() {
         redis.clone(),
         replica,
         Arc::new(|_| false),
-        harness,
+        Arc::clone(&harness),
         ready_tx,
     ));
     ready(&mut readiness).await;
 
-    let error = RedisCommandForwarder::new(redis)
+    let outcome = RedisCommandForwarder::new(redis)
         .forward(
             AgentSessionId::TEST_A,
             HarnessCommand::Delete,
             CommandTarget::Replica(replica),
         )
         .await
-        .expect_err("the remote command fails");
+        .expect("the command publishes");
 
-    assert!(error.to_string().contains("no longer connected"));
+    assert_eq!(outcome, CommandOutcome::Completed);
+    wait_for_calls(&harness, 1).await;
     consumer.abort();
 }
 
 #[tokio::test]
-async fn all_replicas_declining_returns_disconnected_immediately() {
+async fn publishing_without_an_owner_still_succeeds() {
     let redis = redis_client();
     let harness = harness(false);
     let (ready_tx, mut readiness) = tokio::sync::watch::channel(false);
@@ -133,25 +144,23 @@ async fn all_replicas_declining_returns_disconnected_immediately() {
         redis.clone(),
         ReplicaId::mint(),
         Arc::new(|_| false),
-        harness,
+        Arc::clone(&harness),
         ready_tx,
     ));
     ready(&mut readiness).await;
 
     let target = harness_id();
-    let error = RedisCommandForwarder::new(redis)
+    let outcome = RedisCommandForwarder::new(redis)
         .forward(
             AgentSessionId::TEST_A,
             HarnessCommand::Delete,
             CommandTarget::Harness(target),
         )
         .await
-        .expect_err("no replica owns the harness");
+        .expect("the command publishes");
 
-    assert!(matches!(
-        error,
-        HarnessError::Disconnected(AgentSessionId::TEST_A)
-    ));
+    assert_eq!(outcome, CommandOutcome::Completed);
+    assert_eq!(harness.calls.load(Ordering::SeqCst), 0);
     consumer.abort();
 }
 
@@ -189,6 +198,13 @@ async fn overlapping_harness_connections_execute_once() {
         .await
         .unwrap();
 
+    tokio::time::timeout(std::time::Duration::from_secs(2), async {
+        while first.calls.load(Ordering::SeqCst) + second.calls.load(Ordering::SeqCst) != 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("command is processed");
     assert_eq!(
         first.calls.load(Ordering::SeqCst) + second.calls.load(Ordering::SeqCst),
         1

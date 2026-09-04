@@ -4,8 +4,7 @@ use std::sync::Arc;
 
 use agent_harness::domain::service::ForwardedCommands;
 use agent_harness::outbound::forward::{
-    COMMAND_CHANNEL, RuntimeCommandRequest, RuntimeCommandResponse, RuntimeCommandResponseEnvelope,
-    RuntimeCommandTarget, response_channel,
+    COMMAND_CHANNEL, RuntimeCommandRequest, RuntimeCommandTarget,
 };
 use agent_session::domain::model::ReplicaId;
 use futures::StreamExt as _;
@@ -77,28 +76,14 @@ where
                     }
                     RuntimeCommandTarget::Harness(_) => false,
                 };
-                let response = if selected {
-                    match harness_service
+                if selected {
+                    harness_service
                         .execute_forwarded(session, request.into_command())
                         .await
-                    {
-                        Ok(outcome) => RuntimeCommandResponse::Completed(outcome),
-                        Err(error) => RuntimeCommandResponse::Failed(error.to_string()),
-                    }
-                } else {
-                    RuntimeCommandResponse::Declined
-                };
-                let publish = async {
-                    let response = RuntimeCommandResponseEnvelope::new(request_id, response);
-                    let response = serde_json::to_string(&response)?;
-                    let mut publisher = redis.get_multiplexed_async_connection().await?;
-                    publisher
-                        .publish::<_, _, ()>(response_channel(request_id), response)
-                        .await?;
-                    anyhow::Ok(())
-                };
-                if let Err(error) = publish.await {
-                    tracing::error!(error = ?error, "failed to publish runtime command response");
+                        .inspect_err(|error| {
+                            tracing::error!(error = ?error, %session, "forwarded command failed");
+                        })
+                        .ok();
                 }
             }
             .instrument(span),

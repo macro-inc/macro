@@ -1,7 +1,6 @@
 //! Redis implementation of [`CommandForwarder`].
 
 use agent_session::domain::model::AgentSessionId;
-use futures::StreamExt as _;
 use harness_id::HarnessId;
 use opentelemetry::propagation::{Extractor, Injector};
 use redis::AsyncCommands as _;
@@ -35,19 +34,8 @@ impl CommandForwarder for RedisCommandForwarder {
         command: HarnessCommand,
         target: CommandTarget,
     ) -> Result<CommandOutcome> {
-        let request_id = macro_uuid::Uuid::new_v4();
-        let response_channel = response_channel(request_id);
-        let mut subscriber = self
-            .redis
-            .get_async_pubsub()
-            .await
-            .map_err(|error| forward_error("open response subscription", error))?;
-        subscriber
-            .subscribe(&response_channel)
-            .await
-            .map_err(|error| forward_error("subscribe for command response", error))?;
         let request = RuntimeCommandRequest {
-            request_id,
+            request_id: macro_uuid::Uuid::new_v4(),
             target: RuntimeCommandTarget::from(target),
             session,
             command,
@@ -60,54 +48,16 @@ impl CommandForwarder for RedisCommandForwarder {
             .get_multiplexed_async_connection()
             .await
             .map_err(|error| forward_error("open command publisher", error))?;
-        let subscribers = publisher
-            .publish::<_, _, usize>(COMMAND_CHANNEL, payload)
+        publisher
+            .publish::<_, _, ()>(COMMAND_CHANNEL, payload)
             .await
             .map_err(|error| forward_error("publish command request", error))?;
-        if subscribers == 0 {
-            return Err(HarnessError::Disconnected(session));
-        }
-        let mut responses = subscriber.into_on_message();
-        tokio::time::timeout(std::time::Duration::from_secs(120), async {
-            let mut declined = 0;
-            while let Some(response) = responses.next().await {
-                let payload: String = response
-                    .get_payload()
-                    .map_err(|error| forward_error("read command response", error))?;
-                let response = serde_json::from_str::<RuntimeCommandResponseEnvelope>(&payload)
-                    .map_err(|error| forward_error("deserialize command response", error))?;
-                if response.request_id != request_id {
-                    continue;
-                }
-                match response.response {
-                    RuntimeCommandResponse::Completed(outcome) => return Ok(outcome),
-                    RuntimeCommandResponse::Failed(message) => {
-                        return Err(HarnessError::Forward(
-                            rootcause::report!(message).into_dynamic(),
-                        ));
-                    }
-                    RuntimeCommandResponse::Declined => {
-                        declined += 1;
-                        if declined >= subscribers {
-                            return Err(HarnessError::Disconnected(session));
-                        }
-                    }
-                }
-            }
-            Err(HarnessError::Disconnected(session))
-        })
-        .await
-        .map_err(|_| HarnessError::Disconnected(session))?
+        Ok(CommandOutcome::Completed)
     }
 }
 
 /// Redis channel broadcasting runtime commands to every harness replica.
 pub const COMMAND_CHANNEL: &str = "agent-harness.runtime-commands";
-
-/// Return the private response channel for one command request.
-pub fn response_channel(request_id: macro_uuid::Uuid) -> String {
-    format!("agent-harness.runtime-command.response.{request_id}")
-}
 
 /// A command broadcast received from another replica.
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -167,36 +117,6 @@ impl From<CommandTarget> for RuntimeCommandTarget {
         match target {
             CommandTarget::Replica(replica) => Self::Replica(replica.as_uuid()),
             CommandTarget::Harness(harness) => Self::Harness(harness),
-        }
-    }
-}
-
-/// The result sent by each replica that observed a command broadcast.
-#[derive(serde::Serialize, serde::Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum RuntimeCommandResponse {
-    /// The selected replica executed the command.
-    Completed(CommandOutcome),
-    /// The selected replica attempted execution and failed.
-    Failed(String),
-    /// This replica was not responsible for the command.
-    Declined,
-}
-
-/// A response correlated to one command request.
-#[derive(serde::Serialize, serde::Deserialize)]
-pub struct RuntimeCommandResponseEnvelope {
-    request_id: macro_uuid::Uuid,
-    response: RuntimeCommandResponse,
-}
-
-impl RuntimeCommandResponseEnvelope {
-    /// Correlate a response to its command request.
-    #[must_use]
-    pub fn new(request_id: macro_uuid::Uuid, response: RuntimeCommandResponse) -> Self {
-        Self {
-            request_id,
-            response,
         }
     }
 }
