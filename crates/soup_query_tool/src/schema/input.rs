@@ -1,21 +1,21 @@
-//! GraphQL input types and the listing-request boundary.
+//! GraphQL input types and their translation into the domain listing request.
 
 use async_graphql::{Enum, InputObject};
-use chrono::{DateTime, Utc};
 use email::domain::models::PreviewView;
-use filter_ast::Expr;
 use graphql_soup_filter_input::{
     GraphqlCalendarEventExpr, GraphqlCallExpr, GraphqlChannelExpr, GraphqlChannelThreadExpr,
     GraphqlChatExpr, GraphqlDocumentExpr, GraphqlEmailExpr, GraphqlFilterPropertiesExpr,
     GraphqlForeignEntityExpr, GraphqlProjectExpr, materialize_graphql_filter,
 };
-use item_filters::ast::document::DocumentLiteral;
 use models_pagination::SimpleSortMethod;
-use models_properties::service::tag_sets::{TagFilter, TagMatch};
+use models_properties::service::tag_sets::{TagFilter, TagMatch, TagScope};
 use non_empty::NonEmpty;
+use soup::domain::agent_listing::{
+    AgentListingRequest, AgentSoupKind, EmailPreset, EmailScope, InboxSelector, Limit,
+    TagSelection, TaskSelection,
+};
 use soup::domain::models::SoupSortDirection;
-
-use crate::listing::{EmailScope, InboxSelector, Limit, ListingRequest, TagSelection};
+use system_properties::{PriorityOption, StatusOption};
 
 /// `enum GraphqlSoupEntityType`, curated to the nine kinds this tool serves.
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -41,12 +41,51 @@ pub(crate) enum SoupKind {
     ForeignEntity,
 }
 
+impl SoupKind {
+    /// Every kind, in schema order.
+    pub(crate) const ALL: [SoupKind; 9] = [
+        SoupKind::Document,
+        SoupKind::Chat,
+        SoupKind::Project,
+        SoupKind::EmailThread,
+        SoupKind::Channel,
+        SoupKind::ChannelMessage,
+        SoupKind::Call,
+        SoupKind::CalendarEvent,
+        SoupKind::ForeignEntity,
+    ];
+}
+
+impl From<SoupKind> for AgentSoupKind {
+    fn from(kind: SoupKind) -> Self {
+        match kind {
+            SoupKind::Document => Self::Document,
+            SoupKind::Chat => Self::Chat,
+            SoupKind::Project => Self::Project,
+            SoupKind::EmailThread => Self::EmailThread,
+            SoupKind::Channel => Self::Channel,
+            SoupKind::ChannelMessage => Self::ChannelMessage,
+            SoupKind::Call => Self::Call,
+            SoupKind::CalendarEvent => Self::CalendarEvent,
+            SoupKind::ForeignEntity => Self::ForeignEntity,
+        }
+    }
+}
+
 /// High-level email filter preset.
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 #[graphql(name = "SoupEmailPreset")]
 pub(crate) enum SoupEmailPreset {
     /// Important and not shared.
     Signal,
+}
+
+impl From<SoupEmailPreset> for EmailPreset {
+    fn from(preset: SoupEmailPreset) -> Self {
+        match preset {
+            SoupEmailPreset::Signal => Self::Signal,
+        }
+    }
 }
 
 /// Sort field. Default UPDATED_AT.
@@ -63,13 +102,13 @@ pub(crate) enum SoupSortMethod {
     ViewedUpdated,
 }
 
-impl SoupSortMethod {
-    fn into_model(self) -> SimpleSortMethod {
-        match self {
-            Self::ViewedAt => SimpleSortMethod::ViewedAt,
-            Self::CreatedAt => SimpleSortMethod::CreatedAt,
-            Self::UpdatedAt => SimpleSortMethod::UpdatedAt,
-            Self::ViewedUpdated => SimpleSortMethod::ViewedUpdated,
+impl From<SoupSortMethod> for SimpleSortMethod {
+    fn from(sort: SoupSortMethod) -> Self {
+        match sort {
+            SoupSortMethod::ViewedAt => Self::ViewedAt,
+            SoupSortMethod::CreatedAt => Self::CreatedAt,
+            SoupSortMethod::UpdatedAt => Self::UpdatedAt,
+            SoupSortMethod::ViewedUpdated => Self::ViewedUpdated,
         }
     }
 }
@@ -104,11 +143,20 @@ pub(crate) enum SoupTagScope {
     Team,
 }
 
-impl From<models_properties::service::tag_sets::TagScope> for SoupTagScope {
-    fn from(scope: models_properties::service::tag_sets::TagScope) -> Self {
+impl From<TagScope> for SoupTagScope {
+    fn from(scope: TagScope) -> Self {
         match scope {
-            models_properties::service::tag_sets::TagScope::Personal => Self::Personal,
-            models_properties::service::tag_sets::TagScope::Team => Self::Team,
+            TagScope::Personal => Self::Personal,
+            TagScope::Team => Self::Team,
+        }
+    }
+}
+
+impl From<SoupTagScope> for TagScope {
+    fn from(scope: SoupTagScope) -> Self {
+        match scope {
+            SoupTagScope::Personal => Self::Personal,
+            SoupTagScope::Team => Self::Team,
         }
     }
 }
@@ -128,6 +176,18 @@ pub(crate) enum TaskStatus {
     Canceled,
 }
 
+impl From<TaskStatus> for StatusOption {
+    fn from(status: TaskStatus) -> Self {
+        match status {
+            TaskStatus::NotStarted => Self::NotStarted,
+            TaskStatus::InProgress => Self::InProgress,
+            TaskStatus::InReview => Self::InReview,
+            TaskStatus::Completed => Self::Completed,
+            TaskStatus::Canceled => Self::Canceled,
+        }
+    }
+}
+
 /// System task priority.
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 pub(crate) enum TaskPriority {
@@ -141,51 +201,19 @@ pub(crate) enum TaskPriority {
     Urgent,
 }
 
-/// Half-open RFC 3339 window: `from <= t < until`.
-#[derive(InputObject, Clone, Debug)]
-pub(crate) struct DateRange {
-    /// Inclusive start.
-    pub(crate) from: Option<String>,
-    /// Exclusive end.
-    pub(crate) until: Option<String>,
-}
-
-impl DateRange {
-    pub(crate) fn document_literals(
-        &self,
-        updated: bool,
-    ) -> Result<Vec<Expr<DocumentLiteral>>, crate::listing::ListingError> {
-        let parse = |value: &str| {
-            DateTime::parse_from_rfc3339(value)
-                .map(|date| date.with_timezone(&Utc))
-                .map_err(|error| {
-                    crate::listing::ListingError::Task(format!(
-                        "invalid RFC3339 date `{value}`: {error}"
-                    ))
-                })
-        };
-        let mut out = Vec::new();
-        if let Some(from) = &self.from {
-            let date = item_filters::ast::date::DateLiteral::GreaterThanOrEqual(parse(from)?);
-            out.push(Expr::val(if updated {
-                DocumentLiteral::UpdatedAt(date)
-            } else {
-                DocumentLiteral::CreatedAt(date)
-            }));
+impl From<TaskPriority> for PriorityOption {
+    fn from(priority: TaskPriority) -> Self {
+        match priority {
+            TaskPriority::Low => Self::Low,
+            TaskPriority::Medium => Self::Medium,
+            TaskPriority::High => Self::High,
+            TaskPriority::Urgent => Self::Urgent,
         }
-        if let Some(until) = &self.until {
-            let date = item_filters::ast::date::DateLiteral::LessThan(parse(until)?);
-            out.push(Expr::val(if updated {
-                DocumentLiteral::UpdatedAt(date)
-            } else {
-                DocumentLiteral::CreatedAt(date)
-            }));
-        }
-        Ok(out)
     }
 }
 
-/// Tasks by status, assignee, priority, and date. No property ids needed.
+/// Tasks by status, assignee, and priority. No property ids needed. Date
+/// windows go in `filters.documentFilter` like every other kind.
 #[derive(InputObject, Clone, Debug)]
 pub(crate) struct TaskFilter {
     /// Status options to include.
@@ -194,12 +222,29 @@ pub(crate) struct TaskFilter {
     pub(crate) priority: Option<Vec<TaskPriority>>,
     /// Tasks assigned to the current user.
     pub(crate) assigned_to_me: Option<bool>,
-    /// Assignee entity refs (`macro|<email>`) or emails.
+    /// Assignees as `macro|<email>` refs or plain emails.
     pub(crate) assigned_to: Option<Vec<String>>,
-    /// Updated-at window.
-    pub(crate) updated_at: Option<DateRange>,
-    /// Created-at window.
-    pub(crate) created_at: Option<DateRange>,
+}
+
+impl From<TaskFilter> for TaskSelection {
+    fn from(filter: TaskFilter) -> Self {
+        Self {
+            status: filter
+                .status
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            priority: filter
+                .priority
+                .unwrap_or_default()
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+            assigned_to_me: filter.assigned_to_me.unwrap_or(false),
+            assigned_to: filter.assigned_to.unwrap_or_default(),
+        }
+    }
 }
 
 /// One tag selector by label.
@@ -235,13 +280,13 @@ struct SoupFilterInput {
     properties_filter: Option<GraphqlFilterPropertiesExpr>,
 }
 
-/// `input SoupQueryInput`. Every field optional; `Default` gives `= {}`.
+/// `input SoupQueryInput`. Every field optional.
 #[derive(InputObject, Default)]
 #[graphql(name = "SoupQueryInput")]
 pub(crate) struct SoupQueryInput {
     /// Kinds to return. Omit for all.
     entity_types: Option<Vec<SoupKind>>,
-    /// Per-kind filter trees.
+    /// Per-kind filter trees. DescribeSoup shows each kind's literal.
     filters: Option<SoupFilterInput>,
     /// Task sugar over the well-known Status / Assignees / Priority properties.
     task_filter: Option<TaskFilter>,
@@ -250,7 +295,7 @@ pub(crate) struct SoupQueryInput {
     /// Default DESC.
     sort_direction: Option<SoupSortDir>,
     /// Default 50, max 500.
-    limit: Option<u16>,
+    limit: Option<i32>,
     /// SIGNAL = important threads, shared threads excluded.
     email_preset: Option<SoupEmailPreset>,
     /// Mailbox view: inbox, sent, drafts, starred, all, important, other, or user:<label>.
@@ -266,9 +311,9 @@ pub(crate) struct SoupQueryInput {
 /// Why GraphQL input could not become a listing request.
 #[derive(Debug, thiserror::Error)]
 pub(crate) enum InputRejected {
-    /// Limit outside 1..=500.
-    #[error("limit must be between 1 and 500 (got {0})")]
-    Limit(u16),
+    /// Limit outside the accepted range.
+    #[error("limit must be between {min} and {max} (got {0})", min = Limit::MIN, max = Limit::MAX)]
+    Limit(i64),
     /// Empty `entityTypes`.
     #[error("entityTypes must not be empty; omit it to return every kind")]
     EmptyEntityTypes,
@@ -284,11 +329,20 @@ pub(crate) enum InputRejected {
 }
 
 impl SoupQueryInput {
-    /// GraphQL input → validated `ListingRequest`. Pure besides filter materialization.
-    pub(crate) fn into_listing(self) -> Result<ListingRequest, InputRejected> {
-        let limit = Limit::new(self.limit.unwrap_or(50)).map_err(InputRejected::Limit)?;
+    /// GraphQL input → validated domain request. Pure besides filter materialization.
+    pub(crate) fn into_listing(self) -> Result<AgentListingRequest, InputRejected> {
+        let limit = match self.limit {
+            None => Limit::default(),
+            Some(value) => u16::try_from(value)
+                .ok()
+                .and_then(|value| Limit::new(value).ok())
+                .ok_or(InputRejected::Limit(i64::from(value)))?,
+        };
         let kinds = match self.entity_types {
-            Some(types) => Some(NonEmpty::new(types).map_err(|_| InputRejected::EmptyEntityTypes)?),
+            Some(types) => Some(
+                NonEmpty::new(types.into_iter().map(AgentSoupKind::from).collect())
+                    .map_err(|_| InputRejected::EmptyEntityTypes)?,
+            ),
             None => None,
         };
         let filters = match self.filters {
@@ -302,14 +356,7 @@ impl SoupQueryInput {
                     tags.into_iter()
                         .map(|tag| TagFilter {
                             label: tag.label,
-                            scope: tag.scope.map(|scope| match scope {
-                                SoupTagScope::Personal => {
-                                    models_properties::service::tag_sets::TagScope::Personal
-                                }
-                                SoupTagScope::Team => {
-                                    models_properties::service::tag_sets::TagScope::Team
-                                }
-                            }),
+                            scope: tag.scope.map(TagScope::from),
                         })
                         .collect(),
                 )
@@ -329,13 +376,13 @@ impl SoupQueryInput {
             .transpose()
             .map_err(|error| InputRejected::EmailView(error.to_string()))?
             .unwrap_or_default();
-        Ok(ListingRequest {
+        Ok(AgentListingRequest {
             kinds,
             filters,
-            task: self.task_filter,
+            task: self.task_filter.map(TaskSelection::from),
             sort: self
                 .sort_method
-                .map(SoupSortMethod::into_model)
+                .map(SimpleSortMethod::from)
                 .unwrap_or(SimpleSortMethod::UpdatedAt),
             direction: match self.sort_direction {
                 Some(SoupSortDir::Asc) => SoupSortDirection::Asc,
@@ -345,7 +392,7 @@ impl SoupQueryInput {
             email: EmailScope {
                 view,
                 inbox: self.inbox.and_then(InboxSelector::new),
-                preset: self.email_preset,
+                preset: self.email_preset.map(EmailPreset::from),
             },
             tags,
         })

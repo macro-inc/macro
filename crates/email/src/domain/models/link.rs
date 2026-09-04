@@ -180,3 +180,69 @@ pub struct Link {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+/// Why an inbox selector did not name exactly one accessible link.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum InboxSelectorError {
+    /// The caller has no accessible inbox at all.
+    #[error("No email account is linked for this user.")]
+    NoInboxes,
+    /// Several accessible inboxes share the requested address.
+    #[error("Multiple connected inboxes match \"{0}\"; cannot pick one.")]
+    Ambiguous(String),
+    /// The requested address is not one the caller can read.
+    #[error("No connected inbox matches \"{requested}\". Connected inboxes: {available}.")]
+    Unknown {
+        /// The address the caller asked for.
+        requested: String,
+        /// Comma-separated addresses the caller can read.
+        available: String,
+    },
+}
+
+impl Link {
+    /// The caller's default inbox: the primary link they own, then any link
+    /// they own, then any accessible inbox. `caller_macro_id` is the caller's
+    /// own macro id (e.g. `macro|user@example.com`).
+    pub fn caller_primary<'a>(inboxes: &'a [Link], caller_macro_id: &str) -> Option<&'a Link> {
+        inboxes
+            .iter()
+            .find(|l| l.is_primary && l.macro_id.to_string() == caller_macro_id)
+            .or_else(|| {
+                inboxes
+                    .iter()
+                    .find(|l| l.macro_id.to_string() == caller_macro_id)
+            })
+            .or_else(|| inboxes.first())
+    }
+
+    /// Resolve an optional inbox selector (an inbox's email address) against
+    /// the caller's accessible inboxes. `None` resolves to the caller's primary
+    /// inbox. Errors when the address matches no accessible inbox, so a caller
+    /// can never scope to an inbox they don't have.
+    pub fn resolve_selector<'a>(
+        inboxes: &'a [Link],
+        caller_macro_id: &str,
+        requested: Option<&str>,
+    ) -> Result<&'a Link, InboxSelectorError> {
+        let Some(addr) = requested.map(str::trim).filter(|s| !s.is_empty()) else {
+            return Self::caller_primary(inboxes, caller_macro_id)
+                .ok_or(InboxSelectorError::NoInboxes);
+        };
+        let mut matches = inboxes
+            .iter()
+            .filter(|l| l.email_address.0.as_ref().eq_ignore_ascii_case(addr));
+        match (matches.next(), matches.next()) {
+            (Some(link), None) => Ok(link),
+            (Some(_), Some(_)) => Err(InboxSelectorError::Ambiguous(addr.to_owned())),
+            (None, _) => Err(InboxSelectorError::Unknown {
+                requested: addr.to_owned(),
+                available: inboxes
+                    .iter()
+                    .map(|l| l.email_address.0.as_ref())
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            }),
+        }
+    }
+}

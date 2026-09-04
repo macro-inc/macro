@@ -13,14 +13,15 @@ pub(crate) struct Query;
 
 #[Object]
 impl Query {
-    /// The user's unified inbox: one page of items they can access.
+    /// The user's unified inbox: one page of items they can access. Omit
+    /// `input` for the 50 most recently updated items of every kind.
     async fn soup(
         &self,
         ctx: &Context<'_>,
-        #[graphql(default)] input: SoupQueryInput,
+        input: Option<SoupQueryInput>,
     ) -> async_graphql::Result<SoupQueryPage> {
         let lister = ctx.data::<Arc<dyn SoupLister>>()?;
-        let request = input.into_listing()?;
+        let request = input.unwrap_or_default().into_listing()?;
         let page = lister.list(request).await?;
         Ok(SoupQueryPage::from_listing(page))
     }

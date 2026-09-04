@@ -2,7 +2,6 @@
 query OpenTasks {
   soup(input: {
     entityTypes: [DOCUMENT]
-    filters: { documentFilter: { literal: { subType: TASK } } }
     taskFilter: { status: [NOT_STARTED, IN_PROGRESS, IN_REVIEW], assignedToMe: true }
   }) {
     summary
@@ -11,7 +10,7 @@ query OpenTasks {
   }
 }
 
-# Important email since a timestamp
+# Important email since a timestamp (emailFilter literal from DescribeSoup EMAIL_THREAD)
 query Signal($since: String!) {
   soup(input: {
     emailPreset: SIGNAL

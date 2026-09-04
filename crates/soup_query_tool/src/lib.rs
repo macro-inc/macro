@@ -6,12 +6,14 @@
 
 #![deny(missing_docs)]
 
+mod describe;
 mod listing;
 mod read_query;
 /// The query-only GraphQL schema the tool executes.
 pub mod schema;
 mod tool;
 
+pub use describe::{DescribeSoup, DescribeSoupResponse, SoupSchemaTopic};
 pub use read_query::{QueryRejected, ReadQuery};
 pub use tool::{QuerySoup, QuerySoupData};
 

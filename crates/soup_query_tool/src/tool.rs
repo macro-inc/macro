@@ -165,13 +165,13 @@ const COMPACT_KEYS: &[(&str, &str)] = &[
 ];
 
 pub(crate) fn describe_errors(errors: &[async_graphql::ServerError]) -> String {
-    let joined = errors
+    errors
         .iter()
         .map(|error| {
             let mut message = error.to_string();
             if message.contains("Unknown field") {
                 message.push_str(
-                    " Run { __type(name: \"<Type>\") { fields { name type { name } } } } to list its fields.",
+                    " Call DescribeSoup with the kind's topic to see its filter literal and fields.",
                 );
             }
             if message.contains("GraphqlSoupEntityType") {
@@ -190,8 +190,7 @@ pub(crate) fn describe_errors(errors: &[async_graphql::ServerError]) -> String {
             message
         })
         .collect::<Vec<_>>()
-        .join("\n");
-    joined
+        .join("\n")
 }
 
 fn human(bytes: usize) -> String {

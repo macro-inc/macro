@@ -6,10 +6,15 @@ For finding an item by words in its name or body use NameSearch/ContentSearch.
 
 Rules
 - Exactly one `query` operation. Mutations and subscriptions do not exist here.
+- The schema below is the shared part. Each kind's filter literal and output
+  fields come from DescribeSoup (topics DOCUMENT, EMAIL_THREAD, …, PROPERTIES).
+  Call it once per kind you filter on or select fields of; the result stays in
+  the conversation. `items { id displayName }` needs no slice.
 - Filters are per kind: an item of kind K passes if K's tree is absent or matches.
-  Date windows (createdAt/updatedAt) exist on document, project, chat and email
-  trees only; other kinds are cut by sortMethod + limit.
-- Macro tasks are DOCUMENT items with subType TASK. Prefer `taskFilter` for
+  Inputs marked @oneOf take exactly one field. Date windows are
+  `and: { left: { literal: { updatedAt: { gte: $a } } }, right: { literal: { updatedAt: { lt: $b } } } }`
+  on document, project, chat and email trees; other kinds are cut by sortMethod + limit.
+- Macro tasks are DOCUMENT items with subType TASK. Use `taskFilter` for
   status, assignee, and priority — do not invent property definition ids.
 - Tags: filter by label with input.tags (ListTags shows them); results carry
   tags { label scope }. Status/Priority values come back as option ids.
@@ -19,4 +24,3 @@ Rules
 - Select `id` on every `items` selection so results can be linked.
 - Alias `soup` to ask two questions in one call (max 5). Example: activity and
   signal email.
-- Anything not shown: { __type(name: "GraphqlEmailLiteral") { inputFields { name type { name ofType { name } } } } }

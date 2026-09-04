@@ -8,9 +8,9 @@ use models_properties::service::tag_sets::AppliedTag;
 use models_soup::SoupProperty;
 use models_soup::document::SoupDocumentSubType;
 use models_soup::item::SoupItem;
+use soup::domain::agent_listing::{AgentListingPage, tags_of};
 use soup::domain::models::SoupPropertiesField;
 
-use crate::listing::{ListingPage, build_summary, tags_of};
 use crate::schema::input::{SoupKind, SoupTagScope};
 
 /// `type SoupQueryPage`.
@@ -25,7 +25,7 @@ pub(crate) struct SoupQueryPage {
 }
 
 impl SoupQueryPage {
-    pub(crate) fn from_listing(page: ListingPage) -> Self {
+    pub(crate) fn from_listing(page: AgentListingPage) -> Self {
         let summary = build_summary(&page.items, page.has_more);
         let items = page
             .items
@@ -489,6 +489,55 @@ impl SoupEntity {
             SoupItem::CrmCompany(_) => unreachable!("QuerySoup force-filters CRM companies"),
             SoupItem::Reminder(_) => unreachable!("QuerySoup never opts into reminders"),
         }
+    }
+}
+
+/// One-line count summary for the page.
+fn build_summary(items: &[SoupItem<SoupPropertiesField>], has_more: bool) -> String {
+    if items.is_empty() {
+        return "No items found in workspace.".to_string();
+    }
+    let mut counts: [usize; 9] = [0; 9];
+    for item in items {
+        let slot = match item {
+            SoupItem::Document(_) => 0,
+            SoupItem::Chat(_) => 1,
+            SoupItem::Project(_) => 2,
+            SoupItem::EmailThread(_) => 3,
+            SoupItem::Channel(_) => 4,
+            SoupItem::ChannelThread(_) => 5,
+            SoupItem::Call(_) => 6,
+            SoupItem::CalendarEvent(_) => 7,
+            SoupItem::ForeignEntity(_) => 8,
+            SoupItem::CrmCompany(_) | SoupItem::Reminder(_) => continue,
+        };
+        counts[slot] += 1;
+    }
+    const LABELS: [(&str, &str); 9] = [
+        ("document", "documents"),
+        ("AI conversation", "AI conversations"),
+        ("project", "projects"),
+        ("email", "emails"),
+        ("channel", "channels"),
+        ("channel thread", "channel threads"),
+        ("call record", "call records"),
+        ("calendar event", "calendar events"),
+        ("foreign entity", "foreign entities"),
+    ];
+    let parts: Vec<String> = counts
+        .iter()
+        .zip(LABELS)
+        .filter(|(count, _)| **count > 0)
+        .map(|(count, (one, many))| {
+            let label = if *count == 1 { one } else { many };
+            format!("{count} {label}")
+        })
+        .collect();
+    let counts = parts.join(", ");
+    if has_more {
+        format!("Showing {counts}. More items available in workspace.")
+    } else {
+        format!("Found {counts}.")
     }
 }
 

@@ -96,7 +96,13 @@ impl ReadQuery {
         if soup_count > MAX_SOUP_SELECTIONS {
             return Err(QueryRejected::TooManySelections { count: soup_count });
         }
-        if !introspection_only && items_missing_id(&operation.node.selection_set.node.items) {
+        let fragments = Fragments {
+            document: &document,
+            visiting: std::cell::RefCell::new(Vec::new()),
+        };
+        if !introspection_only
+            && fragments.items_missing_id(&operation.node.selection_set.node.items)
+        {
             return Err(QueryRejected::ItemsWithoutId);
         }
         Ok(Self {
@@ -138,28 +144,70 @@ fn count_named_fields(selections: &[Positioned<Selection>], name: &str) -> usize
         .count()
 }
 
-fn items_missing_id(selections: &[Positioned<Selection>]) -> bool {
-    selections.iter().any(|selection| match &selection.node {
-        Selection::Field(field) if field.node.name.node.starts_with("__") => false,
-        Selection::Field(field) if field.node.name.node == "items" => {
-            !field_selected(&field.node.selection_set.node.items, "id")
-        }
-        Selection::Field(field) => items_missing_id(&field.node.selection_set.node.items),
-        Selection::InlineFragment(fragment) => {
-            items_missing_id(&fragment.node.selection_set.node.items)
-        }
-        Selection::FragmentSpread(_) => false,
-    })
+/// Selection walker that follows named fragment spreads into their definitions.
+///
+/// `visiting` guards against a fragment that spreads itself; the executor
+/// rejects such documents anyway, so treating the cycle as "nothing selected"
+/// is safe.
+struct Fragments<'d> {
+    document: &'d ExecutableDocument,
+    visiting: std::cell::RefCell<Vec<String>>,
 }
 
-fn field_selected(selections: &[Positioned<Selection>], name: &str) -> bool {
-    selections.iter().any(|selection| match &selection.node {
-        Selection::Field(field) => field.node.name.node == name,
-        Selection::InlineFragment(fragment) => {
-            field_selected(&fragment.node.selection_set.node.items, name)
+impl Fragments<'_> {
+    fn spread<'s>(&'s self, name: &str) -> Option<&'s [Positioned<Selection>]> {
+        if self.visiting.borrow().iter().any(|seen| seen == name) {
+            return None;
         }
-        Selection::FragmentSpread(_) => false,
-    })
+        self.document
+            .fragments
+            .get(name)
+            .map(|fragment| fragment.node.selection_set.node.items.as_slice())
+    }
+
+    fn with_spread<T>(
+        &self,
+        name: &str,
+        f: impl FnOnce(&[Positioned<Selection>]) -> T,
+    ) -> Option<T> {
+        let selections = self.spread(name)?;
+        self.visiting.borrow_mut().push(name.to_owned());
+        let out = f(selections);
+        self.visiting.borrow_mut().pop();
+        Some(out)
+    }
+
+    fn items_missing_id(&self, selections: &[Positioned<Selection>]) -> bool {
+        selections.iter().any(|selection| match &selection.node {
+            Selection::Field(field) if field.node.name.node.starts_with("__") => false,
+            Selection::Field(field) if field.node.name.node == "items" => {
+                !self.field_selected(&field.node.selection_set.node.items, "id")
+            }
+            Selection::Field(field) => self.items_missing_id(&field.node.selection_set.node.items),
+            Selection::InlineFragment(fragment) => {
+                self.items_missing_id(&fragment.node.selection_set.node.items)
+            }
+            Selection::FragmentSpread(spread) => self
+                .with_spread(&spread.node.fragment_name.node, |items| {
+                    self.items_missing_id(items)
+                })
+                .unwrap_or(false),
+        })
+    }
+
+    fn field_selected(&self, selections: &[Positioned<Selection>], name: &str) -> bool {
+        selections.iter().any(|selection| match &selection.node {
+            Selection::Field(field) => field.node.name.node == name,
+            Selection::InlineFragment(fragment) => {
+                self.field_selected(&fragment.node.selection_set.node.items, name)
+            }
+            Selection::FragmentSpread(spread) => self
+                .with_spread(&spread.node.fragment_name.node, |items| {
+                    self.field_selected(items, name)
+                })
+                .unwrap_or(false),
+        })
+    }
 }
 
 impl QueryRejected {

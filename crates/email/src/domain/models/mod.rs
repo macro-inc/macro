@@ -27,8 +27,8 @@ pub use label::{
     UpdateThreadLabelsResult,
 };
 pub use link::{
-    EmailBackfillStatus, EmailInboxDetails, EmailSyncStatus, Link, UserEmailLink,
-    UserEmailLinkSettings, UserProvider,
+    EmailBackfillStatus, EmailInboxDetails, EmailSyncStatus, InboxSelectorError, Link,
+    UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 pub use message::{Message, MessageRow, SimpleMessage};
 pub use parsed_message::{ParsedLabel, ParsedMessage, ParsedThread};

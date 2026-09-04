@@ -9,6 +9,7 @@ use crate::schema::query_root::Query;
 pub(crate) mod input;
 pub(crate) mod output;
 pub(crate) mod query_root;
+pub(crate) mod slices;
 
 #[cfg(test)]
 mod test;
@@ -25,7 +26,7 @@ pub(crate) static SCHEMA: LazyLock<SoupSchema> = LazyLock::new(|| {
         .finish()
 });
 
-/// Compact-enough SDL of the executed schema.
+/// Compact-enough SDL of the whole executed schema.
 pub fn compact_sdl() -> String {
     SCHEMA.sdl_with_options(SDLExportOptions::new().prefer_single_line_descriptions())
 }
@@ -33,16 +34,16 @@ pub fn compact_sdl() -> String {
 pub(crate) mod description {
     use std::sync::LazyLock;
 
-    /// Tool card: rules + executed SDL + examples.
+    /// Tool card: rules + the card slice of the SDL + examples.
     pub fn text() -> &'static str {
         &TEXT
     }
 
     static TEXT: LazyLock<String> = LazyLock::new(|| {
         format!(
-            "{rules}\n\nSchema\n```graphql\n{sdl}\n```\n\nExamples\n```graphql\n{examples}\n```",
+            "{rules}\n\nSchema (shared types; DescribeSoup adds each kind's filter literal and output fields)\n```graphql\n{sdl}\n```\n\nExamples\n```graphql\n{examples}\n```",
             rules = include_str!("../../description/rules.md"),
-            sdl = super::compact_sdl(),
+            sdl = super::slices::card_sdl(),
             examples = include_str!("../../description/examples.graphql"),
         )
     });
