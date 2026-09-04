@@ -88,6 +88,7 @@ sqlx.workspace = true
 strum.workspace = true
 sync_service_client = { path = "../sync_service_client" }
 system_properties = { path = "../system_properties" }
+thiserror.workspace = true
 tokio.workspace = true
 tokio-util = { workspace = true, features = ["rt"] }
 tracing.workspace = true

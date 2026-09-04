@@ -675,6 +675,7 @@ dependencies = [
  "sync_service_client",
  "system_properties",
  "teams",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
