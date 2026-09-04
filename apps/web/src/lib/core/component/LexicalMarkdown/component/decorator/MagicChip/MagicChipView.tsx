@@ -2,6 +2,7 @@ import {
   EmailDraft,
   EventDraft,
 } from '@app/features/block-agent/component/parts/UserToolCall';
+import { DRAFT_FIELD } from '@app/features/block-agent/state/elicitation-review-sink';
 import {
   StaticMarkdown,
   StaticMarkdownContext,
@@ -44,9 +45,6 @@ export type MagicChipAnswer = {
   answering: boolean;
   respond: (answer: ElicitationAnswer) => Promise<boolean>;
 };
-
-/** The form field a Macro client sends a whole user-tool draft under. */
-const DRAFT_FIELD = 'draft';
 
 /** Fixed-height activity line — no box, just a shimmering label in the flow. */
 const ActivityLine: Component<{
