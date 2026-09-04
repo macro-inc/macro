@@ -10,6 +10,7 @@
  */
 
 import { isCursorBotId } from '@core/constant/cursorAgent';
+import { useUserId } from '@core/context/user';
 import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
 import type {
   FoldedMessage,
@@ -158,9 +159,12 @@ export function AgentSessionProvider(
     isDisconnected(status.status())
       ? undefined
       : (feed.metadata()?.pendingElicitation ?? undefined);
+  const viewerId = useUserId();
   const elicitation = createElicitationController({
     sessionId,
     pending: pendingElicitation,
+    ownerId: () => feed.session()?.ownerId,
+    viewerId,
   });
   const blockedOnUser = () => working() && pendingElicitation() !== undefined;
 

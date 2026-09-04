@@ -17,12 +17,15 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const respond = vi.fn<(answer: ElicitationAnswer) => Promise<boolean>>();
 let pending: PendingElicitation | undefined;
+let canAnswer = true;
 
 vi.mock('../../context/AgentSessionContext', () => ({
   useAgentSession: () => ({
     bot: () => ({ name: 'Macro Coder' }),
     elicitation: {
       pending: () => pending,
+      canAnswer: () => canAnswer,
+      ownerName: () => 'Alice Owner',
       answering: () => false,
       respond,
     },
@@ -143,6 +146,7 @@ beforeEach(() => {
   respond.mockReset();
   respond.mockResolvedValue(true);
   pending = undefined;
+  canAnswer = true;
 });
 
 describe('ElicitationPart', () => {
@@ -153,6 +157,25 @@ describe('ElicitationPart', () => {
     ));
     expect(queryByTestId('form')).not.toBeNull();
     expect(getByTestId('title').textContent).toContain('Macro Coder is asking');
+    expect(getByTestId('trailing').textContent).toBe('Waiting for you');
+  });
+
+  it('a viewer who is not the owner sees the question locked and named for the owner', () => {
+    pending = live();
+    canAnswer = false;
+    const { getByTestId, getByText } = render(() => (
+      <ElicitationPart part={part()} />
+    ));
+    expect(getByTestId('trailing').textContent).toBe('Waiting for Alice Owner');
+    expect(getByTestId('body').textContent).toContain(
+      'Only Alice Owner can answer this.'
+    );
+    for (const label of ['Submit', 'Decline', 'Cancel']) {
+      const button = getByText(label).closest('button');
+      expect(button?.disabled).toBe(true);
+      fireEvent.click(getByText(label));
+    }
+    expect(respond).not.toHaveBeenCalled();
   });
 
   it('reads as not answered once the agent has moved on', () => {

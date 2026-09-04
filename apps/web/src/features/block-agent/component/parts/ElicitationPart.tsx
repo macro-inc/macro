@@ -6,6 +6,10 @@
  * connection, reads as "not answered" rather than offering a form the agent
  * is no longer waiting on. Resolved parts read back what was chosen.
  *
+ * Only the session's owner can answer (the service refuses anyone else), so
+ * another viewer sees the same live card with its controls disabled and the
+ * owner named as the one it waits on.
+ *
  * URL mode never opens anything on its own. The card shows the full URL and
  * its host, warns on punycode, and only after the user presses Open does it
  * send the consent and open a new tab - never an iframe, never a prefetch.
@@ -53,6 +57,13 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
     elicitation.pending()?.requestId === props.part.requestId;
 
   const agentName = () => bot()?.name ?? 'The agent';
+  // Controls are inert while an answer is on the wire and for anyone who is
+  // not the owner.
+  const locked = () => elicitation.answering() || !elicitation.canAnswer();
+  const waitingFor = () =>
+    elicitation.canAnswer()
+      ? 'Waiting for you'
+      : `Waiting for ${elicitation.ownerName()}`;
 
   return (
     <Show when={live()} fallback={<ResolvedElicitation part={props.part} />}>
@@ -60,22 +71,27 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
         title={`${agentName()} is asking`}
         status="running"
         defaultOpen
-        trailing={<span class="text-ink-muted">Waiting for you</span>}
+        trailing={<span class="text-ink-muted">{waitingFor()}</span>}
       >
         <div class="flex flex-col gap-3 py-1">
           <div class="text-sm text-ink">{props.part.message}</div>
+          <Show when={!elicitation.canAnswer()}>
+            <div class="text-xs text-ink-extra-muted">
+              Only {elicitation.ownerName()} can answer this.
+            </div>
+          </Show>
           {match(props.part.request)
             .with({ kind: 'form' }, (request) => (
               <LiveForm
                 schema={request.schema}
-                answering={elicitation.answering()}
+                locked={locked()}
                 onRespond={elicitation.respond}
               />
             ))
             .with({ kind: 'url' }, (request) => (
               <LiveUrl
                 url={request.url}
-                answering={elicitation.answering()}
+                locked={locked()}
                 onRespond={elicitation.respond}
               />
             ))
@@ -85,7 +101,7 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
                   This client cannot display a "{request.mode}" request.
                 </div>
                 <DeclineCancel
-                  answering={elicitation.answering()}
+                  locked={locked()}
                   onRespond={elicitation.respond}
                 />
               </div>
@@ -98,7 +114,7 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
 }
 
 function DeclineCancel(props: {
-  answering: boolean;
+  locked: boolean;
   onRespond: (answer: { action: 'decline' } | { action: 'cancel' }) => unknown;
 }) {
   return (
@@ -106,7 +122,7 @@ function DeclineCancel(props: {
       <Button
         variant="outline"
         size="xs"
-        disabled={props.answering}
+        disabled={props.locked}
         onClick={() => props.onRespond({ action: 'decline' })}
       >
         Decline
@@ -114,7 +130,7 @@ function DeclineCancel(props: {
       <Button
         variant="ghost"
         size="xs"
-        disabled={props.answering}
+        disabled={props.locked}
         onClick={() => props.onRespond({ action: 'cancel' })}
       >
         Cancel
@@ -125,7 +141,7 @@ function DeclineCancel(props: {
 
 function LiveForm(props: {
   schema: Extract<ElicitationPartData['request'], { kind: 'form' }>['schema'];
-  answering: boolean;
+  locked: boolean;
   onRespond: (answer: {
     action: 'accept' | 'decline' | 'cancel';
     content?: Record<string, unknown>;
@@ -137,6 +153,7 @@ function LiveForm(props: {
   const shownErrors = () => (touched() ? errors() : {});
 
   const submit = () => {
+    if (props.locked) return;
     setTouched(true);
     if (Object.keys(errors()).length > 0) return;
     props.onRespond({
@@ -151,22 +168,19 @@ function LiveForm(props: {
         schema={props.schema}
         values={values}
         errors={shownErrors()}
-        disabled={props.answering}
+        disabled={props.locked}
         onChange={(name: string, value: FieldValue) => setValues(name, value)}
       />
       <div class="flex items-center gap-2">
         <Button
           variant="cta"
           size="xs"
-          disabled={props.answering}
+          disabled={props.locked}
           onClick={submit}
         >
           Submit
         </Button>
-        <DeclineCancel
-          answering={props.answering}
-          onRespond={props.onRespond}
-        />
+        <DeclineCancel locked={props.locked} onRespond={props.onRespond} />
       </div>
     </div>
   );
@@ -174,13 +188,14 @@ function LiveForm(props: {
 
 function LiveUrl(props: {
   url: string;
-  answering: boolean;
+  locked: boolean;
   onRespond: (answer: {
     action: 'accept' | 'decline' | 'cancel';
   }) => Promise<boolean> | unknown;
 }) {
   const host = () => urlHost(props.url);
   const open = async () => {
+    if (props.locked) return;
     // Consent goes to the agent first so it learns the user agreed even if
     // the popup is blocked; the link below stays as the fallback.
     const accepted = await props.onRespond({ action: 'accept' });
@@ -202,18 +217,10 @@ function LiveUrl(props: {
         </div>
       </Show>
       <div class="flex items-center gap-2">
-        <Button
-          variant="cta"
-          size="xs"
-          disabled={props.answering}
-          onClick={open}
-        >
+        <Button variant="cta" size="xs" disabled={props.locked} onClick={open}>
           Open
         </Button>
-        <DeclineCancel
-          answering={props.answering}
-          onRespond={props.onRespond}
-        />
+        <DeclineCancel locked={props.locked} onRespond={props.onRespond} />
       </div>
     </div>
   );
