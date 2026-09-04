@@ -499,7 +499,10 @@ async fn create_private_channel_does_not_resolve_a_team() {
         .expect("create lock")
         .clone()
         .expect("called");
-    assert_eq!(actor.as_user(), Some(&user_id()));
+    assert_eq!(
+        actor.as_bot().map(|id| id.bot_id()),
+        Some(bot_id::MACRO_AI_BOT_ID)
+    );
     assert_eq!(org_id, None);
     assert_eq!(req.channel_type, ChannelType::Private);
     assert_eq!(req.team_id, None);
@@ -541,6 +544,58 @@ async fn create_team_channel_injects_the_caller_when_participants_are_empty() {
     assert_eq!(req.channel_type, ChannelType::Team);
     assert_eq!(req.team_id, Some(team_id));
     assert!(req.participants.contains(&user_id()));
+}
+
+#[tokio::test]
+async fn create_private_channel_uses_the_context_actor_for_the_user() {
+    let default_service = ToolTestChannelService::default();
+    let default_created = default_service.created.clone();
+    let custom_service = ToolTestChannelService::default();
+    let custom_created = custom_service.created.clone();
+
+    let tool = CreateChannel {
+        name: "Planning".to_string(),
+        channel_type: NewChannelType::Private,
+        participants: Vec::new(),
+    };
+
+    tool.call(
+        ServiceContext(ChannelToolContext::new(
+            default_service,
+            NoOpEntityAccessService,
+        )),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("default actor can create");
+    tool.call(
+        ServiceContext(
+            ChannelToolContext::new(custom_service, NoOpEntityAccessService)
+                .with_actor(BotId::TEST_A),
+        ),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("custom actor can create");
+
+    let (default_actor, _, _) = default_created
+        .lock()
+        .expect("create lock")
+        .clone()
+        .expect("called");
+    let (custom_actor, _, _) = custom_created
+        .lock()
+        .expect("create lock")
+        .clone()
+        .expect("called");
+    assert_eq!(
+        default_actor.as_bot().map(|id| id.bot_id()),
+        Some(bot_id::MACRO_AI_BOT_ID)
+    );
+    assert_eq!(
+        custom_actor.as_bot().map(|id| id.bot_id()),
+        Some(BotId::TEST_A)
+    );
 }
 
 #[tokio::test]
