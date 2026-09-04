@@ -311,9 +311,92 @@ branch:
 - `scripts/convert_stdio_recording.py` turns a stdio recorder's log into a
   fold fixture.
 
-Still to do, in the order the plan lists: agent-side elicitation from
-Macro's own tools, request scope, more than one outstanding question per
-session (Claude Code's parallel subagents).
+Second pass, same branch — Macro's own user tools reviewed through
+elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-turn)):
+
+- `agent`: `AgentLoop::with_user_tool_finisher`. The stream bridge's
+  `on_tool_result` hands a `"PendingUserExecution"` answer to the finisher
+  and rewrites what the model reads (and the stream records) to what the
+  user decided.
+- `ai_tools::user_tool_review`: the `UserToolReviewer` port in a neutral
+  form vocabulary, the schema→form projection, and `user_tool_finisher`
+  over `is_valid_tool` / `try_user_tool_call` — the same pair chat's
+  `/tool/call` uses.
+- `agent_inmem`: the ACP requester implements the port; a review is a
+  form elicitation scoped to the call with `_meta.macro.userTool`. The idle
+  timeout re-arms while any question is out. `AiHost::AgentSession` pairs
+  chat's toolset with a prompt that describes the review card.
+- `agent_fold`: `ElicitationRequest::UserTool { tool, draft, schema }`,
+  recognized from the absorbed user-tool call or `_meta.macro.userTool`;
+  `MessagePart::Elicitation.tool_outcome` from the absorbed call's later
+  updates.
+- Web: the calendar and email composers split from their chat bindings
+  behind `UserToolReviewSink`; `ElicitationPart` mounts them for a review
+  and settles into the finished user tool; the owner gate lives in the
+  controller; the MagicChip gets an `asking` state with a compact card.
+
+Still to do: request scope, more than one outstanding question per session
+(Claude Code's parallel subagents), the MCP server reviewing user tools for
+sandboxed harnesses.
+
+## User tools reviewed in the turn
+
+Macro's user tools (`SendEmail`, `CreateCalendarEvent`) are registered with
+`add_user_tool`: calling one returns `"PendingUserExecution"` and does
+nothing, and the *host* finishes the call with the pieces `ai_toolset`
+exposes for that — `is_valid_tool` for edited arguments,
+`try_user_tool_call` to run the wrapped tool, `UserToolResponse<T>` as the
+answer. Chat is one host: it finishes after the turn, over HTTP, from its
+composer. An agent session is another: it finishes *inside* the turn,
+through elicitation, before the model reads the result.
+
+```text
+model calls CreateCalendarEvent(draft)
+  └─ UserTool::call → "PendingUserExecution"
+       └─ StreamBridge::on_tool_result (agent)
+            └─ UserToolFinisher (ai_tools)
+                 ├─ form = project(tool input schema, draft) + `draft` (_macro/json)
+                 ├─ reviewer.review(..)          → elicitation/create   (agent_inmem)
+                 │      sessionId, toolCallId, mode: form, requestedSchema,
+                 │      _meta.macro.userTool = { name, draft }
+                 │   ← accept {content} | decline | cancel
+                 ├─ accept: args = apply(draft, content); is_valid_tool; try_user_tool_call
+                 │          → Rewrite(UserToolResponse::UserAction(result))
+                 ├─ decline → Rewrite("Rejected")
+                 └─ cancel / unreachable client → tool error, nothing runs
+```
+
+Why this shape rather than a second, "reviewing" tool wrapper:
+
+- One contract. `PendingUserExecution` already means "the host finishes
+  this"; the session just finishes sooner. Toolset, schemas, descriptions
+  and the `UserToolResponse` output type are identical across chat and
+  sessions, so the fold's `user_tool_outcome` reader and the generated
+  frontend types need nothing new.
+- `toolCallId` for free. The hook has the call's id, so the elicitation is
+  properly tool-call-scoped and the fold's absorption replaces the tool row
+  with the question.
+- Generic forms. The flat elicitation form is projected from the tool's
+  input schema (top-level string / boolean / number / enum arguments,
+  pre-filled from the call); anything nested rides in one `draft` field of
+  Macro's `_macro/json` type. Any user tool is reviewable with no per-tool
+  code; a client without a composer edits the flat fields, Macro's client
+  renders the tool's composer and sends the whole edited draft.
+- Fail closed. No form capability, a slot already taken, or a cancelled
+  turn all read to the model as an error; nothing is created silently.
+
+The fold types the review — `ElicitationRequest::UserTool` — so the web
+`match`es on it exhaustively: the session block mounts the calendar or
+email composer over the draft (through `UserToolReviewSink`, the same
+components chat uses) and the MagicChip shows a compact summary with
+Create/Cancel and "Edit in session". Once the tool reports, the part's
+`tool_outcome` carries its result and the question renders as the finished
+user tool.
+
+Hosts (`ai_tools::AiHost`): `Chat` keeps the deferring registrations and the
+composer prompt; `AgentSession` keeps the same tools with the review prompt;
+`ChannelBot` and `Mcp` are unchanged — direct `CreateCalendarEvent`, no
+`SendEmail` — until the MCP server reviews through `rmcp`'s elicitation.
 
 ## Product decisions
 
@@ -341,6 +424,13 @@ session (Claude Code's parallel subagents).
 11. **No new table, no new gateway message type.** The log is the record;
     the fold derives the pending slot into `SessionMetadata`; the existing
     `agent_session_log` realtime stream carries every frame the web needs.
+12. **Waiting on the user is not idle.** The in-process agent's turn idle
+    timeout re-arms while a question is out; a review waits as long as the
+    user takes, until an answer, a Stop, or the connection going away. No
+    cap for now.
+13. **Only the owner answers, everywhere it shows.** The controller knows
+    the owner and the viewer; the session block and the chip render the
+    question locked for anyone else and name who is being waited on.
 
 ## What changes
 
