@@ -19,11 +19,10 @@ const inboxEntryStateSchemaWithDefaults = z.object({
 
 type InboxEntryState = z.infer<typeof inboxEntryStateSchemaWithDefaults>;
 
-const DEFAULT_INBOX_ENTRY_STATE: InboxEntryState =
-  inboxEntryStateSchemaWithDefaults.parse({});
-const inboxEntryStateSchema = inboxEntryStateSchemaWithDefaults.catch(
-  DEFAULT_INBOX_ENTRY_STATE
-);
+const DEFAULT_INBOX_ENTRY_STATE = {
+  version: 1,
+  tab: 'signal',
+} satisfies InboxEntryState;
 
 const inboxListEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -35,11 +34,11 @@ type InboxListEntryState = z.infer<
   typeof inboxListEntryStateSchemaWithDefaults
 >;
 
-const DEFAULT_INBOX_LIST_ENTRY_STATE: InboxListEntryState =
-  inboxListEntryStateSchemaWithDefaults.parse({});
-const inboxListEntryStateSchema = inboxListEntryStateSchemaWithDefaults.catch(
-  DEFAULT_INBOX_LIST_ENTRY_STATE
-);
+const DEFAULT_INBOX_LIST_ENTRY_STATE = {
+  version: 1,
+  focusKey: undefined,
+  scrollOffset: 0,
+} satisfies InboxListEntryState;
 
 export type InboxListStateSnapshot = {
   focusKey: InboxListEntryState['focusKey'];
@@ -47,8 +46,8 @@ export type InboxListStateSnapshot = {
 };
 
 export const DEFAULT_INBOX_LIST_STATE: InboxListStateSnapshot = {
-  focusKey: DEFAULT_INBOX_LIST_ENTRY_STATE.focusKey,
-  scrollOffset: DEFAULT_INBOX_LIST_ENTRY_STATE.scrollOffset,
+  focusKey: undefined,
+  scrollOffset: 0,
 };
 
 function selectEntryState(state: InboxViewState): InboxEntryState {
@@ -68,7 +67,9 @@ function createInboxEntryStorage(options: {
     restore: (current, stored) => {
       if (!options.restore) return undefined;
 
-      const restored = inboxEntryStateSchema.parse(stored);
+      const result = inboxEntryStateSchemaWithDefaults.safeParse(stored);
+      const restored = result.success ? result.data : DEFAULT_INBOX_ENTRY_STATE;
+
       return {
         ...current,
         tab: restored.tab,
@@ -90,7 +91,10 @@ export function createInboxListEntryStorage(
     handle,
     key: INBOX_LIST_ENTRY_STATE_KEY,
     restore: (current, stored) => {
-      const restored = inboxListEntryStateSchema.parse(stored);
+      const result = inboxListEntryStateSchemaWithDefaults.safeParse(stored);
+      const restored = result.success
+        ? result.data
+        : DEFAULT_INBOX_LIST_ENTRY_STATE;
 
       return {
         ...current,

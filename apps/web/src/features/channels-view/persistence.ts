@@ -53,11 +53,15 @@ const channelsEntryStateSchemaWithDefaults = z.object({
 
 type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;
 
-const DEFAULT_CHANNELS_ENTRY_STATE: ChannelsEntryState =
-  channelsEntryStateSchemaWithDefaults.parse({});
-const channelsEntryStateSchema = channelsEntryStateSchemaWithDefaults.catch(
-  DEFAULT_CHANNELS_ENTRY_STATE
-);
+const DEFAULT_CHANNELS_ENTRY_STATE = {
+  version: 1,
+  tab: 'browse',
+  selectedChannelId: undefined,
+  expandedGroups: {
+    channels: true,
+    direct_messages: true,
+  },
+} satisfies ChannelsEntryState;
 
 const channelsPreferencesSchema = z.object({
   version: z.literal(1).default(1),
@@ -69,6 +73,11 @@ const channelsPreferencesSchema = z.object({
 });
 
 type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
+
+const DEFAULT_CHANNELS_PREFERENCES = {
+  version: 1,
+  asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
+} satisfies ChannelsPreferences;
 
 function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
   return {
@@ -85,7 +94,8 @@ function restoreChannelsEntryState(
   current: ChannelsViewState,
   stored: unknown
 ): ChannelsViewState {
-  const restored = channelsEntryStateSchema.parse(stored);
+  const result = channelsEntryStateSchemaWithDefaults.safeParse(stored);
+  const restored = result.success ? result.data : DEFAULT_CHANNELS_ENTRY_STATE;
 
   return {
     ...current,
@@ -132,7 +142,7 @@ function createChannelsLocalStateStorage(options: {
       try {
         return restoreChannelsEntryState(current, JSON.parse(raw));
       } catch {
-        return undefined;
+        return restoreChannelsEntryState(current, undefined);
       }
     },
     initialize: (current) => {
@@ -173,13 +183,20 @@ function createChannelsPreferencesStorage(options: {
       if (raw === null) return undefined;
 
       try {
-        const restored = channelsPreferencesSchema.parse(JSON.parse(raw));
+        const result = channelsPreferencesSchema.safeParse(JSON.parse(raw));
+        const restored = result.success
+          ? result.data
+          : DEFAULT_CHANNELS_PREFERENCES;
+
         return {
           ...current,
           asideWidth: restored.asideWidth,
         };
       } catch {
-        return undefined;
+        return {
+          ...current,
+          asideWidth: DEFAULT_CHANNELS_PREFERENCES.asideWidth,
+        };
       }
     },
     initialize: (current) => {
