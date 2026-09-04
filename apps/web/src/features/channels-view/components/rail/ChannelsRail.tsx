@@ -5,7 +5,7 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import { useViewTabHotkeys } from '@app/components/view-shell';
-import { CommandState } from '@app/features/command';
+import { runCreateAction } from '@app/features/command/Launcher';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import {
   useSplitPanelOrThrow,
@@ -116,11 +116,7 @@ const conversationRow = (
 const rowKeyForChannel = (channelId: string) => `channel:${channelId}`;
 const rowKeyForSection = (group: ChannelsGroup) => `section:${group}`;
 
-const openDirectMessagePicker = () => {
-  CommandState.clearQuery();
-  CommandState.setCategoryFilter('dms');
-  CommandState.open();
-};
+const openMessageComposer = () => runCreateAction('channel');
 
 function RailModeButton(props: {
   mode: 'full' | 'slim';
@@ -161,7 +157,7 @@ function SlimCreateMenu() {
             <ChannelIcon class="size-4 shrink-0" />
             <span>Create channel</span>
           </Dropdown.Item>
-          <Dropdown.Item onSelect={openDirectMessagePicker}>
+          <Dropdown.Item onSelect={openMessageComposer}>
             <ChatTeardropIcon class="size-4 shrink-0" />
             <span>Start direct message</span>
           </Dropdown.Item>
@@ -589,7 +585,7 @@ export function ChannelsRail(props: {
                       <div data-section-action="" class="pr-1">
                         <CreateRailAction
                           label="Start direct message"
-                          onClick={openDirectMessagePicker}
+                          onClick={openMessageComposer}
                         />
                       </div>
                     </CollapsibleSection.Header>
