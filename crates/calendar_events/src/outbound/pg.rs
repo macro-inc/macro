@@ -695,58 +695,35 @@ impl CalendarRepository for PgCalendarRepository {
             let incoming =
                 serde_json::to_value(StoredSourceProjection::from(&upsert)).map_err(report)?;
             if canonical_projection(&row.normalized_payload) == canonical_projection(&incoming) {
+                // The source is unchanged, so the main-path reconcile below is
+                // skipped. The canonical row may still hold fields a shared copy
+                // flattened — including rows flattened before this rule existed,
+                // which an unchanged primary re-sync (a full snapshot) would
+                // otherwise never repair. Heal from the primary source first.
+                let reconciled = reconcile_primary_owned_fields(&mut tx, row.event_id).await?;
+                if reconciled {
+                    rebuild_event_reminder_firings_from_owner(
+                        &mut tx,
+                        row.event_id,
+                        Some(source.calendar_id),
+                    )
+                    .await?;
+                }
                 tx.commit().await.map_err(report)?;
                 return Ok(CalendarEventWriteOutcome {
                     event_id: row.event_id,
                     owner_id: upsert.event.owner_id.clone(),
-                    change: CalendarEventChange::Unchanged,
+                    change: if reconciled {
+                        CalendarEventChange::Updated
+                    } else {
+                        CalendarEventChange::Unchanged
+                    },
                 });
             }
         }
 
         let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&upsert.event.time);
         let proposed_id = upsert.event.id;
-
-        // Some fields Google only lets a primary calendar carry (status event
-        // types) or that belong to whoever owns the event rather than a viewer
-        // (read-only access, availability, visibility, reminders): a shared
-        // calendar re-importing a member's event, or a teammate's reader-access
-        // copy, arrives with those flattened or set from the viewer's side. The
-        // event's primary-calendar source is their authority, so a non-primary
-        // source must not overwrite them. These two flags gate that: whether the
-        // incoming source is itself a primary calendar, and whether the event
-        // already holds a primary source that owns those fields.
-        let incoming_is_primary = sqlx::query_scalar!(
-            "SELECT is_primary FROM calendars WHERE id = $1",
-            source.calendar_id,
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(report)?
-        .unwrap_or(false);
-        let event_has_primary_source = sqlx::query_scalar!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1
-                FROM calendar_events event
-                JOIN calendar_event_sources source ON source.event_id = event.id
-                JOIN calendars calendar ON calendar.id = source.calendar_id
-                JOIN calendar_accounts account ON account.id = source.account_id
-                WHERE event.owner_id = $1
-                  AND event.source_link_id = $2
-                  AND event.ical_uid = $3
-                  AND calendar.is_primary
-                  AND NOT calendar.is_deleted
-                  AND account.sync_status <> 'disabled'
-            ) AS "exists!"
-            "#,
-            &upsert.event.owner_id,
-            source_link_id,
-            &upsert.event.ical_uid,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(report)?;
 
         // Google is the authoritative source when the same RFC UID was first
         // discovered in email. Email can still create/update entities that do
@@ -780,25 +757,14 @@ impl CalendarRepository for PgCalendarRepository {
                 description = EXCLUDED.description,
                 location = EXCLUDED.location,
                 status = EXCLUDED.status,
-                -- Fields the event's primary calendar owns. A non-primary
-                -- source (a shared calendar's copy, or a teammate's reader
-                -- access) must not overwrite the member's own event type,
-                -- availability, visibility, read-only access, or reminders:
-                -- Google flattens or reframes those on a copy. Take the incoming
-                -- values only from a primary source ($31), or when the event has
-                -- no primary source to defer to (NOT $32).
-                visibility = CASE
-                    WHEN $31 OR NOT $32 THEN EXCLUDED.visibility
-                    ELSE calendar_events.visibility
-                END,
-                transparency = CASE
-                    WHEN $31 OR NOT $32 THEN EXCLUDED.transparency
-                    ELSE calendar_events.transparency
-                END,
-                event_type = CASE
-                    WHEN $31 OR NOT $32 THEN EXCLUDED.event_type
-                    ELSE calendar_events.event_type
-                END,
+                -- The primary-owned fields (event_type, visibility, transparency,
+                -- is_read_only, reminders) are written straight from the incoming
+                -- source here and then reconciled to the event's primary source
+                -- by `reconcile_primary_owned_fields` after this write, so a
+                -- non-primary copy's values never survive the transaction.
+                visibility = EXCLUDED.visibility,
+                transparency = EXCLUDED.transparency,
+                event_type = EXCLUDED.event_type,
                 starts_at = EXCLUDED.starts_at,
                 ends_at = EXCLUDED.ends_at,
                 start_date = EXCLUDED.start_date,
@@ -812,20 +778,11 @@ impl CalendarRepository for PgCalendarRepository {
                 conference_url = EXCLUDED.conference_url,
                 conference_provider = EXCLUDED.conference_provider,
                 sequence = EXCLUDED.sequence,
-                is_read_only = CASE
-                    WHEN $31 OR NOT $32 THEN EXCLUDED.is_read_only
-                    ELSE calendar_events.is_read_only
-                END,
+                is_read_only = EXCLUDED.is_read_only,
                 canonical_source_kind = EXCLUDED.canonical_source_kind,
                 canonical_source_updated_at = EXCLUDED.canonical_source_updated_at,
-                reminders_use_default = CASE
-                    WHEN $31 OR NOT $32 THEN EXCLUDED.reminders_use_default
-                    ELSE calendar_events.reminders_use_default
-                END,
-                reminder_overrides = CASE
-                    WHEN $31 OR NOT $32 THEN EXCLUDED.reminder_overrides
-                    ELSE calendar_events.reminder_overrides
-                END,
+                reminders_use_default = EXCLUDED.reminders_use_default,
+                reminder_overrides = EXCLUDED.reminder_overrides,
                 updated_at = GREATEST(calendar_events.updated_at, EXCLUDED.updated_at)
             WHERE
                 EXCLUDED.sequence > calendar_events.sequence
@@ -871,8 +828,6 @@ impl CalendarRepository for PgCalendarRepository {
             upsert.event.creator_email.as_deref(),
             upsert.event.creator_name.as_deref(),
             upsert.event.event_type.as_str(),
-            incoming_is_primary,
-            event_has_primary_source,
         )
         .fetch_optional(&mut *tx)
         .await
@@ -906,49 +861,15 @@ impl CalendarRepository for PgCalendarRepository {
 
         persist_source(&mut tx, event_id, &upsert).await?;
 
-        // A shared calendar's copy usually wins the canonical projection because
-        // it is re-imported (and so re-stamped) more recently than the member's
-        // own event, which parks the primary sync in the rejected branch above.
-        // The primary still owns the fields protected in the upsert, so when its
-        // projection lost reconcile them directly here — the only path that lifts
-        // them back out of the copy's flattened values.
-        let corrected_primary = if incoming_is_primary && applied.is_none() {
-            sqlx::query!(
-                r#"
-                UPDATE calendar_events SET
-                    event_type = $2,
-                    is_read_only = $3,
-                    transparency = $4,
-                    visibility = $5,
-                    reminders_use_default = $6,
-                    reminder_overrides = $7
-                WHERE id = $1
-                  AND (
-                        event_type IS DISTINCT FROM $2
-                        OR is_read_only IS DISTINCT FROM $3
-                        OR transparency IS DISTINCT FROM $4
-                        OR visibility IS DISTINCT FROM $5
-                        OR reminders_use_default IS DISTINCT FROM $6
-                        OR reminder_overrides IS DISTINCT FROM $7
-                  )
-                "#,
-                event_id,
-                upsert.event.event_type.as_str(),
-                upsert.event.is_read_only,
-                upsert.event.transparency.as_str(),
-                upsert.event.visibility.as_str(),
-                upsert.event.reminders.use_default,
-                serde_json::to_value(&upsert.event.reminders.overrides).map_err(report)?,
-            )
-            .execute(&mut *tx)
-            .await
-            .map_err(report)?
-            .rows_affected()
-                > 0
-        } else {
-            false
-        };
-        if corrected_primary {
+        // The write above (or the INSERT) set the primary-owned fields from the
+        // incoming source, which for a shared calendar's copy flattens them.
+        // Force the event's primary source's values back on, whichever source
+        // triggered this write. This is what keeps a copy from downgrading the
+        // status type or availability, reclaims them after a primary sync loses
+        // the freshness guard, and — because it runs on every write — heals rows
+        // a copy flattened before this rule existed.
+        let reconciled = reconcile_primary_owned_fields(&mut tx, event_id).await?;
+        if reconciled {
             change = CalendarEventChange::Updated;
         }
 
@@ -971,7 +892,7 @@ impl CalendarRepository for PgCalendarRepository {
         // one — so a shared copy winning the projection cannot replace the
         // member's reminders with its own or the shared calendar's empty
         // defaults. Skipped only when nothing above touched the event.
-        if applied.is_some() || corrected_primary {
+        if applied.is_some() || reconciled {
             rebuild_event_reminder_firings_from_owner(&mut tx, event_id, Some(source.calendar_id))
                 .await?;
         }
@@ -2886,6 +2807,87 @@ async fn persist_source(
     Ok(())
 }
 
+/// Force the fields the event's primary calendar owns — status event type,
+/// availability, visibility, read-only access, and reminders — onto the
+/// canonical row from that primary source's stored projection. Google only
+/// lets a primary calendar carry status types and treats these as the owner's
+/// rather than a viewer's, so a shared calendar's copy or a teammate's reader
+/// access arrives with them flattened; the canonical projection may be won by
+/// such a copy, but these fields must still follow the primary source.
+///
+/// Idempotent and source-agnostic: it reads the primary source (not the
+/// incoming write) and only writes when the row disagrees, so running it after
+/// every upsert reclaims the fields whichever source triggered the write and
+/// repairs a row a copy flattened before this rule existed. Returns whether it
+/// changed the row. A no-op when the event has no primary source — then the
+/// canonical projection is the only authority.
+async fn reconcile_primary_owned_fields(
+    tx: &mut Transaction<'_, Postgres>,
+    event_id: Uuid,
+) -> Result<bool, Report> {
+    let primary_event: Option<CalendarEvent> = sqlx::query_scalar!(
+        r#"
+        SELECT source.normalized_payload
+        FROM calendar_event_sources source
+        JOIN calendars calendar ON calendar.id = source.calendar_id
+        JOIN calendar_accounts account ON account.id = source.account_id
+        WHERE source.event_id = $1
+          AND calendar.is_primary
+          AND NOT calendar.is_deleted
+          AND account.sync_status <> 'disabled'
+        ORDER BY
+            source.source_sequence DESC,
+            source.source_updated_at DESC,
+            source.last_seen_at DESC,
+            source.id DESC
+        LIMIT 1
+        "#,
+        event_id,
+    )
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(report)?
+    .map(|payload| serde_json::from_value::<StoredSourceProjection>(payload).map(|p| p.event))
+    .transpose()
+    .map_err(report)?;
+    let Some(primary) = primary_event else {
+        return Ok(false);
+    };
+    let changed = sqlx::query!(
+        r#"
+        UPDATE calendar_events SET
+            event_type = $2,
+            is_read_only = $3,
+            transparency = $4,
+            visibility = $5,
+            reminders_use_default = $6,
+            reminder_overrides = $7
+        WHERE id = $1
+          AND (
+                event_type IS DISTINCT FROM $2
+                OR is_read_only IS DISTINCT FROM $3
+                OR transparency IS DISTINCT FROM $4
+                OR visibility IS DISTINCT FROM $5
+                OR reminders_use_default IS DISTINCT FROM $6
+                OR reminder_overrides IS DISTINCT FROM $7
+          )
+        "#,
+        event_id,
+        primary.event_type.as_str(),
+        primary.is_read_only,
+        primary.transparency.as_str(),
+        primary.visibility.as_str(),
+        primary.reminders.use_default,
+        serde_json::to_value(&primary.reminders.overrides).map_err(report)?,
+    )
+    .execute(&mut **tx)
+    .await
+    .map_err(report)?
+    .rows_affected()
+        > 0;
+    Ok(changed)
+}
+
 /// Rewrite an event from its next-best remaining source, or delete it when no
 /// source is left, reporting which happened.
 ///
@@ -2950,39 +2952,6 @@ async fn restore_best_source_or_delete(
     let projection: StoredSourceProjection =
         serde_json::from_value(source.normalized_payload).map_err(report)?;
 
-    // The freshest remaining source drives the projection, but Google's
-    // per-primary and owner-scoped fields still belong to the event's primary
-    // source when one survives the retirement. Retiring an unrelated source
-    // must not let a shared calendar's copy or a reader's view become the
-    // authority for the type, access, availability, visibility, or reminders
-    // just because it is now the freshest source left.
-    let primary_event: Option<CalendarEvent> = sqlx::query_scalar!(
-        r#"
-        SELECT source.normalized_payload
-        FROM calendar_event_sources source
-        JOIN calendars calendar ON calendar.id = source.calendar_id
-        JOIN calendar_accounts account ON account.id = source.account_id
-        WHERE source.event_id = $1
-          AND calendar.is_primary
-          AND NOT calendar.is_deleted
-          AND account.sync_status <> 'disabled'
-        ORDER BY
-            source.source_sequence DESC,
-            source.source_updated_at DESC,
-            source.last_seen_at DESC,
-            source.id DESC
-        LIMIT 1
-        "#,
-        event_id,
-    )
-    .fetch_optional(&mut **tx)
-    .await
-    .map_err(report)?
-    .map(|payload| serde_json::from_value::<StoredSourceProjection>(payload).map(|p| p.event))
-    .transpose()
-    .map_err(report)?;
-    let owner = primary_event.as_ref().unwrap_or(&projection.event);
-
     let (starts_at, ends_at, start_date, end_date, time_zone) = split_time(&projection.event.time);
     sqlx::query!(
         r#"
@@ -3021,8 +2990,8 @@ async fn restore_best_source_or_delete(
         projection.event.description.as_deref(),
         projection.event.location.as_deref(),
         projection.event.status.as_str(),
-        owner.visibility.as_str(),
-        owner.transparency.as_str(),
+        projection.event.visibility.as_str(),
+        projection.event.transparency.as_str(),
         starts_at,
         ends_at,
         start_date,
@@ -3033,20 +3002,20 @@ async fn restore_best_source_or_delete(
         projection.event.organizer_name.as_deref(),
         projection.event.conference_url.as_deref(),
         db_sequence(projection.event.sequence)?,
-        owner.is_read_only,
+        projection.event.is_read_only,
         &source.source_kind,
         source.source_updated_at,
         projection.event.created_at,
         projection.event.updated_at,
-        owner.reminders.use_default,
-        serde_json::to_value(&owner.reminders.overrides).map_err(report)?,
+        projection.event.reminders.use_default,
+        serde_json::to_value(&projection.event.reminders.overrides).map_err(report)?,
         projection
             .event
             .conference_provider
             .map(ConferenceProvider::as_str),
         projection.event.creator_email.as_deref(),
         projection.event.creator_name.as_deref(),
-        owner.event_type.as_str(),
+        projection.event.event_type.as_str(),
     )
     .execute(&mut **tx)
     .await
@@ -3060,8 +3029,11 @@ async fn restore_best_source_or_delete(
         &projection.occurrences,
     )
     .await?;
-    // Rebuild from the settled row and the calendar that owns its reminders (the
-    // surviving primary source when there is one), consistent with the upsert.
+    // The freshest remaining source drove the write above; force the surviving
+    // primary source's owner-scoped fields back on, so retiring an unrelated
+    // source cannot let a shared copy become their authority. Then rebuild from
+    // the settled row and the calendar that owns its reminders.
+    reconcile_primary_owned_fields(tx, event_id).await?;
     rebuild_event_reminder_firings_from_owner(tx, event_id, source.calendar_id).await?;
     Ok(Some(RetiredCalendarEvent {
         event_id,

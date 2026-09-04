@@ -4530,6 +4530,70 @@ async fn a_primary_edit_still_propagates_after_a_shared_copy_synced(pool: PgPool
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_unchanged_primary_resync_heals_a_row_a_copy_already_flattened(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id).await;
+    let uid = "teo-ooo@example.com";
+
+    let event_id = repo
+        .upsert_event_fixture(member_primary_upsert(
+            member,
+            link_id,
+            (account_id, primary_calendar_id),
+            uid,
+            "OOO",
+        ))
+        .await
+        .unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, shared_calendar_id),
+        uid,
+        "[teo] OOO",
+    ))
+    .await
+    .unwrap();
+
+    // Simulate a row flattened by a copy before the primary-authority rule
+    // existed: the canonical row holds the copy's values while both sources
+    // remain, and the primary source's stored projection is untouched.
+    sqlx::query!(
+        r#"
+        UPDATE calendar_events SET
+            event_type = 'default',
+            is_read_only = true,
+            transparency = 'transparent',
+            visibility = 'default',
+            reminders_use_default = true,
+            reminder_overrides = '[]'::jsonb
+        WHERE id = $1
+        "#,
+        event_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    // The member's primary re-syncs with an unchanged payload, which hits the
+    // identical-projection short-circuit. It must still repair the flattened row.
+    repo.upsert_event_fixture(member_primary_upsert(
+        member,
+        link_id,
+        (account_id, primary_calendar_id),
+        uid,
+        "OOO",
+    ))
+    .await
+    .unwrap();
+
+    assert_primary_owned_fields(&pool, event_id).await;
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn merged_event_reminder_firings_follow_the_primary_not_the_shared_copy(pool: PgPool) {
     let member = "macro|teo@example.com";
     let link_id = insert_link(&pool, member).await;
