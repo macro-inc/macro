@@ -33,18 +33,19 @@ export type ChannelsViewProps = {
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
-  const { state, setAsideWidth } = useChannelsView();
+  const { state, setAsideWidth, setRailMode } = useChannelsView();
   const [workspace, setWorkspace] = createSignal<HTMLDivElement>();
   const workspaceSize = createElementSize(workspace);
   const breakpoints = createSizeBreakpoints(
     () => workspaceSize.width ?? undefined,
     { narrow: 720 }
   );
-  const [railModeOverride, setRailModeOverride] = createSignal<
-    'full' | 'slim'
-  >();
   const railMode = () =>
-    railModeOverride() ?? (breakpoints.narrow() ? 'slim' : 'full');
+    state.railMode === 'auto'
+      ? breakpoints.narrow()
+        ? 'slim'
+        : 'full'
+      : state.railMode;
   const railLayout = () =>
     railMode() === 'slim'
       ? {
@@ -107,7 +108,7 @@ function ChannelsViewRoot() {
                   <ChannelsRail
                     channels={channels()}
                     mode={railMode()}
-                    onModeChange={setRailModeOverride}
+                    onModeChange={setRailMode}
                   />
                 </ViewShell.Aside>
                 <ViewShell.Main class="overflow-hidden">

@@ -70,6 +70,7 @@ const channelsPreferencesSchema = z.object({
     .finite()
     .default(CHANNELS_DEFAULT_RAIL_WIDTH)
     .transform(clampChannelsRailWidth),
+  railMode: z.enum(['auto', 'full', 'slim']).default('auto'),
 });
 
 type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
@@ -77,6 +78,7 @@ type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
 const DEFAULT_CHANNELS_PREFERENCES = {
   version: 1,
   asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
+  railMode: 'auto',
 } satisfies ChannelsPreferences;
 
 function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
@@ -170,6 +172,7 @@ function createChannelsPreferencesStorage(options: {
     JSON.stringify({
       version: 1,
       asideWidth: clampChannelsRailWidth(state.asideWidth),
+      railMode: state.railMode,
     } satisfies ChannelsPreferences);
 
   return {
@@ -191,11 +194,13 @@ function createChannelsPreferencesStorage(options: {
         return {
           ...current,
           asideWidth: restored.asideWidth,
+          railMode: restored.railMode,
         };
       } catch {
         return {
           ...current,
           asideWidth: DEFAULT_CHANNELS_PREFERENCES.asideWidth,
+          railMode: DEFAULT_CHANNELS_PREFERENCES.railMode,
         };
       }
     },

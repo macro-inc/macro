@@ -11,6 +11,7 @@ import {
 import { createChannelsViewPersistence } from './persistence';
 import type {
   ChannelsGroup,
+  ChannelsRailMode,
   ChannelsTab,
   ChannelsViewState,
   ChannelsViewStateOptions,
@@ -26,6 +27,7 @@ export type ChannelsViewContext = {
   setSelectedChannelId: (channelId: string | undefined) => void;
   setGroupOpen: (group: ChannelsGroup, open: boolean) => void;
   setAsideWidth: (width: number) => void;
+  setRailMode: (mode: Exclude<ChannelsRailMode, 'auto'>) => void;
 };
 
 export const [ChannelsViewProvider, useChannelsView] =
@@ -46,13 +48,15 @@ export const [ChannelsViewProvider, useChannelsView] =
           asideWidth: clampChannelsRailWidth(
             initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
           ),
+          railMode: initial.railMode ?? 'auto',
         }),
         createChannelsViewPersistence({
           handle: panel.handle,
           userId,
           restoreEntryState: props.initialState === undefined,
           restoreLocalState: props.initialState === undefined,
-          restorePreferences: initial.asideWidth === undefined,
+          restorePreferences:
+            initial.asideWidth === undefined && initial.railMode === undefined,
         })
       );
 
@@ -64,6 +68,7 @@ export const [ChannelsViewProvider, useChannelsView] =
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),
         setAsideWidth: (width) =>
           setState('asideWidth', clampChannelsRailWidth(width)),
+        setRailMode: (mode) => setState('railMode', mode),
       };
     }
   );
