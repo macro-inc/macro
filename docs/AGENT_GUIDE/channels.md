@@ -54,8 +54,10 @@ navigation scrolls only when the selected message is outside the usable viewport
 Returning through split navigation restores the saved message position and expanded
 threads. Switching channel tabs currently opens Messages at latest. The `Scroll to bottom` control appears when scrolling down through history;
 it returns to the latest page even after opening a link into old history.
+The jump waits for that page to reach the rendered list.
 A newer message navigation cancels a pending jump to latest. Scrolling manually
 or choosing another destination also cancels the initial target's delayed fallback.
+A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.

@@ -535,9 +535,17 @@ export function Channel(props: ChannelProps) {
         queryKey: getChannelMessagesQueryKey(props.channelId, null),
       });
     },
-    scroll: () =>
-      !messagesQuery.hasPreviousPage &&
-      (threadListNavigation()?.scrollToLatest() ?? false),
+    scroll: () => {
+      if (!messagesQuery.isSuccess || messagesQuery.hasPreviousPage)
+        return false;
+      // The message index can still contain the old page during a query reset.
+      const latestMessageId = messagesQuery.data?.pages[0]?.items[0]?.id;
+      return (
+        latestMessageId !== undefined &&
+        messageIndex.keys.at(-1) === latestMessageId &&
+        (threadListNavigation()?.scrollToLatest() ?? false)
+      );
+    },
   });
   const goToLatest: ChannelHandle['goToLatest'] = latestNavigation.goToLatest;
   onCleanup(latestNavigation.cancel);
