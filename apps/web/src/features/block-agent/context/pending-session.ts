@@ -34,21 +34,6 @@ export type PendingSession = {
 
 const pending = new Map<string, PendingSession>();
 
-/**
- * Placeholders whose composer should take the keyboard, because this user just
- * created them from the create menu.
- *
- * Recorded at the gesture rather than inferred from `pending()`: the create can
- * resolve before the lazy block has even mounted, leaving no wait to notice.
- *
- * Read rather than consumed, because the block can mount more than once for
- * one create: opening into a new split rebuilds the subtree, which drops any
- * focus the composer had already taken, and adopting the real session id
- * renames the block underneath it. Both ids are held so the claim survives
- * either, and each new create replaces the set.
- */
-const composerFocusWanted = new Set<string>();
-
 /** Whether `id` is a placeholder this module minted rather than a session. */
 export function isPlaceholderSessionId(id: string): boolean {
   return id.startsWith(PLACEHOLDER_PREFIX);
@@ -63,10 +48,6 @@ export function startPendingSession(): string {
   const [sessionId, setSessionId] = createSignal<string>();
   const [failed, setFailed] = createSignal(false);
   pending.set(placeholder, { sessionId, failed });
-  // Only the newest create may claim the keyboard, so this never accumulates
-  // and an older block cannot pull focus out of a newer one on a re-mount.
-  composerFocusWanted.clear();
-  composerFocusWanted.add(placeholder);
 
   void agentHarnessServiceClient
     .create({})
@@ -74,12 +55,6 @@ export function startPendingSession(): string {
       if (result.isErr()) {
         setFailed(true);
         return;
-      }
-      // Registered under the real id before the block can adopt it: the split
-      // swaps the placeholder out, and the composer must stay claimable
-      // across that rename.
-      if (composerFocusWanted.has(placeholder)) {
-        composerFocusWanted.add(result.value.session.id);
       }
       setSessionId(result.value.session.id);
     })
@@ -105,10 +80,4 @@ export function pendingSession(
  */
 export function forgetPendingSession(placeholder: string): void {
   pending.delete(placeholder);
-  composerFocusWanted.delete(placeholder);
-}
-
-/** Whether this block's composer should claim focus when it mounts. */
-export function wantsComposerFocus(blockId: string): boolean {
-  return composerFocusWanted.has(blockId);
 }

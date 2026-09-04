@@ -16,9 +16,14 @@ import {
   QueuedPrompts,
 } from '../ui';
 
-export function AgentComposer() {
+export function AgentComposer(props: {
+  /**
+   * Whether the composer opens focused. The block adapter decides, from the
+   * split layout and j/k navigation — same contract as Chat and Channel.
+   */
+  autofocus?: boolean;
+}) {
   const {
-    autofocus,
     composer,
     loadFailed,
     metadata,
@@ -70,7 +75,7 @@ export function AgentComposer() {
       </Show>
       <AgentInput
         placeholder="Message the agent, @mention anything"
-        autofocus={autofocus}
+        autofocus={props.autofocus}
         busy={composer.busy()}
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed
