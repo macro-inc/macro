@@ -461,6 +461,13 @@ export type ModelOption = {
   name: string;
   /**  Descriptive copy - pricing, context size, and the like. */
   description: string | null;
+  /**
+   *  The heading the runtime listed this model under, when it grouped its
+   *  options (ACP's `SessionConfigSelectGroup.name`). `None` for a runtime
+   *  that offered a flat list; the flattened order still follows the
+   *  runtime's, group by group.
+   */
+  group: string | null;
 };
 
 /**

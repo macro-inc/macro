@@ -17,6 +17,20 @@ export function calendarEventRenderId(
   return typeof calendarEventId === 'string' ? calendarEventId : event.id;
 }
 
+/**
+ * Every occurrence id a rendered bar stands in for. A merged working-location
+ * run covers several days, only one of which has a chip, so selection, focus,
+ * and chip registration key off all of them.
+ */
+export function calendarEventRenderIds(
+  event: Pick<EventApi, 'extendedProps' | 'id'>
+): string[] {
+  const merged = event.extendedProps.mergedOccurrenceIds;
+  return Array.isArray(merged) && merged.length > 0
+    ? merged
+    : [calendarEventRenderId(event)];
+}
+
 /** Whether an occurrence can safely be moved or resized from the calendar. */
 export function canEditCalendarEventTime(event: CalendarEvent) {
   return (
