@@ -6,6 +6,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{ChannelListRepo, ChannelRepo};
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
+use chrono::{DateTime, Utc};
 use filter_ast::Expr;
 use item_filters::ast::{
     LiteralTree,
@@ -104,6 +105,21 @@ fn channels_params(user_id: &str, filter: LiteralTree<ChannelLiteral>) -> GetCha
 
 fn channel_filter(literal: ChannelLiteral) -> LiteralTree<ChannelLiteral> {
     Some(Arc::new(Expr::val(literal)))
+}
+
+fn channel_list_sort_timestamp(
+    channel: &ChannelWithParticipants,
+    sort: SimpleSortMethod,
+) -> DateTime<Utc> {
+    match sort {
+        SimpleSortMethod::CreatedAt => channel.channel.created_at,
+        SimpleSortMethod::UpdatedAt => channel.channel.updated_at,
+        SimpleSortMethod::ViewedAt | SimpleSortMethod::ViewedUpdated => match channel.channel.id {
+            CH1 => "2024-01-01T00:00:00Z".parse().unwrap(),
+            CH3 => "2024-01-04T00:00:00Z".parse().unwrap(),
+            id => panic!("unexpected channel {id}"),
+        },
+    }
 }
 
 fn participant_roles(channel: &ChannelWithParticipants) -> Vec<(String, ParticipantRole)> {
@@ -268,6 +284,8 @@ async fn channel_list_cursor_pagination_matches_unpaginated_results(pool: Pool<P
     for (sort, expected_ids) in [
         (SimpleSortMethod::CreatedAt, vec![CH3, CH1]),
         (SimpleSortMethod::UpdatedAt, vec![CH1, CH3]),
+        (SimpleSortMethod::ViewedAt, vec![CH3, CH1]),
+        (SimpleSortMethod::ViewedUpdated, vec![CH3, CH1]),
     ] {
         let unpaginated = repo
             .get_user_channels_with_participants(
@@ -312,11 +330,7 @@ async fn channel_list_cursor_pagination_matches_unpaginated_results(pool: Pool<P
                 limit: 1,
                 val: CursorVal {
                     sort_type: sort,
-                    last_val: match sort {
-                        SimpleSortMethod::CreatedAt => last.channel.created_at,
-                        SimpleSortMethod::UpdatedAt => last.channel.updated_at,
-                        _ => unreachable!("channel list test only uses supported sort methods"),
-                    },
+                    last_val: channel_list_sort_timestamp(last, sort),
                 },
                 filter: None,
             });
