@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart};
-use ai_tools::{ToolServiceContext, ToolSetWithPrompt, all_tools};
+use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
 use ai_toolset::ToolSet as AiToolSet;
 use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -78,7 +78,7 @@ async fn drive_turn(
         cancel,
     } = request;
 
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
     let system_prompt = system_prompt(
         &tools.prompt,
@@ -163,7 +163,7 @@ async fn fetch_user_memory(
     tool_context: &ToolServiceContext,
     owner: &MacroUserIdStr<'static>,
 ) -> Option<String> {
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let tools = ToolSetWithPrompt {
         toolset: tools.toolset,
         prompt: tools.prompt,

@@ -1033,7 +1033,7 @@ async fn run() -> anyhow::Result<()> {
             std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
             lexical_client.clone(),
         );
-    let macro_agent_tools = ai_tools::channel_bot_tools();
+    let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
         channels_service.clone(),
         Arc::new(channel_bots::outbound::AgentLoopResponder::new(

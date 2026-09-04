@@ -401,7 +401,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         recorder: ai_usage::pg_recorder(pool.clone()),
         usage_context: ai_usage::UsageContext::system(ai_usage::AiFeature::Chat),
     };
-    let all_tools = ai_tools::all_tools();
+    let all_tools = ai_tools::tools_for(ai_tools::AiHost::Chat);
     let all_tools_toolset = all_tools.toolset.clone();
     let all_tools_prompt: Arc<dyn std::fmt::Display + Send + Sync> =
         Arc::new(all_tools.prompt.to_string());
@@ -465,7 +465,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let projection_generator =
         ai_projections::outbound::agent_generator::AgentProjectionGenerator::new(
             tool_service_context.clone(),
-            ai_tools::all_tools(),
+            ai_tools::tools_for(ai_tools::AiHost::Chat),
         );
 
     let projection_notifier =
