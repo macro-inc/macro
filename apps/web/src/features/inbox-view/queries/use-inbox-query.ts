@@ -3,7 +3,6 @@ import {
   buildFlatSoupRows,
   buildGroupedSoupRows,
   createSearchState,
-  createSoupLoadMoreRow,
   type SoupRow,
   testFacets,
   useSearchContext,
@@ -252,15 +251,6 @@ export function useInboxDataSource(
       );
     } else {
       result = buildFlatSoupRows(entities().items);
-    }
-
-    if (hasMore()) {
-      result.push(
-        createSoupLoadMoreRow({
-          scopeId: `inbox:${state.tab}`,
-          isLoading: isLoadingMore(),
-        })
-      );
     }
 
     return result;
