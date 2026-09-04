@@ -218,6 +218,12 @@ input EntitySharePolicyInput {
 	Channel access entries to add, remove, or replace.
 	"""
 	channelSharePermissions: [ChannelSharePolicyInput!]
+	"""
+	Access level granted to every member of the owner's team. Omit to leave unchanged or pass
+	null to stop sharing with the team. Only the item owner may change this; OWNER cannot be
+	granted to a team.
+	"""
+	teamShareAccessLevel: GraphqlEntityAccessLevel
 }
 
 """

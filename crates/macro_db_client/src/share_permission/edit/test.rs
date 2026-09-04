@@ -20,6 +20,7 @@ fn update_request(
     link_share_access_level: Option<Option<AccessLevel>>,
 ) -> UpdateSharePermissionRequestV2 {
     UpdateSharePermissionRequestV2 {
+        team_share_access_level: None,
         link_share,
         link_share_access_level,
         channel_share_permissions: None,
@@ -68,6 +69,7 @@ async fn edit_share_permission_preserves_update_field_semantics(
     let permission = create_share_permission(
         &mut transaction,
         &SharePermissionV2 {
+            team_share_access_level: None,
             id: String::new(),
             link_share: Some(LinkShare::Public),
             link_share_access_level: Some(AccessLevel::Edit),

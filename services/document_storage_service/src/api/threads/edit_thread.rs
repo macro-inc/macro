@@ -93,6 +93,20 @@ pub async fn edit_thread_handler(
             .into_response());
     }
 
+    if req
+        .share_permission
+        .as_ref()
+        .is_some_and(|share_permission| share_permission.changes_team_share())
+    {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                message: "sharing email threads with a team is not supported".into(),
+            }),
+        )
+            .into_response());
+    }
+
     if let Some(share_permission) = req.share_permission {
         let mut tx = ctx.db.begin().await.map_err(|e| {
             tracing::error!(error=?e, "unable to edit thread");

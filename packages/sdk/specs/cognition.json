@@ -4366,6 +4366,17 @@
           "owner": {
             "type": "string",
             "description": "The owner of the item"
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The access level granted to every member of the owner's team, or `None` when the item is\nnot shared with the team. Distinct from a `Team` link share, which only grants access to\nteam members who have the link."
+              }
+            ]
           }
         }
       },
@@ -4671,6 +4682,17 @@
               {
                 "$ref": "#/components/schemas/AccessLevel",
                 "description": "The link access level. Omit to leave unchanged or pass `null` to reset it to the default\nlevel when a link share exists."
+              }
+            ]
+          },
+          "teamShareAccessLevel": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The access level to grant every member of the owner's team. Omit to leave unchanged or\npass `null` to stop sharing with the team. Only the item owner may change this, and\n`owner` cannot be granted to a team."
               }
             ]
           }

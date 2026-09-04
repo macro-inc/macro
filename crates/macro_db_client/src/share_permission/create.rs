@@ -41,14 +41,16 @@ pub async fn create_share_permission(
             INSERT INTO "SharePermission" (
                 "linkShare",
                 "linkShareAccessLevel",
+                "teamShareAccessLevel",
                 "createdAt",
                 "updatedAt"
             )
-            VALUES ($1, $2, NOW(), NOW())
+            VALUES ($1, $2, $3, NOW(), NOW())
             RETURNING id;
         "#,
         link_share_value,
         link_share_access_level as _,
+        share_permission.team_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;
@@ -63,6 +65,7 @@ pub async fn create_share_permission(
         link_share_access_level,
         owner: String::new(), // Owner is not stored on the share permission row.
         channel_share_permissions: share_permission.channel_share_permissions.clone(),
+        team_share_access_level: share_permission.team_share_access_level,
     })
 }
 

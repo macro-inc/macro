@@ -74,6 +74,12 @@ export type EntitySharePolicyInput = {
    * when a link share exists.
    */
   linkShareAccessLevel?: GraphqlEntityAccessLevel | null | undefined;
+  /**
+   * Access level granted to every member of the owner's team. Omit to leave unchanged or pass
+   * null to stop sharing with the team. Only the item owner may change this; OWNER cannot be
+   * granted to a team.
+   */
+  teamShareAccessLevel?: GraphqlEntityAccessLevel | null | undefined;
 };
 
 /** The two operands of a recursive `CalendarEventFilterExpr` binary expression. */

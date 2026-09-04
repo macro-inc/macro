@@ -164,20 +164,23 @@ pub async fn set_share_permission(
 ) -> Result<(), sqlx::Error> {
     let link_share = share_permission.link_share.map(|value| value.to_string());
     let link_share_access_level = share_permission.link_share_access_level;
+    let team_share_access_level = share_permission.team_share_access_level;
 
     let share_permission_row = sqlx::query!(
         r#"
         INSERT INTO "SharePermission" (
             "linkShare",
             "linkShareAccessLevel",
+            "teamShareAccessLevel",
             "createdAt",
             "updatedAt"
         )
-        VALUES ($1, $2, NOW(), NOW())
+        VALUES ($1, $2, $3, NOW(), NOW())
         RETURNING id
         "#,
         link_share,
         link_share_access_level as _,
+        team_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;

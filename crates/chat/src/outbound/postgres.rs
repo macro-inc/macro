@@ -317,8 +317,7 @@ impl ChatRepo for PgChatRepo {
                 chat_id,
                 share_permission,
             )
-            .await
-            .map_err(to_chat_err)?;
+            .await?;
         }
 
         tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;

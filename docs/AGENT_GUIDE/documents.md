@@ -47,6 +47,24 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
 - Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
   doc's visibility/permissions.
 
+## Share dialog
+
+`Share` (header, or the top-bar `Share` button) opens the share dialog, which is the same for
+documents, chats, and folders:
+
+- **People with access** lists the owner, then a team row (labelled with the team's name, or
+  `Team`, with the subtitle `Everyone on the team`) when the owner is on a team, then one row
+  per channel the item is shared in. Each non-owner row has an access-level menu (`View`,
+  `Comment`, `Edit`, `Remove Access`).
+- The team row is the explicit team share: pick a level to share the item with everyone on
+  the owner's team at that level (it then appears in teammates' feeds), or `Remove Access` to
+  stop. Only the item's owner can change it; for everyone else the row shows the current level
+  as plain text, and it is hidden when there is no team share and the viewer is not the owner
+  on a team. Sharing a folder with the team also shares its contents.
+- **Link sharing** (`None` / `Public` / `Team` segmented control + level) is separate: a
+  `Team` link only grants access to teammates who open the link and does not add the item to
+  their feeds.
+
 ## Known failure: "expected instance of LoroDoc"
 
 Opening any doc can crash with a full-screen dialog `expected instance of LoroDoc` (console:

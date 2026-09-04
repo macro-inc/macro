@@ -577,6 +577,10 @@ pub trait DocumentService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<DocumentTeamShareResponse, DocumentError>> + Send;
 
     /// Grant or revoke the document owner's team's access on the document.
+    ///
+    /// Only the literal document owner may do this; other callers (including
+    /// bots and users with an inherited Owner access level) are rejected with
+    /// [`DocumentError::Unauthorized`].
     fn set_team_share(
         &self,
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,

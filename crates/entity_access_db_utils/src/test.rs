@@ -620,3 +620,226 @@ async fn remove_non_owner_user_entity_access_preserves_non_user_inherited_and_ot
     assert_eq!(other_type_rows[0].access_level, AccessLevel::View);
     assert!(other_type_rows[0].granted_from_project_id.is_none());
 }
+
+const TEAM_ID: Uuid = Uuid::from_u128(0x88888888_8888_8888_8888_888888888888);
+
+async fn fetch_team_rows(pool: &Pool<Postgres>, team_id: &Uuid) -> Vec<Row> {
+    // Runtime query (not the compile-time macro) so this test helper does not
+    // require a `.sqlx` cache entry to build.
+    sqlx::query(
+        r#"
+        SELECT
+            entity_id,
+            entity_type,
+            source_id,
+            access_level,
+            granted_from_project_id
+        FROM entity_access
+        WHERE source_id = $1 AND source_type = 'team'
+        ORDER BY entity_type, entity_id, granted_from_project_id NULLS FIRST
+        "#,
+    )
+    .bind(team_id.to_string())
+    .map(|r: sqlx::postgres::PgRow| Row {
+        entity_id: r.get("entity_id"),
+        entity_type: r.get("entity_type"),
+        source_id: r.get("source_id"),
+        access_level: r.get("access_level"),
+        granted_from_project_id: r.get("granted_from_project_id"),
+    })
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+async fn set_team_share(
+    pool: &Pool<Postgres>,
+    entity_id: &Uuid,
+    entity_type: EntityType,
+    access_level: Option<AccessLevel>,
+) {
+    let mut tx = pool.begin().await.unwrap();
+    set_team_entity_access(&mut tx, entity_id, entity_type, &TEAM_ID, access_level)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("upsert_test_data"))
+)]
+async fn set_team_entity_access_grants_updates_and_revokes_a_single_entity(pool: Pool<Postgres>) {
+    set_team_share(
+        &pool,
+        &CHAT_ROOT_ID,
+        EntityType::Chat,
+        Some(AccessLevel::View),
+    )
+    .await;
+
+    let rows = fetch_team_rows(&pool, &TEAM_ID).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entity_id, CHAT_ROOT_ID);
+    assert_eq!(rows[0].entity_type, "chat");
+    assert_eq!(rows[0].source_id, TEAM_ID.to_string());
+    assert_eq!(rows[0].access_level, AccessLevel::View);
+    assert_eq!(rows[0].granted_from_project_id, None);
+
+    // Changing the level updates the existing row instead of adding a second one.
+    set_team_share(
+        &pool,
+        &CHAT_ROOT_ID,
+        EntityType::Chat,
+        Some(AccessLevel::Edit),
+    )
+    .await;
+    let rows = fetch_team_rows(&pool, &TEAM_ID).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].access_level, AccessLevel::Edit);
+
+    set_team_share(&pool, &CHAT_ROOT_ID, EntityType::Chat, None).await;
+    assert!(fetch_team_rows(&pool, &TEAM_ID).await.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("upsert_test_data"))
+)]
+async fn set_team_entity_access_revoke_keeps_project_granted_rows_on_the_entity(
+    pool: Pool<Postgres>,
+) {
+    // A team row the document inherited from its project is not the document's own team share.
+    let mut tx = pool.begin().await.unwrap();
+    insert_entity_access_for_test(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Document,
+        &TEAM_ID.to_string(),
+        EntityAccessSourceType::Team,
+        AccessLevel::View,
+        Some(&ROOT_PROJECT_ID.to_string()),
+    )
+    .await;
+    tx.commit().await.unwrap();
+
+    set_team_share(&pool, &DOC_ROOT_ID, EntityType::Document, None).await;
+
+    let rows = fetch_team_rows(&pool, &TEAM_ID).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entity_id, DOC_ROOT_ID);
+    assert_eq!(
+        rows[0].granted_from_project_id,
+        Some(ROOT_PROJECT_ID.to_string())
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("upsert_test_data"))
+)]
+async fn set_team_entity_access_on_project_fans_out_to_nested_entities(pool: Pool<Postgres>) {
+    set_team_share(
+        &pool,
+        &ROOT_PROJECT_ID,
+        EntityType::Project,
+        Some(AccessLevel::Comment),
+    )
+    .await;
+
+    let rows = fetch_team_rows(&pool, &TEAM_ID).await;
+    // The project's own row plus one inherited row per nested entity.
+    assert_eq!(rows.len(), 6);
+    assert!(rows.iter().all(|r| r.access_level == AccessLevel::Comment));
+
+    let direct: Vec<&Row> = rows
+        .iter()
+        .filter(|r| r.granted_from_project_id.is_none())
+        .collect();
+    assert_eq!(direct.len(), 1);
+    assert_eq!(direct[0].entity_id, ROOT_PROJECT_ID);
+    assert_eq!(direct[0].entity_type, "project");
+
+    let inherited: std::collections::HashSet<(Uuid, String)> = rows
+        .iter()
+        .filter(|r| r.granted_from_project_id.as_deref() == Some(&ROOT_PROJECT_ID.to_string()))
+        .map(|r| (r.entity_id, r.entity_type.clone()))
+        .collect();
+    let expected: std::collections::HashSet<(Uuid, String)> = [
+        (CHILD_PROJECT_ID, "project"),
+        (DOC_ROOT_ID, "document"),
+        (DOC_CHILD_ID, "document"),
+        (CHAT_CHILD_ID, "chat"),
+        (CHAT_ROOT_ID, "chat"),
+    ]
+    .into_iter()
+    .map(|(id, entity_type)| (id, entity_type.to_string()))
+    .collect();
+    assert_eq!(inherited, expected);
+
+    // Re-granting at a new level updates every row in place.
+    set_team_share(
+        &pool,
+        &ROOT_PROJECT_ID,
+        EntityType::Project,
+        Some(AccessLevel::Edit),
+    )
+    .await;
+    let rows = fetch_team_rows(&pool, &TEAM_ID).await;
+    assert_eq!(rows.len(), 6);
+    assert!(rows.iter().all(|r| r.access_level == AccessLevel::Edit));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("upsert_test_data"))
+)]
+async fn set_team_entity_access_project_revoke_spares_independent_child_shares(
+    pool: Pool<Postgres>,
+) {
+    set_team_share(
+        &pool,
+        &ROOT_PROJECT_ID,
+        EntityType::Project,
+        Some(AccessLevel::View),
+    )
+    .await;
+    // The child document is also shared with the team in its own right.
+    set_team_share(
+        &pool,
+        &DOC_CHILD_ID,
+        EntityType::Document,
+        Some(AccessLevel::Edit),
+    )
+    .await;
+    assert_eq!(fetch_team_rows(&pool, &TEAM_ID).await.len(), 7);
+
+    set_team_share(&pool, &ROOT_PROJECT_ID, EntityType::Project, None).await;
+
+    let rows = fetch_team_rows(&pool, &TEAM_ID).await;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].entity_id, DOC_CHILD_ID);
+    assert_eq!(rows[0].entity_type, "document");
+    assert_eq!(rows[0].access_level, AccessLevel::Edit);
+    assert_eq!(rows[0].granted_from_project_id, None);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("upsert_test_data"))
+)]
+async fn set_team_entity_access_rejects_entity_types_without_share_permissions(
+    pool: Pool<Postgres>,
+) {
+    let mut tx = pool.begin().await.unwrap();
+    let err = set_team_entity_access(
+        &mut tx,
+        &DOC_ROOT_ID,
+        EntityType::Reminder,
+        &TEAM_ID,
+        Some(AccessLevel::View),
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(err, sqlx::Error::InvalidArgument(_)));
+}

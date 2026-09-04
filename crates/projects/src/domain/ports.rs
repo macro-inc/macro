@@ -90,6 +90,12 @@ pub trait ProjectRepo: Send + Sync + 'static {
         user_id: &str,
     ) -> impl Future<Output = Result<Option<TeamLinkShareDefault>, Self::Err>> + Send;
 
+    /// Get the id of the user's team, or `None` when the user is not on a team.
+    fn get_user_team_id(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
     /// Atomically create a project and its permission, history, and owner-access rows.
     fn create_project(
         &self,

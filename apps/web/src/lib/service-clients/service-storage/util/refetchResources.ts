@@ -1,4 +1,4 @@
-import { refetchDocumentShareButtonResource } from '@core/component/TopBar/ShareButton';
+import { refetchSharePermissions } from '@core/component/TopBar/sharePermissionsRefetch';
 import { invalidateUserQuota } from '@queries/auth';
 import { refetchHistory } from '@queries/history/history';
 import { invalidatePreview } from '@queries/preview';
@@ -18,5 +18,5 @@ export function refetchResources() {
 async function refetchProjectResources(_force = false) {
   await invalidateProjects();
 
-  refetchDocumentShareButtonResource();
+  refetchSharePermissions();
 }

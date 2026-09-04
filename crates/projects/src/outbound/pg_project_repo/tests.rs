@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -6,6 +6,9 @@ use model::document::FileType;
 use model::folder::{FileSystemNode, FileSystemNodeWithIds, FolderItem};
 use model::item::Item;
 use model::project::ProjectPreviewV2;
+use models_permissions::share_permission::channel_share_permission::{
+    UpdateChannelSharePermission, UpdateOperation,
+};
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
@@ -17,12 +20,21 @@ use crate::domain::ports::ProjectRepo;
 
 const ROOT_ID: &str = "10000000-0000-0000-0000-000000000001";
 const CHILD_ID: &str = "10000000-0000-0000-0000-000000000002";
+const GRANDCHILD_ID: &str = "10000000-0000-0000-0000-000000000003";
+const DELETED_CHILD_ID: &str = "10000000-0000-0000-0000-000000000004";
 const DELETED_ID: &str = "10000000-0000-0000-0000-000000000009";
+const DOCUMENT_ID: &str = "20000000-0000-0000-0000-000000000001";
+const DELETED_DOCUMENT_ID: &str = "20000000-0000-0000-0000-000000000002";
+const CHAT_ID: &str = "30000000-0000-0000-0000-000000000001";
+const DELETED_CHAT_ID: &str = "30000000-0000-0000-0000-000000000002";
+/// The team `macro|owner@test.com` belongs to (see the fixture).
+const OWNER_TEAM_ID: &str = "c1111111-1111-1111-1111-111111111111";
 
 #[derive(Debug, Eq, PartialEq)]
 struct StoredSharePermission {
     link_share: Option<String>,
     link_share_access_level: Option<String>,
+    team_share_access_level: Option<String>,
 }
 
 async fn project_share_permission_columns(
@@ -34,7 +46,8 @@ async fn project_share_permission_columns(
         r#"
         SELECT
             permission."linkShare" AS "link_share?",
-            permission."linkShareAccessLevel"::text AS "link_share_access_level?"
+            permission."linkShareAccessLevel"::text AS "link_share_access_level?",
+            permission."teamShareAccessLevel"::text AS "team_share_access_level?"
         FROM "SharePermission" permission
         JOIN "ProjectPermission" project_permission
             ON project_permission."sharePermissionId" = permission.id
@@ -45,6 +58,74 @@ async fn project_share_permission_columns(
     .fetch_one(pool)
     .await
     .unwrap()
+}
+
+/// An `entity_access` row granted to a team.
+#[derive(Debug, Eq, PartialEq, Hash, Clone)]
+struct TeamAccessRow {
+    entity_id: String,
+    entity_type: String,
+    access_level: String,
+    granted_from_project_id: Option<String>,
+}
+
+/// Every `entity_access` row granted to the owner's team, in a stable order.
+async fn team_access_rows(pool: &Pool<Postgres>) -> Vec<TeamAccessRow> {
+    sqlx::query_as!(
+        TeamAccessRow,
+        r#"
+        SELECT
+            entity_id::text AS "entity_id!",
+            entity_type,
+            access_level::text AS "access_level!",
+            granted_from_project_id
+        FROM entity_access
+        WHERE source_type = 'team' AND source_id = $1
+        ORDER BY entity_type, entity_id, granted_from_project_id NULLS FIRST
+        "#,
+        OWNER_TEAM_ID,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+fn team_share_edit(project_id: &str, level: Option<Option<AccessLevel>>) -> EditProjectArgs {
+    EditProjectArgs {
+        project_id: project_id.to_owned(),
+        name: None,
+        update_parent: false,
+        parent_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: None,
+            channel_share_permissions: None,
+            team_share_access_level: level,
+        }),
+    }
+}
+
+/// The rows a team share on the root project produces: the project's own grant plus one
+/// inherited grant per nested entity, deleted ones included.
+fn expected_root_team_rows(level: &str) -> HashSet<TeamAccessRow> {
+    let row = |entity_id: &str, entity_type: &str, granted_from: Option<&str>| TeamAccessRow {
+        entity_id: entity_id.to_owned(),
+        entity_type: entity_type.to_owned(),
+        access_level: level.to_owned(),
+        granted_from_project_id: granted_from.map(str::to_owned),
+    };
+    [
+        row(ROOT_ID, "project", None),
+        row(CHILD_ID, "project", Some(ROOT_ID)),
+        row(GRANDCHILD_ID, "project", Some(ROOT_ID)),
+        row(DELETED_CHILD_ID, "project", Some(ROOT_ID)),
+        row(DOCUMENT_ID, "document", Some(ROOT_ID)),
+        row(DELETED_DOCUMENT_ID, "document", Some(ROOT_ID)),
+        row(CHAT_ID, "chat", Some(ROOT_ID)),
+        row(DELETED_CHAT_ID, "chat", Some(ROOT_ID)),
+    ]
+    .into_iter()
+    .collect()
 }
 
 #[sqlx::test(
@@ -181,6 +262,7 @@ async fn reads_share_permissions_and_bumps_modified_timestamp(
     assert_eq!(permission.owner, "macro|owner@test.com");
     assert_eq!(permission.link_share, Some(LinkShare::Public));
     assert_eq!(permission.link_share_access_level, Some(AccessLevel::Edit));
+    assert_eq!(permission.team_share_access_level, None);
     assert_eq!(
         permission.channel_share_permissions.expect("channel").len(),
         1
@@ -237,6 +319,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
         StoredSharePermission {
             link_share: None,
             link_share_access_level: None,
+            team_share_access_level: None,
         }
     );
 
@@ -282,6 +365,7 @@ async fn create_defaults_enabled_link_share_to_view(pool: Pool<Postgres>) -> any
         StoredSharePermission {
             link_share: Some("TEAM".to_owned()),
             link_share_access_level: Some("view".to_owned()),
+            team_share_access_level: None,
         }
     );
     let permission = repo.get_project_share_permission(&project.id).await?;
@@ -331,6 +415,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
                 link_share: Some(Some(LinkShare::Team)),
                 link_share_access_level: Some(None),
                 channel_share_permissions: None,
+                team_share_access_level: None,
             }),
         })
         .await?;
@@ -340,6 +425,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         StoredSharePermission {
             link_share: Some("TEAM".to_owned()),
             link_share_access_level: Some("view".to_owned()),
+            team_share_access_level: None,
         }
     );
 
@@ -352,6 +438,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             link_share: None,
             link_share_access_level: Some(Some(AccessLevel::Comment)),
             channel_share_permissions: None,
+            team_share_access_level: None,
         }),
     })
     .await?;
@@ -360,6 +447,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         StoredSharePermission {
             link_share: Some("TEAM".to_owned()),
             link_share_access_level: Some("comment".to_owned()),
+            team_share_access_level: None,
         }
     );
 
@@ -372,6 +460,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             link_share: Some(Some(LinkShare::Public)),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
             channel_share_permissions: None,
+            team_share_access_level: None,
         }),
     })
     .await?;
@@ -381,6 +470,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         StoredSharePermission {
             link_share: Some("PUBLIC".to_owned()),
             link_share_access_level: Some("edit".to_owned()),
+            team_share_access_level: None,
         }
     );
 
@@ -393,6 +483,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             link_share: None,
             link_share_access_level: None,
             channel_share_permissions: None,
+            team_share_access_level: None,
         }),
     })
     .await?;
@@ -410,6 +501,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             link_share: Some(None),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
             channel_share_permissions: None,
+            team_share_access_level: None,
         }),
     })
     .await?;
@@ -418,15 +510,234 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         StoredSharePermission {
             link_share: None,
             link_share_access_level: None,
+            team_share_access_level: None,
         }
     );
     let permission = repo.get_project_share_permission(ROOT_ID).await?;
     assert_eq!(permission.link_share, None);
     assert_eq!(permission.link_share_access_level, None);
+    assert_eq!(permission.team_share_access_level, None);
     assert_eq!(
         permission.channel_share_permissions.expect("channel").len(),
         1
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn edit_shares_project_with_owner_team_and_fans_out_to_nested_entities(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgProjectRepo::new(pool.clone());
+    assert!(team_access_rows(&pool).await.is_empty());
+
+    repo.edit_project(team_share_edit(ROOT_ID, Some(Some(AccessLevel::Comment))))
+        .await?;
+
+    // The column is set and the link share is left alone.
+    assert_eq!(
+        project_share_permission_columns(&pool, ROOT_ID).await,
+        StoredSharePermission {
+            link_share: Some("PUBLIC".to_owned()),
+            link_share_access_level: Some("edit".to_owned()),
+            team_share_access_level: Some("comment".to_owned()),
+        }
+    );
+    let permission = repo.get_project_share_permission(ROOT_ID).await?;
+    assert_eq!(
+        permission.team_share_access_level,
+        Some(AccessLevel::Comment)
+    );
+    assert_eq!(permission.link_share, Some(LinkShare::Public));
+
+    // The project's own team row plus inherited rows on every nested entity.
+    let rows: HashSet<TeamAccessRow> = team_access_rows(&pool).await.into_iter().collect();
+    assert_eq!(rows, expected_root_team_rows("comment"));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn edit_changes_team_share_level_in_place_and_clears_granted_rows(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgProjectRepo::new(pool.clone());
+    repo.edit_project(team_share_edit(ROOT_ID, Some(Some(AccessLevel::View))))
+        .await?;
+    assert_eq!(team_access_rows(&pool).await.len(), 8);
+
+    // Changing the level updates every existing row instead of adding new ones.
+    repo.edit_project(team_share_edit(ROOT_ID, Some(Some(AccessLevel::Edit))))
+        .await?;
+    assert_eq!(
+        project_share_permission_columns(&pool, ROOT_ID)
+            .await
+            .team_share_access_level,
+        Some("edit".to_owned())
+    );
+    let rows: HashSet<TeamAccessRow> = team_access_rows(&pool).await.into_iter().collect();
+    assert_eq!(rows, expected_root_team_rows("edit"));
+
+    // A nested document that is shared with the team in its own right is not project-granted.
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1::text::uuid, 'document', $2, 'team', 'view')
+        "#,
+        DOCUMENT_ID,
+        OWNER_TEAM_ID,
+    )
+    .execute(&pool)
+    .await?;
+
+    // Clearing removes the column value, the project's own row, and every row it granted.
+    repo.edit_project(team_share_edit(ROOT_ID, Some(None)))
+        .await?;
+    assert_eq!(
+        project_share_permission_columns(&pool, ROOT_ID).await,
+        StoredSharePermission {
+            link_share: Some("PUBLIC".to_owned()),
+            link_share_access_level: Some("edit".to_owned()),
+            team_share_access_level: None,
+        }
+    );
+    assert_eq!(
+        repo.get_project_share_permission(ROOT_ID)
+            .await?
+            .team_share_access_level,
+        None
+    );
+    assert_eq!(
+        team_access_rows(&pool).await,
+        vec![TeamAccessRow {
+            entity_id: DOCUMENT_ID.to_owned(),
+            entity_type: "document".to_owned(),
+            access_level: "view".to_owned(),
+            granted_from_project_id: None,
+        }]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn edit_rejects_team_share_when_owner_has_no_team(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgProjectRepo::new(pool.clone());
+    let project = repo
+        .create_project(CreateProjectArgs {
+            user_id: "macro|viewer@test.com".to_owned(),
+            name: "No team".to_owned(),
+            parent_id: None,
+            share_permission: SharePermissionV2::new_project_share_permission(None),
+        })
+        .await?;
+
+    let error = repo
+        .edit_project(team_share_edit(&project.id, Some(Some(AccessLevel::View))))
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(error, sqlx::Error::InvalidArgument(_)),
+        "unexpected error: {error:?}"
+    );
+    assert_eq!(
+        project_share_permission_columns(&pool, &project.id)
+            .await
+            .team_share_access_level,
+        None
+    );
+    let team_rows = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity_access WHERE source_type = 'team'"#
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(team_rows, 0);
+
+    // A stale value (e.g. the owner left their team) can still be cleared.
+    sqlx::query!(
+        r#"
+        UPDATE "SharePermission" SET "teamShareAccessLevel" = 'view'
+        WHERE id = (SELECT "sharePermissionId" FROM "ProjectPermission" WHERE "projectId" = $1)
+        "#,
+        project.id,
+    )
+    .execute(&pool)
+    .await?;
+    repo.edit_project(team_share_edit(&project.id, Some(None)))
+        .await?;
+    assert_eq!(
+        project_share_permission_columns(&pool, &project.id)
+            .await
+            .team_share_access_level,
+        None
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn link_and_channel_edits_leave_team_share_untouched(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgProjectRepo::new(pool.clone());
+    repo.edit_project(team_share_edit(ROOT_ID, Some(Some(AccessLevel::Comment))))
+        .await?;
+    let before = team_access_rows(&pool).await;
+    assert_eq!(before.len(), 8);
+
+    repo.edit_project(EditProjectArgs {
+        project_id: ROOT_ID.to_owned(),
+        name: None,
+        update_parent: false,
+        parent_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: Some(Some(LinkShare::Team)),
+            link_share_access_level: Some(Some(AccessLevel::View)),
+            channel_share_permissions: Some(vec![
+                UpdateChannelSharePermission {
+                    operation: UpdateOperation::Add,
+                    channel_id: "channel-two".to_owned(),
+                    access_level: Some(AccessLevel::Edit),
+                },
+                UpdateChannelSharePermission {
+                    operation: UpdateOperation::Remove,
+                    channel_id: "channel-one".to_owned(),
+                    access_level: None,
+                },
+            ]),
+            team_share_access_level: None,
+        }),
+    })
+    .await?;
+
+    assert_eq!(
+        project_share_permission_columns(&pool, ROOT_ID).await,
+        StoredSharePermission {
+            link_share: Some("TEAM".to_owned()),
+            link_share_access_level: Some("view".to_owned()),
+            team_share_access_level: Some("comment".to_owned()),
+        }
+    );
+    assert_eq!(team_access_rows(&pool).await, before);
+    let permission = repo.get_project_share_permission(ROOT_ID).await?;
+    assert_eq!(
+        permission.team_share_access_level,
+        Some(AccessLevel::Comment)
+    );
+    let channels = permission.channel_share_permissions.expect("channel");
+    assert_eq!(channels.len(), 1);
+    assert_eq!(channels[0].channel_id, "channel-two");
     Ok(())
 }
 

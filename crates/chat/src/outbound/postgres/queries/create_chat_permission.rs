@@ -25,14 +25,16 @@ pub(crate) async fn create_chat_permission(
         INSERT INTO "SharePermission" (
             "linkShare",
             "linkShareAccessLevel",
+            "teamShareAccessLevel",
             "createdAt",
             "updatedAt"
         )
-        VALUES ($1, $2, NOW(), NOW())
+        VALUES ($1, $2, $3, NOW(), NOW())
         RETURNING id
         "#,
         link_share,
         link_share_access_level as _,
+        share_permission.team_share_access_level as _,
     )
     .fetch_one(tx.as_mut())
     .await?;

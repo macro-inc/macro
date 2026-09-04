@@ -1490,6 +1490,7 @@ async fn edit_call_record_publishes_updated_event_for_share_permission_only() {
             EditCallRecordRequest {
                 share_permission: Some(
                     models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+                        team_share_access_level: None,
                         link_share: Some(Some(
                             models_permissions::share_permission::LinkShare::Public,
                         )),
@@ -1511,6 +1512,38 @@ async fn edit_call_record_publishes_updated_event_for_share_permission_only() {
             .to_string()
             .contains("share_permission")
     );
+}
+
+#[tokio::test]
+async fn edit_call_record_rejects_team_share_access_level() {
+    // Rejected before any repository call, so no expectations are set.
+    let repo = MockCallRepository::new();
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    let error = service
+        .edit_call_record(
+            authenticated_mutation_receipt(),
+            EditCallRecordRequest {
+                share_permission: Some(
+                    models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+                        team_share_access_level: Some(Some(
+                            models_permissions::share_permission::access_level::AccessLevel::View,
+                        )),
+                        link_share: None,
+                        link_share_access_level: None,
+                        channel_share_permissions: None,
+                    },
+                ),
+                share_with_team: None,
+                custom_name: None,
+            },
+        )
+        .await
+        .expect_err("team share on the share permission is rejected for calls");
+
+    assert!(matches!(error, CallError::InvalidRequest(_)));
+    assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]

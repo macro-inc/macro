@@ -46,6 +46,7 @@ struct StubChatRepo {
     fail_permanently_delete: bool,
     fail_patch: bool,
     fail_revert_delete: bool,
+    patch_calls: Arc<Mutex<u32>>,
 }
 
 impl StubChatRepo {
@@ -78,6 +79,10 @@ impl StubChatRepo {
 
     fn repo_err() -> ChatErr {
         ChatErr::Unknown(anyhow::anyhow!("intentional repo failure"))
+    }
+
+    fn patch_calls(&self) -> u32 {
+        *self.patch_calls.lock().unwrap()
     }
 }
 
@@ -177,6 +182,7 @@ impl ChatRepo for StubChatRepo {
         if self.fail_patch {
             return Err(Self::repo_err());
         }
+        *self.patch_calls.lock().unwrap() += 1;
         Ok(())
     }
 
@@ -407,6 +413,7 @@ fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
             )),
             link_share_access_level: None,
             channel_share_permissions: None,
+            team_share_access_level: None,
         },
     );
 
@@ -414,6 +421,32 @@ fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
         name: Some("Renamed Chat".to_string()),
         project_id: None,
         share_permission,
+    }
+}
+
+/// A user who is not the chat's owner, but holds an owner-level receipt.
+const NON_OWNER: &str = "macro|teammate@example.com";
+
+fn non_owner_receipt(chat_id: &str) -> EntityAccessReceipt<OwnerAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        MacroUserIdStr::try_from(NON_OWNER.to_string()).expect("valid user id"),
+        chat_id,
+        EntityType::Chat,
+    )
+}
+
+fn team_share_patch_args(team_share_access_level: Option<Option<AccessLevel>>) -> PatchChatArgs {
+    PatchChatArgs {
+        name: None,
+        project_id: None,
+        share_permission: Some(
+            models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+                link_share: None,
+                link_share_access_level: None,
+                channel_share_permissions: None,
+                team_share_access_level,
+            },
+        ),
     }
 }
 
@@ -846,4 +879,147 @@ async fn broker_scheduling_failure_does_not_fail_the_call() {
             .is_ok()
     );
     assert!(service.revert_delete(owner_receipt(CHAT_ID)).await.is_ok());
+}
+
+// -- Team share policy --
+
+#[tokio::test]
+async fn patch_team_share_by_owner_reaches_repo() {
+    let repo = StubChatRepo::default();
+    let broker = RecordingEventBroker::default();
+    let service = build_service(repo.clone(), broker.clone());
+
+    service
+        .patch(
+            owner_receipt(CHAT_ID),
+            team_share_patch_args(Some(Some(AccessLevel::Edit))),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(repo.patch_calls(), 1);
+    let events = broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].envelope["metadata"]["share_permission_updated"],
+        true
+    );
+}
+
+#[tokio::test]
+async fn patch_clearing_team_share_by_owner_reaches_repo() {
+    let repo = StubChatRepo::default();
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+
+    service
+        .patch(owner_receipt(CHAT_ID), team_share_patch_args(Some(None)))
+        .await
+        .unwrap();
+
+    assert_eq!(repo.patch_calls(), 1);
+}
+
+#[tokio::test]
+async fn patch_team_share_by_non_owner_is_forbidden_despite_owner_level_receipt() {
+    let repo = StubChatRepo::default();
+    let broker = RecordingEventBroker::default();
+    let service = build_service(repo.clone(), broker.clone());
+
+    let err = service
+        .patch(
+            non_owner_receipt(CHAT_ID),
+            team_share_patch_args(Some(Some(AccessLevel::View))),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(
+            err,
+            ChatErr::Access(AccessError::UnauthorizedWithMessage(_))
+        ),
+        "expected an unauthorized error, got {err:?}"
+    );
+    assert_eq!(repo.patch_calls(), 0);
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn patch_clearing_team_share_by_non_owner_is_forbidden() {
+    let repo = StubChatRepo::default();
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+
+    let err = service
+        .patch(
+            non_owner_receipt(CHAT_ID),
+            team_share_patch_args(Some(None)),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        err,
+        ChatErr::Access(AccessError::UnauthorizedWithMessage(_))
+    ));
+    assert_eq!(repo.patch_calls(), 0);
+}
+
+#[tokio::test]
+async fn patch_team_share_owner_level_is_bad_request() {
+    let repo = StubChatRepo::default();
+    let broker = RecordingEventBroker::default();
+    let service = build_service(repo.clone(), broker.clone());
+
+    let err = service
+        .patch(
+            owner_receipt(CHAT_ID),
+            team_share_patch_args(Some(Some(AccessLevel::Owner))),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(err, ChatErr::BadRequest(_)),
+        "expected a bad request error, got {err:?}"
+    );
+    assert_eq!(repo.patch_calls(), 0);
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn patch_team_share_requires_an_authenticated_user() {
+    let repo = StubChatRepo::default();
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+    let internal_receipt: EntityAccessReceipt<OwnerAccessLevel> =
+        EntityAccessReceipt::dangerously_assert_internal_user(CHAT_ID, EntityType::Chat);
+
+    let err = service
+        .patch(
+            internal_receipt,
+            team_share_patch_args(Some(Some(AccessLevel::View))),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, ChatErr::Access(AccessError::Unauthorized)));
+    assert_eq!(repo.patch_calls(), 0);
+}
+
+#[tokio::test]
+async fn patch_without_team_share_change_does_not_require_the_owner() {
+    let repo = StubChatRepo::default();
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+
+    // Renaming and link-share edits are governed by the owner-level receipt
+    // alone; only the team share is reserved for the literal owner.
+    service
+        .patch(non_owner_receipt(CHAT_ID), patch_args(true))
+        .await
+        .unwrap();
+    service
+        .patch(non_owner_receipt(CHAT_ID), team_share_patch_args(None))
+        .await
+        .unwrap();
+
+    assert_eq!(repo.patch_calls(), 2);
 }

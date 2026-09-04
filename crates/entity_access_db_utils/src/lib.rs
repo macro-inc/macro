@@ -439,3 +439,128 @@ pub async fn update_entity_access_channel_share_permissions(
 
     Ok(())
 }
+
+/// Grants or revokes an entity's team share in `entity_access`, mirroring
+/// `"SharePermission"."teamShareAccessLevel"`.
+///
+/// `Some(level)` upserts the `source_type = 'team'` row for `team_id` at `level`; `None` deletes
+/// it. For projects the grant also fans out to every nested entity as an inherited row
+/// (`granted_from_project_id` = the project), and revoking removes only the project's own row and
+/// the rows it granted, so a child's independent team share survives. Rows on the entity that
+/// were granted from a project are never touched here.
+/// *NOTE*: This strictly updates `entity_access`, and the transaction does not get committed
+/// automatically.
+#[tracing::instrument(skip(transaction), err)]
+pub async fn set_team_entity_access(
+    transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    team_id: &macro_uuid::Uuid,
+    access_level: Option<AccessLevel>,
+) -> Result<(), sqlx::Error> {
+    if !matches!(
+        entity_type,
+        EntityType::Document
+            | EntityType::Chat
+            | EntityType::Project
+            | EntityType::EmailThread
+            | EntityType::Call
+    ) {
+        return Err(sqlx::Error::InvalidArgument(format!(
+            "entity type {entity_type:?} cannot be shared with a team"
+        )));
+    }
+
+    let team_source_id = team_id.to_string();
+    let entity_type_str = entity_type.as_ref();
+
+    match access_level {
+        Some(access_level) => {
+            // Direct grant on the entity itself (granted_from_project_id IS NULL).
+            sqlx::query!(
+                r#"
+                INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+                VALUES ($1, $2, $3, 'team', $4)
+                ON CONFLICT (entity_id, entity_type, source_id, source_type)
+                WHERE granted_from_project_id IS NULL
+                DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
+                "#,
+                entity_id,
+                entity_type_str,
+                &team_source_id,
+                access_level as _,
+            )
+            .execute(transaction.as_mut())
+            .await?;
+
+            if entity_type == EntityType::Project {
+                // Inherited grants on every nested entity, excluding the project itself
+                // (already covered above under a different partial unique index).
+                let granted_from = entity_id.to_string();
+                let (nested_ids, nested_types): (Vec<macro_uuid::Uuid>, Vec<String>) =
+                    get_nested_project_entities(transaction, entity_id)
+                        .await?
+                        .into_iter()
+                        .filter(|e| !(e.entity_type == "project" && e.entity_id == granted_from))
+                        .filter_map(|e| {
+                            macro_uuid::string_to_uuid(&e.entity_id)
+                                .ok()
+                                .map(|id| (id, e.entity_type))
+                        })
+                        .unzip();
+
+                if !nested_ids.is_empty() {
+                    sqlx::query!(
+                        r#"
+                        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+                        SELECT n.entity_id, n.entity_type, $3, 'team', $4, $5
+                        FROM UNNEST($1::uuid[], $2::text[]) AS n(entity_id, entity_type)
+                        ON CONFLICT (entity_id, entity_type, source_id, source_type, granted_from_project_id)
+                        WHERE granted_from_project_id IS NOT NULL
+                        DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
+                        "#,
+                        nested_ids.as_slice(),
+                        nested_types.as_slice(),
+                        &team_source_id,
+                        access_level as _,
+                        &granted_from,
+                    )
+                    .execute(transaction.as_mut())
+                    .await?;
+                }
+            }
+        }
+        None => {
+            sqlx::query!(
+                r#"
+                DELETE FROM entity_access
+                WHERE entity_id = $1 AND entity_type = $2
+                AND source_id = $3 AND source_type = 'team'
+                AND granted_from_project_id IS NULL
+                "#,
+                entity_id,
+                entity_type_str,
+                &team_source_id,
+            )
+            .execute(transaction.as_mut())
+            .await?;
+
+            if entity_type == EntityType::Project {
+                // Only the rows this project granted; a child's own team share is left alone.
+                sqlx::query!(
+                    r#"
+                    DELETE FROM entity_access
+                    WHERE source_id = $1 AND source_type = 'team'
+                    AND granted_from_project_id = $2
+                    "#,
+                    &team_source_id,
+                    &entity_id.to_string(),
+                )
+                .execute(transaction.as_mut())
+                .await?;
+            }
+        }
+    }
+
+    Ok(())
+}

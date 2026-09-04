@@ -234,6 +234,10 @@ pub struct EntitySharePolicyInput {
     pub link_share_access_level: MaybeUndefined<GraphqlEntityAccessLevel>,
     /// Channel access entries to add, remove, or replace.
     pub channel_share_permissions: Option<Vec<ChannelSharePolicyInput>>,
+    /// Access level granted to every member of the owner's team. Omit to leave unchanged or pass
+    /// null to stop sharing with the team. Only the item owner may change this; OWNER cannot be
+    /// granted to a team.
+    pub team_share_access_level: MaybeUndefined<GraphqlEntityAccessLevel>,
 }
 
 impl EntitySharePolicyInput {
@@ -254,6 +258,10 @@ impl EntitySharePolicyInput {
                     .map(ChannelSharePolicyInput::into_model)
                     .collect()
             }),
+            team_share_access_level: self
+                .team_share_access_level
+                .map_value(GraphqlEntityAccessLevel::into_model)
+                .into(),
         }
     }
 }
@@ -285,6 +293,14 @@ fn validate_share_policy_inputs(
         if input.policy.link_share.is_value() && !input.policy.link_share_access_level.is_value() {
             return Err(invalid_request(
                 "linkShareAccessLevel is required when link sharing is enabled",
+            ));
+        }
+        if matches!(
+            input.policy.team_share_access_level,
+            MaybeUndefined::Value(GraphqlEntityAccessLevel::Owner)
+        ) {
+            return Err(invalid_request(
+                "teamShareAccessLevel cannot grant OWNER to a team",
             ));
         }
         if let Some(entries) = &input.policy.channel_share_permissions {

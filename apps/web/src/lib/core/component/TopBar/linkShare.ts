@@ -37,7 +37,7 @@ const LINK_SHARE_SCOPE_COPY: Record<LinkShareScope, LinkShareScopeCopy> = {
     label: 'Team',
     title: 'Team link',
     description:
-      "Members of the owner's team with the link can access this item. This does not share it directly with a team or channel.",
+      "Members of the owner's team with the link can access this item. To share it with the whole team, use the Team row under People with access.",
   },
 };
 
@@ -87,9 +87,15 @@ export function getLinkShareScopeCopy(
   return LINK_SHARE_SCOPE_COPY[scope];
 }
 
+/**
+ * Status pill for the share trigger. A public or team *link* wins; otherwise
+ * an explicit team share or any channel share reads as "Shared" — the `Team`
+ * label is reserved for the link scope so the two are never confused.
+ */
 export function getShareStatus(
   linkShare: LinkShare | null | undefined,
-  hasExplicitShares: boolean
+  hasExplicitShares: boolean,
+  hasTeamShare = false
 ): ShareStatus {
   if (linkShare === 'PUBLIC') {
     return {
@@ -102,6 +108,15 @@ export function getShareStatus(
     return {
       label: 'Team',
       tooltip: LINK_SHARE_SCOPE_COPY.TEAM.description,
+    };
+  }
+
+  if (hasTeamShare) {
+    return {
+      label: 'Shared',
+      tooltip: hasExplicitShares
+        ? "Shared with everyone on the owner's team and specific people or channels."
+        : "Shared with everyone on the owner's team.",
     };
   }
 

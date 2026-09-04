@@ -85,6 +85,14 @@ pub trait ChatRepo: Send + Sync + 'static {
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// Patch a chat's metadata (name, project, share permissions).
+    ///
+    /// A team share change in the share permission is persisted together with
+    /// the matching access grant for the chat owner's team, atomically with the
+    /// rest of the patch. Setting a team share level when the owner is not on a
+    /// team fails with [`crate::domain::models::ChatErr::BadRequest`] and
+    /// persists nothing; clearing it without a team only clears the stored
+    /// level. Whether the caller may change the team share is decided by the
+    /// service, not here.
     fn patch(
         &self,
         user_id: MacroUserIdStr<'static>,

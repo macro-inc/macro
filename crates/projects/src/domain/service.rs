@@ -19,8 +19,8 @@ use model::project::{
     WithProjectId,
 };
 use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
-use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use s3_key::BulkUploadStagingKey;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
@@ -141,6 +141,45 @@ where
                     "unable to update project modified date"
                 );
             });
+    }
+
+    /// Enforce the policy for sharing a project with the owner's team: only the literal project
+    /// owner may change it (owner *access* is not enough), `Owner` can never be granted to a
+    /// team, and a level can only be granted when the owner actually has a team. Clearing the
+    /// share is allowed even without a team so a stale value can always be reset.
+    async fn authorize_team_share_change(
+        &self,
+        receipt: &EntityAccessReceipt<EditAccessLevel>,
+        project: &BasicProject,
+        share_permission: &UpdateSharePermissionRequestV2,
+    ) -> Result<(), ProjectError> {
+        let not_owner = || {
+            ProjectError::UnauthorizedWithMessage(
+                "only the project owner can share it with their team".to_string(),
+            )
+        };
+        let actor = receipt.get_authenticated_user().map_err(|_| not_owner())?;
+        if *actor != project.user_id {
+            return Err(not_owner());
+        }
+        if !share_permission.team_share_access_level_is_grantable() {
+            return Err(ProjectError::BadRequest(
+                "owner access cannot be granted to a team".to_string(),
+            ));
+        }
+        if matches!(share_permission.team_share_access_level, Some(Some(_))) {
+            let team_id = self
+                .repo
+                .get_user_team_id(project.user_id.as_ref())
+                .await
+                .map_err(|error| internal_error(error, "unable to look up the owner's team"))?;
+            if team_id.is_none() {
+                return Err(ProjectError::BadRequest(
+                    "the project owner is not in a team".to_string(),
+                ));
+            }
+        }
+        Ok(())
     }
 }
 
@@ -396,6 +435,14 @@ where
             return Err(ProjectError::UnauthorizedWithMessage(
                 "you do not have valid permission to modify share permissions".to_string(),
             ));
+        }
+        if let Some(share_permission) = args
+            .share_permission
+            .as_ref()
+            .filter(|share_permission| share_permission.changes_team_share())
+        {
+            self.authorize_team_share_change(&receipt, &project, share_permission)
+                .await?;
         }
 
         let new_parent_id = args

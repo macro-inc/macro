@@ -9,9 +9,10 @@ use model::document::{DocumentMetadata, FileType};
 use std::sync::{Arc, Mutex};
 
 use crate::domain::models::{
-    EmailImportRepoOutcome, GithubPullRequest, ImportEmailAttachmentRepoArgs,
+    DocumentTeamShare, EmailImportRepoOutcome, GithubPullRequest, ImportEmailAttachmentRepoArgs,
 };
 use crate::domain::ports::{DocumentContentEventService, MockDocumentRepo};
+use models_permissions::share_permission::access_level::AccessLevel;
 
 use super::*;
 use activity::{Actor, Attribution};
@@ -1687,6 +1688,7 @@ async fn edit_document_sets_revocation_intent_from_link_share_target() {
                         link_share,
                         link_share_access_level: None,
                         channel_share_permissions: None,
+                        team_share_access_level: None,
                     }),
                     file_type: None,
                 },
@@ -1694,6 +1696,229 @@ async fn edit_document_sets_revocation_intent_from_link_share_target() {
             .await
             .unwrap();
     }
+}
+
+fn edit_receipt_for_user(document_id: &str, user_id: &str) -> EntityAccessReceipt<EditAccessLevel> {
+    let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)
+        .unwrap()
+        .into_owned();
+
+    EntityAccessReceipt::dangerously_assert_authenticated_user(
+        user_id,
+        document_id,
+        EntityType::Document,
+    )
+}
+
+fn bot_edit_receipt(document_id: &str) -> EntityAccessReceipt<EditAccessLevel> {
+    EntityAccessReceipt::dangerously_assert_bot(
+        bot_id().into_storage_id(),
+        bot_receipt_scope(),
+        document_id,
+        EntityType::Document,
+    )
+}
+
+fn team_share_edit_args(
+    team_share_access_level: Option<Option<AccessLevel>>,
+) -> EditDocumentServiceArgs {
+    EditDocumentServiceArgs {
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: None,
+            channel_share_permissions: None,
+            team_share_access_level,
+        }),
+        file_type: None,
+    }
+}
+
+#[tokio::test]
+async fn edit_document_team_share_rejects_non_owner_with_owner_access_level() {
+    // `edit_receipt` carries an Owner access level (as a project owner would on a
+    // child document) but belongs to "macro|user@user.com", not the document owner.
+    let repo = make_mock_repo();
+
+    let result = make_test_service(repo)
+        .edit_document(
+            edit_receipt("doc-1"),
+            task_document_context("doc-1"),
+            team_share_edit_args(Some(Some(AccessLevel::Comment))),
+        )
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn edit_document_team_share_clear_rejects_non_owner() {
+    let repo = make_mock_repo();
+
+    let result = make_test_service(repo)
+        .edit_document(
+            edit_receipt("doc-1"),
+            task_document_context("doc-1"),
+            team_share_edit_args(Some(None)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn edit_document_team_share_rejects_bot_caller() {
+    let repo = make_mock_repo();
+
+    let result = make_test_service(repo)
+        .edit_document(
+            bot_edit_receipt("doc-1"),
+            task_document_context("doc-1"),
+            team_share_edit_args(Some(Some(AccessLevel::Comment))),
+        )
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn edit_document_team_share_rejects_owner_level() {
+    let repo = make_mock_repo();
+
+    let result = make_test_service(repo)
+        .edit_document(
+            edit_receipt_for_user("doc-1", "macro|owner@user.com"),
+            task_document_context("doc-1"),
+            team_share_edit_args(Some(Some(AccessLevel::Owner))),
+        )
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn edit_document_team_share_requires_owner_to_be_on_a_team() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_team_share()
+        .withf(|document_id| document_id == "doc-1")
+        .return_once(|_| {
+            Box::pin(std::future::ready(Ok(DocumentTeamShare {
+                team_id: None,
+                shared_with_team: false,
+            })))
+        });
+
+    let result = make_test_service(repo)
+        .edit_document(
+            edit_receipt_for_user("doc-1", "macro|owner@user.com"),
+            task_document_context("doc-1"),
+            team_share_edit_args(Some(Some(AccessLevel::Comment))),
+        )
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn edit_document_team_share_by_owner_reaches_repo() {
+    let team_id = uuid::Uuid::new_v4();
+    let mut repo = make_mock_repo();
+    repo.expect_get_team_share().return_once(move |_| {
+        Box::pin(std::future::ready(Ok(DocumentTeamShare {
+            team_id: Some(team_id),
+            shared_with_team: false,
+        })))
+    });
+    repo.expect_edit_document()
+        .withf(|args| {
+            args.document_id == "doc-1"
+                && args.share_permission.as_ref().is_some_and(|permission| {
+                    permission.team_share_access_level == Some(Some(AccessLevel::Comment))
+                })
+        })
+        .return_once(|_| Box::pin(std::future::ready(Ok(()))));
+
+    make_test_service(repo)
+        .edit_document(
+            edit_receipt_for_user("doc-1", "macro|owner@user.com"),
+            task_document_context("doc-1"),
+            team_share_edit_args(Some(Some(AccessLevel::Comment))),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn edit_document_clear_team_share_by_owner_skips_team_lookup() {
+    let mut repo = make_mock_repo();
+    repo.expect_edit_document()
+        .withf(|args| {
+            args.share_permission
+                .as_ref()
+                .is_some_and(|permission| permission.team_share_access_level == Some(None))
+        })
+        .return_once(|_| Box::pin(std::future::ready(Ok(()))));
+
+    make_test_service(repo)
+        .edit_document(
+            edit_receipt_for_user("doc-1", "macro|owner@user.com"),
+            task_document_context("doc-1"),
+            team_share_edit_args(Some(None)),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn set_team_share_rejects_non_owner() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document()
+        .withf(|document_id| document_id == "doc-1")
+        .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
+
+    let result = make_test_service(repo)
+        .set_team_share(edit_receipt("doc-1"), true)
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn set_team_share_rejects_bot_caller() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document()
+        .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
+
+    let result = make_test_service(repo)
+        .set_team_share(bot_edit_receipt("doc-1"), true)
+        .await;
+
+    assert!(matches!(result, Err(DocumentError::Unauthorized)));
+}
+
+#[tokio::test]
+async fn set_team_share_by_owner_updates_repo() {
+    let team_id = uuid::Uuid::new_v4();
+    let mut repo = make_mock_repo();
+    repo.expect_get_basic_document()
+        .return_once(|_| Box::pin(std::future::ready(Ok(task_document_context("doc-1")))));
+    repo.expect_set_team_share()
+        .withf(|document_id, share| document_id == "doc-1" && *share)
+        .return_once(move |_, _| {
+            Box::pin(std::future::ready(Ok(DocumentTeamShare {
+                team_id: Some(team_id),
+                shared_with_team: true,
+            })))
+        });
+
+    let response = make_test_service(repo)
+        .set_team_share(edit_receipt_for_user("doc-1", "macro|owner@user.com"), true)
+        .await
+        .unwrap();
+
+    assert!(response.shared_with_team);
+    assert_eq!(response.team_id, Some(team_id));
 }
 
 #[tokio::test]
