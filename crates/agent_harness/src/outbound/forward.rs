@@ -4,8 +4,11 @@ use agent_session::domain::model::AgentSessionId;
 use futures::StreamExt as _;
 use harness_id::HarnessId;
 use hmac::{Hmac, Mac as _};
+use opentelemetry::propagation::{Extractor, Injector};
 use redis::AsyncCommands as _;
 use sha2::{Digest as _, Sha256};
+use std::collections::BTreeMap;
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{CommandOutcome, HarnessCommand};
@@ -54,9 +57,10 @@ impl CommandForwarder for RedisCommandForwarder {
             target: RuntimeCommandTarget::from(target),
             session,
             command,
+            trace_context: current_trace_context(),
             signature: String::new(),
         };
-        let request = request.signed(&self.internal_api_key)?;
+        let request = request.signed(&self.internal_api_key);
         let payload = serde_json::to_string(&request)
             .map_err(|error| forward_error("serialize command request", error))?;
         let mut publisher = self
@@ -80,7 +84,7 @@ impl CommandForwarder for RedisCommandForwarder {
                     .map_err(|error| forward_error("read command response", error))?;
                 let response = serde_json::from_str::<SignedRuntimeCommandResponse>(&payload)
                     .map_err(|error| forward_error("deserialize command response", error))?;
-                if !response.verify(&self.internal_api_key) {
+                if !response.verify(request_id, &self.internal_api_key) {
                     continue;
                 }
                 match response.response {
@@ -101,15 +105,12 @@ impl CommandForwarder for RedisCommandForwarder {
             Err(HarnessError::Disconnected(session))
         })
         .await
-        .map_err(|_| {
-            HarnessError::Session(
-                agent_session::domain::error::AgentSessionError::Disconnected(session),
-            )
-        })?
+        .map_err(|_| HarnessError::Disconnected(session))?
     }
 }
 
-pub(crate) fn command_channel(key: &str) -> String {
+/// Return the deployment-scoped Redis command channel.
+pub fn command_channel(key: &str) -> String {
     let digest = Sha256::digest(key.as_bytes());
     let namespace = digest[..8]
         .iter()
@@ -118,41 +119,80 @@ pub(crate) fn command_channel(key: &str) -> String {
     format!("agent-harness.runtime-command.{namespace}")
 }
 
-pub(crate) fn response_channel(request_id: macro_uuid::Uuid) -> String {
+/// Return the private response channel for one command request.
+pub fn response_channel(request_id: macro_uuid::Uuid) -> String {
     format!("agent-harness.runtime-command.response.{request_id}")
 }
 
+/// An authenticated command broadcast received from another replica.
 #[derive(serde::Serialize, serde::Deserialize)]
-pub(crate) struct RuntimeCommandRequest {
-    pub(crate) request_id: macro_uuid::Uuid,
-    pub(crate) target: RuntimeCommandTarget,
-    pub(crate) session: AgentSessionId,
-    pub(crate) command: HarnessCommand,
-    pub(crate) signature: String,
+pub struct RuntimeCommandRequest {
+    request_id: macro_uuid::Uuid,
+    target: RuntimeCommandTarget,
+    session: AgentSessionId,
+    command: HarnessCommand,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    trace_context: BTreeMap<String, String>,
+    signature: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+/// The process-local destination selected by the command sender.
+#[derive(Clone, Copy, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum RuntimeCommandTarget {
+pub enum RuntimeCommandTarget {
+    /// A specific session-owning replica.
     Replica(macro_uuid::Uuid),
+    /// Whichever replica currently holds this harness runtime connection.
     Harness(HarnessId),
 }
 
 impl RuntimeCommandRequest {
-    fn signed(mut self, key: &str) -> Result<Self> {
+    fn signed(mut self, key: &str) -> Self {
         self.signature = sign_json(
             &(self.request_id, &self.target, self.session, &self.command),
             key,
         );
-        Ok(self)
+        self
     }
 
-    pub(crate) fn verify(&self, key: &str) -> bool {
+    /// Verify that the command was signed by a deployment peer.
+    #[must_use]
+    pub fn verify(&self, key: &str) -> bool {
         verify_json(
             &(self.request_id, &self.target, self.session, &self.command),
             &self.signature,
             key,
         )
+    }
+
+    /// The unique ID used to claim and answer this command.
+    #[must_use]
+    pub fn request_id(&self) -> macro_uuid::Uuid {
+        self.request_id
+    }
+
+    /// The replica or harness connection selected for execution.
+    #[must_use]
+    pub fn target(&self) -> RuntimeCommandTarget {
+        self.target
+    }
+
+    /// The session receiving the command.
+    #[must_use]
+    pub fn session(&self) -> AgentSessionId {
+        self.session
+    }
+
+    /// Consume the transport envelope and return its domain command.
+    #[must_use]
+    pub fn into_command(self) -> HarnessCommand {
+        self.command
+    }
+
+    /// Create a consumer span parented to the sender's propagated context.
+    #[must_use]
+    pub fn processing_span(&self) -> tracing::Span {
+        runtime_command_span(self)
     }
 }
 
@@ -165,31 +205,97 @@ impl From<CommandTarget> for RuntimeCommandTarget {
     }
 }
 
+/// The result sent by each replica that observed a command broadcast.
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub(crate) enum RuntimeCommandResponse {
+pub enum RuntimeCommandResponse {
+    /// The selected replica executed the command.
     Completed(CommandOutcome),
+    /// The selected replica attempted execution and failed.
     Failed(String),
+    /// This replica was not responsible for the command.
     Declined,
 }
 
+/// An authenticated response to one command request.
 #[derive(serde::Serialize, serde::Deserialize)]
-pub(crate) struct SignedRuntimeCommandResponse {
+pub struct SignedRuntimeCommandResponse {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    request_id: Option<macro_uuid::Uuid>,
     response: RuntimeCommandResponse,
+    // Retained during the rolling protocol transition for older requesters.
     signature: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    request_signature: Option<String>,
 }
 
 impl SignedRuntimeCommandResponse {
-    pub(crate) fn new(response: RuntimeCommandResponse, key: &str) -> Result<Self> {
-        Ok(Self {
+    /// Sign a response for both legacy and request-bound verifiers.
+    #[must_use]
+    pub fn new(request_id: macro_uuid::Uuid, response: RuntimeCommandResponse, key: &str) -> Self {
+        Self {
+            request_signature: Some(sign_json(&(request_id, &response), key)),
             signature: sign_json(&response, key),
+            request_id: Some(request_id),
             response,
-        })
+        }
     }
 
-    fn verify(&self, key: &str) -> bool {
-        verify_json(&self.response, &self.signature, key)
+    fn verify(&self, request_id: macro_uuid::Uuid, key: &str) -> bool {
+        match (self.request_id, self.request_signature.as_deref()) {
+            (Some(response_request_id), Some(signature)) => {
+                response_request_id == request_id
+                    && verify_json(&(response_request_id, &self.response), signature, key)
+            }
+            (None, None) => verify_json(&self.response, &self.signature, key),
+            _ => false,
+        }
     }
+}
+
+#[derive(Default)]
+struct TraceContext(BTreeMap<String, String>);
+
+impl Injector for TraceContext {
+    fn set(&mut self, key: &str, value: String) {
+        self.0.insert(key.to_owned(), value);
+    }
+}
+
+impl Extractor for TraceContext {
+    fn get(&self, key: &str) -> Option<&str> {
+        self.0.get(key).map(String::as_str)
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        self.0.keys().map(String::as_str).collect()
+    }
+}
+
+fn current_trace_context() -> BTreeMap<String, String> {
+    let context = tracing::Span::current().context();
+    let mut carrier = TraceContext::default();
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&context, &mut carrier);
+    });
+    carrier.0
+}
+
+fn runtime_command_span(request: &RuntimeCommandRequest) -> tracing::Span {
+    let span = tracing::info_span!(
+        "redis.process",
+        otel.kind = "consumer",
+        messaging.system = "redis",
+        messaging.operation.name = "process",
+        messaging.operation.type = "process",
+        messaging.message.id = %request.request_id,
+        agent.session.id = %request.session,
+    );
+    let parent = opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.extract(&TraceContext(request.trace_context.clone()))
+    });
+    let _ = span.set_parent(parent);
+    span
 }
 
 fn sign_json(value: &impl serde::Serialize, key: &str) -> String {

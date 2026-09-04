@@ -1,220 +1,135 @@
 use super::*;
-use crate::domain::service::ForwardedCommands;
-use crate::inbound::redis_commands::consume_runtime_commands;
-use agent_session::domain::model::ReplicaId;
-use std::sync::Arc;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
-struct RecordingHarness {
-    calls: AtomicUsize,
-    fails: bool,
-}
-
-impl ForwardedCommands for RecordingHarness {
-    async fn execute_forwarded(
-        &self,
-        _session_id: AgentSessionId,
-        _command: HarnessCommand,
-    ) -> Result<CommandOutcome> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        if self.fails {
-            return Err(HarnessError::Disconnected(_session_id));
-        }
-        Ok(CommandOutcome::Completed)
-    }
-}
-
-fn redis_client() -> redis::Client {
-    let url = macro_env_var::optional_read_env_var("REDIS_URI")
-        .ok()
-        .flatten()
-        .unwrap_or_else(|| "redis://127.0.0.1:6379".to_owned());
-    redis::Client::open(url).expect("valid Redis URL")
-}
-
-#[tokio::test]
-async fn a_command_executes_on_exactly_one_responsible_replica() {
-    let redis = redis_client();
-    let key = macro_uuid::Uuid::new_v4().to_string();
-    let origin = ReplicaId::mint();
-    let peer = ReplicaId::mint();
-    let origin_harness = Arc::new(RecordingHarness {
-        calls: AtomicUsize::new(0),
-        fails: false,
-    });
-    let peer_harness = Arc::new(RecordingHarness {
-        calls: AtomicUsize::new(0),
-        fails: false,
-    });
-    let (origin_ready, mut origin_readiness) = tokio::sync::watch::channel(false);
-    let origin_consumer = tokio::spawn(consume_runtime_commands(
-        redis.clone(),
-        origin,
-        key.clone(),
-        Arc::new(|_| false),
-        Arc::clone(&origin_harness),
-        origin_ready,
-    ));
-    let (peer_ready, mut peer_readiness) = tokio::sync::watch::channel(false);
-    let peer_consumer = tokio::spawn(consume_runtime_commands(
-        redis.clone(),
-        peer,
-        key.clone(),
-        Arc::new(|_| false),
-        Arc::clone(&peer_harness),
-        peer_ready,
-    ));
-    for readiness in [&mut origin_readiness, &mut peer_readiness] {
-        tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            readiness.wait_for(|ready| *ready),
-        )
-        .await
-        .expect("consumer becomes ready")
-        .expect("readiness channel remains open");
-    }
-
-    let forwarder = RedisCommandForwarder::new(redis, key);
-    let outcome = tokio::time::timeout(
-        std::time::Duration::from_secs(2),
-        forwarder.forward(
-            AgentSessionId::TEST_A,
-            HarnessCommand::Delete,
-            CommandTarget::Replica(peer),
-        ),
-    )
-    .await
-    .expect("command receives a response")
-    .unwrap();
-
-    assert_eq!(outcome, CommandOutcome::Completed);
-    assert_eq!(origin_harness.calls.load(Ordering::SeqCst), 0);
-    assert_eq!(peer_harness.calls.load(Ordering::SeqCst), 1);
-    origin_consumer.abort();
-    peer_consumer.abort();
-}
-
-#[tokio::test]
-async fn a_responsible_replicas_error_returns_immediately() {
-    let redis = redis_client();
-    let key = macro_uuid::Uuid::new_v4().to_string();
-    let replica = ReplicaId::mint();
-    let harness = Arc::new(RecordingHarness {
-        calls: AtomicUsize::new(0),
-        fails: true,
-    });
-    let (ready, mut readiness) = tokio::sync::watch::channel(false);
-    let consumer = tokio::spawn(consume_runtime_commands(
-        redis.clone(),
-        replica,
-        key.clone(),
-        Arc::new(|_| false),
-        harness,
-        ready,
-    ));
-    readiness.wait_for(|ready| *ready).await.unwrap();
-
-    let error = tokio::time::timeout(
-        std::time::Duration::from_secs(2),
-        RedisCommandForwarder::new(redis, key).forward(
-            AgentSessionId::TEST_A,
-            HarnessCommand::Delete,
-            CommandTarget::Replica(replica),
-        ),
-    )
-    .await
-    .expect("error response is immediate")
-    .expect_err("the remote command fails");
-
-    assert!(error.to_string().contains("no longer connected"));
-    consumer.abort();
-}
-
-#[tokio::test]
-async fn all_replicas_declining_returns_disconnected_immediately() {
-    let redis = redis_client();
-    let key = macro_uuid::Uuid::new_v4().to_string();
-    let replica = ReplicaId::mint();
-    let harness = Arc::new(RecordingHarness {
-        calls: AtomicUsize::new(0),
-        fails: false,
-    });
-    let (ready, mut readiness) = tokio::sync::watch::channel(false);
-    let consumer = tokio::spawn(consume_runtime_commands(
-        redis.clone(),
-        replica,
-        key.clone(),
-        Arc::new(|_| false),
-        harness,
-        ready,
-    ));
-    readiness.wait_for(|ready| *ready).await.unwrap();
-
-    let error = tokio::time::timeout(
-        std::time::Duration::from_secs(2),
-        RedisCommandForwarder::new(redis, key).forward(
-            AgentSessionId::TEST_A,
-            HarnessCommand::Delete,
-            CommandTarget::Harness(HarnessId::TEST_A),
-        ),
-    )
-    .await
-    .expect("declines are immediate")
-    .expect_err("no replica owns the harness");
-
-    assert!(matches!(
-        error,
-        HarnessError::Disconnected(AgentSessionId::TEST_A)
-    ));
-    consumer.abort();
-}
-
-#[tokio::test]
-async fn overlapping_harness_connections_execute_once() {
-    let redis = redis_client();
-    let key = macro_uuid::Uuid::new_v4().to_string();
-    let first = Arc::new(RecordingHarness {
-        calls: AtomicUsize::new(0),
-        fails: false,
-    });
-    let second = Arc::new(RecordingHarness {
-        calls: AtomicUsize::new(0),
-        fails: false,
-    });
-    let (first_ready, mut first_readiness) = tokio::sync::watch::channel(false);
-    let first_consumer = tokio::spawn(consume_runtime_commands(
-        redis.clone(),
-        ReplicaId::mint(),
-        key.clone(),
-        Arc::new(|harness| harness == HarnessId::TEST_A),
-        Arc::clone(&first),
-        first_ready,
-    ));
-    let (second_ready, mut second_readiness) = tokio::sync::watch::channel(false);
-    let second_consumer = tokio::spawn(consume_runtime_commands(
-        redis.clone(),
-        ReplicaId::mint(),
-        key.clone(),
-        Arc::new(|harness| harness == HarnessId::TEST_A),
-        Arc::clone(&second),
-        second_ready,
-    ));
-    first_readiness.wait_for(|ready| *ready).await.unwrap();
-    second_readiness.wait_for(|ready| *ready).await.unwrap();
-
-    RedisCommandForwarder::new(redis, key)
-        .forward(
-            AgentSessionId::TEST_A,
-            HarnessCommand::Delete,
-            CommandTarget::Harness(HarnessId::TEST_A),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(
-        first.calls.load(Ordering::SeqCst) + second.calls.load(Ordering::SeqCst),
-        1
+#[test]
+fn a_signed_response_cannot_be_replayed_for_another_request() {
+    let key = "internal-key";
+    let request_id = macro_uuid::Uuid::new_v4();
+    let response = SignedRuntimeCommandResponse::new(
+        request_id,
+        RuntimeCommandResponse::Completed(CommandOutcome::Completed),
+        key,
     );
-    first_consumer.abort();
-    second_consumer.abort();
+
+    assert!(response.verify(request_id, key));
+    assert!(!response.verify(macro_uuid::Uuid::new_v4(), key));
+}
+
+#[test]
+fn a_signed_request_with_trace_context_verifies_after_serialization() {
+    let key = "internal-key";
+    let request = RuntimeCommandRequest {
+        request_id: macro_uuid::Uuid::new_v4(),
+        target: RuntimeCommandTarget::Harness(HarnessId::TEST_A),
+        session: AgentSessionId::TEST_A,
+        command: HarnessCommand::Delete,
+        trace_context: BTreeMap::from([
+            ("tracestate".to_owned(), "vendor=value".to_owned()),
+            (
+                "traceparent".to_owned(),
+                "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_owned(),
+            ),
+        ]),
+        signature: String::new(),
+    }
+    .signed(key);
+
+    let payload = serde_json::to_string(&request).expect("request serializes");
+    let decoded: RuntimeCommandRequest =
+        serde_json::from_str(&payload).expect("request deserializes");
+
+    assert!(decoded.verify(key));
+}
+
+#[test]
+fn a_legacy_request_is_accepted_during_the_rolling_transition() {
+    let key = "internal-key";
+    let request_id = macro_uuid::Uuid::new_v4();
+    let target = RuntimeCommandTarget::Harness(HarnessId::TEST_A);
+    let session = AgentSessionId::TEST_A;
+    let command = HarnessCommand::Delete;
+    let payload = serde_json::json!({
+        "request_id": request_id,
+        "target": target,
+        "session": session,
+        "command": command,
+        "signature": sign_json(&(request_id, &target, session, &command), key),
+    });
+    let request: RuntimeCommandRequest =
+        serde_json::from_value(payload).expect("legacy request deserializes");
+
+    assert!(request.verify(key));
+    assert!(request.trace_context.is_empty());
+}
+
+#[test]
+fn a_new_request_keeps_the_legacy_signature() {
+    #[derive(serde::Deserialize)]
+    struct LegacyRequest {
+        request_id: macro_uuid::Uuid,
+        target: RuntimeCommandTarget,
+        session: AgentSessionId,
+        command: HarnessCommand,
+        signature: String,
+    }
+
+    let key = "internal-key";
+    let request = RuntimeCommandRequest {
+        request_id: macro_uuid::Uuid::new_v4(),
+        target: RuntimeCommandTarget::Harness(HarnessId::TEST_A),
+        session: AgentSessionId::TEST_A,
+        command: HarnessCommand::Delete,
+        trace_context: BTreeMap::from([("traceparent".to_owned(), "value".to_owned())]),
+        signature: String::new(),
+    }
+    .signed(key);
+    let payload = serde_json::to_string(&request).expect("request serializes");
+    let legacy: LegacyRequest =
+        serde_json::from_str(&payload).expect("legacy peer ignores trace context");
+
+    assert!(verify_json(
+        &(
+            legacy.request_id,
+            &legacy.target,
+            legacy.session,
+            &legacy.command,
+        ),
+        &legacy.signature,
+        key,
+    ));
+}
+
+#[test]
+fn a_legacy_response_is_accepted_during_the_rolling_transition() {
+    let key = "internal-key";
+    let request_id = macro_uuid::Uuid::new_v4();
+    let response = RuntimeCommandResponse::Completed(CommandOutcome::Completed);
+    let payload = serde_json::json!({
+        "response": response,
+        "signature": sign_json(&response, key),
+    });
+    let response: SignedRuntimeCommandResponse =
+        serde_json::from_value(payload).expect("legacy response deserializes");
+
+    assert!(response.verify(request_id, key));
+}
+
+#[test]
+fn a_new_response_keeps_the_legacy_signature() {
+    #[derive(serde::Deserialize)]
+    struct LegacyResponse {
+        response: RuntimeCommandResponse,
+        signature: String,
+    }
+
+    let key = "internal-key";
+    let response = SignedRuntimeCommandResponse::new(
+        macro_uuid::Uuid::new_v4(),
+        RuntimeCommandResponse::Completed(CommandOutcome::Completed),
+        key,
+    );
+    let payload = serde_json::to_string(&response).expect("response serializes");
+    let legacy: LegacyResponse =
+        serde_json::from_str(&payload).expect("legacy peer ignores new fields");
+
+    assert!(verify_json(&legacy.response, &legacy.signature, key));
 }

@@ -31,6 +31,7 @@ use macro_uuid::Uuid;
 use tokio::sync::mpsc;
 
 use super::AgentHarnessService;
+use super::into_session_error;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeliverAction, HarnessCommand,
@@ -52,6 +53,14 @@ use agent_session::domain::ports::{
 
 fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id")
+}
+
+#[test]
+fn disconnected_harness_errors_keep_the_session_error_classification() {
+    assert!(matches!(
+        into_session_error(HarnessError::Disconnected(AgentSessionId::TEST_A)),
+        AgentSessionError::Disconnected(AgentSessionId::TEST_A)
+    ));
 }
 
 /// A sender whose email domain is `is_macro_staff` - the identity the
@@ -2228,5 +2237,53 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
     assert!(
         repo.get(id).await.is_ok(),
         "the delete ran on the peer, not here"
+    );
+}
+
+#[tokio::test]
+async fn unmanaged_external_session_forwards_to_its_remote_harness() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let runtimes = TestConnections::new(MirrorBindings, RuntimeRegistry::new());
+    let forwarder = RecordingForwarder::default();
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+        ),
+        MockContainerManager::new(),
+        AnnouncerMock::new(),
+        runtimes,
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        forwarder.clone(),
+        SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+        },
+    );
+    let session = service
+        .open_external_session(open_external_request("/srv/agent"))
+        .await
+        .expect("external session opens without a local runtime");
+
+    service
+        .execute(session.id, HarnessCommand::Delete)
+        .await
+        .expect("the remote harness executes the command");
+
+    assert_eq!(
+        *forwarder.calls.lock().unwrap(),
+        [(
+            crate::domain::ports::CommandTarget::Harness(harness_for_bot(session.bot_id)),
+            session.id,
+        )]
+    );
+    assert!(
+        repo.get(session.id).await.is_ok(),
+        "the command did not execute on this replica"
     );
 }

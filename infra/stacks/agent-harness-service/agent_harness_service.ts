@@ -70,10 +70,6 @@ type Args = {
  * partitions across live tasks; ownership plus Redis routing is what makes
  * that split correct.
  *
- * This protocol cutover deploys without old/new overlap because prior tasks
- * understand only direct HTTP forwarding. Steady state still runs two
- * replicas; subsequent changes may restore rolling overlap once every live
- * task speaks the Redis protocol.
  */
 export class AgentHarnessService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
@@ -336,10 +332,8 @@ export class AgentHarnessService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
-        // Redis replaces direct HTTP forwarding in one protocol cutover, so
-        // old and new replicas must not overlap during this deployment.
-        deploymentMinimumHealthyPercent: 0,
-        deploymentMaximumPercent: 100,
+        deploymentMinimumHealthyPercent: 100,
+        deploymentMaximumPercent: 200,
         // Every environment runs two, so dev stays prod-shaped: forwarding is
         // dead code at one task (management() can only answer Ours or
         // Unmanaged), and a path only dev never exercises is one whose

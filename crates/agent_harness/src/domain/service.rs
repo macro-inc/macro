@@ -761,6 +761,7 @@ fn queue_result<T>(
 fn into_session_error(error: HarnessError) -> AgentSessionError {
     match error {
         HarnessError::Session(error) => error,
+        HarnessError::Disconnected(session) => AgentSessionError::Disconnected(session),
         other => AgentSessionError::Unknown(anyhow::anyhow!(other)),
     }
 }
@@ -786,12 +787,6 @@ where
 {
     /// Execute where the session's live actor is: locally when nobody (or
     /// this replica) manages it, on the managing peer otherwise.
-    ///
-    /// A failed forward re-reads the lease once: the one legitimate reason a
-    /// live manager refuses its own session is that it died mid-flight, and
-    /// then its heartbeat going stale is what lets this replica take over. A
-    /// manager that is alive but unreachable stays an error - executing
-    /// locally anyway is how two actors end up on one session.
     /// The routing decision is recorded on the span, not only logged: which of
     /// the three answers the lease gave, which peer it named, and whether the
     /// command left this process. Those are the fields you group by when a

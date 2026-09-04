@@ -13,6 +13,7 @@ mod bots_directory;
 mod config;
 mod containers;
 mod harness_bindings;
+mod runtime_commands;
 mod trigger;
 
 use std::{future::Future, pin::Pin, sync::Arc};
@@ -32,7 +33,6 @@ use agent_harness::domain::service::AgentHarnessService;
 use agent_harness::domain::trigger_router::{
     RoutedTrigger, agent_trigger_bot_id, route_agent_trigger,
 };
-use agent_harness::inbound::redis_commands::consume_runtime_commands;
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
@@ -103,6 +103,8 @@ use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
 use tracing::Instrument as _;
+
+use runtime_commands::consume_runtime_commands;
 
 /// Consumer group owning this harness's agent-session offsets.
 ///
