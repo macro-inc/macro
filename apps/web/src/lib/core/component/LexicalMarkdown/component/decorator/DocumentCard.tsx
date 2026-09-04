@@ -58,7 +58,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { formatDate } from '../../../../util/date';
-import { TaskPropertiesPreview } from '../../../DocumentPreview';
+import { TaskPropertiesPreview } from '../../../TaskPropertiesPreview';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';

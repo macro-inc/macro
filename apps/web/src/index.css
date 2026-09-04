@@ -440,6 +440,9 @@ body.tauri-ios {
 
   /* ---- 200-299: always on top ------------------------------------------ */
   --z-index-tool-tip:      200;
+  /* Portaled controls opened from a tooltip/hover card must stack above the
+     surface that owns them. */
+  --z-index-nested-action-menu: 205;
   /* The PDF custom cursor dot must never hide under a hover tooltip. */
   --z-index-custom-cursor-tooltip: 210;
   /* Toasts sit above everything (incl. full-screen modals) so they stay visible. */

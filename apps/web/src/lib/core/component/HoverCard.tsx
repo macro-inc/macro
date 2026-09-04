@@ -4,7 +4,7 @@ import {
   HoverCard as KobalteHoverCard,
 } from '@kobalte/core/hover-card';
 import { cn } from '@ui/utils/classname';
-import type { JSX, Setter } from 'solid-js';
+import type { Accessor, JSX, Setter } from 'solid-js';
 import {
   createContext,
   createEffect,
@@ -22,6 +22,26 @@ type NestedHoverCardContext = {
 const HoverCardPortalNestedPreviewOpenContext = createContext<
   NestedHoverCardContext | undefined
 >(undefined);
+
+/**
+ * Keeps the nearest parent hover card mounted while a portaled child surface
+ * is active. Use this for menus and editors whose content leaves the hover
+ * card's DOM subtree when it opens.
+ */
+export function useHoldParentHoverCardOpen(active: Accessor<boolean>) {
+  const parentContext = useContext(HoverCardPortalNestedPreviewOpenContext);
+
+  createEffect(() => {
+    if (!parentContext || !active()) return;
+    parentContext.setCount((count) => count + 1);
+    onCleanup(() => parentContext.setCount((count) => count - 1));
+  });
+}
+
+/** Returns whether the calling component is rendered inside a hover card. */
+export function useIsInsideHoverCard() {
+  return useContext(HoverCardPortalNestedPreviewOpenContext) !== undefined;
+}
 
 type HoverCardEntry = {
   parent?: HoverCardEntry;
