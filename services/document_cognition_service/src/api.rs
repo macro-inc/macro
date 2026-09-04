@@ -26,6 +26,11 @@ mod attachments;
 mod chats;
 pub mod structured_completion;
 
+#[cfg(test)]
+mod test;
+
+const GATEWAY_PATH_PREFIX: &str = "/cognition";
+
 #[tracing::instrument(err, skip(state))]
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
@@ -55,6 +60,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         )
         .merge(health::router().layer(cors))
         .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+    let app = mount_at_root_and_prefix(app);
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -68,6 +74,12 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
         .context("error starting service")
+}
+
+fn mount_at_root_and_prefix(inner: Router) -> Router {
+    Router::new()
+        .merge(inner.clone())
+        .nest(GATEWAY_PATH_PREFIX, inner)
 }
 
 fn api_router(api_context: ApiContext) -> Router {
