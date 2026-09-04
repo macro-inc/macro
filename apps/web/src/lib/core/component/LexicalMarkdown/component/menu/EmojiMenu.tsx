@@ -274,10 +274,7 @@ export function EmojiMenu(props: EmojiMenuProps) {
           on:touchstart={(e) => e.stopPropagation()}
           ref={menuRef}
         >
-          <Surface
-            depth={2}
-            class="py-1.5 shadow-lg shadow-drop-shadow rounded-xl"
-          >
+          <Surface depth={2} class="py-1.5 glass-lg bg-menu-glass rounded-xl">
             <div class="flex flex-col px-1.5 w-full">
               <Show
                 when={emojiOptions().length > 0}

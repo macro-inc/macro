@@ -202,7 +202,10 @@ function DropdownContent(props: DropdownContentProps) {
       >
         <KobalteDropdownMenu.Content
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation shadow-menu bg-menu',
+            // Glass: the content is the pane (blur + rim + shadow) and goes
+            // transparent; the groups inside paint the menu color, which the
+            // redefined --color-menu makes translucent so the blur shows.
+            'rounded-xl size-auto z-action-menu menu-open-animation glass-lg bg-transparent [--color-menu:var(--color-menu-glass)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -211,7 +214,7 @@ function DropdownContent(props: DropdownContentProps) {
           onOpenAutoFocus={handleOpenAutoFocus}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
+          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted/60 size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.Content>
@@ -244,7 +247,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation bg-menu [--color-surface:var(--color-menu)]',
+            'rounded-xl size-auto z-action-menu menu-open-animation glass-lg bg-transparent [--color-menu:var(--color-menu-glass)] [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -252,7 +255,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
           {...rest}
           ref={setContentRef}
         >
-          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted size-full">
+          <div class="flex flex-col gap-(--app-border-width) bg-edge-muted/60 size-full">
             {local.children}
           </div>
         </KobalteDropdownMenu.SubContent>

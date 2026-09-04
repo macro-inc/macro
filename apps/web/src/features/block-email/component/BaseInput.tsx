@@ -1720,7 +1720,7 @@ export function BaseInput(props: {
       class={cn(
         'relative flex flex-col flex-1 max-w-full min-h-0',
         isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
-        props.unframed ? 'rounded-lg' : 'rounded-xl'
+        props.unframed ? 'rounded-lg' : 'rounded-xl bg-menu-glass glass-input'
       )}
       style={props.unframed ? { 'background-color': 'transparent' } : undefined}
       hideBorder={props.unframed}

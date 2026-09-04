@@ -68,9 +68,12 @@ export function Dialog(props: DialogProps) {
       <KobalteDialog.Portal>
         <KobalteDialog.Overlay
           class={cn(
-            'invisible fixed inset-0 z-modal bg-modal-overlay',
+            // Every floating dialog dims the page behind it with the accent
+            // sheen; `visibleScrim` layers the heavier legacy coat on top for
+            // destructive flows (its background-color wins over the scrim's).
+            'fixed inset-0 z-modal scrim-glass',
             animateOnOpen() && 'dialog-overlay-open-animation',
-            Boolean(props.visibleScrim) && 'visible'
+            Boolean(props.visibleScrim) && 'bg-modal-overlay'
           )}
         />
         <div
@@ -90,7 +93,14 @@ export function Dialog(props: DialogProps) {
             ref={props.contentRef}
             class={cn(
               'portal-scope isolate rounded-xl bg-dialog',
-              props.fullscreen ? 'size-full' : 'w-200 max-w-[calc(100vw-16px)]',
+              // Floating dialogs (cmd+k, create, confirm) get the glass
+              // treatment; fullscreen fills the viewport, so translucency and
+              // a cast shadow would just bleed the page through the content.
+              // --color-dialog goes translucent inside so nested bg-dialog
+              // chrome (e.g. cmd+k's toolbar/footer) reads as the same pane.
+              props.fullscreen
+                ? 'size-full'
+                : 'w-200 max-w-[calc(100vw-16px)] glass-lg bg-menu-glass [--color-dialog:var(--color-menu-glass)]',
               animateOnOpen() &&
                 (props.fullscreen
                   ? 'dialog-fullscreen-open-animation'
@@ -100,10 +110,6 @@ export function Dialog(props: DialogProps) {
             onCloseAutoFocus={props.onCloseAutoFocus}
             onEscapeKeyDown={props.onEscapeKeyDown}
             onOpenAutoFocus={props.onOpenAutoFocus}
-            style={{
-              'box-shadow':
-                '0 5px 40px rgba(0, 0, 0, 0.1), 0 5px 50px rgba(0,0,0,0.03)',
-            }}
           >
             {props.children}
           </KobalteDialog.Content>

@@ -175,9 +175,11 @@ function KeyPropertiesRow(props: {
                 <Layer depth={2}>
                   <Property.EditTrigger
                     class={cn(
-                      'flex items-center gap-1 min-w-0 ring ring-edge-muted/50 ring-inset',
+                      /* border, not ring: Tailwind rings are box-shadows and
+                         would fight the glass shadow */
+                      'flex items-center gap-1 min-w-0 border border-edge-muted/50 glass-sm',
                       'px-1.5 py-1 leading-tight text-left rounded-full',
-                      '@max-2xl/u-list:ring-0 @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
+                      '@max-2xl/u-list:border-0 @max-2xl/u-list:glass-none @max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
                       {
                         'hover:bg-hover': ctx.canEdit,
                         'text-ink-extra-muted/50': isEmpty(),
