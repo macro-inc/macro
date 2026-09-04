@@ -230,6 +230,62 @@ describe('GraphQL item previews', () => {
     });
   });
 
+  it('returns from REST fallback when a delayed cache read succeeds', async () => {
+    let finishRead!: (
+      records: Array<{ recordKey: string; record: unknown }>
+    ) => void;
+    const read = new Promise<Array<{ recordKey: string; record: unknown }>>(
+      (resolve) => {
+        finishRead = resolve;
+      }
+    );
+    getGraphqlSoupCacheHostMock.mockReturnValue(cacheHost(() => read));
+    const [result] = createStore({
+      data: undefined as PreviewItem | undefined,
+      error: { networkError: new Error('offline') },
+      isError: true,
+      isFetched: true,
+      isFetching: false,
+      isLoading: false,
+      isEnabled: true,
+      stale: false,
+      refetch: vi.fn(async () => undefined),
+    });
+    createUrqlQueryMock.mockReturnValue(result);
+
+    const { query, dispose } = createRoot((dispose) => ({
+      query: createGraphqlItemPreviewQuery(
+        () => ({ id: 'cached-doc', type: 'document' }),
+        () => true
+      ),
+      dispose,
+    }));
+
+    try {
+      expect(query.shouldFallback()).toBe(true);
+      finishRead([
+        {
+          recordKey: 'GraphqlSoupDocument:cached-doc',
+          record: {
+            __typename: 'GraphqlSoupDocument',
+            id: 'cached-doc',
+            displayName: 'Cached document',
+            documentName: 'Cached document',
+            fileType: 'md',
+            subType: null,
+          },
+        },
+      ]);
+
+      await vi.waitFor(() => {
+        expect(query.data()).toMatchObject({ name: 'Cached document' });
+        expect(query.shouldFallback()).toBe(false);
+      });
+    } finally {
+      dispose();
+    }
+  });
+
   it('bypasses cached access state for security-sensitive lookups', async () => {
     getGraphqlSoupCacheHostMock.mockClear();
     const query = vi.fn(() => ({

@@ -524,12 +524,18 @@ export function createGraphqlItemPreviewQuery(
     (result.isFetched &&
       !result.isFetching &&
       result.data === undefined &&
+      cachedPreview() === undefined &&
       !hasCreationGrace(item()));
   const [fallbackRecordKey, setFallbackRecordKey] = createSignal<string>();
 
   createComputed(() => {
     const recordKey = normalizedRecordKey(item());
-    if (!enabled() || !recordKey || result.data !== undefined) {
+    if (
+      !enabled() ||
+      !recordKey ||
+      result.data !== undefined ||
+      cachedPreview() !== undefined
+    ) {
       setFallbackRecordKey(undefined);
       return;
     }
