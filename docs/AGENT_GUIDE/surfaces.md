@@ -44,6 +44,16 @@ that account's calendars at once, and the account's calendars listed beneath it 
 name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
 carry a small RSS icon.
 
+The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
+pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
+conferencing, and location pills, forces a timed (not all-day) range, restricts the calendar
+pill to primary calendars, and shows a `Decline meetings` pill (`Don't decline meetings` /
+`Decline new meetings` / `Decline all meetings`) plus, when declining, an optional
+`Decline message` pill; a warning note discloses the away/auto-decline effect before saving.
+When editing an existing event the kind is read-only (Google treats it as immutable), and an
+out-of-office event's decline settings can still be changed — they read as unset because the
+provider does not report the stored ones.
+
 Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
 `<name>: <event title>`. The side panel's `Team out of office` section (shown only when the
 user belongs to a team with other members) has a checkbox in its header row toggling the

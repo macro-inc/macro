@@ -6,6 +6,7 @@ import {
 import { TZDateMini } from '@date-fns/tz';
 import type { ConferenceChange } from '@service-email/generated/schemas/conferenceChange';
 import type { EventTime } from '@service-email/generated/schemas/eventTime';
+import type { OutOfOfficeProperties } from '@service-email/generated/schemas/outOfOfficeProperties';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
 import type { EventType } from '@service-storage/generated/schemas/eventType';
@@ -30,6 +31,7 @@ import {
   recurrenceConfigsEqual,
   recurrencePresetsFor,
 } from '../../utils/recurrence';
+import type { EventEditorOutOfOffice } from './out-of-office';
 
 /** `<input type="date">` value. */
 const DATE_VALUE = 'yyyy-MM-dd';
@@ -76,6 +78,12 @@ export interface EventEditorInitialValues {
   reminders?: EventReminders;
   /** Provider event type of the edited event; absent for new events. */
   eventType?: EventType;
+  /**
+   * Out-of-office decline behavior. Absent while the event is not out of
+   * office, and on an edited out-of-office event until the user picks decline
+   * settings — the provider readback does not expose the stored ones.
+   */
+  outOfOffice?: EventEditorOutOfOffice;
 }
 
 /** Calendar option displayed by the event editor. */
@@ -85,6 +93,9 @@ export interface EventEditorCalendarOption {
   color: string;
   /** Provider defaults shown until the event's reminders are customized. */
   defaultReminders?: EventReminderOverride[];
+  /** Whether this is its account's primary calendar, the only kind Google
+   * accepts out-of-office events on. */
+  isPrimary?: boolean;
 }
 
 /** Editable fields that a create/edit owner may disable. */
@@ -119,6 +130,12 @@ export interface EventEditorSubmitValues {
   conference?: ConferenceChange;
   /** Present only when the user changed the event's reminder configuration. */
   reminders?: EventReminders;
+  /**
+   * Present when the save is out of office: on create its presence marks the
+   * event as out of office, on edit it patches the decline behavior of an
+   * event that already is.
+   */
+  outOfOffice?: OutOfOfficeProperties;
 }
 
 export function defaultEditorInitialValues(
@@ -138,6 +155,7 @@ export function defaultEditorInitialValues(
     conference: 'none',
     reminders: undefined,
     eventType: undefined,
+    outOfOffice: undefined,
   };
 }
 

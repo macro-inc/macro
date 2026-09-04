@@ -67,6 +67,7 @@ export function useEventEditor(props: UseEventEditorProps) {
           label: event.calendar.name || 'Calendar',
           color: event.calendar.color,
           defaultReminders: calendar?.defaultReminders,
+          isPrimary: calendar?.isPrimary ?? event.calendar.isPrimary,
         },
       ];
     }
@@ -76,6 +77,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       label: calendarDisplayLabel(calendar, spansInboxes()),
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
+      isPrimary: calendar.isPrimary,
     }));
   });
 
@@ -120,6 +122,7 @@ export function useEventEditor(props: UseEventEditorProps) {
             : {}),
           ...(values.conference ? { conference: values.conference } : {}),
           ...(values.reminders ? { reminders: values.reminders } : {}),
+          ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
         },
       });
       return;
@@ -135,6 +138,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       attendees: values.guestEmails.map((email) => ({ email })),
       ...(values.conference ? { conference: values.conference } : {}),
       ...(values.reminders ? { reminders: values.reminders } : {}),
+      ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
     });
   };
 

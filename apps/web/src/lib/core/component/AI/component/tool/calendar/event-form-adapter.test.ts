@@ -1,6 +1,10 @@
+import type { EventEditorSubmitValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CreateCalendarEvent } from '@service-cognition/generated/tools/types';
 import { describe, expect, it } from 'vitest';
-import { outOfOfficeNotice } from './event-form-adapter';
+import {
+  createCalendarEventToEditorInitialValues,
+  editorSubmitValuesToCreateCalendarEvent,
+} from './event-form-adapter';
 
 function event(overrides: Partial<CreateCalendarEvent>): CreateCalendarEvent {
   return {
@@ -14,56 +18,115 @@ function event(overrides: Partial<CreateCalendarEvent>): CreateCalendarEvent {
   } as CreateCalendarEvent;
 }
 
-describe('outOfOfficeNotice', () => {
-  it('returns nothing for a regular event', () => {
-    expect(outOfOfficeNotice(event({}))).toBeUndefined();
-    expect(outOfOfficeNotice(event({ eventType: 'default' }))).toBeUndefined();
+function submitValues(
+  overrides: Partial<EventEditorSubmitValues>
+): EventEditorSubmitValues {
+  return {
+    title: 'Focus',
+    time: {
+      kind: 'timed',
+      startsAt: '2026-08-20T17:00:00Z',
+      endsAt: '2026-08-20T18:00:00Z',
+      timeZone: 'UTC',
+    },
+    guestEmails: [],
+    location: '',
+    description: '',
+    ...overrides,
+  };
+}
+
+describe('createCalendarEventToEditorInitialValues', () => {
+  it('leaves a regular event without out-of-office state', () => {
+    const values = createCalendarEventToEditorInitialValues(event({}));
+    expect(values.eventType).toBeUndefined();
+    expect(values.outOfOffice).toBeUndefined();
   });
 
-  it('discloses the auto-decline behavior for each mode', () => {
-    expect(
-      outOfOfficeNotice(
-        event({
-          eventType: 'out_of_office',
-          outOfOffice: { autoDeclineMode: 'decline_all' },
-        })
-      )?.effect
-    ).toContain('decline all conflicting invitations');
+  it('maps the tool decline modes onto the editor names', () => {
+    const values = createCalendarEventToEditorInitialValues(
+      event({
+        eventType: 'out_of_office',
+        outOfOffice: { autoDeclineMode: 'decline_all', declineMessage: 'Away' },
+      })
+    );
+    expect(values.eventType).toBe('out_of_office');
+    expect(values.outOfOffice).toEqual({
+      autoDeclineMode: 'decline_all_conflicting_invitations',
+      declineMessage: 'Away',
+    });
 
     expect(
-      outOfOfficeNotice(
+      createCalendarEventToEditorInitialValues(
         event({
           eventType: 'out_of_office',
           outOfOffice: { autoDeclineMode: 'decline_new_only' },
         })
-      )?.effect
-    ).toContain('newly received conflicting invitations');
-
-    // No decline mode still discloses the away status, without promising declines.
-    const none = outOfOfficeNotice(
-      event({ eventType: 'out_of_office', outOfOffice: {} })
-    );
-    expect(none?.effect).toContain('away');
-    expect(none?.effect).not.toContain('decline all');
+      ).outOfOffice
+    ).toEqual({
+      autoDeclineMode: 'decline_only_new_conflicting_invitations',
+      declineMessage: '',
+    });
   });
 
-  it('surfaces a decline message and drops a blank one', () => {
-    expect(
-      outOfOfficeNotice(
-        event({
-          eventType: 'out_of_office',
-          outOfOffice: { declineMessage: 'On vacation' },
-        })
-      )?.declineMessage
-    ).toBe('On vacation');
+  it('defaults an out-of-office event without decline settings to none', () => {
+    const values = createCalendarEventToEditorInitialValues(
+      event({ eventType: 'out_of_office' })
+    );
+    expect(values.outOfOffice).toEqual({
+      autoDeclineMode: 'decline_none',
+      declineMessage: '',
+    });
+  });
+});
 
-    expect(
-      outOfOfficeNotice(
-        event({
-          eventType: 'out_of_office',
-          outOfOffice: { declineMessage: '   ' },
-        })
-      )?.declineMessage
-    ).toBeUndefined();
+describe('editorSubmitValuesToCreateCalendarEvent', () => {
+  it('marks the tool args out of office and converts the decline mode back', () => {
+    const merged = editorSubmitValuesToCreateCalendarEvent(
+      submitValues({
+        outOfOffice: {
+          autoDeclineMode: 'decline_only_new_conflicting_invitations',
+          declineMessage: 'On vacation',
+        },
+      }),
+      event({ addGoogleMeet: true })
+    );
+    expect(merged.eventType).toBe('out_of_office');
+    expect(merged.outOfOffice).toEqual({
+      autoDeclineMode: 'decline_new_only',
+      declineMessage: 'On vacation',
+    });
+    expect(merged.addGoogleMeet).toBe(false);
+  });
+
+  it('drops the decline message when it is blank', () => {
+    const merged = editorSubmitValuesToCreateCalendarEvent(
+      submitValues({
+        outOfOffice: { autoDeclineMode: 'decline_all_conflicting_invitations' },
+      }),
+      event({})
+    );
+    expect(merged.outOfOffice).toEqual({ autoDeclineMode: 'decline_all' });
+  });
+
+  it('turns a pending out-of-office create back into a regular event', () => {
+    const merged = editorSubmitValuesToCreateCalendarEvent(
+      submitValues({}),
+      event({
+        eventType: 'out_of_office',
+        outOfOffice: { autoDeclineMode: 'decline_all' },
+      })
+    );
+    expect(merged.eventType).toBe('default');
+    expect(merged.outOfOffice).toBeUndefined();
+  });
+
+  it('keeps a regular event regular', () => {
+    const merged = editorSubmitValuesToCreateCalendarEvent(
+      submitValues({}),
+      event({})
+    );
+    expect(merged.eventType).toBeUndefined();
+    expect(merged.outOfOffice).toBeUndefined();
   });
 });
