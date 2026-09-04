@@ -67,7 +67,11 @@ async fn existing_paths_stay_and_are_also_served_under_the_prefix() {
         "/internal/ping",
         "/email/internal/ping",
     ] {
-        assert_eq!(get_status(sample_app(), path), StatusCode::OK, "{path}",);
+        assert_eq!(
+            get_status(sample_app(), path).await,
+            StatusCode::OK,
+            "{path}"
+        );
     }
 }
 

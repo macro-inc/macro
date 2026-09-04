@@ -226,6 +226,10 @@ export class EmailService extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        // ECS refuses a service whose target group is not yet associated with
+        // a load balancer; it is the listener rule that creates that
+        // association
+        dependsOn: [gatewayTargetGroup.listener_rule],
       }
     );
 
