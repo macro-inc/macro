@@ -21,6 +21,23 @@ fn record(value: &str) -> Record {
     record
 }
 
+fn quick_access_document(name: &str, timestamp: u64) -> Record {
+    let mut document = Record::default();
+    document.fields.insert(
+        "__typename".into(),
+        cache_core::value::CacheValue::String("GraphqlSoupDocument".into()),
+    );
+    document.fields.insert(
+        "name".into(),
+        cache_core::value::CacheValue::String(name.into()),
+    );
+    document.fields.insert(
+        "updatedAt".into(),
+        cache_core::value::CacheValue::Number(cache_core::value::CacheNumber::PosInt(timestamp)),
+    );
+    document
+}
+
 fn queued(label: &str) -> NewQueuedMutation {
     NewQueuedMutation {
         uuid: uuid::Uuid::new_v4(),
@@ -159,19 +176,7 @@ async fn expect_every_storage_method_latched(
 fn search_projection_is_write_through_and_queries_use_projection_indexes() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("search-projection").unwrap();
-        let mut document = Record::default();
-        document.fields.insert(
-            "__typename".into(),
-            cache_core::value::CacheValue::String("GraphqlSoupDocument".into()),
-        );
-        document.fields.insert(
-            "name".into(),
-            cache_core::value::CacheValue::String("Quarterly Plan".into()),
-        );
-        document.fields.insert(
-            "updatedAt".into(),
-            cache_core::value::CacheValue::Number(cache_core::value::CacheNumber::PosInt(123)),
-        );
+        let document = quick_access_document("Quarterly Plan", 123);
         storage
             .put_batch(vec![
                 (key("GraphqlSoupDocument:d1"), document.clone()),
@@ -307,6 +312,56 @@ fn search_projection_is_write_through_and_queries_use_projection_indexes() {
                 "SELECT COUNT(*) FROM search_documents WHERE profile = 'future-profile' AND __typename = 'GraphqlSoupDocument' AND id = 'd1'",
             ),
             1
+        );
+    });
+}
+
+#[test]
+fn search_projection_batches_large_writes_and_keeps_the_last_duplicate() {
+    block_on(async {
+        let mut storage = TursoStorage::open_in_memory("search-projection-batches").unwrap();
+        let record_count = SEARCH_WRITE_BATCH_SIZE + 2;
+        let mut entries = (0..record_count)
+            .map(|index| {
+                (
+                    key(&format!("GraphqlSoupDocument:d{index}")),
+                    quick_access_document(&format!("Document {index}"), index as u64),
+                )
+            })
+            .collect::<Vec<_>>();
+        entries.push((key("GraphqlSoupDocument:d0"), record("internal")));
+
+        storage.put_batch(entries).await.unwrap();
+        let loaded = storage
+            .load_search_documents(SearchProfile::QuickAccessV1)
+            .await
+            .unwrap();
+        assert_eq!(loaded.len(), record_count - 1);
+        assert!(
+            loaded
+                .iter()
+                .all(|document| document.record_key.as_ref() != "GraphqlSoupDocument:d0")
+        );
+
+        storage
+            .put_batch(
+                (1..record_count)
+                    .map(|index| {
+                        (
+                            key(&format!("GraphqlSoupDocument:d{index}")),
+                            record("internal"),
+                        )
+                    })
+                    .collect(),
+            )
+            .await
+            .unwrap();
+        assert!(
+            storage
+                .load_search_documents(SearchProfile::QuickAccessV1)
+                .await
+                .unwrap()
+                .is_empty()
         );
     });
 }
