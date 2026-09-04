@@ -64,7 +64,7 @@ function patchEventItems(
 
 export interface RsvpCalendarEventArgs {
   eventId: string;
-  /** Calendar whose copy of the event is answered; omit for the canonical copy. */
+  /** Calendar whose copy of the event is answered. Omit for the canonical copy. */
   calendarId?: string;
   response: Exclude<AttendeeResponseStatus, 'needs_action'>;
   /** How much of a recurring series to answer for; defaults to all of it. */
@@ -267,7 +267,7 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
 
 export interface DeleteCalendarEventArgs {
   eventId: string;
-  /** Calendar whose copy of the event is deleted; omit for the canonical copy. */
+  /** Calendar whose copy of the event is deleted. Omit for the canonical copy. */
   calendarId?: string;
   /** How much of a recurring series to remove; defaults to all of it. */
   scope?: CalendarDeletionScope;
@@ -373,7 +373,7 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
 
 export interface UpdateCalendarEventArgs {
   eventId: string;
-  /** Calendar whose copy of the event is patched; omit for the canonical copy. */
+  /** Calendar whose copy of the event is patched. Omit for the canonical copy. */
   calendarId?: string;
   patch: Omit<UpdateCalendarEventRequest, 'calendarId'>;
 }

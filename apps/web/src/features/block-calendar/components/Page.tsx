@@ -427,9 +427,6 @@ function CalendarPageHost(props: {
     })
   );
 
-  // Keyed on the mapped events rather than the query's update time: hiding a
-  // calendar re-maps a multi-calendar event to another copy without a fetch,
-  // and the open details must follow that copy.
   createEffect(
     on(
       () =>
@@ -439,18 +436,22 @@ function CalendarPageHost(props: {
           props.eventsById(),
         ] as const,
       ([active, selectedEventId, eventsById]) => {
-        if (
-          !active ||
-          !selectedEventId ||
-          !props.data.occurrencesQuery.isSuccess ||
-          props.data.occurrencesQuery.isPlaceholderData
-        ) {
+        if (!active || !selectedEventId) return;
+
+        // Placeholder data is the previous range, so an absent event proves
+        // nothing yet. A present one still refreshes, so a copy switch made
+        // while a fetch is in flight reaches the open details.
+        const selectedEvent = eventsById.get(selectedEventId);
+        if (selectedEvent) {
+          calendarView.refreshSelectedEvent(selectedEvent);
           return;
         }
-
-        const selectedEvent = eventsById.get(selectedEventId);
-        if (selectedEvent) calendarView.refreshSelectedEvent(selectedEvent);
-        else calendarView.closeEventDetails();
+        if (
+          props.data.occurrencesQuery.isSuccess &&
+          !props.data.occurrencesQuery.isPlaceholderData
+        ) {
+          calendarView.closeEventDetails();
+        }
       }
     )
   );

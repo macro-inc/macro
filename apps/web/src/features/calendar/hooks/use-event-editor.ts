@@ -26,6 +26,17 @@ const EDIT_DISABLED_FIELDS = {
   calendar: true,
 } satisfies EventEditorDisabledFields;
 
+/**
+ * Whether the editor addresses the copy whose reminders Macro's alerts
+ * follow. Another copy's reminders are Google's own and never fire here.
+ */
+function editsPrimaryCopy(event: CalendarEvent) {
+  return (
+    event.reminderCalendarId === undefined ||
+    event.reminderCalendarId === (event.calendarId ?? event.calendar.id)
+  );
+}
+
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
   onSaved: () => void;
@@ -58,8 +69,9 @@ export function useEventEditor(props: UseEventEditorProps) {
     const event = props.event();
     if (event) {
       const calendarId = event.calendarId ?? event.calendar.id;
+      const reminderCalendarId = event.reminderCalendarId ?? calendarId;
       const calendar = calendarsQuery.data?.find(
-        (candidate) => candidate.id === calendarId
+        (candidate) => candidate.id === reminderCalendarId
       );
       return [
         {
@@ -154,6 +166,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       return {
         ...EDIT_DISABLED_FIELDS,
         guests: !viewerCanEditGuests(event),
+        reminders: !editsPrimaryCopy(event),
       };
     }
   );

@@ -72,8 +72,13 @@ export interface CalendarEvent {
   creatorEmail?: string;
   /** Attendees and their RSVP metadata. */
   attendees: CalendarAttendee[];
-  /** Per-user reminder configuration; absent means the calendar default. */
+  /**
+   * Reminder configuration of the primary copy, the one Macro's alerts
+   * follow whichever copy is displayed. Absent means the calendar default.
+   */
   reminders?: EventReminders;
+  /** Calendar whose defaults `reminders` resolve against: the primary copy's. */
+  reminderCalendarId?: string;
   /** Provider event type; absent means a regular event. */
   eventType?: EventType;
   /**
@@ -175,6 +180,7 @@ export function mapCalendarOccurrence(
       : { allDay: true, start: time.startDate, end: time.endDate };
   const selected = selectEventSource(event, options.isSourceVisible);
   const content = selected ?? event;
+  const canonical = event.sources?.[0] ?? event;
   const calendarId = selected?.calendarId ?? event.calendarId ?? undefined;
   const source =
     (calendarId ? options.sourceById?.get(calendarId) : undefined) ??
@@ -198,7 +204,8 @@ export function mapCalendarOccurrence(
     creatorName: optionalText(content.creatorName),
     creatorEmail: optionalText(content.creatorEmail),
     attendees: event.attendees ?? [],
-    reminders: content.reminders ?? undefined,
+    reminders: canonical.reminders ?? undefined,
+    reminderCalendarId: canonical.calendarId ?? undefined,
     eventType: content.eventType ?? undefined,
     calendarId,
     sourceCalendarIds: (event.sources ?? []).map((copy) => copy.calendarId),
@@ -226,8 +233,8 @@ export function mapCalendarEventToFullCalendar(
 
   return {
     // FullCalendar re-applies the calendar color only when an event remounts,
-    // so a chip that switches to another copy (its calendar was hidden) keys
-    // a fresh event; extendedProps keeps the stable occurrence id.
+    // so a chip that switches to another copy keys a fresh event. The stable
+    // occurrence id lives in extendedProps.
     id: JSON.stringify([event.id, event.calendar.id, event.calendar.color]),
     title: event.title,
     start: allDayRange?.start ?? event.start,

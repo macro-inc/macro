@@ -50,8 +50,6 @@ export function useCalendarOccurrenceData(
       };
     }
   );
-  // Each occurrence shows the copy of the event that belongs to a calendar
-  // the viewer has on, so toggling a calendar re-maps rather than filters.
   const events = createMemo(() => {
     if (!isRangeSupported()) return [];
     const sourceById = options.sourceById?.();

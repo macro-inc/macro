@@ -112,6 +112,7 @@ describe('mapCalendarOccurrence', () => {
     expect(event.reminders?.overrides).toEqual([
       { method: 'popup', minutes: 30 },
     ]);
+    expect(event.reminderCalendarId).toBe('primary');
     expect(event.creatorEmail).toBe('teo@example.com');
     expect(event.sourceCalendarIds).toEqual(['primary', 'shared']);
   });
@@ -127,8 +128,20 @@ describe('mapCalendarOccurrence', () => {
     expect(event.title).toBe('[teo] OOO');
     expect(event.eventType).toBe('default');
     expect(event.isReadOnly).toBe(true);
-    expect(event.reminders?.overrides).toEqual([]);
     expect(event.creatorEmail).toBe('script@example.com');
+  });
+
+  it('keeps the reminders that fire on the primary copy whichever copy shows', () => {
+    const event = mapCalendarOccurrence(item([copy('primary'), sharedCopy]), {
+      sourceById,
+      isSourceVisible: hidden('primary'),
+    });
+
+    expect(event.reminders?.overrides).toEqual([
+      { method: 'popup', minutes: 30 },
+    ]);
+    expect(event.reminderCalendarId).toBe('primary');
+    expect(event.calendarId).toBe('shared');
   });
 
   it('keeps the canonical copy when every calendar is hidden', () => {
