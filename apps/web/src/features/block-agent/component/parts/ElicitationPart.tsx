@@ -15,9 +15,17 @@
  * send the consent and open a new tab - never an iframe, never a prefetch.
  */
 
+import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
+import { EmailDraftComposer } from '@core/component/AI/component/tool/email/DraftComposer';
 import type { MessagePart } from '@service-agent-fold/generated/types';
+import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
+import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
+import type {
+  CreateCalendarEvent,
+  SendEmail,
+} from '@service-cognition/generated/tools/types';
 import { Button } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { match } from 'ts-pattern';
 import { useAgentSession } from '../../context/AgentSessionContext';
@@ -30,15 +38,24 @@ import {
   urlHost,
   validate,
 } from '../../state/elicitation-form';
+import { createElicitationReviewSink } from '../../state/elicitation-review-sink';
 import { ElicitationForm, ToolCard } from '../../ui';
+import { UserToolCall } from './UserToolCall';
 
 type ElicitationPartData = Extract<MessagePart, { kind: 'elicitation' }>;
+type UserToolRequest = Extract<
+  ElicitationPartData['request'],
+  { kind: 'user_tool' }
+>;
 
 function outcomeLabel(part: ElicitationPartData): string {
   return match(part.outcome)
     .with({ kind: 'pending' }, () => 'Not answered')
     .with({ kind: 'accepted' }, () =>
-      part.request.kind === 'url' ? 'Opened' : 'Answered'
+      match(part.request.kind)
+        .with('url', () => 'Opened')
+        .with('user_tool', () => 'Confirmed')
+        .otherwise(() => 'Answered')
     )
     .with({ kind: 'declined' }, () => 'Declined')
     .with({ kind: 'cancelled' }, () => 'Cancelled')
@@ -84,6 +101,14 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
             .with({ kind: 'form' }, (request) => (
               <LiveForm
                 schema={request.schema}
+                locked={locked()}
+                onRespond={elicitation.respond}
+              />
+            ))
+            .with({ kind: 'user_tool' }, (request) => (
+              <LiveUserTool
+                request={request}
+                toolCall={props.part.toolCall ?? String(props.part.requestId)}
                 locked={locked()}
                 onRespond={elicitation.respond}
               />
@@ -186,6 +211,68 @@ function LiveForm(props: {
   );
 }
 
+/**
+ * A Macro user tool under review, in the tool's own composer: the calendar
+ * event form for `CreateCalendarEvent`, the email compose for `SendEmail`.
+ * The composer's Create/Send accepts the review with the whole edited draft;
+ * Cancel declines it. A draft the tool's schema rejects, or a tool with no
+ * composer here, falls back to the flat form the agent also sent.
+ */
+function LiveUserTool(props: {
+  request: UserToolRequest;
+  toolCall: string;
+  locked: boolean;
+  onRespond: (answer: ElicitationAnswer) => Promise<boolean>;
+}) {
+  const { elicitation } = useAgentSession();
+  const typed = createMemo(() => {
+    const call = deserializeToolCall({
+      id: props.toolCall,
+      name: props.request.tool,
+      json: props.request.draft,
+    });
+    return call.isOk() ? call.value : undefined;
+  });
+  const sink = <T,>() =>
+    createElicitationReviewSink<T>({
+      canAnswer: elicitation.canAnswer,
+      ownerName: elicitation.ownerName,
+      answering: elicitation.answering,
+      respond: props.onRespond,
+    });
+
+  return (
+    <Switch
+      fallback={
+        <LiveForm
+          schema={props.request.schema}
+          locked={props.locked}
+          onRespond={props.onRespond}
+        />
+      }
+    >
+      <Match when={typed()?.name === 'CreateCalendarEvent' && typed()}>
+        {(tool) => (
+          <CalendarDraftComposer
+            initialData={tool().data as CreateCalendarEvent}
+            sink={sink<CreateCalendarEvent>()}
+            previewKey={props.toolCall}
+          />
+        )}
+      </Match>
+      <Match when={typed()?.name === 'SendEmail' && typed()}>
+        {(tool) => (
+          <EmailDraftComposer
+            initialData={tool().data as SendEmail}
+            sink={sink<SendEmail>()}
+            debugName={`agent-review:${props.toolCall}`}
+          />
+        )}
+      </Match>
+    </Switch>
+  );
+}
+
 function LiveUrl(props: {
   url: string;
   locked: boolean;
@@ -227,6 +314,42 @@ function LiveUrl(props: {
 }
 
 function ResolvedElicitation(props: { part: ElicitationPartData }) {
+  // A reviewed user tool that has reported back reads as the tool: the draft
+  // it ran with and what it did - the same card the chat block's user tools
+  // settle into.
+  const reviewedTool = () => {
+    const { request, toolOutcome } = props.part;
+    return request.kind === 'user_tool' && toolOutcome
+      ? { request, toolOutcome }
+      : undefined;
+  };
+  return (
+    <Show
+      when={reviewedTool()}
+      fallback={<ResolvedQuestion part={props.part} />}
+    >
+      {(reviewed) => (
+        <UserToolCall
+          detail={{
+            kind: 'user_tool',
+            input: reviewed().request.draft,
+            outcome: reviewed().toolOutcome,
+          }}
+          common={{
+            id: props.part.toolCall ?? String(props.part.requestId),
+            label: reviewed().request.tool,
+            status:
+              reviewed().toolOutcome.kind === 'failed' ? 'failed' : 'completed',
+            muted: reviewed().toolOutcome.kind === 'failed',
+            trailing: undefined,
+          }}
+        />
+      )}
+    </Show>
+  );
+}
+
+function ResolvedQuestion(props: { part: ElicitationPartData }) {
   const lines = () =>
     match(props.part)
       .with(

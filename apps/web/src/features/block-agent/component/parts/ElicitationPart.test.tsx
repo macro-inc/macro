@@ -86,6 +86,52 @@ vi.mock('../../ui', () => ({
   },
 }));
 
+// The composers are the chat block's real editors over calendar and email
+// queries; the part's job is to pick one for the tool under review and wire
+// its sink, so each stub exposes the sink through two buttons and its notice.
+type StubSink = {
+  canAct: () => boolean;
+  lockedNotice: () => string | undefined;
+  onExecute: (args: unknown) => Promise<boolean>;
+  onReject: () => Promise<boolean>;
+};
+function composerStub(kind: string) {
+  return (props: { initialData: unknown; sink: StubSink }) => (
+    <div data-testid={`${kind}-composer`} data-can-act={props.sink.canAct()}>
+      <span data-testid="locked-notice">{props.sink.lockedNotice()}</span>
+      <button
+        type="button"
+        data-testid="composer-execute"
+        onClick={() => void props.sink.onExecute(props.initialData)}
+      />
+      <button
+        type="button"
+        data-testid="composer-reject"
+        onClick={() => void props.sink.onReject()}
+      />
+    </div>
+  );
+}
+vi.mock('@core/component/AI/component/tool/calendar/DraftComposer', () => ({
+  CalendarDraftComposer: composerStub('calendar'),
+}));
+vi.mock('@core/component/AI/component/tool/email/DraftComposer', () => ({
+  EmailDraftComposer: composerStub('email'),
+}));
+vi.mock('./UserToolCall', () => ({
+  UserToolCall: (props: {
+    detail: { outcome: { kind: string } };
+    common: { label: string; status: string };
+  }) => (
+    <div
+      data-testid="user-tool"
+      data-label={props.common.label}
+      data-status={props.common.status}
+      data-outcome={props.detail.outcome.kind}
+    />
+  ),
+}));
+
 import { ElicitationPart } from './ElicitationPart';
 
 type Elicitation = Extract<MessagePart, { kind: 'elicitation' }>;
@@ -128,6 +174,7 @@ function part(overrides: Partial<Elicitation> = {}): Elicitation {
     request: colourForm,
     outcome: { kind: 'pending' },
     reported: null,
+    toolOutcome: null,
     ...overrides,
   };
 }
@@ -285,6 +332,132 @@ describe('ElicitationPart', () => {
       'noopener,noreferrer'
     );
     open.mockRestore();
+  });
+
+  describe('a user tool under review', () => {
+    const eventDraft = {
+      title: 'Q3 sync',
+      time: {
+        kind: 'timed',
+        startsAt: '2026-08-20T17:00:00Z',
+        endsAt: '2026-08-20T17:30:00Z',
+        timeZone: 'UTC',
+      },
+      attendees: [],
+      recurrenceLines: [],
+      addGoogleMeet: false,
+      eventType: 'default',
+    };
+    const emptySchema = {
+      title: null,
+      description: null,
+      properties: [],
+      required: [],
+    };
+    const review = (
+      tool: string,
+      draft: unknown
+    ): Extract<Elicitation['request'], { kind: 'user_tool' }> => ({
+      kind: 'user_tool',
+      tool,
+      draft,
+      schema: emptySchema,
+    });
+
+    it("opens the tool's own composer, and Create answers with the whole draft", () => {
+      const request = review('CreateCalendarEvent', eventDraft);
+      pending = { ...live(), request };
+      const { getByTestId, queryByTestId } = render(() => (
+        <ElicitationPart
+          part={part({ request, message: 'Create calendar event?' })}
+        />
+      ));
+      expect(queryByTestId('form')).toBeNull();
+      const composer = getByTestId('calendar-composer');
+      expect(composer.dataset.canAct).toBe('true');
+      expect(getByTestId('locked-notice').textContent).toBe('');
+      fireEvent.click(getByTestId('composer-execute'));
+      expect(respond).toHaveBeenCalledWith({
+        action: 'accept',
+        content: { draft: JSON.stringify(eventDraft) },
+      });
+      fireEvent.click(getByTestId('composer-reject'));
+      expect(respond).toHaveBeenLastCalledWith({ action: 'decline' });
+    });
+
+    it('routes SendEmail to the email composer', () => {
+      const request = review('SendEmail', {
+        to: [{ email: 'alice@example.com' }],
+        cc: [],
+        bcc: [],
+        subject: 'Q3 plan',
+        body: 'Hi Alice',
+      });
+      pending = { ...live(), request };
+      const { queryByTestId } = render(() => (
+        <ElicitationPart part={part({ request })} />
+      ));
+      expect(queryByTestId('email-composer')).not.toBeNull();
+    });
+
+    it('a viewer who is not the owner gets the composer locked and told who can act', () => {
+      canAnswer = false;
+      const request = review('CreateCalendarEvent', eventDraft);
+      pending = { ...live(), request };
+      const { getByTestId } = render(() => (
+        <ElicitationPart part={part({ request })} />
+      ));
+      expect(getByTestId('calendar-composer').dataset.canAct).toBe('false');
+      expect(getByTestId('locked-notice').textContent).toBe(
+        'Waiting for Alice Owner to answer.'
+      );
+      fireEvent.click(getByTestId('composer-execute'));
+      expect(respond).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the flat form for a draft the tool's schema rejects", () => {
+      const request = {
+        ...review('CreateCalendarEvent', { nonsense: true }),
+        schema: colourForm.schema,
+      };
+      pending = { ...live(), request };
+      const { queryByTestId } = render(() => (
+        <ElicitationPart part={part({ request })} />
+      ));
+      expect(queryByTestId('calendar-composer')).toBeNull();
+      expect(queryByTestId('form')).not.toBeNull();
+    });
+
+    it('once the tool has reported, the question reads as the tool it finished', () => {
+      const request = review('CreateCalendarEvent', eventDraft);
+      const { getByTestId } = render(() => (
+        <ElicitationPart
+          part={part({
+            request,
+            outcome: { kind: 'accepted', content: { draft: '{}' } },
+            toolOutcome: {
+              kind: 'completed',
+              result: { eventId: 'evt-1', title: 'Q3 sync' },
+            },
+          })}
+        />
+      ));
+      const tool = getByTestId('user-tool');
+      expect(tool.dataset.label).toBe('CreateCalendarEvent');
+      expect(tool.dataset.outcome).toBe('completed');
+      expect(tool.dataset.status).toBe('completed');
+    });
+
+    it('a declined review with no tool report reads as a declined question', () => {
+      const request = review('CreateCalendarEvent', eventDraft);
+      const { getByTestId, queryByTestId } = render(() => (
+        <ElicitationPart
+          part={part({ request, outcome: { kind: 'declined' } })}
+        />
+      ));
+      expect(queryByTestId('user-tool')).toBeNull();
+      expect(getByTestId('trailing').textContent).toBe('Declined');
+    });
   });
 
   it('a refused url consent does not open the tab', async () => {
