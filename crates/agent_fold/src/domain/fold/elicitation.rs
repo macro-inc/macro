@@ -251,6 +251,42 @@ impl FoldState {
         changed.then(|| Changed::updated(at.message))
     }
 
+    /// A `tool_call` for an id a pending question already names: the question
+    /// asked on the call's behalf arrived first. The question keeps its row
+    /// and becomes the call's position, so the call's later updates land on
+    /// it, and a user tool's draft fills from the call's input when the
+    /// question came without one. `None` when no question names the call.
+    pub(super) fn absorb_late_tool_call(
+        &mut self,
+        id: &ToolUseId,
+        frame: &ToolFrame<'_>,
+    ) -> Option<Changed> {
+        if self.tool_positions.contains_key(id) {
+            return None;
+        }
+        let at = self
+            .pending_elicitations
+            .values()
+            .find(|at| {
+                matches!(
+                    self.part_at(at),
+                    Some(MessagePart::Elicitation { tool_call: Some(named), .. }) if named == id
+                )
+            })
+            .cloned()?;
+        if let Some(MessagePart::Elicitation {
+            request: ElicitationRequest::UserTool { draft, .. },
+            ..
+        }) = self.part_at_mut(&at)
+            && draft.is_null()
+            && let Some(input) = frame.raw_input
+        {
+            **draft = input.clone();
+        }
+        self.tool_positions.insert(id.clone(), at.clone());
+        Some(Changed::updated(at.message))
+    }
+
     /// The Macro user tool at `at`, with its draft, when the part there is a
     /// tool call this fold classified as one.
     fn user_tool_at(&mut self, at: &ToolPath) -> Option<(String, Value)> {

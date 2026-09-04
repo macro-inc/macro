@@ -23,6 +23,16 @@ impl FoldState {
         let id = ToolUseId(call.tool_call_id.0.to_string());
         let reader = self.reader();
         let frame = ToolFrame::of_call(&call);
+
+        // A question already asked on this call's behalf - its
+        // `elicitation/create` is a request the agent sends directly, and can
+        // overtake the `tool_call` notification on the wire - takes the call
+        // in now, the way an open call is absorbed when the question follows
+        // it. Either order shows one row.
+        if let Some(changed) = self.absorb_late_tool_call(&id, &frame) {
+            return Some(changed);
+        }
+
         let name = harness::tool_name(reader, &frame);
 
         // Whose shape the call is in is decided here, once; a patch finds the

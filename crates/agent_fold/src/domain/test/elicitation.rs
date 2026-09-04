@@ -883,6 +883,73 @@ fn a_declined_review_and_a_failed_tool_read_as_such() {
     );
 }
 
+/// The review is a request the agent sends directly from the tool's task,
+/// while the `tool_call` notification queues through the turn loop, so the
+/// question can reach the log first. The call still folds into the question:
+/// one row, and the call's result lands on it.
+#[test]
+fn a_tool_call_arriving_after_its_review_is_absorbed_into_the_question() {
+    let created = r#"{"UserAction":{"eventId":"evt-1","title":"Q3 sync"}}"#;
+    let (machine, _) = drive(&lines(&[
+        &announce("macro-inmem"),
+        PROMPT,
+        CREATE_EVENT_REVIEW,
+        CREATE_EVENT_CALL,
+        &accept(9, "{}"),
+        &tool_update("toolu_evt", "completed", created),
+    ]));
+
+    let agent = &machine.messages()[1];
+    assert_eq!(
+        agent.parts.len(),
+        1,
+        "the late call took the question's row, not its own: {:#?}",
+        agent.parts
+    );
+    let MessagePart::Elicitation {
+        tool_call,
+        request,
+        outcome,
+        tool_outcome,
+        ..
+    } = &agent.parts[0]
+    else {
+        panic!("a question: {:?}", agent.parts[0]);
+    };
+    assert_eq!(*tool_call, Some(ToolUseId("toolu_evt".to_owned())));
+    assert!(matches!(request, ElicitationRequest::UserTool { .. }));
+    assert!(matches!(outcome, ElicitationOutcome::Accepted { .. }));
+    assert_eq!(
+        *tool_outcome,
+        Some(crate::domain::model::UserToolOutcome::Completed {
+            result: serde_json::json!({"eventId": "evt-1", "title": "Q3 sync"}),
+        }),
+        "the call's updates reach the question it was absorbed into"
+    );
+}
+
+/// A review that came without its draft takes it from the late call.
+#[test]
+fn a_late_call_fills_a_review_that_came_without_a_draft() {
+    let bare_review = r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":9,"method":"elicitation/create","params":{"sessionId":"s","toolCallId":"toolu_evt","mode":"form","message":"Create calendar event?","requestedSchema":{"type":"object","properties":{"title":{"type":"string"}}},"_meta":{"macro":{"userTool":{"name":"CreateCalendarEvent"}}}}}}"#;
+    let (machine, _) = drive(&lines(&[
+        &announce("macro-inmem"),
+        PROMPT,
+        bare_review,
+        CREATE_EVENT_CALL,
+    ]));
+    let MessagePart::Elicitation { request, .. } = elicitations(&machine)[0] else {
+        unreachable!()
+    };
+    let ElicitationRequest::UserTool {
+        draft: reviewed, ..
+    } = request
+    else {
+        panic!("a user tool review: {request:?}");
+    };
+    assert_eq!(**reviewed, draft());
+}
+
 #[test]
 fn a_review_with_no_call_to_absorb_is_still_a_review_from_its_meta() {
     let (machine, _) = drive(&lines(&[&announce("macro-inmem"), PROMPT, ORPHAN_REVIEW]));
