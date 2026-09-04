@@ -1407,7 +1407,7 @@ export const listOccurrencesResponse = zod
                         .describe('Visibility of event details.'),
                     })
                     .describe(
-                      "The content one provider copy of an event carries.\n\nGoogle keeps these fields per calendar copy: a shared calendar's copy of a\nmember's event can have its own title, type, reminders, and access role.\nThe entity holds its canonical source's values; every other copy's values\nare read from here so a client can show the copy that belongs to the\ncalendar being viewed."
+                      "The content one provider copy of an event carries.\n\nGoogle keeps these fields per calendar copy: a shared calendar's copy of a\nmember's event can have its own title, type, reminders, and access role.\nThe entity holds its canonical source's values. Every other copy's values\nare read from here so a client can show the copy that belongs to the\ncalendar being viewed."
                     )
                 )
                 .optional()

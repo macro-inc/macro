@@ -1477,7 +1477,7 @@ export type CalendarEventFilters = {
  *
  * Google keeps these fields per calendar copy: a shared calendar's copy of a
  * member's event can have its own title, type, reminders, and access role.
- * The entity holds its canonical source's values; every other copy's values
+ * The entity holds its canonical source's values. Every other copy's values
  * are read from here so a client can show the copy that belongs to the
  * calendar being viewed.
  */
