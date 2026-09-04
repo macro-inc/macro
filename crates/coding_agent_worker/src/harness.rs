@@ -118,11 +118,11 @@ impl ModelProbeHandler for HarnessModelProbes {
 fn safe_probe_error(error: ProbeError) -> String {
     match error {
         ProbeError::Timeout(_) => "the ACP model probe timed out".to_owned(),
+        #[cfg(not(unix))]
         ProbeError::UnsupportedWorkingDirectory => {
             "the ACP model probe cannot apply the configured working directory".to_owned()
         }
         ProbeError::Protocol(_) => "the ACP model probe protocol failed".to_owned(),
         ProbeError::Process(_) => "the ACP model probe process failed".to_owned(),
-        _ => "the ACP model probe failed".to_owned(),
     }
 }

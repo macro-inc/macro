@@ -38,6 +38,7 @@ pub(crate) enum ProbeError {
     Timeout(Duration),
     /// This platform cannot apply a subprocess working directory while
     /// retaining `AcpAgent`'s process-group cleanup.
+    #[cfg(not(unix))]
     #[error("ACP model probe working directories are unsupported on this platform")]
     UnsupportedWorkingDirectory,
 }
