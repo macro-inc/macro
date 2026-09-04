@@ -350,7 +350,10 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
 
     this.service = service;
 
-    this.setupAutoScaling();
+    this.setupAutoScaling({
+      gatewayAlbArnSuffix: gatewayLoadBalancer.albArnSuffix,
+      gatewayTargetGroup: gatewayTargetGroup.target_group,
+    });
 
     this.setupServiceAlarms();
 
@@ -485,7 +488,13 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
     return { serviceAlbSg, serviceSg };
   }
 
-  setupAutoScaling() {
+  setupAutoScaling({
+    gatewayAlbArnSuffix,
+    gatewayTargetGroup,
+  }: {
+    gatewayAlbArnSuffix: pulumi.Output<string>;
+    gatewayTargetGroup: aws.lb.TargetGroup;
+  }) {
     if (!this.service) return;
 
     const serviceScalableTarget = new aws.appautoscaling.Target(
@@ -514,8 +523,8 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
     );
 
     const resourceLabel = pulumi.interpolate`${lbPortion}/${tgPortion}`;
+    const gatewayResourceLabel = pulumi.interpolate`${gatewayAlbArnSuffix}/${gatewayTargetGroup.arnSuffix}`;
 
-    // Create an Auto Scaling policy for request count.
     new aws.appautoscaling.Policy(
       `${BASE_NAME}-scaling-policy-request-count-${stack}`,
       {
@@ -528,6 +537,26 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
           predefinedMetricSpecification: {
             predefinedMetricType: 'ALBRequestCountPerTarget',
             resourceLabel,
+          },
+          scaleInCooldown: 100,
+          scaleOutCooldown: 120,
+        },
+      },
+      { parent: this }
+    );
+
+    new aws.appautoscaling.Policy(
+      `${BASE_NAME}-scaling-policy-gateway-request-count-${stack}`,
+      {
+        policyType: 'TargetTrackingScaling',
+        resourceId: serviceScalableTarget.resourceId,
+        scalableDimension: serviceScalableTarget.scalableDimension,
+        serviceNamespace: serviceScalableTarget.serviceNamespace,
+        targetTrackingScalingPolicyConfiguration: {
+          targetValue: 1000,
+          predefinedMetricSpecification: {
+            predefinedMetricType: 'ALBRequestCountPerTarget',
+            resourceLabel: gatewayResourceLabel,
           },
           scaleInCooldown: 100,
           scaleOutCooldown: 120,
