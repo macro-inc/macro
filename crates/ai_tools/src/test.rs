@@ -13,6 +13,7 @@
 //! turning that runtime failure into a test-time failure.
 
 use super::*;
+use ai_toolset::ToolSet as _;
 
 #[test]
 fn subagent_toolset_passes_schema_validation() {
@@ -21,9 +22,43 @@ fn subagent_toolset_passes_schema_validation() {
 
 #[test]
 fn every_host_toolset_passes_schema_validation() {
-    for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
+    for host in [
+        AiHost::Chat,
+        AiHost::AgentSession,
+        AiHost::ChannelBot,
+        AiHost::Mcp,
+    ] {
         let _ = tools_for(host);
     }
+}
+
+/// An agent session finishes user tools in the turn, so it keeps chat's
+/// deferring registrations - and gets the prompt that says a review card,
+/// not a pending composer, is what follows the call.
+#[test]
+fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
+    let session = tools_for(AiHost::AgentSession);
+    assert!(
+        session
+            .toolset
+            .user_tools
+            .contains_key("CreateCalendarEvent")
+    );
+    assert!(session.toolset.user_tools.contains_key("SendEmail"));
+    let prompt = session.prompt.to_string();
+    assert!(prompt.contains("review card"));
+    assert!(!prompt.contains("PendingUserExecution"));
+    assert_eq!(
+        session
+            .toolset
+            .request_schemas()
+            .map(|schemas| schemas.len()),
+        tools_for(AiHost::Chat)
+            .toolset
+            .request_schemas()
+            .map(|schemas| schemas.len()),
+        "the same tools as chat"
+    );
 }
 
 /// Hosts without a composer cannot finish a deferred user tool, so their

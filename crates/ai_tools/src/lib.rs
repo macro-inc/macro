@@ -111,19 +111,25 @@ pub(crate) fn subagent_toolset() -> AiToolSet {
 
 /// The host a toolset is assembled for.
 ///
-/// Hosts differ on two axes. First, whether their surface can render the
-/// composer card that finishes a chat-deferred user tool: only
-/// [`AiHost::Chat`] can, so it alone registers `SendEmail` and the deferring
-/// `CreateCalendarEvent` — on any other host those registrations would
-/// return `PendingUserExecution` forever while reading to the model as
-/// success. Second, whether the host runs the chat frontend's tool
-/// discovery and display tools.
+/// Hosts differ on two axes. First, whether something finishes a deferred
+/// user tool for them: [`AiHost::Chat`] has the composer card after the
+/// turn and [`AiHost::AgentSession`] the review elicitation in it, so those
+/// two register `SendEmail` and the deferring `CreateCalendarEvent` — on any
+/// other host those registrations would return `PendingUserExecution`
+/// forever while reading to the model as success. Second, whether the host
+/// runs the chat frontend's tool discovery and display tools.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AiHost {
     /// The AI chat, and any host whose conversation is stored as a chat the
-    /// frontend can render (scheduled agents, agent sessions, memory
-    /// generation): composer cards finish deferred user tools there.
+    /// frontend can render (scheduled agents, memory generation): composer
+    /// cards finish deferred user tools there, after the turn.
     Chat,
+    /// Macro's in-process agent serving an agent session: the same toolset
+    /// as [`AiHost::Chat`], but its user tools are reviewed in the turn - the
+    /// agent loop's finisher puts the call to the user over ACP and the tool
+    /// returns the outcome - so the prompt describes a review card the agent
+    /// waits on, never a pending composer.
+    AgentSession,
     /// The channel-mention bot: no composer, so `CreateCalendarEvent`
     /// executes directly in the agent loop and `SendEmail` is omitted.
     ChannelBot,
@@ -140,7 +146,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset());
     let toolset = match host {
-        AiHost::Chat => toolset
+        AiHost::Chat | AiHost::AgentSession => toolset
             .add_subtoolset::<ToolEmailToolContext>(email_toolset())
             .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset()),
         AiHost::ChannelBot | AiHost::Mcp => toolset
@@ -151,7 +157,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
         .add_tool::<Subagent, ToolServiceContext>();
     let toolset = match host {
-        AiHost::Chat | AiHost::ChannelBot => toolset
+        AiHost::Chat | AiHost::AgentSession | AiHost::ChannelBot => toolset
             .add_tool::<SearchTools, ToolServiceContext>()
             .add_tool::<LoadTools, ToolServiceContext>()
             .add_tool::<DisplayResults, ToolServiceContext>(),
@@ -159,6 +165,7 @@ pub fn tools_for(host: AiHost) -> ToolSetWithPrompt {
     };
     let prompt: Box<dyn std::fmt::Display + Send + Sync> = match host {
         AiHost::Chat => Box::new(&prompt::TOOL_USE_PROMPT),
+        AiHost::AgentSession => Box::new(&prompt::SESSION_TOOL_USE_PROMPT),
         AiHost::ChannelBot | AiHost::Mcp => Box::new(&prompt::DIRECT_TOOL_USE_PROMPT),
     };
     ToolSetWithPrompt {
