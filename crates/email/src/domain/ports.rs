@@ -1,11 +1,12 @@
 use crate::domain::models::{
     Attachment, AttachmentDraft, AttachmentForwarded, Contact, ContactInfo, CreateDraftInput,
-    CreatedDraft, EmailErr, EmailFilter, EmailInboxDetails, EmailThreadMetadata,
-    EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label, Link, LinkLabel,
-    Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses, ParsedMessage,
-    ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput, SenderPolicy,
-    SimpleMessage, SimpleMessageInfo, Thread, ThreadRow, UpdateThreadLabelsResult,
-    UpsertEmailFilterInput, UpsertedContacts, UserEmailLink, UserProvider,
+    CreatedDraft, DeletedUserDraft, DraftDeletion, EmailErr, EmailFilter, EmailInboxDetails,
+    EmailThreadMetadata, EmailThreadPreview, EnrichedEmailThreadPreview, GetEmailsRequest, Label,
+    Link, LinkLabel, Message, MessageAttachment, MessageLabel, MessageRow, ParsedAddresses,
+    ParsedMessage, ParsedThread, PreviewCursorQuery, RecipientType, ResolvedDraftInput,
+    SavedUserDraft, SenderPolicy, SettledDraftIds, SimpleMessage, SimpleMessageInfo, Thread,
+    ThreadRow, UpdateThreadLabelsResult, UpsertEmailFilterInput, UpsertedContacts, UserEmailLink,
+    UserProvider,
 };
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
@@ -225,6 +226,23 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_ids: &[Uuid],
     ) -> impl Future<Output = Result<Option<SimpleMessageInfo>, Self::Err>> + Send;
 
+    /// Resolve a client draft handle to its server-minted message ID through
+    /// the mapping table, scoped to the caller's inboxes — identical handles
+    /// from different users never interact.
+    fn message_id_for_client_draft_id(
+        &self,
+        client_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
+    /// Resolve a client thread handle to its server-minted thread ID through
+    /// the mapping table, scoped to the caller's inboxes.
+    fn thread_id_for_client_thread_id(
+        &self,
+        client_id: Uuid,
+        link_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Option<Uuid>, Self::Err>> + Send;
+
     /// Find an existing draft that replies to the given message ID.
     fn get_draft_replying_to(
         &self,
@@ -236,11 +254,18 @@ pub trait EmailRepo: Send + Sync + 'static {
     /// A surviving thread gets its denormalized metadata (inbox visibility,
     /// latest timestamps, is_signal) recomputed, since drafts count toward
     /// those fields.
+    ///
+    /// Ownership is enforced in the DELETE's WHERE clause — the row must be
+    /// an unsent draft in `thread_db_id` belonging to one of `link_ids` —
+    /// so a raced validation read can never delete someone else's row.
+    /// Returns `None` when no row matched (already deleted, sent, or not
+    /// owned): deletes are idempotent, classification is the caller's job.
     fn delete_draft_message(
         &self,
         message_id: Uuid,
         thread_db_id: Uuid,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+        link_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Option<DraftDeletion>, Self::Err>> + Send;
 
     /// Upsert contacts from the parsed addresses. Must be called outside a transaction
     /// to avoid deadlocks (contacts are shared across messages).
@@ -251,8 +276,21 @@ pub trait EmailRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<UpsertedContacts, Self::Err>> + Send;
 
     /// Insert a message within a transaction, including thread insert (if new),
-    /// recipients, scheduled message handling, thread metadata update, and user history.
-    /// If `new_thread` is Some, the thread is created inside the same transaction.
+    /// recipients, scheduled message handling, thread metadata update, user
+    /// history, and any client-handle bindings the input carries (upserted so
+    /// replayed offline saves converge on the final row).
+    ///
+    /// A draft client handle is locked for the transaction and its binding
+    /// re-read under that lock, so concurrent first saves of one handle settle
+    /// on a single message and thread instead of each minting their own. The
+    /// returned IDs are therefore the authoritative ones — a save that adopted
+    /// a concurrent winner's row settled on IDs its own input never named.
+    ///
+    /// Returns `None` (rolling the transaction back) when the upsert's owner
+    /// guard rejected the write: the message ID already exists but belongs to
+    /// another inbox or is no longer an unsent draft. Defense-in-depth behind
+    /// the handle resolution — validation reads can be raced, the guarded
+    /// conflict clause cannot.
     fn insert_message(
         &self,
         input: &ResolvedDraftInput,
@@ -260,7 +298,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
         new_thread: Option<ThreadRow>,
         is_draft: bool,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<SettledDraftIds>, Self::Err>> + Send;
 
     /// Fetch a label by its database ID and link ID.
     fn get_label_by_id(
@@ -541,6 +579,33 @@ pub trait EmailService: Send + Sync + 'static {
         input: CreateDraftInput,
     ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send;
 
+    /// Create or update a draft for the authenticated user, resolving the
+    /// sending inbox from `link_id` (or the caller's primary inbox when
+    /// `None`). Lets transports without the `X-Email-Link-Id` header (the
+    /// GraphQL mutation, whose offline replay persists only variables) target
+    /// an inbox by value. The input's `db_id`/`thread_db_id` are client
+    /// handles here — resolved through the caller-scoped mapping tables and
+    /// bound to server-minted rows, never used as primary keys.
+    fn save_draft_for_user(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        link_id: Option<Uuid>,
+        input: CreateDraftInput,
+    ) -> impl Future<Output = Result<SavedUserDraft, EmailErr>> + Send;
+
+    /// Delete a draft for the authenticated user, searching every inbox they
+    /// can reach. `draft_id` is a handle resolved like a save's: through the
+    /// caller-scoped mapping, else as a server ID. Idempotent: a handle that
+    /// resolves to nothing (or to a row that is not theirs — reported
+    /// identically to avoid an existence oracle) is a successful no-op, so a
+    /// delete queued offline lands cleanly however late it replays. Deleting
+    /// a draft that has since been sent fails with `MessageAlreadySent`.
+    fn delete_draft_for_user(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        draft_id: Uuid,
+    ) -> impl Future<Output = Result<DeletedUserDraft, EmailErr>> + Send;
+
     /// Send a message: persist it and enqueue for scheduled delivery.
     /// `accessible_inboxes` is every inbox the caller can reach (own +
     /// delegated); a reply target may live in any of them, not just `link`.
@@ -799,6 +864,23 @@ impl EmailService for NoOpEmailService {
         _accessible_inboxes: &[Link],
         _input: CreateDraftInput,
     ) -> Result<CreatedDraft, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn save_draft_for_user(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _link_id: Option<Uuid>,
+        _input: CreateDraftInput,
+    ) -> Result<SavedUserDraft, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn delete_draft_for_user(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _draft_id: Uuid,
+    ) -> Result<DeletedUserDraft, EmailErr> {
         Err(no_op_email_err())
     }
 

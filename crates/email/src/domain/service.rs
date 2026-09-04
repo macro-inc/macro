@@ -277,6 +277,24 @@ where
             .await
     }
 
+    async fn save_draft_for_user(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        link_id: Option<uuid::Uuid>,
+        input: CreateDraftInput,
+    ) -> Result<crate::domain::models::SavedUserDraft, EmailErr> {
+        self.save_draft_for_user_impl(macro_id, link_id, input)
+            .await
+    }
+
+    async fn delete_draft_for_user(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        draft_id: uuid::Uuid,
+    ) -> Result<crate::domain::models::DeletedUserDraft, EmailErr> {
+        self.delete_draft_for_user_impl(macro_id, draft_id).await
+    }
+
     async fn send_message(
         &self,
         link: &Link,

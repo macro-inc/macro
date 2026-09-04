@@ -156,6 +156,11 @@ type EmailContextValues = {
     isFetching: Accessor<boolean>;
     fetchNextPage: () => void;
     refetch: () => void;
+    /** Which transport served the thread read. Draft mutations must ride
+     * the same transport: a GraphQL-queued save against a REST-read thread
+     * has no cached page for its optimistic patch, so offline drafts
+     * silently lose visibility. */
+    transport: Accessor<'graphql' | 'rest'>;
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;
@@ -933,6 +938,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
             isFetching: () =>
               threadQuery.isLoading || threadQuery.isFetchingNextPage,
             refetch: threadQuery.refetch,
+            transport: () => threadQuery.transport,
           },
           drafts: {
             deleteDraftForMessage,

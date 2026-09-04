@@ -2089,9 +2089,18 @@ impl<S: Storage> Engine<S> {
             let composed = effective_records(&bases, layers, &candidates);
             let mut effective = present_records(composed);
             merge_updates_into_effective(&mut effective, pending_updates);
+            // Inserted references validate against a loaded record, so a
+            // patch referencing a durable entity absent from the updates
+            // must pull that entity's base in too. A genuinely record-less
+            // key stays absent after loading and the filter below stops the
+            // loop from retrying it.
             let missing: BTreeSet<_> = patches
                 .iter()
                 .filter_map(|patch| missing_patch_record(&effective, patch))
+                .chain(patches.iter().filter_map(|patch| {
+                    let inserted = patch.operation.inserted_entity_key()?;
+                    (!effective.contains_key(inserted)).then(|| inserted.clone())
+                }))
                 .filter(|key| !candidates.contains(key))
                 .collect();
             if missing.is_empty() {

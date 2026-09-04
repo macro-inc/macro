@@ -61,15 +61,17 @@ export function ConfirmDrawer(props: ConfirmDialogProps) {
             >
               {props.confirmLabel ?? 'Confirm'}
             </Button>
-            <MobileDrawer.Close
-              as={Button}
-              type="button"
-              variant="ghost"
-              size="lg"
-              class="w-full rounded-lg"
-            >
-              {props.cancelLabel ?? 'Cancel'}
-            </MobileDrawer.Close>
+            <Show when={!props.hideCancel}>
+              <MobileDrawer.Close
+                as={Button}
+                type="button"
+                variant="ghost"
+                size="lg"
+                class="w-full rounded-lg"
+              >
+                {props.cancelLabel ?? 'Cancel'}
+              </MobileDrawer.Close>
+            </Show>
           </div>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>

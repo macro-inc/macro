@@ -135,6 +135,8 @@ where
             // apply the default signature policy.
             include_signature: self.include_signature,
             actor: Some(acting_user),
+            draft_client_binding: None,
+            thread_client_binding: None,
         };
 
         let sent = service_context

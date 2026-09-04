@@ -181,7 +181,14 @@ async fn test_delete_draft_message_keeps_nonempty_thread(
     let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
-    repo.delete_draft_message(draft_id, thread_id).await?;
+    let deletion = repo
+        .delete_draft_message(draft_id, thread_id, &[link_id])
+        .await?
+        .expect("the draft should be deleted");
+    assert!(
+        !deletion.thread_deleted,
+        "a thread that still has messages should not be reported deleted"
+    );
 
     assert!(
         repo.get_simple_message(draft_id, &[link_id])
@@ -208,8 +215,16 @@ async fn test_delete_draft_message_removes_empty_thread(
 
     let draft_id = Uuid::parse_str("ee000004-0000-0000-0000-000000000004")?;
     let thread_id = Uuid::parse_str("33333333-3333-3333-3333-333333333333")?;
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
-    repo.delete_draft_message(draft_id, thread_id).await?;
+    let deletion = repo
+        .delete_draft_message(draft_id, thread_id, &[link_id])
+        .await?
+        .expect("the draft should be deleted");
+    assert!(
+        deletion.thread_deleted,
+        "emptying the thread should be reported"
+    );
 
     assert!(
         repo.thread_by_id(thread_id).await?.is_none(),
@@ -231,14 +246,56 @@ async fn test_delete_draft_message_rejects_sent_message(
     // ee000003 is a sent message, not a draft; deleting it must not succeed.
     let sent_id = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
     let thread_id = Uuid::parse_str("22222222-2222-2222-2222-222222222222")?;
+    let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
 
     assert!(
-        repo.delete_draft_message(sent_id, thread_id).await.is_err(),
-        "deleting a non-draft should error and leave it intact"
+        repo.delete_draft_message(sent_id, thread_id, &[link_id])
+            .await?
+            .is_none(),
+        "deleting a non-draft should match nothing and leave it intact"
+    );
+    assert!(
+        repo.get_simple_message(sent_id, &[link_id])
+            .await?
+            .is_some(),
+        "the sent message must survive"
     );
     assert!(
         repo.thread_by_id(thread_id).await?.is_some(),
         "the thread of a non-draft must be untouched"
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_delete_draft_message_rejects_foreign_link_scope(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    // The draft exists, but the caller's link scope doesn't include its
+    // inbox: the WHERE-clause guard must match nothing and leave the row —
+    // this is the enforcement a raced validation read falls back on.
+    let draft_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let owner_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let foreign_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+
+    assert!(
+        repo.delete_draft_message(draft_id, thread_id, &[foreign_link])
+            .await?
+            .is_none(),
+        "a delete outside the caller's inboxes must match nothing"
+    );
+    assert!(
+        repo.get_simple_message(draft_id, &[owner_link])
+            .await?
+            .is_some(),
+        "the draft must survive a foreign-scoped delete"
     );
 
     Ok(())
@@ -504,6 +561,8 @@ async fn test_insert_draft_message_into_existing_thread(
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -589,6 +648,8 @@ async fn test_insert_draft_message_with_new_thread(pool: Pool<Postgres>) -> anyh
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -662,6 +723,8 @@ async fn test_insert_draft_message_with_scheduled_send(pool: Pool<Postgres>) -> 
         headers_json: None,
         send_time: Some(send_time),
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -720,6 +783,8 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -788,6 +853,8 @@ async fn test_insert_draft_message_updates_thread_metadata(
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -841,6 +908,8 @@ async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow
         headers_json: None,
         send_time: None,
         actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
     };
 
     let contacts = UpsertedContacts {
@@ -861,6 +930,451 @@ async fn test_insert_message_with_is_draft_false(pool: Pool<Postgres>) -> anyhow
         !row.get::<bool, _>("is_draft"),
         "Message should have is_draft = false"
     );
+
+    Ok(())
+}
+
+// ── client-handle mappings / owner-guarded upsert ───────────────────
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_client_handle_bindings_resolve_scoped_and_cascade(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let other_link = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    let draft_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    let thread_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let draft_handle = Uuid::parse_str("c11e0001-0000-0000-0000-000000000001")?;
+    let thread_handle = Uuid::parse_str("c11e0002-0000-0000-0000-000000000002")?;
+
+    // A save carrying unbound client handles binds them to the settled rows
+    // inside the insert transaction.
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+    let mut input = resolved_input(draft_id, thread_id);
+    input.subject = "Bound".to_string();
+    input.draft_client_id = Some(draft_handle);
+    input.thread_client_id = Some(thread_handle);
+    assert!(
+        repo.insert_message(&input, &contacts, link, None, true)
+            .await?
+            .is_some()
+    );
+
+    // Lookups are scoped to the caller's inboxes: the owner resolves, and an
+    // unrelated inbox sees nothing — identical handles never interact.
+    assert_eq!(
+        repo.message_id_for_client_draft_id(draft_handle, &[link])
+            .await?,
+        Some(draft_id)
+    );
+    assert_eq!(
+        repo.thread_id_for_client_thread_id(thread_handle, &[link])
+            .await?,
+        Some(thread_id)
+    );
+    assert_eq!(
+        repo.message_id_for_client_draft_id(draft_handle, &[other_link])
+            .await?,
+        None
+    );
+    assert_eq!(
+        repo.thread_id_for_client_thread_id(thread_handle, &[other_link])
+            .await?,
+        None
+    );
+
+    // Deleting the draft cascades its binding away.
+    repo.delete_draft_message(draft_id, thread_id, &[link])
+        .await?
+        .expect("the draft should be deleted");
+    assert_eq!(
+        repo.message_id_for_client_draft_id(draft_handle, &[link])
+            .await?,
+        None
+    );
+
+    Ok(())
+}
+
+/// Build the input + new thread a first save of `handle` hands the repo: its
+/// own freshly minted message and thread, because its resolution read saw no
+/// binding for the handle.
+fn first_save_of(
+    handle: Uuid,
+    link_id: Uuid,
+    subject: &str,
+) -> (ResolvedDraftInput, ThreadRow, Uuid) {
+    let message_db_id = macro_uuid::generate_uuid_v7();
+    let thread_db_id = macro_uuid::generate_uuid_v7();
+    let mut input = resolved_input(message_db_id, thread_db_id);
+    input.subject = subject.to_string();
+    input.draft_client_id = Some(handle);
+    let thread = ThreadRow {
+        db_id: thread_db_id,
+        provider_id: None,
+        link_id,
+        inbox_visible: true,
+        is_read: true,
+        latest_inbound_message_ts: None,
+        latest_outbound_message_ts: None,
+        latest_non_spam_message_ts: None,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        project_id: None,
+    };
+    (input, thread, message_db_id)
+}
+
+async fn message_exists(pool: &Pool<Postgres>, id: Uuid) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM email_messages WHERE id = $1) AS "exists!""#,
+        id
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+async fn thread_exists(pool: &Pool<Postgres>, id: Uuid) -> anyhow::Result<bool> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT EXISTS (SELECT 1 FROM email_threads WHERE id = $1) AS "exists!""#,
+        id
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_concurrent_first_saves_of_one_handle_settle_on_one_row(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let handle = Uuid::parse_str("c11e0003-0000-0000-0000-000000000003")?;
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+
+    // Two saves of one client handle in flight at once, each having missed the
+    // other's uncommitted binding and minted a full message + thread of its
+    // own. The handle lock decides one winner; the loser adopts its row.
+    let (input_a, thread_a, message_a) = first_save_of(handle, link, "save a");
+    let (input_b, thread_b, message_b) = first_save_of(handle, link, "save b");
+    let (a, b) = futures::future::join(
+        repo.insert_message(&input_a, &contacts, link, Some(thread_a.clone()), true),
+        repo.insert_message(&input_b, &contacts, link, Some(thread_b.clone()), true),
+    )
+    .await;
+
+    let a = a?.expect("the first save should apply");
+    let b = b?.expect("the second save should apply");
+    assert_eq!(
+        a, b,
+        "concurrent saves of one handle must settle on one message and thread"
+    );
+
+    // Only the settled row set exists: the loser never created a duplicate.
+    let (winner_message, loser_message) = if a.message_db_id == message_a {
+        (message_a, message_b)
+    } else {
+        (message_b, message_a)
+    };
+    let (winner_thread, loser_thread) = if a.thread_db_id == thread_a.db_id {
+        (thread_a.db_id, thread_b.db_id)
+    } else {
+        (thread_b.db_id, thread_a.db_id)
+    };
+    assert_eq!(a.message_db_id, winner_message);
+    assert_eq!(a.thread_db_id, winner_thread);
+    assert!(
+        !message_exists(&pool, loser_message).await?,
+        "the losing save must not leave an orphaned message"
+    );
+    assert!(
+        !thread_exists(&pool, loser_thread).await?,
+        "the losing save must not leave an orphaned thread"
+    );
+
+    // The handle names the settled row, so later saves keep converging on it.
+    assert_eq!(
+        repo.message_id_for_client_draft_id(handle, &[link]).await?,
+        Some(winner_message)
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_save_racing_a_committed_binding_adopts_it(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let handle = Uuid::parse_str("c11e0004-0000-0000-0000-000000000004")?;
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+
+    let (input_a, thread_a, message_a) = first_save_of(handle, link, "winner");
+    let a = repo
+        .insert_message(&input_a, &contacts, link, Some(thread_a.clone()), true)
+        .await?
+        .expect("the winning save should apply");
+
+    // A save whose resolution read predates that commit still carries its own
+    // minted ids. The in-transaction re-read redirects it onto the bound row.
+    let (input_b, thread_b, _) = first_save_of(handle, link, "adopter");
+    let b = repo
+        .insert_message(&input_b, &contacts, link, Some(thread_b.clone()), true)
+        .await?
+        .expect("the adopting save should apply");
+
+    assert_eq!(a, b, "the later save must adopt the bound row");
+    assert!(
+        !thread_exists(&pool, thread_b.db_id).await?,
+        "the adopted save's own thread must never be created"
+    );
+
+    // It updated the bound row rather than inserting alongside it.
+    let subject = sqlx::query_scalar!(
+        "SELECT subject FROM email_messages WHERE id = $1",
+        message_a
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(subject.as_deref(), Some("adopter"));
+
+    Ok(())
+}
+
+// A handle can name a binding under more than one accessible inbox when a
+// move's cascade did not land, and the lookup breaks that tie by recency. A
+// rebind has to count as the newest binding, or the handle keeps resolving to
+// the inbox the draft was moved away from.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_rebinding_a_handle_wins_the_cross_inbox_recency_tie(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    let link_a = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let link_b = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc")?;
+    let both = [link_a, link_b];
+    let draft_handle = Uuid::parse_str("c11e0005-0000-0000-0000-000000000005")?;
+    let thread_handle = Uuid::parse_str("c11e0006-0000-0000-0000-000000000006")?;
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+
+    let save = async |link_id: Uuid, subject: &str| {
+        let (mut input, thread, _) = first_save_of(draft_handle, link_id, subject);
+        input.thread_client_id = Some(thread_handle);
+        repo.insert_message(&input, &contacts, link_id, Some(thread), true)
+            .await
+    };
+
+    // Bound under B, then under A: A is the newer binding, so it wins.
+    let b = save(link_b, "in b")
+        .await?
+        .expect("the B save should apply");
+    let a = save(link_a, "in a")
+        .await?
+        .expect("the A save should apply");
+    assert_eq!(
+        repo.message_id_for_client_draft_id(draft_handle, &both)
+            .await?,
+        Some(a.message_db_id)
+    );
+
+    // Bound back under B. This re-points the existing B row rather than
+    // inserting one, so its recency has to be refreshed for B to win again.
+    let b_again = save(link_b, "back in b")
+        .await?
+        .expect("the rebind applies");
+    assert_eq!(
+        b_again, b,
+        "the rebind should settle on B's existing row, not a third one"
+    );
+    assert_eq!(
+        repo.message_id_for_client_draft_id(draft_handle, &both)
+            .await?,
+        Some(b.message_db_id),
+        "the rebind must outrank the older binding under A"
+    );
+    assert_eq!(
+        repo.thread_id_for_client_thread_id(thread_handle, &both)
+            .await?,
+        Some(b.thread_db_id),
+        "the thread mapping breaks the tie the same way"
+    );
+
+    Ok(())
+}
+
+fn resolved_input(db_id: Uuid, thread_db_id: Uuid) -> ResolvedDraftInput {
+    ResolvedDraftInput {
+        db_id,
+        provider_id: None,
+        replying_to_id: None,
+        provider_thread_id: None,
+        thread_db_id,
+        subject: "Overwritten".to_string(),
+        to: vec![],
+        cc: vec![],
+        bcc: vec![],
+        body_text: Some("attacker content".to_string()),
+        body_html: Some("<p>attacker content</p>".to_string()),
+        body_macro: None,
+        headers_json: None,
+        send_time: None,
+        actor_id: None,
+        draft_client_id: None,
+        thread_client_id: None,
+    }
+}
+
+async fn message_snapshot(
+    pool: &Pool<Postgres>,
+    id: Uuid,
+) -> anyhow::Result<(Uuid, Option<String>, Option<String>, bool, bool)> {
+    let row = sqlx::query(
+        "SELECT link_id, subject, body_text, is_sent, is_draft FROM email_messages WHERE id = $1",
+    )
+    .bind(id)
+    .fetch_one(pool)
+    .await?;
+    Ok((
+        row.get::<Uuid, _>("link_id"),
+        row.get::<Option<String>, _>("subject"),
+        row.get::<Option<String>, _>("body_text"),
+        row.get::<bool, _>("is_sent"),
+        row.get::<bool, _>("is_draft"),
+    ))
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_upsert_guard_rejects_cross_inbox_overwrite(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    // A draft owned by the cccc inbox; the write is issued from aaaa. The
+    // IDs reaching the upsert come from validated reads, but reads race —
+    // the conflict clause, not the read, is what must hold the line.
+    let victim = Uuid::parse_str("ee000005-0000-0000-0000-000000000005")?;
+    let attacker_link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let attacker_thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+
+    let before = message_snapshot(&pool, victim).await?;
+
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+    let applied = repo
+        .insert_message(
+            &resolved_input(victim, attacker_thread),
+            &contacts,
+            attacker_link,
+            None,
+            true,
+        )
+        .await?;
+
+    assert!(
+        applied.is_none(),
+        "owner guard must reject a cross-inbox overwrite"
+    );
+    let after = message_snapshot(&pool, victim).await?;
+    assert_eq!(before, after, "victim row must be untouched");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_upsert_guard_rejects_sent_message_overwrite(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+
+    // Same inbox, but the row is a sent message — no draft save may rewrite it.
+    let victim = Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?;
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+
+    let before = message_snapshot(&pool, victim).await?;
+
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+    let applied = repo
+        .insert_message(&resolved_input(victim, thread), &contacts, link, None, true)
+        .await?;
+
+    assert!(
+        applied.is_none(),
+        "owner guard must reject rewriting a sent message"
+    );
+    let after = message_snapshot(&pool, victim).await?;
+    assert_eq!(before, after, "sent message must be untouched");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn test_insert_message_reports_applied_on_create(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let thread = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
+    let fresh_id = Uuid::parse_str("dd000002-0000-0000-0000-000000000002")?;
+
+    let contacts = UpsertedContacts {
+        from_contact_id: None,
+        recipients: vec![],
+    };
+    let applied = repo
+        .insert_message(
+            &resolved_input(fresh_id, thread),
+            &contacts,
+            link,
+            None,
+            true,
+        )
+        .await?;
+
+    assert!(applied.is_some(), "a fresh unclaimed id inserts normally");
 
     Ok(())
 }

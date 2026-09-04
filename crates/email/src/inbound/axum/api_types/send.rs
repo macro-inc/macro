@@ -60,6 +60,8 @@ impl SendMessageRequest {
             // The actor comes from the transport's auth context, never the
             // request body; the handler fills it in.
             actor: None,
+            draft_client_binding: None,
+            thread_client_binding: None,
         }
     }
 }

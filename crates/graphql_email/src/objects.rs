@@ -31,6 +31,12 @@ pub fn email_message_selection_requires_full_payload(ctx: &Context<'_>) -> bool 
 pub struct GraphqlSoupEmailMessage(EmailContentMessage);
 
 impl GraphqlSoupEmailMessage {
+    /// Wraps a message produced outside the DataLoader path (e.g. a
+    /// mutation payload's draft record).
+    pub(crate) fn from_content(message: EmailContentMessage) -> Self {
+        Self(message)
+    }
+
     fn parsed(&self) -> &ParsedMessage {
         self.0.parsed()
     }

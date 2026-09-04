@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT m.id AS \"message_db_id!\", m.thread_id AS \"thread_db_id!\"\n        FROM email_draft_client_ids c\n        JOIN email_messages m ON m.id = c.message_id\n        WHERE c.link_id = $1 AND c.client_id = $2 AND m.link_id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_db_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "thread_db_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "a5f8e2098c604eaf4122df1d69d404566d43655087ad3c9e8dc2e55b95976f9d"
+}

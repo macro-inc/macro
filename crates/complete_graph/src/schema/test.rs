@@ -416,6 +416,23 @@ impl EmailService for CountingEmailService {
         Err(test_email_err())
     }
 
+    async fn save_draft_for_user(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _link_id: Option<Uuid>,
+        _input: CreateDraftInput,
+    ) -> Result<email::domain::models::SavedUserDraft, EmailErr> {
+        Err(test_email_err())
+    }
+
+    async fn delete_draft_for_user(
+        &self,
+        _macro_id: MacroUserIdStr<'_>,
+        _draft_id: Uuid,
+    ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
+        Err(test_email_err())
+    }
+
     async fn send_message(
         &self,
         _link: &Link,

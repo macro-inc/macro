@@ -1,6 +1,6 @@
 import { ConfirmDrawer } from '@components/app/mobile/ConfirmDrawer';
 import { isMobile } from '@core/mobile/isMobile';
-import type { JSX } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
 import { Dialog, type DialogProps } from './Dialog';
@@ -22,6 +22,11 @@ export type ConfirmDialogDisplayProps = {
   confirmLabel?: JSX.Element;
   cancelLabel?: JSX.Element;
   tone?: 'default' | 'danger' | 'success';
+  /**
+   * Notice style: render only the confirm button. Dismissing without
+   * pressing it still resolves `false`.
+   */
+  hideCancel?: boolean;
   /** Dialog presentation only; the mobile drawer ignores it. */
   position?: DialogProps['position'];
   /** Dialog presentation only; the mobile drawer ignores it. */
@@ -59,15 +64,17 @@ export function ConfirmDialog(props: ConfirmDialogProps) {
           </Dialog.Description>
         </div>
         <div class="flex items-center justify-end gap-2 px-5 py-3">
-          <Button
-            type="button"
-            variant="ghost"
-            depth={2}
-            class="rounded-lg"
-            onClick={() => props.onOpenChange(false)}
-          >
-            {props.cancelLabel ?? 'Cancel'}
-          </Button>
+          <Show when={!props.hideCancel}>
+            <Button
+              type="button"
+              variant="ghost"
+              depth={2}
+              class="rounded-lg"
+              onClick={() => props.onOpenChange(false)}
+            >
+              {props.cancelLabel ?? 'Cancel'}
+            </Button>
+          </Show>
           <Button
             type="button"
             variant={TONE_VARIANT[props.tone ?? 'default']}
