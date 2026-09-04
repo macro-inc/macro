@@ -3,7 +3,7 @@ use super::*;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ChannelSession, SessionStatus};
 use agent_session::domain::ports::MockAgentSessionRepo;
-use bots::domain::models::{Agent, AgentChannelScope, Bot, BotKind, BotOwner};
+use bots::domain::models::{Agent, AgentChannelScope, AgentMcpServers, Bot, BotKind, BotOwner};
 use channel_sender::ChannelSender;
 use channels::domain::models::{ChannelType, SimpleMention};
 use chrono::Utc;
@@ -65,6 +65,7 @@ fn agent_with(bot_id: BotId, owner: BotOwner, channel_scope: AgentChannelScope) 
         default_model: "model".to_owned(),
         channel_scope,
         channel_ids: vec![],
+        mcp: AgentMcpServers::OwnerConnections,
     }
 }
 
@@ -115,6 +116,7 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
         workspace: "/workspace".to_owned(),
         sandbox_size: agent_session::domain::model::SandboxSize::Default,
         instructions: None,
+        mcp_servers: Default::default(),
         acp_session_id: None,
         external: None,
         status: SessionStatus::NoMessages,

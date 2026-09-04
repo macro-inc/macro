@@ -206,6 +206,65 @@ impl AgentChannelScope {
     }
 }
 
+/// Which Pipedream MCP servers an agent's sessions are handed.
+///
+/// One value for the whole choice, so a selection can never travel without
+/// its scope or a scope without its selection. Serialized with a `scope` tag,
+/// which the generated TypeScript sees as a discriminated union.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+#[serde(tag = "scope", rename_all = "snake_case")]
+pub enum AgentMcpServers {
+    /// Whatever apps the person running the session has connected.
+    #[default]
+    OwnerConnections,
+    /// Exactly these apps, connected or not.
+    Selected {
+        /// The apps, in the order the agent's author picked them.
+        servers: Vec<AgentMcpServer>,
+    },
+}
+
+impl AgentMcpServers {
+    /// Storage representation of the scope.
+    pub fn scope_str(&self) -> &'static str {
+        match self {
+            Self::OwnerConnections => "owner_connections",
+            Self::Selected { .. } => "selected",
+        }
+    }
+
+    /// The selected servers, empty under [`Self::OwnerConnections`].
+    pub fn servers(&self) -> &[AgentMcpServer] {
+        match self {
+            Self::OwnerConnections => &[],
+            Self::Selected { servers } => servers,
+        }
+    }
+
+    /// Rebuilds the value from its two stored columns.
+    pub fn from_columns(scope: &str, servers: Vec<AgentMcpServer>) -> anyhow::Result<Self> {
+        match scope {
+            "owner_connections" => Ok(Self::OwnerConnections),
+            "selected" => Ok(Self::Selected { servers }),
+            other => anyhow::bail!("unknown mcp scope {other:?}"),
+        }
+    }
+}
+
+/// One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+///
+/// Only the catalog identity is stored. Whether a given person has connected
+/// the app is theirs, resolved at call time by the egress proxy, never here.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
+pub struct AgentMcpServer {
+    /// Pipedream app slug, e.g. `linear`.
+    pub app_slug: String,
+    /// Display name, e.g. `Linear`.
+    pub server_name: String,
+}
+
 /// A persisted user- or team-owned AI agent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
@@ -224,6 +283,8 @@ pub struct Agent {
     pub channel_scope: AgentChannelScope,
     /// Selected channel ids. Empty for a global agent.
     pub channel_ids: Vec<Uuid>,
+    /// Which MCP servers sessions of this agent are handed.
+    pub mcp: AgentMcpServers,
 }
 
 /// Request to create a persisted AI agent.
@@ -255,6 +316,9 @@ pub struct CreateAgentRequest {
     /// Selected channels. Must be non-empty only for `selected` scope.
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
+    /// Which MCP servers sessions of this agent are handed.
+    #[serde(default)]
+    pub mcp: AgentMcpServers,
 }
 
 /// Request to replace the editable configuration of a persisted AI agent.
@@ -286,6 +350,9 @@ pub struct UpdateAgentRequest {
     /// Selected channels. Must be non-empty only for `selected` scope.
     #[serde(default)]
     pub channel_ids: Vec<Uuid>,
+    /// Which MCP servers sessions of this agent are handed.
+    #[serde(default)]
+    pub mcp: AgentMcpServers,
 }
 
 /// Channel containing a bot.

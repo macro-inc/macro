@@ -1,9 +1,9 @@
 use super::*;
 use crate::domain::{
     models::{
-        AgentChannelScope, BotChannelListCaller, BotChannelType, CreateAgentRequest,
-        CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest, PatchBotRequest,
-        UpdateAgentRequest,
+        AgentChannelScope, AgentMcpServer, AgentMcpServers, BotChannelListCaller, BotChannelType,
+        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+        PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotService},
     service::BotServiceImpl,
@@ -82,6 +82,7 @@ fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAge
         default_model: "cursor-small".to_string(),
         channel_scope,
         channel_ids: Vec::new(),
+        mcp: AgentMcpServers::OwnerConnections,
     }
 }
 
@@ -98,6 +99,7 @@ fn update_agent_req(handle: &str, channel_scope: AgentChannelScope) -> UpdateAge
         default_model: "claude-sonnet-4-5".to_string(),
         channel_scope,
         channel_ids: Vec::new(),
+        mcp: AgentMcpServers::OwnerConnections,
     }
 }
 
@@ -512,6 +514,157 @@ async fn updated_agent_replaces_every_field_and_selected_channel(
     assert_eq!(listed[0].bot.handle, "updated-fixer");
     assert_eq!(listed[0].channel_ids, vec![second]);
     Ok(())
+}
+
+fn mcp_server(app_slug: &str, server_name: &str) -> AgentMcpServer {
+    AgentMcpServer {
+        app_slug: app_slug.to_string(),
+        server_name: server_name.to_string(),
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn selected_mcp_servers_round_trip_and_are_replaced_wholesale(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let selected = |servers: Vec<AgentMcpServer>| AgentMcpServers::Selected { servers };
+    let mut create = create_agent_req("mcp-fixer", AgentChannelScope::All);
+    // Nothing here is connected for anyone: the persona picks from the whole
+    // catalog and the grant is the session owner's business.
+    create.mcp = selected(vec![
+        mcp_server("notion", "Notion"),
+        mcp_server("linear", "Linear"),
+    ]);
+    let created = service.create_agent(user_id(USER_OWNER), create).await?;
+    assert_eq!(
+        created.mcp,
+        selected(vec![
+            mcp_server("notion", "Notion"),
+            mcp_server("linear", "Linear"),
+        ])
+    );
+
+    let fetched = PgBotsRepo::new(pool.clone())
+        .get_agent(created.bot.id)
+        .await?
+        .expect("created agent should be addressable by bot id");
+    // Read back ordered by slug, whatever order they were written in.
+    assert_eq!(
+        fetched.mcp,
+        selected(vec![
+            mcp_server("linear", "Linear"),
+            mcp_server("notion", "Notion"),
+        ])
+    );
+    let listed = service.list_agents(user_id(USER_OWNER)).await?;
+    assert_eq!(listed[0].mcp, fetched.mcp);
+
+    let mut update = update_agent_req("mcp-fixer", AgentChannelScope::All);
+    update.mcp = selected(vec![mcp_server("hubspot", "HubSpot")]);
+    let updated = service
+        .update_agent(user_id(USER_OWNER), created.bot.id, update)
+        .await?;
+    assert_eq!(updated.mcp.servers(), [mcp_server("hubspot", "HubSpot")]);
+    let fetched = PgBotsRepo::new(pool.clone())
+        .get_agent(created.bot.id)
+        .await?
+        .expect("updated agent should still be addressable");
+    assert_eq!(fetched.mcp.servers(), [mcp_server("hubspot", "HubSpot")]);
+
+    let back_to_owner = update_agent_req("mcp-fixer", AgentChannelScope::All);
+    let reverted = service
+        .update_agent(user_id(USER_OWNER), created.bot.id, back_to_owner)
+        .await?;
+    assert_eq!(reverted.mcp, AgentMcpServers::OwnerConnections);
+    let rows = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM agent_mcp_servers WHERE bot_id = $1"#,
+        created.bot.id.as_uuid(),
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(rows, 0);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mcp_server_selection_is_validated(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let selected = |servers: Vec<AgentMcpServer>| AgentMcpServers::Selected { servers };
+
+    let mut bad_slug = create_agent_req("bad-mcp", AgentChannelScope::All);
+    bad_slug.mcp = selected(vec![mcp_server("Linear App", "Linear")]);
+    let error = service
+        .create_agent(user_id(USER_OWNER), bad_slug)
+        .await
+        .expect_err("a slug the proxy could never dial is refused");
+    assert!(matches!(error, BotError::BadRequest(_)));
+
+    let mut duplicate = create_agent_req("bad-mcp", AgentChannelScope::All);
+    duplicate.mcp = selected(vec![
+        mcp_server("linear", "Linear"),
+        mcp_server("linear", "Also"),
+    ]);
+    let error = service
+        .create_agent(user_id(USER_OWNER), duplicate)
+        .await
+        .expect_err("duplicate slugs are refused");
+    assert!(matches!(error, BotError::BadRequest(_)));
+
+    let mut unnamed = create_agent_req("bad-mcp", AgentChannelScope::All);
+    unnamed.mcp = selected(vec![mcp_server("linear", " ")]);
+    let error = service
+        .create_agent(user_id(USER_OWNER), unnamed)
+        .await
+        .expect_err("an unnamed server is refused");
+    assert!(matches!(error, BotError::BadRequest(_)));
+
+    // An explicit empty selection is a valid choice: this persona gets no
+    // connectors at all, not even the owner's.
+    let mut empty = create_agent_req("empty-mcp", AgentChannelScope::All);
+    empty.mcp = selected(Vec::new());
+    let created = service.create_agent(user_id(USER_OWNER), empty).await?;
+    assert_eq!(created.mcp, selected(Vec::new()));
+    Ok(())
+}
+
+#[test]
+fn agent_requests_without_mcp_fields_default_to_owner_connections() {
+    let legacy = json!({
+        "team_id": null,
+        "name": "Legacy",
+        "handle": "legacy",
+        "description": null,
+        "avatar_url": null,
+        "instructions": "",
+        "harness": "cursor",
+        "default_model": "cursor-small",
+        "channel_scope": "all",
+    });
+    let create: CreateAgentRequest = serde_json::from_value(legacy.clone()).unwrap();
+    assert_eq!(create.mcp, AgentMcpServers::OwnerConnections);
+    let update: UpdateAgentRequest = serde_json::from_value(legacy).unwrap();
+    assert_eq!(update.mcp, AgentMcpServers::OwnerConnections);
+}
+
+/// The wire shape is a tagged union, which is what the generated TypeScript
+/// consumes: the scope is the discriminator and the servers ride with it.
+#[test]
+fn agent_mcp_servers_serialize_as_a_tagged_union() {
+    let selected = AgentMcpServers::Selected {
+        servers: vec![mcp_server("linear", "Linear")],
+    };
+    assert_eq!(
+        serde_json::to_value(&selected).unwrap(),
+        json!({"scope": "selected", "servers": [{"app_slug": "linear", "server_name": "Linear"}]})
+    );
+    assert_eq!(
+        serde_json::to_value(AgentMcpServers::OwnerConnections).unwrap(),
+        json!({"scope": "owner_connections"})
+    );
+    let parsed: AgentMcpServers =
+        serde_json::from_value(json!({"scope": "selected", "servers": []})).unwrap();
+    assert_eq!(parsed, AgentMcpServers::Selected { servers: vec![] });
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

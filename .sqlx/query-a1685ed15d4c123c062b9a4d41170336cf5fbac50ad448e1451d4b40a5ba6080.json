@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                b.has_agent,\n                a.instructions,\n                a.harness,\n                a.harness_id,\n                a.default_model,\n                a.channel_scope,\n                ARRAY(\n                    SELECT p.channel_id\n                    FROM comms_channel_participants p\n                    WHERE p.user_id = 'bot|' || b.id::text\n                      AND p.left_at IS NULL\n                    ORDER BY p.channel_id\n                ) AS \"channel_ids!\"\n            FROM bots b\n            INNER JOIN agent_configs a ON a.bot_id = b.id\n            WHERE b.kind = 'owned'\n              AND b.deleted_at IS NULL\n              AND (\n                b.owner_user_id = $1\n                OR b.team_id IN (\n                    SELECT team_id FROM team_user WHERE user_id = $1\n                )\n              )\n            ORDER BY b.created_at ASC, b.id ASC\n            ",
+  "query": "\n            SELECT\n                b.id,\n                b.kind,\n                b.owner_user_id,\n                b.team_id,\n                b.name,\n                b.handle,\n                b.description,\n                b.avatar_url,\n                b.created_by,\n                b.created_at,\n                b.updated_at,\n                b.deleted_at,\n                b.has_agent,\n                a.instructions,\n                a.harness,\n                a.harness_id,\n                a.default_model,\n                a.channel_scope,\n                ARRAY(\n                    SELECT p.channel_id\n                    FROM comms_channel_participants p\n                    WHERE p.user_id = 'bot|' || b.id::text\n                      AND p.left_at IS NULL\n                    ORDER BY p.channel_id\n                ) AS \"channel_ids!\",\n                a.mcp_scope,\n                ARRAY(\n                    SELECT m.app_slug\n                    FROM agent_mcp_servers m\n                    WHERE m.bot_id = b.id\n                    ORDER BY m.app_slug\n                ) AS \"mcp_app_slugs!\",\n                ARRAY(\n                    SELECT m.server_name\n                    FROM agent_mcp_servers m\n                    WHERE m.bot_id = b.id\n                    ORDER BY m.app_slug\n                ) AS \"mcp_server_names!\"\n            FROM bots b\n            INNER JOIN agent_configs a ON a.bot_id = b.id\n            WHERE b.id = $1\n              AND b.kind = 'owned'\n              AND b.deleted_at IS NULL\n            ",
   "describe": {
     "columns": [
       {
@@ -97,11 +97,26 @@
         "ordinal": 18,
         "name": "channel_ids!",
         "type_info": "UuidArray"
+      },
+      {
+        "ordinal": 19,
+        "name": "mcp_scope",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "mcp_app_slugs!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 21,
+        "name": "mcp_server_names!",
+        "type_info": "TextArray"
       }
     ],
     "parameters": {
       "Left": [
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -123,8 +138,11 @@
       true,
       false,
       false,
+      null,
+      false,
+      null,
       null
     ]
   },
-  "hash": "0057301723d11cedc003eab4fb1355b7352cd9a137f0e8807c802e88f538c7ee"
+  "hash": "a1685ed15d4c123c062b9a4d41170336cf5fbac50ad448e1451d4b40a5ba6080"
 }

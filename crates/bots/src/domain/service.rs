@@ -3,10 +3,11 @@
 use super::{
     events::{BotCreatedMetadata, BotDeletedMetadata, BotMacroEvent, BotUpdatedMetadata},
     models::{
-        Agent, AgentChannelScope, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId,
-        BotKind, BotOwner, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
-        CreateBotTokenRequest, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
-        HarnessId, HarnessOwner, PatchBotRequest, UpdateAgentRequest,
+        Agent, AgentChannelScope, AgentMcpServers, AuthenticatedBot, Bot, BotChannel,
+        BotChannelListCaller, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
+        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+        CreateChannelScopedBotResponse, HarnessId, HarnessOwner, PatchBotRequest,
+        UpdateAgentRequest,
     },
     ports::{BotError, BotRepo, BotService},
     tokens,
@@ -30,6 +31,42 @@ impl<R, B> BotServiceImpl<R, B> {
     pub fn new(repo: R, event_broker: B) -> Self {
         Self { repo, event_broker }
     }
+}
+
+/// The charset a Pipedream app slug may use. Mirrors the egress proxy's
+/// `McpServerSlug::parse` (restated here because bots must not depend on
+/// agent_egress): a slug that fails this could never be dialed, so it is
+/// refused where it is written rather than dropped where it is advertised.
+fn is_app_slug(slug: &str) -> bool {
+    !slug.is_empty()
+        && slug
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-' || ch == '_')
+}
+
+fn validate_mcp_servers(mcp: &AgentMcpServers) -> Result<(), BotError> {
+    let mut seen = std::collections::HashSet::new();
+    for server in mcp.servers() {
+        if !is_app_slug(&server.app_slug) {
+            return Err(BotError::BadRequest(format!(
+                "MCP server slug {:?} must be lowercase ascii, digits, '-' or '_'",
+                server.app_slug
+            )));
+        }
+        if server.server_name.trim().is_empty() {
+            return Err(BotError::BadRequest(format!(
+                "MCP server {} must have a name",
+                server.app_slug
+            )));
+        }
+        if !seen.insert(server.app_slug.as_str()) {
+            return Err(BotError::BadRequest(format!(
+                "MCP server {} is listed more than once",
+                server.app_slug
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn validate_handle(handle: &str) -> Result<(), BotError> {
@@ -56,6 +93,7 @@ struct AgentFields<'a> {
     default_model: &'a str,
     channel_scope: AgentChannelScope,
     channel_ids: &'a [Uuid],
+    mcp: &'a AgentMcpServers,
 }
 
 impl<'a> From<&'a CreateAgentRequest> for AgentFields<'a> {
@@ -68,6 +106,7 @@ impl<'a> From<&'a CreateAgentRequest> for AgentFields<'a> {
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
+            mcp: &req.mcp,
         }
     }
 }
@@ -82,6 +121,7 @@ impl<'a> From<&'a UpdateAgentRequest> for AgentFields<'a> {
             default_model: &req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: &req.channel_ids,
+            mcp: &req.mcp,
         }
     }
 }
@@ -95,8 +135,10 @@ fn validate_agent_fields(
         default_model,
         channel_scope,
         channel_ids,
+        mcp,
     }: AgentFields<'_>,
 ) -> Result<(), BotError> {
+    validate_mcp_servers(mcp)?;
     validate_handle(handle)?;
     if name.trim().is_empty() {
         return Err(BotError::BadRequest(

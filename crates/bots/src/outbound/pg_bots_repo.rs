@@ -5,10 +5,10 @@ mod tests;
 
 use crate::domain::{
     models::{
-        Agent, AgentChannelScope, AuthenticatedBot, Bot, BotChannel, BotChannelType, BotId,
-        BotKind, BotOwner, BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest,
-        CreateBotTokenRequest, CreateChannelScopedBotRequest, HarnessId, HarnessOwner,
-        PatchBotRequest, UpdateAgentRequest,
+        Agent, AgentChannelScope, AgentMcpServer, AgentMcpServers, AuthenticatedBot, Bot,
+        BotChannel, BotChannelType, BotId, BotKind, BotOwner, BotToken, BotTokenCandidate,
+        CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest, CreateChannelScopedBotRequest,
+        HarnessId, HarnessOwner, PatchBotRequest, UpdateAgentRequest,
     },
     ports::BotRepo,
 };
@@ -112,6 +112,9 @@ struct AgentRow {
     default_model: String,
     channel_scope: String,
     channel_ids: Vec<Uuid>,
+    mcp_scope: String,
+    mcp_app_slugs: Vec<String>,
+    mcp_server_names: Vec<String>,
 }
 
 impl TryFrom<AgentRow> for Agent {
@@ -122,6 +125,19 @@ impl TryFrom<AgentRow> for Agent {
             .channel_scope
             .parse::<AgentChannelScope>()
             .map_err(anyhow::Error::msg)?;
+        if row.mcp_app_slugs.len() != row.mcp_server_names.len() {
+            anyhow::bail!("agent {} mcp server columns disagree in length", row.id);
+        }
+        let mcp_servers = row
+            .mcp_app_slugs
+            .into_iter()
+            .zip(row.mcp_server_names)
+            .map(|(app_slug, server_name)| AgentMcpServer {
+                app_slug,
+                server_name,
+            })
+            .collect();
+        let mcp = AgentMcpServers::from_columns(&row.mcp_scope, mcp_servers)?;
         let bot = BotRow {
             id: row.id,
             kind: row.kind,
@@ -147,6 +163,7 @@ impl TryFrom<AgentRow> for Agent {
             default_model: row.default_model,
             channel_scope,
             channel_ids: row.channel_ids,
+            mcp,
         })
     }
 }
@@ -254,6 +271,33 @@ fn map_token_row(row: BotTokenRow) -> BotToken {
     row.into()
 }
 
+/// Writes an agent's selected MCP servers inside the caller's transaction.
+async fn insert_mcp_servers(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    bot_id: BotId,
+    servers: &[AgentMcpServer],
+) -> Result<(), anyhow::Error> {
+    if servers.is_empty() {
+        return Ok(());
+    }
+    let slugs: Vec<&str> = servers.iter().map(|s| s.app_slug.as_str()).collect();
+    let names: Vec<&str> = servers.iter().map(|s| s.server_name.as_str()).collect();
+    sqlx::query!(
+        r#"
+        INSERT INTO agent_mcp_servers (bot_id, app_slug, server_name)
+        SELECT $1, slug, name
+        FROM UNNEST($2::text[], $3::text[]) AS t(slug, name)
+        "#,
+        bot_id.as_uuid(),
+        &slugs as &[&str],
+        &names as &[&str],
+    )
+    .execute(&mut **tx)
+    .await
+    .context("failed to write the agent's MCP servers")?;
+    Ok(())
+}
+
 impl BotRepo for PgBotsRepo {
     type Err = anyhow::Error;
 
@@ -310,9 +354,9 @@ impl BotRepo for PgBotsRepo {
         sqlx::query!(
             r#"
             INSERT INTO agent_configs (
-                bot_id, instructions, harness, harness_id, default_model, channel_scope
+                bot_id, instructions, harness, harness_id, default_model, channel_scope, mcp_scope
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
             bot_id.as_uuid(),
             &req.instructions,
@@ -320,10 +364,13 @@ impl BotRepo for PgBotsRepo {
             req.harness_id.map(HarnessId::as_uuid),
             &req.default_model,
             req.channel_scope.as_str(),
+            req.mcp.scope_str(),
         )
         .execute(&mut *tx)
         .await
         .context("failed to create agent config")?;
+
+        insert_mcp_servers(&mut tx, bot_id, req.mcp.servers()).await?;
 
         if !req.channel_ids.is_empty() {
             let bot_principal = principal_id(bot_id);
@@ -353,6 +400,7 @@ impl BotRepo for PgBotsRepo {
             default_model: req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: req.channel_ids,
+            mcp: req.mcp,
         })
     }
 
@@ -422,6 +470,7 @@ impl BotRepo for PgBotsRepo {
                 harness_id = $4,
                 default_model = $5,
                 channel_scope = $6,
+                mcp_scope = $7,
                 updated_at = now()
             WHERE bot_id = $1
             "#,
@@ -431,10 +480,22 @@ impl BotRepo for PgBotsRepo {
             req.harness_id.map(HarnessId::as_uuid),
             &req.default_model,
             req.channel_scope.as_str(),
+            req.mcp.scope_str(),
         )
         .execute(&mut *tx)
         .await
         .context("failed to update agent config")?;
+
+        // Replaced wholesale in the same transaction as the channels, so a
+        // reader never sees half of the old set and half of the new.
+        sqlx::query!(
+            "DELETE FROM agent_mcp_servers WHERE bot_id = $1",
+            bot_id.as_uuid(),
+        )
+        .execute(&mut *tx)
+        .await
+        .context("failed to clear the agent's previous MCP servers")?;
+        insert_mcp_servers(&mut tx, bot_id, req.mcp.servers()).await?;
 
         let bot_principal = principal_id(bot_id);
         sqlx::query!(
@@ -481,6 +542,7 @@ impl BotRepo for PgBotsRepo {
             default_model: req.default_model,
             channel_scope: req.channel_scope,
             channel_ids: req.channel_ids,
+            mcp: req.mcp,
         }))
     }
 
@@ -516,7 +578,20 @@ impl BotRepo for PgBotsRepo {
                     WHERE p.user_id = 'bot|' || b.id::text
                       AND p.left_at IS NULL
                     ORDER BY p.channel_id
-                ) AS "channel_ids!"
+                ) AS "channel_ids!",
+                a.mcp_scope,
+                ARRAY(
+                    SELECT m.app_slug
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.app_slug
+                ) AS "mcp_app_slugs!",
+                ARRAY(
+                    SELECT m.server_name
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.app_slug
+                ) AS "mcp_server_names!"
             FROM bots b
             INNER JOIN agent_configs a ON a.bot_id = b.id
             WHERE b.kind = 'owned'
@@ -806,7 +881,20 @@ impl BotRepo for PgBotsRepo {
                     WHERE p.user_id = 'bot|' || b.id::text
                       AND p.left_at IS NULL
                     ORDER BY p.channel_id
-                ) AS "channel_ids!"
+                ) AS "channel_ids!",
+                a.mcp_scope,
+                ARRAY(
+                    SELECT m.app_slug
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.app_slug
+                ) AS "mcp_app_slugs!",
+                ARRAY(
+                    SELECT m.server_name
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.app_slug
+                ) AS "mcp_server_names!"
             FROM bots b
             INNER JOIN agent_configs a ON a.bot_id = b.id
             WHERE b.id = $1
