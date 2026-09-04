@@ -56,7 +56,7 @@ type IdFieldName = {
 /**
  * Map a schema `EntityRef.type` onto the soup `FieldFilters` id field.
  *
- * Both `email` and `email_thread` are mapped here: `EntityData`/`ListEntities`
+ * Both `email` and `email_thread` are mapped here: `EntityData`/`QuerySoup`
  * tag emails as `'email'` everywhere else in the app (see
  * `@entity/types/entity`'s `EmailEntity`), so that's what the AI actually
  * echoes back from prior tool results into a `list` widget's refs, but

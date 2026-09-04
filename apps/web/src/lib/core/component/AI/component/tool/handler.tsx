@@ -42,7 +42,6 @@ import {
   importNotionPageHandler,
   listImportEntitiesHandler,
 } from './ImportTools';
-import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
 import { listTagsHandler } from './ListTags';
@@ -59,6 +58,7 @@ import {
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
 } from './Properties';
+import { querySoupHandler } from './QuerySoup';
 import { readActivityHandler } from './ReadActivity';
 import { readCallRecordHandler } from './ReadCallRecord';
 import {
@@ -119,7 +119,6 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,
   ListImportEntities: listImportEntitiesHandler,
-  ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
   ListSkills: listSkillsHandler,
@@ -145,6 +144,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   EditTag: editTagHandler,
   GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,
+  QuerySoup: querySoupHandler,
   ReadActivity: readActivityHandler,
   ReadCallRecord: readCallRecordHandler,
   ReadChannelMessageContext: readChannelMessageContextHandler,

@@ -5,7 +5,7 @@
  * The fold has already named the tool and removed any MCP envelope, so
  * `detail.input` / `detail.output` are the tool's own JSON. When the chat
  * block has a component for that tool, it renders here with that JSON — the
- * same chip a chat shows for `ReadContent`, `ListEntities`, `CreateDocument`
+ * same chip a chat shows for `ReadContent`, `QuerySoup`, `CreateDocument`
  * and the rest. The chat renderer validates the JSON against the tool's
  * schema and shows nothing for a shape it does not know; then, or when a
  * chat component assumes chat context it does not have here, the card falls

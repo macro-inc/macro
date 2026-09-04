@@ -101,10 +101,6 @@ type ToolParserMap = {
     call: types.ListCompanies;
     response: types.ListCompaniesResponse;
   };
-  ListEntities: {
-    call: types.ListEntities;
-    response: types.ListEntitiesResponse;
-  };
   ListImportEntities: {
     call: types.ListImportEntities;
     response: types.ListImportEntitiesResponse;
@@ -147,6 +143,7 @@ type ToolParserMap = {
     response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  QuerySoup: { call: types.QuerySoup; response: types.QuerySoupData };
   ReadActivity: {
     call: types.ReadActivity;
     response: types.ReadActivityResponse;
@@ -326,10 +323,6 @@ const toolParserMap = {
     call: schemas.ListCompanies,
     response: schemas.ListCompaniesResponse,
   },
-  ListEntities: {
-    call: schemas.ListEntities,
-    response: schemas.ListEntitiesResponse,
-  },
   ListImportEntities: {
     call: schemas.ListImportEntities,
     response: schemas.ListImportEntitiesResponse,
@@ -384,6 +377,7 @@ const toolParserMap = {
     call: schemas.NameSearch,
     response: schemas.SearchToolResponse,
   },
+  QuerySoup: { call: schemas.QuerySoup, response: schemas.QuerySoupData },
   ReadActivity: {
     call: schemas.ReadActivity,
     response: schemas.ReadActivityResponse,
@@ -577,10 +571,6 @@ type ToolDataMap = {
     call: types.ListCompanies;
     response: types.ListCompaniesResponse;
   };
-  ListEntities: {
-    call: types.ListEntities;
-    response: types.ListEntitiesResponse;
-  };
   ListImportEntities: {
     call: types.ListImportEntities;
     response: types.ListImportEntitiesResponse;
@@ -623,6 +613,7 @@ type ToolDataMap = {
     response: types.MoveToProjectResponse;
   };
   NameSearch: { call: types.NameSearch; response: types.SearchToolResponse };
+  QuerySoup: { call: types.QuerySoup; response: types.QuerySoupData };
   ReadActivity: {
     call: types.ReadActivity;
     response: types.ReadActivityResponse;

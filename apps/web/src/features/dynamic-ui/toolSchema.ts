@@ -28,7 +28,7 @@ export function displayResultsInstructions(): string {
     '```json',
     JSON.stringify(jsonSchema, null, 2),
     '```',
-    'Entity-backed widgets (`list`, `timeline`, `channelMessage`) take real workspace entity ids — use ids you obtained from other tools (ListEntities, search, etc.), never invented ones.',
+    'Entity-backed widgets (`list`, `timeline`, `channelMessage`) take real workspace entity ids — use ids you obtained from other tools (QuerySoup, search, etc.), never invented ones.',
   ].join('\n');
   return cached;
 }

@@ -239,8 +239,8 @@ export type ImportStatus = 'staged' | 'importing' | 'imported' | 'discarded';
  * Entity types a reminder can be attached to.
  *
  * Deliberately narrower than [`EntityType`], which covers plenty of things a
- * reminder has no business pointing at. The names match the ones `ListEntities`
- * uses so the model sees one vocabulary across tools.
+ * reminder has no business pointing at. Chat is `ai_chat` here (the reminder
+ * attach vocabulary); QuerySoup lists the same items as GraphQL `CHAT`.
  */
 export type ReminderEntityType =
   | 'document'
@@ -270,219 +270,6 @@ export type TagColor =
  * How much of a recurring series a deletion removes.
  */
 export type DeletionScopeInput = 'all' | 'this_event' | 'this_and_following';
-/**
- * Entity types that can be returned by the list entities AI tool.
- */
-export type ItemType =
-  | 'calendar_event'
-  | 'document'
-  | 'ai_chat'
-  | 'project'
-  | 'email'
-  | 'channel'
-  | 'channel_thread'
-  | 'call'
-  | 'foreign_entity';
-/**
- * Sort order for the list entities AI tool.
- */
-export type SortBy =
-  | 'recently_viewed'
-  | 'recently_updated'
-  | 'recently_created';
-export type EmailPreset = 'signal';
-/**
- * Item returned by the list entities AI tool.
- */
-export type EntityItem =
-  | {
-      /**
-       * Calendar event id.
-       */
-      id: string;
-      /**
-       * Event title.
-       */
-      title: string;
-      /**
-       * Event status.
-       */
-      status: string;
-      /**
-       * Optional location.
-       */
-      location?: string | null;
-      /**
-       * Optional conference join URL.
-       */
-      conferenceUrl?: string | null;
-      /**
-       * Which conferencing system backs the join URL.
-       */
-      conferenceProvider?: string | null;
-      /**
-       * Canonical timed or all-day span.
-       */
-      time: {
-        [k: string]: unknown;
-      };
-      /**
-       * Tags on the event visible to the user.
-       */
-      tags?: AppliedTag[];
-      type: 'calendarEvent';
-    }
-  | {
-      /**
-       * Document id.
-       */
-      id: string;
-      /**
-       * Document name.
-       */
-      name: string;
-      /**
-       * The document's file type (e.g. md, pdf, docx), when known.
-       */
-      fileType?: string | null;
-      /**
-       * The document's sub type: "task" for Macro tasks, "snippet" for snippets,
-       * "skill" for skills.
-       */
-      subType?: string | null;
-      /**
-       * Tags on the document visible to the user.
-       */
-      tags?: AppliedTag[];
-      type: 'document';
-    }
-  | {
-      /**
-       * Chat id.
-       */
-      id: string;
-      /**
-       * Chat name.
-       */
-      name: string;
-      /**
-       * Tags on the chat visible to the user.
-       */
-      tags?: AppliedTag[];
-      type: 'aiChat';
-    }
-  | {
-      /**
-       * Project id.
-       */
-      id: string;
-      /**
-       * Project name.
-       */
-      name: string;
-      /**
-       * Tags on the project visible to the user.
-       */
-      tags?: AppliedTag[];
-      type: 'project';
-    }
-  | {
-      /**
-       * Email thread id.
-       */
-      id: string;
-      /**
-       * Email subject, when present.
-       */
-      subject?: string | null;
-      /**
-       * Preview text from the thread's latest relevant message.
-       */
-      snippet?: string | null;
-      /**
-       * Sender display name, when present.
-       */
-      senderName?: string | null;
-      /**
-       * Sender email address, when present.
-       */
-      senderEmail?: string | null;
-      /**
-       * Whether the thread currently belongs in the inbox.
-       */
-      inboxVisible: boolean;
-      /**
-       * Whether the thread has been read.
-       */
-      isRead: boolean;
-      /**
-       * Whether the thread contains a draft.
-       */
-      isDraft: boolean;
-      /**
-       * Tags on the thread visible to the user.
-       */
-      tags?: AppliedTag[];
-      type: 'email';
-    }
-  | {
-      /**
-       * Channel id.
-       */
-      id: string;
-      /**
-       * Channel name, when present.
-       */
-      name?: string | null;
-      type: 'channel';
-    }
-  | {
-      /**
-       * Parent message id for the thread.
-       */
-      id: string;
-      /**
-       * Channel id containing the thread.
-       */
-      channelId: string;
-      type: 'channelThread';
-    }
-  | {
-      /**
-       * Call id.
-       */
-      id: string;
-      /**
-       * User or actor that created the call.
-       */
-      createdBy: string;
-      /**
-       * Tags on the call visible to the user.
-       */
-      tags?: AppliedTag[];
-      type: 'call';
-    }
-  | {
-      /**
-       * Foreign entity row id.
-       */
-      id: string;
-      /**
-       * Provider-specific foreign entity id.
-       */
-      foreignEntityId: string;
-      /**
-       * Provider/source name for the foreign entity.
-       */
-      foreignEntitySource: string;
-      /**
-       * Foreign entity metadata.
-       */
-      metadata: {
-        [k: string]: unknown;
-      };
-      type: 'foreignEntity';
-    };
 /**
  * User-facing notification categories used for list filtering.
  */
@@ -1060,7 +847,7 @@ export interface BotSummary {
   hasAgent: boolean;
 }
 /**
- * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
+ * Search items by their content: document body text; email subject/body/sender/recipient/cc/bcc and the display names on those addresses; chat messages; call transcripts. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed content. Use this for targeted keyword/content lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with QuerySoup using time/type/channel filters. Whitespace-separated terms are ANDed. For documents and emails, every term must match somewhere in the document — different terms can appear in different chunks/pages or different fields. For documents and emails specifically, each single-word term is matched as a prefix (so `scri` matches `script`); for emails the prefix expansion also runs against the local-part of address fields. For chats, channels, and call transcripts the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the content, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion (e.g. an exact word, identifier, or full email address). Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface ContentSearch {
   /**
@@ -2184,7 +1971,7 @@ export interface CreateProjectResponse {
  *
  * ## Attaching to an item
  *
- * Pass `entityType` and `entityId` together, using ids from ListEntities, GetThread, or search. The user must already have access to what you attach. `entityType` accepts exactly these values, and a type not on the list cannot be attached even if ListEntities returns it:
+ * Pass `entityType` and `entityId` together, using ids from QuerySoup, GetThread, or search. The user must already have access to what you attach. `entityType` accepts exactly these values, and a type not on the list cannot be attached even if QuerySoup returns it:
  *
  * - `document` — a Macro document
  * - `ai_chat` — an AI chat conversation
@@ -3207,106 +2994,6 @@ export interface CompanyListItem {
   revenue?: number | null;
 }
 /**
- * Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as "what happened today", "what's going on", "catch me up", or "what happened in standup today"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as "list my tasks", "tasks assigned to me", or "tasks I completed yesterday", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {"l":{"dst":"task"}} and includeTypes ["document"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For "completed yesterday", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. "my items tagged bug-report"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead.
- */
-export interface ListEntities {
-  /**
-   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. Macro tasks are returned as document items, so use includeTypes=["document"] with df subtype task for task requests. This is folded into the AST and applied as part of cursor-level filtering.
-   */
-  includeTypes?: ItemType[] | null;
-  sortBy?: SortBy;
-  /**
-   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}; for skills, {"l":{"dst":"skill"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
-   */
-  df?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Full soup AST project filter (pf).
-   */
-  pf?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Full soup AST AI chat filter (cf).
-   */
-  cf?: {
-    [k: string]: unknown;
-  };
-  /**
-   * High-level email filter preset. Use "signal" for signal emails. Signal emails and important emails are synonymous: if the user asks for important emails, use emailPreset="signal". This expands to the email AST {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]} and defaults results to emails if includeTypes is omitted.
-   */
-  emailPreset?: EmailPreset | null;
-  /**
-   * Advanced full soup AST email filter (ef). Prefer emailPreset="signal" for common requests. Signal emails and important emails are synonymous; they use {"&":[{"l":{"Importance":true}},{"l":{"Shared":"exclude"}}]}. Supports filtering by thread timestamp: {"l":{"ca":{"gte":"<start>"}}} matches created_at, {"l":{"ua":{"gte":"<start>","lt":"<end>"}}} matches updated_at, using ISO timestamps with gt/lt/gte/lte comparators. For "emails from the last 7 days", AND a ua (or ca) gte bound set to 7 days before now, e.g. {"l":{"ua":{"gte":"<7-days-ago-ISO>"}}}.
-   */
-  ef?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Full soup AST channel filter (chanf).
-   */
-  chanf?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Full soup AST channel thread filter (cthf).
-   */
-  cthf?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Full soup AST call filter (callf).
-   */
-  callf?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Full soup AST foreign entity filter (fef).
-   */
-  fef?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Full soup AST property filter (propf). Use this for Macro task Status, Assignees, Priority, and other entity properties. For task Status Completed: {"l":{"pd":"00000001-0000-0000-0000-000000000002","et":"TASK","v":{"so":"00000001-0000-0000-0002-000000000004"}}}. For tasks assigned to the current user: {"l":{"pd":"00000001-0000-0000-0000-000000000001","et":"TASK","v":{"er":"macro|user@example.com"}}}. Combine both with &: {"&":[statusCompleted, assignedToMe]}. Prefer this over Linear tools for unqualified task requests.
-   */
-  propf?: {
-    [k: string]: unknown;
-  };
-  /**
-   * Which mailbox view to hydrate previews from for email results. Valid values: inbox (default), sent, drafts, starred, all, important, other, or user:<label>.
-   *
-   * When the user asks about signal or important emails, use emailView="inbox" together with emailPreset="signal" — do not set emailView="important" in that case. Only override the default when the user explicitly asks for a specific mailbox or label view (e.g. "sent", "drafts", "my Foo label").
-   */
-  emailView?: string | null;
-  /**
-   * Restrict email results to a single connected inbox, given as that inbox's email address. Omit to span every inbox the user can access (their own plus any delegated to them). Only set this when the user scopes the request to a specific mailbox (e.g. "my work inbox", "the shared inbox"); call ListInboxes first to get the exact address. Only affects email results.
-   */
-  inbox?: string | null;
-  /**
-   * Filter results to items carrying the given tags — any of them by default, every one of them with tagsMatch="all". Each entry names a tag by its label, matched case-insensitively against the user's own tags; only set scope ("personal" or "team") when the user distinguishes between their personal and team tags. An unknown label fails with the list of available tags — call ListTags first when unsure what tags exist. Only taggable items (documents, tasks, projects, emails, AI chats, call records) can match a tag filter. Prefer this over hand-building a propf filter for tags.
-   */
-  tags?: TagFilter[] | null;
-  tagsMatch?: TagMatch;
-  /**
-   * Maximum number of items to return. Defaults to 50; max 500.
-   */
-  limit?: number | null;
-}
-/**
- * Response returned by the list entities AI tool.
- */
-export interface ListEntitiesResponse {
-  /**
-   * Items returned for the request.
-   */
-  items: EntityItem[];
-  /**
-   * Human-readable summary of the returned items.
-   */
-  summary: string;
-}
-/**
  * List the user's import ledger: staged candidates, in-flight imports, imported items (including ones teammates imported into the team), and declined items. Use this to check what already exists before proposing or creating imports.
  */
 export interface ListImportEntities {
@@ -3331,7 +3018,7 @@ export interface ListImportEntitiesResponse {
 /**
  * List the email inboxes the user can read or act on. Returns the caller's primary inbox, any other inboxes they have connected, and any inboxes delegated to them by teammates. Each entry has an `emailAddress`, `isPrimary` (the default inbox used when no inbox is specified), and `isDelegated` (true when the inbox belongs to another user).
  *
- * Use this when the user references a specific or non-default mailbox (e.g. "my work inbox", "the shared inbox", "the inbox Alex shared with me") so you can pass the exact `emailAddress` to the `inbox` parameter of ListEntities, ContentSearch, or NameSearch, or to ListLabels. Most users have a single inbox, in which case email tools operate on it by default and you do not need this tool. Do not guess inbox addresses — list them here first.
+ * Use this when the user references a specific or non-default mailbox (e.g. "my work inbox", "the shared inbox", "the inbox Alex shared with me") so you can pass the exact `emailAddress` to the `inbox` parameter of QuerySoup, ContentSearch, or NameSearch, or to ListLabels. Most users have a single inbox, in which case email tools operate on it by default and you do not need this tool. Do not guess inbox addresses — list them here first.
  */
 export type ListInboxes = {};
 /**
@@ -3604,7 +3291,7 @@ export interface SkillSearchResult {
   updatedAt?: string | null;
 }
 /**
- * List the tags available to the user: their personal tag set plus their team's set when they belong to a team. Each tag has a human-readable label, an option id, and optionally a color. Refer to tags by label when talking to the user. To filter items by tag, pass the labels to the tags argument of ListEntities, ContentSearch, or NameSearch. To apply or remove a tag on an entity, call SetEntityProperty with the set's propertyDefinitionId and the tag's option id in add_option_ids or remove_option_ids — never rewrite the full value to add or remove one tag. Call this before tag operations when you don't already know the user's tags.
+ * List the tags available to the user: their personal tag set plus their team's set when they belong to a team. Each tag has a human-readable label, an option id, and optionally a color. Refer to tags by label when talking to the user. To filter items by tag, pass the labels to QuerySoup input.tags, or to the tags argument of ContentSearch or NameSearch. To apply or remove a tag on an entity, call SetEntityProperty with the set's propertyDefinitionId and the tag's option id in add_option_ids or remove_option_ids — never rewrite the full value to add or remove one tag. Call this before tag operations when you don't already know the user's tags.
  */
 export type ListTags = {};
 /**
@@ -3861,7 +3548,7 @@ export interface MoveToProjectResponse {
   message: string;
 }
 /**
- * Search items by their name or title: document name, email subject, chat title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with ListEntities using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
+ * Search items by their name or title: document name, email subject, chat title, channel name, project name, or call-record name. This is keyword search, not semantic search: queries only match literal words/tokens, prefixes, or exact quoted terms that appear in the indexed title/name. Use this for targeted name/title lookup, not for activity-summary questions like "what happened today", "what's going on", "catch me up", or "what happened in standup today"; those should start with QuerySoup using time/type/channel filters. For emails, whitespace-separated terms are ANDed and each is a prefix match against the subject. For all other types the whole query is matched as a single adjacent phrase prefix — so pass 1-3 targeted keywords drawn from words that would literally appear in the title, not the user's natural-language description; long phrases will not match. Matching defaults to prefix; set matchType to 'exact' to match whole tokens/phrases with no prefix expansion. Wrap a multi-word phrase in double quotes to keep it together as one adjacent phrase. If the user's request combines a person with a topic, run separate searches (NameSearch for the person, ContentSearch for the topic) rather than one combined query. Leave entityTypes empty by default; only filter when the user explicitly scopes to a type. Results for documents, emails, AI chats, projects, and call records include the tags visible to the user as {label, scope} pairs; to restrict a search to tagged items, pass the tag labels in the tags argument (ListTags shows which tags exist).
  */
 export interface NameSearch {
   /**
@@ -3884,7 +3571,1095 @@ export interface NameSearch {
   tagsMatch?: TagMatch;
 }
 /**
- * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use ListEntities for those. Returns at most 100 activities and reports when the result was truncated.
+ * Browse the user's Macro workspace (the unified inbox) by writing a GraphQL query
+ * against the schema below. This is the tool for "catch me up", "what happened
+ * today", "list my tasks", "important emails since Friday", recent items by kind,
+ * by project, by tag, or by time window. It reads; it cannot change anything.
+ * For finding an item by words in its name or body use NameSearch/ContentSearch.
+ *
+ * Rules
+ * - Exactly one `query` operation. Mutations and subscriptions do not exist here.
+ * - Filters are per kind: an item of kind K passes if K's tree is absent or matches.
+ *   Date windows (createdAt/updatedAt) exist on document, project, chat and email
+ *   trees only; other kinds are cut by sortMethod + limit.
+ * - Macro tasks are DOCUMENT items with subType TASK. Prefer `taskFilter` for
+ *   status, assignee, and priority — do not invent property definition ids.
+ * - Tags: filter by label with input.tags (ListTags shows them); results carry
+ *   tags { label scope }. Status/Priority values come back as option ids.
+ * - Prefer emailPreset: SIGNAL for "important"/"signal" email; keep emailView as
+ *   inbox (or omit it). For a user label pass emailView: "user:<name>".
+ * - There is no cursor. If hasMore is true, tighten filters or raise limit (≤500).
+ * - Select `id` on every `items` selection so results can be linked.
+ * - Alias `soup` to ask two questions in one call (max 5). Example: activity and
+ *   signal email.
+ * - Anything not shown: { __type(name: "GraphqlEmailLiteral") { inputFields { name type { name ofType { name } } } } }
+ *
+ *
+ * Schema
+ * ```graphql
+ * "Half-open RFC 3339 window: `from <= t < until`."
+ * input DateRange {
+ * 	"Inclusive start."
+ * 	from: String
+ * 	"Exclusive end."
+ * 	until: String
+ * }
+ *
+ * "A Boolean property value."
+ * type GraphqlBooleanPropertyValue {
+ * 	"The stored Boolean."
+ * 	value: Boolean!
+ * }
+ *
+ * "The two operands of a recursive `CalendarEventFilterExpr` binary expression."
+ * input GraphqlCalendarEventBinaryExpr {
+ * 	"Left expression."
+ * 	left: GraphqlCalendarEventExpr!
+ * 	"Right expression."
+ * 	right: GraphqlCalendarEventExpr!
+ * }
+ *
+ * "A recursive `CalendarEventFilterExpr` filter expression."
+ * input GraphqlCalendarEventExpr @oneOf {
+ * 	"Both expressions must match."
+ * 	and: GraphqlCalendarEventBinaryExpr
+ * 	"Either expression may match."
+ * 	or: GraphqlCalendarEventBinaryExpr
+ * 	"Negate an expression."
+ * 	not: GraphqlCalendarEventExpr
+ * 	"Match a literal."
+ * 	literal: GraphqlCalendarEventLiteral
+ * }
+ *
+ * "GraphQL input representing a calendar event literal."
+ * input GraphqlCalendarEventLiteral @oneOf {
+ * 	"Canonical event id."
+ * 	id: ID
+ * 	"Event status."
+ * 	status: String
+ * 	"Master start must be before this RFC3339 instant."
+ * 	startsBefore: String
+ * 	"Master end must be after this RFC3339 instant."
+ * 	endsAfter: String
+ * 	"Attendee email."
+ * 	attendee: String
+ * 	"Organizer email."
+ * 	organizer: String
+ * 	"Notification done state for the requester."
+ * 	notificationDone: Boolean
+ * 	"Notification seen state for the requester."
+ * 	notificationSeen: Boolean
+ * }
+ *
+ * "The two operands of a recursive `CallFilterExpr` binary expression."
+ * input GraphqlCallBinaryExpr {
+ * 	"Left expression."
+ * 	left: GraphqlCallExpr!
+ * 	"Right expression."
+ * 	right: GraphqlCallExpr!
+ * }
+ *
+ * "A recursive `CallFilterExpr` filter expression."
+ * input GraphqlCallExpr @oneOf {
+ * 	"Both expressions must match."
+ * 	and: GraphqlCallBinaryExpr
+ * 	"Either expression may match."
+ * 	or: GraphqlCallBinaryExpr
+ * 	"Negate an expression."
+ * 	not: GraphqlCallExpr
+ * 	"Match a literal."
+ * 	literal: GraphqlCallLiteral
+ * }
+ *
+ * "GraphQL input representing the call literal."
+ * input GraphqlCallLiteral @oneOf {
+ * 	"The call id option."
+ * 	callId: ID
+ * 	"The channel id option."
+ * 	channelId: ID
+ * 	"The speaker option."
+ * 	speaker: String
+ * 	"The status option."
+ * 	status: GraphqlCallStatus
+ * 	"The attended option."
+ * 	attended: Boolean
+ * }
+ *
+ * "GraphQL input representing the call status."
+ * enum GraphqlCallStatus {
+ * 	"The attended option."
+ * 	ATTENDED
+ * 	"The missed option."
+ * 	MISSED
+ * 	"The unattended option."
+ * 	UNATTENDED
+ * }
+ *
+ * "The two operands of a recursive `ChannelFilterExpr` binary expression."
+ * input GraphqlChannelBinaryExpr {
+ * 	"Left expression."
+ * 	left: GraphqlChannelExpr!
+ * 	"Right expression."
+ * 	right: GraphqlChannelExpr!
+ * }
+ *
+ * "A recursive `ChannelFilterExpr` filter expression."
+ * input GraphqlChannelExpr @oneOf {
+ * 	"Both expressions must match."
+ * 	and: GraphqlChannelBinaryExpr
+ * 	"Either expression may match."
+ * 	or: GraphqlChannelBinaryExpr
+ * 	"Negate an expression."
+ * 	not: GraphqlChannelExpr
+ * 	"Match a literal."
+ * 	literal: GraphqlChannelLiteral
+ * }
+ *
+ * "GraphQL input representing the channel literal."
+ * input GraphqlChannelLiteral @oneOf {
+ * 	"The thread id option."
+ * 	threadId: ID
+ * 	"The mention option."
+ * 	mention: String
+ * 	"The organization id option."
+ * 	organizationId: Int
+ * 	"The team id option."
+ * 	teamId: ID
+ * 	"The channel id option."
+ * 	channelId: ID
+ * 	"The sender option."
+ * 	sender: String
+ * 	"The channel type option."
+ * 	channelType: GraphqlChannelTypeFilter
+ * 	"The importance option."
+ * 	importance: Boolean
+ * 	"""
+ * 	The is participant option. Filters by whether the requesting user is an
+ * 	active participant; its presence widens the candidate set to team channels
+ * 	of the user's teams they have not joined.
+ * 	"""
+ * 	isParticipant: Boolean
+ * 	"The notification done option."
+ * 	notificationDone: Boolean
+ * 	"The notification seen option."
+ * 	notificationSeen: Boolean
+ * }
+ *
+ * "The two operands of a recursive `ChannelThreadFilterExpr` binary expression."
+ * input GraphqlChannelThreadBinaryExpr {
+ * 	"Left expression."
+ * 	left: GraphqlChannelThreadExpr!
+ * 	"Right expression."
+ * 	right: GraphqlChannelThreadExpr!
+ * }
+ *
+ * "A recursive `ChannelThreadFilterExpr` filter expression."
+ * input GraphqlChannelThreadExpr @oneOf {
+ * 	"Both expressions must match."
+ * 	and: GraphqlChannelThreadBinaryExpr
+ * 	"Either expression may match."
+ * 	or: GraphqlChannelThreadBinaryExpr
+ * 	"Negate an expression."
+ * 	not: GraphqlChannelThreadExpr
+ * 	"Match a literal."
+ * 	literal: GraphqlChannelThreadLiteral
+ * }
+ *
+ * "GraphQL input representing the channel thread literal."
+ * input GraphqlChannelThreadLiteral @oneOf {
+ * 	"The thread id option."
+ * 	threadId: ID
+ * 	"The channel id option."
+ * 	channelId: ID
+ * 	"The root sender option."
+ * 	rootSender: String
+ * 	"The participant option."
+ * 	participant: String
+ * 	"The notification done option."
+ * 	notificationDone: Boolean
+ * 	"The notification seen option."
+ * 	notificationSeen: Boolean
+ * }
+ *
+ * "GraphQL input representing the channel type filter."
+ * enum GraphqlChannelTypeFilter {
+ * 	"The public option."
+ * 	PUBLIC
+ * 	"The private option."
+ * 	PRIVATE
+ * 	"The direct message option."
+ * 	DIRECT_MESSAGE
+ * 	"The team option."
+ * 	TEAM
+ * }
+ *
+ * "The two operands of a recursive `ChatFilterExpr` binary expression."
+ * input GraphqlChatBinaryExpr {
+ * 	"Left expression."
+ * 	left: GraphqlChatExpr!
+ * 	"Right expression."
+ * 	right: GraphqlChatExpr!
+ * }
+ *
+ * "A recursive `ChatFilterExpr` filter expression."
+ * input GraphqlChatExpr @oneOf {
+ * 	"Both expressions must match."
+ * 	and: GraphqlChatBinaryExpr
+ * 	"Either expression may match."
+ * 	or: GraphqlChatBinaryExpr
+ * 	"Negate an expression."
+ * 	not: GraphqlChatExpr
+ * 	"Match a literal."
+ * 	literal: GraphqlChatLiteral
+ * }
+ *
+ * "GraphQL input representing the chat literal."
+ * input GraphqlChatLiteral @oneOf {
+ * 	"The project id option."
+ * 	projectId: ID
+ * 	"The role option."
+ * 	role: GraphqlChatRole
+ * 	"The chat id option."
+ * 	chatId: ID
+ * 	"The owner option."
+ * 	owner: String
+ * 	"The importance option."
+ * 	importance: Boolean
+ * 	"The notification done option."
+ * 	notificationDone: Boolean
+ * 	"The notification seen option."
+ * 	notificationSeen: Boolean
+ * 	"The created at option."
+ * 	createdAt: GraphqlDateLiteral
+ * 	"The updated at option."
+ * 	updatedAt: GraphqlDateLiteral
+ * }
+ *
+ * "GraphQL input representing the chat role."
+ * enum GraphqlChatRole {
+ * 	"The user option."
+ * 	USER
+ * 	"The system option."
+ * 	SYSTEM
+ * 	"The assistant option."
+ * 	ASSISTANT
+ * }
+ *
+ * "GraphQL input representing the date literal."
+ * input GraphqlDateLiteral @oneOf {
+ * 	"The gt option."
+ * 	gt: String
+ * 	"The lt option."
+ * 	lt: String
+ * 	"The gte option."
+ * 	gte: String
+ * 	"The lte option."
+ * 	lte: String
+ * }
+ *
+ * "A date-time property value."
+ * type GraphqlDatePropertyValue {
+ * 	"The stored date-time formatted as RFC 3339."
+ * 	value: String!
+ * }
+ *
+ * "The two operands of a recursive `DocumentFilterExpr` binary expression."
+ * input GraphqlDocumentBinaryExpr {
+ * 	"Left expression."
+ * 	left: GraphqlDocumentExpr!
+ * 	"Right expression."
+ * 	right: GraphqlDocumentExpr!
+ * }
+ *
+ * "A recursive `DocumentFilterExpr` filter expression."
+ * input GraphqlDocumentExpr @oneOf {
+ * 	"Both expressions must match."
+ * 	and: GraphqlDocumentBinaryExpr
+ * 	"Either expression may match."
+ * 	or: GraphqlDocumentBinaryExpr
+ * 	"Negate an expression."
+ * 	not: GraphqlDocumentExpr
+ * 	"Match a literal."
+ * 	literal: GraphqlDocumentLiteral
+ * }
+ *
+ * "GraphQL input representing the document literal."
+ * input GraphqlDocumentLiteral @oneOf {
+ * 	"The file type option."
+ * 	fileType: String
+ * 	"The id option."
+ * 	id: ID
+ * 	"The project id option."
+ * 	projectId: ID
+ * 	"The owner option."
+ * 	owner: String
+ * 	"The importance option."
+ * 	importance: Boolean
+ * 	"The notification done option."
+ * 	notificationDone: Boolean
+ * 	"The notification seen option."
+ * 	notificationSeen: Boolean
+ * 	"The include cbm atm nc option."
+ * 	includeCbmAtmNc: Boolean
+ * 	"The sub type option."
+ * 	subType: GraphqlDocumentSubType
+ * 	"The file assoc option."
+ * 	fileAssoc: String
+ * 	"The is email attachment option."
+ * 	isEmailAttachment: Boolean
+ * 	"The created at option."
+ * 	createdAt: GraphqlDateLiteral
+ * 	"The updated at option."
+ * 	updatedAt: GraphqlDateLiteral
+ * }
+ *
+ * "GraphQL input representing the document sub type."
+ * enum GraphqlDocumentSubType {
+ * 	"The task option."
+ * 	TASK
+ * 	"The snippet option."
+ * 	SNIPPET
+ * 	"The skill option."
+ * 	SKILL
+ * }
+ *
+ * "The two operands of a recursive `EmailFilterExpr` binary expression."
+ * input GraphqlEmailBinaryExpr {
+ * 	"Left expression."
+ * 	left: GraphqlEmailExpr!
+ * 	"Right expression."
+ * 	right: GraphqlEmailExpr!
+ * }
+ *
+ * "A recursive `EmailFilterExpr` filter expression."
+ * input GraphqlEmailExpr @oneOf {
+ * 	"Both expressions must match."
+ * 	and: GraphqlEmailBinaryExpr
+ * 	"Either expression may match."
+ * 	or: GraphqlEmailBinaryExpr
+ * 	"Negate an expression."
+ * 	not: GraphqlEmailExpr
+ * 	"Match a literal."
+ * 	literal: GraphqlEmailLiteral
+ * }
+ *
+ * "`input GraphqlEmailFilterAst` minus `crmScope`."
+ * input GraphqlEmailFilterAst {
+ * 	tree: GraphqlEmailExpr
+ * }
+ *
+ * "GraphQL input representing the email literal."
+ * input GraphqlEmailLiteral @oneOf {
+ * 	"The sender option."
+ * 	sender: GraphqlEmailValue
+ * 	"The cc option."
+ * 	cc: GraphqlEmailValue
+ * 	"The bcc option."
+ * 	bcc: GraphqlEmailValue
+ * 	"The recipient option."
+ * 	recipient: GraphqlEmailValue
+ * 	"The thread id option."
+ * 	threadId: ID
+ * 	"The owner option."
+ * 	owner: ID
+ * 	"The project id option."
+ * 	projectId: String
+ * 	"The importance option."
+ * 	importance: Boolean
+ * 	"The notification done option."
+ * 	notificationDone: Boolean
+ * 	"The notification seen option."
+ * 	notificationSeen: Boolean
+ * 	"The shared option."
+ * 	shared: GraphqlSharedEmailFilter
+ * 	"The calendar only option."
+ * 	calendarOnly: Boolean
+ * 	"The created at option."
+ * 	createdAt: GraphqlDateLiteral
+ * 	"The updated at option."
+ * 	updatedAt: GraphqlDateLiteral
+ * }
+ *
+ * "GraphQL input representing the email value."
+ * input GraphqlEmailValue @oneOf {
+ * 	"The partial option."
+ * 	partial: String
+ * 	"The complete option."
+ * 	complete: String
+ * 	"The domain option."
+ * 	domain: String
+ * }
+ *
+ * "`input GraphqlEntityFilterAst` minus CRM and reminder trees."
+ * input GraphqlEntityFilterAst {
+ * 	documentFilter: GraphqlDocumentExpr
+ * 	projectFilter: GraphqlProjectExpr
+ * 	chatFilter: GraphqlChatExpr
+ * 	emailFilter: GraphqlEmailFilterAst
+ * 	channelFilter: GraphqlChannelExpr
+ * 	channelThreadFilter: GraphqlChannelThreadExpr
+ * 	callFilter: GraphqlCallExpr
+ * 	calendarEventFilter: GraphqlCalendarEventExpr
+ * 	foreignEntityFilter: GraphqlForeignEntityExpr
+ * 	propertiesFilter: GraphqlFilterPropertiesExpr
+ * }
+ *
+ * "An entity-reference property value."
+ * type GraphqlEntityReferencePropertyValue {
+ * 	"The referenced entities."
+ * 	references: [GraphqlPropertyEntityReference!]!
+ * }
+ *
+ * "The two operands of a recursive `PropertiesFilterExpr` binary expression."
+ * input GraphqlFilterPropertiesBinaryExpr {
+ * 	"Left expression."
+ * 	left: GraphqlFilterPropertiesExpr!
+ * 	"Right expression."
+ * 	right: GraphqlFilterPropertiesExpr!
+ * }
+ *
+ * "A recursive `PropertiesFilterExpr` filter expression."
+ * input GraphqlFilterPropertiesExpr @oneOf {
+ * 	"Both expressions must match."
+ * 	and: GraphqlFilterPropertiesBinaryExpr
+ * 	"Either expression may match."
+ * 	or: GraphqlFilterPropertiesBinaryExpr
+ * 	"Negate an expression."
+ * 	not: GraphqlFilterPropertiesExpr
+ * 	"Match a literal."
+ * 	literal: GraphqlFilterPropertiesLiteral
+ * }
+ *
+ * "GraphQL input for matching a property value on an entity."
+ * input GraphqlFilterPropertiesLiteral {
+ * 	"Property definition id to match."
+ * 	propertyDefinitionId: ID!
+ * 	"Optional entity type scope for the property match."
+ * 	entityType: GraphqlPropertyEntityType
+ * 	"Value to compare against the property."
+ * 	value: GraphqlFilterPropertyMatchValue!
+ * }
+ *
+ * "GraphQL input value used when matching a property."
+ * input GraphqlFilterPropertyMatchValue @oneOf {
+ * 	"Select option id to match."
+ * 	selectOption: ID
+ * 	"Entity reference id to match."
+ * 	entityRef: ID
+ * }
+ *
+ * "The two operands of a recursive `ForeignEntityFilterExpr` binary expression."
+ * input GraphqlForeignEntityBinaryExpr {
+ * 	"Left expression."
+ * 	left: GraphqlForeignEntityExpr!
+ * 	"Right expression."
+ * 	right: GraphqlForeignEntityExpr!
+ * }
+ *
+ * "A recursive `ForeignEntityFilterExpr` filter expression."
+ * input GraphqlForeignEntityExpr @oneOf {
+ * 	"Both expressions must match."
+ * 	and: GraphqlForeignEntityBinaryExpr
+ * 	"Either expression may match."
+ * 	or: GraphqlForeignEntityBinaryExpr
+ * 	"Negate an expression."
+ * 	not: GraphqlForeignEntityExpr
+ * 	"Match a literal."
+ * 	literal: GraphqlForeignEntityLiteral
+ * }
+ *
+ * "GraphQL input representing the foreign entity literal."
+ * input GraphqlForeignEntityLiteral @oneOf {
+ * 	"The id option."
+ * 	id: ID
+ * 	"The foreign entity id option."
+ * 	foreignEntityId: String
+ * 	"The foreign entity source option."
+ * 	foreignEntitySource: String
+ * 	"The includes me option."
+ * 	includesMe: Boolean
+ * 	"The notification done option."
+ * 	notificationDone: Boolean
+ * 	"The notification seen option."
+ * 	notificationSeen: Boolean
+ * }
+ *
+ * "A link property value."
+ * type GraphqlLinkPropertyValue {
+ * 	"The stored URLs."
+ * 	urls: [String!]!
+ * }
+ *
+ * "A numeric property value."
+ * type GraphqlNumberPropertyValue {
+ * 	"The stored number."
+ * 	value: Float!
+ * }
+ *
+ * "The two operands of a recursive `ProjectFilterExpr` binary expression."
+ * input GraphqlProjectBinaryExpr {
+ * 	"Left expression."
+ * 	left: GraphqlProjectExpr!
+ * 	"Right expression."
+ * 	right: GraphqlProjectExpr!
+ * }
+ *
+ * "A recursive `ProjectFilterExpr` filter expression."
+ * input GraphqlProjectExpr @oneOf {
+ * 	"Both expressions must match."
+ * 	and: GraphqlProjectBinaryExpr
+ * 	"Either expression may match."
+ * 	or: GraphqlProjectBinaryExpr
+ * 	"Negate an expression."
+ * 	not: GraphqlProjectExpr
+ * 	"Match a literal."
+ * 	literal: GraphqlProjectLiteral
+ * }
+ *
+ * "GraphQL input representing the project literal."
+ * input GraphqlProjectLiteral @oneOf {
+ * 	"The project id option."
+ * 	projectId: ID
+ * 	"The project id self option."
+ * 	projectIdSelf: ID
+ * 	"The owner option."
+ * 	owner: String
+ * 	"The importance option."
+ * 	importance: Boolean
+ * 	"The notification done option."
+ * 	notificationDone: Boolean
+ * 	"The notification seen option."
+ * 	notificationSeen: Boolean
+ * 	"The created at option."
+ * 	createdAt: GraphqlDateLiteral
+ * 	"The updated at option."
+ * 	updatedAt: GraphqlDateLiteral
+ * }
+ *
+ * type GraphqlProperty {
+ * 	propertyDefinitionId: ID!
+ * 	displayName: String!
+ * 	dataType: GraphqlPropertyDataType!
+ * 	value: GraphqlPropertyValue
+ * }
+ *
+ * "A property definition's supported value type."
+ * enum GraphqlPropertyDataType {
+ * 	"Boolean true/false values."
+ * 	BOOLEAN
+ * 	"Date and time values."
+ * 	DATE
+ * 	"Numeric values."
+ * 	NUMBER
+ * 	"String or text values."
+ * 	STRING
+ * 	"A select property with numeric options."
+ * 	SELECT_NUMBER
+ * 	"A select property with string options."
+ * 	SELECT_STRING
+ * 	"User- or team-scoped colored labels."
+ * 	TAG
+ * 	"References to other entities."
+ * 	ENTITY
+ * 	"URL values."
+ * 	LINK
+ * }
+ *
+ * "An entity reference stored in a property value."
+ * type GraphqlPropertyEntityReference {
+ * 	"The referenced entity's identifier."
+ * 	entityId: String!
+ * 	"The referenced entity's property-domain type."
+ * 	entityType: GraphqlPropertyEntityType!
+ * 	"The specific message identifier when the reference targets a thread message."
+ * 	specificMessageId: ID
+ * }
+ *
+ * "An entity type supported by the properties domain."
+ * enum GraphqlPropertyEntityType {
+ * 	"Calendar event entity."
+ * 	CALENDAR_EVENT
+ * 	"Call record entity."
+ * 	CALL_RECORD
+ * 	"Channel entity."
+ * 	CHANNEL
+ * 	"Chat entity."
+ * 	CHAT
+ * 	"Company entity."
+ * 	COMPANY
+ * 	"Document entity."
+ * 	DOCUMENT
+ * 	"Project entity."
+ * 	PROJECT
+ * 	"Task entity."
+ * 	TASK
+ * 	"Thread entity."
+ * 	THREAD
+ * 	"User entity."
+ * 	USER
+ * }
+ *
+ * "A property value represented by a type-safe GraphQL union."
+ * union GraphqlPropertyValue = GraphqlBooleanPropertyValue | GraphqlNumberPropertyValue | GraphqlStringPropertyValue | GraphqlDatePropertyValue | GraphqlSelectOptionPropertyValue | GraphqlEntityReferencePropertyValue | GraphqlLinkPropertyValue
+ *
+ * "A select-option property value."
+ * type GraphqlSelectOptionPropertyValue {
+ * 	"The selected option identifiers."
+ * 	optionIds: [ID!]!
+ * }
+ *
+ * "GraphQL input representing the shared email filter."
+ * enum GraphqlSharedEmailFilter {
+ * 	"The exclude option."
+ * 	EXCLUDE
+ * 	"The include option."
+ * 	INCLUDE
+ * 	"The only option."
+ * 	ONLY
+ * }
+ *
+ * "Sort field. Default UPDATED_AT."
+ * enum GraphqlSimpleSortMethod {
+ * 	"Most recently viewed."
+ * 	VIEWED_AT
+ * 	"Creation timestamp."
+ * 	CREATED_AT
+ * 	"Update timestamp."
+ * 	UPDATED_AT
+ * 	"Viewed, falling back to updated."
+ * 	VIEWED_UPDATED
+ * }
+ *
+ * "`type GraphqlSkillSubType`."
+ * type GraphqlSkillSubType {
+ * 	nothing: Boolean!
+ * }
+ *
+ * "`type GraphqlSnippetSubType`."
+ * type GraphqlSnippetSubType {
+ * 	nothing: Boolean!
+ * }
+ *
+ * "Sort direction. Default DESC."
+ * enum GraphqlSortDirection {
+ * 	"Oldest first."
+ * 	ASC
+ * 	"Newest first."
+ * 	DESC
+ * }
+ *
+ * "`type GraphqlSoupCalendarEvent`."
+ * type GraphqlSoupCalendarEvent implements SoupEntity {
+ * 	id: ID!
+ * 	entityType: GraphqlSoupEntityType!
+ * 	displayName: String
+ * 	tags: [SoupTag!]!
+ * 	properties: [GraphqlProperty!]!
+ * 	title: String!
+ * 	description: String
+ * 	location: String
+ * 	status: String!
+ * 	ownerId: String!
+ * 	time: JSON!
+ * 	conferenceUrl: String
+ * 	conferenceProvider: String
+ * 	createdAt: String!
+ * 	updatedAt: String!
+ * }
+ *
+ * "`type GraphqlSoupCall`."
+ * type GraphqlSoupCall implements SoupEntity {
+ * 	id: ID!
+ * 	entityType: GraphqlSoupEntityType!
+ * 	displayName: String
+ * 	tags: [SoupTag!]!
+ * 	properties: [GraphqlProperty!]!
+ * 	name: String
+ * 	summary: String
+ * 	channelId: ID!
+ * 	channelName: String
+ * 	createdBy: String!
+ * 	status: String!
+ * 	attended: Boolean!
+ * 	participantCount: Int!
+ * 	startedAt: String!
+ * 	endedAt: String
+ * 	durationMs: Int
+ * }
+ *
+ * "`type GraphqlSoupChannel`."
+ * type GraphqlSoupChannel implements SoupEntity {
+ * 	id: ID!
+ * 	entityType: GraphqlSoupEntityType!
+ * 	displayName: String
+ * 	tags: [SoupTag!]!
+ * 	properties: [GraphqlProperty!]!
+ * 	name: String
+ * 	channelType: String!
+ * 	ownerId: String!
+ * 	teamId: ID
+ * 	isParticipant: Boolean!
+ * 	participantCount: Int!
+ * 	latestMessage: GraphqlSoupChannelMessagePreview
+ * 	createdAt: String!
+ * 	updatedAt: String!
+ * 	viewedAt: String
+ * 	interactedAt: String
+ * }
+ *
+ * "`type GraphqlSoupChannelMessage`."
+ * type GraphqlSoupChannelMessage implements SoupEntity {
+ * 	id: ID!
+ * 	entityType: GraphqlSoupEntityType!
+ * 	displayName: String
+ * 	tags: [SoupTag!]!
+ * 	properties: [GraphqlProperty!]!
+ * 	channelId: ID!
+ * 	senderId: String!
+ * 	content: String!
+ * 	replyCount: Int!
+ * 	createdAt: String!
+ * 	updatedAt: String!
+ * 	effectiveUpdatedAt: String!
+ * }
+ *
+ * "`type GraphqlSoupChannelMessagePreview`."
+ * type GraphqlSoupChannelMessagePreview {
+ * 	messageId: ID!
+ * 	threadId: ID
+ * 	senderId: String!
+ * 	content: String!
+ * 	createdAt: String!
+ * }
+ *
+ * "`type GraphqlSoupChat`."
+ * type GraphqlSoupChat implements SoupEntity {
+ * 	id: ID!
+ * 	entityType: GraphqlSoupEntityType!
+ * 	displayName: String
+ * 	tags: [SoupTag!]!
+ * 	properties: [GraphqlProperty!]!
+ * 	name: String!
+ * 	ownerId: String!
+ * 	projectId: ID
+ * 	createdAt: String!
+ * 	updatedAt: String!
+ * 	viewedAt: String
+ * }
+ *
+ * "`type GraphqlSoupDocument`."
+ * type GraphqlSoupDocument implements SoupEntity {
+ * 	id: ID!
+ * 	entityType: GraphqlSoupEntityType!
+ * 	displayName: String
+ * 	tags: [SoupTag!]!
+ * 	properties: [GraphqlProperty!]!
+ * 	name: String!
+ * 	ownerId: String!
+ * 	fileType: String
+ * 	projectId: ID
+ * 	subType: GraphqlSoupDocumentSubType
+ * 	createdAt: String!
+ * 	updatedAt: String!
+ * 	viewedAt: String
+ * }
+ *
+ * "`union GraphqlSoupDocumentSubType`."
+ * union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType
+ *
+ * "`type GraphqlSoupEmailThread`."
+ * type GraphqlSoupEmailThread implements SoupEntity {
+ * 	id: ID!
+ * 	entityType: GraphqlSoupEntityType!
+ * 	displayName: String
+ * 	tags: [SoupTag!]!
+ * 	properties: [GraphqlProperty!]!
+ * 	name: String
+ * 	snippet: String
+ * 	senderName: String
+ * 	senderEmail: String
+ * 	inboxVisible: Boolean!
+ * 	isRead: Boolean!
+ * 	isDraft: Boolean!
+ * 	isImportant: Boolean!
+ * 	ownerId: String!
+ * 	projectId: ID
+ * 	attachmentCount: Int!
+ * 	participantCount: Int!
+ * 	sortTs: String!
+ * 	createdAt: String!
+ * 	updatedAt: String!
+ * 	viewedAt: String
+ * }
+ *
+ * "`enum GraphqlSoupEntityType`, curated to the nine kinds this tool serves."
+ * enum GraphqlSoupEntityType {
+ * 	"A Macro document, including tasks, snippets, and skills."
+ * 	DOCUMENT
+ * 	"An AI chat."
+ * 	CHAT
+ * 	"A project."
+ * 	PROJECT
+ * 	"An email thread."
+ * 	EMAIL_THREAD
+ * 	"A channel."
+ * 	CHANNEL
+ * 	"A channel thread root."
+ * 	CHANNEL_MESSAGE
+ * 	"A call record."
+ * 	CALL
+ * 	"A calendar event."
+ * 	CALENDAR_EVENT
+ * 	"A connected foreign record."
+ * 	FOREIGN_ENTITY
+ * }
+ *
+ * "`type GraphqlSoupForeignEntity`."
+ * type GraphqlSoupForeignEntity implements SoupEntity {
+ * 	id: ID!
+ * 	entityType: GraphqlSoupEntityType!
+ * 	displayName: String
+ * 	tags: [SoupTag!]!
+ * 	properties: [GraphqlProperty!]!
+ * 	foreignEntityId: String!
+ * 	foreignEntitySource: String!
+ * 	sourceMetadata: JSON!
+ * 	createdAt: String!
+ * 	updatedAt: String!
+ * }
+ *
+ * "`type GraphqlSoupProject`."
+ * type GraphqlSoupProject implements SoupEntity {
+ * 	id: ID!
+ * 	entityType: GraphqlSoupEntityType!
+ * 	displayName: String
+ * 	tags: [SoupTag!]!
+ * 	properties: [GraphqlProperty!]!
+ * 	name: String!
+ * 	ownerId: String!
+ * 	parentId: ID
+ * 	createdAt: String!
+ * 	updatedAt: String!
+ * 	viewedAt: String
+ * }
+ *
+ * "A string property value."
+ * type GraphqlStringPropertyValue {
+ * 	"The stored string."
+ * 	value: String!
+ * }
+ *
+ * "`type GraphqlTaskSubType`."
+ * type GraphqlTaskSubType {
+ * 	isCompleted: Boolean!
+ * }
+ *
+ * "A scalar that can represent any JSON value."
+ * scalar JSON
+ *
+ * type Query {
+ * 	"The user's unified inbox: one page of items they can access."
+ * 	soup(input: SoupQueryInput! = {entityTypes: null, filters: null, taskFilter: null, sortMethod: null, sortDirection: null, limit: null, emailPreset: null, emailView: null, inbox: null, tags: null, tagsMatch: null}): SoupQueryPage!
+ * }
+ *
+ * "High-level email filter preset."
+ * enum SoupEmailPreset {
+ * 	"Important and not shared."
+ * 	SIGNAL
+ * }
+ *
+ * "`interface SoupEntity`."
+ * interface SoupEntity {
+ * 	id: ID!
+ * 	entityType: GraphqlSoupEntityType!
+ * 	displayName: String
+ * 	tags: [SoupTag!]!
+ * 	properties: [GraphqlProperty!]!
+ * }
+ *
+ * "`input SoupQueryInput`. Every field optional; `Default` gives `= {}`."
+ * input SoupQueryInput {
+ * 	"Kinds to return. Omit for all."
+ * 	entityTypes: [GraphqlSoupEntityType!]
+ * 	"Per-kind filter trees."
+ * 	filters: GraphqlEntityFilterAst
+ * 	"Task sugar over the well-known Status / Assignees / Priority properties."
+ * 	taskFilter: TaskFilter
+ * 	"Default UPDATED_AT."
+ * 	sortMethod: GraphqlSimpleSortMethod
+ * 	"Default DESC."
+ * 	sortDirection: GraphqlSortDirection
+ * 	"Default 50, max 500."
+ * 	limit: Int
+ * 	"SIGNAL = important threads, shared threads excluded."
+ * 	emailPreset: SoupEmailPreset
+ * 	"Mailbox view: inbox, sent, drafts, starred, all, important, other, or user:<label>."
+ * 	emailView: String
+ * 	"Restrict email results to one connected inbox by address."
+ * 	inbox: String
+ * 	"Only items carrying these tags, by label."
+ * 	tags: [SoupTagFilterInput!]
+ * 	"ANY unless set."
+ * 	tagsMatch: SoupTagMatch
+ * }
+ *
+ * "`type SoupQueryPage`."
+ * type SoupQueryPage {
+ * 	items: [SoupEntity!]!
+ * 	"True when limit cut the list."
+ * 	hasMore: Boolean!
+ * 	"One line of counts, and whether results were truncated."
+ * 	summary: String!
+ * }
+ *
+ * "`type SoupTag`."
+ * type SoupTag {
+ * 	label: String!
+ * 	scope: SoupTagScope!
+ * }
+ *
+ * "One tag selector by label."
+ * input SoupTagFilterInput {
+ * 	label: String!
+ * 	scope: SoupTagScope
+ * }
+ *
+ * "How multiple tag filters combine."
+ * enum SoupTagMatch {
+ * 	"At least one tag."
+ * 	ANY
+ * 	"Every tag."
+ * 	ALL
+ * }
+ *
+ * "Whose tag set a label came from."
+ * enum SoupTagScope {
+ * 	"The caller's personal tags."
+ * 	PERSONAL
+ * 	"A team tag set."
+ * 	TEAM
+ * }
+ *
+ * "Tasks by status, assignee, priority, and date. No property ids needed."
+ * input TaskFilter {
+ * 	"Status options to include."
+ * 	status: [TaskStatus!]
+ * 	"Priority options to include."
+ * 	priority: [TaskPriority!]
+ * 	"Tasks assigned to the current user."
+ * 	assignedToMe: Boolean
+ * 	"Assignee entity refs (`macro|<email>`) or emails."
+ * 	assignedTo: [String!]
+ * 	"Updated-at window."
+ * 	updatedAt: DateRange
+ * 	"Created-at window."
+ * 	createdAt: DateRange
+ * }
+ *
+ * "System task priority."
+ * enum TaskPriority {
+ * 	"Low."
+ * 	LOW
+ * 	"Medium."
+ * 	MEDIUM
+ * 	"High."
+ * 	HIGH
+ * 	"Urgent."
+ * 	URGENT
+ * }
+ *
+ * "System task status."
+ * enum TaskStatus {
+ * 	"Not started."
+ * 	NOT_STARTED
+ * 	"In progress."
+ * 	IN_PROGRESS
+ * 	"In review."
+ * 	IN_REVIEW
+ * 	"Completed."
+ * 	COMPLETED
+ * 	"Canceled."
+ * 	CANCELED
+ * }
+ *
+ * "Directs the executor to include this field or fragment only when the `if` argument is true."
+ * directive @include(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+ * "Indicates that an Input Object is a OneOf Input Object (and thus requires exactly one of its field be provided)"
+ * directive @oneOf on INPUT_OBJECT
+ * "Directs the executor to skip this field or fragment when the `if` argument is true."
+ * directive @skip(if: Boolean!) on FIELD | FRAGMENT_SPREAD | INLINE_FRAGMENT
+ * schema {
+ * 	query: Query
+ * }
+ *
+ * ```
+ *
+ * Examples
+ * ```graphql
+ * # Tasks assigned to me that are not completed
+ * query OpenTasks {
+ *   soup(input: {
+ *     entityTypes: [DOCUMENT]
+ *     filters: { documentFilter: { literal: { subType: TASK } } }
+ *     taskFilter: { status: [NOT_STARTED, IN_PROGRESS, IN_REVIEW], assignedToMe: true }
+ *   }) {
+ *     summary
+ *     hasMore
+ *     items { id displayName ... on GraphqlSoupDocument { updatedAt } }
+ *   }
+ * }
+ *
+ * # Important email since a timestamp
+ * query Signal($since: String!) {
+ *   soup(input: {
+ *     emailPreset: SIGNAL
+ *     filters: { emailFilter: { tree: { literal: { updatedAt: { gte: $since } } } } }
+ *   }) {
+ *     hasMore
+ *     items { id ... on GraphqlSoupEmailThread { name senderName snippet isRead updatedAt } }
+ *   }
+ * }
+ *
+ * # Catch me up: recent activity plus signal email
+ * query CatchMeUp($since: String!) {
+ *   activity: soup(input: {
+ *     filters: {
+ *       documentFilter: { literal: { updatedAt: { gte: $since } } }
+ *       projectFilter: { literal: { updatedAt: { gte: $since } } }
+ *       chatFilter: { literal: { updatedAt: { gte: $since } } }
+ *       emailFilter: { tree: { literal: { updatedAt: { gte: $since } } } }
+ *     }
+ *     limit: 100
+ *   }) {
+ *     summary
+ *     hasMore
+ *     items { __typename id displayName tags { label } }
+ *   }
+ *   signal: soup(input: { emailPreset: SIGNAL, limit: 15 }) {
+ *     items { id ... on GraphqlSoupEmailThread { name snippet senderName } }
+ *   }
+ * }
+ *
+ * ```
+ */
+export interface QuerySoup {
+  /**
+   * GraphQL document with exactly one `query` operation against the schema in this tool's description.
+   */
+  query: string;
+  /**
+   * Values for the document's $variables, as a JSON object.
+   */
+  variables?: {} | null;
+}
+/**
+ * GraphQL data map. Each selected soup field or alias is a SoupQueryPage.
+ */
+export interface QuerySoupData {
+  [k: string]: unknown;
+}
+/**
+ * Read actions attributed to the authenticated user within a time range, newest first. Use this for questions about what the user did, including actions an agent performed on their behalf. Property changes include propertyName/propertyType plus fromLabels/toLabels for resolved select and tag values; use those human-readable fields in the answer and never expose property or option ids. Do not use this for organization-wide updates or everything that happened to entities the user can access; use QuerySoup for those. Returns at most 100 activities and reports when the result was truncated.
  */
 export interface ReadActivity {
   /**
@@ -3932,7 +4707,7 @@ export interface ToolActivityEvent {
   occurredAt: string;
 }
 /**
- * Retrieve the transcript for a specific call record. Use ListEntities with includeTypes: ["call"] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from ListEntities. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
+ * Retrieve the transcript for a specific call record. Use QuerySoup with entityTypes: [CALL] first to find the callId. Only the transcript is returned — other metadata (participants, duration, etc.) is already available from QuerySoup. In transcript segments, speakerId is the associated user/track, not guaranteed speaker identity; use diarizedSpeakerId to distinguish actual voices, and treat different diarizedSpeakerIds as potentially different speakers even if speakerId is the caller/"you".
  */
 export interface ReadCallRecord {
   /**
@@ -5105,18 +5880,18 @@ export interface SetEntityPropertyResponse {
  *
  * Policies are per inbox. When acting on a specific thread (e.g. after GetThread), pass `thread_id` so the policy applies to the inbox that owns that thread, which matters for delegated or secondary inboxes. Otherwise pass `inbox` (an inbox email address from ListInboxes) to name one, or omit both to use the primary inbox.
  *
- * Get `sender_email` from GetThread (`from.email`) or ListEntities (`sender_email`); do not guess addresses. Calling again with a different policy overwrites the previous one. Repeating a call with the same arguments is safe.
+ * Get `sender_email` from GetThread (`from.email`) or QuerySoup (`senderEmail`); do not guess addresses. Calling again with a different policy overwrites the previous one. Repeating a call with the same arguments is safe.
  */
 export interface SetSenderPolicy {
   /**
    * The sender's email address, e.g. `from.email` on a GetThread message or
-   * `sender_email` on a ListEntities email row. Exact address, not a domain.
+   * `senderEmail` on a QuerySoup email thread. Exact address, not a domain.
    */
   sender_email: string;
   policy: ToolSenderPolicy;
   /**
    * Apply the policy to the inbox that owns this thread (same UUID returned
-   * by ListEntities, search, or GetThread). Takes precedence over `inbox`.
+   * by QuerySoup, search, or GetThread). Takes precedence over `inbox`.
    */
   thread_id?: string | null;
   /**
@@ -5342,11 +6117,11 @@ export interface UpdateReminder {
  * - Report spam: add `SPAM` (add=true) / Not spam: remove (add=false)
  * - Apply custom user label: add the label with that display name (add=true) / Remove: (add=false)
  *
- * `thread_id` is the email thread UUID (the same id returned by ListEntities, search results, or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name.
+ * `thread_id` is the email thread UUID (the same id returned by QuerySoup, search results, or GetThread). `label_id` is the UUID returned by ListLabels — NOT the label name.
  */
 export interface UpdateThreadLabels {
   /**
-   * The ID of the email thread to modify. Same UUID returned by ListEntities, search, or GetThread.
+   * The ID of the email thread to modify. Same UUID returned by QuerySoup, search, or GetThread.
    */
   thread_id: string;
   /**

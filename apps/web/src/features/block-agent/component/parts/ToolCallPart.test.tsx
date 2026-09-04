@@ -304,7 +304,7 @@ describe('ToolCallPart Macro tools', () => {
             output: null,
             error: 'permission denied',
           },
-          { name: 'ListEntities', status: 'failed' }
+          { name: 'QuerySoup', status: 'failed' }
         )}
       />
     ));
