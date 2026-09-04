@@ -676,19 +676,19 @@ export function ChannelsRail(props: {
           </div>
         </Match>
         <Match when={props.mode === 'slim'}>
-          <div class="flex shrink-0 flex-col items-center gap-3 px-2">
-            <div class="flex h-8 items-center justify-center">
+          <div class="flex shrink-0 flex-col items-center gap-3">
+            <div class="flex h-8 w-full items-center justify-center px-2">
               <SplitPanel.ControlGroup>
                 <SplitPanel.CloseButton size="icon-sm" />
               </SplitPanel.ControlGroup>
             </div>
-            <div class="flex h-8 items-center justify-center">
+            <div class="flex h-8 w-full items-center justify-center px-2">
               <RailModeButton
                 mode={props.mode}
                 onModeChange={props.onModeChange}
               />
             </div>
-            <div class="w-full px-1">
+            <div class="w-full px-3">
               <Tabs
                 aria-label="Chat sidebar views"
                 class="h-[76px] flex-col"
@@ -704,9 +704,11 @@ export function ChannelsRail(props: {
                 }}
               />
             </div>
-            <div class="flex w-full justify-center">
+            <div class="w-full border-t border-edge-muted" />
+            <div class="flex w-full justify-center px-2">
               <SlimCreateMenu />
             </div>
+            <div class="w-full border-t border-edge-muted" />
           </div>
 
           <div
