@@ -23,6 +23,7 @@ use notification::domain::ports::VoipPushSender;
 use notification::domain::service::NotificationIngress;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use subtle::ConstantTimeEq;
 
 use uuid::Uuid;
 
@@ -478,7 +479,7 @@ impl<
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
             .as_deref()
-            .is_some_and(|secret| secret == token)
+            .is_some_and(|secret| secret.as_bytes().ct_eq(token.as_bytes()).into())
     }
 
     #[tracing::instrument(err, skip(self))]
