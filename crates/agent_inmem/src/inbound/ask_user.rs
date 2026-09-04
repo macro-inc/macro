@@ -52,7 +52,8 @@ pub enum AskUserResponse {
 }
 
 impl ToolAnnotated for AskUser {
-    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Ask user");
+    const ANNOTATIONS: ToolAnnotations =
+        ToolAnnotations::read_only("Ask user").without_idempotent();
 }
 
 #[async_trait]
