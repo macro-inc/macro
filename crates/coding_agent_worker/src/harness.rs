@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::config::Harness;
-use agent_acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
+use crate::outbound::acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Client, ConnectTo};
 use agent_fold::domain::model_selection::model_selection;
 use agent_runtime_protocol::domain::connection::{

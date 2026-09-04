@@ -1,6 +1,4 @@
-//! Bounded, prompt-free discovery of an ACP agent's session configuration.
-
-#![deny(missing_docs)]
+//! Prompt-free inspection of a configured ACP subprocess.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -16,19 +14,19 @@ mod test;
 
 /// A subprocess launch description for one isolated ACP probe.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ProbeSubprocess {
+pub(crate) struct ProbeSubprocess {
     /// Executable or command name.
-    pub command: PathBuf,
+    pub(crate) command: PathBuf,
     /// Arguments passed to the executable.
-    pub args: Vec<String>,
+    pub(crate) args: Vec<String>,
     /// Directory in which the executable runs.
-    pub cwd: PathBuf,
+    pub(crate) cwd: PathBuf,
 }
 
 /// A failure to discover an ACP agent's session configuration.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
-pub enum ProbeError {
+pub(crate) enum ProbeError {
     /// The initialize or session/new exchange failed.
     #[error("ACP model probe failed: {0}")]
     Protocol(String),
@@ -48,7 +46,7 @@ pub enum ProbeError {
 /// channel and return the new session's raw configuration options.
 ///
 /// No prompt is sent. Dropping this future drops the ACP client connection.
-pub async fn probe_channel(
+async fn probe_channel(
     channel: Channel,
     cwd: &Path,
     deadline: Duration,
@@ -78,7 +76,7 @@ pub async fn probe_channel(
 /// On Unix the working directory is applied by a small `/bin/sh` wrapper
 /// which immediately `exec`s the configured command. The wrapper and agent
 /// remain in the process group guarded by [`AcpAgent`].
-pub async fn probe_subprocess(
+pub(crate) async fn probe_subprocess(
     process: &ProbeSubprocess,
     deadline: Duration,
 ) -> Result<Vec<SessionConfigOption>, ProbeError> {
