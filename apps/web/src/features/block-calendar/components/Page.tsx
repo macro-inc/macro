@@ -427,15 +427,18 @@ function CalendarPageHost(props: {
     })
   );
 
+  // Keyed on the mapped events rather than the query's update time: hiding a
+  // calendar re-maps a multi-calendar event to another copy without a fetch,
+  // and the open details must follow that copy.
   createEffect(
     on(
       () =>
         [
           isActive(),
           calendarView.selectedEvent()?.id,
-          props.data.occurrencesQuery.dataUpdatedAt,
+          props.eventsById(),
         ] as const,
-      ([active, selectedEventId]) => {
+      ([active, selectedEventId, eventsById]) => {
         if (
           !active ||
           !selectedEventId ||
@@ -445,7 +448,7 @@ function CalendarPageHost(props: {
           return;
         }
 
-        const selectedEvent = props.eventsById().get(selectedEventId);
+        const selectedEvent = eventsById.get(selectedEventId);
         if (selectedEvent) calendarView.refreshSelectedEvent(selectedEvent);
         else calendarView.closeEventDetails();
       }

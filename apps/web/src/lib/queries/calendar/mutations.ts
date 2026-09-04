@@ -293,6 +293,46 @@ function survivesDeletion(
   return false;
 }
 
+/**
+ * Cached items after an optimistic deletion. Deleting a whole event that is
+ * one copy among several retires only that copy at the provider, so the
+ * event stays under its remaining calendars with that copy dropped;
+ * everything else removes the covered occurrences.
+ */
+function applyDeletion(
+  items: CalendarOccurrenceItem[],
+  args: DeleteCalendarEventArgs
+): CalendarOccurrenceItem[] {
+  return items.flatMap((item) => {
+    if (item.event.id !== args.eventId) return [item];
+    const sources = item.event.sources ?? [];
+    const removesOneCopy =
+      (args.scope ?? 'all') === 'all' &&
+      args.calendarId !== undefined &&
+      sources.length > 1 &&
+      sources.some((copy) => copy.calendarId === args.calendarId);
+    if (!removesOneCopy) {
+      return survivesDeletion(item, args) ? [item] : [];
+    }
+    const remaining = sources.filter(
+      (copy) => copy.calendarId !== args.calendarId
+    );
+    return [
+      {
+        ...item,
+        event: {
+          ...item.event,
+          sources: remaining,
+          calendarId:
+            item.event.calendarId === args.calendarId
+              ? remaining[0]?.calendarId
+              : item.event.calendarId,
+        },
+      },
+    ];
+  });
+}
+
 type DeleteCallbacks = MutationCallbacks<
   unknown,
   Error,
@@ -319,9 +359,7 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
     >(
       {
         onMutate: (args) =>
-          patchOccurrenceCaches((items) =>
-            items.filter((item) => survivesDeletion(item, args))
-          ),
+          patchOccurrenceCaches((items) => applyDeletion(items, args)),
         onError: (_error, _args, context) => context?.rollback(),
         onSettled: (_data, _error, args) => {
           invalidateCalendarEventPreviews(args.eventId);
