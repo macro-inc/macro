@@ -105,6 +105,60 @@ vi.mock('@core/context/channels', () => ({
   }),
 }));
 
+const pipedreamMocks = vi.hoisted(() => ({
+  enabled: true,
+  connected: [] as string[],
+  connect: vi.fn(),
+  catalog: [
+    {
+      app_slug: 'linear',
+      display_name: 'Linear',
+      description: 'Issue tracking',
+      icon_url: null,
+    },
+    {
+      app_slug: 'notion',
+      display_name: 'Notion',
+      description: 'Docs and wikis',
+      icon_url: null,
+    },
+  ],
+}));
+
+vi.mock('@core/pipedream/flag', () => ({
+  usePipedreamMcpFlag: () => () => pipedreamMocks.enabled,
+}));
+
+vi.mock('@queries/pipedream-connectors', () => ({
+  usePipedreamConnectedSlugs: () => ({
+    slugs: () => new Set(pipedreamMocks.connected),
+    ready: () => true,
+  }),
+  usePipedreamCatalogQuery: (search: () => string) => ({
+    get data() {
+      const term = search().trim().toLowerCase();
+      return {
+        pages: [
+          {
+            servers: pipedreamMocks.catalog.filter((entry) =>
+              entry.display_name.toLowerCase().includes(term)
+            ),
+            next_cursor: null,
+          },
+        ],
+        pageParams: [undefined],
+      };
+    },
+    isFetching: false,
+    isFetchingNextPage: false,
+    hasNextPage: false,
+    isError: false,
+    fetchNextPage: vi.fn(),
+    refetch: vi.fn(),
+  }),
+  connectPipedreamApp: pipedreamMocks.connect,
+}));
+
 beforeAll(() => {
   vi.stubGlobal('scrollTo', vi.fn());
 });
@@ -123,6 +177,15 @@ beforeEach(() => {
   agentMocks.currentTeam = { team: { id: 'team-1' } };
   agentMocks.isTeamOwner = false;
   harnessMocks.query.data = [];
+  pipedreamMocks.enabled = true;
+  pipedreamMocks.connected = [];
+  pipedreamMocks.connect.mockReset();
+  pipedreamMocks.connect.mockImplementation(
+    async (args: { appSlug: string }) => {
+      pipedreamMocks.connected = [...pipedreamMocks.connected, args.appSlug];
+      return 'connected';
+    }
+  );
 });
 
 const MACROD_HARNESS = {
@@ -286,6 +349,7 @@ describe('Agents', () => {
         harness: 'in-memory',
         name: 'Bug resolver',
         instructions: 'Fix the root cause.',
+        mcp: { scope: 'owner_connections' },
         teamId: undefined,
       });
       expect(agentMocks.toastSuccess).toHaveBeenCalledWith('Agent updated');
@@ -507,6 +571,7 @@ describe('Agents', () => {
         harness: 'in-memory',
         name: 'Bug fixer',
         instructions: 'Fix the root cause and add tests.',
+        mcp: { scope: 'owner_connections' },
         teamId: 'team-1',
       });
       expect(agentMocks.toastSuccess).toHaveBeenCalledWith('Agent created');
@@ -594,6 +659,7 @@ describe('Agents', () => {
         harnessId: MACROD_HARNESS.id,
         name: 'Bug fixer',
         instructions: '',
+        mcp: { scope: 'owner_connections' },
         teamId: undefined,
       });
     });
@@ -634,5 +700,171 @@ describe('Agents', () => {
     const defaultModel = within(dialog).getByLabelText('Default model');
     expect(defaultModel.tagName).toBe('INPUT');
     expect(defaultModel).toHaveProperty('value', 'default');
+  });
+
+  const linearAgent = {
+    bot: {
+      id: 'agent-mcp',
+      kind: 'owned',
+      owner: { type: 'team', team_id: 'team-1' },
+      name: 'Triage bot',
+      handle: 'triage-bot',
+      has_agent: true,
+      created_by: 'macro|user@example.com',
+      created_at: '2026-08-27T12:00:00Z',
+      updated_at: '2026-08-27T12:00:00Z',
+    },
+    instructions: '',
+    harness: 'in-memory',
+    default_model: Model.sonnet5,
+    channel_scope: 'all',
+    channel_ids: [],
+    mcp: {
+      scope: 'selected',
+      servers: [
+        { app_slug: 'linear', server_name: 'Linear' },
+        { app_slug: 'notion', server_name: 'Notion' },
+      ],
+    },
+  };
+
+  it('hides the Connections section when the Pipedream stack is off but keeps the selection', async () => {
+    pipedreamMocks.enabled = false;
+    agentMocks.query.data = [linearAgent];
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).queryByText('Connections')).toBeNull();
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' })
+    );
+
+    await waitFor(() => {
+      expect(agentMocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mcp: { scope: 'selected', servers: linearAgent.mcp.servers },
+        })
+      );
+    });
+  });
+
+  it('defaults new agents to the owner connections policy', () => {
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(
+      within(dialog).getByLabelText('Use my connected apps')
+    ).toHaveProperty('checked', true);
+    expect(within(dialog).queryByLabelText('Search connectors')).toBeNull();
+  });
+
+  it('picks apps from the whole catalog, shows the viewer connection state, and persists them', async () => {
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+
+    const dialog = screen.getByRole('dialog');
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Triage bot' },
+    });
+    fireEvent.click(within(dialog).getByLabelText('Specific apps'));
+
+    // An explicit selection with nothing in it is not something to save.
+    expect(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    ).toHaveProperty('disabled', true);
+
+    fireEvent.input(within(dialog).getByLabelText('Search connectors'), {
+      target: { value: 'lin' },
+    });
+    await waitFor(() => {
+      expect(
+        within(dialog).getByRole('option', { name: /Linear/ })
+      ).toBeTruthy();
+    });
+    fireEvent.click(within(dialog).getByRole('option', { name: /Linear/ }));
+
+    // The pick is listed as not connected for this viewer, with a way in.
+    await waitFor(() => {
+      expect(within(dialog).getByText('Linear')).toBeTruthy();
+    });
+    expect(within(dialog).getByLabelText('Not connected')).toBeTruthy();
+    expect(
+      within(dialog).getByRole('button', { name: 'Connect' })
+    ).toBeTruthy();
+    // ...and no longer offered by the search.
+    fireEvent.input(within(dialog).getByLabelText('Search connectors'), {
+      target: { value: 'lin' },
+    });
+    await waitFor(() => {
+      expect(
+        within(dialog).queryByRole('option', { name: /Linear/ })
+      ).toBeNull();
+    });
+
+    // Unconnected picks never block saving: the agent's author chooses the
+    // apps, each person connects their own.
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+    await waitFor(() => {
+      expect(agentMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mcp: {
+            scope: 'selected',
+            servers: [{ app_slug: 'linear', server_name: 'Linear' }],
+          },
+        })
+      );
+    });
+  });
+
+  it('connects a picked app in place and flips its indicator without saving', async () => {
+    agentMocks.update.mockClear();
+    agentMocks.query.data = [linearAgent];
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Triage bot' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Specific apps')).toHaveProperty(
+      'checked',
+      true
+    );
+    expect(within(dialog).getAllByLabelText('Not connected')).toHaveLength(2);
+    // Team agents say out loud that connections are per person.
+    expect(within(dialog).getByText(/Connections are personal/)).toBeTruthy();
+
+    // Linear is listed first; its row carries the first Connect action.
+    fireEvent.click(
+      within(dialog).getAllByRole('button', {
+        name: 'Connect',
+      })[0] as HTMLElement
+    );
+
+    await waitFor(() => {
+      expect(pipedreamMocks.connect).toHaveBeenCalledWith(
+        expect.objectContaining({ appSlug: 'linear', serverName: 'Linear' })
+      );
+    });
+    expect(agentMocks.update).not.toHaveBeenCalled();
+
+    // Removing one pick keeps the other.
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Remove Notion' })
+    );
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' })
+    );
+    await waitFor(() => {
+      expect(agentMocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mcp: {
+            scope: 'selected',
+            servers: [{ app_slug: 'linear', server_name: 'Linear' }],
+          },
+        })
+      );
+    });
   });
 });

@@ -7,6 +7,7 @@
 
 import type { AgentChannelScope } from './agentChannelScope';
 import type { AgentHarnessId } from './agentHarnessId';
+import type { AgentMcpServers } from './agentMcpServers';
 import type { Bot } from './bot';
 
 /**
@@ -26,4 +27,6 @@ export interface Agent {
   harness_id?: AgentHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
+  /** Which MCP servers sessions of this agent are handed. */
+  mcp: AgentMcpServers;
 }

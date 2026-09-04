@@ -5,6 +5,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
+import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import MacroLogo from '@icon/macro-logo.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -25,12 +26,16 @@ import {
   useCursorModelsQuery,
 } from '@queries/auth/cursor-api-key';
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
+import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
+import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
+import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { Avatar, Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
 import { canDeleteBot } from '../channel/Bots/botPermissions';
 import { ChannelMultiSelect } from '../channel/Bots/ChannelMultiSelect';
+import { PipedreamAppPicker } from './PipedreamAppPicker';
 import {
   ChoiceRow,
   SettingsCard,
@@ -547,7 +552,32 @@ function AgentDialog(props: {
   const [share, setShare] = createSignal<AgentShare>(
     props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
   );
+  const pipedreamMcp = usePipedreamMcpFlag();
+  const connections = usePipedreamConnectedSlugs();
+  const [mcp, setMcp] = createSignal<AgentMcpServers>(
+    props.agent?.mcp ?? { scope: 'owner_connections' }
+  );
+  const selectedMcpServers = (): AgentMcpServer[] => {
+    const current = mcp();
+    return current.scope === 'selected' ? current.servers : [];
+  };
+  // Picks survive a round trip through "Use my connected apps", so toggling
+  // the radio to compare does not throw the list away.
+  let rememberedMcpServers: AgentMcpServer[] = selectedMcpServers();
+  const setMcpScope = (scope: AgentMcpServers['scope']) => {
+    if (scope === 'selected') {
+      setMcp({ scope: 'selected', servers: rememberedMcpServers });
+    } else {
+      rememberedMcpServers = selectedMcpServers();
+      setMcp({ scope: 'owner_connections' });
+    }
+  };
+  const setSelectedMcpServers = (servers: AgentMcpServer[]) => {
+    rememberedMcpServers = servers;
+    setMcp({ scope: 'selected', servers });
+  };
   let avatarInputRef: HTMLInputElement | undefined;
+  let dialogContentRef: HTMLDivElement | undefined;
 
   const close = () => props.onClose();
 
@@ -581,6 +611,7 @@ function AgentDialog(props: {
     selectedHarness() !== undefined &&
     selectedDefaultModelId().length > 0 &&
     (channelMode() === 'all' || selectedChannelIds().length > 0) &&
+    (mcp().scope === 'owner_connections' || selectedMcpServers().length > 0) &&
     (share() === 'Private' ? props.canMakePrivate : props.canShareWithTeam);
 
   const selectedTeamId = () => {
@@ -607,6 +638,9 @@ function AgentDialog(props: {
       harnessId: harness?.kind === 'macrod' ? harness.id : undefined,
       name: name().trim(),
       instructions: instructions().trim(),
+      // Always sent, flag or no flag, so an editor without the Connections
+      // section never wipes a selection somebody else made.
+      mcp: mcp(),
       teamId: selectedTeamId(),
     });
     if (saved) close();
@@ -619,6 +653,9 @@ function AgentDialog(props: {
       position="center"
       visibleScrim
       class="w-[min(720px,calc(100vw-16px))]"
+      contentRef={(element) => {
+        dialogContentRef = element;
+      }}
     >
       <Panel depth={2} class="max-h-[88vh] rounded-xl text-ink">
         <Panel.Header class="justify-between px-3">
@@ -823,6 +860,53 @@ function AgentDialog(props: {
                 </label>
               </div>
             </AgentFormSection>
+
+            <Show when={pipedreamMcp()}>
+              <AgentFormSection
+                title="Connections"
+                description="Which connected apps (MCP tools) this agent can use."
+              >
+                <fieldset class="flex flex-col gap-2">
+                  <legend class="sr-only">Connections</legend>
+                  <ChoiceRow
+                    name="agent-mcp-mode"
+                    value="owner_connections"
+                    checked={mcp().scope === 'owner_connections'}
+                    title="Use my connected apps"
+                    description="The agent uses whatever apps the person running it has connected."
+                    onChange={() => setMcpScope('owner_connections')}
+                  />
+                  <ChoiceRow
+                    name="agent-mcp-mode"
+                    value="selected"
+                    checked={mcp().scope === 'selected'}
+                    title="Specific apps"
+                    description="Pick apps from the catalog. Each person connects their own account."
+                    onChange={() => setMcpScope('selected')}
+                  />
+                </fieldset>
+
+                <Show when={mcp().scope === 'selected'}>
+                  <div class="mt-3 border-t border-edge-muted pt-3">
+                    <PipedreamAppPicker
+                      selected={selectedMcpServers()}
+                      onChange={setSelectedMcpServers}
+                      connectedSlugs={connections.slugs}
+                      connectionsReady={connections.ready}
+                      connectContainer={() => dialogContentRef}
+                    />
+                  </div>
+                </Show>
+
+                <Show when={share() === 'Team'}>
+                  <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
+                    Connections are personal. Teammates who use this agent
+                    connect these apps under Settings → Connections; the
+                    indicators here show only your own.
+                  </p>
+                </Show>
+              </AgentFormSection>
+            </Show>
 
             <AgentFormSection
               title="Channels"

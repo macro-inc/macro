@@ -78,7 +78,18 @@ list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team`, `Tags`, `CRM`, `Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; `Log out`.
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`;
+`Log out`.
+`Agents` lists team and private agents with `Create agent` / `Edit <name>` dialogs grouped
+Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:
+`Use my connected apps` (default; the agent gets whatever the person running it has
+connected) or `Specific apps`, which reveals a `Search connectors` box over the whole
+Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
+with a connected / not-connected dot for the *current viewer* plus an inline `Connect`
+that opens the Pipedream Connect flow inside the dialog. Unconnected picks never block
+saving; each teammate connects their own account. An agent session that calls a picked
+but unconnected app gets a tool result saying so, and the agent's reply renders a
+`Connect <app>` chip that opens Settings → Connections for that app.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
 ## Notifications

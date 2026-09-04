@@ -115,12 +115,50 @@ export type Agent = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp: AgentMcpServers;
 };
 
 /**
  * Whether an agent is available everywhere or only in selected channels.
  */
 export type AgentChannelScope = 'all' | 'selected';
+
+/**
+ * One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+ *
+ * Only the catalog identity is stored. Whether a given person has connected
+ * the app is theirs, resolved at call time by the egress proxy, never here.
+ */
+export type AgentMcpServer = {
+    /**
+     * Pipedream app slug, e.g. `linear`.
+     */
+    app_slug: string;
+    /**
+     * Display name, e.g. `Linear`.
+     */
+    server_name: string;
+};
+
+/**
+ * Which Pipedream MCP servers an agent's sessions are handed.
+ *
+ * One value for the whole choice, so a selection can never travel without
+ * its scope or a scope without its selection. Serialized with a `scope` tag,
+ * which the generated TypeScript sees as a discriminated union.
+ */
+export type AgentMcpServers = {
+    scope: 'owner_connections';
+} | {
+    scope: 'selected';
+    /**
+     * The apps, in the order the agent's author picked them.
+     */
+    servers: Array<AgentMcpServer>;
+};
 
 export type Anchor = PdfAnchor;
 
@@ -2785,6 +2823,10 @@ export type CreateAgentRequest = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp?: AgentMcpServers;
     /**
      * Display name.
      */
@@ -8670,6 +8712,10 @@ export type UpdateAgentRequest = {
      * Instructions supplied to the agent at the start of a conversation.
      */
     instructions: string;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp?: AgentMcpServers;
     /**
      * Display name.
      */

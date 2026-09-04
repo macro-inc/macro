@@ -77,6 +77,42 @@ export const listAgentsResponseItem = zod
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
       ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
+      ),
   })
   .describe('A persisted user- or team-owned AI agent.');
 export const listAgentsResponse = zod.array(listAgentsResponseItem);
@@ -112,6 +148,43 @@ export const createAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .optional()
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -156,6 +229,43 @@ export const updateAgentBody = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .optional()
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
     name: zod.string().describe('Display name.'),
     team_id: zod
@@ -234,6 +344,42 @@ export const updateAgentResponse = zod
       .string()
       .describe(
         'Instructions supplied to the agent at the start of a conversation.'
+      ),
+    mcp: zod
+      .union([
+        zod
+          .object({
+            scope: zod.enum(['owner_connections']),
+          })
+          .describe(
+            'Whatever apps the person running the session has connected.'
+          ),
+        zod
+          .object({
+            scope: zod.enum(['selected']),
+            servers: zod
+              .array(
+                zod
+                  .object({
+                    app_slug: zod
+                      .string()
+                      .describe('Pipedream app slug, e.g. `linear`.'),
+                    server_name: zod
+                      .string()
+                      .describe('Display name, e.g. `Linear`.'),
+                  })
+                  .describe(
+                    'One Pipedream app an agent lists under [`AgentMcpServers::Selected`].\n\nOnly the catalog identity is stored. Whether a given person has connected\nthe app is theirs, resolved at call time by the egress proxy, never here.'
+                  )
+              )
+              .describe(
+                "The apps, in the order the agent's author picked them."
+              ),
+          })
+          .describe('Exactly these apps, connected or not.'),
+      ])
+      .describe(
+        "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       ),
   })
   .describe('A persisted user- or team-owned AI agent.');
