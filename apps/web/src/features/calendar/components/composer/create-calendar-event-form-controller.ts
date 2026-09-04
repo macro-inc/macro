@@ -196,12 +196,16 @@ export function createCalendarEventFormController(
 
   const selectedCalendarOption = () => calendarOptionFor(effectiveCalendarId());
 
+  // Reminder defaults come from the calendar a save would actually target,
+  // which the out-of-office restriction may have steered away from the
+  // stated `calendarId`.
   const resolvedReminderMinutesFor = (values: EventEditorInitialValues) =>
     normalizedReminderMinutes(
       popupMinutes(
         resolveReminderOverrides(
           values.reminders,
-          calendarOptionFor(values.calendarId)?.defaultReminders,
+          calendarOptionFor(values.calendarId ?? effectiveCalendarId())
+            ?.defaultReminders,
           values.eventType
         )
       )
@@ -252,9 +256,14 @@ export function createCalendarEventFormController(
     };
   });
 
-  // An out-of-office event hides guests, location, and conferencing, so the
-  // snapshot zeroes what a save would not submit — a value lingering from
-  // before a kind switch is neither dirty nor saved.
+  // A new out-of-office event hides guests, location, and conferencing, so a
+  // create blanks them — a value lingering from before a kind switch is
+  // neither dirty nor saved. An edit passes them through untouched instead:
+  // the kind cannot change there, so blanking would patch fields the hidden
+  // pills never let the user edit.
+  const blanksHiddenFields = (outOfOffice: boolean) =>
+    outOfOffice && options.isEdit !== true;
+
   const outOfOfficeSnapshotFields = (values: EventEditorInitialValues) => {
     const eventKind = eventKindOf(values.eventType);
     const outOfOffice =
@@ -273,17 +282,22 @@ export function createCalendarEventFormController(
     end: state().end,
     recurrenceLines: effectiveRecurrenceLines(),
     calendarId: effectiveCalendarId(),
-    guestEmails: isOutOfOffice() ? [] : selectedGuests().map(guestEmail),
-    location: isOutOfOffice() ? '' : state().location,
+    guestEmails: blanksHiddenFields(isOutOfOffice())
+      ? []
+      : selectedGuests().map(guestEmail),
+    location: blanksHiddenFields(isOutOfOffice()) ? '' : state().location,
     description: state().description,
-    conference: isOutOfOffice() ? 'none' : state().conference,
+    conference: blanksHiddenFields(isOutOfOffice())
+      ? 'none'
+      : state().conference,
     reminderMinutes: normalizedReminderMinutes(reminderMinutes()),
     ...outOfOfficeSnapshotFields(state()),
   });
 
   const initialSnapshot = (): EventComposerFormSnapshot => {
-    const initialOutOfOffice =
-      eventKindOf(initialValue().eventType) === 'out_of_office';
+    const blanks = blanksHiddenFields(
+      eventKindOf(initialValue().eventType) === 'out_of_office'
+    );
     return {
       title: initialValue().title,
       allDay: initialValue().allDay,
@@ -291,10 +305,10 @@ export function createCalendarEventFormController(
       end: initialValue().end,
       recurrenceLines: initialValue().recurrenceLines,
       calendarId: initialValue().calendarId ?? options.calendarOptions()[0]?.id,
-      guestEmails: initialOutOfOffice ? [] : initialGuestEmails(),
-      location: initialOutOfOffice ? '' : initialValue().location,
+      guestEmails: blanks ? [] : initialGuestEmails(),
+      location: blanks ? '' : initialValue().location,
       description: initialValue().description,
-      conference: initialOutOfOffice ? 'none' : initialValue().conference,
+      conference: blanks ? 'none' : initialValue().conference,
       reminderMinutes: normalizedReminderMinutes(initialReminderMinutes()),
       ...outOfOfficeSnapshotFields(initialValue()),
     };
@@ -444,8 +458,10 @@ export function createCalendarEventFormController(
       time,
       recurrenceLines: recurrence.recurrenceLines(),
       calendarId: effectiveCalendarId(),
-      guestEmails: isOutOfOffice() ? [] : selectedGuests().map(guestEmail),
-      location: isOutOfOffice() ? '' : current.location,
+      guestEmails: blanksHiddenFields(isOutOfOffice())
+        ? []
+        : selectedGuests().map(guestEmail),
+      location: blanksHiddenFields(isOutOfOffice()) ? '' : current.location,
       description: current.description,
       ...(conference ? { conference } : {}),
       ...(reminders ? { reminders } : {}),

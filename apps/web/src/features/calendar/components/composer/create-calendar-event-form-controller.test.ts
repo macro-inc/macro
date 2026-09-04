@@ -238,6 +238,24 @@ describe('out of office', () => {
     expect(controller.isDirty()).toBe(false);
   });
 
+  it('edits pass the hidden guest and location values through untouched', () => {
+    const controller = controllerFor(
+      {
+        ...timedRange(3),
+        title: 'Away',
+        eventType: 'out_of_office',
+        guests: 'guest@example.com',
+        location: 'HQ',
+      },
+      { isEdit: true }
+    );
+
+    expect(controller.isDirty()).toBe(false);
+    const values = controller.submitValues();
+    expect(values?.guestEmails).toEqual(['guest@example.com']);
+    expect(values?.location).toBe('HQ');
+  });
+
   it('edits only patch decline settings the user actually picked', () => {
     const controller = controllerFor(
       { ...timedRange(3), title: 'Away', eventType: 'out_of_office' },
