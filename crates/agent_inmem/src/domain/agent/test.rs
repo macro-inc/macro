@@ -508,6 +508,39 @@ async fn ask_sends_a_form_elicitation_and_echoes_the_accepted_answer() {
 }
 
 #[tokio::test]
+async fn ask_rejects_an_answer_outside_the_offered_options() {
+    use std::collections::BTreeMap;
+
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue,
+    };
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([(
+            ASK_FIELD.to_owned(),
+            ElicitationContentValue::String("yellow".to_owned()),
+        )])));
+    let (notifications, _, response) = with_asking_agent(answer, async |connection, session| {
+        connection
+            .send_request(text_prompt(
+                &session,
+                "/ask What is the best colour? | red | blue | green",
+            ))
+            .block_task()
+            .await
+            .expect("the ask turn should complete with a validation message")
+    })
+    .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert!(
+        spoken(&notifications).contains("was not one of the offered options"),
+        "got {:?}",
+        spoken(&notifications)
+    );
+}
+
+#[tokio::test]
 async fn ask_reports_a_decline_and_a_free_text_question_has_no_options() {
     use agent_client_protocol::schema::v1::{ElicitationAction, ElicitationMode};
 

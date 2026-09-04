@@ -196,11 +196,11 @@ struct AcpUserInputRequester {
 #[async_trait]
 impl UserInputRequester for AcpUserInputRequester {
     async fn ask(&self, request: UserInputRequest) -> Result<UserInputOutcome, UserInputError> {
+        let options = request.options;
         let mut field = StringPropertySchema::new().title("Answer");
-        if !request.options.is_empty() {
+        if !options.is_empty() {
             field = field.one_of(
-                request
-                    .options
+                options
                     .iter()
                     .map(|option| EnumOption::new(option.clone(), option.clone()))
                     .collect::<Vec<_>>(),
@@ -222,17 +222,25 @@ impl UserInputRequester for AcpUserInputRequester {
             .await
             .map_err(|error| UserInputError::RequestFailed(error.to_string()))?;
         match response.action {
-            ElicitationAction::Accept(accept) => accept
-                .content
-                .as_ref()
-                .and_then(|content| content.get(ASK_FIELD))
-                .and_then(|value| serde_json::to_value(value).ok())
-                .map(|value| match value {
-                    serde_json::Value::String(text) => text,
-                    other => other.to_string(),
-                })
-                .map(UserInputOutcome::Answered)
-                .ok_or(UserInputError::MissingAnswer),
+            ElicitationAction::Accept(accept) => {
+                let answer = accept
+                    .content
+                    .as_ref()
+                    .and_then(|content| content.get(ASK_FIELD))
+                    .and_then(|value| serde_json::to_value(value).ok())
+                    .ok_or(UserInputError::MissingAnswer)?;
+                let serde_json::Value::String(answer) = answer else {
+                    return Err(UserInputError::InvalidAnswer(
+                        "the answer was not a string".to_owned(),
+                    ));
+                };
+                if !options.is_empty() && !options.contains(&answer) {
+                    return Err(UserInputError::InvalidAnswer(format!(
+                        "{answer:?} was not one of the offered options"
+                    )));
+                }
+                Ok(UserInputOutcome::Answered(answer))
+            }
             ElicitationAction::Decline => Ok(UserInputOutcome::Declined),
             ElicitationAction::Cancel => Ok(UserInputOutcome::Cancelled),
             _ => Err(UserInputError::RequestFailed(
