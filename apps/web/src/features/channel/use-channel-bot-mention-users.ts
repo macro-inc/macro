@@ -1,3 +1,4 @@
+import { useCursorAgentsAccess } from '@core/cursor/flag';
 import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
@@ -19,17 +20,30 @@ function mentionUser(bot: Bot): IUser {
 export function availableBotMentionUsers(
   channelBots: readonly Bot[],
   agents: readonly Agent[],
-  cursorConnected: boolean
+  cursorEnabled: boolean,
+  agentsLoaded = true
 ): IUser[] {
+  if (!agentsLoaded) return [];
   const globalAgents = agents.filter(
     (agent) =>
       agent.channel_scope === 'all' &&
       agent.bot.has_agent &&
-      (agent.harness !== 'cursor' || cursorConnected)
+      (agent.harness !== 'cursor' || cursorEnabled)
   );
   const seen = new Set<string>();
 
-  return [...channelBots, ...globalAgents.map((agent) => agent.bot)]
+  const cursorAgentIds = new Set(
+    agents
+      .filter((agent) => agent.harness === 'cursor')
+      .map((agent) => agent.bot.id)
+  );
+
+  return [
+    ...channelBots.filter(
+      (bot) => cursorEnabled || !cursorAgentIds.has(bot.id)
+    ),
+    ...globalAgents.map((agent) => agent.bot),
+  ]
     .map(mentionUser)
     .filter((user) => {
       if (seen.has(user.id)) return false;
@@ -51,12 +65,14 @@ export function useChannelBotMentionUsers(
   const channelBots = useChannelBotsQuery(channelId);
   const agents = useAgentsQuery();
   const cursorStatus = useCursorApiKeyStatusQuery();
+  const canUseCursor = useCursorAgentsAccess();
 
   return createMemo(() =>
     availableBotMentionUsers(
       channelBots.data ?? [],
       agents.data ?? [],
-      cursorStatus.data?.registered ?? false
+      canUseCursor() && (cursorStatus.data?.registered ?? false),
+      agents.isSuccess
     )
   );
 }

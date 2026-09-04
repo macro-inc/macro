@@ -381,6 +381,11 @@ where
         req: CreateAgentRequest,
     ) -> Result<Agent, BotError> {
         validate_agent_request(&req)?;
+        if req.harness == "cursor" {
+            return Err(BotError::BadRequest(
+                "Cursor personas are created by connecting Cursor".to_string(),
+            ));
+        }
         if req.channel_scope == AgentChannelScope::Selected
             && !self
                 .repo
@@ -430,8 +435,28 @@ where
         req: UpdateAgentRequest,
     ) -> Result<Agent, BotError> {
         let current = self.ensure_manageable(caller.clone(), bot_id).await?;
-
         validate_update_agent_request(&req)?;
+        let is_managed_cursor = self
+            .repo
+            .has_provisioning_key(bot_id, "cursor")
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?;
+        if req.harness == "cursor" && !is_managed_cursor {
+            return Err(BotError::BadRequest(
+                "Cursor personas are created by connecting Cursor".to_string(),
+            ));
+        }
+        if is_managed_cursor
+            && (req.team_id.is_some()
+                || req.harness != "cursor"
+                || req.harness_id.is_some()
+                || req.channel_scope != AgentChannelScope::All)
+        {
+            return Err(BotError::BadRequest(
+                "Cursor personas must remain private, global, and on the Cursor runtime"
+                    .to_string(),
+            ));
+        }
         if req.channel_scope == AgentChannelScope::Selected
             && !self
                 .repo
@@ -587,7 +612,7 @@ where
         bot_id: BotId,
         req: PatchBotRequest,
     ) -> Result<Bot, BotError> {
-        self.ensure_manageable(caller.clone(), bot_id).await?;
+        let bot = self.ensure_manageable(caller.clone(), bot_id).await?;
         if let Some(handle) = &req.handle {
             validate_handle(handle)?;
         }
@@ -595,6 +620,19 @@ where
         let requested_handle = req.handle.clone();
         let requested_description = req.description.clone();
         let requested_avatar_url = req.avatar_url.clone();
+        let requested_has_agent = req.has_agent;
+        if bot.has_agent
+            && requested_has_agent == Some(false)
+            && self
+                .repo
+                .has_provisioning_key(bot_id, "cursor")
+                .await
+                .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::BadRequest(
+                "Cursor personas must remain enabled".to_string(),
+            ));
+        }
         let bot = self
             .repo
             .patch_bot(bot_id, req)
@@ -622,6 +660,16 @@ where
         bot_id: BotId,
     ) -> Result<(), BotError> {
         let bot = self.ensure_manageable(caller.clone(), bot_id).await?;
+        if self
+            .repo
+            .has_provisioning_key(bot_id, "cursor")
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::BadRequest(
+                "Cursor personas are managed by the Cursor connection".to_string(),
+            ));
+        }
         if let Some(BotOwner::Team { team_id }) = &bot.owner
             && bot.created_by.as_deref() != Some(caller.as_ref())
             && !self
@@ -667,6 +715,16 @@ where
             .cloned()
             .map_err(|_| BotError::Unauthorized)?;
         self.ensure_manageable(caller, bot_id).await?;
+        if self
+            .repo
+            .has_provisioning_key(bot_id, "cursor")
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Err(BotError::BadRequest(
+                "Cursor personas are global and cannot be installed in channels".to_string(),
+            ));
+        }
         self.repo
             .add_bot_to_channel(channel_id, bot_id)
             .await

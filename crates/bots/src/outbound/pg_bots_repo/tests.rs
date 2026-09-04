@@ -8,6 +8,10 @@ use crate::domain::{
     ports::{BotError, BotService},
     service::BotServiceImpl,
 };
+use crate::{
+    domain::provisioning::CURSOR_PERSONA,
+    outbound::pg_provisioned_agents::ensure_private_provisioned_agent,
+};
 use entity_access::domain::models::{
     Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
     ParticipantRole,
@@ -26,6 +30,188 @@ const TEAM_OWNER: &str = "macro|bot-team-owner@example.com";
 const TEAM_OTHER: &str = "macro|bot-team-other@example.com";
 fn user_id(value: &str) -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cursor_persona_provisioning_is_idempotent_and_preserves_edits(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OWNER).await?;
+    let owner = user_id(USER_OWNER);
+
+    let mut tx = pool.begin().await?;
+    let first = ensure_private_provisioned_agent(&mut tx, &owner, &CURSOR_PERSONA).await?;
+    tx.commit().await?;
+
+    sqlx::query!(
+        "UPDATE bots SET name = 'My Cursor' WHERE id = $1",
+        first.as_uuid()
+    )
+    .execute(&pool)
+    .await?;
+
+    let mut tx = pool.begin().await?;
+    let second = ensure_private_provisioned_agent(&mut tx, &owner, &CURSOR_PERSONA).await?;
+    tx.commit().await?;
+
+    assert_eq!(second, first);
+    let row = sqlx::query!(
+        r#"
+        SELECT b.name, b.owner_user_id, b.provisioning_key, a.harness, a.channel_scope
+        FROM bots AS b
+        JOIN agent_configs AS a ON a.bot_id = b.id
+        WHERE b.id = $1
+        "#,
+        first.as_uuid()
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(row.name, "My Cursor");
+    assert_eq!(row.owner_user_id.as_deref(), Some(USER_OWNER));
+    assert_eq!(row.provisioning_key.as_deref(), Some("cursor"));
+    assert_eq!(row.harness, "cursor");
+    assert_eq!(row.channel_scope, "all");
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cursor_personas_cannot_be_shared_or_moved_to_another_runtime(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, USER_OWNER, "owner").await?;
+    let owner = user_id(USER_OWNER);
+
+    let mut tx = pool.begin().await?;
+    let original = ensure_private_provisioned_agent(&mut tx, &owner, &CURSOR_PERSONA).await?;
+    tx.commit().await?;
+
+    let mut update = update_agent_req("shared-cursor", AgentChannelScope::All);
+    update.team_id = Some(team_id);
+    update.harness = "cursor".to_string();
+    let shared = service(&pool)
+        .update_agent(owner.clone(), original, update)
+        .await;
+    assert!(matches!(shared, Err(BotError::BadRequest(_))));
+
+    let mut moved = update_agent_req("moved-cursor", AgentChannelScope::All);
+    moved.harness = "in-memory".to_string();
+    let moved = service(&pool).update_agent(owner, original, moved).await;
+    assert!(matches!(moved, Err(BotError::BadRequest(_))));
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cursor_agents_cannot_be_created_with_team_ownership(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, USER_OWNER, "owner").await?;
+    let mut request = create_agent_req("team-cursor", AgentChannelScope::All);
+    request.team_id = Some(team_id);
+    request.harness = "cursor".to_string();
+
+    let created = service(&pool)
+        .create_agent(user_id(USER_OWNER), request)
+        .await;
+    assert!(matches!(created, Err(BotError::BadRequest(_))));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cursor_agents_cannot_be_created_through_the_generic_api(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OWNER).await?;
+    let mut request = create_agent_req("private-cursor", AgentChannelScope::All);
+    request.harness = "cursor".to_string();
+
+    let created = service(&pool)
+        .create_agent(user_id(USER_OWNER), request)
+        .await;
+    assert!(matches!(created, Err(BotError::BadRequest(_))));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cursor_personas_cannot_be_disabled_or_deleted(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OWNER).await?;
+    let owner = user_id(USER_OWNER);
+    let mut tx = pool.begin().await?;
+    let persona = ensure_private_provisioned_agent(&mut tx, &owner, &CURSOR_PERSONA).await?;
+    tx.commit().await?;
+
+    let disabled = service(&pool)
+        .patch_bot(
+            owner.clone(),
+            persona,
+            PatchBotRequest {
+                name: None,
+                handle: None,
+                description: None,
+                avatar_url: None,
+                has_agent: Some(false),
+            },
+        )
+        .await;
+    assert!(matches!(disabled, Err(BotError::BadRequest(_))));
+
+    let deleted = service(&pool).delete_bot(owner, persona).await;
+    assert!(matches!(deleted, Err(BotError::BadRequest(_))));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cursor_personas_cannot_be_installed_in_channels(pool: PgPool) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    insert_channel_member(&pool, channel_id, USER_OWNER).await?;
+    let owner = user_id(USER_OWNER);
+    let mut tx = pool.begin().await?;
+    let persona = ensure_private_provisioned_agent(&mut tx, &owner, &CURSOR_PERSONA).await?;
+    tx.commit().await?;
+
+    let result = service(&pool)
+        .add_bot_to_channel(channel_member_receipt(USER_OWNER, channel_id), persona)
+        .await;
+    assert!(matches!(result, Err(BotError::BadRequest(_))));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cursor_persona_deactivation_preserves_edits_and_reconnect_restores_it(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    insert_user(&pool, USER_OWNER).await?;
+    let owner = user_id(USER_OWNER);
+    let mut tx = pool.begin().await?;
+    let persona = ensure_private_provisioned_agent(&mut tx, &owner, &CURSOR_PERSONA).await?;
+    tx.commit().await?;
+    sqlx::query!(
+        "UPDATE bots SET name = 'My Cursor' WHERE id = $1",
+        persona.as_uuid()
+    )
+    .execute(&pool)
+    .await?;
+
+    let mut tx = pool.begin().await?;
+    assert!(
+        crate::outbound::pg_provisioned_agents::deactivate_private_provisioned_agent(
+            &mut tx,
+            &owner,
+            CURSOR_PERSONA.key,
+        )
+        .await?
+    );
+    tx.commit().await?;
+    assert!(service(&pool).list_agents(owner.clone()).await?.is_empty());
+
+    let mut tx = pool.begin().await?;
+    let restored = ensure_private_provisioned_agent(&mut tx, &owner, &CURSOR_PERSONA).await?;
+    tx.commit().await?;
+    assert_eq!(restored, persona);
+    let restored = service(&pool).get_bot(owner, persona).await?;
+    assert_eq!(restored.name, "My Cursor");
+    Ok(())
 }
 
 fn channel_member_receipt(
@@ -77,7 +263,7 @@ fn create_agent_req(handle: &str, channel_scope: AgentChannelScope) -> CreateAge
         description: Some("Finds and fixes bugs".to_string()),
         avatar_url: Some("https://static.example/bug-fixer.png".to_string()),
         instructions: "Fix the root cause and add tests.".to_string(),
-        harness: "cursor".to_string(),
+        harness: "in-memory".to_string(),
         harness_id: None,
         default_model: "cursor-small".to_string(),
         channel_scope,
@@ -420,7 +606,7 @@ async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Re
     assert!(created.bot.has_agent);
     assert_eq!(created.bot.handle, "bug-fixer");
     assert_eq!(created.instructions, "Fix the root cause and add tests.");
-    assert_eq!(created.harness, "cursor");
+    assert_eq!(created.harness, "in-memory");
     assert_eq!(created.default_model, "cursor-small");
     assert_eq!(created.channel_scope, AgentChannelScope::All);
     assert!(created.channel_ids.is_empty());
@@ -452,6 +638,7 @@ async fn create_team_agent_requires_membership_not_admin(pool: PgPool) -> anyhow
     let service = service(&pool);
     let mut request = create_agent_req("member-agent", AgentChannelScope::All);
     request.team_id = Some(team_id);
+    request.harness = "in-memory".to_string();
 
     let created = service
         .create_agent(user_id(TEAM_MEMBER), request.clone())
@@ -558,6 +745,7 @@ async fn team_member_can_update_team_agent_but_cannot_make_it_private(
     let service = service(&pool);
     let mut create = create_agent_req("team-fixer", AgentChannelScope::All);
     create.team_id = Some(team_id);
+    create.harness = "in-memory".to_string();
     let created = service.create_agent(user_id(TEAM_ADMIN), create).await?;
 
     let mut update = update_agent_req("changed-by-member", AgentChannelScope::All);
@@ -775,6 +963,7 @@ async fn only_creator_or_team_owner_can_delete_team_bots(pool: PgPool) -> anyhow
 
     let mut member_agent_request = create_agent_req("member-team-agent", AgentChannelScope::All);
     member_agent_request.team_id = Some(team_id);
+    member_agent_request.harness = "in-memory".to_string();
     let member_agent = service
         .create_agent(user_id(TEAM_MEMBER), member_agent_request)
         .await?;

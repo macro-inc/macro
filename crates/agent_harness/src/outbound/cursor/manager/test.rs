@@ -23,6 +23,7 @@ use std::sync::{Arc, Mutex};
 struct StubSessions {
     external: Arc<Mutex<HashMap<AgentSessionId, ExternalSession>>>,
     acp_session_id: Arc<Mutex<Option<String>>>,
+    model: Option<&'static str>,
 }
 
 impl ExternalSessionRepo for StubSessions {
@@ -70,7 +71,7 @@ impl AgentSessionRepo for StubSessions {
             thread_channel_id: None,
             originating_message_id: None,
             bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
-            model: "auto".to_owned(),
+            model: self.model.unwrap_or("auto").to_owned(),
             harness: "cursor".to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
@@ -500,6 +501,66 @@ async fn spawn_uses_the_owners_default_model() {
         body["model"]["params"],
         serde_json::json!([{"id":"effort","value":"high"},{"id":"fast","value":"true"}])
     );
+}
+
+#[tokio::test]
+async fn spawn_prefers_the_personas_configured_model() {
+    let (base_url, _, created) = fake_cursor_api().await;
+    let sessions = StubSessions {
+        model: Some("grok-4.6"),
+        ..Default::default()
+    };
+    let session_id = AgentSessionId::new();
+    let manager = manager_with_keys(
+        base_url,
+        sessions,
+        StubKeys {
+            key: Some("crsr_test"),
+            model: Some("claude-4.5-sonnet"),
+        },
+    );
+
+    let transport = manager
+        .spawn(SpawnContainer {
+            session_id,
+            kind: AgentKind::Cursor,
+            size: SandboxSize::Default,
+            egress: crate::testing::helpers::egress::test_egress(),
+        })
+        .await
+        .expect("spawn");
+    let (sender, mut receiver) = transport.split();
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}),
+    )
+    .await;
+    next_acp(&mut receiver).await;
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"/workspace","mcpServers":[]}}),
+    )
+    .await;
+    let acp_session = next_acp(&mut receiver).await["result"]["sessionId"]
+        .as_str()
+        .expect("a session id")
+        .to_owned();
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{
+            "sessionId": acp_session,
+            "prompt": [{"type":"text","text":"go"}],
+        }}),
+    )
+    .await;
+    loop {
+        if next_acp(&mut receiver).await["id"] == 3 {
+            break;
+        }
+    }
+
+    let body = created.lock().expect("create log poisoned")[0].clone();
+    assert_eq!(body["model"]["id"], "grok-4.6");
 }
 
 /// MCP servers ride the ACP protocol itself: whatever the client names in

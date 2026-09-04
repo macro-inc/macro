@@ -60,7 +60,10 @@ type ConnectedHarness = {
   name: string;
   models: readonly HarnessModel[];
   kind: 'builtin' | 'macrod';
+  owner?: 'private' | 'team';
+  teamId?: string;
   connected?: boolean;
+  privateOnly?: boolean;
 };
 
 type HarnessModel = {
@@ -122,15 +125,23 @@ export function Agents() {
               group: model.group,
             })),
             kind: 'builtin' as const,
+            privateOnly: true,
           },
         ]
       : []),
     ...(harnessesQuery.data ?? []).map((harness) => ({
       id: harness.id,
       name:
-        harness.owner.type === 'team' ? `${harness.name} · Team` : harness.name,
+        harness.owner.type === 'team'
+          ? `${harness.name} · Team`
+          : `${harness.name} · Private`,
       models: [],
       kind: 'macrod' as const,
+      owner:
+        harness.owner.type === 'team'
+          ? ('team' as const)
+          : ('private' as const),
+      teamId: harness.owner.type === 'team' ? harness.owner.team_id : undefined,
       connected: harness.connected,
     })),
   ];
@@ -144,6 +155,7 @@ export function Agents() {
   const canMakePrivate = (agent: AgentWithHarnessId) =>
     agent.bot.owner?.type !== 'team' || isAgentCreator(agent);
   const canDeleteAgent = (agent: AgentWithHarnessId) =>
+    agent.harness !== 'cursor' &&
     canDeleteBot(agent.bot, currentUserId(), currentTeamId(), isTeamOwner());
   const agents = createMemo(() =>
     (agentsQuery.data ?? []).map((agent) =>
@@ -518,16 +530,79 @@ function AgentDialog(props: {
   const [instructions, setSystemPrompt] = createSignal(
     props.agent?.instructions ?? ''
   );
-  const [harnessId, setHarnessId] = createSignal(
+  const initialShare: AgentShare =
+    props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private';
+  const agentTeamId = () => {
+    const owner = props.agent?.bot.owner;
+    return owner?.type === 'team' ? owner.team_id : props.currentTeamId;
+  };
+  const harnessIsCompatible = (
+    harness: ConnectedHarness,
+    nextShare: AgentShare
+  ) =>
+    (harness.kind === 'builtin' &&
+      !(nextShare === 'Team' && harness.privateOnly)) ||
+    (harness.owner === 'team'
+      ? harness.teamId === agentTeamId()
+      : nextShare === 'Private');
+  const configuredHarnessId =
     props.agent?.harness_id ??
-      props.agent?.harness ??
-      props.connectedHarnesses[0]?.id ??
-      ''
-  );
+    props.agent?.harness ??
+    props.connectedHarnesses[0]?.id ??
+    '';
+  const configuredHarness =
+    props.connectedHarnesses.find(
+      (harness) => harness.id === configuredHarnessId
+    ) ??
+    (props.agent
+      ? {
+          id: configuredHarnessId,
+          name: harnessName(configuredHarnessId),
+          models: [
+            {
+              id: props.agent.default_model,
+              name: props.agent.default_model,
+            },
+          ],
+          kind: configuredHarnessId === 'cursor' ? 'builtin' : 'macrod',
+          privateOnly: configuredHarnessId === 'cursor',
+          owner: props.agent.bot.owner?.type === 'team' ? 'team' : 'private',
+          teamId:
+            props.agent.bot.owner?.type === 'team'
+              ? props.agent.bot.owner.team_id
+              : undefined,
+          connected: false,
+        }
+      : undefined);
+  const selectableHarnesses = () =>
+    props.agent
+      ? props.connectedHarnesses
+      : props.connectedHarnesses.filter((harness) => !harness.privateOnly);
+  const harnessOptions = () =>
+    configuredHarness &&
+    !selectableHarnesses().some(
+      (harness) => harness.id === configuredHarness.id
+    )
+      ? [configuredHarness, ...selectableHarnesses()]
+      : selectableHarnesses();
+  const initialHarness =
+    configuredHarness && harnessIsCompatible(configuredHarness, initialShare)
+      ? configuredHarness
+      : (harnessOptions().find(
+          (harness) =>
+            harness.kind === 'macrod' &&
+            harnessIsCompatible(harness, initialShare)
+        ) ?? IN_MEMORY_HARNESS);
+  const [share, setShare] = createSignal<AgentShare>(initialShare);
+  const [harnessId, setHarnessId] = createSignal(initialHarness.id);
   const selectedHarness = () =>
-    props.connectedHarnesses.find((harness) => harness.id === harnessId());
+    harnessOptions().find((harness) => harness.id === harnessId());
   const [defaultModelId, setDefaultModelId] = createSignal(
-    props.agent?.default_model ?? ''
+    initialHarness.id === configuredHarnessId
+      ? (props.agent?.default_model ?? '')
+      : initialHarness.kind === 'macrod'
+        ? 'default'
+        : (initialHarness.models[0]?.id ?? '')
   );
   const selectedDefaultModelId = () =>
     defaultModelId() || selectedHarness()?.models[0]?.id || '';
@@ -544,9 +619,7 @@ function AgentDialog(props: {
   const [selectedChannelIds, setSelectedChannelIds] = createSignal<string[]>(
     props.agent?.channel_ids ?? []
   );
-  const [share, setShare] = createSignal<AgentShare>(
-    props.agent?.bot.owner?.type === 'team' ? 'Team' : 'Private'
-  );
+  const managedCursor = () => props.agent?.harness === 'cursor';
   let avatarInputRef: HTMLInputElement | undefined;
 
   const close = () => props.onClose();
@@ -558,11 +631,25 @@ function AgentDialog(props: {
 
   const handleHarnessChange = (id: string) => {
     setHarnessId(id);
-    const harness = props.connectedHarnesses.find((option) => option.id === id);
+    const harness = harnessOptions().find((option) => option.id === id);
     // macrod treats 'default' as "use the harness's own configured model".
     setDefaultModelId(
       harness?.kind === 'macrod' ? 'default' : (harness?.models[0]?.id ?? '')
     );
+  };
+
+  const handleShareChange = (nextShare: AgentShare) => {
+    setShare(nextShare);
+    const currentHarness = selectedHarness();
+    if (nextShare !== 'Team' || !currentHarness) return;
+    if (harnessIsCompatible(currentHarness, nextShare)) return;
+
+    const compatibleHarness =
+      harnessOptions().find(
+        (harness) =>
+          harness.kind === 'macrod' && harnessIsCompatible(harness, nextShare)
+      ) ?? IN_MEMORY_HARNESS;
+    handleHarnessChange(compatibleHarness.id);
   };
 
   const handleAvatarInput = (file: File | undefined) => {
@@ -751,13 +838,19 @@ function AgentDialog(props: {
                   <select
                     class="settings-input w-full"
                     value={harnessId()}
+                    disabled={managedCursor()}
                     onChange={(event) =>
                       handleHarnessChange(event.currentTarget.value)
                     }
                   >
-                    <For each={props.connectedHarnesses}>
+                    <For each={harnessOptions()}>
                       {(harness) => (
-                        <option value={harness.id}>{harness.name}</option>
+                        <option
+                          value={harness.id}
+                          disabled={!harnessIsCompatible(harness, share())}
+                        >
+                          {harness.name}
+                        </option>
                       )}
                     </For>
                   </select>
@@ -822,6 +915,10 @@ function AgentDialog(props: {
                   </Show>
                 </label>
               </div>
+              <p class="mt-3 text-xs text-ink-extra-muted">
+                Team agents use built-ins or harnesses shared with this team.
+                Private agents can also use private harnesses.
+              </p>
             </AgentFormSection>
 
             <AgentFormSection
@@ -844,6 +941,7 @@ function AgentDialog(props: {
                   checked={channelMode() === 'selected'}
                   title="Specific channels"
                   description="Only members of selected channels can use this agent."
+                  disabled={managedCursor()}
                   onChange={() => setChannelMode('selected')}
                 />
               </fieldset>
@@ -875,7 +973,7 @@ function AgentDialog(props: {
                       : 'Only the agent creator can make it private.'
                   }
                   disabled={!props.canMakePrivate}
-                  onChange={() => setShare('Private')}
+                  onChange={() => handleShareChange('Private')}
                 />
                 <ChoiceRow
                   name="agent-share"
@@ -887,8 +985,8 @@ function AgentDialog(props: {
                       ? 'Your team can use this agent in shared channels.'
                       : 'Create or join a team before sharing agents.'
                   }
-                  disabled={!props.canShareWithTeam}
-                  onChange={() => setShare('Team')}
+                  disabled={!props.canShareWithTeam || managedCursor()}
+                  onChange={() => handleShareChange('Team')}
                 />
               </fieldset>
               <Show when={!props.canShareWithTeam}>

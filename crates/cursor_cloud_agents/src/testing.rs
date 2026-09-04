@@ -289,8 +289,10 @@ impl RunStream for FakeCursor {
         &self,
         _agent: &CursorAgentId,
         _run: &CursorRunId,
-    ) -> Result<impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send, rootcause::Report>
-    {
+    ) -> Result<
+        impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send + use<>,
+        rootcause::Report,
+    > {
         let receiver = {
             let mut state = self.inner.lock().expect("fake cursor poisoned");
             if state.streams.is_empty() {

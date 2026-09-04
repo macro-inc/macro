@@ -137,6 +137,13 @@ const MACROD_HARNESS = {
   last_connected_at: '2026-08-27T12:34:00Z',
 };
 
+const TEAM_MACROD_HARNESS = {
+  ...MACROD_HARNESS,
+  id: '4a2d0e3f-9b5c-4d6e-8f70-2b3c4d5e6f70',
+  name: 'Team box',
+  owner: { type: 'team', team_id: 'team-1' },
+};
+
 describe('Agents', () => {
   it('lists the built-in global Macro agent as a team agent', () => {
     render(() => <Agents />);
@@ -294,6 +301,7 @@ describe('Agents', () => {
   });
 
   it('lets team members edit without deleting or privatizing another creator agent', () => {
+    harnessMocks.query.data = [MACROD_HARNESS];
     agentMocks.query.data = [
       {
         bot: {
@@ -336,6 +344,11 @@ describe('Agents', () => {
     expect(
       within(dialog).getByText('Only the agent creator can make it private.')
     ).toBeTruthy();
+    expect(
+      within(within(dialog).getByLabelText('Harness')).getByRole('option', {
+        name: 'Dev box · Private',
+      })
+    ).toHaveProperty('disabled', true);
   });
 
   it('lets the creator privatize and the team owner delete a team agent', () => {
@@ -514,7 +527,7 @@ describe('Agents', () => {
     });
   });
 
-  it('offers Cursor and its models when Cursor is connected', () => {
+  it('does not offer managed Cursor as a generic agent runtime', () => {
     cursorMocks.status.data = {
       registered: true,
       updatedAt: '2026-08-27T12:00:00Z',
@@ -525,19 +538,72 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('dialog');
     const harness = within(dialog).getByLabelText('Harness');
-    expect(within(harness).getAllByRole('option')).toHaveLength(2);
-
-    fireEvent.change(harness, { target: { value: 'cursor' } });
-    expect(harness).toHaveProperty('value', 'cursor');
-
-    const defaultModel = within(dialog).getByLabelText('Default model');
-    expect(within(defaultModel).getAllByRole('option')).toHaveLength(2);
+    expect(within(harness).getAllByRole('option')).toHaveLength(1);
     expect(
-      within(defaultModel).getByRole('option', { name: 'Cursor Small' })
-    ).toHaveProperty('selected', true);
+      within(harness).queryByRole('option', { name: 'Cursor' })
+    ).toBeNull();
   });
 
-  it('offers registered macrod harnesses in the harness picker', () => {
+  it('labels private macrod harnesses and allows same-team harnesses for private agents', () => {
+    harnessMocks.query.data = [MACROD_HARNESS, TEAM_MACROD_HARNESS];
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+
+    const dialog = screen.getByRole('dialog');
+    const harness = within(dialog).getByLabelText('Harness');
+    expect(within(harness).getAllByRole('option')).toHaveLength(3);
+    expect(
+      within(harness).getByRole('option', { name: 'Dev box · Private' })
+    ).toHaveProperty('disabled', false);
+    expect(
+      within(harness).getByRole('option', { name: 'Team box · Team' })
+    ).toHaveProperty('disabled', false);
+    expect(within(dialog).getByText(/Team agents use built-ins/)).toBeTruthy();
+  });
+
+  it('disables private harnesses for team agents and selects the first same-team harness', async () => {
+    harnessMocks.query.data = [MACROD_HARNESS, TEAM_MACROD_HARNESS];
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+
+    const dialog = screen.getByRole('dialog');
+    const harness = within(dialog).getByLabelText('Harness');
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Team helper' },
+    });
+    fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
+    fireEvent.input(within(dialog).getByLabelText('Default model'), {
+      target: { value: 'custom-model' },
+    });
+    fireEvent.click(within(dialog).getByLabelText('Team'));
+
+    expect(
+      within(harness).getByRole('option', { name: 'Dev box · Private' })
+    ).toHaveProperty('disabled', true);
+    expect(harness).toHaveProperty('value', TEAM_MACROD_HARNESS.id);
+    expect(within(dialog).getByLabelText('Default model')).toHaveProperty(
+      'value',
+      'default'
+    );
+
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+    await waitFor(() => {
+      expect(agentMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          defaultModel: 'default',
+          harness: 'macrod',
+          harnessId: TEAM_MACROD_HARNESS.id,
+          teamId: 'team-1',
+        })
+      );
+    });
+  });
+
+  it('falls back to in-memory when sharing a private-harness agent with the team', () => {
     harnessMocks.query.data = [MACROD_HARNESS];
 
     render(() => <Agents />);
@@ -545,10 +611,17 @@ describe('Agents', () => {
 
     const dialog = screen.getByRole('dialog');
     const harness = within(dialog).getByLabelText('Harness');
-    expect(within(harness).getAllByRole('option')).toHaveLength(2);
-    expect(
-      within(harness).getByRole('option', { name: 'Dev box' })
-    ).toBeTruthy();
+    fireEvent.change(harness, { target: { value: MACROD_HARNESS.id } });
+    fireEvent.input(within(dialog).getByLabelText('Default model'), {
+      target: { value: 'custom-model' },
+    });
+    fireEvent.click(within(dialog).getByLabelText('Team'));
+
+    expect(harness).toHaveProperty('value', 'in-memory');
+    expect(within(dialog).getByLabelText('Default model')).toHaveProperty(
+      'value',
+      Model.sonnet5
+    );
   });
 
   it('swaps the model select for a free-text input seeded with default for macrod harnesses', () => {

@@ -428,8 +428,10 @@ impl RunStream for CursorClient {
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
-    ) -> Result<impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send, rootcause::Report>
-    {
+    ) -> Result<
+        impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send + use<>,
+        rootcause::Report,
+    > {
         // A stream opened right after `POST …/runs` can answer
         // `stream_unavailable` before the run's stream is provisioned —
         // observed on follow-up runs, whose create-to-stream gap is much

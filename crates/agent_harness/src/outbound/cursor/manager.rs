@@ -33,7 +33,8 @@ use cursor_cloud_agents::domain::model::{
 use cursor_cloud_agents::domain::ports::{CursorAgents, RepoResolver, RunStream};
 use cursor_cloud_agents::domain::service::CursorSessionService;
 use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
-use futures::Stream;
+use futures::{Stream, StreamExt};
+use macro_user_id::user_id::MacroUserIdStr;
 
 use super::keys::CursorApiKeys;
 use super::pipe::PipeTransport;
@@ -141,7 +142,7 @@ struct RestoredCursorSession {
 impl<Sessions, Keys> CursorContainerManager<Sessions, Keys>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
-    Keys: CursorApiKeys,
+    Keys: CursorApiKeys + Clone,
 {
     /// Build the manager over the key source, the API it talks to, and the
     /// repository every session works on.
@@ -178,7 +179,12 @@ where
             tracing::error!(error = %error, session_id = %session.id, "a stored cursor api key is unusable");
             HarnessError::Container("the stored cursor api key is unusable".to_owned())
         })?;
-        Ok((client, config.default_model_id))
+        let default_model_id = match session.model.as_str() {
+            "default" | "auto" => config.default_model_id,
+            _ if session.bot_id == bot_id::CURSOR_BOT_ID => config.default_model_id,
+            _ => Some(session.model.clone()),
+        };
+        Ok((client, default_model_id))
     }
 
     /// Wire up one session's in-process agent and return our end of its pipe.
@@ -187,17 +193,19 @@ where
     /// passes `None`.
     fn serve_session(
         &self,
-        client: CursorClient,
         default_model_id: Option<String>,
         session_id: AgentSessionId,
+        owner: MacroUserIdStr<'static>,
         restore: Option<RestoredCursorSession>,
     ) -> PipeTransport {
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);
         let (agent_reader, agent_writer) = tokio::io::split(theirs);
         let cursor = RecordingCursor {
-            client,
             session_id,
             sessions: self.sessions.clone(),
+            owner,
+            keys: self.keys.clone(),
+            base_url: self.base_url.clone(),
         };
         let notifier = AcpNotifier::new();
         // The user's chosen model seeds the session as its default: a fresh
@@ -268,7 +276,7 @@ where
 impl<Sessions, Keys> ContainerManager for CursorContainerManager<Sessions, Keys>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
-    Keys: CursorApiKeys,
+    Keys: CursorApiKeys + Clone,
 {
     type Transport = PipeTransport;
 
@@ -278,12 +286,12 @@ where
         // connected an account, and refusing here is what turns "the bot
         // ignored me" into a sentence they can act on.
         let session = AgentSessionRepo::get(&self.sessions, command.session_id).await?;
-        let (client, default_model_id) = self.client_for(&session).await?;
+        let (_client, default_model_id) = self.client_for(&session).await?;
         // No MCP servers pass through here: they ride the ACP protocol
         // itself. The harness's session actor names them in `session/new`,
         // and the in-process adapter forwards them to Cursor's API - the same
         // rail every other transport uses.
-        Ok(self.serve_session(client, default_model_id, command.session_id, None))
+        Ok(self.serve_session(default_model_id, command.session_id, session.owner_id, None))
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<PipeTransport> {
@@ -296,7 +304,7 @@ where
         // agent yet (the next prompt mints one). No acp id at all means the
         // session never opened; serve it fresh, exactly like `spawn`.
         let stored = AgentSessionRepo::get(&self.sessions, session).await?;
-        let (client, default_model_id) = self.client_for(&stored).await?;
+        let (_client, default_model_id) = self.client_for(&stored).await?;
         let restore = match &stored.acp_session_id {
             Some(acp) => {
                 let agent = ExternalSessionRepo::get(&self.sessions, session)
@@ -322,7 +330,7 @@ where
         // died with the process (only its hash is persisted). The one session
         // this loses servers for is one restored before its first prompt ever
         // landed, which then creates its agent bare rather than not at all.
-        Ok(self.serve_session(client, default_model_id, session, restore))
+        Ok(self.serve_session(default_model_id, session, stored.owner_id, restore))
     }
 
     /// A Cursor session has no container of ours to hold a token: the raw
@@ -387,15 +395,39 @@ where
 /// the database does not know about. The name and url are fetched with a
 /// follow-up `get_agent` — one extra call per session lifetime — and are
 /// cosmetic: if the fetch fails the row is still written with the id alone.
-struct RecordingCursor<Sessions> {
-    client: CursorClient,
+struct RecordingCursor<Sessions, Keys> {
     session_id: AgentSessionId,
     sessions: Sessions,
+    owner: MacroUserIdStr<'static>,
+    keys: Keys,
+    base_url: String,
 }
 
-impl<Sessions> CursorAgents for RecordingCursor<Sessions>
+impl<Sessions, Keys> RecordingCursor<Sessions, Keys>
+where
+    Keys: CursorApiKeys,
+{
+    async fn current_client(&self) -> std::result::Result<CursorClient, rootcause::Report> {
+        let config = self
+            .keys
+            .resolve(&self.owner)
+            .await
+            .map_err(|error| rootcause::report!("Cursor is disconnected: {error}"))?;
+        CursorClient::new(CursorConfig {
+            api_key: ApiKey::new(config.key.expose()),
+            base_url: self.base_url.clone(),
+            model: None,
+            starting_ref: DEFAULT_STARTING_REF.to_owned(),
+            record_dir: None,
+        })
+        .map_err(|error| rootcause::report!("the stored Cursor key is unusable: {error}"))
+    }
+}
+
+impl<Sessions, Keys> CursorAgents for RecordingCursor<Sessions, Keys>
 where
     Sessions: ExternalSessionRepo + Clone,
+    Keys: CursorApiKeys,
 {
     #[tracing::instrument(skip_all, err, fields(
         session = %self.session_id,
@@ -408,12 +440,11 @@ where
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
     ) -> std::result::Result<(CursorAgentId, CursorRunId), rootcause::Report> {
-        let (agent, run) = self
-            .client
+        let client = self.current_client().await?;
+        let (agent, run) = client
             .create_agent(prompt, repo, mcp_servers, model)
             .await?;
-        let summary = self
-            .client
+        let summary = client
             .get_agent(&agent)
             .await
             .inspect_err(|error| {
@@ -441,11 +472,14 @@ where
         prompt: &str,
         model: Option<&ModelChoice>,
     ) -> std::result::Result<CursorRunId, rootcause::Report> {
-        self.client.create_run(agent, prompt, model).await
+        self.current_client()
+            .await?
+            .create_run(agent, prompt, model)
+            .await
     }
 
     async fn list_models(&self) -> std::result::Result<Vec<CursorModel>, rootcause::Report> {
-        self.client.list_models().await
+        self.current_client().await?.list_models().await
     }
 
     async fn cancel_run(
@@ -453,7 +487,7 @@ where
         agent: &CursorAgentId,
         run: &CursorRunId,
     ) -> std::result::Result<(), rootcause::Report> {
-        self.client.cancel_run(agent, run).await
+        self.current_client().await?.cancel_run(agent, run).await
     }
 
     async fn run_result(
@@ -462,7 +496,7 @@ where
         run: &CursorRunId,
     ) -> std::result::Result<cursor_cloud_agents::domain::model::RunOutcome, rootcause::Report>
     {
-        self.client.run_result(agent, run).await
+        self.current_client().await?.run_result(agent, run).await
     }
 
     async fn list_runs(
@@ -470,13 +504,14 @@ where
         agent: &CursorAgentId,
     ) -> std::result::Result<Vec<cursor_cloud_agents::domain::model::RunListing>, rootcause::Report>
     {
-        self.client.list_runs(agent).await
+        self.current_client().await?.list_runs(agent).await
     }
 }
 
-impl<Sessions> RunStream for RecordingCursor<Sessions>
+impl<Sessions, Keys> RunStream for RecordingCursor<Sessions, Keys>
 where
     Sessions: ExternalSessionRepo + Clone,
+    Keys: CursorApiKeys,
 {
     async fn stream(
         &self,
@@ -488,9 +523,12 @@ where
                 cursor_cloud_agents::domain::event::CursorEvent,
                 rootcause::Report,
             >,
-        > + Send,
+        > + Send
+        + use<Sessions, Keys>,
         rootcause::Report,
     > {
-        self.client.stream(agent, run).await
+        let client = self.current_client().await?;
+        let stream = client.stream(agent, run).await?;
+        Ok(stream.map(|item| item))
     }
 }

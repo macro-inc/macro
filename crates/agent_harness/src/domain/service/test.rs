@@ -89,6 +89,30 @@ fn open_command() -> OpenSession {
     }
 }
 
+fn cursor_open_command(sender: MacroUserIdStr<'static>) -> OpenSession {
+    let mut command = open_command();
+    command.runtime.kind = AgentKind::Cursor;
+    command.runtime.harness = "cursor".to_owned();
+    command.origin.sender = sender;
+    command
+}
+
+#[tokio::test]
+async fn only_macro_staff_can_open_cursor_sessions() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let denied = service
+        .execute(
+            AgentSessionId::new(),
+            HarnessCommand::Open(cursor_open_command(sender())),
+        )
+        .await;
+    assert!(matches!(
+        denied,
+        Err(HarnessError::Session(AgentSessionError::Forbidden))
+    ));
+    assert_eq!(containers.spawned(), 0);
+}
+
 /// A prompt arriving from a channel that is not the session's own, so it is
 /// the announcing case.
 fn forward_message(content: &str) -> DeliverAction {

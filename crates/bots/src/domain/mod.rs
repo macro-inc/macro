@@ -7,6 +7,8 @@ pub mod models;
 #[cfg(feature = "ports")]
 /// Bot ports.
 pub mod ports;
+/// Product-managed persona provisioning definitions.
+pub mod provisioning;
 #[cfg(feature = "ports")]
 /// Bot service.
 pub mod service;
