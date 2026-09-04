@@ -17,7 +17,10 @@ import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createMemo, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
-import { ChannelsMobileView } from './components/ChannelsMobileView';
+import {
+  ChannelsMobileView,
+  type MobileChannelsTab,
+} from './components/ChannelsMobileView';
 import { ChannelsRail } from './components/rail/ChannelsRail';
 import {
   CHANNELS_MAX_RAIL_WIDTH,
@@ -33,10 +36,38 @@ export type ChannelsViewProps = {
   initialState?: ChannelsViewStateOptions;
 };
 
+function channelFiltersForMobileTab(tab: MobileChannelsTab) {
+  if (tab === 'channels') {
+    return defineQueryFilters({
+      include: { channelIsParticipant: [true] },
+      exclude: { channelType: ['direct_message'] },
+    });
+  }
+
+  if (tab === 'dms') {
+    return defineQueryFilters({
+      include: {
+        channelType: ['direct_message'],
+        channelIsParticipant: [true],
+      },
+    });
+  }
+
+  return defineQueryFilters({
+    include: {
+      channelImportance: true,
+      channelIsParticipant: [true],
+    },
+  });
+}
+
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
   const { state, setAsideWidth, setRailMode } = useChannelsView();
+  const [mobileTab, setMobileTab] = createSignal<MobileChannelsTab>(
+    state.tab === 'recents' ? 'recents' : 'channels'
+  );
   const [workspace, setWorkspace] = createSignal<HTMLDivElement>();
   const workspaceSize = createElementSize(workspace);
   const breakpoints = createSizeBreakpoints(
@@ -70,12 +101,9 @@ function ChannelsViewRoot() {
       },
       body: compileToAst(
         queryStateFrom(
-          defineQueryFilters({
-            include: {
-              channelImportance: true,
-              channelIsParticipant: [true],
-            },
-          })
+          isTouchDevice()
+            ? channelFiltersForMobileTab(mobileTab())
+            : channelFiltersForMobileTab('recents')
         )
       ),
     }),
@@ -167,7 +195,12 @@ function ChannelsViewRoot() {
                   </div>
                 }
               >
-                <ChannelsMobileView channels={channels()} />
+                <ChannelsMobileView
+                  channels={channels()}
+                  source={channelsQuery}
+                  tab={mobileTab()}
+                  onTabChange={setMobileTab}
+                />
               </Suspense>
             </Show>
           </SplitPanel.Body>

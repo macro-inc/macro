@@ -4,16 +4,27 @@ import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
-import { compareDateDesc } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
-import { Key } from '@solid-primitives/keyed';
-import { createMemo, createSignal, createUniqueId, Show } from 'solid-js';
+import SpinnerIcon from '@phosphor/spinner.svg';
+import type { SoupAstItemsQuery } from '@queries/soup/items';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
+import { Button } from '@ui';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../channels-view-context';
 import { ConversationCard } from './rail/ChannelRailItems';
 import { useChannelCallState } from './rail/useChannelCallState';
 import { useChannelRailActivity } from './rail/useChannelRailActivity';
 
-type MobileChannelsTab = 'channels' | 'dms' | 'recents';
+export type MobileChannelsTab = 'channels' | 'dms' | 'recents';
 
 const MOBILE_CHANNEL_TABS: readonly PillTabItem<MobileChannelsTab>[] = [
   { value: 'recents', label: 'Recents' },
@@ -23,15 +34,24 @@ const MOBILE_CHANNEL_TABS: readonly PillTabItem<MobileChannelsTab>[] = [
 const MOBILE_TAB_STRIP_CLASS =
   '-ml-(--mobile-chrome-gutter) w-[100cqw] max-w-none flex-none';
 const MOBILE_TAB_CONTENT_CLASS = 'px-(--mobile-chrome-gutter)';
+const MOBILE_CHANNEL_ITEM_SIZE = 72;
+const MOBILE_CHANNEL_BUFFER_SIZE = MOBILE_CHANNEL_ITEM_SIZE * 6;
+const LOAD_MORE_THRESHOLD = 300;
 
-export function ChannelsMobileView(props: { channels: ChannelEntity[] }) {
+export function ChannelsMobileView(props: {
+  channels: ChannelEntity[];
+  source: SoupAstItemsQuery;
+  tab: MobileChannelsTab;
+  onTabChange: (tab: MobileChannelsTab) => void;
+}) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const currentUserId = useUserId();
   const { state, setSelectedChannelId, setTab } = useChannelsView();
-  const [mobileTab, setMobileTab] = createSignal<MobileChannelsTab>(
-    state.tab === 'recents' ? 'recents' : 'channels'
-  );
+  const [viewport, setViewport] = createSignal<HTMLDivElement>();
+  const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
+  const topSpacerSize = createElementSize(topSpacer);
   const listId = createUniqueId();
   const { callActivity, incomingCallIds, callStatuses } = useChannelCallState();
   const channelActivity = useChannelRailActivity(
@@ -40,31 +60,60 @@ export function ChannelsMobileView(props: { channels: ChannelEntity[] }) {
   );
 
   const visibleChannels = createMemo(() => {
-    if (mobileTab() === 'channels') {
+    if (props.tab === 'channels') {
       return props.channels.filter(
         (channel) => channel.channelType !== 'direct_message'
       );
     }
-    if (mobileTab() === 'dms') {
+
+    if (props.tab === 'dms') {
       return props.channels.filter(
         (channel) => channel.channelType === 'direct_message'
       );
     }
 
-    return props.channels
-      .filter((channel) => channel.latestRootMessage)
-      .sort((a, b) =>
-        compareDateDesc(
-          a.latestRootMessage?.createdAt,
-          b.latestRootMessage?.createdAt
-        )
-      );
+    return props.channels.filter((channel) => channel.latestRootMessage);
   });
 
   const selectTab = (tab: MobileChannelsTab) => {
-    setMobileTab(tab);
+    props.onTabChange(tab);
     setTab(tab === 'recents' ? 'recents' : 'browse');
+    viewport()?.scrollTo({ top: 0 });
   };
+
+  const topInset = () => topSpacerSize.height ?? 0;
+
+  function loadNextPage() {
+    if (
+      props.source.isFetching ||
+      props.source.isFetchingNextPage ||
+      !props.source.hasNextPage
+    ) {
+      return;
+    }
+
+    void props.source.fetchNextPage();
+  }
+
+  function checkNearEnd(offset?: number) {
+    const handle = virtualizer();
+    if (!handle) return;
+
+    const distance =
+      handle.scrollSize - handle.viewportSize - (offset ?? handle.scrollOffset);
+    if (distance >= LOAD_MORE_THRESHOLD) return;
+
+    loadNextPage();
+  }
+
+  createEffect(() => {
+    visibleChannels().length;
+    props.source.hasNextPage;
+    props.source.isFetching;
+    props.source.isFetchingNextPage;
+
+    queueMicrotask(checkNearEnd);
+  });
 
   const mentionsCurrentUser = (channel: ChannelEntity) => {
     const userId = currentUserId()?.toLocaleLowerCase();
@@ -87,8 +136,9 @@ export function ChannelsMobileView(props: { channels: ChannelEntity[] }) {
   };
 
   const emptyLabel = () => {
-    if (mobileTab() === 'channels') return 'No channels';
-    if (mobileTab() === 'dms') return 'No direct messages';
+    if (props.tab === 'channels') return 'No channels';
+    if (props.tab === 'dms') return 'No direct messages';
+
     return 'No recent conversations';
   };
 
@@ -101,7 +151,7 @@ export function ChannelsMobileView(props: { channels: ChannelEntity[] }) {
             class={MOBILE_TAB_STRIP_CLASS}
             contentClass={MOBILE_TAB_CONTENT_CLASS}
             items={MOBILE_CHANNEL_TABS}
-            value={mobileTab()}
+            value={props.tab}
             onChange={selectTab}
           />
         </div>
@@ -109,39 +159,103 @@ export function ChannelsMobileView(props: { channels: ChannelEntity[] }) {
 
       <div
         role="tree"
-        aria-label={`${MOBILE_CHANNEL_TABS.find((tab) => tab.value === mobileTab())?.label ?? 'Channels'} conversations`}
-        class="scrollbar-hidden size-full min-h-0 overflow-y-auto pt-(--mobile-content-inset-top) pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
+        aria-label={`${MOBILE_CHANNEL_TABS.find((tab) => tab.value === props.tab)?.label ?? 'Channels'} conversations`}
+        aria-busy={props.source.isFetchingNextPage}
+        class="size-full min-h-0 overflow-hidden"
       >
-        <div aria-hidden="true" class="h-3" />
-        <Show
-          when={visibleChannels().length > 0}
-          fallback={
-            <div class="grid min-h-32 place-items-center px-(--mobile-chrome-gutter) text-sm text-ink-muted">
-              {emptyLabel()}
-            </div>
-          }
+        <div
+          ref={setViewport}
+          class="scrollbar-hidden size-full min-h-0 overflow-y-auto overscroll-none"
         >
-          <div class="flex flex-col divide-y divide-edge-muted/50">
-            <Key each={visibleChannels()} by={(channel) => channel.id}>
-              {(channel) => (
-                <ConversationCard
-                  id={`${listId}-channel:${channel().id}`}
-                  class="px-(--mobile-chrome-gutter) touch:pl-6"
-                  channel={channel()}
-                  showLatestMessage={mobileTab() === 'recents'}
-                  senderId={channel().latestRootMessage?.senderId}
-                  mentionedCurrentUser={mentionsCurrentUser(channel())}
-                  unread={channelActivity.unreadChannelIds().has(channel().id)}
-                  callStatus={callStatuses().get(channel().id)}
-                  incomingCallId={incomingCallIds().get(channel().id)}
-                  selected={state.selectedChannelId === channel().id}
-                  focused={false}
-                  onActivate={() => openChannel(channel())}
+          <div
+            ref={setTopSpacer}
+            aria-hidden="true"
+            class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
+          />
+          <Switch>
+            <Match when={props.source.isLoading}>
+              <div class="grid min-h-32 place-items-center text-ink-muted">
+                <SpinnerIcon
+                  aria-label="Loading conversations"
+                  class="size-5 animate-spin"
                 />
-              )}
-            </Key>
-          </div>
-        </Show>
+              </div>
+            </Match>
+            <Match when={props.source.error}>
+              <div class="flex min-h-32 flex-col items-center justify-center gap-3 px-(--mobile-chrome-gutter) text-sm text-ink-muted">
+                <span>Conversations couldn’t be loaded.</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void props.source.refresh()}
+                >
+                  Try again
+                </Button>
+              </div>
+            </Match>
+            <Match when={visibleChannels().length === 0}>
+              <div class="flex min-h-32 flex-col items-center justify-center gap-3 px-(--mobile-chrome-gutter) text-sm text-ink-muted">
+                <span>{emptyLabel()}</span>
+                <Show when={props.source.hasNextPage}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={props.source.isFetchingNextPage}
+                    onClick={loadNextPage}
+                  >
+                    <Show
+                      when={props.source.isFetchingNextPage}
+                      fallback="Search more"
+                    >
+                      <SpinnerIcon class="size-3 animate-spin" />
+                      Searching
+                    </Show>
+                  </Button>
+                </Show>
+              </div>
+            </Match>
+            <Match when={true}>
+              <Virtualizer
+                ref={(handle) => setVirtualizer(handle)}
+                data={visibleChannels()}
+                scrollRef={viewport()}
+                startMargin={topInset()}
+                itemSize={MOBILE_CHANNEL_ITEM_SIZE}
+                bufferSize={MOBILE_CHANNEL_BUFFER_SIZE}
+                onScroll={checkNearEnd}
+              >
+                {(channel) => (
+                  <ConversationCard
+                    id={`${listId}-channel:${channel.id}`}
+                    class="border-b border-edge-muted/50 px-(--mobile-chrome-gutter) touch:pl-6"
+                    channel={channel}
+                    showLatestMessage={props.tab === 'recents'}
+                    senderId={channel.latestRootMessage?.senderId}
+                    mentionedCurrentUser={mentionsCurrentUser(channel)}
+                    unread={channelActivity.unreadChannelIds().has(channel.id)}
+                    callStatus={callStatuses().get(channel.id)}
+                    incomingCallId={incomingCallIds().get(channel.id)}
+                    selected={state.selectedChannelId === channel.id}
+                    focused={false}
+                    onActivate={() => openChannel(channel)}
+                  />
+                )}
+              </Virtualizer>
+              <Show when={props.source.isFetchingNextPage}>
+                <div class="flex h-12 items-center justify-center text-ink-muted">
+                  <SpinnerIcon
+                    aria-label="Loading more conversations"
+                    class="size-4 animate-spin"
+                  />
+                </div>
+              </Show>
+            </Match>
+          </Switch>
+          <div
+            aria-hidden="true"
+            class="h-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
+          />
+        </div>
       </div>
     </>
   );
