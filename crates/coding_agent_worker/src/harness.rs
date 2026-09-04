@@ -7,12 +7,10 @@ use std::time::Duration;
 use crate::config::Harness;
 use crate::outbound::acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Client, ConnectTo};
-use agent_fold::domain::model_selection::model_selection;
 use agent_runtime_protocol::domain::connection::{
     ConnectionError, ModelProbeHandler, RuntimeChannel, RuntimeConnection,
 };
 use agent_runtime_protocol::domain::schema::v0::SystemEvent;
-use harnesses::domain::models::{PairingModelCatalog, PairingModelOption};
 
 #[cfg(test)]
 mod test;
@@ -63,41 +61,12 @@ pub async fn bridge(
     outcome.map_err(|error| BridgeError::Harness(error.to_string()))
 }
 
-/// Discover the configured harness's model catalog before it is registered.
-pub(crate) async fn discover_model_catalog(
-    harness: &Harness,
-    cwd: &Path,
-) -> Result<Option<PairingModelCatalog>, String> {
-    let options = probe_subprocess(&probe_process(harness, cwd), MODEL_PROBE_TIMEOUT)
-        .await
-        .map_err(safe_probe_error)?;
-    Ok(pairing_model_catalog(&options))
-}
-
 fn probe_process(harness: &Harness, cwd: &Path) -> ProbeSubprocess {
     ProbeSubprocess {
         command: harness.command.clone().into(),
         args: harness.args.clone(),
         cwd: cwd.to_owned(),
     }
-}
-
-fn pairing_model_catalog(
-    options: &[agent_client_protocol::schema::v1::SessionConfigOption],
-) -> Option<PairingModelCatalog> {
-    model_selection(options).map(|selection| PairingModelCatalog {
-        current: selection.current,
-        options: selection
-            .options
-            .into_iter()
-            .map(|option| PairingModelOption {
-                id: option.id,
-                name: option.name,
-                description: option.description,
-                group: option.group,
-            })
-            .collect(),
-    })
 }
 
 #[derive(Clone)]

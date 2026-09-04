@@ -52,7 +52,6 @@ const harnessMocks = vi.hoisted(() => ({
       requested_name: 'Dev laptop',
       requested_scope: null,
       host: 'erics-mbp.local',
-      model_catalog: null,
       created_at: '2026-08-27T12:00:00Z',
       expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
     },

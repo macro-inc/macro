@@ -89,9 +89,7 @@ a retryable error without hiding the other harnesses. Editing preserves a saved 
 is no longer offered and labels it `saved, unavailable`.
 
 `Harness` configures Cursor and paired macrod runtimes. Cursor's default-model picker uses
-the same live model discovery and retains its existing save action. `Enter pairing code`
-shows the model catalog macrod advertised before registration, when one was provided; no
-registered-harness request is made while only a pairing code exists.
+the same live model discovery and retains its existing save action.
 
 ## Notifications
 

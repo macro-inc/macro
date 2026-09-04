@@ -3559,7 +3559,6 @@ name = "coding_agent_worker"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
- "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
@@ -7485,7 +7484,6 @@ dependencies = [
  "model-error-response",
  "rand 0.9.4",
  "serde",
- "serde_json",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",

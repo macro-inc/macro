@@ -5,7 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CreatePairingRequestHost } from './createPairingRequestHost';
-import type { CreatePairingRequestModelCatalog } from './createPairingRequestModelCatalog';
 import type { CreatePairingRequestScope } from './createPairingRequestScope';
 
 /**
@@ -16,7 +15,6 @@ The daemon serializes this, so both derives are used.
 export interface CreatePairingRequest {
   /** Display-only description of the machine, e.g. `eric@macbook / darwin`. */
   host?: CreatePairingRequestHost;
-  model_catalog?: CreatePairingRequestModelCatalog;
   /** Requested harness display name (typically the machine's hostname). */
   name: string;
   scope?: CreatePairingRequestScope;

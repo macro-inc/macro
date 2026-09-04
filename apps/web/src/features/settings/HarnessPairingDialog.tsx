@@ -6,7 +6,7 @@ import {
 } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button, Dialog, Panel } from '@ui';
-import { createEffect, createSignal, For, Match, Show, Switch } from 'solid-js';
+import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { ChoiceRow } from './primitives';
 
 const PAIRING_ERROR_FALLBACK =
@@ -183,52 +183,6 @@ export function HarnessPairingDialog(props: {
                       Expires in {expiresInMinutes(pairing().expires_at)}{' '}
                       minutes
                     </span>
-                  </div>
-
-                  <div class="rounded-lg border border-edge-muted bg-ink/[0.025] p-3">
-                    <div class="text-xs font-medium text-ink">
-                      Available models
-                    </div>
-                    <Show
-                      when={pairing().model_catalog}
-                      fallback={
-                        <p class="mt-1 text-xs text-ink-muted">
-                          This harness did not provide a model catalog during
-                          pairing.
-                        </p>
-                      }
-                    >
-                      {(catalog) => (
-                        <For
-                          each={catalog().options}
-                          fallback={
-                            <p class="mt-1 text-xs text-ink-muted">
-                              This harness does not support model selection.
-                            </p>
-                          }
-                        >
-                          {(model) => (
-                            <div class="mt-2">
-                              <div class="flex items-center gap-2 text-xs text-ink">
-                                <span>{model.name}</span>
-                                <Show when={model.id === catalog().current}>
-                                  <span class="rounded-full border border-edge-muted px-1.5 py-0.5 text-xxs uppercase text-ink-extra-muted">
-                                    Current
-                                  </span>
-                                </Show>
-                              </div>
-                              <Show when={model.description}>
-                                {(description) => (
-                                  <p class="mt-0.5 text-xs text-ink-muted">
-                                    {description()}
-                                  </p>
-                                )}
-                              </Show>
-                            </div>
-                          )}
-                        </For>
-                      )}
-                    </Show>
                   </div>
 
                   <label class="flex flex-col gap-1.5">

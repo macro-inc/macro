@@ -3194,7 +3194,6 @@ export type CreatePairingRequest = {
      * Display-only description of the machine, e.g. `eric@macbook / darwin`.
      */
     host?: string | null;
-    model_catalog?: null | PairingModelCatalog;
     /**
      * Requested harness display name (typically the machine's hostname).
      */
@@ -6155,51 +6154,11 @@ export type PairingDetails = {
      * Display-only description of the machine.
      */
     host?: string | null;
-    model_catalog?: null | PairingModelCatalog;
     /**
      * Harness display name the daemon asked for.
      */
     requested_name: string;
     requested_scope?: null | RequestedHarnessScope;
-};
-
-/**
- * Model choices discovered from a harness while opening a pairing.
- *
- * This transport-safe domain type deliberately does not expose ACP or fold
- * types. The daemon maps its local probe result into this catalog.
- */
-export type PairingModelCatalog = {
-    /**
-     * The model value currently selected by the harness.
-     */
-    current: string;
-    /**
-     * Models offered by the harness, in its advertised order.
-     */
-    options: Array<PairingModelOption>;
-};
-
-/**
- * One selectable model discovered from a harness.
- */
-export type PairingModelOption = {
-    /**
-     * Optional descriptive copy supplied by the harness.
-     */
-    description?: string | null;
-    /**
-     * Optional group heading supplied by the harness.
-     */
-    group?: string | null;
-    /**
-     * The value sent back to the harness to select this model.
-     */
-    id: string;
-    /**
-     * Human-readable model label.
-     */
-    name: string;
 };
 
 /**

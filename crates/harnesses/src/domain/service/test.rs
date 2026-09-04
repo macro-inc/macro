@@ -5,7 +5,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::*;
 use crate::domain::{
-    models::{PairingClaimFacts, PairingModelCatalog, PairingModelOption, RequestedHarnessScope},
+    models::{PairingClaimFacts, RequestedHarnessScope},
     ports::{OpenPairingCounts, PairingRow},
 };
 
@@ -39,23 +39,10 @@ fn pending_pairing() -> PairingRow {
             requested_name: "erics-macbook".to_owned(),
             host: Some("eric@macbook / darwin".to_owned()),
             requested_scope: Some(RequestedHarnessScope::Team),
-            model_catalog: Some(model_catalog()),
             created_at: Utc::now(),
             expires_at: Utc::now() + Duration::minutes(10),
         },
         status: PairingStatus::Pending,
-    }
-}
-
-fn model_catalog() -> PairingModelCatalog {
-    PairingModelCatalog {
-        current: "claude-sonnet".to_owned(),
-        options: vec![PairingModelOption {
-            id: "claude-sonnet".to_owned(),
-            name: "Claude Sonnet".to_owned(),
-            description: Some("Fast and capable".to_owned()),
-            group: None,
-        }],
     }
 }
 
@@ -207,7 +194,6 @@ async fn creating_a_pairing_returns_code_and_secret_and_persists_only_hashes() {
             name: "  erics-macbook  ".to_owned(),
             host: Some("eric@macbook".to_owned()),
             scope: Some(RequestedHarnessScope::Team),
-            model_catalog: Some(model_catalog()),
         })
         .await
         .unwrap();
@@ -220,7 +206,6 @@ async fn creating_a_pairing_returns_code_and_secret_and_persists_only_hashes() {
     let inserted = &calls.inserted_pairings[0];
     assert_eq!(inserted.requested_name, "erics-macbook");
     assert_eq!(inserted.requested_scope, Some(RequestedHarnessScope::Team));
-    assert_eq!(inserted.model_catalog, Some(model_catalog()));
     assert_eq!(inserted.code, created.code);
     assert_eq!(
         inserted.device_secret_hash,
@@ -239,7 +224,6 @@ async fn pairing_creation_retries_code_collisions() {
             name: "erics-macbook".to_owned(),
             host: None,
             scope: None,
-            model_catalog: None,
         })
         .await
         .unwrap();
@@ -263,7 +247,6 @@ async fn pairing_creation_is_throttled_and_validates_the_name() {
             name: "erics-macbook".to_owned(),
             host: None,
             scope: None,
-            model_catalog: None,
         })
         .await;
     assert!(matches!(result, Err(HarnessError::Throttled)));
@@ -273,7 +256,6 @@ async fn pairing_creation_is_throttled_and_validates_the_name() {
             name: "   ".to_owned(),
             host: None,
             scope: None,
-            model_catalog: None,
         })
         .await;
     assert!(matches!(result, Err(HarnessError::BadRequest(_))));
@@ -287,7 +269,6 @@ async fn pairing_lookup_normalizes_codes_and_reports_state() {
     };
     let details = service(repo).get_pairing("kx7m 4qhd").await.unwrap();
     assert_eq!(details.requested_name, "erics-macbook");
-    assert_eq!(details.model_catalog, Some(model_catalog()));
 
     let missing = service(FakeRepo::default()).get_pairing(CODE).await;
     assert!(matches!(missing, Err(HarnessError::NotFound(_))));

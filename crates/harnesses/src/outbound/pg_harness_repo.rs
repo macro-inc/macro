@@ -14,7 +14,7 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         Harness, HarnessAgent, HarnessOwner, HarnessSession, PairingClaimFacts, PairingDetails,
-        PairingModelCatalog, PairingStatus, RequestedHarnessScope,
+        PairingStatus, RequestedHarnessScope,
     },
     ports::{HarnessRepo, NewHarness, NewPairing, OpenPairingCounts, PairingRow},
 };
@@ -109,17 +109,12 @@ impl HarnessRepo for PgHarnessRepo {
     type Err = anyhow::Error;
 
     async fn insert_pairing(&self, pairing: NewPairing) -> Result<bool, Self::Err> {
-        let model_catalog = pairing
-            .model_catalog
-            .map(serde_json::to_value)
-            .transpose()
-            .context("failed to serialize pairing model catalog")?;
         let inserted = sqlx::query!(
             r#"
             INSERT INTO harness_pairing_requests
                 (id, code, device_secret_hash, requested_name, host_info, requested_scope,
-                 model_catalog, expires_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                 expires_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (code) DO NOTHING
             "#,
             pairing.id,
@@ -128,7 +123,6 @@ impl HarnessRepo for PgHarnessRepo {
             pairing.requested_name,
             pairing.host,
             pairing.requested_scope.map(RequestedHarnessScope::as_str),
-            model_catalog,
             pairing.expires_at,
         )
         .execute(&self.pool)
@@ -178,9 +172,8 @@ impl HarnessRepo for PgHarnessRepo {
     async fn get_pairing(&self, code: &str) -> Result<Option<PairingRow>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT code, requested_name, host_info, requested_scope,
-                   model_catalog AS "model_catalog?: sqlx::types::Json<PairingModelCatalog>",
-                   status, created_at, expires_at
+            SELECT code, requested_name, host_info, requested_scope, status, created_at,
+                   expires_at
             FROM harness_pairing_requests
             WHERE code = $1
             "#,
@@ -203,7 +196,6 @@ impl HarnessRepo for PgHarnessRepo {
                     requested_name: row.requested_name,
                     host: row.host_info,
                     requested_scope,
-                    model_catalog: row.model_catalog.map(|catalog| catalog.0),
                     created_at: row.created_at,
                     expires_at: row.expires_at,
                 },
