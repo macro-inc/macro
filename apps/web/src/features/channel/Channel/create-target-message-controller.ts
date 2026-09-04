@@ -5,6 +5,8 @@ import {
 } from '@queries/channel/channel-messages';
 import { queryClient } from '@queries/client';
 import { type Accessor, onCleanup, untrack } from 'solid-js';
+import { match } from 'ts-pattern';
+import type { ThreadListNavigation } from './ThreadList';
 import {
   activeTargetMessageId,
   activeTargetMessageReplyId,
@@ -16,8 +18,7 @@ import {
   pendingTargetReplyId,
   type State,
   targetMessageDef,
-} from '../domain/target-message';
-import type { ThreadListNavigation } from './ThreadList';
+} from './target-message';
 
 /**
  * How long a navigation target keeps its accent highlight after its scroll
@@ -48,7 +49,7 @@ export type TargetMessageController = ReturnType<
 
 /**
  * Runner for the target-message machine. All decisions live in
- * `domain/target-message.ts`; this file owns the three things that touch the
+ * `target-message.ts`; this file owns the three things that touch the
  * world: the flash timer, cache restoration, and the readiness condition.
  * No effects: readiness is a derivation the selectors consume.
  */
@@ -73,15 +74,15 @@ export function createTargetMessageController(
     },
 
     execute: (cmd, dispatch) => {
-      switch (cmd.t) {
-        case 'restore-default-pagination': {
+      match(cmd)
+        .with({ t: 'restore-default-pagination' }, (cmd) => {
           const restored = restoreDefaultChannelPaginationAfterTargetLoad(
             options.channelId(),
             cmd.loadAround
           );
           if (restored) dispatch({ t: 'pagination-restored' });
-        }
-      }
+        })
+        .exhaustive();
     },
 
     inspect: import.meta.env.DEV

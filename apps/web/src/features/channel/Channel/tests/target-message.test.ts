@@ -12,7 +12,7 @@ import {
   type State,
   type Target,
   targetMessageDef,
-} from './target-message';
+} from '../target-message';
 
 const ROOT: Target = { messageId: 'm1', replyId: undefined };
 const NESTED: Target = { messageId: 'm1', replyId: 'r1' };

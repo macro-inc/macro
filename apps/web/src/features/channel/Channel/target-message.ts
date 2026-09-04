@@ -1,12 +1,13 @@
 import type { MachineDef, Transition } from '@macro-inc/machine';
+import { match } from 'ts-pattern';
 
 /**
  * Target-message navigation (deep link / click-to-message) as a state machine.
  *
  * Pure: no solid-js, no timers, no cache. The runner in
- * `../Channel/create-target-message-controller.ts` owns the flash timer, the
- * readiness memo, and cache restoration. This module owns every decision
- * about what a navigation means.
+ * `create-target-message-controller.ts` owns the flash timer, the readiness
+ * condition, and cache restoration. This module owns every decision about
+ * what a navigation means.
  *
  * Lifecycle:  navigate → targeting → flashing → idle
  *
@@ -127,69 +128,65 @@ const isRoot = (t: Target) => t.replyId === undefined;
 
 export const targetMessageDef: MachineDef<State, Event, Command> = {
   idle: {
-    on: (s, e) => {
-      switch (e.t) {
-        case 'navigate':
-          return navigate(s, e);
-        case 'pagination-restored':
-          return clearLoadAround(s);
-        case 'reset':
-          return RESET;
-        default:
-          return undefined;
-      }
-    },
+    on: (s, e) =>
+      match(e)
+        .with({ t: 'navigate' }, (e) => navigate(s, e))
+        .with({ t: 'pagination-restored' }, () => clearLoadAround(s))
+        .with({ t: 'reset' }, () => RESET)
+        .with(
+          { t: 'root-scroll-done' },
+          { t: 'reply-scroll-done' },
+          { t: 'flash-elapsed' },
+          { t: 'release' },
+          () => undefined
+        )
+        .exhaustive(),
   },
 
   targeting: {
-    on: (s, e) => {
-      switch (e.t) {
-        case 'navigate':
-          return isSameTarget(s.target, e.target) &&
-            pendingScrollTargetId(s, e.ready) !== undefined
+    on: (s, e) =>
+      match(e)
+        .with({ t: 'navigate' }, (e) =>
+          isSameTarget(s.target, e.target) &&
+          pendingScrollTargetId(s, e.ready) !== undefined
             ? undefined
-            : navigate(s, e);
-
-        case 'root-scroll-done':
-          return isRoot(s.target) && e.messageId === s.target.messageId
+            : navigate(s, e)
+        )
+        .with({ t: 'root-scroll-done' }, (e) =>
+          isRoot(s.target) && e.messageId === s.target.messageId
             ? flash(s)
-            : undefined;
-
-        case 'reply-scroll-done':
-          return e.messageId === s.target.messageId &&
-            e.replyId === s.target.replyId
+            : undefined
+        )
+        .with({ t: 'reply-scroll-done' }, (e) =>
+          e.messageId === s.target.messageId && e.replyId === s.target.replyId
             ? flash(s)
-            : undefined;
-
-        case 'pagination-restored':
-          return clearLoadAround(s);
-        case 'release':
-          return e.messageId === s.target.messageId ? release(s) : undefined;
-        case 'reset':
-          return RESET;
-        default:
-          return undefined;
-      }
-    },
+            : undefined
+        )
+        .with({ t: 'pagination-restored' }, () => clearLoadAround(s))
+        .with({ t: 'release' }, (e) =>
+          e.messageId === s.target.messageId ? release(s) : undefined
+        )
+        .with({ t: 'reset' }, () => RESET)
+        .with({ t: 'flash-elapsed' }, () => undefined)
+        .exhaustive(),
   },
 
   flashing: {
-    on: (s, e) => {
-      switch (e.t) {
-        case 'navigate':
-          return navigate(s, e);
-        case 'flash-elapsed':
-          return release(s);
-        case 'pagination-restored':
-          return clearLoadAround(s);
-        case 'release':
-          return e.messageId === s.target.messageId ? release(s) : undefined;
-        case 'reset':
-          return RESET;
-        default:
-          return undefined;
-      }
-    },
+    on: (s, e) =>
+      match(e)
+        .with({ t: 'navigate' }, (e) => navigate(s, e))
+        .with({ t: 'flash-elapsed' }, () => release(s))
+        .with({ t: 'pagination-restored' }, () => clearLoadAround(s))
+        .with({ t: 'release' }, (e) =>
+          e.messageId === s.target.messageId ? release(s) : undefined
+        )
+        .with({ t: 'reset' }, () => RESET)
+        .with(
+          { t: 'root-scroll-done' },
+          { t: 'reply-scroll-done' },
+          () => undefined
+        )
+        .exhaustive(),
   },
 };
 
@@ -206,10 +203,16 @@ export function initialState(init: {
 }
 
 export const activeTargetMessageId = (s: State): string | undefined =>
-  s.t === 'idle' ? undefined : s.target.messageId;
+  match(s)
+    .with({ t: 'idle' }, () => undefined)
+    .with({ t: 'targeting' }, { t: 'flashing' }, (s) => s.target.messageId)
+    .exhaustive();
 
 export const activeTargetMessageReplyId = (s: State): string | undefined =>
-  s.t === 'idle' ? undefined : s.target.replyId;
+  match(s)
+    .with({ t: 'idle' }, () => undefined)
+    .with({ t: 'targeting' }, { t: 'flashing' }, (s) => s.target.replyId)
+    .exhaustive();
 
 /**
  * The root row ChannelThread should position, if any. A root-only target is
@@ -221,13 +224,19 @@ export const pendingScrollTargetId = (
   s: State,
   ready: boolean
 ): string | undefined =>
-  s.t === 'targeting' && (isRoot(s.target) || !ready)
-    ? s.target.messageId
-    : undefined;
+  match(s)
+    .with({ t: 'targeting' }, (s) =>
+      isRoot(s.target) || !ready ? s.target.messageId : undefined
+    )
+    .with({ t: 'idle' }, { t: 'flashing' }, () => undefined)
+    .exhaustive();
 
 /** The reply ChannelThread should position once the root row clears. */
 export const pendingTargetReplyId = (s: State): string | undefined =>
-  s.t === 'targeting' ? s.target.replyId : undefined;
+  match(s)
+    .with({ t: 'targeting' }, (s) => s.target.replyId)
+    .with({ t: 'idle' }, { t: 'flashing' }, () => undefined)
+    .exhaustive();
 
 /** Any scroll still owed to the target (root or reply). Used by Channel.tsx for keep-mounted. */
 export const hasPendingElementScroll = (s: State, ready: boolean): boolean =>
