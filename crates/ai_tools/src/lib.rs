@@ -138,6 +138,33 @@ pub fn all_tool_frontend_schemas() -> FrontendSchemas {
         .build()
 }
 
+/// Toolset for the channel-mention bot — a surface with no composer to
+/// finish a chat-deferred user tool in.
+///
+/// Matches [`all_tools`] except for the two user tools: `CreateCalendarEvent`
+/// executes directly in the agent loop (as over MCP), and `SendEmail` is
+/// omitted, since a channel reply offers no way to review a draft before it
+/// is sent. A deferred user tool here would return `PendingUserExecution`
+/// forever — nothing ever executes it — while reading to the model as
+/// success, so the bot would report an action it never performed.
+pub fn channel_bot_tools() -> ToolSetWithPrompt {
+    let toolset = subagent_toolset()
+        .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
+        .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset())
+        .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
+        .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset())
+        .add_subtoolset::<ToolImportToolContext>(import_toolset())
+        .add_tool::<Subagent, ToolServiceContext>()
+        .add_tool::<SearchTools, ToolServiceContext>()
+        .add_tool::<LoadTools, ToolServiceContext>()
+        .add_tool::<DisplayResults, ToolServiceContext>();
+    let toolset = Arc::new(toolset);
+    ToolSetWithPrompt {
+        toolset,
+        prompt: Box::new(&prompt::TOOL_USE_PROMPT),
+    }
+}
+
 /// Toolset for the MCP server — excludes chat-deferred user tools.
 pub fn mcp_tools() -> ToolSetWithPrompt {
     let toolset = subagent_toolset()

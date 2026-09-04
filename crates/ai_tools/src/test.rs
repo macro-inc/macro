@@ -30,6 +30,37 @@ fn mcp_tools_passes_schema_validation() {
 }
 
 #[test]
+fn channel_bot_tools_passes_schema_validation() {
+    let _ = channel_bot_tools();
+}
+
+/// The channel bot has no composer to finish a deferred user tool in, so its
+/// toolset must execute calendar creation directly and omit SendEmail
+/// entirely — a `UserToolResponse` output here would mean a call that nothing
+/// can ever execute.
+#[test]
+fn channel_bot_tools_execute_calendar_create_directly_and_omit_send_email() {
+    let json = frontend_schemas_builder()
+        .merge(&channel_bot_tools())
+        .build()
+        .to_json_pretty()
+        .expect("channel bot schemas serialize");
+    let schemas: serde_json::Value = serde_json::from_str(&json).expect("valid schema json");
+    let tools = schemas["tools"].as_array().expect("tools array");
+
+    let create = tools
+        .iter()
+        .find(|tool| tool["name"] == "CreateCalendarEvent")
+        .expect("channel bot toolset keeps CreateCalendarEvent");
+    assert_eq!(create["output"], "ToolCalendarEvent");
+
+    assert!(
+        !tools.iter().any(|tool| tool["name"] == "SendEmail"),
+        "channel bot toolset must not expose SendEmail"
+    );
+}
+
+#[test]
 fn no_tools_passes_schema_validation() {
     let _ = no_tools();
 }

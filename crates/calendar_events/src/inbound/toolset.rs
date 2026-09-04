@@ -105,10 +105,12 @@ where
     shared_calendar_toolset().add_user_tool::<CreateCalendarEvent, CalendarToolContext<M, O>>()
 }
 
-/// Create the MCP calendar toolset.
+/// Create the calendar toolset for hosts without a composer — the MCP server
+/// and the channel-mention bot.
 ///
-/// MCP clients receive the real create tool and apply their own confirmation
-/// policy from its annotations rather than the chat-specific deferred flow.
+/// These hosts receive the real create tool and apply their own confirmation
+/// policy from its annotations rather than the chat-specific deferred flow,
+/// which only the chat frontend can finish.
 pub fn mcp_toolset<M, O>() -> AsyncToolCollection<CalendarToolContext<M, O>>
 where
     M: CalendarMutationService,
