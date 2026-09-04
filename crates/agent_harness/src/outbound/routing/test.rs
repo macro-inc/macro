@@ -198,13 +198,13 @@ fn spawn_for(kind: AgentKind) -> SpawnContainer {
 }
 
 #[tokio::test]
-async fn the_cursor_bot_routes_to_cursor_and_everything_else_to_the_sandbox() {
+async fn a_cursor_runtime_routes_to_cursor_and_everything_else_to_the_sandbox() {
     let sandbox = TaggedManager::new("sandbox");
     let cursor = TaggedManager::new("cursor");
     let router = RoutedContainerManager::new(
         sandbox.clone(),
         cursor.clone(),
-        FixedBotSessions(bot_id::CURSOR_BOT_ID),
+        FixedBotSessions(BotId::TEST_A),
     );
 
     let spawned = router
@@ -230,7 +230,7 @@ async fn resume_and_teardown_route_by_the_stored_bot() {
     let router = RoutedContainerManager::new(
         sandbox.clone(),
         cursor.clone(),
-        FixedBotSessions(bot_id::CURSOR_BOT_ID),
+        FixedBotSessions(BotId::TEST_A),
     );
 
     let session = AgentSessionId::new();

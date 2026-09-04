@@ -101,18 +101,18 @@ pub const MACRO_CODER_HANDLE: &str = "coder";
 /// Display name for the "Macro Coder" system bot.
 pub const MACRO_CODER_NAME: &str = "Macro Coder";
 
-/// Stable [`BotId`] for the "Cursor" system bot.
+/// Legacy [`BotId`] for Cursor sessions created before private personas.
 ///
-/// Mentioning it opens an agent session like [`MACRO_CODER_BOT_ID`] does, but
-/// the session is served by a Cursor cloud agent rather than a Macro-managed
-/// sandbox.
+/// This remains a system identity during the staged rollout so queued events
+/// and historical conversations keep resolving. New clients do not advertise
+/// it; newly connected users receive a private persisted Cursor persona.
 pub const CURSOR_BOT_ID: BotId =
     BotId::new_from_uuid(Uuid::from_u128(0x0000_0000_0000_0000_0000_0000_0000_c5c5));
 
-/// Stable handle for the "Cursor" system bot (used for `@` mentions).
+/// Legacy handle retained for historical Cursor bot rendering.
 pub const CURSOR_HANDLE: &str = "cursor";
 
-/// Display name for the "Cursor" system bot.
+/// Legacy display name retained for historical Cursor bot rendering.
 pub const CURSOR_NAME: &str = "Cursor";
 
 /// Stable handle for the autonomous Macro platform principal.

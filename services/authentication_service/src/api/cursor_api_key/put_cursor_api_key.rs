@@ -44,7 +44,6 @@ pub async fn handler(
     extract::Json(req): extract::Json<PutCursorApiKeyRequest>,
 ) -> Result<Json<CursorApiKeyStatus>, CursorApiKeyError> {
     let user_id = &user_context.authorization.macro_user_id;
-
     let cipher = &ctx.cursor_api_key_cipher;
 
     // Parsed before anything else, so a malformed key never reaches KMS.
@@ -60,13 +59,18 @@ pub async fn handler(
             CursorApiKeyError::Internal
         })?;
 
-    let stored =
-        cursor_api_key::store::upsert_cursor_api_key(&ctx.db, user_id.as_ref(), &encrypted)
-            .await
-            .map_err(|error| {
-                tracing::error!(error = ?error, "failed to store cursor api key");
-                CursorApiKeyError::Internal
-            })?;
+    let stored = authentication_service::service::cursor_connection::connect_cursor(
+        &ctx.db, user_id, &encrypted,
+    )
+    .await
+    .map_err(|error| {
+        tracing::error!(error = ?error, "failed to connect cursor");
+        if error.to_string().contains("Cursor agents are not enabled") {
+            CursorApiKeyError::Forbidden
+        } else {
+            CursorApiKeyError::Internal
+        }
+    })?;
 
     Ok(Json(CursorApiKeyStatus {
         registered: true,

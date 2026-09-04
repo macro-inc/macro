@@ -11,12 +11,10 @@ import {
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
-import { isCursorBotId } from '@core/constant/cursorAgent';
 import {
   enableChatV3Agents,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
-import { useCursorAgentsAccess } from '@core/cursor/flag';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
@@ -28,7 +26,6 @@ import {
   uploadFile,
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
-import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { isIOS } from '@solid-primitives/platform';
 import { CollapsedInput, cn, Surface } from '@ui';
 import { $getRoot } from 'lexical';
@@ -41,7 +38,6 @@ import {
   Switch,
 } from 'solid-js';
 import {
-  cursorMentionUser,
   isMacroAiId,
   isMacroCoderId,
   isMacroNewId,
@@ -266,20 +262,12 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  const canUseCursor = useCursorAgentsAccess();
-  const cursorApiKey = useCursorApiKeyStatusQuery();
-
   // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
   // and any bot added to the channel is mentionable too. All are surfaced
   // through the same `@`-mention typeahead as participants and re-tagged as
   // bot mentions at send time.
   const mentionUsers: Accessor<IUser[]> = () => {
-    const cursorEnabled =
-      canUseCursor() && (cursorApiKey.data?.registered ?? false);
-    const base = [
-      ...(props.participants?.() ?? []),
-      ...(props.bots?.() ?? []),
-    ].filter((user) => cursorEnabled || !isCursorBotId(user.id));
+    const base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
     if (
       isFeatureEnabled(enableChatV3Agents) &&
       !base.some((user) => isMacroCoderId(user.id))
@@ -291,14 +279,6 @@ export function ChannelInput(props: ChannelInputProps) {
       !base.some((user) => isMacroNewId(user.id))
     ) {
       base.unshift(macroNewMentionUser());
-    }
-    if (
-      cursorEnabled &&
-      // Hiding it is not enforcement — a mention can still arrive from a
-      // copied message or another client — so the harness refuses these too.
-      !base.some((user) => isCursorBotId(user.id))
-    ) {
-      base.unshift(cursorMentionUser());
     }
     if (!base.some((user) => isMacroAiId(user.id))) {
       base.unshift(macroAiMentionUser());

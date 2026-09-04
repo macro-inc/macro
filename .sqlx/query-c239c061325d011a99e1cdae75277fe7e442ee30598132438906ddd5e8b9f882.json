@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE bots\n        SET deleted_at = NOW(), updated_at = NOW()\n        WHERE owner_user_id = $1\n          AND provisioning_key = $2\n          AND deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c239c061325d011a99e1cdae75277fe7e442ee30598132438906ddd5e8b9f882"
+}

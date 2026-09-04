@@ -107,4 +107,20 @@ describe('message sender normalization', () => {
       'Bot'
     );
   });
+
+  it('uses persisted sender names for external agents', () => {
+    expect(
+      getBotDisplayName('bot|external-agent', {
+        type: 'bot',
+        id: 'external-agent',
+        name: 'Workspace Agent',
+      })
+    ).toBe('Workspace Agent');
+  });
+
+  it('keeps the legacy Cursor name for compatibility payloads', () => {
+    expect(getBotDisplayName('bot|00000000-0000-0000-0000-00000000c5c5')).toBe(
+      'Cursor'
+    );
+  });
 });

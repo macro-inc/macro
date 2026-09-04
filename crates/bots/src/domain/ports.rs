@@ -81,6 +81,13 @@ pub trait BotRepo: Send + Sync + 'static {
         bot_id: BotId,
     ) -> impl Future<Output = Result<Option<Agent>, Self::Err>> + Send;
 
+    /// Check whether a bot is managed by a product provisioning lifecycle.
+    fn has_provisioning_key(
+        &self,
+        bot_id: BotId,
+        provisioning_key: &'static str,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
     /// Check team membership.
     fn user_has_team(
         &self,

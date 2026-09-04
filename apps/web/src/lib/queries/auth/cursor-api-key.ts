@@ -1,4 +1,6 @@
 import { throwOnErr } from '@core/util/result';
+import { agentKeys } from '@queries/agents/keys';
+import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
 import { authServiceClient } from '@service-auth/client';
 import type { CursorApiKeyStatus } from '@service-auth/generated/schemas';
@@ -47,9 +49,14 @@ export function useSaveCursorApiKey() {
     mutationFn: async (apiKey: string) =>
       throwOnErr(async () => await authServiceClient.putCursorApiKey(apiKey)),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: authKeys.cursorApiKeyStatus.queryKey,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: authKeys.cursorApiKeyStatus.queryKey,
+        }),
+        queryClient.invalidateQueries({ queryKey: agentKeys.list.queryKey }),
+        queryClient.invalidateQueries({ queryKey: channelKeys._def }),
+        queryClient.removeQueries({ queryKey: authKeys.cursorModels.queryKey }),
+      ]);
     },
   }));
 }
@@ -65,9 +72,14 @@ export function useDisconnectCursorApiKey() {
     mutationFn: async () =>
       throwOnErr(async () => await authServiceClient.deleteCursorApiKey()),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: authKeys.cursorApiKeyStatus.queryKey,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: authKeys.cursorApiKeyStatus.queryKey,
+        }),
+        queryClient.invalidateQueries({ queryKey: agentKeys.list.queryKey }),
+        queryClient.invalidateQueries({ queryKey: channelKeys._def }),
+        queryClient.removeQueries({ queryKey: authKeys.cursorModels.queryKey }),
+      ]);
     },
   }));
 }

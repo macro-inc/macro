@@ -28,6 +28,7 @@ rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+bots = { path = "../../crates/bots", default-features = false, features = ["outbound"] }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 aes-gcm = { workspace = true }
@@ -164,6 +165,7 @@ database_env_vars = { path = "../../crates/database_env_vars" }
 
 [dev-dependencies]
 cool_asserts = "2"
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
 
 [package.metadata.cargo-machete]
 ignored = ["async-stripe"]

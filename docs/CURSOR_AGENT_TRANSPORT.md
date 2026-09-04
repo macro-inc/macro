@@ -90,8 +90,9 @@ A field to enter a Cursor API key. On submit we validate it before storing:
 `GET /v1/me` with the key. A `crsr_`-prefixed key that authenticates is stored;
 anything else is rejected with a useful message rather than silently saved.
 
-The stored record is per Macro user. Deleting it is supported and revokes
-`@cursor` for that user.
+The stored record is per Macro user. Deleting it is supported and deactivates
+`@cursor` for that user. The private persona and its edits remain persisted;
+reconnecting restores the same identity.
 
 ### 2. `@cursor` in any channel
 
@@ -103,19 +104,19 @@ Gated on key registration. A user with no Cursor key registered should not see
 `@cursor` in the mention autocomplete, and a mention that somehow arrives anyway
 must fail with a message telling them to register a key — never silently drop.
 
-**How the gate works.** The mention autocomplete reads
-`useChannelBotsQuery` → `GET /channels/{id}/bots`
-(`apps/web/src/lib/queries/channel/channel-bots.ts:31`). That endpoint already
-authenticates the caller, so the filter belongs there: omit `@cursor` from the
-response when the caller has no row in `cursor_api_key`. One `LEFT JOIN` on the
-authenticated user.
+**How the gate works.** Connecting Cursor atomically stores the credential and
+ensures one private persisted persona identified by `(owner_user_id,
+provisioning_key)`. The autocomplete combines installed channel bots with the
+caller's global persisted agents, then includes a Cursor-backed persona only
+when the rollout flag, Macro-staff entitlement, and key status all allow it.
+Disconnecting atomically removes the credential and soft-deactivates the
+persona, so server-side invocation also stops rather than relying on the client
+filter.
 
-No new endpoint, no new frontend query, no client-side join, and no window where
-the autocomplete offers a bot that would fail. The check mirrors
-`is_managed_bot` — a hardcoded `CURSOR_BOT_ID` comparison in the channel-bots
-read. When there is a second credential-gated bot, this becomes a
-`requires_user_credential` column on `bots` and the filter goes declarative; for
-one bot that is premature.
+The former fixed `CURSOR_BOT_ID` remains a hidden compatibility alias during the
+staged rollout. It continues to route historical sessions and queued events but
+is not inserted into new mention menus. Historical message and session
+references are not rewritten.
 
 Settings needs its own small surface regardless, for the connections tab:
 `GET /me/cursor-key` → `{ registered: bool }`, `PUT` to set, `DELETE` to revoke.
@@ -597,9 +598,8 @@ Steps 1 and 2 are independent and can go in parallel.
 - Transport: drive the duplex pipe end-to-end against the in-memory `CursorAgents`
   / `RunStream` doubles already in `testing.rs` — a full `initialize` →
   `session/new` → `session/prompt` → updates round trip with no network.
-- Routing: `RoutedContainerManager` sends a Cursor bot to the Cursor manager and
-  anything else to the sandbox manager. Cheap, and it is the piece whose failure
-  mode is worst.
+- Routing: `RoutedContainerManager` sends a persisted agent whose harness is
+  `cursor` to the Cursor manager and anything else to the appropriate manager.
 - Cipher: round-trip encrypt/decrypt, and a test asserting the plaintext key
   does not appear in the `Debug` output of the types that hold it.
 - Repos: standard live-Postgres tests. Include the `UNIQUE (provider,
@@ -607,9 +607,9 @@ Steps 1 and 2 are independent and can go in parallel.
 
 ## Resolved questions
 
-Resolved in review: the external table alone (no `agent_session` column), one
-global seeded `@cursor` system bot, channel-bots server-side filtering for the
-mention gate, hardcoded `macro-inc/macro` repo, and omitted model.
+Resolved in review: the external table alone (no `agent_session` column), a
+private persisted `@cursor` persona provisioned with each user's connection,
+key-aware mention filtering, and the hardcoded `macro-inc/macro` repo.
 
 1. **Do we store user keys at all in v1?** **Yes.** Sub-tokens were the
    alternative, and they lose the property that makes this feature legible: the

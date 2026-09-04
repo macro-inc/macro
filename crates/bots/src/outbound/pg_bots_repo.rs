@@ -822,6 +822,28 @@ impl BotRepo for PgBotsRepo {
         row.map(Agent::try_from).transpose()
     }
 
+    async fn has_provisioning_key(
+        &self,
+        bot_id: BotId,
+        provisioning_key: &'static str,
+    ) -> Result<bool, Self::Err> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT EXISTS (
+                SELECT 1
+                FROM bots
+                WHERE id = $1
+                  AND provisioning_key = $2
+            ) AS "exists!"
+            "#,
+            bot_id.as_uuid(),
+            provisioning_key,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .context("failed to check bot provisioning identity")
+    }
+
     async fn get_harness_owner(
         &self,
         harness_id: HarnessId,

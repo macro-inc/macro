@@ -9,8 +9,10 @@
  * so each stateful concern stays a composable unit as wiring grows.
  */
 
-import { isCursorBotId } from '@core/constant/cursorAgent';
-import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
+import {
+  sessionMayProvideExternalUrl,
+  useAgentSessionExternalUrlQuery,
+} from '@queries/agent-session/session';
 import type {
   FoldedMessage,
   SessionMetadata,
@@ -165,7 +167,7 @@ export function AgentSessionProvider(
           The poll component gates on `isSuccess` so it should not suspend;
           this boundary is the backstop if a read of `query.data` ever does. */}
       <Suspense fallback={null}>
-        <CursorExternalUrlPoll
+        <ExternalUrlPoll
           sessionId={sessionId}
           session={feed.session}
           applySnapshot={feed.applySnapshot}
@@ -200,22 +202,22 @@ export function AgentSessionProvider(
 }
 
 /**
- * Compensating read for a Cursor session whose provider url arrived after
+ * Compensating read for an external session whose provider url arrived after
  * the feed's snapshot. Lives in its own Suspense so the rest of the block
  * stays mounted while this query's first fetch is in flight.
  */
-function CursorExternalUrlPoll(props: {
+function ExternalUrlPoll(props: {
   sessionId: Accessor<string | undefined>;
   session: Accessor<AgentSessionResponse | undefined>;
   applySnapshot: (session: AgentSessionResponse) => void;
 }) {
-  // Only a loaded Cursor session whose provider url is still missing polls;
-  // everything else passes `undefined`, which disables the query.
+  // External metadata can be populated after creation. The persisted harness
+  // identifies that capability until the provider metadata itself arrives.
   const query = useAgentSessionExternalUrlQuery(() => {
     const id = props.sessionId();
     const session = props.session();
     if (!id || !session || session.external?.url) return undefined;
-    return isCursorBotId(session.botId) ? id : undefined;
+    return sessionMayProvideExternalUrl(session) ? id : undefined;
   });
   createEffect(() => {
     // `query.data` suspends while pending and throws once it errors

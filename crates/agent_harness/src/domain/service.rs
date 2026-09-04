@@ -873,8 +873,10 @@ where
     ) -> Result<CommandOutcome> {
         match &command {
             HarnessCommand::Open(open)
-                if AgentKind::of(open.bot_id) == AgentKind::SandboxedCoder
-                    && !is_macro_staff(&open.origin.sender) =>
+                if matches!(
+                    AgentKind::for_session(open.bot_id, &open.runtime.harness),
+                    AgentKind::SandboxedCoder | AgentKind::Cursor
+                ) && !is_macro_staff(&open.origin.sender) =>
             {
                 return Err(AgentSessionError::Forbidden.into());
             }
@@ -886,8 +888,10 @@ where
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
-                if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
-                    && !actor.as_ref().is_some_and(is_macro_staff)
+                if matches!(
+                    AgentKind::for_session(session.bot_id, &session.harness),
+                    AgentKind::SandboxedCoder | AgentKind::Cursor
+                ) && !actor.as_ref().is_some_and(is_macro_staff)
                 {
                     return Err(AgentSessionError::Forbidden.into());
                 }

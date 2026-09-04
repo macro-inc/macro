@@ -107,7 +107,7 @@ pub trait RunStream {
         run: &CursorRunId,
     ) -> impl Future<
         Output = Result<
-            impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send,
+            impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send + use<Self>,
             rootcause::Report,
         >,
     > + Send;

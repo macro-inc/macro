@@ -29,10 +29,10 @@ pub async fn handler(
 ) -> Result<Json<CursorApiKeyStatus>, CursorApiKeyError> {
     let user_id = &user_context.authorization.macro_user_id;
 
-    cursor_api_key::store::delete_cursor_api_key(&ctx.db, user_id.as_ref())
+    authentication_service::service::cursor_connection::disconnect_cursor(&ctx.db, user_id)
         .await
         .map_err(|error| {
-            tracing::error!(error = ?error, "failed to delete cursor api key");
+            tracing::error!(error = ?error, "failed to disconnect cursor");
             CursorApiKeyError::Internal
         })?;
 

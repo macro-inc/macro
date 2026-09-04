@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO bots (\n            id, kind, owner_user_id, name, handle, description, created_by,\n            has_agent, provisioning_key\n        )\n        VALUES ($1, 'owned', $2, $3, $4, $5, $2, true, $6)\n        ON CONFLICT (owner_user_id, provisioning_key)\n            WHERE provisioning_key IS NOT NULL\n        DO UPDATE SET deleted_at = NULL, updated_at = NOW()\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4f05929d398a7efd0feac9020ad45123da0a0becdb0385285ac340e55c7b7ba2"
+}

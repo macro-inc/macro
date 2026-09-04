@@ -82,10 +82,18 @@ describe('availableBotMentionUsers', () => {
     ]);
   });
 
-  it('only offers a global Cursor agent when Cursor is connected', () => {
+  it('only offers a global Cursor agent when Cursor access is enabled', () => {
     const cursorAgent = agent('cursor-agent', 'Cursor agent', 'all', 'cursor');
 
     expect(availableBotMentionUsers([], [cursorAgent], false)).toEqual([]);
     expect(availableBotMentionUsers([], [cursorAgent], true)).toHaveLength(1);
+  });
+
+  it('filters an installed Cursor persona when Cursor access is disabled', () => {
+    const cursorAgent = agent('cursor-agent', 'Cursor agent', 'all', 'cursor');
+
+    expect(
+      availableBotMentionUsers([cursorAgent.bot], [cursorAgent], false)
+    ).toEqual([]);
   });
 });

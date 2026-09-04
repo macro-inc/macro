@@ -71,6 +71,9 @@ pub enum CursorApiKeyError {
     /// "Cursor is having a moment" from "we broke".
     #[error("Cursor's API is unavailable right now")]
     CursorUnavailable,
+    /// The caller is outside the current Cursor rollout cohort.
+    #[error("Cursor agents are not enabled for this account")]
+    Forbidden,
     /// Encryption or persistence failed.
     #[error("internal error")]
     Internal,
@@ -84,6 +87,7 @@ impl axum::response::IntoResponse for CursorApiKeyError {
             Self::MalformedKey => StatusCode::BAD_REQUEST,
             Self::NotConnected => StatusCode::CONFLICT,
             Self::CursorUnavailable => StatusCode::BAD_GATEWAY,
+            Self::Forbidden => StatusCode::FORBIDDEN,
             Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         };
         // `to_string` and nothing else: every variant's message is written to
