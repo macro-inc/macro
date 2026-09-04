@@ -74,6 +74,7 @@
     "@lukemorales/query-key-factory": "^1.3.4",
     "@macro-inc/collaboration": "workspace:*",
     "@macro-inc/lexical-core": "workspace:*",
+    "@macro-inc/machine": "workspace:*",
     "@macro-inc/observability": "workspace:*",
     "@normy/query-core": "^0.21.0",
     "@phosphor-icons/core": "^2.1.1",

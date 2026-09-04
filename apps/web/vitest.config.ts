@@ -32,6 +32,7 @@ export default defineConfig({
     projects: [
       '../../packages/collaboration/vitest.collab.config.ts',
       '../../packages/collaboration/vitest.transport.config.ts',
+      '../../packages/machine/vitest.config.ts',
       {
         // Core package tests
         extends: './src/lib/core/vitest.config.ts',
