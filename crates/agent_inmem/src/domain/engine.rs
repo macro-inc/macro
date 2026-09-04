@@ -34,7 +34,7 @@ pub struct TurnRequest {
 ///
 /// The trait is the testing seam: the ACP surface is exercised against a
 /// scripted engine, and production plugs in
-/// [`crate::outbound::rig_engine::RigTurnEngine`].
+/// [`crate::rig_engine::RigTurnEngine`].
 pub trait TurnEngine: Send + Sync + 'static {
     /// Start the turn. Parts arrive on the returned receiver; the stream
     /// ending is the turn ending, and an `Err` item is a turn-fatal failure.

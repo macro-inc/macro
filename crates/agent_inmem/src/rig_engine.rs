@@ -1,5 +1,5 @@
-//! The production turn engine: the shared rig agent loop over the Macro
-//! product toolset.
+//! Composition root for the production turn engine: the shared rig agent loop
+//! over the Macro product toolset.
 //!
 //! Consumption mirrors the scheduled-action executor
 //! (`services/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
@@ -30,6 +30,7 @@ use crate::domain::engine::{TurnEngine, TurnRequest};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[cfg(test)]
+#[path = "outbound/rig_engine/test.rs"]
 mod test;
 
 /// How many stream parts may sit unread before the engine pauses; keeps a

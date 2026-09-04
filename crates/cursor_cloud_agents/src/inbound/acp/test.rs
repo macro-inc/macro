@@ -732,6 +732,70 @@ async fn session_new_advertises_the_models_as_a_config_option() {
     assert_eq!(values, vec!["composer-2.5", "gpt-5.5"]);
 }
 
+/// With two models of one family in the listing, the select goes out as ACP
+/// groups headed by family — `Claude Opus` once, its versions under it — in
+/// listing order, and the flat fixture above stays flat: singletons gain
+/// nothing from a header each.
+#[tokio::test]
+async fn a_listing_with_families_is_advertised_as_headed_groups() {
+    let cursor = FakeCursor::new();
+    let mut models = offered_models();
+    models.extend([
+        CursorModel {
+            id: "claude-opus-5".to_owned(),
+            display_name: "Claude Opus 5".to_owned(),
+            variants: Vec::new(),
+        },
+        CursorModel {
+            id: "claude-opus-4.8".to_owned(),
+            display_name: "Claude Opus 4.8".to_owned(),
+            variants: Vec::new(),
+        },
+    ]);
+    cursor.script_models(models);
+    let (_service, mut client) =
+        serve_over_channel_with_default_model(cursor, Some("claude-opus-5"), |_| {});
+
+    let response = client
+        .call(
+            1,
+            "session/new",
+            serde_json::json!({"cwd": "/workspace", "mcpServers": []}),
+        )
+        .await;
+    let option = &expect_result(&response)["configOptions"][0];
+    assert_eq!(option["currentValue"], "claude-opus-5");
+    let groups: Vec<(&str, &str, Vec<&str>)> = option["options"]
+        .as_array()
+        .expect("grouped options")
+        .iter()
+        .map(|group| {
+            (
+                group["group"].as_str().expect("a group id"),
+                group["name"].as_str().expect("a group name"),
+                group["options"]
+                    .as_array()
+                    .expect("a group's options")
+                    .iter()
+                    .map(|entry| entry["value"].as_str().expect("a value id"))
+                    .collect(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        groups,
+        vec![
+            ("composer", "Composer", vec!["composer-2.5"]),
+            ("gpt", "GPT", vec!["gpt-5.5"]),
+            (
+                "claude-opus",
+                "Claude Opus",
+                vec!["claude-opus-5", "claude-opus-4.8"]
+            ),
+        ]
+    );
+}
+
 /// Setting the model mid-session is accepted and reflected back, and the next
 /// run carries it — the point being that Cursor honours `model` on a follow-up
 /// run, so a change does not have to wait for a new agent.

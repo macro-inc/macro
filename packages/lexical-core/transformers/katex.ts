@@ -100,10 +100,7 @@ export const E_BLOCK_EQUATION_NODE: TextMatchTransformer = {
     try {
       const [equationMatch] = match;
       const equation = equationMatch.replace(/^\$\$|\$\$$/g, '');
-
-      // when AI Chat prompt gets updated to support inline vs block, update inline to false
-      const isInline = true; // false
-      const equationNode = $createEquationNode(equation, isInline);
+      const equationNode = $createEquationNode(equation, false);
       node.replace(equationNode);
     } catch (e) {
       console.error('Error creating equation node:', e);
@@ -151,9 +148,7 @@ export const E_MULTILINE_BLOCK_EQUATION_NODE: MultilineElementTransformer = {
     }
 
     try {
-      // when AI Chat prompt gets updated to support inline vs block, update inline to false
-      const isInline = true; // false
-      const equationNode = $createEquationNode(latexString, isInline);
+      const equationNode = $createEquationNode(latexString, false);
       rootNode.append(equationNode);
     } catch (e) {
       console.error('Error creating multiline equation node:', e);
