@@ -510,7 +510,6 @@ export function ChannelsRail(props: {
                   <div class="flex h-full min-h-0 flex-col gap-3 px-4">
                     <CollapsibleSection.Root
                       open={state.expandedGroups.channels}
-                      fillAvailable={!state.expandedGroups.direct_messages}
                     >
                       <CollapsibleSection.Header
                         focused={
@@ -799,7 +798,6 @@ export function ChannelsRail(props: {
                 <div class="flex h-full min-h-0 flex-col gap-3 px-2">
                   <CollapsibleSection.Root
                     open={state.expandedGroups.channels}
-                    fillAvailable={!state.expandedGroups.direct_messages}
                     class="items-center"
                   >
                     <CollapsibleSection.Header
