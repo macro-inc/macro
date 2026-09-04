@@ -17,6 +17,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "inbound",
 ] }
 entity_mutation = { path = "../entity_mutation" }
+favorites = { path = "../favorites", default-features = false, features = ["ports"] }
 graphql_activity = { path = "../graphql_activity" }
 graphql_channel = { path = "../graphql_channel" }
 graphql_common = { path = "../graphql_common" }

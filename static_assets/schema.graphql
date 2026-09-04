@@ -100,6 +100,10 @@ type CompleteMutationRoot {
 	"""
 	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!
 	"""
+	Persist the authenticated user's complete favorites order and return the authoritative list.
+	"""
+	reorderFavorites(input: ReorderFavoritesInput!): [GraphqlFavorite!]!
+	"""
 	Record a view or interaction in the authenticated user's channel activity.
 	"""
 	recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!
@@ -2046,6 +2050,44 @@ enum GraphqlEntityType {
 	AI coding agent session entity.
 	"""
 	AGENT_SESSION
+}
+
+"""
+GraphQL fields for an ordered favorite.
+"""
+type GraphqlFavorite {
+	"""
+	Canonical type of the favorited entity.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Canonical identifier of the favorited entity.
+	"""
+	entityId: ID!
+	"""
+	Manual ordering value; lower values sort first.
+	"""
+	sortOrder: Float!
+	"""
+	Time at which the entity was first favorited, in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	File type of a favorited document, when applicable.
+	"""
+	fileType: String
+	"""
+	Document subtype of a favorited document, when applicable.
+	"""
+	documentSubType: String
+	"""
+	Channel type of a favorited channel, when applicable.
+	"""
+	channelType: String
+	"""
+	Owning channel id of a favorited channel message, when applicable.
+	"""
+	channelId: ID
 }
 
 """
@@ -5518,6 +5560,16 @@ input RenameEntityInput {
 	New user-visible display name.
 	"""
 	displayName: String!
+}
+
+"""
+Input for persisting the authenticated user's complete favorites order.
+"""
+input ReorderFavoritesInput {
+	"""
+	Favorited entities in the desired order.
+	"""
+	favorites: [EntityRefInput!]!
 }
 
 """

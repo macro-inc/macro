@@ -3741,6 +3741,7 @@ dependencies = [
  "email",
  "entity_access",
  "entity_mutation",
+ "favorites",
  "graphql_activity",
  "graphql_channel",
  "graphql_common",
@@ -7212,12 +7213,19 @@ name = "graphql_favorite"
 version = "0.1.0"
 dependencies = [
  "async-graphql",
+ "chrono",
+ "entity_mutation",
  "favorites",
+ "graphql_common",
+ "graphql_entity_mutation",
+ "graphql_permission",
+ "graphql_soup",
  "macro_user_id",
  "model-entity",
  "rootcause",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack",
 ]
 
