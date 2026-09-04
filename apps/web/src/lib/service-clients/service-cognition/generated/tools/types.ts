@@ -3109,7 +3109,8 @@ export interface ListCalendarsToolResponse {
 export interface ToolCalendar {
   /**
    * Calendar id; pass as `calendarId` to CreateCalendarEvent to target
-   * this calendar.
+   * this calendar. Not a mentionable entity: never put it in a mention
+   * tag — only individual calendar events can be mentioned.
    */
   calendarId: string;
   /**

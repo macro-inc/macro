@@ -358,6 +358,13 @@ impl CalendarRepository for FakeRepo {
         Ok(self.visible_calendars.clone())
     }
 
+    async fn primary_time_zone(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Option<String>, rootcause::Report> {
+        Ok(None)
+    }
+
     async fn owned_inbox_emails(
         &self,
         _requester_id: &str,
@@ -675,12 +682,37 @@ impl macro_event_broker::MacroEventBroker for RecordingEventBroker {
     }
 }
 
-fn service(
-    repo: FakeRepo,
-    provider: FakeProvider,
-    tokens: FakeTokens,
-) -> CalendarMutationServiceImpl<FakeRepo, FakeProvider, FakeTokens, RecordingEventBroker> {
-    CalendarMutationServiceImpl::new(repo, provider, tokens, RecordingEventBroker::default())
+/// Records every viewer refresh nudge the service emits.
+#[derive(Clone, Default)]
+struct RecordingRefreshNotifier {
+    notified: Arc<Mutex<Vec<(String, Uuid)>>>,
+}
+
+impl CalendarRefreshNotifier for RecordingRefreshNotifier {
+    async fn calendar_changed(&self, owner_id: &str, email_link_id: Uuid) {
+        self.notified
+            .lock()
+            .expect("notifier lock")
+            .push((owner_id.to_string(), email_link_id));
+    }
+}
+
+type TestMutationService = CalendarMutationServiceImpl<
+    FakeRepo,
+    FakeProvider,
+    FakeTokens,
+    RecordingEventBroker,
+    RecordingRefreshNotifier,
+>;
+
+fn service(repo: FakeRepo, provider: FakeProvider, tokens: FakeTokens) -> TestMutationService {
+    CalendarMutationServiceImpl::new(
+        repo,
+        provider,
+        tokens,
+        RecordingEventBroker::default(),
+        RecordingRefreshNotifier::default(),
+    )
 }
 
 fn service_with_broker(
@@ -688,8 +720,29 @@ fn service_with_broker(
     provider: FakeProvider,
     tokens: FakeTokens,
     broker: RecordingEventBroker,
-) -> CalendarMutationServiceImpl<FakeRepo, FakeProvider, FakeTokens, RecordingEventBroker> {
-    CalendarMutationServiceImpl::new(repo, provider, tokens, broker)
+) -> TestMutationService {
+    CalendarMutationServiceImpl::new(
+        repo,
+        provider,
+        tokens,
+        broker,
+        RecordingRefreshNotifier::default(),
+    )
+}
+
+fn service_with_refresh(
+    repo: FakeRepo,
+    provider: FakeProvider,
+    tokens: FakeTokens,
+    refresh: RecordingRefreshNotifier,
+) -> TestMutationService {
+    CalendarMutationServiceImpl::new(
+        repo,
+        provider,
+        tokens,
+        RecordingEventBroker::default(),
+        refresh,
+    )
 }
 
 #[tokio::test]
@@ -884,6 +937,50 @@ async fn a_write_that_changed_nothing_publishes_nothing() {
         broker.published().is_empty(),
         "an unchanged row must stay off the topic"
     );
+}
+
+#[tokio::test]
+async fn a_persisted_mutation_nudges_the_links_calendar_viewers() {
+    let repo = FakeRepo {
+        creation_target: Some(creation_target(false)),
+        write_change: CalendarEventChange::Updated,
+        ..FakeRepo::default()
+    };
+    let refresh = RecordingRefreshNotifier::default();
+    service_with_refresh(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        refresh.clone(),
+    )
+    .create_event("macro|user", None, None, draft())
+    .await
+    .unwrap();
+
+    let notified = refresh.notified.lock().expect("notifier lock").clone();
+    assert_eq!(notified.len(), 1);
+    assert_eq!(notified[0].0, "macro|self@example.com");
+}
+
+#[tokio::test]
+async fn a_write_that_changed_nothing_sends_no_refresh_nudge() {
+    let repo = FakeRepo {
+        creation_target: Some(creation_target(false)),
+        write_change: CalendarEventChange::Unchanged,
+        ..FakeRepo::default()
+    };
+    let refresh = RecordingRefreshNotifier::default();
+    service_with_refresh(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        refresh.clone(),
+    )
+    .create_event("macro|user", None, None, draft())
+    .await
+    .unwrap();
+
+    assert!(refresh.notified.lock().expect("notifier lock").is_empty());
 }
 
 #[tokio::test]

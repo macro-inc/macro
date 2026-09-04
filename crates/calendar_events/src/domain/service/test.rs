@@ -137,6 +137,10 @@ impl CalendarRepository for FakeRepo {
         Ok(Vec::new())
     }
 
+    async fn primary_time_zone(&self, _requester_id: &str) -> Result<Option<String>, Report> {
+        Ok(None)
+    }
+
     async fn owned_inbox_emails(&self, _requester_id: &str) -> Result<Vec<String>, Report> {
         Ok(Vec::new())
     }

@@ -171,6 +171,12 @@ where
             .await
     }
 
+    /// The IANA time zone of the requester's primary calendar.
+    #[tracing::instrument(skip(self, requester_id), err)]
+    pub async fn primary_time_zone(&self, requester_id: &str) -> Result<Option<String>, Report> {
+        self.repository.primary_time_zone(requester_id).await
+    }
+
     /// Re-arm the watched inbox's sync job for a push notification whose
     /// channel token the adapter already verified. Returns whether the
     /// notification matched an active channel.
@@ -239,6 +245,13 @@ where
         limit: u16,
     ) -> impl Future<Output = Result<Vec<super::models::TeamOutOfOffice>, Report>> + Send {
         CalendarService::list_team_out_of_office(self, requester_id, range, limit)
+    }
+
+    fn primary_time_zone(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send {
+        CalendarService::primary_time_zone(self, requester_id)
     }
 }
 

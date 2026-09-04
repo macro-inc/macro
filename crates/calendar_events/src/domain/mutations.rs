@@ -22,10 +22,10 @@ use super::{
     ports::{
         CalendarAccessTokenProvider, CalendarDeletionScope, CalendarEventChange,
         CalendarEventWrite, CalendarEventWriteOutcome, CalendarMutationError,
-        CalendarMutationService, CalendarRepository, CalendarRsvpScope, CalendarTokenError,
-        CalendarUpdateScope, GoogleCalendarMutationProvider, GoogleInstanceUpdateOutcome,
-        GoogleProviderError, GoogleProviderErrorKind, GoogleRsvpOutcome,
-        GoogleSeriesMutationOutcome, RetiredCalendarEvent,
+        CalendarMutationService, CalendarRefreshNotifier, CalendarRepository, CalendarRsvpScope,
+        CalendarTokenError, CalendarUpdateScope, GoogleCalendarMutationProvider,
+        GoogleInstanceUpdateOutcome, GoogleProviderError, GoogleProviderErrorKind,
+        GoogleRsvpOutcome, GoogleSeriesMutationOutcome, RetiredCalendarEvent,
     },
 };
 use crate::domain::events::{CalendarEventMetadata, CalendarMacroEvent, CalendarTopicEvent};
@@ -33,27 +33,30 @@ use macro_event_broker::MacroEventBroker;
 
 /// Calendar mutation use cases with provider, token, and persistence
 /// details behind ports.
-pub struct CalendarMutationServiceImpl<R, G, T, B> {
+pub struct CalendarMutationServiceImpl<R, G, T, B, N> {
     repository: R,
     provider: G,
     tokens: T,
     macro_event_broker: B,
+    refresh: N,
 }
 
-impl<R, G, T, B> CalendarMutationServiceImpl<R, G, T, B>
+impl<R, G, T, B, N> CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository,
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
     B: MacroEventBroker,
+    N: CalendarRefreshNotifier,
 {
     /// Construct the service from its ports.
-    pub fn new(repository: R, provider: G, tokens: T, macro_event_broker: B) -> Self {
+    pub fn new(repository: R, provider: G, tokens: T, macro_event_broker: B, refresh: N) -> Self {
         Self {
             repository,
             provider,
             tokens,
             macro_event_broker,
+            refresh,
         }
     }
 
@@ -141,6 +144,8 @@ where
         upsert: CalendarEventUpsert,
     ) -> Result<CalendarEvent, CalendarMutationError> {
         let mut event = upsert.event.clone();
+        let super::models::CalendarEventSource::Google(source) = &upsert.source;
+        let email_link_id = source.email_link_id;
         let outcome = self
             .repository
             .upsert_event(CalendarEventWrite::UserMutation(upsert))
@@ -148,6 +153,11 @@ where
             .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
         event.id = outcome.event_id;
         self.publish_write_outcome(&outcome);
+        if outcome.change != CalendarEventChange::Unchanged {
+            self.refresh
+                .calendar_changed(&outcome.owner_id, email_link_id)
+                .await;
+        }
         if let Some(viewer) = viewer {
             viewer.mark_attendees(&mut event.attendees);
         }
@@ -155,12 +165,13 @@ where
     }
 }
 
-impl<R, G, T, B> CalendarMutationService for CalendarMutationServiceImpl<R, G, T, B>
+impl<R, G, T, B, N> CalendarMutationService for CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository,
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
     B: MacroEventBroker,
+    N: CalendarRefreshNotifier,
 {
     #[tracing::instrument(skip(self, requester_id, draft), err)]
     async fn create_event(
@@ -388,7 +399,13 @@ where
                     )
                     .await
                     .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
+                let changed = !retired.is_empty();
                 self.publish_retirements(retired);
+                if changed {
+                    self.refresh
+                        .calendar_changed(&target.owner_id, target.email_link_id)
+                        .await;
+                }
                 Ok(())
             }
         }
@@ -463,12 +480,13 @@ where
     }
 }
 
-impl<R, G, T, B> CalendarMutationServiceImpl<R, G, T, B>
+impl<R, G, T, B, N> CalendarMutationServiceImpl<R, G, T, B, N>
 where
     R: CalendarRepository,
     G: GoogleCalendarMutationProvider,
     T: CalendarAccessTokenProvider,
     B: MacroEventBroker,
+    N: CalendarRefreshNotifier,
 {
     /// Close the push channels a disconnected calendar left open. Best-effort:
     /// the local calendars are already gone, so a notification that still
@@ -537,9 +555,15 @@ where
                 );
             })
             .unwrap_or_default();
+        let changed = !retired.is_empty();
         // The row may be gone now, so search cannot rediscover this by
         // re-reading Postgres — the retirement has to be announced.
         self.publish_retirements(retired);
+        if changed {
+            self.refresh
+                .calendar_changed(&target.owner_id, target.email_link_id)
+                .await;
+        }
     }
 }
 

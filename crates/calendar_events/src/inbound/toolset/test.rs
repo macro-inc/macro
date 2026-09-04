@@ -267,6 +267,13 @@ impl CalendarOccurrenceService for MockOccurrences {
     ) -> Result<Vec<crate::domain::models::TeamOutOfOffice>, rootcause::Report> {
         unreachable!("no calendar tool lists team out-of-office")
     }
+
+    async fn primary_time_zone(
+        &self,
+        _requester_id: &str,
+    ) -> Result<Option<String>, rootcause::Report> {
+        unreachable!("no calendar tool resolves the primary time zone")
+    }
 }
 
 fn context(

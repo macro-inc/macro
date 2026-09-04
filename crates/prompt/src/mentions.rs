@@ -35,6 +35,7 @@ The AI does not need to know the name — an empty string is fine and the fronte
 
 The `blockName` for an email thread is always exactly `email` — never `thread` or `email_thread`, which the frontend cannot resolve.
 The `blockName` for a calendar event is always exactly `calendar` — never `calendar_event`, which the frontend cannot resolve. `documentId` is the `eventId` a calendar tool returned. To point at one instance of a recurring event, pass that occurrence's `recurrenceId` from ListCalendarEvents as the `occurrenceKey` block param; otherwise omit it and the mention previews the nearest instance. A calendar event mention resolves only for users who have that event on their own calendar.
+Only the entity types listed above can be mentioned. A calendar itself is NOT a mentionable entity: never put a `calendarId` (e.g. from ListCalendars) in a mention tag — the frontend cannot resolve it and renders a broken chip. Refer to a calendar by name in plain text and mention only individual events on it. The same goes for any other id with no mention format listed here: plain text, never an improvised tag.
 When a tool returns both a channel id and a channel message id, link the specific message using the channel message mention format. Do not link only the channel unless you are referring to the whole channel.
 
 ### Example Response
@@ -48,7 +49,9 @@ static INTENT: &str = "Entities and channel messages are referenced with correct
 including exactly \"email\" for email threads, exactly \"calendar\" for calendar events, and \
 channel_message_id for specific channel messages, \
 across every Markdown surface (AI chat replies, agent session replies, channel messages, \
-email bodies, and Markdown documents) — never inside non-Markdown documents.";
+email bodies, and Markdown documents) — never inside non-Markdown documents, and never for \
+ids outside the listed entity types (a calendar id from ListCalendars is not mentionable; \
+only individual events are).";
 
 /// The entity-mention prompt.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);

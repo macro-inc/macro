@@ -1806,6 +1806,40 @@ impl CalendarRepository for PgCalendarRepository {
     }
 
     #[tracing::instrument(skip(self, requester_id), err)]
+    async fn primary_time_zone(&self, requester_id: &str) -> Result<Option<String>, Report> {
+        let time_zone = sqlx::query_scalar!(
+            r#"
+            SELECT calendar.time_zone
+            FROM email_links link
+            JOIN calendar_accounts account ON account.email_link_id = link.id
+            JOIN calendars calendar ON calendar.account_id = account.id
+            WHERE NOT calendar.is_deleted
+              AND account.sync_status <> 'disabled'
+              AND calendar.is_primary
+              AND (
+                    link.macro_id = $1
+                    OR EXISTS (
+                        SELECT 1
+                        FROM macro_user_links delegation
+                        WHERE delegation.link_id = link.id
+                          AND delegation.primary_macro_id = $1
+                    )
+              )
+            ORDER BY
+                (link.macro_id = $1) DESC,
+                link.is_primary DESC,
+                link.created_at ASC
+            LIMIT 1
+            "#,
+            requester_id,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(report)?;
+        Ok(time_zone.flatten())
+    }
+
+    #[tracing::instrument(skip(self, requester_id), err)]
     async fn list_visible_calendars(
         &self,
         requester_id: &str,

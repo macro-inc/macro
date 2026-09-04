@@ -12,7 +12,7 @@ use channels::domain::ports::{ChannelMutationErr, ChannelService};
 use uuid::Uuid;
 
 use super::models::{BotEvent, BotTrigger};
-use super::ports::AgentResponder;
+use super::ports::{AgentResponder, UserTimeZones};
 use super::sender_label;
 
 /// How many channel messages to include around the trigger.
@@ -92,25 +92,53 @@ const THINKING_MESSAGE: &str = r#"<m-await>{"text":"Macro is thinking…","inlin
 const EMPTY_RESPONSE_FALLBACK: &str = "I wasn't able to come up with a response.";
 const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
 
+/// Render the `<current_time>` block: now in the user's primary calendar
+/// time zone when one is known and parseable, UTC otherwise.
+fn current_time_block(now: chrono::DateTime<chrono::Utc>, time_zone: Option<&str>) -> String {
+    const FORMAT: &str = "%A, %B %-d, %Y, %-I:%M %p";
+    let zoned = time_zone.and_then(|name| {
+        let tz = name
+            .parse::<chrono_tz::Tz>()
+            .inspect_err(|error| {
+                tracing::warn!(error=?error, time_zone = name, "unparseable calendar time zone");
+            })
+            .ok()?;
+        Some(format!(
+            "{} — {name}, the time zone of the user's primary calendar",
+            now.with_timezone(&tz).format(FORMAT)
+        ))
+    });
+    let line = zoned.unwrap_or_else(|| {
+        format!(
+            "{} — UTC; the user's own time zone is unknown (no connected calendar)",
+            now.format(FORMAT)
+        )
+    });
+    format!("\n<current_time>\n{line}\n</current_time>\n")
+}
+
 /// In-process handler for the Macro AI system bot.
 ///
 /// Posts an immediate "thinking" reply in a thread, runs the agent loop, then
 /// edits that same message with the final answer.
-pub struct MacroAiHandler<C, R> {
+pub struct MacroAiHandler<C, R, Z> {
     channels: Arc<C>,
     responder: Arc<R>,
+    time_zones: Arc<Z>,
 }
 
-impl<C, R> MacroAiHandler<C, R>
+impl<C, R, Z> MacroAiHandler<C, R, Z>
 where
     C: ChannelService,
     R: AgentResponder,
+    Z: UserTimeZones,
 {
     /// Create a Macro AI handler.
-    pub fn new(channels: Arc<C>, responder: Arc<R>) -> Self {
+    pub fn new(channels: Arc<C>, responder: Arc<R>, time_zones: Arc<Z>) -> Self {
         Self {
             channels,
             responder,
+            time_zones,
         }
     }
 
@@ -258,6 +286,15 @@ where
                 &lines,
             );
         }
+
+        let time_zone = self
+            .time_zones
+            .primary_time_zone(event.requesting_user.as_ref())
+            .await;
+        prompt.push_str(&current_time_block(
+            chrono::Utc::now(),
+            time_zone.as_deref(),
+        ));
 
         let _ = write!(prompt, "\nReply to {mentioner}.");
         prompt

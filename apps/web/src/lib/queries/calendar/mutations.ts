@@ -14,6 +14,7 @@ import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { useMutation } from '@tanstack/solid-query';
 import { calendarKeys } from './keys';
+import { invalidateCalendarEventPreviews } from './mention-preview';
 import {
   type CalendarOccurrencesData,
   invalidateCalendarOccurrences,
@@ -317,7 +318,10 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
             items.filter((item) => survivesDeletion(item, args))
           ),
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: () => invalidateCalendarOccurrences(),
+        onSettled: (_data, _error, args) => {
+          invalidateCalendarEventPreviews(args.eventId);
+          return invalidateCalendarOccurrences();
+        },
       },
       callbacks
     ),
@@ -394,7 +398,10 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
             )
           ),
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: () => invalidateCalendarOccurrences(),
+        onSettled: (_data, _error, args) => {
+          invalidateCalendarEventPreviews(args.eventId);
+          return invalidateCalendarOccurrences();
+        },
       },
       callbacks
     ),

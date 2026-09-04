@@ -12,7 +12,10 @@ ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bot_id = { path = "../bot_id" }
+calendar_events = { path = "../calendar_events" }
 channels = { path = "../channels", features = ["inbound", "outbound"] }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
 futures = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 prompt = { path = "../prompt" }
@@ -24,5 +27,4 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-chrono = { workspace = true }
 models_pagination = { path = "../models_pagination" }

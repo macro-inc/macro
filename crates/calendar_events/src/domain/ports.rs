@@ -328,6 +328,14 @@ pub trait CalendarOccurrenceService: Send + Sync + 'static {
         range: OccurrenceRange,
         limit: u16,
     ) -> impl Future<Output = Result<Vec<TeamOutOfOffice>, Report>> + Send;
+
+    /// The IANA time zone of the requester's primary calendar, resolved the
+    /// same way event creation picks its default target. `None` when no
+    /// calendar is connected or the provider reported no zone.
+    fn primary_time_zone(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
 }
 
 /// What a write did to one event's canonical `calendar_events` row.
@@ -553,6 +561,14 @@ pub trait CalendarRepository: Send + Sync + 'static {
         requester_id: &str,
     ) -> impl Future<Output = Result<Vec<VisibleCalendar>, Report>> + Send;
 
+    /// The IANA time zone of the requester's primary calendar, resolved the
+    /// same way [`get_creation_target`](Self::get_creation_target) picks its
+    /// default target.
+    fn primary_time_zone(
+        &self,
+        requester_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
+
     /// Addresses of every connected inbox the requester owns
     /// (`email_links.macro_id = requester`). Raw and unnormalized;
     /// [`ActorInboxes::from_owned`] is the single normalization point.
@@ -572,6 +588,19 @@ pub trait CalendarRepository: Send + Sync + 'static {
         calendar_id: Uuid,
         provider_event_id: &str,
     ) -> impl Future<Output = Result<Vec<RetiredCalendarEvent>, Report>> + Send;
+}
+
+/// Outbound port that nudges a connected inbox's calendar viewers — the link
+/// owner plus its delegates — to refetch their calendar projections after a
+/// Macro-originated mutation changed them. Best effort: implementations log
+/// and swallow delivery failures, since the mutation is already committed.
+pub trait CalendarRefreshNotifier: Send + Sync + 'static {
+    /// Signal that `email_link_id`'s calendar projection changed.
+    fn calendar_changed(
+        &self,
+        owner_id: &str,
+        email_link_id: Uuid,
+    ) -> impl Future<Output = ()> + Send;
 }
 
 /// Inbound service port for user-initiated calendar event mutations.

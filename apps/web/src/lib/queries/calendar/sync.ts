@@ -1,14 +1,16 @@
 import { queryClient } from '@queries/client';
 import { calendarKeys } from './keys';
+import { invalidateCalendarEventPreviews } from './mention-preview';
 import { invalidateCalendarOccurrences } from './occurrences';
 
 /**
  * Refetches everything the calendar UI reads: every mounted occurrence
- * viewport and the calendar list, which also carries per-calendar colors and
- * names.
+ * viewport, the calendar list (which also carries per-calendar colors and
+ * names), and the cached previews behind calendar mention chips.
  */
 export function invalidateCalendarViews(): void {
   invalidateCalendarOccurrences();
+  invalidateCalendarEventPreviews();
   queryClient.invalidateQueries({
     queryKey: calendarKeys.visibleCalendars.queryKey,
   });

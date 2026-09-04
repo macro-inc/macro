@@ -9,7 +9,7 @@ use tracing::Instrument as _;
 
 use crate::domain::{
     models::BotEvent,
-    ports::{AgentResponder, TriggerDetector},
+    ports::{AgentResponder, TriggerDetector, UserTimeZones},
     service::MacroAiHandler,
 };
 
@@ -25,12 +25,12 @@ use crate::domain::{
 /// are ignored here; only Macro AI is handled by this branch. Non-system bots
 /// are notified of mentions out of process via the `channel.mentioned`
 /// webhook event instead (see the `webhook` crate).
-pub struct BotTriggerRouter<C, R, D> {
-    macro_ai: Arc<MacroAiHandler<C, R>>,
+pub struct BotTriggerRouter<C, R, D, Z> {
+    macro_ai: Arc<MacroAiHandler<C, R, Z>>,
     detector: Arc<D>,
 }
 
-impl<C, R, D> Clone for BotTriggerRouter<C, R, D> {
+impl<C, R, D, Z> Clone for BotTriggerRouter<C, R, D, Z> {
     fn clone(&self) -> Self {
         Self {
             macro_ai: self.macro_ai.clone(),
@@ -39,16 +39,17 @@ impl<C, R, D> Clone for BotTriggerRouter<C, R, D> {
     }
 }
 
-impl<C, R, D> BotTriggerRouter<C, R, D>
+impl<C, R, D, Z> BotTriggerRouter<C, R, D, Z>
 where
     C: ChannelService,
     R: AgentResponder,
     D: TriggerDetector,
+    Z: UserTimeZones,
 {
     /// Create a router with the built-in system bots registered.
-    pub fn new(channels: Arc<C>, responder: Arc<R>, detector: Arc<D>) -> Self {
+    pub fn new(channels: Arc<C>, responder: Arc<R>, detector: Arc<D>, time_zones: Arc<Z>) -> Self {
         Self {
-            macro_ai: Arc::new(MacroAiHandler::new(channels, responder)),
+            macro_ai: Arc::new(MacroAiHandler::new(channels, responder, time_zones)),
             detector,
         }
     }
@@ -58,6 +59,7 @@ where
     where
         R: 'static,
         D: 'static,
+        Z: 'static,
     {
         tokio::spawn(async move {
             while let Some(candidate) = candidates.recv().await {

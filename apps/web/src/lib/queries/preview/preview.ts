@@ -42,11 +42,19 @@ const SIMULATE_FAILURE = false;
 
 const PREVIEW_STALE_TIME = 60 * 1000 * 60 * 24; // 24 hours
 
+/** Calendar events rename and reschedule far more often than documents, and
+ * their preview carries the title and datetime chips render — so they go
+ * stale on the mention-preview cadence rather than the 24h default. */
+const CALENDAR_EVENT_PREVIEW_STALE_TIME = 60 * 1000;
+
 function itemPreviewQueryOptions(
   item: ItemEntity,
   enabled = true,
   staleTime = PREVIEW_STALE_TIME
 ) {
+  if (item.type === 'calendar_event') {
+    staleTime = Math.min(staleTime, CALENDAR_EVENT_PREVIEW_STALE_TIME);
+  }
   return {
     queryKey: previewKeys.item(item.id).queryKey,
     queryFn: async () => {

@@ -37,8 +37,10 @@ event without attendees creates the event right away (unlike AI chat, where crea
 for the user to confirm a composer card). For an event with attendees the bot is prompted to
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
-email at all. `@macro-new` / `@coder` / `@cursor` open an agent session; follow-up `@`
-mentions of that bot in the same thread route to it.
+email at all. The bot's prompt carries the current date and time in the mentioning user's
+own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
+"EOD") without asking. `@macro-new` / `@coder` / `@cursor` open an agent session; follow-up
+`@` mentions of that bot in the same thread route to it.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention.
 

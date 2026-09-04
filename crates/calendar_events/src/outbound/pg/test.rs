@@ -2545,6 +2545,39 @@ async fn mutation_target_resolves_only_for_visible_requesters(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn primary_time_zone_is_the_primary_calendars(pool: PgPool) {
+    let owner_id = "macro|calendar-time-zone@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let (account_id, _) = grant_and_provider_ids(&repo, link_id).await;
+    repo.upsert_calendar_fixture(
+        account_id,
+        ProviderCalendar {
+            provider_calendar_id: "primary".to_string(),
+            name: "Primary".to_string(),
+            description: None,
+            time_zone: Some("America/New_York".to_string()),
+            color: None,
+            access_role: Some("owner".to_string()),
+            is_primary: true,
+            is_selected: true,
+            default_reminders: Vec::new(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let zone = repo.primary_time_zone(owner_id).await.unwrap();
+    assert_eq!(zone.as_deref(), Some("America/New_York"));
+
+    let stranger = repo
+        .primary_time_zone("macro|calendar-time-zone-stranger@example.com")
+        .await
+        .unwrap();
+    assert!(stranger.is_none(), "a stranger has no primary calendar");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn creation_target_actor_is_owned_inboxes_not_the_calendar_inbox(pool: PgPool) {
     let owner_id = "macro|calendar-create-actor@example.com";
     let delegate_id = "macro|calendar-create-delegate@example.com";
