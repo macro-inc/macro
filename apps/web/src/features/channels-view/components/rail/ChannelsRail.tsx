@@ -463,7 +463,7 @@ export function ChannelsRail(props: {
       <Switch>
         <Match when={props.mode === 'full'}>
           <div class="flex shrink-0 flex-col gap-3 px-4">
-            <div class="flex h-8 items-center">
+            <div class="flex items-center">
               <SplitPanel.ControlGroup>
                 <SplitPanel.CloseButton />
                 <SplitPanel.BackButton />
@@ -748,7 +748,7 @@ export function ChannelsRail(props: {
         </Match>
         <Match when={props.mode === 'slim'}>
           <div class="flex shrink-0 flex-col items-center gap-3">
-            <div class="flex h-8 w-full items-center justify-center px-2">
+            <div class="flex w-full items-center justify-center px-2">
               <SplitPanel.ControlGroup>
                 <SplitPanel.CloseButton size="icon-sm" />
               </SplitPanel.ControlGroup>
