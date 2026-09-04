@@ -1,5 +1,4 @@
 import { getWebOrigin } from '@core/util/webOrigin';
-import { constrainImageDimensions } from '@macro-inc/lexical-core/utils/media';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 
 /** Slack previews ~2 links per message, Discord up to 5; we split the middle. */
@@ -86,7 +85,17 @@ function blankOut(
  * bare autolinked URLs, minus anything inside code, other mention tags, or
  * pointing back into the app. Deduped, capped at {@link MAX_LINK_PREVIEWS}.
  */
+/**
+ * Cheap gate so the regex pipeline does not run on ordinary messages.
+ * `http` matches both `http://` and `https://`.
+ */
+export function contentMayHaveLinkPreviews(content: string): boolean {
+  return content.includes('http');
+}
+
 export function extractUnfurlableUrls(content: string): string[] {
+  if (!contentMayHaveLinkPreviews(content)) return [];
+
   const candidates: Candidate[] = [];
 
   let text = blankOut(content, CODE_FENCE_RE);
@@ -132,40 +141,60 @@ export function shouldRenderUnfurl(unfurl: GetUnfurlResponse): boolean {
   return Boolean(unfurl.title) && unfurl.title !== unfurl.url;
 }
 
-/** Tailwind `max-w-md` on the preview column. */
-export const LINK_PREVIEW_IMAGE_MAX_WIDTH = 448;
-/** Tailwind `max-h-64` on the preview image. */
-export const LINK_PREVIEW_IMAGE_MAX_HEIGHT = 256;
-/** Open Graph default landscape when the page omitted image dimensions. */
-const DEFAULT_PREVIEW_ASPECT = 1.91;
+/** Tailwind `max-w-md` on the preview column / image frame. */
+export const LINK_PREVIEW_IMAGE_WIDTH = 448;
+/** Fixed landscape image frame (OG 1.91 at `max-w-md`). */
+export const LINK_PREVIEW_IMAGE_HEIGHT = 235;
+/** Domain + two-line title + two-line description. */
+export const LINK_PREVIEW_CHROME_HEIGHT = 96;
+/** Gap between chrome and the image frame (`gap-1`). */
+export const LINK_PREVIEW_SLOT_GAP = 4;
+/**
+ * One preview slot: chrome + image. Loading, ready, and empty states all
+ * use this height so virtua's first measure matches the settled row.
+ */
+export const LINK_PREVIEW_SLOT_HEIGHT =
+  LINK_PREVIEW_CHROME_HEIGHT +
+  LINK_PREVIEW_SLOT_GAP +
+  LINK_PREVIEW_IMAGE_HEIGHT;
+
+export type LinkPreviewSlotState = 'loading' | 'ready' | 'empty';
 
 type UnfurlImageFields = Pick<GetUnfurlResponse, 'image_url'> & {
   image_width?: number | null;
   image_height?: number | null;
 };
 
+type UnfurlSlotInput = {
+  type: 'loading' | 'error' | 'success';
+  data?: GetUnfurlResponse;
+};
+
 /**
- * Pixel box reserved for a preview image before the bytes decode — the
- * attachment pattern: known OG dims when present, otherwise a landscape
- * placeholder so the channel row does not grow on load.
+ * Slot state from the unfurl store. Missing and in-flight are both loading
+ * so the first paint already owns the reserved height.
+ */
+export function linkPreviewSlotState(
+  data: UnfurlSlotInput | undefined
+): LinkPreviewSlotState {
+  if (!data || data.type === 'loading') return 'loading';
+  if (data.type === 'success' && data.data && shouldRenderUnfurl(data.data)) {
+    return 'ready';
+  }
+  return 'empty';
+}
+
+/**
+ * Pixel box for a preview image. Size is constant; `known` only picks
+ * `object-contain` vs `object-cover` once bytes arrive.
  */
 export function reservedPreviewImageSize(
   unfurl: UnfurlImageFields
 ): { width: number; height: number; known: boolean } | undefined {
   if (!unfurl.image_url) return undefined;
-  const constrained = constrainImageDimensions(
-    unfurl.image_width ?? undefined,
-    unfurl.image_height ?? undefined,
-    LINK_PREVIEW_IMAGE_MAX_WIDTH,
-    LINK_PREVIEW_IMAGE_MAX_HEIGHT
-  );
-  if (constrained) return { ...constrained, known: true };
-
-  const fallback = constrainImageDimensions(
-    Math.round(LINK_PREVIEW_IMAGE_MAX_HEIGHT * DEFAULT_PREVIEW_ASPECT),
-    LINK_PREVIEW_IMAGE_MAX_HEIGHT,
-    LINK_PREVIEW_IMAGE_MAX_WIDTH,
-    LINK_PREVIEW_IMAGE_MAX_HEIGHT
-  );
-  return fallback ? { ...fallback, known: false } : undefined;
+  return {
+    width: LINK_PREVIEW_IMAGE_WIDTH,
+    height: LINK_PREVIEW_IMAGE_HEIGHT,
+    known: Boolean(unfurl.image_width && unfurl.image_height),
+  };
 }

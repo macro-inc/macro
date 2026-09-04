@@ -10,7 +10,16 @@ import { useRemoveLinkPreviewMutation } from '@queries/channel/message';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { cn } from '@ui';
-import { createEffect, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { useMessage } from './context';
 import {
   hiddenUrlsForMessage,
@@ -21,8 +30,12 @@ import {
 } from './link-preview-visibility';
 import {
   extractUnfurlableUrls,
+  LINK_PREVIEW_CHROME_HEIGHT,
+  LINK_PREVIEW_IMAGE_HEIGHT,
+  LINK_PREVIEW_IMAGE_WIDTH,
+  LINK_PREVIEW_SLOT_HEIGHT,
+  linkPreviewSlotState,
   reservedPreviewImageSize,
-  shouldRenderUnfurl,
 } from './link-previews';
 
 function openLink(url: string): JSX.EventHandler<HTMLElement, MouseEvent> {
@@ -36,6 +49,83 @@ function openLink(url: string): JSX.EventHandler<HTMLElement, MouseEvent> {
   };
 }
 
+function RemovePreviewButton(props: { onHide: () => void; hovered: boolean }) {
+  return (
+    <button
+      type="button"
+      aria-label="Remove link preview"
+      class={cn(
+        'shrink-0 rounded p-0.5 text-ink-muted',
+        props.hovered
+          ? 'opacity-100'
+          : 'opacity-0 group-hover/message:opacity-100 group-hover/preview:opacity-100 group-focus-within/message:opacity-100 group-focus-within/preview:opacity-100 focus-visible:opacity-100 touch:opacity-100'
+      )}
+      onClick={props.onHide}
+    >
+      <XIcon class="size-4 fill-current" />
+    </button>
+  );
+}
+
+function PreviewSlot(props: { url: string; children: JSX.Element }) {
+  return (
+    <div
+      class="mb-2 box-border flex min-w-0 max-w-md flex-col gap-1 overflow-hidden"
+      style={{ height: `${LINK_PREVIEW_SLOT_HEIGHT}px` }}
+      data-link-preview-slot={props.url}
+    >
+      {props.children}
+    </div>
+  );
+}
+
+function PreviewImageFrame(props: { src?: string; objectContain?: boolean }) {
+  return (
+    <div
+      class="shrink-0 self-start overflow-hidden rounded-md"
+      style={{
+        width: `${LINK_PREVIEW_IMAGE_WIDTH}px`,
+        height: `${LINK_PREVIEW_IMAGE_HEIGHT}px`,
+      }}
+      data-link-preview-image
+    >
+      <Show
+        when={props.src}
+        fallback={
+          <div
+            class="size-full rounded-md border border-edge-muted bg-surface"
+            data-link-preview-image-empty
+          />
+        }
+      >
+        {(src) => (
+          <MediaImage.Image
+            src={src()}
+            width={LINK_PREVIEW_IMAGE_WIDTH}
+            height={LINK_PREVIEW_IMAGE_HEIGHT}
+            class={cn(
+              'size-full rounded-md border border-edge-muted',
+              props.objectContain ? 'object-contain' : 'object-cover'
+            )}
+            style={{
+              width: `${LINK_PREVIEW_IMAGE_WIDTH}px`,
+              height: `${LINK_PREVIEW_IMAGE_HEIGHT}px`,
+            }}
+            fallback={
+              <div
+                class="flex size-full items-center justify-center rounded-md border border-edge-muted bg-surface"
+                data-link-preview-image-placeholder
+              >
+                <Spinner class="size-4 animate-spin" />
+              </div>
+            }
+          />
+        )}
+      </Show>
+    </div>
+  );
+}
+
 function LinkPreviewCard(props: {
   unfurled: GetUnfurlResponse;
   onHide?: () => void;
@@ -47,102 +137,144 @@ function LinkPreviewCard(props: {
 
   return (
     <div
-      class="group/preview mb-2 flex min-w-0 flex-col gap-0.5 border-l-2 border-edge py-0.5 pl-3"
+      class="group/preview flex h-full min-w-0 flex-col gap-1 border-l-2 border-edge pl-3"
       data-link-preview={props.unfurled.url}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => setHovered(false)}
     >
-      <div class="flex min-w-0 items-center gap-1.5">
-        <Show
-          when={props.unfurled.favicon_url && !faviconFailed()}
-          fallback={<GlobeIcon class="size-3.5 shrink-0 text-ink-muted" />}
-        >
-          {(_) => (
-            <img
-              src={proxyResource(props.unfurled.favicon_url!)}
-              class="size-3.5 shrink-0 rounded-xs object-cover"
-              crossorigin="anonymous"
-              alt=""
-              draggable={false}
-              on:error={() => setFaviconFailed(true)}
-            />
-          )}
-        </Show>
-        <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink">
-          {domain()}
-        </span>
-        <Show when={props.onHide}>
-          <button
-            type="button"
-            aria-label="Remove link preview"
-            class={cn(
-              'shrink-0 rounded p-0.5 text-ink-muted',
-              hovered()
-                ? 'opacity-100'
-                : 'opacity-0 group-hover/message:opacity-100 group-hover/preview:opacity-100 group-focus-within/message:opacity-100 group-focus-within/preview:opacity-100 focus-visible:opacity-100 touch:opacity-100'
-            )}
-            onClick={props.onHide}
+      <div
+        class="flex min-h-0 shrink-0 flex-col gap-0.5 overflow-hidden"
+        style={{ height: `${LINK_PREVIEW_CHROME_HEIGHT}px` }}
+      >
+        <div class="flex min-w-0 items-center gap-1.5">
+          <Show
+            when={props.unfurled.favicon_url && !faviconFailed()}
+            fallback={<GlobeIcon class="size-3.5 shrink-0 text-ink-muted" />}
           >
-            <XIcon class="size-4 fill-current" />
-          </button>
+            {(_) => (
+              <img
+                src={proxyResource(props.unfurled.favicon_url!)}
+                class="size-3.5 shrink-0 rounded-xs object-cover"
+                crossorigin="anonymous"
+                alt=""
+                draggable={false}
+                on:error={() => setFaviconFailed(true)}
+              />
+            )}
+          </Show>
+          <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink">
+            {domain()}
+          </span>
+          <Show when={props.onHide}>
+            {(onHide) => (
+              <RemovePreviewButton onHide={onHide()} hovered={hovered()} />
+            )}
+          </Show>
+        </div>
+        <a
+          href={props.unfurled.url}
+          target="_blank"
+          rel="noopener"
+          class="line-clamp-2 wrap-break-word text-sm font-medium text-accent hover:underline"
+          draggable={false}
+          onClick={openLink(props.unfurled.url)}
+        >
+          {props.unfurled.title || domain()}
+        </a>
+        <Show when={props.unfurled.description}>
+          <p class="line-clamp-2 wrap-break-word text-xs text-ink-muted">
+            {props.unfurled.description}
+          </p>
         </Show>
       </div>
-      <a
-        href={props.unfurled.url}
-        target="_blank"
-        rel="noopener"
-        class="line-clamp-2 wrap-break-word text-sm font-medium text-accent hover:underline"
-        draggable={false}
-        onClick={openLink(props.unfurled.url)}
+      <PreviewImageFrame
+        src={imageBox() ? proxyResource(props.unfurled.image_url!) : undefined}
+        objectContain={imageBox()?.known}
+      />
+    </div>
+  );
+}
+
+function LinkPreviewFallback(props: { url: string; onHide?: () => void }) {
+  const [hovered, setHovered] = createSignal(false);
+  const domain = () => extractDomain(props.url);
+
+  return (
+    <div
+      class="group/preview flex h-full min-w-0 flex-col gap-1 border-l-2 border-edge pl-3"
+      data-link-preview-empty={props.url}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+    >
+      <div
+        class="flex min-h-0 shrink-0 flex-col gap-0.5 overflow-hidden"
+        style={{ height: `${LINK_PREVIEW_CHROME_HEIGHT}px` }}
       >
-        {props.unfurled.title || domain()}
-      </a>
-      <Show when={props.unfurled.description}>
-        <p class="line-clamp-3 wrap-break-word text-xs text-ink-muted">
-          {props.unfurled.description}
-        </p>
-      </Show>
-      <Show when={imageBox()}>
-        {(box) => (
-          <a
-            href={props.unfurled.url}
-            target="_blank"
-            rel="noopener"
-            class="mt-1 block self-start overflow-hidden rounded-md"
-            style={{ width: `${box().width}px` }}
-            draggable={false}
-            onClick={openLink(props.unfurled.url)}
-            data-link-preview-image
-          >
-            <MediaImage.Image
-              src={proxyResource(props.unfurled.image_url!)}
-              width={box().width}
-              height={box().height}
-              class={cn(
-                'w-full rounded-md border border-edge-muted',
-                box().known ? 'object-contain' : 'object-cover'
-              )}
-              style={{
-                'aspect-ratio': `${box().width} / ${box().height}`,
-                'max-width': `${box().width}px`,
-                height: `${box().height}px`,
-              }}
-              fallback={
-                <div
-                  class="flex items-center justify-center rounded-md border border-edge-muted bg-surface"
-                  style={{
-                    width: `${box().width}px`,
-                    height: `${box().height}px`,
-                  }}
-                  data-link-preview-image-placeholder
-                >
-                  <Spinner class="size-4 animate-spin" />
-                </div>
-              }
-            />
-          </a>
-        )}
-      </Show>
+        <div class="flex min-w-0 items-center gap-1.5">
+          <GlobeIcon class="size-3.5 shrink-0 text-ink-muted" />
+          <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink">
+            {domain()}
+          </span>
+          <Show when={props.onHide}>
+            {(onHide) => (
+              <RemovePreviewButton onHide={onHide()} hovered={hovered()} />
+            )}
+          </Show>
+        </div>
+        <a
+          href={props.url}
+          target="_blank"
+          rel="noopener"
+          class="line-clamp-2 wrap-break-word text-sm font-medium text-accent hover:underline"
+          draggable={false}
+          onClick={openLink(props.url)}
+        >
+          {domain()}
+        </a>
+      </div>
+      <PreviewImageFrame />
+    </div>
+  );
+}
+
+function LinkPreviewSkeleton(props: { url: string; onHide?: () => void }) {
+  const [hovered, setHovered] = createSignal(false);
+
+  return (
+    <div
+      class="group/preview flex h-full min-w-0 flex-col gap-1 border-l-2 border-edge pl-3"
+      data-link-preview-loading={props.url}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+    >
+      <div
+        class="flex min-h-0 shrink-0 flex-col gap-1.5 overflow-hidden"
+        style={{ height: `${LINK_PREVIEW_CHROME_HEIGHT}px` }}
+      >
+        <div class="flex min-w-0 items-center gap-1.5">
+          <div class="skeleton-shimmer size-3.5 shrink-0 rounded-xs bg-skeleton" />
+          <div class="skeleton-shimmer h-3 w-24 rounded-full bg-skeleton" />
+          <Show when={props.onHide}>
+            {(onHide) => (
+              <RemovePreviewButton onHide={onHide()} hovered={hovered()} />
+            )}
+          </Show>
+        </div>
+        <div class="skeleton-shimmer h-3.5 w-4/5 rounded-full bg-skeleton" />
+        <div class="skeleton-shimmer h-2.5 w-full rounded-full bg-skeleton" />
+        <div class="skeleton-shimmer h-2.5 w-2/3 rounded-full bg-skeleton" />
+      </div>
+      <div
+        class="flex shrink-0 items-center justify-center self-start rounded-md border border-edge-muted bg-surface"
+        style={{
+          width: `${LINK_PREVIEW_IMAGE_WIDTH}px`,
+          height: `${LINK_PREVIEW_IMAGE_HEIGHT}px`,
+        }}
+        data-link-preview-image
+        data-link-preview-image-placeholder
+      >
+        <Spinner class="size-4 animate-spin" />
+      </div>
     </div>
   );
 }
@@ -152,18 +284,30 @@ function LinkPreview(props: {
   onRemove: (() => void) | undefined;
 }) {
   const [unfurlData] = useUnfurl(props.url);
-  const renderable = () => {
+  const state = () => linkPreviewSlotState(unfurlData());
+  const ready = () => {
     const data = unfurlData();
-    if (data?.type !== 'success') return undefined;
-    return shouldRenderUnfurl(data.data) ? data.data : undefined;
+    return data?.type === 'success' && state() === 'ready'
+      ? data.data
+      : undefined;
   };
 
   return (
-    <Show when={renderable()}>
-      {(unfurled) => (
-        <LinkPreviewCard unfurled={unfurled()} onHide={props.onRemove} />
-      )}
-    </Show>
+    <PreviewSlot url={props.url}>
+      <Switch>
+        <Match when={ready()}>
+          {(unfurled) => (
+            <LinkPreviewCard unfurled={unfurled()} onHide={props.onRemove} />
+          )}
+        </Match>
+        <Match when={state() === 'empty'}>
+          <LinkPreviewFallback url={props.url} onHide={props.onRemove} />
+        </Match>
+        <Match when={true}>
+          <LinkPreviewSkeleton url={props.url} onHide={props.onRemove} />
+        </Match>
+      </Switch>
+    </PreviewSlot>
   );
 }
 
@@ -175,9 +319,9 @@ type LinkPreviewsProps = {
 
 /**
  * Slack-style rich previews for external links in the message body, rendered
- * below the content. Previews pop in once the unfurl service responds; links
- * with no usable metadata, and links whose sender removed the preview
- * (`preview: false` on the link node), render nothing.
+ * below the content. Each extracted URL owns a constant-height slot on the
+ * first paint (skeleton while unfurl is in flight) so the channel row does
+ * not grow when metadata arrives.
  */
 export function LinkPreviews(props: LinkPreviewsProps) {
   const message = useMessage();
@@ -185,12 +329,16 @@ export function LinkPreviews(props: LinkPreviewsProps) {
   const removePreview = useRemoveLinkPreviewMutation();
   // Extraction already drops `preview: false` links; the local hidden set is
   // the optimistic layer covering the gap until rewritten content arrives.
-  const previewable = () =>
-    message().deleted_at ? [] : extractUnfurlableUrls(message().content ?? '');
-  const urls = () =>
+  // Memoized on message identity/content so hover/unfurl updates do not
+  // rescan the body.
+  const previewable = createMemo(() =>
+    message().deleted_at ? [] : extractUnfurlableUrls(message().content ?? '')
+  );
+  const urls = createMemo(() =>
     showLinkPreviews()
       ? previewable().filter((url) => !isLinkPreviewHidden(message().id, url))
-      : [];
+      : []
+  );
 
   // Sender-only, per link: the server sets `preview: false` on the matching
   // link node, hiding the card for every participant.
@@ -220,8 +368,6 @@ export function LinkPreviews(props: LinkPreviewsProps) {
 
   return (
     <Show when={urls().length > 0}>
-      {/* Spacing lives on the cards: with every unfurl still loading or
-          failed this container is empty and must take up no height. */}
       <div
         class={cn('flex min-w-0 max-w-md flex-col', props.class)}
         data-message-link-previews

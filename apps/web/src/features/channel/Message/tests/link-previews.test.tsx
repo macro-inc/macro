@@ -15,6 +15,10 @@ import {
 } from '../link-preview-visibility';
 import {
   extractUnfurlableUrls,
+  LINK_PREVIEW_IMAGE_HEIGHT,
+  LINK_PREVIEW_IMAGE_WIDTH,
+  LINK_PREVIEW_SLOT_HEIGHT,
+  linkPreviewSlotState,
   reservedPreviewImageSize,
   shouldRenderUnfurl,
 } from '../link-previews';
@@ -60,6 +64,10 @@ vi.mock('@queries/channel/message', () => ({
 }));
 
 describe('extractUnfurlableUrls', () => {
+  it('skips bodies with no http without scanning for links', () => {
+    expect(extractUnfurlableUrls('just a hello')).toEqual([]);
+  });
+
   it('extracts bare URLs', () => {
     expect(extractUnfurlableUrls('check out https://example.com/post')).toEqual(
       ['https://example.com/post']
@@ -176,31 +184,51 @@ describe('shouldRenderUnfurl', () => {
   });
 });
 
+describe('linkPreviewSlotState', () => {
+  it('treats a missing or in-flight unfurl as loading', () => {
+    expect(linkPreviewSlotState(undefined)).toBe('loading');
+    expect(linkPreviewSlotState({ type: 'loading' })).toBe('loading');
+  });
+
+  it('is ready only when the unfurl is worth a card', () => {
+    const url = 'https://example.com/a';
+    expect(
+      linkPreviewSlotState({
+        type: 'success',
+        data: { url, title: 'A Page' },
+      })
+    ).toBe('ready');
+    expect(
+      linkPreviewSlotState({ type: 'success', data: { url, title: url } })
+    ).toBe('empty');
+    expect(linkPreviewSlotState({ type: 'error' })).toBe('empty');
+  });
+});
+
 describe('reservedPreviewImageSize', () => {
   it('returns nothing without an image', () => {
     expect(reservedPreviewImageSize({ image_url: undefined })).toBeUndefined();
   });
 
-  it('scales known Open Graph dimensions into the preview cap', () => {
-    const box = reservedPreviewImageSize({
-      image_url: 'https://example.com/og.png',
-      image_width: 1200,
-      image_height: 630,
-    });
-    expect(box).toEqual({
-      width: 448,
-      height: 235,
+  it('uses the constant image frame whether or not OG dims are present', () => {
+    expect(
+      reservedPreviewImageSize({
+        image_url: 'https://example.com/og.png',
+        image_width: 1200,
+        image_height: 630,
+      })
+    ).toEqual({
+      width: LINK_PREVIEW_IMAGE_WIDTH,
+      height: LINK_PREVIEW_IMAGE_HEIGHT,
       known: true,
     });
-  });
-
-  it('reserves a landscape box when the page omitted dimensions', () => {
-    const box = reservedPreviewImageSize({
-      image_url: 'https://example.com/og.png',
+    expect(
+      reservedPreviewImageSize({ image_url: 'https://example.com/og.png' })
+    ).toEqual({
+      width: LINK_PREVIEW_IMAGE_WIDTH,
+      height: LINK_PREVIEW_IMAGE_HEIGHT,
+      known: false,
     });
-    expect(box?.known).toBe(false);
-    expect(box?.width).toBe(448);
-    expect(box?.height).toBe(235);
   });
 });
 
@@ -256,14 +284,76 @@ describe('LinkPreviews', () => {
     expect(getByText('example.com')).not.toBeNull();
   });
 
-  it('renders no card while loading or after an error', () => {
+  it('reserves a constant-height loading slot before unfurl returns', () => {
     const loading = 'https://example.com/loading';
-    const errored = 'https://example.com/errored';
     unfurlResults.set(loading, { type: 'loading', _createdAt: new Date() });
+
+    const { container } = renderPreviews(loading);
+    const slot = container.querySelector(
+      '[data-link-preview-slot]'
+    ) as HTMLElement | null;
+
+    expect(slot).not.toBeNull();
+    expect(slot?.style.height).toBe(`${LINK_PREVIEW_SLOT_HEIGHT}px`);
+    expect(
+      container.querySelector('[data-link-preview-loading]')
+    ).not.toBeNull();
+    expect(container.querySelector('[data-link-preview]')).toBeNull();
+  });
+
+  it('treats a missing unfurl store entry as a loading slot', () => {
+    const { container } = renderPreviews('https://example.com/pending');
+
+    expect(
+      container.querySelector('[data-link-preview-loading]')
+    ).not.toBeNull();
+    expect(
+      (container.querySelector('[data-link-preview-slot]') as HTMLElement).style
+        .height
+    ).toBe(`${LINK_PREVIEW_SLOT_HEIGHT}px`);
+  });
+
+  it('keeps the same slot height after unfurl succeeds', () => {
+    const url = 'https://example.com/same-height';
+    unfurlResults.set(url, { type: 'loading', _createdAt: new Date() });
+    const { container } = renderPreviews(url);
+    const loadingHeight = (
+      container.querySelector('[data-link-preview-slot]') as HTMLElement
+    ).style.height;
+
+    unfurlResults.set(url, {
+      type: 'success',
+      data: {
+        url,
+        title: 'Same Height',
+        description: 'Description here',
+        image_url: 'https://example.com/og.png',
+        image_width: 1200,
+        image_height: 600,
+      },
+      _createdAt: new Date(),
+    });
+    const { container: ready } = renderPreviews(url);
+
+    expect(loadingHeight).toBe(`${LINK_PREVIEW_SLOT_HEIGHT}px`);
+    expect(
+      (ready.querySelector('[data-link-preview-slot]') as HTMLElement).style
+        .height
+    ).toBe(loadingHeight);
+    expect(ready.querySelector('[data-link-preview]')).not.toBeNull();
+  });
+
+  it('keeps an empty slot after an error so the row does not collapse', () => {
+    const errored = 'https://example.com/errored';
     unfurlResults.set(errored, { type: 'error', _createdAt: new Date() });
 
-    const { container } = renderPreviews(`${loading} ${errored}`);
+    const { container } = renderPreviews(errored);
+    const slot = container.querySelector(
+      '[data-link-preview-slot]'
+    ) as HTMLElement | null;
 
+    expect(slot?.style.height).toBe(`${LINK_PREVIEW_SLOT_HEIGHT}px`);
+    expect(container.querySelector('[data-link-preview-empty]')).not.toBeNull();
     expect(container.querySelector('[data-link-preview]')).toBeNull();
   });
 
@@ -287,12 +377,13 @@ describe('LinkPreviews', () => {
       '[data-link-preview-image-placeholder]'
     );
     expect(slot).not.toBeNull();
-    expect((slot as HTMLElement).style.width).toBe('448px');
+    expect((slot as HTMLElement).style.width).toBe(
+      `${LINK_PREVIEW_IMAGE_WIDTH}px`
+    );
     expect(placeholder).not.toBeNull();
-    expect((placeholder as HTMLElement).style.height).toBe('235px');
   });
 
-  it('reserves a landscape image box when Open Graph omitted dimensions', () => {
+  it('keeps the constant image frame when Open Graph omitted dimensions', () => {
     const url = 'https://example.com/og-no-dims';
     unfurlResults.set(url, {
       type: 'success',
@@ -305,15 +396,15 @@ describe('LinkPreviews', () => {
     });
 
     const { container } = renderPreviews(url);
-    const placeholder = container.querySelector(
-      '[data-link-preview-image-placeholder]'
-    );
-    expect(placeholder).not.toBeNull();
-    expect((placeholder as HTMLElement).style.width).toBe('448px');
-    expect((placeholder as HTMLElement).style.height).toBe('235px');
+    const frame = container.querySelector(
+      '[data-link-preview-image]'
+    ) as HTMLElement | null;
+    expect(frame).not.toBeNull();
+    expect(frame?.style.width).toBe(`${LINK_PREVIEW_IMAGE_WIDTH}px`);
+    expect(frame?.style.height).toBe(`${LINK_PREVIEW_IMAGE_HEIGHT}px`);
   });
 
-  it('renders no card for an unfurl with no usable metadata', () => {
+  it('keeps a constant empty slot for an unfurl with no usable metadata', () => {
     const url = 'https://example.com/bare';
     unfurlResults.set(url, {
       type: 'success',
@@ -322,8 +413,13 @@ describe('LinkPreviews', () => {
     });
 
     const { container } = renderPreviews(url);
+    const slot = container.querySelector(
+      '[data-link-preview-slot]'
+    ) as HTMLElement | null;
 
     expect(container.querySelector('[data-link-preview]')).toBeNull();
+    expect(container.querySelector('[data-link-preview-empty]')).not.toBeNull();
+    expect(slot?.style.height).toBe(`${LINK_PREVIEW_SLOT_HEIGHT}px`);
   });
 
   it('reveals the muted X after pointer hover on the preview', async () => {
@@ -366,6 +462,9 @@ describe('LinkPreviews', () => {
       first.getByRole('button', { name: 'Remove link preview' })
     );
     // Hidden immediately (optimistic) while the server rewrites the content.
+    expect(
+      first.container.querySelector('[data-link-preview-slot]')
+    ).toBeNull();
     expect(first.container.querySelector('[data-link-preview]')).toBeNull();
     expect(suppressMutate).toHaveBeenCalledTimes(1);
     expect(suppressMutate.mock.calls[0]?.[0]).toEqual({
