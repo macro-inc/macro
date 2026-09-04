@@ -355,13 +355,8 @@ where
         actor: BotId,
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
-        self.create_owned_channel(
-            owner.clone(),
-            Sender::new_from_bot(actor),
-            Some(owner),
-            req,
-        )
-        .await
+        self.create_owned_channel(owner.clone(), Sender::new_from_bot(actor), Some(owner), req)
+            .await
     }
 
     async fn create_owned_channel(
