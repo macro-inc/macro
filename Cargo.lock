@@ -659,6 +659,7 @@ dependencies = [
  "serde_json",
  "skills",
  "soup",
+ "soup_query_tool",
  "sqlx",
  "sqs_client",
  "strum 0.27.2",

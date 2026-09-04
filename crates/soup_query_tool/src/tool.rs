@@ -13,7 +13,7 @@ use schemars::JsonSchema;
 use schemars::Schema;
 use schemars::generate::SchemaGenerator;
 use schemars::json_schema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use soup::domain::ports::SoupService;
 use soup::inbound::toolset::SoupToolContext;
 
@@ -33,6 +33,26 @@ pub struct QuerySoup {
     /// Values for `$variables` used by `query`. JSON object or omitted.
     #[serde(default)]
     pub variables: Option<serde_json::Value>,
+}
+
+/// GraphQL execution data. Keys are selected field names (`soup` or aliases).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct QuerySoupData(pub serde_json::Map<String, serde_json::Value>);
+
+impl JsonSchema for QuerySoupData {
+    fn schema_name() -> Cow<'static, str> {
+        Cow::Borrowed("QuerySoupData")
+    }
+
+    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
+        json_schema!({
+            "title": "QuerySoupData",
+            "description": "GraphQL data map. Each selected soup field or alias is a SoupQueryPage.",
+            "type": "object",
+            "additionalProperties": true
+        })
+    }
 }
 
 impl JsonSchema for QuerySoup {
@@ -70,7 +90,7 @@ where
     T: SoupService,
     E: EmailService,
 {
-    type Output = serde_json::Value;
+    type Output = QuerySoupData;
 
     #[tracing::instrument(skip_all, fields(user_id = ?request_context.user_id), err)]
     async fn call(
@@ -93,7 +113,7 @@ where
     }
 }
 
-fn project_response(response: async_graphql::Response) -> ToolResult<serde_json::Value> {
+fn project_response(response: async_graphql::Response) -> ToolResult<QuerySoupData> {
     if !response.errors.is_empty() {
         return Err(ToolCallError {
             description: describe_errors(&response.errors),
@@ -104,7 +124,16 @@ fn project_response(response: async_graphql::Response) -> ToolResult<serde_json:
         description: format!("failed to encode QuerySoup result: {error}"),
         internal_error: anyhow::anyhow!(error),
     })?;
-    let bytes = serde_json::to_vec(&data).map_err(|error| ToolCallError {
+    let object = match data {
+        serde_json::Value::Object(map) => map,
+        other => {
+            return Err(ToolCallError {
+                description: "QuerySoup result was not a GraphQL object".to_string(),
+                internal_error: anyhow::anyhow!("expected object, got {other}"),
+            });
+        }
+    };
+    let bytes = serde_json::to_vec(&object).map_err(|error| ToolCallError {
         description: format!("failed to encode QuerySoup result: {error}"),
         internal_error: anyhow::anyhow!(error),
     })?;
@@ -119,7 +148,7 @@ fn project_response(response: async_graphql::Response) -> ToolResult<serde_json:
             internal_error: anyhow::anyhow!("QuerySoup result exceeded {MAX_RESULT_BYTES} bytes"),
         });
     }
-    Ok(data)
+    Ok(QuerySoupData(object))
 }
 
 fn describe_errors(errors: &[async_graphql::ServerError]) -> String {

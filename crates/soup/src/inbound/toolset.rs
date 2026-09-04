@@ -1,17 +1,13 @@
 //! Toolset inbound adapter for the Soup service.
-
-mod list_entities;
-
-#[cfg(test)]
-mod test;
+//!
+//! The listing tool itself lives in `soup_query_tool` so it can execute GraphQL
+//! without creating a `soup` ↔ `graphql_soup` cycle. This module only owns the
+//! context that tool (and any future soup tools) run against.
 
 use crate::domain::ports::SoupService;
-use ai_toolset::AsyncToolCollection;
 use email::domain::ports::EmailService;
 use std::sync::Arc;
 use uuid::Uuid;
-
-pub use list_entities::{EntityItem, ItemType, ListEntities, ListEntitiesResponse, SortBy};
 
 /// Service context for soup AI tools
 pub struct SoupToolContext<T: SoupService, E: EmailService> {
@@ -44,13 +40,4 @@ impl<T: SoupService, E: EmailService> SoupToolContext<T, E> {
             self_chat_id: None,
         }
     }
-}
-
-/// Create a soup toolset
-pub fn soup_toolset<T, E>() -> AsyncToolCollection<SoupToolContext<T, E>>
-where
-    T: SoupService,
-    E: EmailService,
-{
-    AsyncToolCollection::new().add_tool::<ListEntities, SoupToolContext<T, E>>()
 }

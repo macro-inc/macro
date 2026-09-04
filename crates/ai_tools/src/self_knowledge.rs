@@ -38,7 +38,7 @@ Macro is organized into "blocks":
 - **Agents** — AI agents that can act across the workspace.
 
 Cross-cutting concepts: the **Unified Inbox** (recent items across every block,
-read via the ListEntities tool), **Unified Search**, **Unified Memory**,
+read via the QuerySoup tool), **Unified Search**, **Unified Memory**,
 bidirectional **@mentions / linking**, and **permissions** that inherit from
 channels.
 

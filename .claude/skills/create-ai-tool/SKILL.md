@@ -16,7 +16,7 @@ Decide which domain crate the tool belongs in. Tools live at `crates/<crate>/src
 Study an existing tool for patterns:
 - `crates/documents/src/inbound/toolset/` — tools: `read_content.rs`, `read_metadata.rs`, `create_document.rs`
 - `crates/email/src/inbound/toolset/` — tools: `send_email.rs`, `get_thread.rs`, `update_thread_labels.rs`
-- `crates/soup/src/inbound/toolset/` — tool: `list_entities.rs`
+- `crates/soup_query_tool/` — tool: `QuerySoup`
 - `crates/call/src/inbound/toolset/` — call-related tools
 
 Each tool is a struct that derives `JsonSchema` and `Deserialize`, with `#[schemars(title = "...", description = "...")]` on the struct and `#[schemars(description = "...")]` on each field. The struct implements `AsyncTool<Context>` from the `ai_toolset` crate.
@@ -93,7 +93,7 @@ The tool UI components live at `apps/web/src/lib/core/component/AI/component/too
 - `Search.tsx` — search results rendering
 - `ReadContent.tsx` / `ReadMetadata.tsx` — document tool UI
 - `SendEmail.tsx` — email tool UI  
-- `ListEntities.tsx` — list display
+- `QuerySoup.tsx` — list display
 - `Properties.tsx` — property get/set tools
 - `ListCallRecords.tsx` / `ReadCallRecord.tsx` — call tools
 - `BaseTool.tsx` — shared base component
@@ -108,7 +108,7 @@ Each tool needs a handler object implementing `ToolHandler` (from `ToolRenderer.
    - Import your handler
    - Add it to the `toolHandlers` map with the key matching your tool's schema title
 
-Every tool renderer must show results. Use the expandable dropdown pattern from `Search.tsx` / `ListEntities.tsx`:
+Every tool renderer must show results. Use the expandable dropdown pattern from `Search.tsx` / `QuerySoup.tsx`:
 
 - Use `BaseTool` (from `BaseTool.tsx`) as the wrapper. It accepts a `response` prop for expandable content.
 - Create `const [isExpanded, setIsExpanded] = createSignal(false)` to track open/closed state.

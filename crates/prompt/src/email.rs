@@ -8,7 +8,7 @@ static INSTRUCTIONS: &str = r##"## Email inboxes
 
 - A user can have more than one email inbox: their own primary inbox, additional inboxes they
   have connected, and inboxes that teammates have delegated to them.
-- By default — when you don't pass an `inbox` — reads and searches (`ListEntities`, `ContentSearch`,
+- By default — when you don't pass an `inbox` — reads and searches (`QuerySoup`, `ContentSearch`,
   `NameSearch`) span ALL the inboxes the user can access, and per-thread actions use whichever inbox
   owns the thread. Pass an `inbox` only to narrow to a single mailbox. Most users have a single
   inbox, so for them this never matters — just use the email tools normally.
@@ -20,7 +20,7 @@ static INSTRUCTIONS: &str = r##"## Email inboxes
   first to see the inboxes they can access. Each entry has an `emailAddress`, `isPrimary` (the
   default inbox), and `isDelegated` (true when it belongs to another user).
 - Then pass the exact `emailAddress` as the `inbox` parameter:
-  - `ListEntities`, `ContentSearch`, and `NameSearch` accept `inbox` to restrict email results to
+  - `QuerySoup`, `ContentSearch`, and `NameSearch` accept `inbox` to restrict email results to
     that one inbox. Omit `inbox` to span every inbox the user can access (this is the default).
   - Never guess an inbox address — get it from `ListInboxes`.
 

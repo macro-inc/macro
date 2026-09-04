@@ -48,7 +48,7 @@ has an `emailAddress`, `isPrimary` (the default inbox used when no inbox is spec
 \n\
 Use this when the user references a specific or non-default mailbox (e.g. \"my work inbox\", \
 \"the shared inbox\", \"the inbox Alex shared with me\") so you can pass the exact \
-`emailAddress` to the `inbox` parameter of ListEntities, ContentSearch, or NameSearch, or to \
+`emailAddress` to the `inbox` parameter of QuerySoup, ContentSearch, or NameSearch, or to \
 ListLabels. Most users have a single inbox, in which case email tools operate on it by default \
 and you do not need this tool. Do not guess inbox addresses — list them here first."
 )]

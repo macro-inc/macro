@@ -82,6 +82,7 @@ projects = { path = "../projects", default-features = false, features = ["ai_too
 skills = { path = "../skills", default-features = false, features = ["ai_tools", "outbound"] }
 properties = { path = "../properties", features = ["ai_tools"] }
 soup = { path = "../soup", features = ["ai_tools", "outbound"] }
+soup_query_tool = { path = "../soup_query_tool" }
 sqs_client = { path = "../sqs_client", default-features = false, features = ["email", "gmail"] }
 teams = { path = "../teams", default-features = false, features = ["ai_tools", "outbound"] }
 sqlx.workspace = true

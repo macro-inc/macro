@@ -59,7 +59,7 @@ async fn server_instructions_describe_available_workflows() {
         "ReadMetadata",
         "ReadThread",
         "CreateDocument",
-        "ListEntities",
+        "QuerySoup",
     ] {
         assert!(
             instructions.contains(expected_text),
