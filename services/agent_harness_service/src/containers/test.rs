@@ -96,3 +96,14 @@ async fn routes_an_owned_bot_to_the_sandbox() {
         Route::Sandbox
     ));
 }
+
+/// The in-process runtime skips Macro's own server by the name the harness
+/// gives it, and restates that name rather than importing it. This is the one
+/// crate that sees both, so it is where they are held equal.
+#[test]
+fn the_in_process_runtime_and_the_harness_agree_on_macros_server_name() {
+    assert_eq!(
+        agent_inmem::domain::mcp::MACRO_MCP_NAME,
+        agent_harness::domain::model::MACRO_MCP_NAME
+    );
+}

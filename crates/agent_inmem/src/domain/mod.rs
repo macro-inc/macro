@@ -3,5 +3,6 @@
 
 pub mod agent;
 pub mod engine;
+pub mod mcp;
 pub mod replay;
 pub mod session;

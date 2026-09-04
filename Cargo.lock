@@ -365,11 +365,16 @@ dependencies = [
  "bot_id",
  "dashmap",
  "futures",
+ "http 1.4.0",
  "macro_user_id",
  "macro_uuid",
+ "mcp_select",
+ "mcp_toolset",
  "memory",
  "prompt",
+ "reqwest 0.13.4",
  "rig-agent",
+ "rmcp",
  "serde",
  "serde_json",
  "sqlx",
@@ -10265,6 +10270,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcp_toolset"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "futures",
+ "regex",
+ "rmcp",
+ "schemars 1.2.1",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+ "workspace-hack",
+]
+
+[[package]]
 name = "md-5"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -12370,8 +12391,8 @@ dependencies = [
  "futures",
  "macro_authorization",
  "macro_user_id",
+ "mcp_toolset",
  "model-error-response",
- "regex",
  "reqwest 0.13.4",
  "rmcp",
  "schemars 1.2.1",

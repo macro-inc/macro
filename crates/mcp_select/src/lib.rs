@@ -91,6 +91,10 @@ impl<Context: Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
         }
     }
 
+    fn searchable_catalog(&self) -> Vec<SearchableTool> {
+        self.catalog()
+    }
+
     fn searchable_toolset_names(&self) -> Vec<String> {
         match self {
             UserMcpTools::Pipedream(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
@@ -273,16 +277,19 @@ where
     }
 }
 
-/// Wraps a static [`AsyncToolCollection`] and the user's selected MCP tools,
-/// presenting them as a single toolset to the AI loop.
-pub struct CombinedToolSet<T> {
+/// Wraps a static [`AsyncToolCollection`] and a set of MCP tools, presenting
+/// them as a single toolset to the AI loop.
+///
+/// `Mcp` defaults to the per-user selection, [`UserMcpTools`]; the in-process
+/// agent runtime composes the same way over the servers it was handed.
+pub struct CombinedToolSet<T, Mcp = UserMcpTools> {
     static_tools: Arc<AsyncToolCollection<T>>,
-    mcp_tools: UserMcpTools,
+    mcp_tools: Mcp,
 }
 
-impl<T> CombinedToolSet<T> {
-    /// Combine the static tools with an already-selected MCP toolset.
-    pub fn new(static_tools: Arc<AsyncToolCollection<T>>, mcp_tools: UserMcpTools) -> Self {
+impl<T, Mcp> CombinedToolSet<T, Mcp> {
+    /// Combine the static tools with an already-built MCP toolset.
+    pub fn new(static_tools: Arc<AsyncToolCollection<T>>, mcp_tools: Mcp) -> Self {
         Self {
             static_tools,
             mcp_tools,
@@ -290,7 +297,7 @@ impl<T> CombinedToolSet<T> {
     }
 }
 
-impl<T: Send + Sync + 'static> ToolSet<T> for CombinedToolSet<T> {
+impl<T: Send + Sync + 'static, Mcp: ToolSet<T>> ToolSet<T> for CombinedToolSet<T, Mcp> {
     fn try_tool_call<'a>(
         &'a self,
         context: T,
@@ -318,7 +325,7 @@ impl<T: Send + Sync + 'static> ToolSet<T> for CombinedToolSet<T> {
     }
 
     fn searchable_catalog(&self) -> Vec<SearchableTool> {
-        self.mcp_tools.catalog()
+        ToolSet::<T>::searchable_catalog(&self.mcp_tools)
     }
 
     fn searchable_toolset_names(&self) -> Vec<String> {

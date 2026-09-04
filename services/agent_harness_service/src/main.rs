@@ -48,6 +48,7 @@ use agent_harness::outbound::forward::RedisCommandForwarder;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::routing::RoutedContainerManager;
 use agent_harness::outbound::runtime_registry::{HarnessKeyedConnections, RuntimeRegistry};
+use agent_inmem::outbound::acp_mcp::AcpMcpConnector;
 use agent_inmem::outbound::log_frames::LogFrameSource;
 use agent_inmem::outbound::manager::InMemAgentManager;
 use agent_inmem::outbound::rig_engine::RigTurnEngine;
@@ -278,7 +279,7 @@ async fn run() -> anyhow::Result<()> {
             // their model context from the same log every frame lands in.
             let frames = Arc::new(LogFrameSource::new(session_repo.clone()));
             Some(InMemRuntime {
-                manager: InMemAgentManager::new(engine, frames),
+                manager: InMemAgentManager::new(engine, frames, Arc::new(AcpMcpConnector::new())),
             })
         }
         None => None,

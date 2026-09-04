@@ -61,6 +61,8 @@ where
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
+        mcp: Arc::new(crate::domain::mcp::NoMcpServers),
+        mcp_tools: std::sync::Mutex::new(None),
     });
 
     let (client_channel, agent_channel) = AcpChannel::duplex();
@@ -352,4 +354,86 @@ async fn a_prompt_for_an_unknown_session_is_refused() {
         );
     })
     .await;
+}
+
+/// Records the servers it was asked to dial and dials none of them.
+struct SpyConnector {
+    asked: std::sync::Mutex<Vec<Vec<String>>>,
+}
+
+impl crate::domain::mcp::McpToolConnector for Arc<SpyConnector> {
+    async fn connect(
+        &self,
+        servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
+    ) -> Option<mcp_toolset::RemoteMcpToolSet> {
+        self.asked
+            .lock()
+            .expect("asked lock")
+            .push(servers.into_iter().map(|server| server.name).collect());
+        None
+    }
+}
+
+/// The servers `session/new` carries are dialed then and there, minus Macro's
+/// own, whose tools this runtime already has natively.
+#[tokio::test]
+async fn session_new_dials_the_advertised_servers_except_macros_own() {
+    use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
+
+    let spy = Arc::new(SpyConnector {
+        asked: std::sync::Mutex::new(Vec::new()),
+    });
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("test-model".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        engine: Arc::new(ScriptedEngine::new(Vec::new())),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        mcp: Arc::new(Arc::clone(&spy)),
+        mcp_tools: std::sync::Mutex::new(None),
+    });
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    let servers = ["macro", "linear", "notion"]
+        .into_iter()
+        .map(|name| {
+            AcpMcpServer::Http(
+                McpServerHttp::new(name, format!("https://egress.test/mcp/{name}")).headers(vec![
+                    HttpHeader::new("Authorization", "Bearer session-token"),
+                ]),
+            )
+        })
+        .collect::<Vec<_>>();
+    Client
+        .builder()
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                connection
+                    .send_request(NewSessionRequest::new("/").mcp_servers(servers))
+                    .block_task()
+                    .await?;
+                Ok(())
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
+
+    assert_eq!(
+        *spy.asked.lock().expect("asked lock"),
+        vec![vec!["linear".to_owned(), "notion".to_owned()]]
+    );
 }

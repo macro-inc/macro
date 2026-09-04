@@ -15,9 +15,14 @@ ai_usage = { path = "../ai_usage" }
 dashmap = { workspace = true }
 futures = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
+http = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
+mcp_select = { path = "../mcp_select" }
+mcp_toolset = { path = "../mcp_toolset" }
 memory = { path = "../memory" }
 prompt = { path = "../prompt" }
+reqwest = { workspace = true }
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client-reqwest"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

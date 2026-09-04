@@ -31,7 +31,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
+use agent_client_protocol::schema::v1::McpServer as AcpMcpServer;
+use mcp_toolset::RemoteMcpToolSet;
 
 #[cfg(test)]
 mod test;
@@ -77,9 +80,33 @@ pub struct AgentState {
     /// Serializes turns: the client may queue prompts, the engine runs one at
     /// a time.
     pub turn_lock: tokio::sync::Mutex<()>,
+    /// Dials the MCP servers `session/new` and `session/resume` hand over.
+    pub mcp: Arc<dyn DynMcpToolConnector>,
+    /// The tools of those servers, once dialed; `None` until then or when
+    /// there were none.
+    pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
 }
 
 impl AgentState {
+    /// Dial the servers a session request carried and keep their tools for
+    /// every turn that follows. Done at `session/new`/`session/resume`, the
+    /// same moment a sandboxed harness connects its servers, so the first
+    /// turn already has them.
+    async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
+        let tools = self.mcp.connect_dyn(dialable_servers(servers)).await;
+        *self
+            .mcp_tools
+            .lock()
+            .expect("mcp tools lock should not be poisoned") = tools;
+    }
+
+    fn current_mcp_tools(&self) -> Option<RemoteMcpToolSet> {
+        self.mcp_tools
+            .lock()
+            .expect("mcp tools lock should not be poisoned")
+            .clone()
+    }
+
     fn expect_session(&self, requested: &SessionId) -> Result<(), AcpError> {
         let matches = self
             .store
@@ -184,10 +211,11 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
         .on_receive_request(
             {
                 let state = Arc::clone(&state);
-                async move |_request: NewSessionRequest, responder, _connection| {
+                async move |request: NewSessionRequest, responder, _connection| {
                     let state = Arc::clone(&state);
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
+                    state.connect_mcp(request.mcp_servers).await;
                     responder.respond(NewSessionResponse::new(acp_id))
                 }
             },
@@ -203,6 +231,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     // attach replayed the frame log back into it (see
                     // `domain::replay`).
                     state.bind_acp_session(request.session_id, true);
+                    state.connect_mcp(request.mcp_servers).await;
                     responder.respond(ResumeSessionResponse::new())
                 }
             },
@@ -310,6 +339,7 @@ async fn run_turn(
         model,
         instructions,
         messages,
+        mcp_tools: state.current_mcp_tools(),
         cancel: cancel.clone(),
     });
 
