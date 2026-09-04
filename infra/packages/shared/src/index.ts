@@ -66,5 +66,6 @@ export {
 } from './ai_tools';
 export { getKafkaClusterPolicy } from './kafka_cluster_policy';
 export { getGatewayAlb, type GatewayAlb } from './gateway';
+export { GATEWAY_PRIORITIES, GatewayService } from './gateway_priorities';
 
 export * from './service_urls';

@@ -20,6 +20,15 @@ pub(crate) enum FoldError {
         /// The unopened tool call.
         tool_call: ToolUseId,
     },
+    /// A `tool_call` named a parent call the fold has not seen, or one that
+    /// is not a subagent. The call is folded at top level instead.
+    #[error("tool call {tool_call:?} names an unknown parent {parent:?}")]
+    UnknownParent {
+        /// The call that named a parent.
+        tool_call: ToolUseId,
+        /// The parent it named.
+        parent: ToolUseId,
+    },
     /// A response arrived for a request id the fold was not tracking.
     #[error("response arrived for a request id the fold was not tracking")]
     UncorrelatedResponse,

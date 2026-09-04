@@ -24,7 +24,7 @@ use crate::{
 use authentication_service::service::user::create_user::create_user;
 use authentication_service::service::user::support_channel_welcome::post_support_channel_welcome;
 use channels::domain::{
-    models::{ChannelType, CreateChannelRequest, Sender},
+    models::{ChannelType, CreateChannelRequest},
     ports::ChannelService,
 };
 use favorites::domain::ports::FavoritesService;
@@ -441,9 +441,8 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
             };
 
             let channel = match channel_service
-                .create_channel(
-                    Sender::new_from_user(owner_id.clone()),
-                    None,
+                .create_system_channel(
+                    owner_id.clone(),
                     CreateChannelRequest {
                         name: Some(support_channel_name),
                         channel_type: ChannelType::Private,

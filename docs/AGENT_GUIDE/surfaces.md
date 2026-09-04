@@ -5,8 +5,11 @@
 Unified triage list (emails, channel messages, task assignments, doc mentions, agent
 results). Filter radios: `Signal` (default, AI-filtered "needs attention") / `Noise` / `All`
 / `Reminders`; plus `Filter` menu and `Preview` toggle (split list + preview pane; the empty
-preview shows "No content selected"). Keyboard: `j`/`k` move, `space` preview, `enter` open,
-`e` mark done. Rows are buttons named `<channel> <sender>:<snippet> <time>`.
+preview shows "No content selected"). With the `enable-inbox-notified-sort` flag on, `Signal`
+and `Noise` order rows (and their date headers) by when you were last notified about the
+item, so a fresh comment on an old task sits under "Today"; with it off they order by
+recency like `All` and `Reminders`. Keyboard: `j`/`k` move, `space` preview, `enter` open, `e` mark done.
+Rows are buttons named `<channel> <sender>:<snippet> <time>`.
 
 ## Email — `/app/component/mail`
 
@@ -30,7 +33,23 @@ tags, updated time. Clicking a row opens the doc.
 
 Week view with `New event`, `Choose calendar view` menu, prev/next week, `Search events`,
 `Calendar settings`, and a mini month picker in the side panel. Events require connecting a
-Google account (`Connect calendar`).
+Google account (`Connect calendar`). The `Calendar settings` (gear) menu has an `Accounts`
+section listing each connected account with a per-account `Enable` (grant calendar) or
+`Turn off` action, plus `Connect another account` to connect a new Google account
+(email + calendar).
+
+The side panel's `Calendars` section folds each connected account into a collapsible
+group: a caret plus the account address header with a checkbox that shows or hides all of
+that account's calendars at once, and the account's calendars listed beneath it (color dot,
+name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
+carry a small RSS icon.
+
+Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
+`<name>: <event title>`. The side panel's `Team out of office` section (shown only when the
+user belongs to a team with other members) has a checkbox in its header row toggling the
+whole overlay on or off — all teammates or none — and lists the next 90 days of teammate
+absences; clicking a row navigates the grid to that date. Coverage depends on each teammate
+having connected their own calendar and using Google's out-of-office event type.
 
 ## Calls — `/app/component/calls`
 

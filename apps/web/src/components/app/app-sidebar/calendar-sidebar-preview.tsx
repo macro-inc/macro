@@ -12,6 +12,7 @@ import type {
   CalendarTimeFormat,
 } from '@app/features/calendar/types';
 import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
+import { groupCalendarSourcesByAccount } from '@app/features/calendar/utils/calendar-source-groups';
 import {
   formatCalendarTime,
   getDefaultCalendarTimeFormat,
@@ -351,22 +352,21 @@ function PreviewContent(props: { dropdownMount?: HTMLElement }) {
                       class="max-h-52 w-56 overflow-y-auto"
                     >
                       <Dropdown.Group>
-                        <For each={sources()}>
-                          {(source) => (
+                        <For each={groupCalendarSourcesByAccount(sources())}>
+                          {(group) => (
                             <Dropdown.CheckboxItem
-                              checked={isSourceVisible(source.id)}
+                              checked={group.calendars.every((source) =>
+                                isSourceVisible(source.id)
+                              )}
                               closeOnSelect={false}
-                              onChange={(visible) =>
-                                setSourceVisibility(source.id, visible)
-                              }
+                              onChange={(visible) => {
+                                for (const source of group.calendars) {
+                                  setSourceVisibility(source.id, visible);
+                                }
+                              }}
                             >
-                              <span
-                                aria-hidden="true"
-                                class="size-2.5 shrink-0 rounded-sm"
-                                style={{ 'background-color': source.color }}
-                              />
                               <span class="min-w-0 flex-1 truncate">
-                                {source.name}
+                                {group.emailAddress}
                               </span>
                             </Dropdown.CheckboxItem>
                           )}

@@ -404,10 +404,11 @@ export const SoupView = (props: SoupViewProps) => {
         : (persistedGroupBy ?? props.initialGroupBy);
 
       // The inbox exposes no sort control on either desktop (the toolbar
-      // hides SoupViewContextSort) or mobile, so its order is always
-      // updated_at. Ignore any sort persisted back when the control was
-      // reachable: honoring it would pin the list to an order the user can
-      // no longer change.
+      // hides SoupViewContextSort) or mobile, so its order is fixed: update
+      // recency, which the Signal and Noise presets override with the
+      // notified order they serve (see `clientSort`). Ignore any sort
+      // persisted back when the control was reachable: honoring it would pin
+      // the list to an order the user can no longer change.
       let initialSortIds =
         contentId === 'inbox'
           ? ['updated_at']
@@ -806,6 +807,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isSearchServiceLoading,
     isLocalSearchSettling,
     activeTab,
+    clientSort,
     fetchNextGroupPage,
     isFetchingGroupPage,
   } = useSoupView();
@@ -1420,9 +1422,18 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                       >
                         {(row, i) => {
                           const timestamp = () => {
+                            const sort_ = clientSort();
+                            // The notified order shows when you were told,
+                            // ahead of the row's own recency stamp.
+                            if (
+                              sort_[0]?.id === 'notified_at' &&
+                              row.original.notifiedAt
+                            ) {
+                              return row.original.notifiedAt;
+                            }
+
                             if (row.original.sortTs) return row.original.sortTs;
 
-                            const sort_ = soup.sort.active();
                             if (!sort_.length) return;
 
                             switch (sort_[0].id) {

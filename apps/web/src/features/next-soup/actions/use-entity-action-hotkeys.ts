@@ -31,6 +31,7 @@ import {
   makeMarkReadAction,
   makeMarkUnreadAction,
   makeMoveToProjectAction,
+  makeMuteAction,
   makeRenameAction,
   makeSetCompanyPropertyAction,
   makeShareAction,
@@ -101,6 +102,9 @@ export const useEntityActionHotkeys = (
   const shareAction = makeShareAction();
 
   const favoriteAction = makeFavoriteAction();
+  const muteAction = makeMuteAction({
+    notificationSource: () => notificationSource,
+  });
 
   const setCompanyPropertyAction = makeSetCompanyPropertyAction();
   const addTagAction = makeAddTagAction();
@@ -365,6 +369,34 @@ export const useEntityActionHotkeys = (
       if (condition && !condition()) return false;
       const entities = getEntitiesForAction();
       return entities.length > 0 && entities.every(favoriteAction.canExecute);
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  }).withGroup(group);
+
+  // Mute notifications (command menu only, no keybinding)
+  registerHotkey({
+    hotkeyToken: TOKENS.entity.action.mute,
+    scopeId,
+    description: () => {
+      const entities = getEntitiesForAction();
+      const allMuted =
+        entities.length > 0 &&
+        entities.every((entity) => muteAction.isMuted(entity));
+      return allMuted ? 'Unmute notifications' : 'Mute notifications';
+    },
+    keyDownHandler: () => {
+      const entities = getEntitiesForAction();
+      if (entities.length === 0) return false;
+      if (!entities.every(muteAction.canExecute)) return false;
+
+      void muteAction.executeWithSoup(entities, list);
+      return true;
+    },
+    condition: () => {
+      if (condition && !condition()) return false;
+      const entities = getEntitiesForAction();
+      return entities.length > 0 && entities.every(muteAction.canExecute);
     },
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],

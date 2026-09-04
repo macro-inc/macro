@@ -753,6 +753,50 @@ async fn run() -> anyhow::Result<()> {
         authorization_state.clone(),
     );
 
+    let (webhook_stream_sender, _) =
+        tokio::sync::broadcast::channel(webhook::domain::stream::WEBHOOK_STREAM_CHANNEL_CAPACITY);
+    let sse_stream_service = webhook::domain::stream::WebhookEventStreamServiceImpl::new(
+        webhook_stream_sender.clone(),
+        entity_access_service.clone(),
+        webhook_repository.clone(),
+    );
+    let sse_stream_state = webhook::inbound::stream_router::WebhookStreamRouterState::new(
+        sse_stream_service,
+        authorization_state.clone(),
+    );
+    consumer_tracker.spawn({
+        let brokers = config.kafka_brokers.as_ref().to_string();
+        let sender = webhook_stream_sender;
+        let cancellation_token = consumer_cancellation_token.clone();
+        async move {
+            loop {
+                let result = tokio::select! {
+                    biased;
+                    _ = cancellation_token.cancelled() => break,
+                    result = webhook::inbound::kafka_stream_consumer::run_webhook_stream_consumer(
+                        &brokers,
+                        &sender,
+                    ) => result,
+                };
+
+                if cancellation_token.is_cancelled() {
+                    break;
+                }
+                if let Err(error) = result {
+                    tracing::error!(
+                        error = ?error,
+                        "webhook SSE Kafka consumer stopped"
+                    );
+                    tokio::select! {
+                        biased;
+                        _ = cancellation_token.cancelled() => break,
+                        _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+                    }
+                }
+            }
+        }
+    });
+
     let webhook_ingestion_service =
         webhook::domain::ingestion::WebhookEventIngestionServiceImpl::new(
             entity_access_service.clone(),
@@ -1372,6 +1416,7 @@ async fn run() -> anyhow::Result<()> {
         call_state,
         call_webhook_state,
         webhook_state,
+        sse_stream_state,
         call_internal_state,
         cal_webhook_state,
         entity_access_management_service,

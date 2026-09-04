@@ -8,6 +8,11 @@ export type AsideLayout = {
   width: number;
   min: number;
   max: number;
+  /**
+   * Whether automatic container resizing should preserve `width`.
+   * Set to false with a main `preferredWidth` to let the aside yield first.
+   */
+  preserveDuringResize?: boolean;
 };
 
 export const DEFAULT_ASIDE_LAYOUT: AsideLayout = {
@@ -20,6 +25,11 @@ export type MainLayout = {
   width?: number;
   min: number;
   max?: number;
+  /**
+   * Soft width protected while a yielding aside shrinks toward its minimum.
+   * Unlike `min`, this does not prevent Main from shrinking when space runs out.
+   */
+  preferredWidth?: number;
 };
 
 export const DEFAULT_MAIN_LAYOUT: MainLayout = {

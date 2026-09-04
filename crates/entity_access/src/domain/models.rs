@@ -34,6 +34,15 @@ pub enum BotAccessScope {
 }
 
 impl BotAccessScope {
+    /// User scope for a caller that knows only the acting user, such as an AI
+    /// tool request, which carries no organization context.
+    pub fn user(user_id: MacroUserIdStr<'static>) -> Self {
+        Self::User {
+            user_id,
+            user_org_id: None,
+        }
+    }
+
     /// Returns the verified acting user's identifier for user scope.
     pub fn user_id(&self) -> Option<&MacroUserIdStr<'static>> {
         match self {

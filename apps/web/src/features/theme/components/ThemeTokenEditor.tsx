@@ -57,7 +57,6 @@ const tokenSections = [
     tokens: [
       'surface',
       'inset',
-      'lift',
       'page',
       'panel',
       'dialog',

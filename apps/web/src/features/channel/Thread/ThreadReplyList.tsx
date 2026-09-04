@@ -33,7 +33,7 @@ export function ThreadReplyList(props: {
   ) => boolean;
   selectedReplyId?: Accessor<string | undefined>;
   /**
-   * Reply targeted by channel navigation or bound to the unified input's reply (quote-reply).
+   * Reply targeted by channel navigation or referenced by the unified input.
    */
   targetedReplyId?: Accessor<string | undefined>;
   isThreadFocused?: Accessor<boolean>;

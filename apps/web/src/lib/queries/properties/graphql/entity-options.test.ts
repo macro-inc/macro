@@ -1,4 +1,5 @@
 import type { Property, PropertyDefinitionDomain } from '@property/types';
+import { validate as validateUuid } from 'uuid';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const executeOptimisticMutationMock = vi.hoisted(() => vi.fn());
@@ -126,7 +127,31 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     ]);
     // The record already exists, so the entity's property link list is intact.
     expect(options.revalidations).toEqual([]);
+    expect(validateUuid(options.uuid)).toBe(true);
     expect(inspectMock).not.toHaveBeenCalled();
+  });
+
+  it('uses a fresh UUID for each non-coalescible delta batch', async () => {
+    const input = {
+      entityType: 'DOCUMENT' as const,
+      entityId: 'doc-1',
+      properties: [
+        {
+          property: tagProperty,
+          currentOptionIds: ['stale'],
+          nextOptionIds: ['spotlight'],
+        },
+      ],
+    };
+
+    await updateGraphqlEntityPropertyOptions(input);
+    await updateGraphqlEntityPropertyOptions(input);
+
+    const uuids = executeOptimisticMutationMock.mock.calls.map(
+      (call) => call[4].uuid
+    );
+    expect(uuids.every(validateUuid)).toBe(true);
+    expect(new Set(uuids).size).toBe(2);
   });
 
   it('revalidates only the cached queries holding the entity when it has no record for the definition', async () => {

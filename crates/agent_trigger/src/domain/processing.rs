@@ -7,8 +7,8 @@ use macro_event_broker::{EventBrokerError, MacroEvent as _, MacroEventBroker};
 
 use super::broker_events::AgentTriggerEventName;
 use super::service::{
-    AgentBotLookup, AgentTriggerService, ChannelParticipationLookup, ImplicitTriggerJudge,
-    ReplyDetector, TeamMembershipLookup, ThreadHistory,
+    AgentBotLookup, AgentTriggerService, ChannelParticipationLookup, ExplicitReplyExtractor,
+    ImplicitTriggerJudge, TeamMembershipLookup, ThreadHistory,
 };
 
 /// Failure while evaluating or publishing one channel event.
@@ -39,7 +39,7 @@ where
     Bots: AgentBotLookup,
     Teams: TeamMembershipLookup,
     Channels: ChannelParticipationLookup,
-    Replies: ReplyDetector,
+    Replies: ExplicitReplyExtractor,
     Judge: ImplicitTriggerJudge,
     History: ThreadHistory,
     Broker: MacroEventBroker,

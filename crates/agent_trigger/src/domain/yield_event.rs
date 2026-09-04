@@ -40,7 +40,7 @@ pub enum NoEventReason {
         session_id: AgentSessionId,
     },
     /// The message sat in a session's thread without a mention, and neither
-    /// quote-reply detection nor the model judged it addressed to the agent.
+    /// an explicit reply to the agent nor the model judged it addressed.
     NotAddressedToAgent {
         /// Session whose thread carried the message.
         session_id: AgentSessionId,

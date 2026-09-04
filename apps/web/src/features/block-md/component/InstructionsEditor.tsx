@@ -58,7 +58,6 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
-import WarningIcon from '@phosphor/warning.svg';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
 import type { EditorState } from 'lexical';
@@ -73,6 +72,7 @@ import {
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
+import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 
 const EDITOR_PADDING_BOTTOM = 120;
@@ -371,13 +371,11 @@ export function InstructionsEditor(props: {
 
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
-      {/* SCUFFED: are these the right transparency values? */}
       <Show when={editorError()}>
         {(error) => (
-          <div class="pointer-events-none text-alert-ink p-2 bg-alert-bg w-full border-alert/30 border mb-2 flex items-center gap-2">
-            <WarningIcon class="size-6 shrink-0" />
+          <EditorSystemMessage variant="warning" class="mb-2">
             {getErrorDescription(error())}
-          </div>
+          </EditorSystemMessage>
         )}
       </Show>
       <div class="relative" ref={editorContainerRef}>

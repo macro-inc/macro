@@ -23,6 +23,7 @@ import { createWorkerCacheHost } from './worker-host';
 const CLIENT_ID = '00000000-0000-4000-8000-000000000007';
 const EMPTY_WRITE: WriteResult = {
   revision: INITIAL_CACHE_REVISION,
+  revisionAdvanced: false,
   changed: [],
   affectedOps: [],
   reset: false,
@@ -398,6 +399,7 @@ describe('createWorkerCacheHost', () => {
       }),
       host.enqueueOptimisticMutation(
         {
+          uuid: '00000000-0000-4000-8000-000000000005',
           opKey: 9,
           query: 'mutation Rename { rename { id } }',
           data: { rename: { id: 'doc-1' } },
@@ -474,6 +476,11 @@ describe('createWorkerCacheHost', () => {
         nowMs: 123,
       },
     });
+    expect(requests[5]).toEqual(
+      expect.objectContaining({
+        uuid: '00000000-0000-4000-8000-000000000005',
+      })
+    );
     expect(requests[4]).toEqual(
       expect.objectContaining({
         originOpId: `${CLIENT_ID}:8`,
@@ -521,7 +528,11 @@ describe('createWorkerCacheHost', () => {
 
     const read = host.readQuery({ opKey: 4, query: 'query Read { user }' });
     const mutation = host.enqueueOptimisticMutation(
-      { query: 'mutation Update { update }', data: { update: true } },
+      {
+        uuid: '00000000-0000-4000-8000-000000000100',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      },
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
     const readRejected = expect(read).rejects.toThrow(
@@ -578,7 +589,11 @@ describe('createWorkerCacheHost', () => {
 
     const read = host.readQuery({ opKey: 44, query: 'query Read { user }' });
     const mutation = host.enqueueOptimisticMutation(
-      { query: 'mutation Update { update }', data: { update: true } },
+      {
+        uuid: '00000000-0000-4000-8000-000000000100',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      },
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
     const readRejected = expect(read).rejects.toMatchObject({
@@ -662,6 +677,7 @@ describe('createWorkerCacheHost', () => {
     const read = host.readQuery({ query: 'query Read { user { id } }' });
     const mutation = host.enqueueOptimisticMutation(
       {
+        uuid: '00000000-0000-4000-8000-000000000006',
         query: 'mutation Rename { rename { id } }',
         data: { rename: { id: 'doc-1' } },
       },
@@ -721,7 +737,11 @@ describe('createWorkerCacheHost', () => {
 
     const read = host.readQuery({ opKey: 44, query: 'query Read { user }' });
     const mutation = host.enqueueOptimisticMutation(
-      { query: 'mutation Update { update }', data: { update: true } },
+      {
+        uuid: '00000000-0000-4000-8000-000000000100',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      },
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
     const readRejected = expect(read).rejects.toThrow('owner epoch 1 was lost');
@@ -959,7 +979,11 @@ describe('createWorkerCacheHost', () => {
     await host.clear();
     const adapter = requireAdapter();
     const mutation = host.enqueueOptimisticMutation(
-      { query: 'mutation Update { update }', data: { update: true } },
+      {
+        uuid: '00000000-0000-4000-8000-000000000100',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      },
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
     const mutationRejected = expect(mutation).rejects.toMatchObject({
@@ -1138,7 +1162,11 @@ describe('createWorkerCacheHost', () => {
     });
     adapter.dispose.mockImplementationOnce(async () => await draining);
     const mutation = host.enqueueOptimisticMutation(
-      { query: 'mutation Update { update }', data: { update: true } },
+      {
+        uuid: '00000000-0000-4000-8000-000000000100',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      },
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
     await vi.waitFor(() =>
@@ -1275,7 +1303,11 @@ describe('createWorkerCacheHost', () => {
     });
     adapter.dispose.mockImplementationOnce(async () => await draining);
     const mutation = host.enqueueOptimisticMutation(
-      { query: 'mutation Update { update }', data: { update: true } },
+      {
+        uuid: '00000000-0000-4000-8000-000000000100',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      },
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
     await vi.waitFor(() =>
@@ -1309,7 +1341,11 @@ describe('createWorkerCacheHost', () => {
     await host.clear();
     const adapter = requireAdapter();
     const mutation = host.enqueueOptimisticMutation(
-      { query: 'mutation Update { update }', data: { update: true } },
+      {
+        uuid: '00000000-0000-4000-8000-000000000100',
+        query: 'mutation Update { update }',
+        data: { update: true },
+      },
       { owner: 'runner', nowMs: 1, leaseExpiresAtMs: 101 }
     );
     const rejected = expect(mutation).rejects.toMatchObject({

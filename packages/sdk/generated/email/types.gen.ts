@@ -816,6 +816,7 @@ export type CreateCalendarEventRequest = {
      * Optional location label.
      */
     location?: string | null;
+    outOfOffice?: null | OutOfOfficeProperties;
     /**
      * Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`).
      */
@@ -1230,6 +1231,28 @@ export type Message = {
 
 export type MessageListVisibility = 'Show' | 'Hide';
 
+/**
+ * How an out-of-office event responds to conflicting invitations, mirroring
+ * Google's `autoDeclineMode`.
+ */
+export type OutOfOfficeAutoDeclineMode = 'decline_none' | 'decline_all_conflicting_invitations' | 'decline_only_new_conflicting_invitations';
+
+/**
+ * The extra properties Google requires on an out-of-office event, mirroring
+ * its `outOfOfficeProperties` block. Their presence on a draft or patch is
+ * what marks the mutation as out-of-office.
+ */
+export type OutOfOfficeProperties = {
+    /**
+     * How conflicting invitations are handled while the user is out.
+     */
+    autoDeclineMode?: OutOfOfficeAutoDeclineMode;
+    /**
+     * Message returned to organizers whose invitations are auto-declined.
+     */
+    declineMessage?: string | null;
+};
+
 export type ParsedMessage = {
     bcc: Array<ContactInfo>;
     body_parsed?: string | null;
@@ -1469,6 +1492,7 @@ export type UpdateCalendarEventRequest = {
      * Replacement location; an empty string clears it.
      */
     location?: string | null;
+    outOfOffice?: null | OutOfOfficeProperties;
     /**
      * Original-start key of the occurrence the update targets.
      */
@@ -1605,6 +1629,11 @@ export type VisibleCalendar = {
      * Whether this is its account's primary calendar.
      */
     isPrimary: boolean;
+    /**
+     * Whether this is one of Google's shared system calendars (holidays,
+     * birthdays) the account subscribes to rather than one a person maintains.
+     */
+    isSubscription: boolean;
     /**
      * Whether the grant can create and modify events on this calendar.
      */

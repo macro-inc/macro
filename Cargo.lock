@@ -212,6 +212,7 @@ dependencies = [
  "agent_runtime_protocol",
  "clap",
  "insta",
+ "lazy-regex",
  "macro_user_id",
  "macro_uuid",
  "non_empty",
@@ -335,6 +336,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "url",
  "utoipa",
@@ -361,6 +363,7 @@ dependencies = [
  "macro_uuid",
  "memory",
  "prompt",
+ "rig-agent",
  "serde",
  "serde_json",
  "sqlx",
@@ -2935,6 +2938,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "thiserror 2.0.18",
+ "uuid",
 ]
 
 [[package]]
@@ -2950,12 +2954,13 @@ dependencies = [
  "thiserror 2.0.18",
  "turso-opfs",
  "turso_core",
+ "uuid",
  "wasm-bindgen-test",
 ]
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.3"
+version = "0.6.4"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -2968,6 +2973,7 @@ dependencies = [
  "soup-filter-cache-adapter",
  "soup-filter-projection",
  "turso-opfs",
+ "uuid",
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "wasm-bindgen-test",
@@ -3552,15 +3558,15 @@ dependencies = [
  "agent_runtime_protocol",
  "agent_session",
  "agent_trigger",
- "axum",
  "bot_id",
- "bots",
  "channel_sender",
  "channels",
  "chrono",
  "clap",
  "crossterm 0.28.1",
  "dashmap",
+ "eventsource-stream",
+ "futures",
  "harness_id",
  "harnesses",
  "macro_event_broker",
@@ -3580,12 +3586,10 @@ dependencies = [
  "tokio-util",
  "toml 0.8.23",
  "toml_edit 0.22.27",
- "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
  "uuid",
  "webhook",
- "webhook_signature",
  "workspace-hack",
 ]
 
@@ -4137,9 +4141,7 @@ checksum = "7704b5fdd17b18ae31c4c1da5a2e0305a2bf17b5249300a9ee9ed7b72114c636"
 name = "cowlike"
 version = "0.1.0"
 dependencies = [
- "bot_id",
  "either",
- "macro_user_id",
 ]
 
 [[package]]
@@ -4922,6 +4924,23 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "determinator"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf14b901cdfba3f731d01c4c184100e85f586a272d38874824175b845dbaeaf9"
+dependencies = [
+ "camino",
+ "globset",
+ "guppy",
+ "guppy-workspace-hack",
+ "once_cell",
+ "petgraph 0.6.5",
+ "rayon",
+ "serde",
+ "toml 0.5.11",
 ]
 
 [[package]]
@@ -6944,6 +6963,7 @@ dependencies = [
 name = "github"
 version = "0.1.0"
 dependencies = [
+ "activity",
  "anyhow",
  "axum",
  "axum-extra",
@@ -8650,6 +8670,7 @@ dependencies = [
  "filter_ast",
  "item_filters",
  "predicate-index",
+ "system_properties",
  "thiserror 2.0.18",
  "uuid",
 ]
@@ -8972,6 +8993,29 @@ dependencies = [
  "tokio",
  "tracing",
  "workspace-hack",
+]
+
+[[package]]
+name = "lazy-regex"
+version = "3.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4994ba703f78b083e2f7946dac9251abd83fd43a0365f030e99b69be5b4b9ef9"
+dependencies = [
+ "lazy-regex-proc_macros",
+ "once_cell",
+ "regex",
+]
+
+[[package]]
+name = "lazy-regex-proc_macros"
+version = "3.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd97232314824e6dbef1918a871bb93f51070455e3715bf26e19a6d01aa977a0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -11017,7 +11061,6 @@ dependencies = [
  "macro_uuid",
  "model-entity",
  "model-error-response",
- "model_notifications",
  "model_user",
  "models_pagination",
  "rate_limit",
@@ -12603,6 +12646,7 @@ dependencies = [
  "axum",
  "axum-extra",
  "base64 0.22.1",
+ "bot_id",
  "chrono",
  "document_sub_type",
  "documents",
@@ -12669,6 +12713,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
+ "bot_id",
  "chrono",
  "document_sub_type",
  "entity_access",
@@ -13356,9 +13401,9 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.12.3"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e10754a14b9137dd7b1e3e5b0493cc9171fdd105e0ab477f51b72e7f3ac0e276"
+checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -13368,9 +13413,9 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
-version = "0.4.14"
+version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e1dd4122fc1595e8162618945476892eefca7b88c52820e74af6262213cae8f"
+checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
 dependencies = [
  "aho-corasick",
  "memchr",
@@ -13385,9 +13430,9 @@ checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
 
 [[package]]
 name = "regex-syntax"
-version = "0.8.10"
+version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc897dd8d9e8bd1ed8cdad82b5966c3e0ecae09fb1907d58efaa013543185d0a"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "reminders"
@@ -14089,6 +14134,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "utoipa",
  "utoipa-swagger-ui",
@@ -17777,6 +17823,7 @@ dependencies = [
  "serde_json",
  "sqlx",
  "sqs_client",
+ "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",
@@ -18682,6 +18729,7 @@ dependencies = [
  "dotenvy",
  "indexmap 2.14.0",
  "indicatif",
+ "indoc",
  "libc",
  "macro_aws_config",
  "macro_env_var",
@@ -18702,8 +18750,11 @@ name = "xtask_nextest_filter"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "determinator",
  "guppy",
+ "tempfile",
  "xtask_graph",
+ "xtask_paths",
 ]
 
 [[package]]

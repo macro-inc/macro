@@ -21,6 +21,7 @@ import type { CacheHost } from '../host/types';
 import {
   ADMITTED_ENQUEUE_UNCERTAIN_ERROR_CODE,
   type ClaimedMutation,
+  type CommitOptimisticWriteResult,
   type EnqueueOptimisticMutationResult,
   INITIAL_CACHE_REVISION,
   type MutationClaim,
@@ -219,6 +220,8 @@ function makeFakeHost(): FakeHost {
     host.claims.push(head.transactionId);
     return {
       transactionId: head.transactionId,
+      uuid: head.args.uuid,
+      superseded: false,
       leaseGeneration: String(head.attemptCount),
       query: head.args.query,
       operationName: head.args.operationName,
@@ -286,6 +289,7 @@ function makeFakeHost(): FakeHost {
       host.cacheActions.push({ kind: 'write', value: args.data });
       return {
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -315,9 +319,11 @@ function makeFakeHost(): FakeHost {
       return {
         transactionId,
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
+        upsertKind: { kind: 'inserted' },
         initialClaim: mutation
           ? { kind: 'claimed', mutation }
           : { kind: 'not-runnable' },
@@ -347,26 +353,31 @@ function makeFakeHost(): FakeHost {
         head.leased = false;
         head.nextAttemptAtMs = nextAttemptAtMs;
       }
+      return { kind: 'deferred' };
     },
     async commitOptimisticWrite(
       transactionId,
       _claim,
       args
-    ): Promise<WriteResult> {
+    ): Promise<CommitOptimisticWriteResult> {
       host.commits.push({ transactionId, query: args.query, data: args.data });
       if (queue[0]?.transactionId === transactionId) queue.shift();
       return {
+        kind: 'committed',
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
       };
     },
-    async rollbackOptimisticWrite(transactionId, _claim): Promise<WriteResult> {
+    async rollbackOptimisticWrite(transactionId, _claim) {
       host.rollbacks.push(transactionId);
       if (queue[0]?.transactionId === transactionId) queue.shift();
       return {
+        kind: 'rolled-back' as const,
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -466,7 +477,12 @@ function makeMutationOp(key: number, optimisticResponse?: unknown): Operation {
       suspense: false,
       ...(optimisticResponse === undefined
         ? {}
-        : { normalizedCacheOptimistic: { optimisticResponse } }),
+        : {
+            normalizedCacheOptimistic: {
+              uuid: crypto.randomUUID(),
+              optimisticResponse,
+            },
+          }),
     } as never
   );
 }
@@ -709,6 +725,7 @@ describe('normalizedCacheExchange', () => {
       cacheContainsDocument = true;
       return {
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -1349,6 +1366,7 @@ describe('normalizedCacheExchange', () => {
       cached = args.data;
       return {
         revision: INITIAL_CACHE_REVISION,
+        revisionAdvanced: true,
         changed: [],
         affectedOps: [],
         reset: false,
@@ -1539,6 +1557,7 @@ describe('normalizedCacheExchange', () => {
 
     it('replays a persisted mutation when the exchange starts', async () => {
       host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000001',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
         variables: { input: {} },
@@ -1556,6 +1575,7 @@ describe('normalizedCacheExchange', () => {
 
     it('rolls back when a persisted replay resolves with an urql error', async () => {
       host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000002',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
         variables: { input: {} },
@@ -1704,6 +1724,7 @@ describe('normalizedCacheExchange', () => {
       const operation = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: optimistic,
           linkPatches: [
             {
@@ -1734,6 +1755,7 @@ describe('normalizedCacheExchange', () => {
 
     it('replays an older returned claim and reports the new caller as queued', async () => {
       host.seedQueued({
+        uuid: '00000000-0000-4000-8000-000000000003',
         query: stringifyDocument(MUTATION),
         operationName: 'SetEntityProperty',
         variables: { input: { restored: true } },
@@ -1819,6 +1841,7 @@ describe('normalizedCacheExchange', () => {
       const op = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: optimistic,
           linkPatches: [patch],
           revalidations: [],
@@ -1836,6 +1859,7 @@ describe('normalizedCacheExchange', () => {
       const op = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: optimistic,
           linkPatches: [
             {
@@ -1930,6 +1954,26 @@ describe('normalizedCacheExchange', () => {
       expect(host.writes).toHaveLength(0);
     });
 
+    it('does not expose a stale response when commit lands beneath a replacement', async () => {
+      const commit = host.commitOptimisticWrite.bind(host);
+      host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+        ...(await commit(transactionId, claim, args)),
+        kind: 'committed-superseded',
+        replacementTransactionId: 'txn-2',
+      });
+      const { ops, results } = harness(host);
+
+      ops.next(makeMutationOp(1, optimistic));
+      await tick();
+
+      expect(host.commits[0]?.data).toEqual({ from: 'network' });
+      expect(results[0]?.data).toBeUndefined();
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-2',
+      });
+    });
+
     it('replays mixed explicit cache effects in order after an optimistic commit', async () => {
       const deletion = {
         __typename: 'GraphqlCacheDeletion',
@@ -1958,6 +2002,7 @@ describe('normalizedCacheExchange', () => {
       const operation = makeOperation(base.kind, base, {
         ...base.context,
         normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
           optimisticResponse: {
             renameEntities: { results: [] },
           },
@@ -1991,6 +2036,68 @@ describe('normalizedCacheExchange', () => {
         },
       ]);
       expect(results[0]?.data).toBe(data);
+    });
+
+    it('skips stale explicit effects and revalidations for a superseded commit', async () => {
+      const deletion = {
+        __typename: 'GraphqlCacheDeletion',
+        graphqlTypeName: 'GraphqlSoupDocument',
+        entityId: 'document-1',
+      };
+      const update = {
+        __typename: 'SoupUpdated',
+        item: {
+          __typename: 'GraphqlSoupDocument',
+          id: 'document-1',
+          displayName: 'Stale rename',
+        },
+      };
+      const data = {
+        renameEntities: {
+          results: [
+            {
+              __typename: 'GraphqlMutationSuccess',
+              effects: [deletion, update],
+            },
+          ],
+        },
+      };
+      const commit = host.commitOptimisticWrite.bind(host);
+      host.commitOptimisticWrite = async (transactionId, claim, args) => ({
+        ...(await commit(transactionId, claim, args)),
+        kind: 'committed-superseded',
+        replacementTransactionId: 'txn-2',
+        revalidations: [
+          {
+            query: stringifyDocument(QUERY),
+            operationName: 'Soup',
+            variablesJson: '{"input":{"limit":2}}',
+          },
+        ],
+      });
+      const base = makeRenameMutationOp(11);
+      const operation = makeOperation(base.kind, base, {
+        ...base.context,
+        normalizedCacheOptimistic: {
+          uuid: crypto.randomUUID(),
+          optimisticResponse: { renameEntities: { results: [] } },
+        },
+      });
+      const { ops, results, client } = harness(host, (op) =>
+        op.kind === 'mutation' ? { data } : {}
+      );
+
+      ops.next(operation);
+      await tick();
+
+      expect(host.commits).toHaveLength(1);
+      expect(host.cacheActions).toEqual([]);
+      expect(vi.mocked(client.query)).not.toHaveBeenCalled();
+      expect(results[0]?.data).toBeUndefined();
+      expect(optimisticMutationDispositionOf(results[0])).toEqual({
+        kind: 'queued',
+        transactionId: 'txn-2',
+      });
     });
 
     it('fires commit revalidations with network-only policy', async () => {

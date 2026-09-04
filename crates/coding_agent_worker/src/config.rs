@@ -1,6 +1,6 @@
 //! The daemon's one input: a TOML file describing the Macro deployment it
-//! serves, the webhook server it listens on, and the harness it runs per
-//! session. See `config.example.toml` at the crate root.
+//! streams from and the harness it runs per session. See
+//! `config.example.toml` at the crate root.
 //!
 //! Deliberately credential-free: identity comes from pairing (press `p` in
 //! the control panel), which persists the harness credential in a state file
@@ -22,8 +22,11 @@ pub struct Config {
     /// How this daemon introduces itself when pairing.
     #[serde(default)]
     pub identity: Identity,
-    /// The webhook server this daemon listens on.
-    pub server: Server,
+    /// Unused: kept so existing configs that still declare a webhook listener
+    /// continue to parse. The daemon listens over SSE and no longer serves HTTP.
+    #[serde(default)]
+    #[expect(dead_code, reason = "accepted only so existing configs still parse")]
+    server: Option<LegacyServer>,
     /// The harness process spawned per session.
     pub harness: Harness,
     /// The workspace every session runs against.
@@ -39,7 +42,7 @@ pub struct MacroApi {
     /// prompted here, and its `ws(s)` twin hosts the runtime gateway.
     pub api_url: String,
     /// Base URL of the storage service, e.g. `http://localhost:50009/dss`.
-    /// Hosts the harness pairing and webhook APIs.
+    /// Hosts harness pairing and `GET /webhook/events/stream`.
     pub storage_url: String,
     /// Base URL of the Macro web app, used only to print the pairing link.
     #[serde(default = "default_web_url")]
@@ -90,22 +93,19 @@ pub enum IdentityScope {
     Team,
 }
 
-/// The webhook server this daemon listens on.
+/// Historical `[server]` table from when the daemon received signed webhooks.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct Server {
-    /// Port `POST /macro-events` is served on.
-    pub port: u16,
-    /// The URL webhook deliveries reach this daemon at - what the feed is
-    /// registered with. Locally that is the stack's relay
-    /// (`http://sdk-webhook-relay:8787/macro-events`); in production, a
-    /// public HTTPS endpoint.
-    pub public_url: String,
-    /// Explicit signing secret, overriding boot-time feed registration.
-    /// Normally absent: the daemon registers its own feed and keeps the
-    /// minted secret in a state file next to the config.
+struct LegacyServer {
     #[serde(default)]
-    pub signing_secret: Option<String>,
+    #[expect(dead_code, reason = "accepted only so existing configs still parse")]
+    port: Option<u16>,
+    #[serde(default)]
+    #[expect(dead_code, reason = "accepted only so existing configs still parse")]
+    public_url: Option<String>,
+    #[serde(default)]
+    #[expect(dead_code, reason = "accepted only so existing configs still parse")]
+    signing_secret: Option<String>,
 }
 
 /// The harness process spawned per session. Generic on purpose: any binary

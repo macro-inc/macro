@@ -52,42 +52,14 @@ fn document_hydration(
         item: SoupItem::Document(document(id, sub_type)),
         document_server_facts: Some(SoupDocumentServerFacts {
             is_email_attachment,
+            is_important: true,
+            status_option_ids: Vec::new(),
         }),
     }
 }
 
 fn document_key(id: Uuid) -> RecordKey {
     RecordKey::new(format!("GraphqlSoupDocument:{id}")).unwrap()
-}
-
-fn composed_v2_document(
-    id: Uuid,
-    sub_type: Option<&str>,
-    is_email_attachment: bool,
-) -> IndexDocument {
-    let document = document(id, None);
-    let sub_type = sub_type.map(|value| match value {
-        "task" => DocumentSubType::Task,
-        "snippet" => DocumentSubType::Snippet,
-        "skill" => DocumentSubType::Skill,
-        value => panic!("unsupported test subtype {value}"),
-    });
-    let supplement = SoupCacheProjectionSupplement::document(document_key(id), is_email_attachment);
-    compose_soup_flat_v2(
-        DirectProjectionInput {
-            record_key: document_key(id),
-            kind: SoupFlatEntityKind::Document,
-            id: document.id,
-            owner: document.owner_id.to_string(),
-            project_id: document.project_id,
-            file_type: document.file_type,
-            created_at: document.created_at,
-            updated_at: document.updated_at,
-        },
-        sub_type,
-        Some(&supplement),
-    )
-    .unwrap()
 }
 
 #[test]
@@ -220,15 +192,19 @@ fn document_supplement_contains_only_authoritative_relation_state() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(supplement.target_profile(), &vocabulary::profile_v2());
+    assert_eq!(supplement.target_profile(), &vocabulary::profile_v3());
     assert_eq!(supplement.partition(), &vocabulary::document_partition());
     assert_eq!(supplement.record_key(), &document_key(id));
     assert!(!supplement.is_email_attachment());
+    assert_eq!(supplement.is_important(), Some(true));
+    assert_eq!(supplement.status_option_ids(), Some(&[] as &[Uuid]));
 
-    let wire = SoupCacheProjectionCapsuleV1::from(&supplement);
-    assert_eq!(wire.target_profile, "soup-flat-v2");
+    let wire = SoupCacheProjectionCapsuleV2::try_from(&supplement).unwrap();
+    assert_eq!(wire.target_profile, "soup-flat-v3");
     assert_eq!(wire.partition, "document");
     assert!(!wire.is_email_attachment);
+    assert!(wire.is_important);
+    assert!(wire.status_option_ids.is_empty());
 }
 
 #[test]
@@ -297,6 +273,8 @@ fn document_server_facts_attached_to_another_entity_are_rejected() {
         }),
         document_server_facts: Some(SoupDocumentServerFacts {
             is_email_attachment: false,
+            is_important: true,
+            status_option_ids: Vec::new(),
         }),
     };
     assert!(matches!(
@@ -309,32 +287,7 @@ fn document_server_facts_attached_to_another_entity_are_rejected() {
 }
 
 #[test]
-fn complete_v2_validation_remains_separate_from_the_supplement() {
-    let projection = composed_v2_document(Uuid::from_u128(1), Some("task"), false);
-    validate_soup_flat_v2(&projection).unwrap();
-
-    let mut missing = projection.clone();
-    missing
-        .exact_facts
-        .retain(|fact| fact.attribute != vocabulary::email_attachment());
-    assert!(matches!(
-        validate_soup_flat_v2(&missing),
-        Err(ProfileValidationError::MissingRequired("email-attachment"))
-    ));
-
-    let mut duplicate = projection;
-    duplicate.exact_facts.push(ExactFact {
-        attribute: vocabulary::email_attachment(),
-        value: ExactValue::new(vec![1]).unwrap(),
-    });
-    assert!(matches!(
-        validate_soup_flat_v2(&duplicate),
-        Err(ProfileValidationError::Duplicate("email-attachment"))
-    ));
-}
-
-#[test]
-fn supplement_capsule_v1_native_golden_round_trip_is_deterministic() {
+fn supplement_capsule_v2_native_golden_round_trip_is_deterministic() {
     let id = Uuid::from_u128(1);
     let supplement = project_soup_cache_supplement(
         document_key(id),
@@ -346,19 +299,89 @@ fn supplement_capsule_v1_native_golden_round_trip_is_deterministic() {
     let encoded = encode_cache_projection_supplement(&supplement).unwrap();
     assert_eq!(
         encoded,
-        "AQxzb3VwLWZsYXQtdjI4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEIZG9jdW1lbnQA"
+        "Agxzb3VwLWZsYXQtdjM4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEIZG9jdW1lbnQAAQA"
     );
     assert_eq!(
         decode_cache_projection_supplement(&encoded).unwrap(),
         supplement
     );
+
+    let status_supplement = SoupCacheProjectionSupplement::document(
+        document_key(id),
+        true,
+        false,
+        vec![Uuid::from_u128(11), Uuid::from_u128(12)],
+    );
+    let encoded = encode_cache_projection_supplement(&status_supplement).unwrap();
+    assert_eq!(
+        encoded,
+        "Agxzb3VwLWZsYXQtdjM4R3JhcGhxbFNvdXBEb2N1bWVudDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEIZG9jdW1lbnQBAAIQAAAAAAAAAAAAAAAAAAAACxAAAAAAAAAAAAAAAAAAAAAM"
+    );
+    assert_eq!(
+        decode_cache_projection_supplement(&encoded).unwrap(),
+        status_supplement
+    );
+}
+
+#[test]
+fn complete_v3_projection_contains_viewer_importance_and_status_facts() {
+    let id = Uuid::from_u128(1);
+    let status_a = Uuid::from_u128(11);
+    let status_b = Uuid::from_u128(12);
+    let document = document(id, None);
+    let supplement = SoupCacheProjectionSupplement::document(
+        document_key(id),
+        false,
+        false,
+        vec![status_b, status_a, status_b],
+    );
+    assert_eq!(
+        supplement.status_option_ids(),
+        Some([status_a, status_b].as_slice())
+    );
+
+    let projection = compose_soup_flat_v3(
+        DirectProjectionInput {
+            record_key: document_key(id),
+            kind: SoupFlatEntityKind::Document,
+            id: document.id,
+            owner: document.owner_id.to_string(),
+            project_id: document.project_id,
+            file_type: document.file_type,
+            created_at: document.created_at,
+            updated_at: document.updated_at,
+        },
+        Some(DocumentSubType::Task),
+        Some(&supplement),
+    )
+    .unwrap();
+    validate_soup_flat_v3(&projection).unwrap();
+    assert!(projection.exact_facts.iter().any(|fact| {
+        fact.attribute == vocabulary::importance() && fact.value == ExactValue::new([0]).unwrap()
+    }));
+    let statuses = projection
+        .exact_facts
+        .iter()
+        .filter(|fact| fact.attribute == vocabulary::task_status_option())
+        .map(|fact| fact.value.as_bytes())
+        .collect::<Vec<_>>();
+    assert_eq!(statuses, vec![status_a.as_bytes(), status_b.as_bytes()]);
+
+    let mut missing_importance = projection;
+    missing_importance
+        .exact_facts
+        .retain(|fact| fact.attribute != vocabulary::importance());
+    assert!(matches!(
+        validate_soup_flat_v3(&missing_importance),
+        Err(ProfileValidationError::MissingRequired("importance"))
+    ));
 }
 
 #[test]
 fn supplement_decoder_rejects_unknown_oversized_and_trailing_frames() {
     assert!(matches!(
-        decode_cache_projection_supplement(&STANDARD_NO_PAD.encode([0x02])),
-        Err(SoupCacheProjectionWireError::UnsupportedWireVersion(0x02))
+        decode_cache_projection_supplement(&STANDARD_NO_PAD.encode([0x03])),
+        Err(SoupCacheProjectionWireError::UnsupportedWireVersion(0x03))
     ));
     assert!(matches!(
         decode_cache_projection_supplement(
@@ -368,7 +391,7 @@ fn supplement_decoder_rejects_unknown_oversized_and_trailing_frames() {
     ));
 
     let supplement =
-        SoupCacheProjectionSupplement::document(document_key(Uuid::from_u128(1)), false);
+        SoupCacheProjectionSupplement::document_v2(document_key(Uuid::from_u128(1)), false);
     let encoded = encode_cache_projection_supplement(&supplement).unwrap();
     let mut framed = STANDARD_NO_PAD.decode(encoded).unwrap();
     framed.push(0);
@@ -381,28 +404,28 @@ fn supplement_decoder_rejects_unknown_oversized_and_trailing_frames() {
 #[test]
 fn supplement_decoder_rejects_invalid_profile_partition_and_record_binding() {
     let supplement =
-        SoupCacheProjectionSupplement::document(document_key(Uuid::from_u128(1)), false);
+        SoupCacheProjectionSupplement::document_v2(document_key(Uuid::from_u128(1)), false);
     let encode_unchecked = |capsule: &SoupCacheProjectionCapsuleV1| {
-        let mut framed = vec![SOUP_CACHE_PROJECTION_WIRE_VERSION];
+        let mut framed = vec![SOUP_CACHE_PROJECTION_WIRE_VERSION_V1];
         framed.extend(postcard::to_stdvec(capsule).unwrap());
         STANDARD_NO_PAD.encode(framed)
     };
 
-    let mut unknown_profile = SoupCacheProjectionCapsuleV1::from(&supplement);
+    let mut unknown_profile = SoupCacheProjectionCapsuleV1::try_from(&supplement).unwrap();
     unknown_profile.target_profile = "soup-flat-v999".to_owned();
     assert!(matches!(
         decode_cache_projection_supplement(&encode_unchecked(&unknown_profile)),
         Err(SoupCacheProjectionWireError::UnsupportedTargetProfile(_))
     ));
 
-    let mut wrong_partition = SoupCacheProjectionCapsuleV1::from(&supplement);
+    let mut wrong_partition = SoupCacheProjectionCapsuleV1::try_from(&supplement).unwrap();
     wrong_partition.partition = "project".to_owned();
     assert!(matches!(
         decode_cache_projection_supplement(&encode_unchecked(&wrong_partition)),
         Err(SoupCacheProjectionWireError::UnsupportedPartition(_))
     ));
 
-    let mut wrong_record = SoupCacheProjectionCapsuleV1::from(&supplement);
+    let mut wrong_record = SoupCacheProjectionCapsuleV1::try_from(&supplement).unwrap();
     wrong_record.record_key = "GraphqlSoupProject:00000000-0000-0000-0000-000000000001".to_owned();
     assert!(matches!(
         decode_cache_projection_supplement(&encode_unchecked(&wrong_record)),

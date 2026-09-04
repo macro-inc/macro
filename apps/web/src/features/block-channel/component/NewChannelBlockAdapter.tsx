@@ -150,7 +150,7 @@ function NewTop(props: { channelId: string }) {
   // the tab is being displayed (e.g. via the auto-join flow that flips
   // `activeTab` to `call` before the join request resolves).
   const showCallTab = () =>
-    ENABLE_CALLS() &&
+    ENABLE_CALLS &&
     canUseInlineCallTab() &&
     (call.isInThisChannel() ||
       call.isJoining() ||
@@ -240,7 +240,7 @@ function NewTop(props: { channelId: string }) {
         />
       </SplitTitleFileMenu>
       {/* Hidden once the user has joined — the call surface owns the UI. */}
-      <Show when={ENABLE_CALLS() && !call.isInThisChannel()}>
+      <Show when={ENABLE_CALLS && !call.isInThisChannel()}>
         <SplitHeaderRight>
           <HeaderIsland
             class={cn(

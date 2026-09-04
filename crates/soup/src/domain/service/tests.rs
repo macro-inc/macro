@@ -1,4 +1,4 @@
-use crate::domain::models::TouchedEntity;
+use crate::domain::models::{NotifiedEntity, TouchedEntity};
 use crate::domain::ports::MockSoupRepo;
 use channels::domain::{
     models::{
@@ -10,7 +10,9 @@ use chrono::Days;
 use chrono::{DateTime, Utc};
 use cool_asserts::assert_matches;
 use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::models::{
+    AnyEntityPermission, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use filter_ast::Expr;
 use foreign_entity::domain::{
     models::{
@@ -34,6 +36,10 @@ use models_pagination::{
 };
 use models_soup::document::{SoupDocument, SoupDocumentSubType};
 use ordered_float::OrderedFloat;
+use reminders::domain::models::{
+    CreateReminder, Reminder, ReminderError, ReminderFilter, ReminderForSoup, ReminderPage,
+    ReminderPatch,
+};
 use rootcause::Report;
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
@@ -2635,6 +2641,8 @@ async fn touched_soup_projection_preserves_authoritative_attachment_facts() {
                         )),
                         document_server_facts: Some(SoupDocumentServerFacts {
                             is_email_attachment: false,
+                            is_important: true,
+                            status_option_ids: Vec::new(),
                         }),
                     },
                     SoupProjectionHydration {
@@ -2644,6 +2652,8 @@ async fn touched_soup_projection_preserves_authoritative_attachment_facts() {
                         )),
                         document_server_facts: Some(SoupDocumentServerFacts {
                             is_email_attachment: true,
+                            is_important: true,
+                            status_option_ids: Vec::new(),
                         }),
                     },
                 ])
@@ -2685,12 +2695,16 @@ async fn touched_soup_projection_preserves_authoritative_attachment_facts() {
         page.items[0].document_server_facts,
         Some(SoupDocumentServerFacts {
             is_email_attachment: true,
+            is_important: true,
+            status_option_ids: Vec::new(),
         })
     );
     assert_eq!(
         page.items[1].document_server_facts,
         Some(SoupDocumentServerFacts {
             is_email_attachment: false,
+            is_important: true,
+            status_option_ids: Vec::new(),
         })
     );
 }
@@ -2865,6 +2879,7 @@ async fn touched_soup_full_page_builds_keyset_cursor() {
 #[derive(Clone, Default)]
 struct RecordingEmailPreviewService {
     requests: Arc<Mutex<Vec<(PreviewView, Vec<Uuid>, Option<u32>)>>>,
+    filters: Arc<Mutex<Vec<String>>>,
 }
 
 impl EmailPreviewServiceReadOnly for RecordingEmailPreviewService {
@@ -2879,10 +2894,73 @@ impl EmailPreviewServiceReadOnly for RecordingEmailPreviewService {
             .lock()
             .unwrap()
             .push((req.view.clone(), req.link_ids.clone(), req.limit));
+        self.filters
+            .lock()
+            .unwrap()
+            .push(serde_json::to_string(req.query.filter()).unwrap());
         Ok(Option::<EnrichedEmailThreadPreview>::None
             .into_iter()
             .paginate_on(0, SimpleSortMethod::CreatedAt)
             .into_page())
+    }
+}
+
+/// Records the id sets and limits the reminders leg is asked for.
+#[derive(Default)]
+struct RecordingRemindersService {
+    queries: Arc<Mutex<Vec<(Vec<Uuid>, i64)>>>,
+}
+
+impl RemindersService for RecordingRemindersService {
+    async fn create_reminder(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _request: CreateReminder,
+        _entity_receipt: Option<EntityAccessReceipt<AnyEntityPermission>>,
+    ) -> Result<Reminder, ReminderError> {
+        unimplemented!("RecordingRemindersService.create_reminder")
+    }
+
+    async fn get_reminder(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<Reminder, ReminderError> {
+        unimplemented!("RecordingRemindersService.get_reminder")
+    }
+
+    async fn list_reminders(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        _filter: ReminderFilter,
+    ) -> Result<ReminderPage, ReminderError> {
+        unimplemented!("RecordingRemindersService.list_reminders")
+    }
+
+    async fn list_reminders_for_soup(
+        &self,
+        _user_id: &MacroUserIdStr<'_>,
+        query: SoupReminderQuery<'_>,
+    ) -> Result<Vec<ReminderForSoup>, ReminderError> {
+        self.queries
+            .lock()
+            .unwrap()
+            .push((query.ids.to_vec(), query.limit));
+        Ok(Vec::new())
+    }
+
+    async fn update_reminder(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        _patch: ReminderPatch,
+    ) -> Result<Reminder, ReminderError> {
+        unimplemented!("RecordingRemindersService.update_reminder")
+    }
+
+    async fn delete_reminder(
+        &self,
+        _receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), ReminderError> {
+        unimplemented!("RecordingRemindersService.delete_reminder")
     }
 }
 
@@ -3012,4 +3090,490 @@ async fn touched_soup_rejects_unfoldable_filters() {
             assert_eq!(kind, expected_kind);
         });
     }
+}
+
+fn notified_request(
+    limit: u16,
+    link_ids: Vec<Uuid>,
+    filters: EntityFilters,
+) -> SoupRequest<EntityFilters> {
+    SoupRequest {
+        sort_direction: SoupSortDirection::default(),
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::Inbox,
+        ),
+        link_ids,
+        soup_type: SoupType::Expanded,
+        limit,
+        cursor: SoupQuery::new_sort_notified(filters),
+        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+    }
+}
+
+fn notified(entity_type: EntityType, id: Uuid, notified_at: DateTime<Utc>) -> NotifiedEntity {
+    NotifiedEntity {
+        entity: entity_type.with_entity_string(id.to_string()),
+        notified_at,
+    }
+}
+
+/// A candidate that fails hydration is dropped and the page refills from the
+/// next candidate page, in notification order, until the candidates run out.
+#[tokio::test]
+async fn notified_soup_refills_after_hydration_drops_and_ends_when_exhausted() {
+    let doc_1 = Uuid::from_u128(1);
+    let ghost = Uuid::from_u128(2);
+    let project = Uuid::from_u128(3);
+    let doc_2 = Uuid::from_u128(4);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_notified_soup_page()
+        .times(2)
+        .returning(move |req| {
+            assert_eq!(req.limit, 3);
+            // Round one is a full candidate page; the ghost never hydrates,
+            // so round two resumes after the last walked candidate and is
+            // short, which ends the feed.
+            let rows = match req.after {
+                None => vec![
+                    notified(EntityType::Document, doc_1, base + Days::new(5)),
+                    notified(EntityType::Document, ghost, base + Days::new(4)),
+                    notified(EntityType::Project, project, base + Days::new(3)),
+                ],
+                Some(after) => {
+                    assert_eq!(after.entity_id, project.to_string());
+                    assert_eq!(after.notified_at, base + Days::new(3));
+                    vec![notified(EntityType::Document, doc_2, base + Days::new(2))]
+                }
+            };
+            Box::pin(async move { Ok(rows) })
+        });
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .times(2)
+        .returning(move |params| {
+            let items: Vec<SoupItem<()>> = params
+                .entities
+                .iter()
+                .filter_map(|entity| {
+                    let id = Uuid::parse_str(&entity.entity_id).unwrap();
+                    (id != ghost).then(|| {
+                        SoupItem::Document(soup_document_uuid_with_updated(id, Default::default()))
+                    })
+                })
+                .collect();
+            Box::pin(async move { Ok(items) })
+        });
+    soup_mock
+        .expect_unexpanded_soup_by_ids()
+        .times(1)
+        .returning(move |params| {
+            assert_eq!(params.entities.len(), 1);
+            Box::pin(async move {
+                Ok(vec![SoupItem::Project(models_soup::project::SoupProject {
+                    id: project,
+                    name: 'p'.to_string(),
+                    owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+                    parent_id: None,
+                    created_at: Default::default(),
+                    updated_at: Default::default(),
+                    viewed_at: Default::default(),
+                    deleted_at: None,
+                    extra: (),
+                })])
+            })
+        });
+    soup_mock
+        .expect_populate_properties()
+        .times(1)
+        .returning(|_, items| {
+            Box::pin(async move {
+                Ok(items
+                    .into_iter()
+                    .map(|item| item.map_extra(|()| SoupPropertiesField::default()))
+                    .collect())
+            })
+        });
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        NoOpRemindersService,
+    )
+    .get_user_soup_with_properties(notified_request(3, vec![], EntityFilters::default()), None)
+    .await
+    .unwrap()
+    .into_notified()
+    .unwrap();
+
+    let ids: Vec<Uuid> = page.items.iter().map(|item| item.item.id()).collect();
+    assert_eq!(ids, vec![doc_1, project, doc_2]);
+    // Every item carries the notification timestamp it was ordered on.
+    let notified_at: Vec<_> = page.items.iter().map(|item| item.notified_at).collect();
+    assert_eq!(
+        notified_at,
+        vec![
+            Some(base + Days::new(5)),
+            Some(base + Days::new(3)),
+            Some(base + Days::new(2)),
+        ]
+    );
+    // The second candidate page was short and fully consumed: feed exhausted.
+    assert!(page.next_cursor.is_none());
+}
+
+#[tokio::test]
+async fn notified_soup_full_page_builds_keyset_cursor() {
+    let doc_1 = Uuid::from_u128(1);
+    let doc_2 = Uuid::from_u128(2);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_notified_soup_page()
+        .times(1)
+        .returning(move |_req| {
+            Box::pin(async move {
+                Ok(vec![
+                    notified(EntityType::Document, doc_1, base + Days::new(5)),
+                    notified(EntityType::Document, doc_2, base + Days::new(4)),
+                ])
+            })
+        });
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .times(1)
+        .returning(move |_params| {
+            Box::pin(async move {
+                Ok(vec![
+                    SoupItem::Document(soup_document_uuid_with_updated(doc_1, Default::default())),
+                    SoupItem::Document(soup_document_uuid_with_updated(doc_2, Default::default())),
+                ])
+            })
+        });
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        NoOpRemindersService,
+    )
+    .get_user_soup(notified_request(2, vec![], EntityFilters::default()), None)
+    .await
+    .unwrap()
+    .into_notified()
+    .unwrap();
+
+    assert_eq!(page.items.len(), 2);
+    // A full candidate page continues from the last walked candidate.
+    let decoded: CursorWithValAndFilter<String, models_pagination::NotifiedAt, EntityFilters> =
+        page.next_cursor.unwrap().decode_json().unwrap();
+    assert_eq!(decoded.id, doc_2.to_string());
+    assert_eq!(decoded.val.last_val, base + Days::new(4));
+}
+
+/// A run of candidates that all fail hydration must not loop forever: the
+/// refill stops after the round cap and hands back a cursor so the client
+/// can keep going.
+#[tokio::test]
+async fn notified_soup_caps_refill_rounds_and_keeps_a_cursor() {
+    let ghost = Uuid::from_u128(9);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    let mut rounds = 0u64;
+    soup_mock
+        .expect_notified_soup_page()
+        .times(MAX_NOTIFIED_FILL_ROUNDS)
+        .returning(move |_req| {
+            rounds += 1;
+            let rows = vec![notified(
+                EntityType::Document,
+                ghost,
+                base + Days::new(10 - rounds),
+            )];
+            Box::pin(async move { Ok(rows) })
+        });
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .times(MAX_NOTIFIED_FILL_ROUNDS)
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        NoOpRemindersService,
+    )
+    .get_user_soup(notified_request(1, vec![], EntityFilters::default()), None)
+    .await
+    .unwrap()
+    .into_notified()
+    .unwrap();
+
+    assert!(page.items.is_empty());
+    let decoded: CursorWithValAndFilter<String, models_pagination::NotifiedAt, EntityFilters> =
+        page.next_cursor.unwrap().decode_json().unwrap();
+    assert_eq!(decoded.id, ghost.to_string());
+    assert_eq!(
+        decoded.val.last_val,
+        base + Days::new(10 - MAX_NOTIFIED_FILL_ROUNDS as u64)
+    );
+}
+
+/// Channel, channel-thread and email candidates hydrate through their own
+/// legs with the request's tree ANDed onto the page's ids, under the
+/// request's own view, so every such filter keeps applying to the notified
+/// feed.
+#[tokio::test]
+async fn notified_soup_hydrates_channels_and_emails_with_the_request_tree() {
+    let channel = Uuid::from_u128(5);
+    let channel_thread = Uuid::from_u128(6);
+    let thread = Uuid::from_u128(7);
+    let link = Uuid::from_u128(8);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_notified_soup_page()
+        .times(1)
+        .returning(move |req| {
+            assert!(req.hydratable.channels);
+            assert!(req.hydratable.channel_threads);
+            assert!(req.hydratable.email_threads);
+            assert!(!req.hydratable.reminders);
+            Box::pin(async move {
+                Ok(vec![
+                    notified(EntityType::Channel, channel, base + Days::new(3)),
+                    notified(
+                        EntityType::ChannelMessage,
+                        channel_thread,
+                        base + Days::new(2),
+                    ),
+                    notified(EntityType::EmailThread, thread, base + Days::new(1)),
+                ])
+            })
+        });
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let email_service = RecordingEmailPreviewService::default();
+    let email_requests = email_service.requests.clone();
+    let email_filters = email_service.filters.clone();
+    let comms_service = RecordingCommsService::new(vec![]);
+
+    let filters = EntityFilters {
+        channel_filters: item_filters::ChannelFilters {
+            notification_filters: item_filters::NotificationFilters {
+                done: Some(false),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        channel_thread_filters: ChannelThreadFilters {
+            participant_ids: vec!["macro|test@example.com".to_string()],
+            ..Default::default()
+        },
+        email_filters: item_filters::EmailFilters {
+            importance: Some(true),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let _page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        email_service,
+        comms_service.clone(),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        NoOpRemindersService,
+    )
+    .get_user_soup(notified_request(20, vec![link], filters), None)
+    .await
+    .unwrap();
+
+    let channel_filters = comms_service.channel_filters();
+    assert_eq!(channel_filters.len(), 1);
+    assert!(channel_filters[0].contains("ChannelId"));
+    assert!(channel_filters[0].contains(&channel.to_string()));
+    assert!(channel_filters[0].contains("NotificationDone"));
+
+    let thread_filters = comms_service.thread_filters();
+    assert_eq!(thread_filters.len(), 1);
+    assert!(thread_filters[0].contains("ThreadId"));
+    assert!(thread_filters[0].contains(&channel_thread.to_string()));
+    assert!(thread_filters[0].contains("Participant"));
+
+    let recorded = email_requests.lock().unwrap();
+    let (view, link_ids, limit) = recorded.first().expect("email hydration ran");
+    // The request's own view, not the touched feed's unfiltered `All`.
+    assert_eq!(
+        view,
+        &PreviewView::StandardLabel(email::domain::models::PreviewViewStandardLabel::Inbox)
+    );
+    assert_eq!(link_ids, &vec![link]);
+    assert_eq!(limit, &Some(1));
+    let email_filters = email_filters.lock().unwrap();
+    assert!(email_filters[0].contains(&thread.to_string()));
+    assert!(email_filters[0].contains("Importance"));
+}
+
+fn reminder_id_filters(ids: &[Uuid]) -> EntityFilters {
+    EntityFilters {
+        reminder_filters: item_filters::ReminderFilters {
+            include: true,
+            ids: ids.iter().map(Uuid::to_string).collect(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
+
+/// A request naming reminder ids hydrates only the page candidates among
+/// them: the leg is asked for the intersection.
+#[tokio::test]
+async fn notified_soup_narrows_the_reminder_leg_to_the_request_ids() {
+    let named = Uuid::from_u128(11);
+    let unnamed = Uuid::from_u128(12);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_notified_soup_page()
+        .times(1)
+        .returning(move |req| {
+            assert!(req.hydratable.reminders);
+            Box::pin(async move {
+                Ok(vec![
+                    notified(EntityType::Reminder, named, base + Days::new(2)),
+                    notified(EntityType::Reminder, unnamed, base + Days::new(1)),
+                ])
+            })
+        });
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let reminders_service = RecordingRemindersService::default();
+    let queries = reminders_service.queries.clone();
+
+    let _page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        reminders_service,
+    )
+    .get_user_soup(
+        notified_request(20, vec![], reminder_id_filters(&[named])),
+        None,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(*queries.lock().unwrap(), vec![(vec![named], 1)]);
+}
+
+/// When no page candidate is among the named ids the leg is skipped: an
+/// empty id list means every reminder to the reminders service, which would
+/// hydrate — and surface — the candidates the request excluded.
+#[tokio::test]
+async fn notified_soup_skips_the_reminder_leg_when_no_candidate_is_named() {
+    let named = Uuid::from_u128(11);
+    let unnamed = Uuid::from_u128(12);
+    let base: DateTime<Utc> = DateTime::default();
+
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_notified_soup_page()
+        .times(1)
+        .returning(move |_req| {
+            Box::pin(async move {
+                Ok(vec![notified(
+                    EntityType::Reminder,
+                    unnamed,
+                    base + Days::new(1),
+                )])
+            })
+        });
+    soup_mock
+        .expect_expanded_soup_by_ids()
+        .returning(|_params| Box::pin(async move { Ok(Vec::new()) }));
+
+    let reminders_service = RecordingRemindersService::default();
+    let queries = reminders_service.queries.clone();
+
+    let page = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        reminders_service,
+    )
+    .get_user_soup(
+        notified_request(20, vec![], reminder_id_filters(&[named])),
+        None,
+    )
+    .await
+    .unwrap()
+    .into_notified()
+    .unwrap();
+
+    assert!(queries.lock().unwrap().is_empty());
+    assert!(page.items.is_empty());
+}
+
+/// Calendar events hydrate by id through the main query, so only the
+/// calendar literals the candidate query can fold are accepted.
+#[tokio::test]
+async fn notified_soup_rejects_unfoldable_calendar_filters() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock.expect_notified_soup_page().times(0);
+
+    let filters = EntityFilters {
+        calendar_event_filters: item_filters::CalendarEventFilters {
+            organizers: vec!["organizer@example.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let err = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailPreviewService,
+        RecordingCommsService::new(vec![]),
+        NoopCallRecordQueryService,
+        NoOpCrmService,
+        NoopForeignEntityService,
+        NoOpRemindersService,
+    )
+    .get_user_soup(notified_request(20, vec![], filters), None)
+    .await
+    .unwrap_err();
+
+    assert_matches!(err, SoupErr::NotifiedUnsupportedFilter("calendar_event"));
 }

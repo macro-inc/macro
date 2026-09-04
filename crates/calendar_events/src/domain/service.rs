@@ -110,6 +110,40 @@ where
         Ok(rows)
     }
 
+    /// Query teammates' out-of-office occurrences in a bounded viewport.
+    ///
+    /// Teammates learn when — not necessarily why — each other are out: an
+    /// event marked private or confidential keeps its title withheld,
+    /// mirroring what Google shows viewers without full detail access. The
+    /// same provider event synced through more than one of a teammate's
+    /// connected inboxes collapses to one occurrence.
+    #[tracing::instrument(skip(self, requester_id, range), err)]
+    pub async fn list_team_out_of_office(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        limit: u16,
+    ) -> Result<Vec<super::models::TeamOutOfOffice>, Report> {
+        validate_query(&range, limit)?;
+        let rows = self
+            .repository
+            .list_team_out_of_office(requester_id, range, limit)
+            .await?;
+        Ok(rows
+            .into_iter()
+            .map(|mut row| {
+                if matches!(
+                    row.visibility,
+                    super::models::EventVisibility::Private
+                        | super::models::EventVisibility::Confidential
+                ) {
+                    row.title = None;
+                }
+                row
+            })
+            .collect())
+    }
+
     /// Return the aggregate ingestion state of the requester's visible accounts.
     #[tracing::instrument(skip(self, requester_id), err)]
     pub async fn sync_status(
@@ -197,6 +231,15 @@ where
     {
         CalendarService::mention_previews(self, requester_id, items)
     }
+
+    fn list_team_out_of_office(
+        &self,
+        requester_id: &str,
+        range: OccurrenceRange,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<super::models::TeamOutOfOffice>, Report>> + Send {
+        CalendarService::list_team_out_of_office(self, requester_id, range, limit)
+    }
 }
 
 /// Orchestrates a Google account backfill while keeping HTTP and SQL behind ports.
@@ -216,6 +259,12 @@ pub struct GoogleCalendarSyncScheduler<R> {
     repository: R,
 }
 
+/// How long a backfill job may sit off the queue — pending after a delivery
+/// dead-lettered, or running behind a dead worker's lease — before the reaper
+/// republishes it. Comfortably past the SQS retry budget so an actively
+/// retrying delivery is never duplicated.
+const WEDGED_SYNC_STALL_THRESHOLD: chrono::Duration = chrono::Duration::minutes(15);
+
 impl<R> GoogleCalendarSyncScheduler<R>
 where
     R: GoogleCalendarSyncRepository,
@@ -230,6 +279,15 @@ where
     pub async fn run_once(&self, now: chrono::DateTime<Utc>) -> Result<usize, Report> {
         self.repository
             .schedule_due_google_syncs(now - chrono::Duration::minutes(5))
+            .await
+    }
+
+    /// Re-arm jobs stranded off the queue by a dead-lettered delivery or a
+    /// dead worker's lease, so they recover without a grant change.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn reap_once(&self, now: chrono::DateTime<Utc>) -> Result<usize, Report> {
+        self.repository
+            .reap_wedged_google_syncs(now - WEDGED_SYNC_STALL_THRESHOLD)
             .await
     }
 }

@@ -19,11 +19,13 @@ pub fn url(instance: &Instance) -> String {
     format!("http://localhost:{}", instance.port(Port::Proxy))
 }
 
-/// Write the instance Caddyfile and return its path. Both local and dev route
-/// the frontend through this single origin to the local service containers; the
-/// only difference is the static-file block (dev has no local LocalStack).
-/// With `static_frontend` the proxy also serves the built app bundle at `/app`,
-/// making it the one origin for the whole product.
+/// Write the instance Caddyfile and return its path. Both local and dev keep a
+/// single frontend origin; Local fans every inventory prefix to a local
+/// container, while Dev fans Local-only prefixes (services that must not run
+/// against shared-dev) to the deployed gateway. The static-file block also
+/// differs (dev has no local LocalStack). With `static_frontend` the proxy also
+/// serves the built app bundle at `/app`, making it the one origin for the
+/// whole product.
 pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -> Result<PathBuf> {
     let path = caddyfile_path(instance);
     if let Some(dir) = path.parent() {
@@ -38,8 +40,6 @@ pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -
 /// Assemble the Caddyfile: the listener head, the generated per-service routes
 /// (from the inventory), the special non-inventory routes, the mode's
 /// static-file block, the optional static-frontend block, then the tail.
-/// Service routes are identical across modes (they hit the local containers);
-/// only the static-file and frontend blocks differ.
 fn caddyfile(mode: Mode, static_frontend: bool) -> String {
     let static_block = if mode.spec().static_files_via_localstack {
         STATIC_FILE_LOCAL
@@ -54,29 +54,44 @@ fn caddyfile(mode: Mode, static_frontend: bool) -> String {
     let frontend_block = if static_frontend { FRONTEND_STATIC } else { "" };
     format!(
         "{CADDY_HEAD}{routes}{SPECIAL_ROUTES}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}",
-        routes = service_routes()
+        routes = service_routes(mode)
     )
 }
+
+/// Shared-dev gateway origin for Local-only inventory prefixes under `run-dev`.
+/// Keep the path (no strip) — gateway tenants are mounted under this prefix.
+const DEV_GATEWAY_ORIGIN: &str = "https://dev-gateway.macro.com";
 
 /// Generate the reverse-proxy routes for every inventoried service that exposes
 /// a path prefix. The inventory is the single source, so adding a service's
 /// proxy route is one field there — not a hand-edit here that can drift.
-fn service_routes() -> String {
+fn service_routes(mode: Mode) -> String {
     let mut out = String::new();
     for svc in inventory::RUST_SERVICES {
-        if let Some(prefix) = svc.path_prefix {
-            out.push_str(&route_block(prefix, svc.compose_name, svc.is_websocket));
+        let Some(prefix) = svc.path_prefix else {
+            continue;
+        };
+        if svc.in_mode(mode) {
+            out.push_str(&local_route_block(
+                prefix,
+                svc.compose_name,
+                svc.is_websocket,
+            ));
+        } else if mode == Mode::Dev && svc.in_mode(Mode::Local) {
+            // Local-only: do not start the binary against shared-dev, but keep
+            // the single-origin proxy by fanning out to the deployed gateway.
+            out.push_str(&dev_gateway_route_block(prefix, svc.is_websocket));
         }
     }
     out
 }
 
-/// One Caddy route to a service container (always on `:8080`). HTTP uses
+/// One Caddy route to a local service container (always on `:8080`). HTTP uses
 /// `handle_path` (which strips the prefix); WebSocket needs the bare-prefix
 /// `@matcher` + explicit strip so the frontend's trailing-slash-less connect URL
 /// still matches. The target is the canonical compose service name, which always
 /// resolves on the proxy's networks.
-fn route_block(prefix: &str, target: &str, is_websocket: bool) -> String {
+fn local_route_block(prefix: &str, target: &str, is_websocket: bool) -> String {
     if is_websocket {
         let m = matcher_name(prefix);
         format!(
@@ -84,6 +99,24 @@ fn route_block(prefix: &str, target: &str, is_websocket: bool) -> String {
         )
     } else {
         format!("    handle_path {prefix}/* {{\n        reverse_proxy {target}:8080\n    }}\n")
+    }
+}
+
+/// Dev route to the shared gateway: keep the path prefix (gateway mounts are
+/// prefixed) and set `Host` so TLS/SNI + ALB host routing work.
+fn dev_gateway_route_block(prefix: &str, is_websocket: bool) -> String {
+    let host = DEV_GATEWAY_ORIGIN
+        .trim_start_matches("https://")
+        .trim_start_matches("http://");
+    if is_websocket {
+        let m = matcher_name(prefix);
+        format!(
+            "    {m} path {prefix} {prefix}/*\n    handle {m} {{\n        reverse_proxy {DEV_GATEWAY_ORIGIN} {{\n            header_up Host {host}\n        }}\n    }}\n"
+        )
+    } else {
+        format!(
+            "    handle {prefix}/* {{\n        reverse_proxy {DEV_GATEWAY_ORIGIN} {{\n            header_up Host {host}\n        }}\n    }}\n"
+        )
     }
 }
 

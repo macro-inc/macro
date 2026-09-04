@@ -26,7 +26,7 @@ use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendeeInput, CalendarEvent, CalendarEventDraft,
         CalendarEventPatch, ConferenceChange, EventReminders, EventTime, EventTransparency,
-        EventVisibility, VisibleCalendar,
+        EventVisibility, OutOfOfficeProperties, VisibleCalendar,
     },
     ports::{
         CalendarDeletionScope, CalendarMutationError, CalendarMutationService, CalendarRsvpScope,
@@ -142,6 +142,10 @@ pub struct CreateCalendarEventRequest {
     pub reminders: Option<EventReminders>,
     /// Conference to attach to the new event; omit to create it without one.
     pub conference: Option<ConferenceChange>,
+    /// Out-of-office properties; present to create the event as a Google
+    /// out-of-office status event (primary calendar only, timed, no
+    /// attendees), omitted for a regular event.
+    pub out_of_office: Option<OutOfOfficeProperties>,
 }
 
 /// Request body patching an event; omitted fields are left untouched.
@@ -173,6 +177,10 @@ pub struct UpdateCalendarEventRequest {
     /// A third-party conference is replaced or detached like any other, since
     /// the request is explicit. Omit the field to leave it alone.
     pub conference: Option<ConferenceChange>,
+    /// Replacement out-of-office properties, applied only to an event that is
+    /// already out-of-office — the provider event type is immutable. Omit to
+    /// leave them untouched.
+    pub out_of_office: Option<OutOfOfficeProperties>,
     /// How much of a recurring series the update covers. Omit to let
     /// `recurrenceId` decide: the identified occurrence alone when one is
     /// supplied, otherwise the whole event or series. An explicit
@@ -412,6 +420,7 @@ where
         transparency: request.transparency,
         reminders: request.reminders,
         conference: request.conference,
+        out_of_office: request.out_of_office,
     };
     let event = state
         .service
@@ -527,6 +536,7 @@ where
         transparency: request.transparency,
         reminders: request.reminders,
         conference: request.conference,
+        out_of_office: request.out_of_office,
     };
     let event = state
         .service

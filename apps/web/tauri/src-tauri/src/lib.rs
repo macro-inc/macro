@@ -161,6 +161,7 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_haptics::init())
+            .plugin(tauri_plugin_edit_menu::init())
             .plugin(tauri_plugin_input_accessory::init())
             .plugin(tauri_plugin_network_status::init())
             .plugin(tauri_plugin_pasteboard::init())

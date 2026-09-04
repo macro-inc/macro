@@ -12,6 +12,8 @@
  * under a gradient so the overflow is visible rather than merely scrollable.
  */
 
+import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
+import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import type { ModelOption } from '@service-agent-fold/generated/types';
@@ -58,52 +60,86 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
     props.options.find((option) => option.id === shown())?.name ??
     shown() ??
     'Model';
+  const catalogOptions = () =>
+    props.options.map((option) => ({
+      id: option.id,
+      label: option.name,
+      description: option.description ?? undefined,
+      group: option.group ?? undefined,
+    }));
+  const useCatalog = () => isLargeModelCatalog(catalogOptions());
 
   return (
     <Show when={props.options.length > 0}>
-      <Dropdown placement="top-start">
-        <Dropdown.Trigger
-          variant="ghost"
-          size="sm"
-          class="h-6 gap-1 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10"
-          disabled={props.disabled || props.changingTo !== undefined}
-        >
-          <TextShimmer text={label()} active={props.changingTo !== undefined} />
-          <CaretDown />
-        </Dropdown.Trigger>
-        <Dropdown.Content class="overflow-hidden">
-          {/* The gradients anchor here, outside the scrolling box, and read
-              the menu background through `--color-surface`. */}
-          <div class="relative [--color-surface:var(--color-menu)]">
-            <Dropdown.Group
-              ref={setListRef}
-              class="overflow-y-auto overscroll-contain p-0"
-              style={{ 'max-height': LIST_MAX_HEIGHT }}
+      <Show
+        when={useCatalog()}
+        fallback={
+          <Dropdown placement="top-start">
+            <Dropdown.Trigger
+              variant="ghost"
+              size="sm"
+              class="h-6 gap-1 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10"
+              disabled={props.disabled || props.changingTo !== undefined}
             >
-              <div class="flex flex-col p-1.5">
-                <For each={props.options}>
-                  {(option) => (
-                    <Dropdown.Item
-                      class={cn(
-                        'h-7 shrink-0 gap-2',
-                        option.id === shown() && 'text-ink font-medium'
+              <TextShimmer
+                text={label()}
+                active={props.changingTo !== undefined}
+              />
+              <CaretDown />
+            </Dropdown.Trigger>
+            <Dropdown.Content class="overflow-hidden">
+              {/* The gradients anchor here, outside the scrolling box, and read
+                  the menu background through `--color-surface`. */}
+              <div class="relative [--color-surface:var(--color-menu)]">
+                <Dropdown.Group
+                  ref={setListRef}
+                  class="overflow-y-auto overscroll-contain p-0"
+                  style={{ 'max-height': LIST_MAX_HEIGHT }}
+                >
+                  <div class="flex flex-col p-1.5">
+                    <For each={props.options}>
+                      {(option) => (
+                        <Dropdown.Item
+                          class={cn(
+                            'h-7 shrink-0 gap-2',
+                            option.id === shown() && 'text-ink font-medium'
+                          )}
+                          title={option.description ?? undefined}
+                          onSelect={() => {
+                            if (option.id !== props.model)
+                              props.onSelect(option.id);
+                          }}
+                        >
+                          <span class="flex-1 truncate text-xs">
+                            {option.name}
+                          </span>
+                        </Dropdown.Item>
                       )}
-                      title={option.description ?? undefined}
-                      onSelect={() => {
-                        if (option.id !== props.model)
-                          props.onSelect(option.id);
-                      }}
-                    >
-                      <span class="flex-1 truncate text-xs">{option.name}</span>
-                    </Dropdown.Item>
-                  )}
-                </For>
+                    </For>
+                  </div>
+                </Dropdown.Group>
+                <ScrollIndicators scrollRef={listRef} appearance="gradient" />
               </div>
-            </Dropdown.Group>
-            <ScrollIndicators scrollRef={listRef} appearance="gradient" />
-          </div>
-        </Dropdown.Content>
-      </Dropdown>
+            </Dropdown.Content>
+          </Dropdown>
+        }
+      >
+        <div class="min-w-44">
+          <ModelCatalogPicker
+            value={shown()}
+            options={catalogOptions()}
+            onSelect={(id) => {
+              if (id !== props.model) props.onSelect(id);
+            }}
+            disabled={props.disabled || props.changingTo !== undefined}
+            ariaLabel="Agent model"
+            searchPlaceholder="Search models"
+            triggerClass="h-6 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10"
+            contentClass="overflow-hidden"
+            placement="top-start"
+          />
+        </div>
+      </Show>
     </Show>
   );
 }

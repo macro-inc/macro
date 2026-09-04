@@ -129,7 +129,6 @@
   /* Depth-0 defaults for content rendered outside a Layer marker. */
   --layer-surface: var(--color-surface-0);
   --layer-inset: var(--color-surface-0);
-  --layer-lift: var(--color-surface-1);
 
   ::selection {
     background-color: oklch(from var(--color-accent) l c h / 0.5);
@@ -155,37 +154,31 @@ body.tauri-ios {
 [data-layer] {
   --color-surface: var(--theme-surface, var(--layer-surface));
   --color-inset: var(--theme-inset, var(--layer-inset));
-  --color-lift: var(--theme-lift, var(--layer-lift));
 }
 
 [data-layer][data-depth='0'] {
   --layer-surface: var(--color-surface-0);
   --layer-inset: var(--color-surface-0);
-  --layer-lift: var(--color-surface-1);
 }
 
 [data-layer][data-depth='1'] {
   --layer-surface: var(--color-surface-1);
   --layer-inset: var(--color-surface-0);
-  --layer-lift: var(--color-surface-2);
 }
 
 [data-layer][data-depth='2'] {
   --layer-surface: var(--color-surface-2);
   --layer-inset: var(--color-surface-1);
-  --layer-lift: var(--color-surface-3);
 }
 
 [data-layer][data-depth='3'] {
   --layer-surface: var(--color-surface-3);
   --layer-inset: var(--color-surface-2);
-  --layer-lift: var(--color-surface-4);
 }
 
 [data-layer][data-depth='4'] {
   --layer-surface: var(--color-surface-4);
   --layer-inset: var(--color-surface-3);
-  --layer-lift: var(--color-surface-4);
 }
 
 /* Scope the panel semantic itself so nested bg-panel consumers share the same
@@ -235,11 +228,10 @@ body.tauri-ios {
   --color-purple: oklch(62.7% 0.265 303.9);
   --color-pink: oklch(65.6% 0.241 354.308);
 
-  /* Component-facing semantic assignments. A theme may override the three
+  /* Component-facing semantic assignments. A theme may override the two
      layer-relative colors; otherwise they resolve through the nearest Layer. */
   --color-surface: var(--theme-surface, var(--layer-surface));
   --color-inset: var(--theme-inset, var(--layer-inset));
-  --color-lift: var(--theme-lift, var(--layer-lift));
   --color-ink: var(--color-content-0);
   --color-ink-muted: var(--color-content-1);
   --color-ink-subtle: var(--color-content-2);
@@ -255,8 +247,8 @@ body.tauri-ios {
   --color-tooltip: var(--color-surface-2);
   --color-toast: var(--color-surface-2);
   --color-input: transparent;
-  --color-input-focus: var(--color-lift);
-  --color-message: var(--color-lift);
+  --color-input-focus: var(--color-surface-1);
+  --color-message: var(--color-surface-1);
   --color-code-buffer: color-mix(in srgb, var(--color-surface-0) 60%, var(--color-surface-1));
   --color-hover: color-mix(in oklch, var(--color-content-0) 3%, transparent);
   --color-active: color-mix(in oklch, var(--color-content-0) 6%, transparent);
@@ -936,7 +928,6 @@ a {
 
 @utility macro-message-padding {
   @container (width < 936px) { padding-inline: calc(var(--spacing) * 4); }
-  @container (width < 640px) { padding-inline: calc(var(--spacing) * 2); }
 }
 
 @utility macro-message-margin {

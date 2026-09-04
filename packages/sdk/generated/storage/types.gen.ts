@@ -1905,6 +1905,7 @@ export type ChannelCreatedMetadata = {
      * Type of channel that was created.
      */
     channel_type: ChannelType;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * Active participants after creation (including the owner).
      */
@@ -4063,11 +4064,18 @@ export type DocumentCreatedMetadata = {
  * Metadata for [`DocumentTopicEvent::Deleted`].
  */
 export type DocumentDeletedMetadata = {
+    /**
+     * Who mechanically deleted the document. Absent on events published
+     * before attribution, and on user-receipt writes (ingest then uses
+     * [`Self::actor_user_id`]).
+     */
+    actor?: string | null;
     actor_user_id?: null | MacroUserIdStr;
     /**
      * The id of the deleted document.
      */
     document_id: string;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * Project the document belonged to, when any.
      */
@@ -4423,6 +4431,11 @@ export type DocumentSubType = 'task' | 'snippet' | 'skill';
  */
 export type DocumentSyncContentUpdatedMetadata = {
     /**
+     * Who mechanically changed the content. Absent on events published
+     * before attribution, and on human-only collab sessions.
+     */
+    actor?: string | null;
+    /**
      * The id of the live-collab document whose content changed.
      */
     document_id: string;
@@ -4434,6 +4447,7 @@ export type DocumentSyncContentUpdatedMetadata = {
      * File type of the sync document (markdown today).
      */
     file_type: FileType;
+    on_behalf_of?: null | MacroUserIdStr;
 };
 
 /**
@@ -4509,6 +4523,12 @@ export type DocumentTopicEvent = {
  * Metadata for [`DocumentTopicEvent::Updated`].
  */
 export type DocumentUpdatedMetadata = {
+    /**
+     * Who mechanically updated the document. Absent on events published
+     * before attribution, and on user-receipt writes (ingest then uses
+     * [`Self::actor_user_id`]).
+     */
+    actor?: string | null;
     actor_user_id?: null | MacroUserIdStr;
     /**
      * The id of the updated document.
@@ -4519,6 +4539,7 @@ export type DocumentUpdatedMetadata = {
      */
     document_name?: string | null;
     file_type?: null | FileTypeUpdate;
+    on_behalf_of?: null | MacroUserIdStr;
     /**
      * The owner of the document.
      */
@@ -7241,6 +7262,12 @@ export type SoupApiItem = SoupItem & {
      */
     is_favorited: boolean;
     /**
+     * When the caller was last notified about this entity, present only
+     * when the page was ordered by `notified_at`. Clients keep the notified
+     * feed ordered and date-bucketed on this value.
+     */
+    notified_at?: string | null;
+    /**
      * The caller's latest own mutation of this entity, present only when the
      * page was ordered by `touched_by_me`. Clients keep the touched feed
      * ordered on this value, so it can be bumped optimistically.
@@ -7251,7 +7278,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -8456,6 +8483,40 @@ export type TaskFilters = {
 };
 
 /**
+ * One teammate's out-of-office occurrence.
+ */
+export type TeamOutOfOfficeItem = {
+    /**
+     * The teammate's calendar event id.
+     */
+    eventId: string;
+    /**
+     * Stable occurrence key within the event.
+     */
+    occurrenceKey: string;
+    /**
+     * Macro user id of the teammate who is out.
+     */
+    ownerId: string;
+    /**
+     * Occurrence time span.
+     */
+    time: EventTime;
+    /**
+     * Event title, absent when the event's visibility withholds details.
+     */
+    title?: string | null;
+};
+
+/**
+ * Team out-of-office viewport response.
+ */
+export type TeamOutOfOfficeResponse = {
+    hasMore: boolean;
+    items: Array<TeamOutOfOfficeItem>;
+};
+
+/**
  * The role a user has within a team.
  *
  * Ordered least to most privileged so comparisons reflect access strength.
@@ -8961,7 +9022,8 @@ export type WebhookFilter = {
 /**
  * Scope that owns a newly-created webhook.
  *
- * Clients serialize this, so both derives are used.
+ * Clients serialize this, so both derives are used. `Display`/`FromStr`
+ * spell the same names as serde, for query strings and config values.
  */
 export type WebhookScope = 'user' | 'team';
 
@@ -9448,6 +9510,58 @@ export type MentionPreviewsResponses = {
 };
 
 export type MentionPreviewsResponse = MentionPreviewsResponses[keyof MentionPreviewsResponses];
+
+export type ListTeamOutOfOfficeData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Inclusive UTC viewport start.
+         */
+        start: string;
+        /**
+         * Exclusive UTC viewport end.
+         */
+        end: string;
+        /**
+         * Inclusive local date boundary for all-day events.
+         */
+        startDate?: string;
+        /**
+         * Exclusive local date boundary for all-day events.
+         */
+        endDate?: string;
+        /**
+         * Maximum number of occurrences, from 1 through 2,000.
+         */
+        limit?: number;
+    };
+    url: '/calendar-events/team-out-of-office';
+};
+
+export type ListTeamOutOfOfficeErrors = {
+    /**
+     * Invalid or unsupported calendar viewport
+     */
+    400: unknown;
+    /**
+     * Authentication required
+     */
+    401: unknown;
+    /**
+     * Calendar query failed
+     */
+    500: unknown;
+};
+
+export type ListTeamOutOfOfficeResponses = {
+    /**
+     * Teammates' out-of-office occurrences in the requested viewport
+     */
+    200: TeamOutOfOfficeResponse;
+};
+
+export type ListTeamOutOfOfficeResponse = ListTeamOutOfOfficeResponses[keyof ListTeamOutOfOfficeResponses];
 
 export type GetActiveCallsData = {
     body?: never;
@@ -12892,7 +13006,8 @@ export type GetItemsSoupData = {
         limit?: number;
         /**
          * Sort method. Options are viewed_at, created_at, updated_at,
-         * viewed_updated, frecency, touched_by_me. Defaults to viewed_at.
+         * viewed_updated, frecency, touched_by_me, notified_at. Defaults to
+         * viewed_at.
          */
         sort_method?: SoupApiSort;
         /**
@@ -14015,6 +14130,49 @@ export type EditProjectV2Responses = {
 };
 
 export type EditProjectV2Response = EditProjectV2Responses[keyof EditProjectV2Responses];
+
+export type StreamEventsData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Personal or team workspace whose webhook lifecycle events are delivered.
+         */
+        scope: WebhookScope;
+        /**
+         * URL-encoded JSON array of webhook filters, identical to the persisted
+         * webhook `filters` field.
+         */
+        filters?: string;
+    };
+    url: '/webhook/events/stream';
+};
+
+export type StreamEventsErrors = {
+    /**
+     * Bad request
+     */
+    400: ErrorResponse;
+    /**
+     * Forbidden
+     */
+    403: ErrorResponse;
+    /**
+     * Internal server error
+     */
+    500: ErrorResponse;
+};
+
+export type StreamEventsError = StreamEventsErrors[keyof StreamEventsErrors];
+
+export type StreamEventsResponses = {
+    /**
+     * Server-Sent Events stream of matching broker events
+     */
+    200: string;
+};
+
+export type StreamEventsResponse = StreamEventsResponses[keyof StreamEventsResponses];
 
 export type ListWebhooksData = {
     body?: never;

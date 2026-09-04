@@ -13,9 +13,8 @@ import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
-  ENABLE_HOME_OVERRIDE,
-  ENABLE_HOME_RECOMMENDATIONS_FLAG,
-  ENABLE_HOME_RECOMMENDATIONS_OVERRIDE,
+  enableHomeRecommendations,
+  enableHomeView,
 } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserContext } from '@core/context/user';
@@ -76,11 +75,7 @@ function getGreeting() {
 
 export function Home() {
   return (
-    <ShowFeatureFlag
-      key="enable-home-view"
-      enabledOverride={ENABLE_HOME_OVERRIDE}
-      fallback={<Navigate href="/" />}
-    >
+    <ShowFeatureFlag flag={enableHomeView} fallback={<Navigate href="/" />}>
       <ChatInputProvider>
         <DragDropWrapper class="relative size-full">
           <HomeContent />
@@ -138,10 +133,7 @@ function HomeContent() {
             <HomeBackfillProgress />
           </HomeSectionBoundary>
 
-          <ShowFeatureFlag
-            key={ENABLE_HOME_RECOMMENDATIONS_FLAG}
-            enabledOverride={ENABLE_HOME_RECOMMENDATIONS_OVERRIDE}
-          >
+          <ShowFeatureFlag flag={enableHomeRecommendations}>
             <HomeSectionBoundary title="recommendations" fallback={null}>
               <RecommendedSection />
             </HomeSectionBoundary>

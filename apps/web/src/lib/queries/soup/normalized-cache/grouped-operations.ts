@@ -277,12 +277,17 @@ export function insertGroupedPage(
 }
 
 /** Inserts an item into the first page of any expanded group query it matches. */
-export function insertGroupQueries(item: SoupApiItem, itemId: string) {
+export function insertGroupQueries(
+  item: SoupApiItem,
+  itemId: string,
+  keyFilter?: (key: QueryKey) => boolean
+) {
   const queries = queryClient.getQueryCache().findAll({
     queryKey: soupKeys.groupedGroup._def,
   });
 
   for (const query of queries) {
+    if (keyFilter && !keyFilter(query.queryKey)) continue;
     const prev = query.state.data as GroupedGroupInfiniteData | undefined;
     if (!prev?.pages?.length) continue;
 
@@ -299,8 +304,12 @@ export function insertGroupQueries(item: SoupApiItem, itemId: string) {
     }
     if (!targetKeys.includes(meta.groupKey)) continue;
 
+    // Continuation pages hold their own itemIds, so check them all — a
+    // restore of an entity sitting on a later page must not duplicate it.
+    if (prev.pages.some((page) => page.group.itemIds.includes(itemId)))
+      continue;
+
     const firstPage = prev.pages[0];
-    if (firstPage.group.itemIds.includes(itemId)) continue;
 
     query.setData(
       {

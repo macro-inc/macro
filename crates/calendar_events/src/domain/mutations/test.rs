@@ -5,7 +5,8 @@ use crate::domain::models::{
     CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, CalendarWatchRelease,
     ConferenceChange, DisconnectedGoogleCalendar, EventStatus, EventTransparency, EventType,
     EventVisibility, GoogleCalendarSyncSnapshot, GoogleCalendarTarget, GoogleEventSource,
-    GoogleWatchChannel, ProviderCalendar, StoredGoogleCalendar, VisibleCalendar,
+    GoogleWatchChannel, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties, ProviderCalendar,
+    StoredGoogleCalendar, VisibleCalendar,
 };
 use crate::domain::ports::RetiredCalendarEvent;
 use chrono::{Duration, TimeZone};
@@ -55,6 +56,7 @@ fn creation_target(is_read_only: bool) -> CalendarCreationTarget {
         calendar_id: Uuid::now_v7(),
         provider_calendar_id: "primary".to_string(),
         is_read_only,
+        is_primary: true,
         token_identity: token_identity(),
         actor: Some(ActorInboxes::sole("self@example.com")),
     }
@@ -129,6 +131,7 @@ fn draft() -> CalendarEventDraft {
         transparency: None,
         reminders: None,
         conference: None,
+        out_of_office: None,
     }
 }
 
@@ -238,6 +241,15 @@ impl CalendarRepository for FakeRepo {
         _items: Vec<crate::domain::models::CalendarMentionRequestItem>,
         _now: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<crate::domain::models::CalendarMentionPreview>, rootcause::Report> {
+        unreachable!()
+    }
+
+    async fn list_team_out_of_office(
+        &self,
+        _requester_id: &str,
+        _range: OccurrenceRange,
+        _limit: u16,
+    ) -> Result<Vec<crate::domain::models::TeamOutOfOffice>, rootcause::Report> {
         unreachable!()
     }
 
@@ -1138,6 +1150,124 @@ async fn create_rejects_invalid_input_before_reaching_the_provider() {
         Err(CalendarMutationError::InvalidInput(_))
     ));
     assert!(calls.lock().unwrap().is_empty());
+}
+
+fn out_of_office_draft() -> CalendarEventDraft {
+    CalendarEventDraft {
+        attendees: Vec::new(),
+        out_of_office: Some(OutOfOfficeProperties {
+            auto_decline_mode: OutOfOfficeAutoDeclineMode::DeclineAllConflictingInvitations,
+            decline_message: Some("Out".to_string()),
+        }),
+        ..draft()
+    }
+}
+
+#[tokio::test]
+async fn create_out_of_office_forwards_the_type_and_adds_no_organizer_guest() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let drafts = provider.created_drafts.clone();
+    let repo = FakeRepo {
+        creation_target: Some(creation_target(false)),
+        ..FakeRepo::default()
+    };
+
+    service(repo, provider, FakeTokens::ok())
+        .create_event("macro|user", None, None, out_of_office_draft())
+        .await
+        .unwrap();
+
+    let sent = drafts.lock().unwrap();
+    let sent = sent.first().expect("one create call");
+    assert!(sent.out_of_office.is_some());
+    // An out-of-office event carries no attendees, so the organizer is never
+    // injected as a guest the way a regular event's is.
+    assert!(sent.attendees.is_empty());
+}
+
+#[tokio::test]
+async fn create_out_of_office_rejects_a_non_primary_calendar_before_the_provider() {
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let svc = service(
+        FakeRepo {
+            creation_target: Some(CalendarCreationTarget {
+                is_primary: false,
+                ..creation_target(false)
+            }),
+            ..FakeRepo::default()
+        },
+        provider,
+        FakeTokens::ok(),
+    );
+
+    assert!(matches!(
+        svc.create_event("macro|user", None, None, out_of_office_draft())
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+    assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn create_out_of_office_rejects_all_day_spans_and_attendees() {
+    let all_day = service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    );
+    let mut all_day_draft = out_of_office_draft();
+    all_day_draft.time = EventTime::AllDay {
+        start_date: chrono::NaiveDate::from_ymd_opt(2026, 8, 6).unwrap(),
+        end_date: chrono::NaiveDate::from_ymd_opt(2026, 8, 7).unwrap(),
+    };
+    assert!(matches!(
+        all_day
+            .create_event("macro|user", None, None, all_day_draft)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+
+    let with_guest = service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    );
+    let mut guest_draft = out_of_office_draft();
+    guest_draft.attendees = vec![CalendarAttendeeInput {
+        email: "guest@example.com".to_string(),
+        is_optional: false,
+        response_status: None,
+    }];
+    assert!(matches!(
+        with_guest
+            .create_event("macro|user", None, None, guest_draft)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
+
+    let with_conference = service(
+        FakeRepo {
+            creation_target: Some(creation_target(false)),
+            ..FakeRepo::default()
+        },
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+    );
+    let mut conference_draft = out_of_office_draft();
+    conference_draft.conference = Some(ConferenceChange::GoogleMeet);
+    assert!(matches!(
+        with_conference
+            .create_event("macro|user", None, None, conference_draft)
+            .await,
+        Err(CalendarMutationError::InvalidInput(_))
+    ));
 }
 
 #[tokio::test]

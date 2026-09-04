@@ -8,11 +8,27 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_CALENDAR_UI: () => mocks.calendarUiEnabled,
-  ENABLE_CALENDAR_SEARCH_UI: () => mocks.calendarSearchEnabled,
-  ENABLE_REMINDERS: () => mocks.remindersEnabled,
-  ENABLE_SNIPPETS: () => mocks.snippetsEnabled,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE: false,
+  enableCalendarUi: { key: 'enable-calendar-ui' },
+  enableReminders: { key: 'enable-reminders' },
+  enableSnippets: { key: 'enable-snippets' },
+  enableSupportedSoupForeignEntities: {
+    key: 'enable-supported-soup-foreign-entities',
+  },
+  isCalendarSearchUiEnabled: () => mocks.calendarSearchEnabled,
+  isFeatureEnabled: (flag: { key?: string }) => {
+    switch (flag.key) {
+      case 'enable-calendar-ui':
+        return mocks.calendarUiEnabled;
+      case 'enable-reminders':
+        return mocks.remindersEnabled;
+      case 'enable-snippets':
+        return mocks.snippetsEnabled;
+      case 'enable-supported-soup-foreign-entities':
+        return false;
+      default:
+        return false;
+    }
+  },
 }));
 
 afterEach(() => {
@@ -297,6 +313,32 @@ describe('tab lists and filter presets agree', () => {
 describe('recent view preset', () => {
   it('forces the touched-by-me server sort', () => {
     expect(getViewPreset('recent')?.sortMethod).toBe('touched_by_me');
+  });
+});
+
+describe('inbox view presets', () => {
+  // `getViewPreset` falls back to the first compatible tab when the requested
+  // one does not resolve, so each check also pins the tab's own predicate.
+  it('orders the notification tabs by latest notification', () => {
+    // The sort is also a filter (rows without a notification are absent),
+    // which matches what Signal and Noise already mean.
+    const signal = getViewPreset('inbox', 'signal');
+    expect(signal?.clientFilters).toEqual({ and: ['inbox'] });
+    expect(signal?.sortMethod).toBe('notified_at');
+    const noise = getViewPreset('inbox', 'noise');
+    expect(noise?.clientFilters).toEqual({ and: ['noise'] });
+    expect(noise?.sortMethod).toBe('notified_at');
+  });
+
+  it('keeps recency ordering on the other tabs', () => {
+    // The inbox client sort id is not an API sort method, so these must name
+    // their server sort or the API would fall back to created_at.
+    const all = getViewPreset('inbox', 'all');
+    expect(all?.clientFilters).toEqual({ and: ['explicit-noise'] });
+    expect(all?.sortMethod).toBe('updated_at');
+    const reminders = getViewPreset('inbox', 'reminders');
+    expect(reminders?.clientFilters).toEqual({ and: ['reminders-not-done'] });
+    expect(reminders?.sortMethod).toBe('updated_at');
   });
 
   it('never compiles channel or email filter trees', () => {

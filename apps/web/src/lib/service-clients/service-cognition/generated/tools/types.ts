@@ -200,6 +200,17 @@ export type EventTimeInput =
       kind: 'allDay';
     };
 /**
+ * The kind of event a create tool call makes.
+ */
+export type CalendarEventTypeInput = 'default' | 'out_of_office';
+/**
+ * How an out-of-office event handles conflicting invitations.
+ */
+export type AutoDeclineModeInput =
+  | 'decline_none'
+  | 'decline_all'
+  | 'decline_new_only';
+/**
  * User tools are pending until a user executes them
  */
 export type UserToolResponseForToolCalendarEvent =
@@ -1799,6 +1810,8 @@ export interface BotWebhook {
  * Prepare an event on the user's calendar, inviting any listed attendees through Google Calendar. In Macro chat this tool opens an inline composer so the user can review, edit, and confirm the event; use the tool to present the proposal instead of asking for a redundant confirmation in prose. When the pending call is executed, the event is written to Google immediately and attendees receive invitations. Other clients should confirm attendee events before executing the call.
  *
  * The event lands on the user's primary calendar unless `calendarId` (from ListCalendars) targets another one. For recurring events pass RFC 5545 lines in `recurrenceLines`, e.g. ["RRULE:FREQ=WEEKLY;BYDAY=MO"]. Returns the created event with its `eventId` for later updates or deletion. Fails if the user has no writable calendar connected.
+ *
+ * Set `eventType` to "out_of_office" to mark the user as out of office (e.g. "mark me out of office Thursday"). Out-of-office events must land on the user's primary calendar (omit `calendarId`), must be timed rather than all-day, and take no attendees or Google Meet (leave `addGoogleMeet` false); use `outOfOffice` to control whether conflicting meetings are auto-declined. The type cannot be changed afterward.
  */
 export interface CreateCalendarEvent {
   /**
@@ -1834,6 +1847,11 @@ export interface CreateCalendarEvent {
    * Attach a freshly generated Google Meet video conference to the event.
    */
   addGoogleMeet?: boolean;
+  eventType?: CalendarEventTypeInput;
+  /**
+   * Out-of-office decline behavior, used only when eventType is "out_of_office". Omit to just block the time; set `autoDeclineMode` to "decline_all" or "decline_new_only" to have Google decline conflicting meetings, optionally with a `declineMessage`.
+   */
+  outOfOffice?: OutOfOfficeInput | null;
 }
 /**
  * An attendee supplied to a calendar tool.
@@ -1873,6 +1891,20 @@ export interface EventReminderOverrideInput {
    * Minutes before the event start.
    */
   minutes: number;
+}
+/**
+ * Out-of-office decline behavior supplied to the calendar tools.
+ */
+export interface OutOfOfficeInput {
+  /**
+   * How conflicting invitations are handled. Defaults to declining nothing,
+   * so the event only blocks time and shows the away status.
+   */
+  autoDeclineMode?: AutoDeclineModeInput | null;
+  /**
+   * Message returned to organizers whose invitations are auto-declined.
+   */
+  declineMessage?: string | null;
 }
 /**
  * A calendar event as returned by the create and update tools.
@@ -3008,6 +3040,12 @@ export interface CalendarEventListItem {
    * Event status: confirmed or tentative.
    */
   status: string;
+  /**
+   * Provider event type for status-style events (out_of_office,
+   * focus_time, working_location, birthday, from_gmail); absent for
+   * regular events.
+   */
+  eventType?: string | null;
   /**
    * Whether this occurrence belongs to a recurring series.
    */
@@ -5242,6 +5280,10 @@ export interface UpdateCalendarEvent {
    * Set the user's own response to the invitation: "accepted", "declined", or "tentative". Omit to leave their response alone.
    */
   rsvp?: RsvpResponseInput | null;
+  /**
+   * Adjust out-of-office decline behavior; only valid on an event that is already out of office (its event type cannot be changed). Replaces the whole block: set `autoDeclineMode` ("decline_none", "decline_all", or "decline_new_only") and optionally `declineMessage`. Omit to leave it untouched.
+   */
+  outOfOffice?: OutOfOfficeInput | null;
 }
 /**
  * Change one of the current user's reminders: reword it, move when it fires, or mark it done. Get the `reminderId` from ListReminders or CreateReminder.

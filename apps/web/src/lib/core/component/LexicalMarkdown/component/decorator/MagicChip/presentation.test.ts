@@ -22,6 +22,103 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
+  it('describes a working subagent by what its child call is doing', () => {
+    expect(
+      deriveMagicChipPresentation({
+        persistedStatus: 'booting',
+        response: response({
+          parts: [
+            {
+              kind: 'tool_use',
+              id: 'agent',
+              name: { kind: 'native', name: 'Agent' },
+              status: 'running',
+              detail: {
+                kind: 'subagent',
+                title: 'Add 5+5',
+                agentType: 'general-purpose',
+                description: 'Add 5+5',
+                prompt: 'Run python',
+                background: false,
+                children: [
+                  {
+                    kind: 'tool_use',
+                    id: 'child',
+                    name: { kind: 'native', name: 'Bash' },
+                    status: 'running',
+                    detail: {
+                      kind: 'terminal',
+                      command: 'python3 -c "print(5+5)"',
+                      output: null,
+                      exitCode: null,
+                    },
+                  },
+                ],
+                result: null,
+              },
+            },
+          ],
+        }),
+      })
+    ).toMatchObject({
+      kind: 'working',
+      activity: {
+        label: 'Running command',
+        detail: 'python3 -c "print(5+5)"',
+        busy: true,
+      },
+    });
+  });
+
+  it('names a Macro tool and a drafted user tool by their tools', () => {
+    const macro = deriveMagicChipPresentation({
+      persistedStatus: 'booting',
+      response: response({
+        parts: [
+          {
+            kind: 'tool_use',
+            id: 'read',
+            name: { kind: 'mcp', server: 'macro', tool: 'ReadContent' },
+            status: 'running',
+            detail: {
+              kind: 'macro',
+              input: { documentId: 'd' },
+              output: null,
+              error: null,
+            },
+          },
+        ],
+      }),
+    });
+    expect(macro).toMatchObject({
+      kind: 'working',
+      activity: { label: 'Using ReadContent', busy: true },
+    });
+
+    const drafted = deriveMagicChipPresentation({
+      persistedStatus: 'booting',
+      response: response({
+        parts: [
+          {
+            kind: 'tool_use',
+            id: 'email',
+            name: { kind: 'mcp', server: 'macro', tool: 'SendEmail' },
+            status: 'completed',
+            detail: {
+              kind: 'user_tool',
+              input: { subject: 'Hi' },
+              outcome: { kind: 'pending' },
+            },
+          },
+        ],
+      }),
+    });
+    expect(drafted).toMatchObject({
+      kind: 'working',
+      activity: { label: 'SendEmail drafted', busy: false },
+    });
+  });
+
   it('shows thought activity before answer text exists', () => {
     expect(
       deriveMagicChipPresentation({
@@ -45,10 +142,8 @@ describe('deriveMagicChipPresentation', () => {
         parts: [
           {
             kind: 'tool_use',
-            rawInput: null,
-            rawOutput: null,
             id: 'running',
-            label: 'Terminal',
+            name: { kind: 'native', name: 'Terminal' },
             status: 'running',
             detail: {
               kind: 'terminal',
@@ -59,10 +154,8 @@ describe('deriveMagicChipPresentation', () => {
           },
           {
             kind: 'tool_use',
-            rawInput: null,
-            rawOutput: null,
             id: 'done',
-            label: 'Read',
+            name: { kind: 'native', name: 'Read' },
             status: 'completed',
             detail: { kind: 'read', paths: ['README.md'] },
           },
@@ -93,10 +186,8 @@ describe('deriveMagicChipPresentation', () => {
           parts: [
             {
               kind: 'tool_use',
-              rawInput: null,
-              rawOutput: null,
               id: 'tool',
-              label: 'Terminal',
+              name: { kind: 'native', name: 'Terminal' },
               status: 'pending',
               detail: {
                 kind: 'terminal',
@@ -131,7 +222,10 @@ describe('deriveMagicChipPresentation', () => {
     expect(presentation).toEqual({
       kind: 'answering',
       markdown: 'Looking at t',
-      activity: { label: 'Writing response', busy: false },
+      activity: {
+        label: 'Writing response',
+        busy: false,
+      },
     });
   });
 
@@ -145,10 +239,8 @@ describe('deriveMagicChipPresentation', () => {
           { kind: 'text', text: 'Let me check the tests.' },
           {
             kind: 'tool_use',
-            rawInput: null,
-            rawOutput: null,
             id: 'running',
-            label: 'Terminal',
+            name: { kind: 'native', name: 'Terminal' },
             status: 'running',
             detail: {
               kind: 'terminal',
@@ -164,7 +256,11 @@ describe('deriveMagicChipPresentation', () => {
     expect(presentation).toEqual({
       kind: 'answering',
       markdown: 'Let me check the tests.',
-      activity: { label: 'Running command', detail: 'cargo test', busy: true },
+      activity: {
+        label: 'Running command',
+        detail: 'cargo test',
+        busy: true,
+      },
     });
   });
 

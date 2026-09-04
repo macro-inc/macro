@@ -178,6 +178,29 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
                 FROM document_email de
                 WHERE de.document_id = d.id
             ) as "is_email_attachment",
+            (
+                dt.sub_type IS DISTINCT FROM 'task'
+                OR EXISTS (
+                    SELECT 1
+                    FROM entity_properties ep_assignees_projection
+                    WHERE ep_assignees_projection.entity_id = d.id
+                        AND ep_assignees_projection.entity_type = 'TASK'
+                        AND ep_assignees_projection.property_definition_id = $8
+                        AND ep_assignees_projection.values->'value' @> jsonb_build_array(
+                            jsonb_build_object('entity_id', $1)
+                        )
+                )
+            ) as "is_important",
+            ARRAY(
+                SELECT status_option_id::uuid
+                FROM jsonb_array_elements_text(
+                    CASE
+                        WHEN jsonb_typeof(ep_status.values->'value') = 'array'
+                        THEN ep_status.values->'value'
+                        ELSE '[]'::jsonb
+                    END
+                ) AS status_option_id
+            ) as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             CASE
@@ -234,6 +257,8 @@ static CHAT_DETAIL_CLAUSE: &str = r#"
             NULL as "sha",
             NULL as "sub_type",
             false as "is_email_attachment",
+            true as "is_important",
+            ARRAY[]::uuid[] as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
@@ -263,6 +288,8 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL as "sha",
             NULL as "sub_type",
             false as "is_email_attachment",
+            true as "is_important",
+            ARRAY[]::uuid[] as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
@@ -500,7 +527,7 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
         WHERE false
 "#;
 
-fn build_notification_exists_clause(
+pub(in crate::outbound::pg_soup_repo) fn build_notification_exists_clause(
     entity_id_sql: &str,
     entity_type: &str,
     predicate_sql: &str,
@@ -552,13 +579,13 @@ pub(in crate::outbound::pg_soup_repo) fn build_notification_seen_clause(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NotificationPredicate {
+pub(in crate::outbound::pg_soup_repo) enum NotificationPredicate {
     Done(bool),
     Seen(bool),
 }
 
 impl NotificationPredicate {
-    fn sql(self) -> &'static str {
+    pub(in crate::outbound::pg_soup_repo) fn sql(self) -> &'static str {
         match self {
             NotificationPredicate::Done(true) => "un.done = true",
             NotificationPredicate::Done(false) => "un.done = false",
@@ -1118,7 +1145,9 @@ pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
     })
 }
 
-fn calendar_event_filter_is_impossible(ast: Option<&Expr<CalendarEventLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn calendar_event_filter_is_impossible(
+    ast: Option<&Expr<CalendarEventLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
@@ -1573,6 +1602,8 @@ fn build_query(
                 NULL::text as "sha",
                 NULL::document_sub_type_value as "sub_type",
                 false as "is_email_attachment",
+                false as "is_important",
+                ARRAY[]::uuid[] as "status_option_ids",
                 NULL::timestamptz as "viewed_at",
                 NULL::timestamptz as "sort_ts",
                 NULL::boolean as "is_completed",
@@ -1603,6 +1634,10 @@ struct DocumentRow {
     sub_type: Option<DocumentSubType>,
     #[sqlx(default)]
     is_email_attachment: bool,
+    #[sqlx(default)]
+    is_important: bool,
+    #[sqlx(default)]
+    status_option_ids: Vec<Uuid>,
     is_completed: Option<bool>,
     deleted_at: Option<DateTime<Utc>>,
 }
@@ -1666,6 +1701,8 @@ impl SoupRow {
         match self {
             Self::Document(row) => Some(SoupDocumentServerFacts {
                 is_email_attachment: row.is_email_attachment,
+                is_important: row.is_important,
+                status_option_ids: row.status_option_ids.clone(),
             }),
             Self::Chat(_) | Self::Project(_) | Self::CalendarEvent(_) => None,
         }
@@ -1699,6 +1736,8 @@ impl SoupRow {
                 viewed_at,
                 sub_type,
                 is_email_attachment: _,
+                is_important: _,
+                status_option_ids: _,
                 is_completed,
                 deleted_at,
             }) => SoupItem::Document(SoupDocument {

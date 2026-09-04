@@ -128,6 +128,7 @@ import type { GroupedSoupSort } from './generated/schemas/groupedSoupSort';
 import type { Item } from './generated/schemas/item';
 import type { ListOccurrencesParams } from './generated/schemas/listOccurrencesParams';
 import type { ListRemindersParams } from './generated/schemas/listRemindersParams';
+import type { ListTeamOutOfOfficeParams } from './generated/schemas/listTeamOutOfOfficeParams';
 import type { LocationResponseV3 } from './generated/schemas/locationResponseV3';
 import type { PatchChannelRequest } from './generated/schemas/patchChannelRequest';
 import type { PatchMessageRequest } from './generated/schemas/patchMessageRequest';
@@ -154,6 +155,7 @@ import type { SetContactNameRequest } from './generated/schemas/setContactNameRe
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SoupPage } from './generated/schemas/soupPage';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
+import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { ThreadResponse } from './generated/schemas/threadResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
 import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
@@ -426,6 +428,24 @@ export const storageServiceClient = {
     return (
       await dssFetch<CalendarOccurrenceResponse>(
         `/calendar-events?${params.toString()}`,
+        { method: 'GET', signal }
+      )
+    ).map((result) => result);
+  },
+
+  async listTeamOutOfOffice(
+    args: ListTeamOutOfOfficeParams & { signal?: AbortSignal }
+  ) {
+    const { end, endDate, limit, signal, start, startDate } = args;
+    const params = new URLSearchParams({ end, start });
+
+    if (startDate) params.set('startDate', startDate);
+    if (endDate) params.set('endDate', endDate);
+    if (limit !== undefined) params.set('limit', String(limit));
+
+    return (
+      await dssFetch<TeamOutOfOfficeResponse>(
+        `/calendar-events/team-out-of-office?${params.toString()}`,
         { method: 'GET', signal }
       )
     ).map((result) => result);

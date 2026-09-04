@@ -1411,6 +1411,89 @@ export const mentionPreviewsResponse = zod
   .describe('Batch calendar mention preview response.');
 
 /**
+ * @summary Return teammates' out-of-office occurrences in the requested viewport.
+ */
+export const listTeamOutOfOfficeQueryLimitMax = 2000;
+
+export const listTeamOutOfOfficeQueryParams = zod.object({
+  start: zod.iso.datetime({}).describe('Inclusive UTC viewport start.'),
+  end: zod.iso.datetime({}).describe('Exclusive UTC viewport end.'),
+  startDate: zod.iso
+    .date()
+    .optional()
+    .describe('Inclusive local date boundary for all-day events.'),
+  endDate: zod.iso
+    .date()
+    .optional()
+    .describe('Exclusive local date boundary for all-day events.'),
+  limit: zod
+    .number()
+    .min(1)
+    .max(listTeamOutOfOfficeQueryLimitMax)
+    .optional()
+    .describe('Maximum number of occurrences, from 1 through 2,000.'),
+});
+
+export const listTeamOutOfOfficeResponse = zod
+  .object({
+    hasMore: zod.boolean(),
+    items: zod.array(
+      zod
+        .object({
+          eventId: zod.uuid().describe("The teammate's calendar event id."),
+          occurrenceKey: zod
+            .string()
+            .describe('Stable occurrence key within the event.'),
+          ownerId: zod
+            .string()
+            .describe('Macro user id of the teammate who is out.'),
+          time: zod
+            .union([
+              zod
+                .object({
+                  endsAt: zod.iso
+                    .datetime({})
+                    .describe('Exclusive end instant.'),
+                  kind: zod.enum(['timed']),
+                  startsAt: zod.iso
+                    .datetime({})
+                    .describe('Inclusive start instant.'),
+                  timeZone: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Original IANA time-zone identifier, when supplied.'
+                    ),
+                })
+                .describe('An event with absolute instants.'),
+              zod
+                .object({
+                  endDate: zod.iso.date().describe('Exclusive local end date.'),
+                  kind: zod.enum(['allDay']),
+                  startDate: zod.iso
+                    .date()
+                    .describe('Inclusive local start date.'),
+                })
+                .describe(
+                  "An all-day event using RFC 5545's exclusive end date."
+                ),
+            ])
+            .describe(
+              'The mutually exclusive time shape of a calendar event.\n\nFields are renamed per variant rather than with `rename_all_fields`\nbecause utoipa only honors variant-level serde renames when it\nderives the OpenAPI schema.'
+            ),
+          title: zod
+            .string()
+            .nullish()
+            .describe(
+              "Event title, absent when the event's visibility withholds details."
+            ),
+        })
+        .describe("One teammate's out-of-office occurrence.")
+    ),
+  })
+  .describe('Team out-of-office viewport response.');
+
+/**
  * Lists all active calls in channels the caller is an active member of,
 newest first. Calls with no active participants (orphaned by dropped RTC
 webhooks) are excluded.
@@ -8718,10 +8801,11 @@ export const getItemsSoupQueryParams = zod.object({
       'viewed_updated',
       'frecency',
       'touched_by_me',
+      'notified_at',
     ])
     .optional()
     .describe(
-      'Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me. Defaults to viewed_at.'
+      'Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.'
     ),
   sort_direction: zod
     .enum(['asc', 'desc'])
@@ -11692,6 +11776,12 @@ export const getItemsSoupResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            notified_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
+              ),
             touched_at: zod.iso
               .datetime({})
               .nullish()
@@ -12362,6 +12452,7 @@ export const postItemsSoupBody = zod
                 'viewed_updated',
                 'frecency',
                 'touched_by_me',
+                'notified_at',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -15341,6 +15432,12 @@ export const postItemsSoupResponse = zod
               .describe(
                 'Whether the requesting user has favorited this entity.'
               ),
+            notified_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
+              ),
             touched_at: zod.iso
               .datetime({})
               .nullish()
@@ -15475,6 +15572,7 @@ export const postItemsSoupAstBody = zod
                 'viewed_updated',
                 'frecency',
                 'touched_by_me',
+                'notified_at',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
@@ -18455,6 +18553,12 @@ export const postItemsSoupAstResponse = zod
               .boolean()
               .describe(
                 'Whether the requesting user has favorited this entity.'
+              ),
+            notified_at: zod.iso
+              .datetime({})
+              .nullish()
+              .describe(
+                'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
               ),
             touched_at: zod.iso
               .datetime({})
@@ -21922,6 +22026,12 @@ export const postItemsSoupAstGroupedResponse = zod
                     .describe(
                       'Whether the requesting user has favorited this entity.'
                     ),
+                  notified_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
+                    ),
                   touched_at: zod.iso
                     .datetime({})
                     .nullish()
@@ -25038,6 +25148,12 @@ export const postItemsSoupAstGroupedResponse = zod
                     .describe(
                       'Whether the requesting user has favorited this entity.'
                     ),
+                  notified_at: zod.iso
+                    .datetime({})
+                    .nullish()
+                    .describe(
+                      'When the caller was last notified about this entity, present only\nwhen the page was ordered by `notified_at`. Clients keep the notified\nfeed ordered and date-bucketed on this value.'
+                    ),
                   touched_at: zod.iso
                     .datetime({})
                     .nullish()
@@ -27793,6 +27909,23 @@ export const editProjectV2Response = zod.object({
 });
 
 /**
+ * @summary Stream matching broker events to the caller over Server-Sent Events.
+ */
+export const streamEventsQueryParams = zod.object({
+  scope: zod
+    .enum(['user', 'team'])
+    .describe(
+      'Personal or team workspace whose webhook lifecycle events are delivered.'
+    ),
+  filters: zod
+    .string()
+    .optional()
+    .describe(
+      'URL-encoded JSON array of webhook filters, identical to the persisted\nwebhook `filters` field.'
+    ),
+});
+
+/**
  * @summary List the caller's webhooks.
  */
 export const listWebhooksResponse = zod
@@ -27899,7 +28032,7 @@ export const createWebhookBody = zod
     scope: zod
       .enum(['user', 'team'])
       .describe(
-        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used.'
+        'Scope that owns a newly-created webhook.\n\nClients serialize this, so both derives are used. `Display`\/`FromStr`\nspell the same names as serde, for query strings and config values.'
       ),
   })
   .describe(

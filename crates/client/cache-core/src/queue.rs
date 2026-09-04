@@ -11,6 +11,7 @@ use crate::value::canonical_json;
 use predicate_index::OptimisticProjectionMutation;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as Json;
+use uuid::Uuid;
 
 /// Durable, monotonically increasing mutation identifier and queue position.
 pub type MutationId = u64;
@@ -180,6 +181,8 @@ pub struct PersistedOptimisticLayer {
 /// A mutation and optimistic layer before storage assigns its queue id.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NewQueuedMutation {
+    /// Caller-supplied coalescing key.
+    pub uuid: Uuid,
     /// Mutation request plus initial retry metadata.
     pub mutation: StoredMutation,
     /// Optimistic contribution paired with the mutation.
@@ -191,10 +194,73 @@ pub struct NewQueuedMutation {
 pub struct QueuedMutation {
     /// Durable queue id and ordering key.
     pub id: MutationId,
+    /// Caller-supplied coalescing key.
+    pub uuid: Uuid,
+    /// Whether a newer mutation superseded this still-active row.
+    pub superseded: bool,
     /// Mutation request and retry metadata.
     pub mutation: StoredMutation,
     /// Optimistic contribution paired with the mutation.
     pub optimistic: PersistedOptimisticLayer,
+}
+
+/// Queue and lifecycle state used to fence a staged UUID upsert.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MutationQueueSnapshot {
+    /// Durable queue id.
+    pub id: MutationId,
+    /// Caller coalescing key.
+    pub uuid: Uuid,
+    /// Whether this row has been superseded.
+    pub superseded: bool,
+    /// Current lease owner.
+    pub lease_owner: Option<String>,
+    /// Current lease generation.
+    pub lease_generation: u64,
+    /// Current lease expiry.
+    pub lease_expires_at_ms: Option<i64>,
+    /// Current retry eligibility time.
+    pub next_attempt_at_ms: Option<i64>,
+}
+
+impl From<&QueuedMutation> for MutationQueueSnapshot {
+    fn from(queued: &QueuedMutation) -> Self {
+        Self {
+            id: queued.id,
+            uuid: queued.uuid,
+            superseded: queued.superseded,
+            lease_owner: queued.mutation.lease_owner.clone(),
+            lease_generation: queued.mutation.lease_generation,
+            lease_expires_at_ms: queued.mutation.lease_expires_at_ms,
+            next_attempt_at_ms: queued.mutation.next_attempt_at_ms,
+        }
+    }
+}
+
+/// How a UUID-aware enqueue changed the existing queue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum MutationUpsertKind {
+    /// No current row used this UUID.
+    Inserted,
+    /// A non-active current row was removed.
+    ReplacedPending {
+        /// Transaction removed by the replacement.
+        removed_id: MutationId,
+    },
+    /// A live row was retained and marked superseded.
+    AppendedAfterActive {
+        /// Still-active transaction retained ahead of the replacement.
+        active_id: MutationId,
+    },
+}
+
+/// Result of atomically inserting or replacing a queued mutation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MutationUpsertResult {
+    /// Fresh queue id assigned to the inserted tail row.
+    pub id: MutationId,
+    /// Queue collision outcome.
+    pub kind: MutationUpsertKind,
 }
 
 /// Successful claim of the oldest runnable mutation.

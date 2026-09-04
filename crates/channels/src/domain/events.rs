@@ -31,6 +31,8 @@ pub enum ChannelEvent {
         channel_id: Uuid,
         /// Actor that created the channel.
         actor: ChannelSender<'static>,
+        /// User the actor created the channel for, when the actor is a bot.
+        on_behalf_of: Option<MacroUserIdStr<'static>>,
         /// Type of channel that was created.
         channel_type: ChannelType,
         /// Stored channel name; `None` for direct message / unnamed channels.

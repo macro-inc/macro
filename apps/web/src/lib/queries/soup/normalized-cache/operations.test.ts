@@ -65,6 +65,7 @@ import {
   removeSearchEntities,
   removeSoupEntities,
   removeSoupEntitiesFromDoneFilteredQueries,
+  restoreSoupEntityToDoneFilteredQueries,
 } from './operations';
 
 // -- Fixtures --
@@ -1088,5 +1089,221 @@ describe('insertSoupEntity — folder membership gate', () => {
         key
       )!.pages[0];
     expect(page.items.map(getSoupItemId)).toEqual(['d-new', 'd-in']);
+  });
+});
+
+/**
+ * Regression coverage for macro-3258: a channel row marked done is removed
+ * from the done-filtered inbox pages, but the entity stays in the normalized
+ * cache (the sidebar still references it), so an incoming notification took
+ * the field-merge path and the inbox showed nothing until a refetch.
+ */
+describe('restoreSoupEntityToDoneFilteredQueries', () => {
+  const doneFilteredAstKey = (suffix: string) => [
+    ...soupKeys.astItems._def,
+    { chanf: [{ l: { NotificationDone: false } }] },
+    suffix,
+  ];
+  const doneFilteredItemsKey = [
+    ...soupKeys.items._def,
+    { ef: [{ l: { NotificationDone: false } }] },
+    'legacy-inbox',
+  ];
+  const allViewAstKey = [
+    ...soupKeys.astItems._def,
+    { emailView: 'all' },
+    'all-view',
+  ];
+
+  function seedFlatAstQuery(key: unknown[], pages: SoupApiItem[][]) {
+    const data: InfiniteData<SoupAstItemsFlatPage, unknown> = {
+      pages: pages.map((items) => ({ kind: 'flat', items, nextCursor: null })),
+      pageParams: pages.map((_, i) => (i === 0 ? null : `cursor-${i}`)),
+    };
+    testQueryClient.setQueryData(key, data);
+  }
+
+  function flatAstItemsAt(key: unknown[], page = 0) {
+    return testQueryClient
+      .getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(key)!
+      .pages[page].items.map(getSoupItemId);
+  }
+
+  function cacheChannel(id: string) {
+    const item = mockChannelItem(id);
+    mockNormalizer.getObjectById.mockImplementation((normKey) =>
+      normKey === `soup:${id}` ? item : null
+    );
+    return item;
+  }
+
+  it('prepends the cached entity to done-filtered queries missing it', () => {
+    cacheChannel('ch-1');
+    seedFlatAstQuery(doneFilteredAstKey('inbox'), [[mockChatItem('c-1')]]);
+    testQueryClient.setQueryData(
+      doneFilteredItemsKey,
+      mockSoupCache([[mockChatItem('c-1')]])
+    );
+    seedFlatAstQuery(allViewAstKey, [[mockChatItem('c-1')]]);
+
+    restoreSoupEntityToDoneFilteredQueries('ch-1');
+
+    expect(flatAstItemsAt(doneFilteredAstKey('inbox'))).toEqual([
+      'ch-1',
+      'c-1',
+    ]);
+    expect(
+      testQueryClient
+        .getQueryData<InfiniteData<SoupPage, unknown>>(doneFilteredItemsKey)!
+        .pages[0].items.map(getSoupItemId)
+    ).toEqual(['ch-1', 'c-1']);
+    // Done-inclusive views are left alone.
+    expect(flatAstItemsAt(allViewAstKey)).toEqual(['c-1']);
+  });
+
+  it('skips queries that already contain the entity on any page', () => {
+    cacheChannel('ch-1');
+    seedFlatAstQuery(doneFilteredAstKey('inbox'), [
+      [mockChatItem('c-1')],
+      [mockChannelItem('ch-1')],
+    ]);
+
+    restoreSoupEntityToDoneFilteredQueries('ch-1');
+
+    expect(flatAstItemsAt(doneFilteredAstKey('inbox'), 0)).toEqual(['c-1']);
+    expect(flatAstItemsAt(doneFilteredAstKey('inbox'), 1)).toEqual(['ch-1']);
+  });
+
+  it('no-ops when the entity is not in the normalized cache', () => {
+    mockNormalizer.getObjectById.mockReturnValue(null);
+    seedFlatAstQuery(doneFilteredAstKey('inbox'), [[mockChatItem('c-1')]]);
+
+    restoreSoupEntityToDoneFilteredQueries('ch-1');
+
+    expect(flatAstItemsAt(doneFilteredAstKey('inbox'))).toEqual(['c-1']);
+  });
+
+  it("respects the query's item filter", () => {
+    const item = cacheChannel('ch-1');
+    const key = doneFilteredAstKey('filtered');
+    testQueryClient.setQueryDefaults(key, {
+      meta: { itemFilter: (candidate: SoupApiItem) => candidate !== item },
+    });
+    seedFlatAstQuery(key, [[mockChatItem('c-1')]]);
+
+    restoreSoupEntityToDoneFilteredQueries('ch-1');
+
+    expect(flatAstItemsAt(key)).toEqual(['c-1']);
+  });
+
+  it('inserts into a resolvable group of a done-filtered grouped parent', () => {
+    const task = mockTaskItem('t-new', 'in_progress');
+    mockNormalizer.getObjectById.mockImplementation((normKey) =>
+      normKey === 'soup:t-new' ? task : null
+    );
+    const key = [
+      ...soupKeys.astItems._def,
+      { df: [{ l: { nd: false } }] },
+      STATUS_GROUP_BY,
+      'grouped-inbox',
+    ];
+    testQueryClient.setQueryDefaults(key, {
+      meta: { groupBy: STATUS_GROUP_BY },
+    });
+    testQueryClient.setQueryData(
+      key,
+      mockGroupedParentCache(
+        [mockTaskItem('t-1', 'in_progress')],
+        [buildGroup('in_progress', ['t-1'], 1, 0)]
+      )
+    );
+
+    restoreSoupEntityToDoneFilteredQueries('t-new');
+
+    const page =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!.pages[0];
+    expect(page.items['t-new']).toBeDefined();
+    expect(page.groups[0].itemIds).toEqual(['t-new', 't-1']);
+  });
+
+  it('restores the entity into done-filtered expanded group queries', () => {
+    const task = mockTaskItem('t-new', 'in_progress');
+    mockNormalizer.getObjectById.mockImplementation((normKey) =>
+      normKey === 'soup:t-new' ? task : null
+    );
+
+    const makeGroupQueryKey = (bodyMarker: object, suffix: string) => [
+      ...soupKeys.groupedGroup._def,
+      'in_progress',
+      STATUS_GROUP_BY,
+      bodyMarker,
+      suffix,
+    ];
+    const doneFilteredKey = makeGroupQueryKey(
+      { df: [{ l: { nd: false } }] },
+      'done-filtered'
+    );
+    const allViewKey = makeGroupQueryKey({ emailView: 'all' }, 'all-view');
+    const groupData = () => ({
+      pages: [
+        {
+          items: { 't-1': mockTaskItem('t-1', 'in_progress') },
+          group: buildGroup('in_progress', ['t-1'], 1, 0),
+        },
+      ],
+      pageParams: [null],
+    });
+    for (const key of [doneFilteredKey, allViewKey]) {
+      testQueryClient.setQueryDefaults(key, {
+        meta: { groupBy: STATUS_GROUP_BY, groupKey: 'in_progress' },
+      });
+      testQueryClient.setQueryData(key, groupData());
+    }
+
+    restoreSoupEntityToDoneFilteredQueries('t-new');
+
+    type GroupPage = { items: Record<string, SoupApiItem>; group: GroupMeta };
+    const restored =
+      testQueryClient.getQueryData<InfiniteData<GroupPage, unknown>>(
+        doneFilteredKey
+      )!.pages[0];
+    expect(restored.items['t-new']).toBeDefined();
+    expect(restored.group.itemIds).toEqual(['t-new', 't-1']);
+    // Done-inclusive expanded groups are left alone.
+    const untouched =
+      testQueryClient.getQueryData<InfiniteData<GroupPage, unknown>>(
+        allViewKey
+      )!.pages[0];
+    expect(untouched.group.itemIds).toEqual(['t-1']);
+  });
+
+  it('invalidates a grouped parent whose group cannot be resolved locally', () => {
+    cacheChannel('ch-1');
+    // No groupBy meta mirrors groupings the client cannot bucket (e.g. date):
+    // insertGroupedPage cannot resolve a target group, so the query refetches.
+    const key = [
+      ...soupKeys.astItems._def,
+      { chanf: [{ l: { NotificationDone: false } }] },
+      'grouped-date-inbox',
+    ];
+    testQueryClient.setQueryData(
+      key,
+      mockGroupedParentCache(
+        [mockChatItem('c-1')],
+        [buildGroup('today', ['c-1'], 1, 0)]
+      )
+    );
+
+    restoreSoupEntityToDoneFilteredQueries('ch-1');
+
+    expect(testQueryClient.getQueryState(key)?.isInvalidated).toBe(true);
+    // The page itself is untouched until the refetch lands.
+    const page =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!.pages[0];
+    expect(page.items['ch-1']).toBeUndefined();
   });
 });
