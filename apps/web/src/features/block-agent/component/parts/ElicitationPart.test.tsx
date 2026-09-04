@@ -400,6 +400,24 @@ describe('ElicitationPart', () => {
       expect(queryByTestId('email-composer')).not.toBeNull();
     });
 
+    // The email composer offers only Send, so the card carries the decline the
+    // calendar composer answers through its own Cancel.
+    it('an email review can be declined from the card', () => {
+      const request = review('SendEmail', {
+        to: [{ email: 'alice@example.com' }],
+        cc: [],
+        bcc: [],
+        subject: 'Q3 plan',
+        body: 'Hi Alice',
+      });
+      pending = { ...live(), request };
+      const { getByText } = render(() => (
+        <ElicitationPart part={part({ request })} />
+      ));
+      fireEvent.click(getByText('Cancel'));
+      expect(respond).toHaveBeenCalledWith({ action: 'decline' });
+    });
+
     it('a viewer who is not the owner gets the composer locked and told who can act', () => {
       canAnswer = false;
       const request = review('CreateCalendarEvent', eventDraft);
