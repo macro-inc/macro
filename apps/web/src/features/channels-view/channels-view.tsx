@@ -15,7 +15,7 @@ import { useSoupAstItemsQuery } from '@queries/soup/items';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createMemo, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { ChannelsViewProvider, useChannelsView } from './channels-view-context';
-import { ChannelsRail } from './components/ChannelsRail';
+import { ChannelsRail } from './components/rail/ChannelsRail';
 import type { ChannelsViewStateOptions } from './types';
 
 const SIDEBAR_CHANNEL_LIMIT = 100;

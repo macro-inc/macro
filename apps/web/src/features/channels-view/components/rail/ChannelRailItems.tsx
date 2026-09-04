@@ -7,7 +7,7 @@ import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
 import { cn, Tooltip } from '@ui';
 import { Show } from 'solid-js';
-import { channelInitials, formatDetailedTimestamp } from '../utils';
+import { channelInitials, formatDetailedTimestamp } from '../../utils';
 
 function ChannelAvatar(props: { channel: ChannelEntity; size?: 'sm' | 'md' }) {
   const sizeClass = () =>

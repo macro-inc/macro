@@ -7,7 +7,6 @@ import {
 import { useViewTabHotkeys } from '@app/components/view-shell';
 import { CommandState } from '@app/features/command';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
@@ -15,9 +14,8 @@ import {
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { compareDateDesc, type DateValue } from '@core/util/date';
+import { compareDateDesc } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
-import { notificationIsRead } from '@entity/utils/notification';
 import ChannelIcon from '@icon/wide-channel.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
@@ -26,10 +24,8 @@ import ChatsIcon from '@phosphor/chats-circle.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Tabs } from '@ui';
 import {
-  type Accessor,
   createEffect,
   createMemo,
-  createSignal,
   createUniqueId,
   Match,
   on,
@@ -37,8 +33,8 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { useChannelsView } from '../channels-view-context';
-import type { ChannelsGroup, ChannelsTab } from '../types';
+import { useChannelsView } from '../../channels-view-context';
+import type { ChannelsGroup, ChannelsTab } from '../../types';
 import {
   ChannelOption,
   ConversationCard,
@@ -46,6 +42,7 @@ import {
   SlimConversationCard,
 } from './ChannelRailItems';
 import { CollapsibleSection, CreateRailAction } from './ChannelsRailSection';
+import { useChannelRailActivity } from './useChannelRailActivity';
 
 const CHANNEL_TABS = [
   {
@@ -116,119 +113,6 @@ const conversationRow = (
 const rowKeyForChannel = (channelId: string) => `channel:${channelId}`;
 const rowKeyForSection = (group: ChannelsGroup) => `section:${group}`;
 
-const channelGroup = (channel: ChannelEntity): ChannelsGroup =>
-  channel.channelType === 'direct_message' ? 'direct_messages' : 'channels';
-
-function useChannelRailActivity(channels: Accessor<readonly ChannelEntity[]>) {
-  const notificationSource = useGlobalNotificationSource();
-  const [activityChannelIds, setActivityChannelIds] = createSignal<
-    Partial<Record<ChannelsGroup, string>>
-  >({});
-  const channelsById = createMemo(
-    () => new Map(channels().map((channel) => [channel.id, channel]))
-  );
-
-  const notificationActivity = createMemo(() => {
-    const unreadChannelIds = new Set<string>();
-    const unreadCounts: Record<ChannelsGroup, number> = {
-      channels: 0,
-      direct_messages: 0,
-    };
-    const latestChannelIds: Partial<Record<ChannelsGroup, string>> = {};
-    const notifications = [...notificationSource.notifications()].sort((a, b) =>
-      compareDateDesc(a.created_at, b.created_at)
-    );
-
-    for (const notification of notifications) {
-      if (
-        notification.entity_type !== 'channel' ||
-        notificationIsRead(notification)
-      ) {
-        continue;
-      }
-
-      const isFirstUnreadForChannel = !unreadChannelIds.has(
-        notification.entity_id
-      );
-      unreadChannelIds.add(notification.entity_id);
-
-      const channel = channelsById().get(notification.entity_id);
-      if (!channel) continue;
-
-      const group = channelGroup(channel);
-      if (isFirstUnreadForChannel) unreadCounts[group] += 1;
-      latestChannelIds[group] ??= channel.id;
-    }
-
-    return { latestChannelIds, unreadChannelIds, unreadCounts };
-  });
-
-  const recordActivity = (channel: ChannelEntity) => {
-    const group = channelGroup(channel);
-    setActivityChannelIds((current) => ({
-      ...current,
-      [group]: channel.id,
-    }));
-  };
-
-  onCleanup(
-    notificationSource.subscribe((notification) => {
-      if (
-        notification.entity_type !== 'channel' ||
-        notificationIsRead(notification)
-      ) {
-        return;
-      }
-
-      const channel = channelsById().get(notification.entity_id);
-      if (channel) recordActivity(channel);
-    })
-  );
-
-  let latestMessageTimes = new Map<string, DateValue | undefined>();
-  createEffect(() => {
-    const nextMessageTimes = new Map<string, DateValue | undefined>();
-
-    for (const channel of channels()) {
-      const nextMessageTime = channel.latestRootMessage?.createdAt;
-      nextMessageTimes.set(channel.id, nextMessageTime);
-
-      if (
-        latestMessageTimes.has(channel.id) &&
-        nextMessageTime !== undefined &&
-        nextMessageTime !== latestMessageTimes.get(channel.id)
-      ) {
-        recordActivity(channel);
-      }
-    }
-
-    latestMessageTimes = nextMessageTimes;
-  });
-
-  const targetChannelId = (group: ChannelsGroup) =>
-    activityChannelIds()[group] ??
-    notificationActivity().latestChannelIds[group];
-
-  const clearTarget = (group: ChannelsGroup, channelId: string) => {
-    if (targetChannelId(group) !== channelId) return;
-
-    setActivityChannelIds((current) =>
-      current[group] === channelId
-        ? { ...current, [group]: undefined }
-        : current
-    );
-  };
-
-  return {
-    clearTarget,
-    targetChannelId,
-    unreadChannelIds: () => notificationActivity().unreadChannelIds,
-    unreadCount: (group: ChannelsGroup) =>
-      notificationActivity().unreadCounts[group],
-  };
-}
-
-/** V2 Chat navigation rail with Browse and Recents destinations. */
 export function ChannelsRail(props: {
   channels: ChannelEntity[];
   mode: 'full' | 'slim';
