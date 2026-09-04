@@ -84,6 +84,8 @@ export interface EventEditorInitialValues {
    * settings — the provider readback does not expose the stored ones.
    */
   outOfOffice?: EventEditorOutOfOffice;
+  /** Event type of the copy `reminders` belong to; absent for new events. */
+  reminderEventType?: EventType;
 }
 
 /** Calendar option displayed by the event editor. */
@@ -229,6 +231,7 @@ export function calendarEventToEditorInitialValues(
       conference: initialConferenceChoice(event),
       reminders: event.reminders,
       eventType: event.eventType,
+      reminderEventType: event.reminderEventType,
     };
   }
 
@@ -245,6 +248,7 @@ export function calendarEventToEditorInitialValues(
     conference: initialConferenceChoice(event),
     reminders: event.reminders,
     eventType: event.eventType,
+    reminderEventType: event.reminderEventType,
   };
 }
 

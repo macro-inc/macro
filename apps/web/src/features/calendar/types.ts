@@ -79,12 +79,16 @@ export interface CalendarEvent {
   reminders?: EventReminders;
   /** Calendar whose defaults `reminders` resolve against: the primary copy's. */
   reminderCalendarId?: string;
+  /**
+   * Event type of the primary copy. Status types such as out of office never
+   * resolve `reminders` to the calendar defaults.
+   */
+  reminderEventType?: EventType;
   /** Provider event type; absent means a regular event. */
   eventType?: EventType;
   /**
    * Calendar of the displayed copy: the first visible one of the event's
-   * copies, preferring the primary. Mutations address this copy, and its
-   * calendar's defaults resolve the event's reminders.
+   * copies, preferring the primary. Mutations address this copy.
    */
   calendarId?: string;
   /**
@@ -206,6 +210,7 @@ export function mapCalendarOccurrence(
     attendees: event.attendees ?? [],
     reminders: canonical.reminders ?? undefined,
     reminderCalendarId: canonical.calendarId ?? undefined,
+    reminderEventType: canonical.eventType ?? 'default',
     eventType: content.eventType ?? undefined,
     calendarId,
     sourceCalendarIds: (event.sources ?? []).map((copy) => copy.calendarId),

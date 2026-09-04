@@ -141,6 +141,8 @@ describe('mapCalendarOccurrence', () => {
       { method: 'popup', minutes: 30 },
     ]);
     expect(event.reminderCalendarId).toBe('primary');
+    expect(event.reminderEventType).toBe('out_of_office');
+    expect(event.eventType).toBe('default');
     expect(event.calendarId).toBe('shared');
   });
 
