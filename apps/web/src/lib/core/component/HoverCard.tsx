@@ -180,12 +180,15 @@ export function HoverCard(props: HoverCardComponentProps) {
     );
     if (deeperTriggerIsOpen) return false;
 
+    // Register before closing competitors so their `unregister` calls cannot
+    // remove this group's set from the map during the handoff.
+    entries.add(entry);
+    entry.registeredGroup = group;
+
     for (const openEntry of competitors) {
       openEntry.close();
     }
 
-    entries.add(entry);
-    entry.registeredGroup = group;
     return true;
   };
 
