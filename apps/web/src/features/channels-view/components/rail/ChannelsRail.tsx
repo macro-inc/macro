@@ -26,7 +26,7 @@ import ChatsIcon from '@phosphor/chats-circle.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { useActiveCallsQuery } from '@queries/call/call';
 import { Key } from '@solid-primitives/keyed';
-import { Button, cn, Dropdown, Tabs } from '@ui';
+import { Button, cn, Dropdown, Hotkey, Tabs } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -458,7 +458,7 @@ export function ChannelsRail(props: {
   return (
     <aside
       aria-label="Chat navigation"
-      class="flex size-full min-h-0 flex-col gap-3 bg-inset pb-5 pt-2"
+      class="flex size-full min-h-0 flex-col gap-3 bg-inset pt-2"
     >
       <Switch>
         <Match when={props.mode === 'full'}>
@@ -492,241 +492,258 @@ export function ChannelsRail(props: {
             />
           </div>
 
-          <div
-            ref={(element) => {
-              listRoot = element;
-            }}
-            role="tree"
-            tabIndex={-1}
-            aria-activedescendant={activeDescendant()}
-            class={cn(
-              'scrollbar-hidden min-h-0 flex-1 outline-none',
-              state.tab === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
-            )}
-          >
-            <Switch>
-              <Match when={state.tab === 'browse'}>
-                <div class="flex h-full min-h-0 flex-col gap-3 px-4">
-                  <CollapsibleSection.Root
-                    open={state.expandedGroups.channels}
-                    fillAvailable={!state.expandedGroups.direct_messages}
-                  >
-                    <CollapsibleSection.Header
-                      focused={
-                        list.focus.key() === rowKeyForSection('channels')
-                      }
-                      focusWithin={list.focus.item()?.group === 'channels'}
-                      class="h-9 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
-                    >
-                      <button
-                        id={domIdForRow(rowKeyForSection('channels'))}
-                        type="button"
-                        role="treeitem"
-                        tabIndex={-1}
-                        class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                        aria-expanded={state.expandedGroups.channels}
-                        onClick={() =>
-                          activateRow(rowKeyForSection('channels'))
-                        }
-                      >
-                        <CaretDownIcon
-                          class={cn(
-                            'size-3 shrink-0 transition-transform',
-                            !state.expandedGroups.channels && '-rotate-90'
-                          )}
-                        />
-                        <span class="min-w-0 flex-1 truncate">Channels</span>
-                        <Show when={unreadTeamChannelCount() > 0}>
-                          <span class="text-xxs tabular-nums">
-                            {unreadTeamChannelCount()}
-                          </span>
-                        </Show>
-                      </button>
-                      <div data-section-action="" class="pr-1">
-                        <CreateRailAction
-                          label="Create channel"
-                          onClick={() => openNewChannelModal()}
-                        />
-                      </div>
-                    </CollapsibleSection.Header>
-                    <CollapsibleSection.Content
+          <div class="flex min-h-0 flex-1 flex-col">
+            <div
+              ref={(element) => {
+                listRoot = element;
+              }}
+              role="tree"
+              tabIndex={-1}
+              aria-activedescendant={activeDescendant()}
+              class={cn(
+                'scrollbar-hidden min-h-0 flex-1 outline-none',
+                state.tab === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
+              )}
+            >
+              <Switch>
+                <Match when={state.tab === 'browse'}>
+                  <div class="flex h-full min-h-0 flex-col gap-3 px-4">
+                    <CollapsibleSection.Root
                       open={state.expandedGroups.channels}
-                      contentRef={setSectionScrollRoot('channels')}
-                      class="flex min-h-0 flex-col gap-0.5"
-                      activityTargetId={activityTargetId('channels')}
-                      activityLabel={channelActivity.targetLabel('channels')}
-                      onActivityVisible={(targetId) =>
-                        clearVisibleActivity('channels', targetId)
-                      }
+                      fillAvailable={!state.expandedGroups.direct_messages}
                     >
-                      <Show
-                        when={teamChannels().length > 0}
-                        fallback={
-                          <div class="px-2 py-2 text-xs text-ink-extra-muted">
-                            No channels
-                          </div>
+                      <CollapsibleSection.Header
+                        focused={
+                          list.focus.key() === rowKeyForSection('channels')
                         }
+                        focusWithin={list.focus.item()?.group === 'channels'}
+                        class="h-9 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
                       >
-                        <Key each={teamChannels()} by={(channel) => channel.id}>
-                          {(channel) => (
-                            <ChannelOption
-                              id={domIdForRow(rowKeyForChannel(channel().id))}
-                              channel={channel()}
-                              unread={unreadChannelIds().has(channel().id)}
-                              callStatus={callStatuses().get(channel().id)}
-                              incomingCallId={incomingCallIds().get(
-                                channel().id
-                              )}
-                              selected={
-                                state.selectedChannelId === channel().id
-                              }
-                              focused={
-                                list.focus.key() ===
-                                rowKeyForChannel(channel().id)
-                              }
-                              onActivate={() =>
-                                activateRow(rowKeyForChannel(channel().id))
-                              }
-                            />
-                          )}
-                        </Key>
-                      </Show>
-                    </CollapsibleSection.Content>
-                  </CollapsibleSection.Root>
-
-                  <CollapsibleSection.Root
-                    open={state.expandedGroups.direct_messages}
-                    fillAvailable={!state.expandedGroups.channels}
-                  >
-                    <CollapsibleSection.Header
-                      focused={
-                        list.focus.key() === rowKeyForSection('direct_messages')
-                      }
-                      focusWithin={
-                        list.focus.item()?.group === 'direct_messages'
-                      }
-                      class="h-9 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
-                    >
-                      <button
-                        id={domIdForRow(rowKeyForSection('direct_messages'))}
-                        type="button"
-                        role="treeitem"
-                        tabIndex={-1}
-                        class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
-                        aria-expanded={state.expandedGroups.direct_messages}
-                        onClick={() =>
-                          activateRow(rowKeyForSection('direct_messages'))
-                        }
-                      >
-                        <CaretDownIcon
-                          class={cn(
-                            'size-3 shrink-0 transition-transform',
-                            !state.expandedGroups.direct_messages &&
-                              '-rotate-90'
-                          )}
-                        />
-                        <span class="min-w-0 flex-1 truncate">DMs</span>
-                        <Show when={unreadDirectMessageCount() > 0}>
-                          <span class="text-xxs tabular-nums">
-                            {unreadDirectMessageCount()}
-                          </span>
-                        </Show>
-                      </button>
-                      <div data-section-action="" class="pr-1">
-                        <CreateRailAction
-                          label="Start direct message"
-                          onClick={openMessageComposer}
-                        />
-                      </div>
-                    </CollapsibleSection.Header>
-                    <CollapsibleSection.Content
-                      open={state.expandedGroups.direct_messages}
-                      contentRef={setSectionScrollRoot('direct_messages')}
-                      class="flex min-h-0 flex-col gap-0.5"
-                      activityTargetId={activityTargetId('direct_messages')}
-                      activityLabel={channelActivity.targetLabel(
-                        'direct_messages'
-                      )}
-                      onActivityVisible={(targetId) =>
-                        clearVisibleActivity('direct_messages', targetId)
-                      }
-                    >
-                      <Show
-                        when={directMessages().length > 0}
-                        fallback={
-                          <div class="px-2 py-2 text-xs text-ink-extra-muted">
-                            No direct messages
-                          </div>
-                        }
-                      >
-                        <Key
-                          each={directMessages()}
-                          by={(channel) => channel.id}
+                        <button
+                          id={domIdForRow(rowKeyForSection('channels'))}
+                          type="button"
+                          role="treeitem"
+                          tabIndex={-1}
+                          class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                          aria-expanded={state.expandedGroups.channels}
+                          onClick={() =>
+                            activateRow(rowKeyForSection('channels'))
+                          }
                         >
-                          {(channel) => (
-                            <ChannelOption
-                              id={domIdForRow(rowKeyForChannel(channel().id))}
-                              channel={channel()}
-                              unread={unreadChannelIds().has(channel().id)}
-                              callStatus={callStatuses().get(channel().id)}
-                              incomingCallId={incomingCallIds().get(
-                                channel().id
-                              )}
-                              selected={
-                                state.selectedChannelId === channel().id
-                              }
-                              focused={
-                                list.focus.key() ===
-                                rowKeyForChannel(channel().id)
-                              }
-                              onActivate={() =>
-                                activateRow(rowKeyForChannel(channel().id))
-                              }
-                            />
-                          )}
-                        </Key>
-                      </Show>
-                    </CollapsibleSection.Content>
-                  </CollapsibleSection.Root>
-                </div>
-              </Match>
-              <Match when={state.tab === 'recents'}>
-                <Show
-                  when={recentConversations().length > 0}
-                  fallback={
-                    <div class="px-3 py-8 text-center text-sm text-ink-extra-muted">
-                      No recent messages
-                    </div>
-                  }
-                >
-                  <div class="flex w-full flex-col divide-y divide-edge-muted">
-                    <Key
-                      each={recentConversations()}
-                      by={(channel) => channel.id}
+                          <CaretDownIcon
+                            class={cn(
+                              'size-3 shrink-0 transition-transform',
+                              !state.expandedGroups.channels && '-rotate-90'
+                            )}
+                          />
+                          <span class="min-w-0 flex-1 truncate">Channels</span>
+                          <Show when={unreadTeamChannelCount() > 0}>
+                            <span class="text-xxs tabular-nums">
+                              {unreadTeamChannelCount()}
+                            </span>
+                          </Show>
+                        </button>
+                        <div data-section-action="" class="pr-1">
+                          <CreateRailAction
+                            label="Create channel"
+                            onClick={() => openNewChannelModal()}
+                          />
+                        </div>
+                      </CollapsibleSection.Header>
+                      <CollapsibleSection.Content
+                        open={state.expandedGroups.channels}
+                        contentRef={setSectionScrollRoot('channels')}
+                        class="flex min-h-0 flex-col gap-0.5"
+                        activityTargetId={activityTargetId('channels')}
+                        activityLabel={channelActivity.targetLabel('channels')}
+                        onActivityVisible={(targetId) =>
+                          clearVisibleActivity('channels', targetId)
+                        }
+                      >
+                        <Show
+                          when={teamChannels().length > 0}
+                          fallback={
+                            <div class="px-2 py-2 text-xs text-ink-extra-muted">
+                              No channels
+                            </div>
+                          }
+                        >
+                          <Key
+                            each={teamChannels()}
+                            by={(channel) => channel.id}
+                          >
+                            {(channel) => (
+                              <ChannelOption
+                                id={domIdForRow(rowKeyForChannel(channel().id))}
+                                channel={channel()}
+                                unread={unreadChannelIds().has(channel().id)}
+                                callStatus={callStatuses().get(channel().id)}
+                                incomingCallId={incomingCallIds().get(
+                                  channel().id
+                                )}
+                                selected={
+                                  state.selectedChannelId === channel().id
+                                }
+                                focused={
+                                  list.focus.key() ===
+                                  rowKeyForChannel(channel().id)
+                                }
+                                onActivate={() =>
+                                  activateRow(rowKeyForChannel(channel().id))
+                                }
+                              />
+                            )}
+                          </Key>
+                        </Show>
+                      </CollapsibleSection.Content>
+                    </CollapsibleSection.Root>
+
+                    <CollapsibleSection.Root
+                      open={state.expandedGroups.direct_messages}
+                      fillAvailable={!state.expandedGroups.channels}
                     >
-                      {(channel) => (
-                        <ConversationCard
-                          id={domIdForRow(rowKeyForChannel(channel().id))}
-                          channel={channel()}
-                          senderId={channel().latestRootMessage?.senderId}
-                          mentionedCurrentUser={mentionsCurrentUser(channel())}
-                          unread={unreadChannelIds().has(channel().id)}
-                          callStatus={callStatuses().get(channel().id)}
-                          incomingCallId={incomingCallIds().get(channel().id)}
-                          selected={state.selectedChannelId === channel().id}
-                          focused={
-                            list.focus.key() === rowKeyForChannel(channel().id)
+                      <CollapsibleSection.Header
+                        focused={
+                          list.focus.key() ===
+                          rowKeyForSection('direct_messages')
+                        }
+                        focusWithin={
+                          list.focus.item()?.group === 'direct_messages'
+                        }
+                        class="h-9 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
+                      >
+                        <button
+                          id={domIdForRow(rowKeyForSection('direct_messages'))}
+                          type="button"
+                          role="treeitem"
+                          tabIndex={-1}
+                          class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                          aria-expanded={state.expandedGroups.direct_messages}
+                          onClick={() =>
+                            activateRow(rowKeyForSection('direct_messages'))
                           }
-                          onActivate={() =>
-                            activateRow(rowKeyForChannel(channel().id))
+                        >
+                          <CaretDownIcon
+                            class={cn(
+                              'size-3 shrink-0 transition-transform',
+                              !state.expandedGroups.direct_messages &&
+                                '-rotate-90'
+                            )}
+                          />
+                          <span class="min-w-0 flex-1 truncate">DMs</span>
+                          <Show when={unreadDirectMessageCount() > 0}>
+                            <span class="text-xxs tabular-nums">
+                              {unreadDirectMessageCount()}
+                            </span>
+                          </Show>
+                        </button>
+                        <div data-section-action="" class="pr-1">
+                          <CreateRailAction
+                            label="Start direct message"
+                            onClick={openMessageComposer}
+                          />
+                        </div>
+                      </CollapsibleSection.Header>
+                      <CollapsibleSection.Content
+                        open={state.expandedGroups.direct_messages}
+                        contentRef={setSectionScrollRoot('direct_messages')}
+                        class="flex min-h-0 flex-col gap-0.5"
+                        activityTargetId={activityTargetId('direct_messages')}
+                        activityLabel={channelActivity.targetLabel(
+                          'direct_messages'
+                        )}
+                        onActivityVisible={(targetId) =>
+                          clearVisibleActivity('direct_messages', targetId)
+                        }
+                      >
+                        <Show
+                          when={directMessages().length > 0}
+                          fallback={
+                            <div class="px-2 py-2 text-xs text-ink-extra-muted">
+                              No direct messages
+                            </div>
                           }
-                        />
-                      )}
-                    </Key>
+                        >
+                          <Key
+                            each={directMessages()}
+                            by={(channel) => channel.id}
+                          >
+                            {(channel) => (
+                              <ChannelOption
+                                id={domIdForRow(rowKeyForChannel(channel().id))}
+                                channel={channel()}
+                                unread={unreadChannelIds().has(channel().id)}
+                                callStatus={callStatuses().get(channel().id)}
+                                incomingCallId={incomingCallIds().get(
+                                  channel().id
+                                )}
+                                selected={
+                                  state.selectedChannelId === channel().id
+                                }
+                                focused={
+                                  list.focus.key() ===
+                                  rowKeyForChannel(channel().id)
+                                }
+                                onActivate={() =>
+                                  activateRow(rowKeyForChannel(channel().id))
+                                }
+                              />
+                            )}
+                          </Key>
+                        </Show>
+                      </CollapsibleSection.Content>
+                    </CollapsibleSection.Root>
                   </div>
-                </Show>
-              </Match>
-            </Switch>
+                </Match>
+                <Match when={state.tab === 'recents'}>
+                  <Show
+                    when={recentConversations().length > 0}
+                    fallback={
+                      <div class="px-3 py-8 text-center text-sm text-ink-extra-muted">
+                        No recent messages
+                      </div>
+                    }
+                  >
+                    <div class="flex w-full flex-col divide-y divide-edge-muted">
+                      <Key
+                        each={recentConversations()}
+                        by={(channel) => channel.id}
+                      >
+                        {(channel) => (
+                          <ConversationCard
+                            id={domIdForRow(rowKeyForChannel(channel().id))}
+                            channel={channel()}
+                            senderId={channel().latestRootMessage?.senderId}
+                            mentionedCurrentUser={mentionsCurrentUser(
+                              channel()
+                            )}
+                            unread={unreadChannelIds().has(channel().id)}
+                            callStatus={callStatuses().get(channel().id)}
+                            incomingCallId={incomingCallIds().get(channel().id)}
+                            selected={state.selectedChannelId === channel().id}
+                            focused={
+                              list.focus.key() ===
+                              rowKeyForChannel(channel().id)
+                            }
+                            onActivate={() =>
+                              activateRow(rowKeyForChannel(channel().id))
+                            }
+                          />
+                        )}
+                      </Key>
+                    </div>
+                  </Show>
+                </Match>
+              </Switch>
+            </div>
+            <Show when={state.tab === 'browse'}>
+              <footer class="flex h-9 shrink-0 items-center justify-start gap-1 border-t border-edge-muted px-4 text-xxs text-ink-extra-muted">
+                <span>Use</span>
+                <Hotkey shortcut="[" theme="subtle" />
+                <Hotkey shortcut="]" theme="subtle" />
+                <span>to jump sections</span>
+              </footer>
+            </Show>
           </div>
         </Match>
         <Match when={props.mode === 'slim'}>
