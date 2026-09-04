@@ -3,6 +3,7 @@ import type { GithubLink } from '@queries/auth';
 import type { PipedreamConnectionResponse } from '@service-cognition/client';
 import type { ServerResponse } from '@service-cognition/generated/schemas';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
+import { match } from 'ts-pattern';
 
 export type CapabilityStatus =
   | 'connected'
@@ -198,12 +199,11 @@ function googleCapabilities(input: ConnectionsInput): Capability[] {
 }
 
 function githubCapabilities(input: ConnectionsInput): Capability[] {
-  const accountStatus: CapabilityStatus =
-    input.github?.status === 'linked'
-      ? 'connected'
-      : input.github?.status === 'reauthentication_required'
-        ? 'action-required'
-        : 'not-connected';
+  const accountStatus: CapabilityStatus = match(input.github?.status)
+    .with('linked', () => 'connected' as const)
+    .with('reauthentication_required', () => 'action-required' as const)
+    .with('unlinked', undefined, () => 'not-connected' as const)
+    .exhaustive();
   return [
     {
       id: 'github-account',

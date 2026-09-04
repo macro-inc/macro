@@ -169,6 +169,32 @@ describe('toConnectionsModel', () => {
     );
   });
 
+  it('maps GitHub account status from the link union', () => {
+    expect(
+      toConnectionsModel({
+        ...emptyInput,
+        github: github({ status: 'linked' }),
+      }).capabilities.find((row) => row.id === 'github-account')?.status
+    ).toBe('connected');
+    expect(
+      toConnectionsModel(emptyInput).capabilities.find(
+        (row) => row.id === 'github-account'
+      )?.status
+    ).toBe('not-connected');
+    expect(
+      toConnectionsModel({
+        ...emptyInput,
+        github: github({ status: 'reauthentication_required' }),
+      }).capabilities.find((row) => row.id === 'github-account')?.status
+    ).toBe('action-required');
+    expect(
+      toConnectionsModel({
+        ...emptyInput,
+        github: undefined,
+      }).capabilities.find((row) => row.id === 'github-account')?.status
+    ).toBe('not-connected');
+  });
+
   it('shows GitHub reconnect without counting the unproven team app', () => {
     const model = toConnectionsModel({
       ...emptyInput,
