@@ -5,3 +5,4 @@ pub mod agent;
 pub mod engine;
 pub mod replay;
 pub mod session;
+pub mod user_input;

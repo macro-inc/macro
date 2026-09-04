@@ -6,9 +6,11 @@ use serde::Serialize;
 use specta::Type;
 
 use super::ToolUseId;
+use super::elicitation::{ElicitationOutcome, ElicitationRequest, ElicitationRequestId};
 use super::permission::{PermissionOption, PermissionOutcome};
 use super::plan::PlanEntry;
 use super::tool::{ToolDetail, ToolName, ToolStatus};
+use super::user_tool::UserToolOutcome;
 
 /// A unit of renderable content.
 #[derive(Debug, Clone, PartialEq, Serialize, Type)]
@@ -56,6 +58,39 @@ pub enum MessagePart {
     Plan {
         /// The tasks, in the order the agent listed them.
         entries: Vec<PlanEntry>,
+    },
+    /// The agent asking the user a question.
+    ///
+    /// When the question was asked on behalf of a tool call this fold had
+    /// already opened (Claude Code's `AskUserQuestion`), this part *replaces*
+    /// that tool's part in place: the question is the call, and rendering
+    /// both would show one thing twice.
+    Elicitation {
+        /// The agent's `elicitation/create` request id - what an answer must
+        /// echo.
+        #[serde(rename = "requestId")]
+        request_id: ElicitationRequestId,
+        /// The tool call the question belongs to, when the agent said.
+        #[serde(rename = "toolCall")]
+        tool_call: Option<ToolUseId>,
+        /// What the agent is asking, in prose.
+        message: String,
+        /// The form or URL.
+        request: ElicitationRequest,
+        /// How it has resolved so far.
+        outcome: ElicitationOutcome,
+        /// The harness's own reading of the answer, when it reported one
+        /// after the response went back (Claude Code echoes the chosen
+        /// option through its tool result). Absent otherwise.
+        #[specta(type = specta_typescript::Unknown)]
+        reported: Option<serde_json::Value>,
+        /// For a user tool's review ([`ElicitationRequest::UserTool`]): how
+        /// the tool itself ended once the user answered - run with the
+        /// reviewed draft, rejected, or failed - read from the absorbed
+        /// call's later updates. Absent until the tool reports, and for
+        /// every other kind of question.
+        #[serde(rename = "toolOutcome")]
+        tool_outcome: Option<UserToolOutcome>,
     },
 }
 

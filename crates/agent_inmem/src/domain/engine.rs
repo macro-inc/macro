@@ -1,10 +1,15 @@
 //! The seam between the ACP surface and the agentic loop that serves it.
 
+use std::sync::Arc;
+
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
+use ai_tools::user_tool_review::UserToolReviewer;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
+
+use super::user_input::SharedUserInputRequester;
 
 /// Everything one conversational turn needs.
 pub struct TurnRequest {
@@ -23,13 +28,21 @@ pub struct TurnRequest {
     /// Cancelling this token stops the turn; the stream ends after the
     /// engine has drained cooperatively.
     pub cancel: CancellationToken,
+    /// User-input capability for model-callable tools. Absent when the ACP
+    /// client did not advertise form elicitation.
+    pub user_input: Option<SharedUserInputRequester>,
+    /// Puts a user tool's call (`SendEmail`, `CreateCalendarEvent`) to the
+    /// user for review mid-turn, so the tool is finished - run as edited, or
+    /// rejected - before the model reads its result. Absent for the same
+    /// reason as `user_input`; a pending call then stays pending.
+    pub reviewer: Option<Arc<dyn UserToolReviewer>>,
 }
 
 /// Runs one conversational turn and streams its parts back.
 ///
 /// The trait is the testing seam: the ACP surface is exercised against a
 /// scripted engine, and production plugs in
-/// [`crate::outbound::rig_engine::RigTurnEngine`].
+/// [`crate::rig_engine::RigTurnEngine`].
 pub trait TurnEngine: Send + Sync + 'static {
     /// Start the turn. Parts arrive on the returned receiver; the stream
     /// ending is the turn ending, and an `Err` item is a turn-fatal failure.

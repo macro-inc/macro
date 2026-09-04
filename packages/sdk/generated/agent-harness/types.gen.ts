@@ -15,7 +15,9 @@ export type AgentAction = (AgentPromptAction & {
     type: 'compact';
 } | {
     type: 'stop';
-};
+} | (AgentRespondElicitationAction & {
+    type: 'respondElicitation';
+});
 
 /**
  * Identifies one accepted [`AgentAction`] end to end: returned by the
@@ -39,6 +41,17 @@ export type AgentPromptAction = {
      * What to tell the agent.
      */
     prompt: string;
+};
+
+/**
+ * Answer an elicitation the agent is waiting on.
+ */
+export type AgentRespondElicitationAction = ElicitationAnswer & {
+    /**
+     * The agent's `elicitation/create` request id - not an
+     * [`AgentActionId`], because the agent minted it.
+     */
+    requestId: ElicitationRequestId;
 };
 
 /**
@@ -338,6 +351,34 @@ export type EditQueuedActionRequest = {
      */
     prompt: string;
 };
+
+/**
+ * What the user decided about an elicitation. Mirrors ACP's three actions;
+ * there is no `Other` because we never originate an action we do not know.
+ */
+export type ElicitationAnswer = {
+    action: 'accept';
+    /**
+     * Form: the submitted values keyed by property. URL: omitted.
+     */
+    content?: {
+        [key: string]: unknown;
+    } | null;
+} | {
+    action: 'decline';
+} | {
+    action: 'cancel';
+};
+
+/**
+ * The JSON-RPC id of an agent's `elicitation/create` request, carried whole
+ * so the answer echoes exactly what the agent sent.
+ *
+ * Agents pick these, not us: Claude Code counts from `0`, others use
+ * strings. `null` is not a legal id for a request that expects a response,
+ * so it is not representable here.
+ */
+export type ElicitationRequestId = number | string;
 
 /**
  * The provider-side identity of an externally-served session.

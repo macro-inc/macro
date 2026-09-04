@@ -1,6 +1,4 @@
-//! Outbound adapters: the production turn engine and the per-session agent
-//! manager.
+//! Outbound adapters for session logging and agent management.
 
 pub mod log_frames;
 pub mod manager;
-pub mod rig_engine;

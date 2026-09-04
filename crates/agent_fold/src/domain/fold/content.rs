@@ -17,6 +17,16 @@ impl FoldState {
         Some(part)
     }
 
+    /// [`Self::part_at_mut`], read-only.
+    pub(super) fn part_at(&self, at: &ToolPath) -> Option<&MessagePart> {
+        let (first, rest) = at.path.split_first()?;
+        let mut part = self.messages.get(at.message)?.parts.get(*first)?;
+        for &index in rest {
+            part = part.children().get(index)?;
+        }
+        Some(part)
+    }
+
     /// Append agent prose, extending the trailing text part when there is one.
     pub(super) fn append_text(&mut self, text: String) -> Option<Changed> {
         if let Some((message, parts)) = self.agent_parts_mut()

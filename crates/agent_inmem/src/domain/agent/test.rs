@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use agent::StreamPart;
 use agent_client_protocol::schema::ProtocolVersion;
@@ -61,6 +62,7 @@ where
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
+        client_renders_forms: AtomicBool::new(false),
     });
 
     let (client_channel, agent_channel) = AcpChannel::duplex();
@@ -352,4 +354,512 @@ async fn a_prompt_for_an_unknown_session_is_refused() {
         );
     })
     .await;
+}
+
+/// Like [`with_agent`], but the client advertises form elicitation and
+/// answers every `elicitation/create` with `answer`, recording what it was
+/// asked.
+async fn with_asking_agent<Out>(
+    answer: agent_client_protocol::schema::v1::ElicitationAction,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
+) -> (Vec<SessionNotification>, Vec<CreateElicitationRequest>, Out) {
+    with_asking_engine(
+        Arc::new(ScriptedEngine::new(vec![])),
+        answer,
+        Duration::ZERO,
+        scenario,
+    )
+    .await
+}
+
+/// [`with_asking_agent`] over `engine`, with the client taking `delay` to
+/// answer each question - the user's think time.
+async fn with_asking_engine<Engine, Out>(
+    engine: Arc<Engine>,
+    answer: agent_client_protocol::schema::v1::ElicitationAction,
+    delay: Duration,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
+) -> (Vec<SessionNotification>, Vec<CreateElicitationRequest>, Out)
+where
+    Engine: TurnEngine,
+{
+    use agent_client_protocol::schema::v1::{
+        ClientCapabilities, CreateElicitationResponse, ElicitationCapabilities,
+        ElicitationFormCapabilities,
+    };
+
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("test-model".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        engine,
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        client_renders_forms: AtomicBool::new(false),
+    });
+
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    let notifications = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let asked = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let out = Client
+        .builder()
+        .on_receive_notification(
+            {
+                let notifications = Arc::clone(&notifications);
+                async move |notification: SessionNotification, _connection| {
+                    notifications.lock().unwrap().push(notification);
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
+        .on_receive_request(
+            {
+                let asked = Arc::clone(&asked);
+                async move |request: CreateElicitationRequest, responder, connection| {
+                    asked.lock().unwrap().push(request);
+                    if delay.is_zero() {
+                        return responder.respond(CreateElicitationResponse::new(answer.clone()));
+                    }
+                    // Answer off the dispatch loop so the delay does not hold
+                    // up the notifications the agent keeps sending meanwhile.
+                    let answer = answer.clone();
+                    connection.spawn(async move {
+                        tokio::time::sleep(delay).await;
+                        let _ = responder.respond(CreateElicitationResponse::new(answer));
+                        Ok(())
+                    })?;
+                    Ok(())
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(
+                        InitializeRequest::new(ProtocolVersion::V1).client_capabilities(
+                            ClientCapabilities::new().elicitation(
+                                ElicitationCapabilities::new()
+                                    .form(ElicitationFormCapabilities::new()),
+                            ),
+                        ),
+                    )
+                    .block_task()
+                    .await?;
+                let session = connection
+                    .send_request(NewSessionRequest::new("/"))
+                    .block_task()
+                    .await?;
+                Ok(scenario(connection, session.session_id).await)
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
+
+    let notifications = notifications.lock().unwrap().clone();
+    let asked = asked.lock().unwrap().clone();
+    (notifications, asked, out)
+}
+
+fn spoken(notifications: &[SessionNotification]) -> String {
+    notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                ContentBlock::Text(text) => Some(text.text.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+#[tokio::test]
+async fn ask_sends_a_form_elicitation_and_echoes_the_accepted_answer() {
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue, ElicitationMode,
+    };
+    use std::collections::BTreeMap;
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([(
+            ASK_FIELD.to_owned(),
+            ElicitationContentValue::String("blue".to_owned()),
+        )])));
+    let (notifications, asked, response) =
+        with_asking_agent(answer, async |connection, session| {
+            connection
+                .send_request(text_prompt(
+                    &session,
+                    "/ask What is the best colour? | red | blue | green",
+                ))
+                .block_task()
+                .await
+                .expect("the ask should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(asked.len(), 1, "exactly one question was asked");
+    assert_eq!(asked[0].message, "What is the best colour?");
+    let ElicitationMode::Form(form) = &asked[0].mode else {
+        panic!("a form was asked");
+    };
+    let field = form
+        .requested_schema
+        .properties
+        .get(ASK_FIELD)
+        .expect("the one field");
+    let agent_client_protocol::schema::v1::ElicitationPropertySchema::String(field) = field else {
+        panic!("a string field");
+    };
+    assert_eq!(
+        field.one_of.as_ref().map(|options| options
+            .iter()
+            .map(|option| option.value.as_str())
+            .collect::<Vec<_>>()),
+        Some(vec!["red", "blue", "green"])
+    );
+    assert_eq!(
+        form.requested_schema.required.as_deref(),
+        Some(&[ASK_FIELD.to_owned()][..])
+    );
+    assert_eq!(spoken(&notifications), "You answered: blue");
+}
+
+#[tokio::test]
+async fn ask_rejects_an_answer_outside_the_offered_options() {
+    use std::collections::BTreeMap;
+
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue,
+    };
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([(
+            ASK_FIELD.to_owned(),
+            ElicitationContentValue::String("yellow".to_owned()),
+        )])));
+    let (notifications, _, response) = with_asking_agent(answer, async |connection, session| {
+        connection
+            .send_request(text_prompt(
+                &session,
+                "/ask What is the best colour? | red | blue | green",
+            ))
+            .block_task()
+            .await
+            .expect("the ask turn should complete with a validation message")
+    })
+    .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert!(
+        spoken(&notifications).contains("was not one of the offered options"),
+        "got {:?}",
+        spoken(&notifications)
+    );
+}
+
+#[tokio::test]
+async fn ask_reports_a_decline_and_a_free_text_question_has_no_options() {
+    use agent_client_protocol::schema::v1::{ElicitationAction, ElicitationMode};
+
+    let (notifications, asked, response) =
+        with_asking_agent(ElicitationAction::Decline, async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "/ask Name the service"))
+                .block_task()
+                .await
+                .expect("the ask should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    let ElicitationMode::Form(form) = &asked[0].mode else {
+        panic!("a form was asked");
+    };
+    let agent_client_protocol::schema::v1::ElicitationPropertySchema::String(field) =
+        &form.requested_schema.properties[ASK_FIELD]
+    else {
+        panic!("a string field");
+    };
+    assert!(field.one_of.is_none(), "free text has no options");
+    assert_eq!(spoken(&notifications), "You declined to answer.");
+}
+
+/// An engine whose one tool asks the user a question through the turn's
+/// user-input port and then says the answer - `AskUser` reduced to the part
+/// the ACP surface cares about.
+struct AskingEngine;
+
+impl TurnEngine for AskingEngine {
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            let requester = request
+                .user_input
+                .expect("the client advertised forms, so the turn can ask");
+            let outcome = requester
+                .ask(UserInputRequest {
+                    question: "Which colour?".to_owned(),
+                    options: Vec::new(),
+                })
+                .await;
+            let text = match outcome {
+                Ok(UserInputOutcome::Answered(answer)) => format!("You said {answer}."),
+                Ok(other) => format!("{other:?}"),
+                Err(error) => error.to_string(),
+            };
+            let _ = parts.send(Ok(StreamPart::Content(text))).await;
+        });
+        receiver
+    }
+}
+
+/// A user who takes longer than the idle timeout to answer is not a hung
+/// turn: the question holds the timeout off, and the turn finishes on the
+/// answer rather than being stopped for producing nothing meanwhile.
+#[tokio::test(start_paused = true)]
+async fn a_turn_waiting_on_the_user_outlasts_the_idle_timeout() {
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue,
+    };
+    use std::collections::BTreeMap;
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([(
+            ASK_FIELD.to_owned(),
+            ElicitationContentValue::String("teal".to_owned()),
+        )])));
+    let (notifications, asked, response) = with_asking_engine(
+        Arc::new(AskingEngine),
+        answer,
+        TURN_IDLE_TIMEOUT * 3,
+        async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "pick a colour for me"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        },
+    )
+    .await;
+
+    assert_eq!(asked.len(), 1, "the tool asked once");
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(spoken(&notifications), "You said teal.");
+}
+
+/// An engine whose turn puts one user tool call to the reviewer and says what
+/// came back - the agent loop's finisher reduced to the ACP surface.
+struct ReviewingEngine;
+
+impl TurnEngine for ReviewingEngine {
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            let reviewer = request
+                .reviewer
+                .expect("the client advertised forms, so the turn can ask for a review");
+            let outcome = reviewer
+                .review(ReviewRequest {
+                    tool_name: "CreateCalendarEvent".to_owned(),
+                    tool_call_id: "toolu_7".to_owned(),
+                    message: "Create calendar event?".to_owned(),
+                    draft: serde_json::json!({"title": "Q3 sync", "addGoogleMeet": false}),
+                    form: ReviewForm {
+                        title: Some("Create calendar event".to_owned()),
+                        fields: vec![
+                            ai_tools::user_tool_review::ReviewField {
+                                name: "title".to_owned(),
+                                description: Some("The event title.".to_owned()),
+                                kind: ReviewFieldKind::Text {
+                                    default: Some("Q3 sync".to_owned()),
+                                    format: None,
+                                },
+                            },
+                            ai_tools::user_tool_review::ReviewField {
+                                name: "addGoogleMeet".to_owned(),
+                                description: None,
+                                kind: ReviewFieldKind::Boolean {
+                                    default: Some(false),
+                                },
+                            },
+                            ai_tools::user_tool_review::ReviewField {
+                                name: "draft".to_owned(),
+                                description: None,
+                                kind: ReviewFieldKind::Json,
+                            },
+                        ],
+                        required: vec!["title".to_owned()],
+                    },
+                })
+                .await;
+            let text = match outcome {
+                Ok(ReviewOutcome::Accepted(content)) => format!(
+                    "accepted {}",
+                    serde_json::to_string(&content).expect("content serializes")
+                ),
+                Ok(other) => format!("{other:?}"),
+                Err(error) => error.to_string(),
+            };
+            let _ = parts.send(Ok(StreamPart::Content(text))).await;
+        });
+        receiver
+    }
+}
+
+/// A user tool's review goes out as a tool-call-scoped form elicitation the
+/// fold and a Macro client can recognize: the draft's flat fields with their
+/// values as defaults, the `_macro/json` draft field, and `_meta.macro.userTool`
+/// naming the tool. The accepted content comes back as submitted.
+#[tokio::test]
+async fn a_user_tool_review_is_a_tool_scoped_form_elicitation_naming_the_tool() {
+    use agent_client_protocol::schema::v1::{
+        ElicitationAcceptAction, ElicitationAction, ElicitationContentValue, ElicitationMode,
+        ElicitationPropertySchema, ElicitationScope,
+    };
+    use std::collections::BTreeMap;
+
+    let answer =
+        ElicitationAction::Accept(ElicitationAcceptAction::new().content(BTreeMap::from([
+            (
+                "title".to_owned(),
+                ElicitationContentValue::String("Q3 planning".to_owned()),
+            ),
+            (
+                "addGoogleMeet".to_owned(),
+                ElicitationContentValue::Boolean(true),
+            ),
+        ])));
+    let (notifications, asked, response) = with_asking_engine(
+        Arc::new(ReviewingEngine),
+        answer,
+        Duration::ZERO,
+        async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "create the event"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        },
+    )
+    .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert_eq!(asked.len(), 1, "one review was asked");
+    let request = &asked[0];
+    assert_eq!(request.message, "Create calendar event?");
+    let ElicitationMode::Form(form) = &request.mode else {
+        panic!("a form was asked");
+    };
+    let ElicitationScope::Session(scope) = &form.scope else {
+        panic!("session scoped");
+    };
+    assert_eq!(
+        scope.tool_call_id.as_ref().map(|id| id.0.as_ref()),
+        Some("toolu_7"),
+        "the elicitation names the call it reviews"
+    );
+    let user_tool = request
+        .meta
+        .as_ref()
+        .and_then(|meta| meta.get(META_NAMESPACE))
+        .and_then(|ours| ours.get(USER_TOOL_META_KEY))
+        .expect("_meta.macro.userTool names the tool under review");
+    assert_eq!(
+        user_tool.get("name").and_then(|name| name.as_str()),
+        Some("CreateCalendarEvent"),
+        "a Macro client learns which tool's composer to show"
+    );
+    assert_eq!(
+        user_tool.get("draft"),
+        Some(&serde_json::json!({"title": "Q3 sync", "addGoogleMeet": false})),
+        "and has the draft whether or not it opened the call"
+    );
+    let schema = &form.requested_schema;
+    assert_eq!(schema.title.as_deref(), Some("Create calendar event"));
+    let ElicitationPropertySchema::String(title) = &schema.properties["title"] else {
+        panic!("title is a string field");
+    };
+    assert_eq!(title.default.as_deref(), Some("Q3 sync"));
+    assert_eq!(title.description.as_deref(), Some("The event title."));
+    let ElicitationPropertySchema::Boolean(meet) = &schema.properties["addGoogleMeet"] else {
+        panic!("addGoogleMeet is a boolean field");
+    };
+    assert_eq!(meet.default, Some(false));
+    let ElicitationPropertySchema::Other(draft) = &schema.properties["draft"] else {
+        panic!(
+            "the draft is a custom field, got {:?}",
+            schema.properties["draft"]
+        );
+    };
+    assert_eq!(draft.type_, JSON_PROPERTY_TYPE);
+    assert_eq!(
+        schema.required.as_deref(),
+        Some(&["title".to_owned()][..]),
+        "the draft field is never required"
+    );
+    assert_eq!(
+        spoken(&notifications),
+        r#"accepted {"addGoogleMeet":true,"title":"Q3 planning"}"#
+    );
+}
+
+/// The timeout still guards a turn that is silent with nothing asked.
+#[tokio::test(start_paused = true)]
+async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
+    let (notifications, response) =
+        with_agent(Arc::new(HangingEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "hang"))
+                .block_task()
+                .await
+                .expect("the turn should complete")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+    assert!(
+        spoken(&notifications).contains("produced nothing"),
+        "got {:?}",
+        spoken(&notifications)
+    );
+}
+
+#[tokio::test]
+async fn ask_without_form_support_explains_instead_of_asking() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let (notifications, response) = with_agent(engine, async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "/ask anything?"))
+            .block_task()
+            .await
+            .expect("the ask should complete")
+    })
+    .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    assert!(
+        spoken(&notifications).contains("did not advertise form elicitation"),
+        "got {:?}",
+        spoken(&notifications)
+    );
 }

@@ -3,6 +3,8 @@
 use serde::Serialize;
 use specta::Type;
 
+use super::elicitation::PendingElicitation;
+
 /// Which ACP agent produced a session's log.
 ///
 /// ACP names none of a harness's conventions - which `_meta` keys it writes,
@@ -40,7 +42,9 @@ pub enum Harness {
 
 /// Session-level state derived from the log, latest-wins and carried whole.
 /// Fields start absent and fill in as the log reveals them.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Type)]
+///
+/// `PartialEq` only: a pending form's numeric bounds are `f64`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct SessionMetadata {
     /// The agent that produced the log. See [`Harness`].
@@ -59,6 +63,10 @@ pub struct SessionMetadata {
     /// The last system event's wire name (`"acp_ready"`, `"disconnected"`),
     /// `None` until the runtime reports one.
     pub status: Option<String>,
+    /// The one elicitation the user can answer right now. `None` when
+    /// nothing is pending, when the turn that asked has ended, or when the
+    /// connection that asked is gone - the request id dies with it.
+    pub pending_elicitation: Option<PendingElicitation>,
 }
 
 /// One slash command the harness advertises.

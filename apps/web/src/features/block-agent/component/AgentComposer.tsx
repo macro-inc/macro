@@ -18,7 +18,9 @@ import {
 
 export function AgentComposer() {
   const {
+    blockedOnUser,
     composer,
+    elicitation,
     loadFailed,
     metadata,
     pending,
@@ -71,6 +73,15 @@ export function AgentComposer() {
       </Show>
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
+      </Show>
+      <Show when={blockedOnUser()}>
+        <ComposerNotice
+          text={
+            elicitation.canAnswer()
+              ? 'The agent is waiting for your answer above. Messages sent now are queued.'
+              : `The agent is waiting for ${elicitation.ownerName()} to answer above. Messages sent now are queued.`
+          }
+        />
       </Show>
       <AgentInput
         placeholder="Message the agent, @mention anything"

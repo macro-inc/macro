@@ -274,6 +274,18 @@ impl IntoResponse for AgentSessionApiError {
                 )
                     .into_response()
             }
+            // Same class as a disconnected runtime: nothing is wrong, and
+            // repeating the request will not land. The form the caller is
+            // answering has already resolved (someone else answered, a stop
+            // cancelled it, or the connection that asked is gone).
+            Self::Domain(AgentSessionError::ElicitationNotPending(session_id)) => {
+                tracing::info!(%session_id, "elicitation answer refused: nothing pending under that id");
+                (
+                    StatusCode::CONFLICT,
+                    "the agent is not waiting on that question any more",
+                )
+                    .into_response()
+            }
             Self::Domain(AgentSessionError::Forbidden) => {
                 (StatusCode::FORBIDDEN, "forbidden").into_response()
             }

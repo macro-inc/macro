@@ -33,8 +33,20 @@ pub(super) enum SessionPhase {
     },
     Live {
         session_id: SessionId,
+        /// The one `elicitation/create` this connection is holding for the
+        /// user to answer. Macro allows one at a time; a second is refused
+        /// while this is `Some`.
+        elicitation: Option<PendingElicitation>,
     },
     Dead,
+}
+
+/// An `elicitation/create` the agent is waiting on. Only the id is held:
+/// message, schema and mode are in the log for the fold to render, and the
+/// machine's one job is to know which id it may answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct PendingElicitation {
+    pub(super) request_id: RequestId,
 }
 
 #[derive(Clone)]

@@ -1,10 +1,27 @@
 import {
+  EmailDraft,
+  EventDraft,
+} from '@app/features/block-agent/component/parts/UserToolCall';
+import { DRAFT_FIELD } from '@app/features/block-agent/state/elicitation-review-sink';
+import {
   StaticMarkdown,
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { type Component, Match, Show, Switch } from 'solid-js';
-import type { MagicChipActivity, MagicChipPresentation } from './presentation';
+import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
+import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
+import type {
+  CreateCalendarEvent,
+  SendEmail,
+} from '@service-cognition/generated/tools/types';
+import { Button } from '@ui';
+import { type Component, createMemo, Match, Show, Switch } from 'solid-js';
+import { match } from 'ts-pattern';
+import type {
+  MagicChipActivity,
+  MagicChipPresentation,
+  MagicChipQuestion,
+} from './presentation';
 
 function working(presentation: MagicChipPresentation) {
   return presentation.kind === 'working' ? presentation : undefined;
@@ -14,9 +31,20 @@ function answering(presentation: MagicChipPresentation) {
   return presentation.kind === 'answering' ? presentation : undefined;
 }
 
+function asking(presentation: MagicChipPresentation) {
+  return presentation.kind === 'asking' ? presentation : undefined;
+}
+
 function settled(presentation: MagicChipPresentation) {
   return presentation.kind === 'settled' ? presentation : undefined;
 }
+
+/** What the chip's answer to a question does. */
+export type MagicChipAnswer = {
+  /** An answer is on the wire; the buttons wait. */
+  answering: boolean;
+  respond: (answer: ElicitationAnswer) => Promise<boolean>;
+};
 
 /** Fixed-height activity line — no box, just a shimmering label in the flow. */
 const ActivityLine: Component<{
@@ -95,6 +123,131 @@ const StreamingAnswer: Component<{
   </div>
 );
 
+/**
+ * A question the agent stopped to ask, kept small for a channel thread: what
+ * is being asked, a read-only summary of a user tool's draft, and the two
+ * decisions. Editing the draft, or answering a form field by field, happens
+ * in the session - "Edit in session" opens it. Anyone but the session's
+ * owner sees the summary and who is being waited on.
+ */
+const AskingCard: Component<{
+  agentSessionId: string;
+  asking: MagicChipQuestion;
+  answer?: MagicChipAnswer;
+  onOpen?: () => void;
+}> = (props) => {
+  const request = () => props.asking.question.request;
+  const userTool = createMemo(() => {
+    const current = request();
+    if (current.kind !== 'user_tool') return undefined;
+    const call = deserializeToolCall({
+      id:
+        props.asking.question.toolCall ??
+        String(props.asking.question.requestId),
+      name: current.tool,
+      json: current.draft,
+    });
+    return call.isOk() ? { tool: call.value, draft: current.draft } : undefined;
+  });
+  const locked = () =>
+    !props.asking.canAnswer || props.answer?.answering === true;
+  const waitingFor = () =>
+    props.asking.canAnswer
+      ? 'Waiting for you'
+      : `Waiting for ${props.asking.ownerName}`;
+  const confirmLabel = () =>
+    match(userTool()?.tool.name)
+      .with('CreateCalendarEvent', () => 'Create event')
+      .with('SendEmail', () => 'Send email')
+      .otherwise(() => 'Confirm');
+  const respond = (answer: ElicitationAnswer) => {
+    if (locked()) return;
+    void props.answer?.respond(answer);
+  };
+  // The chip sends the draft as the agent wrote it; edits need the session's
+  // composer.
+  const accept = () =>
+    respond({
+      action: 'accept',
+      content:
+        request().kind === 'user_tool'
+          ? { [DRAFT_FIELD]: JSON.stringify(userTool()?.draft ?? {}) }
+          : {},
+    });
+
+  return (
+    <div
+      class="flex w-full min-w-0 flex-col gap-2 rounded-lg border border-edge-muted bg-surface p-3"
+      data-magic-chip={props.agentSessionId}
+      data-magic-chip-asking
+      data-message-reply-preview={`${waitingFor()} · ${props.asking.question.message}`}
+    >
+      <div class="flex items-center gap-2 text-xs">
+        <span class="shrink-0 font-semibold text-ink-muted" aria-live="polite">
+          {waitingFor()}
+        </span>
+        <span class="min-w-0 truncate text-ink">
+          {props.asking.question.message}
+        </span>
+      </div>
+      <Switch>
+        <Match
+          when={userTool()?.tool.name === 'CreateCalendarEvent' && userTool()}
+        >
+          {(reviewed) => (
+            <EventDraft event={reviewed().tool.data as CreateCalendarEvent} />
+          )}
+        </Match>
+        <Match when={userTool()?.tool.name === 'SendEmail' && userTool()}>
+          {(reviewed) => (
+            <EmailDraft
+              email={reviewed().tool.data as SendEmail}
+              inFlight={false}
+            />
+          )}
+        </Match>
+      </Switch>
+      <div class="flex flex-wrap items-center gap-2">
+        <Show when={props.asking.canAnswer}>
+          <Show when={userTool()}>
+            <Button
+              variant="cta"
+              size="xs"
+              disabled={locked()}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={accept}
+            >
+              {confirmLabel()}
+            </Button>
+          </Show>
+          <Button
+            variant="outline"
+            size="xs"
+            disabled={locked()}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => respond({ action: 'decline' })}
+          >
+            {userTool() ? 'Cancel' : 'Decline'}
+          </Button>
+        </Show>
+        <Button
+          variant="ghost"
+          size="xs"
+          disabled={!props.onOpen}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={props.onOpen}
+        >
+          {props.asking.canAnswer
+            ? userTool()
+              ? 'Edit in session'
+              : 'Answer in session'
+            : 'Open session'}
+        </Button>
+      </div>
+    </div>
+  );
+};
+
 /** The settled response, quoted as if the agent had answered inline. */
 const SettledAnswer: Component<{
   agentSessionId: string;
@@ -122,6 +275,8 @@ const SettledAnswer: Component<{
 export const MagicChipView: Component<{
   agentSessionId: string;
   presentation: MagicChipPresentation;
+  /** How the chip answers a question the agent asks; absent renders one read-only. */
+  answer?: MagicChipAnswer;
   onOpen?: () => void;
 }> = (props) => (
   <Switch>
@@ -142,6 +297,21 @@ export const MagicChipView: Component<{
           activity={presentation().activity}
           onOpen={props.onOpen}
         />
+      )}
+    </Match>
+    <Match when={asking(props.presentation)}>
+      {(presentation) => (
+        <div class="grid w-full min-w-0 justify-items-start gap-1">
+          <Show when={presentation().markdown}>
+            {(markdown) => <AnswerBody markdown={markdown()} />}
+          </Show>
+          <AskingCard
+            agentSessionId={props.agentSessionId}
+            asking={presentation().asking}
+            answer={props.answer}
+            onOpen={props.onOpen}
+          />
+        </div>
       )}
     </Match>
     <Match when={settled(props.presentation)}>

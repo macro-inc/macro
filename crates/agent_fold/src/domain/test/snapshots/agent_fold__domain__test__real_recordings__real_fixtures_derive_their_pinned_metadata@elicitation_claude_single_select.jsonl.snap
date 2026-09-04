@@ -1,0 +1,77 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+expression: machine.metadata()
+input_file: crates/agent_fold/fixtures/real/elicitation_claude_single_select.jsonl
+---
+SessionMetadata {
+    harness: ClaudeCode,
+    model: Some(
+        "sonnet",
+    ),
+    supported_models: [
+        ModelOption {
+            id: "default",
+            name: "Default (recommended)",
+            description: Some(
+                "Opus 5 with 1M context · Best for everyday, complex tasks",
+            ),
+            group: None,
+        },
+        ModelOption {
+            id: "opus[1m]",
+            name: "Opus (1M context)",
+            description: Some(
+                "Opus 5 with 1M context · Best for everyday, complex tasks",
+            ),
+            group: None,
+        },
+        ModelOption {
+            id: "claude-fable-5[1m]",
+            name: "Fable",
+            description: Some(
+                "Fable 5 · Most capable for your hardest and longest-running tasks",
+            ),
+            group: None,
+        },
+        ModelOption {
+            id: "sonnet",
+            name: "Sonnet",
+            description: Some(
+                "Sonnet 5 · Efficient for routine tasks",
+            ),
+            group: None,
+        },
+        ModelOption {
+            id: "haiku",
+            name: "Haiku",
+            description: Some(
+                "Haiku 4.5 · Fastest for quick answers",
+            ),
+            group: None,
+        },
+    ],
+    title: None,
+    available_commands: [
+        AvailableCommand {
+            name: "add-sdk-endpoint",
+            description: "Wrap a new backend endpoint in the TypeScript SDK (packages/sdk), or record it as skipped. Use when `just coverage` fails, or after adding an endpoint to a Rust service. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "qc",
+            description: "Quality gate. 5 parallel agents review changes. All must pass. (project)",
+            input_hint: None,
+        },
+        AvailableCommand {
+            name: "compact",
+            description: "Free up context by summarizing the conversation so far",
+            input_hint: Some(
+                "<optional custom summarization instructions>",
+            ),
+        },
+    ],
+    status: Some(
+        "acp_ready",
+    ),
+    pending_elicitation: None,
+}

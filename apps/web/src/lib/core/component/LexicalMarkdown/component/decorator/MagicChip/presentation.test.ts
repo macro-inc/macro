@@ -213,6 +213,46 @@ describe('deriveMagicChipPresentation', () => {
     }
   );
 
+  it('prioritizes an unanswered question over a running tool', () => {
+    const presentation = deriveMagicChipPresentation({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [
+          {
+            kind: 'elicitation',
+            requestId: 0,
+            toolCall: 'tool',
+            message: 'Which approach?',
+            request: {
+              kind: 'form',
+              schema: {
+                title: null,
+                description: null,
+                properties: [],
+                required: [],
+              },
+            },
+            outcome: { kind: 'pending' },
+            reported: null,
+            toolOutcome: null,
+          },
+          {
+            kind: 'tool_use',
+            id: 'other',
+            name: { kind: 'native', name: 'Read' },
+            status: 'running',
+            detail: { kind: 'read', paths: [] },
+          },
+        ],
+      }),
+    });
+
+    expect(presentation).toMatchObject({
+      kind: 'working',
+      activity: { label: 'Waiting for your input', busy: false },
+    });
+  });
+
   it('shows the answer as it is written, before the turn ends', () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'acp_ready',
@@ -290,5 +330,72 @@ describe('deriveMagicChipPresentation', () => {
     });
 
     expect(presentation).toEqual({ kind: 'settled', markdown: '**Fixed.**' });
+  });
+
+  describe('a question the agent is waiting on', () => {
+    const asking = {
+      question: {
+        requestId: 9,
+        turn: 0,
+        toolCall: 'toolu_evt',
+        message: 'Create calendar event?',
+        request: {
+          kind: 'user_tool' as const,
+          tool: 'CreateCalendarEvent',
+          draft: { title: 'Q3 sync' },
+          schema: {
+            title: null,
+            description: null,
+            properties: [],
+            required: [],
+          },
+        },
+      },
+      canAnswer: true,
+      ownerName: 'Alice Owner',
+    };
+
+    it('outranks whatever else the open turn is doing, keeping the answer so far', () => {
+      const presentation = deriveMagicChipPresentation({
+        persistedStatus: 'acp_ready',
+        asking,
+        response: response({
+          parts: [
+            { kind: 'text', text: 'Setting that up.' },
+            {
+              kind: 'tool_use',
+              id: 'tool',
+              name: { kind: 'native', name: 'ListCalendars' },
+              status: 'running',
+              detail: { kind: 'macro', input: {}, output: null, error: null },
+            },
+          ],
+        }),
+      });
+      expect(presentation).toEqual({
+        kind: 'asking',
+        markdown: 'Setting that up.',
+        asking,
+      });
+    });
+
+    it('is offered even before the agent has written anything', () => {
+      expect(
+        deriveMagicChipPresentation({ persistedStatus: 'acp_ready', asking })
+      ).toEqual({ kind: 'asking', markdown: '', asking });
+    });
+
+    it('never outranks a settled answer', () => {
+      expect(
+        deriveMagicChipPresentation({
+          persistedStatus: 'acp_ready',
+          asking,
+          response: response({
+            parts: [{ kind: 'text', text: 'Done.' }],
+            stop: { kind: 'end_turn' },
+          }),
+        })
+      ).toEqual({ kind: 'settled', markdown: 'Done.' });
+    });
   });
 });

@@ -7,8 +7,8 @@ use crate::domain::harness::{HarnessReader, ToolFrame};
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::model::{Control, FoldedMessage, SessionMetadata, ToolUseId, TurnId};
 use agent_client_protocol::schema::v1::{
-    PromptRequest, RequestId, RequestPermissionRequest, Response, SessionNotification,
-    SessionUpdate,
+    CompleteElicitationNotification, CreateElicitationRequest, PromptRequest, RequestId,
+    RequestPermissionRequest, Response, SessionNotification, SessionUpdate,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::action::AgentAction;
@@ -71,6 +71,16 @@ impl StepChange {
     }
 }
 
+impl FoldState {
+    /// The changes for a handler that touched one message and reported
+    /// whether the metadata moved, message first.
+    fn message_and_metadata(changed: Changed, metadata: bool) -> Vec<StepChange> {
+        let mut changes = vec![StepChange::Message(changed)];
+        changes.extend(StepChange::metadata(metadata));
+        changes
+    }
+}
+
 /// The fold's state, advanced one log entry at a time by [`State::step`] and
 /// owned by [`FoldMachineImpl`].
 #[derive(Debug, Default)]
@@ -95,6 +105,14 @@ pub(super) struct FoldState {
     pub(super) turns_opened: u32,
     /// Outstanding permission requests, by the id of the request that asked.
     pub(super) pending_permissions: HashMap<RequestId, ToolUseId>,
+    /// Outstanding `elicitation/create`s, by the id of the request that
+    /// asked: where the question's part sits, so its answer can find it.
+    /// Session-wide like [`Self::tool_positions`], since the part may have
+    /// taken a tool call's place under a subagent.
+    pub(super) pending_elicitations: HashMap<RequestId, ToolPath>,
+    /// Accepted URL elicitations the agent may still report complete, by the
+    /// agent's `elicitationId`.
+    pub(super) completable_elicitations: HashMap<String, ToolPath>,
     /// Session-level state derived so far. Handlers mutate it freely; the
     /// machine diffs it against what it last reported.
     pub(super) metadata: SessionMetadata,
@@ -199,7 +217,10 @@ impl FoldState {
                         AgentAction::Stop => {
                             self.record_control(Control::Stop, None, entry.user_id.clone())
                         }
-                        AgentAction::Prompt(_) => None,
+                        // `control_from_runtime` never yields these: a prompt
+                        // is folded below, and an elicitation answer is a
+                        // response frame, correlated by the agent's id.
+                        AgentAction::Prompt(_) | AgentAction::RespondElicitation(_) => None,
                     });
                 }
                 StepChange::message(match &acp.0 {
@@ -209,11 +230,27 @@ impl FoldState {
                     {
                         self.begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
                     }
-                    // The user's answer to a permission request.
+                    // The user's answer to a question or a permission
+                    // request. Each map holds only the ids of its own
+                    // requests, so trying the elicitations first is order,
+                    // not precedence.
                     RawJsonRpcMessage::Response(Response::Result { id, result }) => {
+                        if let Some((changed, metadata)) =
+                            self.resolve_elicitation(id, Some(result), None)
+                        {
+                            return Self::message_and_metadata(changed, metadata);
+                        }
                         self.resolve_permission(id, Some(result))
                     }
-                    RawJsonRpcMessage::Response(Response::Error { id, .. }) => {
+                    // An error response is this client refusing a request it
+                    // could not hold - a second question, an unknown mode -
+                    // or failing to answer a permission.
+                    RawJsonRpcMessage::Response(Response::Error { id, error }) => {
+                        if let Some((changed, metadata)) =
+                            self.resolve_elicitation(id, None, Some(&error.message))
+                        {
+                            return Self::message_and_metadata(changed, metadata);
+                        }
                         self.resolve_permission(id, None)
                     }
                     // Handshake and configuration traffic: nothing to render.
@@ -236,6 +273,21 @@ impl FoldState {
                         self.request_permission(&request.id, request.params.as_ref()),
                     )
                 }
+                // The agent asking the user a question.
+                RawJsonRpcMessage::Request(request)
+                    if CreateElicitationRequest::matches_method(&request.method) =>
+                {
+                    match self.request_elicitation(&request.id, request.params.as_ref()) {
+                        Some((changed, metadata)) => Self::message_and_metadata(changed, metadata),
+                        None => Vec::new(),
+                    }
+                }
+                // The agent reporting that a URL interaction finished.
+                RawJsonRpcMessage::Notification(notification)
+                    if CompleteElicitationNotification::matches_method(&notification.method) =>
+                {
+                    StepChange::message(self.complete_elicitation(notification.params.as_ref()))
+                }
                 // The response to `session/prompt` closes the turn; a
                 // config-bearing response updates the metadata; a control's
                 // response resolves its outcome. Set-model is both of the
@@ -253,7 +305,9 @@ impl FoldState {
                     } else if control.is_some() {
                         StepChange::message(control)
                     } else {
-                        StepChange::message(self.end_turn(id, Some(result)))
+                        let mut changes = StepChange::message(self.end_turn(id, Some(result)));
+                        changes.extend(StepChange::metadata(self.turn_ended_clears_elicitation()));
+                        changes
                     }
                 }
                 RawJsonRpcMessage::Response(Response::Error { id, error }) => {
@@ -263,7 +317,9 @@ impl FoldState {
                     if self.pending_config_requests.remove(id) || control.is_some() {
                         StepChange::message(control)
                     } else {
-                        StepChange::message(self.fail_turn(id, &error.message))
+                        let mut changes = StepChange::message(self.fail_turn(id, &error.message));
+                        changes.extend(StepChange::metadata(self.turn_ended_clears_elicitation()));
+                        changes
                     }
                 }
                 RawJsonRpcMessage::Request(_) | RawJsonRpcMessage::Notification(_) => Vec::new(),
@@ -275,16 +331,18 @@ impl FoldState {
             // nothing pending can be answered past one - a stale entry would
             // misattribute a new connection's reused id.
             Message::ToServer(ToServerMessage::Event { event }) => {
+                let mut changed = false;
                 if matches!(event, SystemEvent::AcpReady) {
                     self.pending_initialize = None;
                     self.pending_config_requests.clear();
                     self.pending_permissions.clear();
                     self.pending_controls.clear();
+                    changed |= self.forget_elicitations();
                 }
                 let status = Some(event.as_str().to_owned());
-                let changed = self.metadata.status != status;
-                if changed {
+                if self.metadata.status != status {
                     self.metadata.status = status;
+                    changed = true;
                 }
                 StepChange::metadata(changed)
             }

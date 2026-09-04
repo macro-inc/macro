@@ -1,11 +1,19 @@
-//! The production turn engine: the shared rig agent loop over the Macro
-//! product toolset.
+//! Composition root for the production turn engine: the shared rig agent loop
+//! over the Macro product toolset.
 //!
 //! Consumption mirrors the scheduled-action executor
 //! (`services/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
 //! the full static toolset, the agent-session preamble, the static Macro
 //! prompt (immediately before any session instructions), and the owner's
 //! memory, with usage recorded per turn against the session owner.
+//!
+//! User tools (`SendEmail`, `CreateCalendarEvent`) are the chat host's
+//! deferring ones, finished inside the turn: the turn's [`TurnRequest`]
+//! carries a reviewer over the ACP connection, and the agent loop's
+//! user-tool finisher puts each pending call to it - the session renders the
+//! elicitation - then runs or rejects the tool before the model reads the
+//! result. Without a reviewer (a client with no form support) a pending call
+//! stays pending, as in chat.
 //!
 //! This is also where a session's own instructions become a system prompt.
 //! Nothing has to be transported for it - the loop runs in this process - which
@@ -15,8 +23,10 @@
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart};
+use ai_tools::user_tool_review::user_tool_finisher;
 use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
-use ai_toolset::ToolSet as AiToolSet;
+use ai_toolset::{AsyncToolCollection, ToolSet as AiToolSet};
+use axum::extract::FromRef;
 use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::domain::MemoryService as _;
@@ -26,8 +36,10 @@ use sqlx::PgPool;
 use tokio::sync::mpsc;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::inbound::ask_user::{AskUser, AskUserContext};
 
 #[cfg(test)]
+#[path = "outbound/rig_engine/test.rs"]
 mod test;
 
 /// How many stream parts may sit unread before the engine pauses; keeps a
@@ -35,7 +47,7 @@ mod test;
 const PART_BUFFER: usize = 256;
 
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
-/// [`ai_tools::all_tools`].
+/// [`ai_tools::tools_for`].
 pub struct RigTurnEngine {
     db: PgPool,
     tool_context: ToolServiceContext,
@@ -47,6 +59,36 @@ impl RigTurnEngine {
     #[must_use]
     pub fn new(db: PgPool, tool_context: ToolServiceContext) -> Self {
         Self { db, tool_context }
+    }
+}
+
+#[derive(Clone)]
+struct InMemToolContext {
+    base: ToolServiceContext,
+    ask_user: AskUserContext,
+}
+
+impl FromRef<InMemToolContext> for ToolServiceContext {
+    fn from_ref(context: &InMemToolContext) -> Self {
+        context.base.clone()
+    }
+}
+
+impl FromRef<InMemToolContext> for AskUserContext {
+    fn from_ref(context: &InMemToolContext) -> Self {
+        context.ask_user.clone()
+    }
+}
+
+fn tools_for_turn(
+    base_tools: ai_tools::AiToolSet,
+    supports_user_input: bool,
+) -> AsyncToolCollection<InMemToolContext> {
+    let tools = AsyncToolCollection::<InMemToolContext>::new().add_subtoolset(base_tools);
+    if supports_user_input {
+        tools.add_tool::<AskUser, AskUserContext>()
+    } else {
+        tools
     }
 }
 
@@ -76,9 +118,14 @@ async fn drive_turn(
         instructions,
         messages,
         cancel,
+        user_input,
+        reviewer,
     } = request;
 
-    let tools = tools_for(AiHost::Chat);
+    // Chat's tools with the session's prompt: the user tools (`SendEmail`,
+    // `CreateCalendarEvent`) defer to the user, and this runtime finishes
+    // them in the turn through `reviewer`.
+    let tools = tools_for(AiHost::AgentSession);
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
     let system_prompt = system_prompt(
         &tools.prompt,
@@ -86,12 +133,34 @@ async fn drive_turn(
         user_memory.as_deref(),
     );
 
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
-    let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
-    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner);
+    // `tools_for` returns a fresh Arc. Take its collection back so the
+    // in-memory runtime can widen it onto the session-specific context and
+    // add the one tool that needs the active ACP connection.
+    let base_tools = Arc::into_inner(tools.toolset)
+        .expect("tools_for should return a fresh, uniquely owned collection");
+    let toolset = Arc::new(tools_for_turn(base_tools, user_input.is_some()));
+    let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner.clone());
     // Carry the feature on the context so tool-spawned subagents attribute to it.
-    let mut tool_context = base_context;
+    let mut tool_context = base_context.clone();
     tool_context.usage_context = usage_ctx.clone();
+    let tool_context = InMemToolContext {
+        base: tool_context,
+        ask_user: AskUserContext {
+            requester: user_input,
+        },
+    };
+
+    let mut agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
+    if let Some(reviewer) = reviewer {
+        agent_loop = agent_loop.with_user_tool_finisher(user_tool_finisher(
+            Arc::clone(&toolset),
+            tool_context.clone(),
+            owner,
+            reviewer,
+            cancel.clone(),
+        ));
+    }
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = toolset;
     let session = agent_loop
         .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
         .await;

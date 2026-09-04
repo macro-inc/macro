@@ -10,6 +10,11 @@
 //!   on the collaboration tools. `tool: "spawnAgent"` is the delegation; the
 //!   others (`sendInput`, `wait`, `closeAgent`, …) steer an existing one.
 //!
+//! Its `request_user_input` asks through `elicitation/create` (adapter ≥
+//! 1.8): per question an `<id>` select and an `<id>__other` free-text
+//! companion marked `_meta.codex = { questionId, isOtherAnswer: true }`. No
+//! tool call goes over the wire for it, so nothing reports the answer back.
+//!
 //! A `spawnAgent` call is `kind: other`, titled `spawnAgent` for its whole
 //! life, and carries its state in `rawInput` ([`SpawnAgentInput`]) - there is
 //! no `rawOutput`. The child's own activity is not streamed into the parent
@@ -43,6 +48,18 @@ struct CodexMeta {
 struct Collaboration {
     tool: String,
 }
+
+/// `_meta.codex` on an elicitation form's "Other" property.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OtherAnswerMarker {
+    question_id: String,
+    #[serde(default)]
+    is_other_answer: bool,
+}
+
+/// What the adapter appends to a question's id for its "Other" companion.
+const OTHER_ANSWER_SUFFIX: &str = "__other";
 
 /// `_meta` flags codex-acp writes at the top level.
 #[derive(Debug, Default, Deserialize)]
@@ -128,5 +145,16 @@ impl HarnessReader for Codex {
             ..SubagentResult::default()
         };
         (!result.is_empty()).then_some(result)
+    }
+
+    fn custom_answer_for(&self, name: &str, property: &Value) -> Option<String> {
+        let own_marker = || {
+            let marker: OtherAnswerMarker =
+                serde_json::from_value(property.get("_meta")?.get(NAMESPACE)?.clone()).ok()?;
+            marker.is_other_answer.then_some(marker.question_id)
+        };
+        own_marker()
+            .or_else(|| generic::custom_answer_for(name, property))
+            .or_else(|| generic::custom_answer_by_suffix(name, property, OTHER_ANSWER_SUFFIX))
     }
 }

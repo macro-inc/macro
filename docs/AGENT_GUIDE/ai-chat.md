@@ -39,6 +39,19 @@ The agent has workspace tools (it can list your documents, read channels, create
 render `displayResults` views). Requests go to `POST /cognition/stream/chat/message`; results
 stream over the app's websocket, not the HTTP response.
 
+## Agent sessions asking a question
+
+An agent session (the `/app/channel/<channel>/agent/<session>` pane) can pause its turn to
+ask you something. A card titled `<bot> is asking` with trailing text `Waiting for you`
+appears in the transcript, and the notice `The agent is waiting for your answer above` sits
+over the composer. Forms have one control per field (radios for a choice, an `Other` text
+box when the agent allows a custom answer, checkboxes for multi-select, text/number inputs)
+plus `Submit` / `Decline` / `Cancel`; a link request shows the target host and URL with an
+`Open` button that only opens a new tab after you click it. Once answered the card collapses
+to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right and the agent
+continues. Messages typed while a question is open queue behind it; the composer's `Stop`
+square cancels the question and the turn.
+
 ## In channels
 
 Mention `@Macro` in any channel message for the classic in-channel reply. Mention

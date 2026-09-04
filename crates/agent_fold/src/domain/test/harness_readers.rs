@@ -14,6 +14,71 @@ fn native(name: &str) -> ToolName {
     ToolName::native(name)
 }
 
+// --- Claude Code (@agentclientprotocol/claude-agent-acp) ---
+
+/// `AskUserQuestion` through `elicitation/create`: the `question_N_custom`
+/// companion carries the shared marker; without one its name and title say.
+#[test]
+fn claude_code_recognizes_its_custom_answer_companion() {
+    let reader = Harness::ClaudeCode.reader();
+    let marked = json!({"type": "string", "title": "Other", "description": "Type your own answer instead of choosing an option above (optional).", "_meta": {"_askUserQuestionCustomAnswer": {"questionId": "question_0", "isCustomAnswer": true}}});
+    assert_eq!(
+        reader.custom_answer_for("question_0_custom", &marked),
+        Some("question_0".to_owned())
+    );
+    let unset = json!({"type": "string", "title": "Other", "_meta": {"_askUserQuestionCustomAnswer": {"questionId": "question_0", "isCustomAnswer": false}}});
+    assert_eq!(reader.custom_answer_for("question_0_custom", &unset), None);
+    let bare = json!({"type": "string", "title": "Other"});
+    assert_eq!(
+        reader.custom_answer_for("question_0_custom", &bare),
+        Some("question_0".to_owned())
+    );
+    let select =
+        json!({"type": "string", "title": "Other", "oneOf": [{"const": "a", "title": "a"}]});
+    assert_eq!(
+        reader.custom_answer_for("question_0_custom", &select),
+        None,
+        "a select titled Other is a question, not a companion"
+    );
+    let retitled = json!({"type": "string", "title": "Notes"});
+    assert_eq!(
+        reader.custom_answer_for("question_0_custom", &retitled),
+        None
+    );
+    assert_eq!(reader.custom_answer_for("_custom", &bare), None);
+}
+
+/// The adapter reports the answer it settled on through the asking tool's
+/// `toolResponse`, keyed by question text.
+#[test]
+fn claude_code_reports_the_answer_it_took_on_the_tool_frame() {
+    let reader = Harness::ClaudeCode.reader();
+    let reported = Frame::new().meta(json!({"claudeCode": {"toolName": "AskUserQuestion", "toolResponse": {"questions": [], "answers": {"What is the best colour?": "blue"}}}}));
+    assert_eq!(
+        reader.reported_elicitation_answer(&reported.view()),
+        Some(json!({"What is the best colour?": "blue"}))
+    );
+    let streaming = Frame::new().meta(json!({"claudeCode": {"toolName": "AskUserQuestion"}}));
+    assert_eq!(reader.reported_elicitation_answer(&streaming.view()), None);
+    let other_tool = Frame::new()
+        .meta(json!({"claudeCode": {"toolName": "Bash", "toolResponse": {"stdout": "x"}}}));
+    assert_eq!(reader.reported_elicitation_answer(&other_tool.view()), None);
+}
+
+/// The neutral reading knows the shared marker and nothing else: no
+/// namespace, no naming convention.
+#[test]
+fn the_generic_reader_knows_only_the_shared_marker() {
+    let reader = Harness::Unknown.reader();
+    let shared = json!({"type": "string", "title": "Other", "_meta": {"_askUserQuestionCustomAnswer": {"questionId": "q", "isCustomAnswer": true}}});
+    assert_eq!(reader.custom_answer_for("x", &shared), Some("q".to_owned()));
+    let bare = json!({"type": "string", "title": "Other"});
+    assert_eq!(reader.custom_answer_for("q_custom", &bare), None);
+    assert_eq!(reader.custom_answer_for("q__other", &bare), None);
+    let codex = json!({"type": "string", "title": "Other", "_meta": {"codex": {"questionId": "q", "isOtherAnswer": true}}});
+    assert_eq!(reader.custom_answer_for("q__other", &codex), None);
+}
+
 // --- Codex (@agentclientprotocol/codex-acp, legacy collaboration mode) ---
 
 #[test]
@@ -107,6 +172,51 @@ fn codex_is_sniffed_from_either_of_its_meta_signals() {
     assert_eq!(Harness::sniff(&flagged.view()), Some(Harness::Codex));
     let unflagged = Frame::new().meta(json!({"is_mcp_tool_call": false}));
     assert_eq!(Harness::sniff(&unflagged.view()), None);
+}
+
+/// `request_user_input` through `elicitation/create`: the `__other`
+/// companion carries Codex's own marker, and is recognized by it first, by
+/// the shared marker second, and by its name and title last.
+#[test]
+fn codex_recognizes_its_other_answer_companion() {
+    let reader = Harness::Codex.reader();
+    let marked = json!({"type": "string", "title": "Other", "_meta": {"codex": {"questionId": "target", "isOtherAnswer": true, "isSecret": false}}});
+    assert_eq!(
+        reader.custom_answer_for("target__other", &marked),
+        Some("target".to_owned())
+    );
+    // The marker names the question; the property's own name need not.
+    assert_eq!(
+        reader.custom_answer_for("anything", &marked),
+        Some("target".to_owned())
+    );
+    let select = json!({"type": "string", "title": "Target", "oneOf": [{"const": "a", "title": "a"}], "_meta": {"codex": {"isOther": true, "isSecret": false}}});
+    assert_eq!(
+        reader.custom_answer_for("target", &select),
+        None,
+        "the select itself is not a companion"
+    );
+    let shared = json!({"type": "string", "title": "Other", "_meta": {"_askUserQuestionCustomAnswer": {"questionId": "q", "isCustomAnswer": true}}});
+    assert_eq!(
+        reader.custom_answer_for("q__other", &shared),
+        Some("q".to_owned())
+    );
+    let bare = json!({"type": "string", "title": "Other"});
+    assert_eq!(
+        reader.custom_answer_for("target__other", &bare),
+        Some("target".to_owned()),
+        "a recording that lost its _meta still collapses by name"
+    );
+    assert_eq!(
+        reader.custom_answer_for("target_custom", &bare),
+        None,
+        "Claude Code's suffix is not Codex's"
+    );
+    assert_eq!(
+        reader.reported_elicitation_answer(&Frame::new().view()),
+        None,
+        "Codex sends no tool call for a question, so nothing reports back"
+    );
 }
 
 // --- Cursor (cursor_cloud_agents) ---

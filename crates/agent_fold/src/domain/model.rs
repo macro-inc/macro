@@ -18,6 +18,8 @@ use non_empty::NonEmpty;
 use serde::Serialize;
 use specta::Type;
 
+/// Questions the agent asks the user, and their answers.
+mod elicitation;
 /// Per-push change reports.
 mod event;
 /// Session-level metadata.
@@ -35,6 +37,10 @@ mod tool;
 /// Macro user tools.
 mod user_tool;
 
+pub use elicitation::{
+    ElicitationOption, ElicitationOutcome, ElicitationProperty, ElicitationPropertySchema,
+    ElicitationRequest, ElicitationRequestId, ElicitationSchema, PendingElicitation,
+};
 pub use event::{FoldEvent, OwnedFoldEvent};
 pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata};
 pub use part::{Control, ControlOutcome, MessagePart, StopReason};

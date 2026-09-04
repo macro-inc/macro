@@ -6,12 +6,15 @@
 
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type {
+  ElicitationSchema,
   FoldedMessage,
   ToolStatus,
 } from '@service-agent-fold/generated/types';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { Message } from '../component/AgentMessage';
 import { ReplyToSelection } from '../component/ReplyToSelection';
+import { initialValues, validate } from '../state/elicitation-form';
 import {
   ActionLine,
   AgentInput,
@@ -19,6 +22,7 @@ import {
   ComposerNotice,
   CountSummary,
   DiffChanges,
+  ElicitationForm,
   PierreDiff,
   QuestionAnswers,
   type QuoteInsert,
@@ -272,6 +276,102 @@ const FIXTURE_MESSAGE: FoldedMessage = {
   ],
 };
 
+/**
+ * The Claude Code colour question after the fold collapsed its custom pair,
+ * plus one of every other field type, so the form's controls can be eyeballed.
+ */
+const FIXTURE_ELICITATION: ElicitationSchema = {
+  title: 'Deployment',
+  description: 'A few details before the agent continues.',
+  required: ['question_0', 'name'],
+  properties: [
+    {
+      name: 'question_0',
+      title: 'Best colour',
+      description: null,
+      schema: {
+        type: 'string',
+        minLength: null,
+        maxLength: null,
+        pattern: null,
+        format: null,
+        default: null,
+        options: [
+          { value: 'Red', title: 'Red', description: 'Warm' },
+          { value: 'Blue', title: 'Blue', description: 'Cool' },
+          { value: 'Green', title: 'Green', description: null },
+        ],
+        customField: 'question_0_custom',
+      },
+    },
+    {
+      name: 'name',
+      title: 'Service name',
+      description: 'Lowercase letters only',
+      schema: {
+        type: 'string',
+        minLength: 1,
+        maxLength: 32,
+        pattern: '^[a-z]+$',
+        format: null,
+        default: 'api',
+        options: [],
+        customField: null,
+      },
+    },
+    {
+      name: 'port',
+      title: 'Port',
+      description: null,
+      schema: { type: 'integer', minimum: 1024, maximum: 65535, default: 3000 },
+    },
+    {
+      name: 'logging',
+      title: 'Enable logging',
+      description: null,
+      schema: { type: 'boolean', default: true },
+    },
+    {
+      name: 'regions',
+      title: 'Regions',
+      description: null,
+      schema: {
+        type: 'multi_select',
+        minItems: 1,
+        maxItems: 2,
+        options: [
+          { value: 'us', title: 'US', description: null },
+          { value: 'eu', title: 'EU', description: null },
+          { value: 'ap', title: 'APAC', description: null },
+        ],
+        default: ['us'],
+        customField: 'regions_custom',
+      },
+    },
+    {
+      name: 'weird',
+      title: 'Hologram',
+      description: null,
+      schema: { type: 'unrecognized', typeName: '_hologram', raw: {} },
+    },
+  ],
+};
+
+function ElicitationFormDemo() {
+  const [values, setValues] = createStore(initialValues(FIXTURE_ELICITATION));
+  const errors = () => validate(FIXTURE_ELICITATION, values);
+  return (
+    <ToolCard title="Macro Coder is asking" status="running" defaultOpen>
+      <ElicitationForm
+        schema={FIXTURE_ELICITATION}
+        values={values}
+        errors={errors()}
+        onChange={(name, value) => setValues(name, value)}
+      />
+    </ToolCard>
+  );
+}
+
 export default function AgentUiGallery() {
   const pulse = usePulse();
   const status = (): ToolStatus => (pulse() ? 'running' : 'completed');
@@ -281,6 +381,10 @@ export default function AgentUiGallery() {
     <StaticMarkdownContext>
       <div class="size-full overflow-auto">
         <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
+          <Item label="ElicitationForm (live validation)">
+            <ElicitationFormDemo />
+          </Item>
+
           <Item label="ComposerNotice">
             <ComposerNotice text="Waking the agent's sandbox…" active />
           </Item>
