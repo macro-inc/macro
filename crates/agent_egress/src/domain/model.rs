@@ -364,6 +364,84 @@ impl fmt::Display for McpServerSlug {
     }
 }
 
+/// Stable path id for a custom MCP server: the first 16 lowercase hex chars
+/// of SHA-256 over the server URL bytes.
+///
+/// A hash rather than the URL itself, because the URL is not a path segment
+/// and must never appear in the sandbox's server list as a credentialed
+/// destination the model can rewrite.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CustomMcpId(String);
+
+impl CustomMcpId {
+    /// Derive the id from a stored server URL.
+    pub fn from_url(url: &str) -> Self {
+        Self(
+            Sha256::digest(url.as_bytes())[..8]
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect(),
+        )
+    }
+
+    /// Accept a path segment that is already this id.
+    ///
+    /// Rejects rather than repairs: uppercase or a different length is not
+    /// this id, and folding it into one would let a sandbox name one server
+    /// and reach another.
+    pub fn parse(segment: &str) -> Option<Self> {
+        let valid = segment.len() == 16
+            && segment
+                .bytes()
+                .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'));
+        valid.then(|| Self(segment.to_owned()))
+    }
+
+    /// The 16-character hex id.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl fmt::Display for CustomMcpId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// An MCP server the harness advertised to a sandbox.
+///
+/// [`Self::name`] is the ACP / server-list name, not a path segment.
+/// Resolution uses the slug or [`CustomMcpId`], never this display name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AdvertisedMcp {
+    /// A Pipedream-connected app, advertised under its app slug.
+    Pipedream(McpServerSlug),
+    /// An authenticated custom MCP server from `mcp_servers`.
+    Custom {
+        /// Path id the proxy resolves.
+        id: CustomMcpId,
+        /// ACP / server-list name.
+        name: String,
+    },
+}
+
+impl AdvertisedMcp {
+    /// The name a session's server list shows for this server.
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Pipedream(slug) => slug.as_str(),
+            Self::Custom { name, .. } => name,
+        }
+    }
+}
+
+impl fmt::Display for AdvertisedMcp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 /// Which half of git's smart-HTTP protocol a request is doing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GitService {
@@ -470,6 +548,7 @@ impl EgressTarget {
         match self {
             Self::McpServer(McpDestination::Macro) => "macro".to_owned(),
             Self::McpServer(McpDestination::Connected(slug)) => slug.as_str().to_owned(),
+            Self::McpServer(McpDestination::Custom(id)) => id.as_str().to_owned(),
             Self::GitHubGit { endpoint } => format!("git {}", endpoint.path_and_query()),
         }
     }
@@ -477,15 +556,18 @@ impl EgressTarget {
 
 /// Which MCP server a request names.
 ///
-/// Macro's own server and the owner's connected apps live on different
-/// routes (`/mcp-macro` vs `/mcp/{slug}`), so they can never collide: there
-/// is no reserved word to shadow, and no connected app a name could hide.
+/// Macro's own server, the owner's Pipedream apps, and authenticated custom
+/// MCP servers live on different routes (`/mcp-macro`, `/mcp/{slug}`,
+/// `/mcp-custom/{id}`), so they can never collide: there is no reserved
+/// word to shadow, and no connected app a name could hide.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum McpDestination {
     /// Macro's own MCP server, available to every session.
     Macro,
     /// One of the owner's Pipedream-connected apps.
     Connected(McpServerSlug),
+    /// One of the owner's authenticated custom MCP servers.
+    Custom(CustomMcpId),
 }
 
 /// A resolved destination and the credential to reach it with.

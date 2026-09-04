@@ -1,7 +1,7 @@
 //! Commands and values used by the harness domain.
 
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
-use agent_egress::domain::model::McpServerSlug;
+use agent_egress::domain::model::AdvertisedMcp;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
@@ -344,10 +344,9 @@ pub struct SandboxEgress {
     pub base_url: String,
     /// The session token, presented on every proxied call.
     pub session_token: String,
-    /// The owner's connected MCP servers, by the slug the proxy resolves.
-    /// Macro's own server is not listed: every session has it, on its own
-    /// route.
-    pub mcp_servers: Vec<McpServerSlug>,
+    /// The owner's connected MCP servers. Macro's own server is not listed:
+    /// every session has it, on its own route.
+    pub mcp_servers: Vec<AdvertisedMcp>,
 }
 
 /// Where the sandbox finds the egress proxy.
@@ -369,10 +368,12 @@ pub const SESSION_TOKEN_VARIABLE: &str = "MACRO_SESSION_TOKEN";
 pub const MACRO_MCP_NAME: &str = "macro";
 
 impl SandboxEgress {
-    /// Where the proxy serves `slug` - the URL a client dials to reach that
-    /// server, whichever client it is.
-    pub fn mcp_url(&self, slug: &McpServerSlug) -> String {
-        format!("{}/mcp/{slug}", self.base_url)
+    /// Where the proxy serves this advertised server.
+    pub fn mcp_url(&self, server: &AdvertisedMcp) -> String {
+        match server {
+            AdvertisedMcp::Pipedream(slug) => format!("{}/mcp/{slug}", self.base_url),
+            AdvertisedMcp::Custom { id, .. } => format!("{}/mcp-custom/{id}", self.base_url),
+        }
     }
 
     /// Where the proxy serves Macro's own MCP server: its own route, so no
@@ -401,8 +402,7 @@ impl SandboxEgress {
     }
 
     /// Every server the session may dial, as `(name, url)` pairs: Macro's own
-    /// server first, then the owner's connected apps under their Pipedream
-    /// slugs.
+    /// server first, then the owner's connected apps.
     ///
     /// The one enumeration behind both renderings - [`Self::acp_servers`] and
     /// the Cursor API's - so the two can never advertise different sets.
@@ -410,7 +410,7 @@ impl SandboxEgress {
         std::iter::once((MACRO_MCP_NAME.to_owned(), self.macro_mcp_url())).chain(
             self.mcp_servers
                 .iter()
-                .map(|slug| (slug.as_str().to_owned(), self.mcp_url(slug))),
+                .map(|server| (server.name().to_owned(), self.mcp_url(server))),
         )
     }
 

@@ -9,6 +9,9 @@ pub mod macro_mcp;
 /// Resolving an owner's Pipedream-connected apps to scoped upstream calls.
 pub mod mcp_credentials;
 
+/// Resolving an owner's authenticated custom MCP servers.
+pub mod custom_mcp;
+
 /// Resolving a sandbox's session token to the session it stands for.
 pub mod session_authority;
 

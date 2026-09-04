@@ -78,6 +78,7 @@ impl EgressService for SpyService {
             Some(EgressError::Upstream(_)) => {
                 Err(EgressError::Upstream(rootcause::report!("unreachable")))
             }
+            Some(EgressError::UnknownCustom(id)) => Err(EgressError::UnknownCustom(id.clone())),
             Some(_) => Err(EgressError::Unauthenticated("refused by the spy")),
         }
     }
@@ -125,6 +126,23 @@ async fn routes_a_slug_to_an_mcp_target() {
         [EgressTarget::McpServer(McpDestination::Connected(
             McpServerSlug::parse("datadog").expect("slug")
         ))]
+    );
+}
+
+#[tokio::test]
+async fn routes_a_hex_id_to_a_custom_mcp_target() {
+    let id = CustomMcpId::from_url("https://mcp.example.com/mcp");
+    let service = SpyService::accepting();
+    let response = call(
+        &service,
+        get(&format!("/mcp-custom/{id}"), Some("Bearer session")),
+    )
+    .await;
+
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert_eq!(
+        service.targets(),
+        [EgressTarget::McpServer(McpDestination::Custom(id))]
     );
 }
 
@@ -199,6 +217,10 @@ async fn maps_each_refusal_to_the_status_that_tells_the_agent_what_to_do() {
             StatusCode::UNAUTHORIZED,
         ),
         (EgressError::SessionClosed, StatusCode::UNAUTHORIZED),
+        (
+            EgressError::UnknownCustom(CustomMcpId::from_url("https://mcp.example.com/mcp")),
+            StatusCode::NOT_FOUND,
+        ),
         (
             EgressError::RepoUnavailable(RepoSlug::parse("other", "repo").expect("slug")),
             StatusCode::FORBIDDEN,

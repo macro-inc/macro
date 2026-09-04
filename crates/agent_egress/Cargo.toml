@@ -36,6 +36,11 @@ macro_user_id = { path = "../macro_user_id" }
 # The rows saying which apps an owner connected, and the client that turns one
 # into Pipedream's MCP endpoint plus the headers scoping a call to it.
 pipedream_mcp = { path = "../pipedream_mcp" }
+# Custom MCP server rows (`mcp_servers`) and their stored OAuth credentials.
+# Domain stays free of these types; only the custom outbound adapter reads them.
+mcp_client = { path = "../mcp_client", default-features = false }
+# `TokenResponse::access_token` on rmcp's stored OAuth grant.
+oauth2 = { version = "5.0", default-features = false }
 rand = { workspace = true }
 reqwest = { workspace = true }
 rootcause = { workspace = true }
@@ -50,5 +55,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 anyhow = { workspace = true }
+rmcp = { workspace = true, features = ["auth"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
 tower = { workspace = true }

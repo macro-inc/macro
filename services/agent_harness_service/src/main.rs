@@ -18,6 +18,7 @@ mod trigger;
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use agent_egress::domain::service::EgressServiceImpl;
+use agent_egress::outbound::custom_mcp::WithCustomMcp;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
 use agent_egress::outbound::macro_mcp::{MacroApiTokenSigner, WithMacroMcp};
@@ -495,6 +496,13 @@ async fn run() -> anyhow::Result<()> {
     // keep in sync. The rows hold no secrets - Pipedream owns the grants.
     let mcp_connections = Arc::new(PgConnectionRepo::new(pool.clone()));
 
+    let custom_mcp_key = mcp_client::domain::models::AesKey::try_from(
+        config.mcp_credentials_key_secret_name.as_ref(),
+    )
+    .context("invalid MCP credentials encryption key")?;
+    let custom_mcp_repo =
+        mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), custom_mcp_key);
+
     // The client that addresses Pipedream's remote MCP server, built from the
     // same credentials `document_cognition_service` uses.
     let pipedream = PipedreamClient::new(PipedreamConfig {
@@ -517,7 +525,11 @@ async fn run() -> anyhow::Result<()> {
         HarnessKeyedConnections::new(PgHarnessBindings::new(pool.clone()), Arc::clone(&runtimes)),
         prompt_context,
         prompt_composer,
-        EgressProvisioner::new(Arc::clone(&mcp_connections), config.egress_base_url.clone()),
+        EgressProvisioner::new(
+            Arc::clone(&mcp_connections),
+            Some(Arc::new(custom_mcp_repo.clone())),
+            config.egress_base_url.clone(),
+        ),
         HttpCommandForwarder::new(config.internal_api_key.clone())
             .map_err(|error| anyhow::anyhow!("failed to build the command forwarder: {error}"))?,
         defaults,
@@ -622,7 +634,10 @@ async fn run() -> anyhow::Result<()> {
     // signed inline with the same key authentication_service holds; what this
     // process hands out is always single-user and minutes from expiry.
     let mcp_credentials = WithMacroMcp::new(
-        PipedreamMcpCredentials::new(mcp_connections, pipedream),
+        WithCustomMcp::new(
+            PipedreamMcpCredentials::new(mcp_connections, pipedream),
+            custom_mcp_repo,
+        ),
         MacroApiTokenSigner::new(
             pool.clone(),
             config.macro_api_token_issuer.as_ref(),

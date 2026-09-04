@@ -19,7 +19,7 @@ use std::sync::Arc;
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    BoxError, EgressTarget, GitEndpoint, McpDestination, McpServerSlug, ProxyRequest,
+    BoxError, CustomMcpId, EgressTarget, GitEndpoint, McpDestination, McpServerSlug, ProxyRequest,
     ProxyResponse, SessionToken,
 };
 use crate::domain::service::EgressService;
@@ -64,6 +64,7 @@ where
     Router::new()
         .route("/health", get(health))
         .route("/mcp/{slug}", any(mcp_handler::<Service>))
+        .route("/mcp-custom/{id}", any(custom_mcp_handler::<Service>))
         .route("/mcp-macro", any(macro_mcp_handler::<Service>))
         .route(
             "/git/{*path}",
@@ -95,6 +96,24 @@ where
         .ok_or_else(|| EgressError::Unroutable(format!("{slug} is not a server name")))?;
 
     mcp_proxy(state, McpDestination::Connected(slug), request).await
+}
+
+/// A custom MCP server, on its own route rather than under `/mcp/{slug}`:
+/// a Pipedream app slug can be `custom-*`, so that prefix is not a
+/// reserved word we can steal.
+#[tracing::instrument(skip_all, err, fields(%id))]
+async fn custom_mcp_handler<Service>(
+    State(state): State<EgressRouterState<Service>>,
+    Path(id): Path<String>,
+    request: Request,
+) -> Result<Response, EgressError>
+where
+    Service: EgressService,
+{
+    let id = CustomMcpId::parse(&id)
+        .ok_or_else(|| EgressError::Unroutable(format!("{id} is not a server name")))?;
+
+    mcp_proxy(state, McpDestination::Custom(id), request).await
 }
 
 /// Macro's own MCP server, on its own route rather than under `/mcp/{slug}`:
@@ -244,7 +263,9 @@ impl IntoResponse for EgressError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::Unauthenticated(_) | Self::SessionClosed => StatusCode::UNAUTHORIZED,
-            Self::UnknownServer(_) | Self::Unroutable(_) => StatusCode::NOT_FOUND,
+            Self::UnknownServer(_) | Self::UnknownCustom(_) | Self::Unroutable(_) => {
+                StatusCode::NOT_FOUND
+            }
             Self::RepoUnavailable(_) => StatusCode::FORBIDDEN,
             Self::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             // The named upstream is unusable as configured. Someone has to
@@ -266,7 +287,7 @@ impl IntoResponse for EgressError {
             }
             Self::SessionClosed => "This session is no longer open.",
             Self::Unroutable(_) => "Nothing is served at that path.",
-            Self::UnknownServer(_) => "No such connected MCP server.",
+            Self::UnknownServer(_) | Self::UnknownCustom(_) => "No such connected MCP server.",
             Self::RepoUnavailable(_) => {
                 "This session's repository is not reachable with Macro's GitHub App."
             }
