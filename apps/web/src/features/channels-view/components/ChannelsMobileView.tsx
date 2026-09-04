@@ -112,7 +112,7 @@ export function ChannelsMobileView(props: { channels: ChannelEntity[] }) {
         aria-label={`${MOBILE_CHANNEL_TABS.find((tab) => tab.value === mobileTab())?.label ?? 'Channels'} conversations`}
         class="scrollbar-hidden size-full min-h-0 overflow-y-auto pt-(--mobile-content-inset-top) pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
       >
-        <div aria-hidden="true" class="h-2" />
+        <div aria-hidden="true" class="h-3" />
         <Show
           when={visibleChannels().length > 0}
           fallback={
@@ -121,12 +121,12 @@ export function ChannelsMobileView(props: { channels: ChannelEntity[] }) {
             </div>
           }
         >
-          <div class="flex flex-col divide-y divide-edge-muted">
+          <div class="flex flex-col divide-y divide-edge-muted/50">
             <Key each={visibleChannels()} by={(channel) => channel.id}>
               {(channel) => (
                 <ConversationCard
                   id={`${listId}-channel:${channel().id}`}
-                  class="px-(--mobile-chrome-gutter)"
+                  class="px-(--mobile-chrome-gutter) touch:pl-6"
                   channel={channel()}
                   showLatestMessage={mobileTab() === 'recents'}
                   senderId={channel().latestRootMessage?.senderId}

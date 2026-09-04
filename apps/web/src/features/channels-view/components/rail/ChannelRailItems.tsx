@@ -288,7 +288,7 @@ export function ConversationCard(props: ConversationCardProps) {
       role="treeitem"
       tabIndex={-1}
       class={cn(
-        'w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent touch:focus-visible:ring-0',
+        'relative w-full min-w-0 overflow-hidden px-2 py-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent touch:focus-visible:ring-0',
         props.selected && !isTouchDevice() && 'bg-active',
         !props.selected &&
           !isTouchDevice() &&
@@ -316,7 +316,7 @@ export function ConversationCard(props: ConversationCardProps) {
             <Show when={props.unread}>
               <span
                 aria-label="Unread"
-                class="size-2 shrink-0 rounded-full bg-accent"
+                class="size-2 shrink-0 rounded-full bg-accent touch:absolute touch:left-2 touch:top-7.5 touch:-translate-y-1/2"
               />
             </Show>
             <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
