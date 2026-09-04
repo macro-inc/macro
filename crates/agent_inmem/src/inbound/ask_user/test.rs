@@ -144,3 +144,35 @@ async fn rejects_an_empty_question_without_calling_the_port() {
             .is_empty()
     );
 }
+
+#[tokio::test]
+async fn a_cancelled_turn_does_not_start_a_question() {
+    let requester = Arc::new(FakeRequester {
+        requests: Mutex::new(Vec::new()),
+        response: UserInputOutcome::Answered("unused".to_owned()),
+    });
+    let request_context = request_context();
+    request_context.cancel.cancel();
+
+    let response = AskUser {
+        question: "Continue?".to_owned(),
+        options: Vec::new(),
+    }
+    .call(
+        ServiceContext(AskUserContext {
+            requester: Some(requester.clone()),
+        }),
+        request_context,
+    )
+    .await
+    .expect("turn cancellation is a successful cancelled tool result");
+
+    assert_eq!(response, AskUserResponse::Cancelled);
+    assert!(
+        requester
+            .requests
+            .lock()
+            .expect("request lock should not be poisoned")
+            .is_empty()
+    );
+}

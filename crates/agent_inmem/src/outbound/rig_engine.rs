@@ -70,6 +70,18 @@ impl FromRef<InMemToolContext> for AskUserContext {
     }
 }
 
+fn tools_for_turn(
+    base_tools: ai_tools::AiToolSet,
+    supports_user_input: bool,
+) -> AsyncToolCollection<InMemToolContext> {
+    let tools = AsyncToolCollection::<InMemToolContext>::new().add_subtoolset(base_tools);
+    if supports_user_input {
+        tools.add_tool::<AskUser, AskUserContext>()
+    } else {
+        tools
+    }
+}
+
 impl TurnEngine for RigTurnEngine {
     fn run_turn(&self, request: TurnRequest) -> mpsc::Receiver<Result<StreamPart, AgentError>> {
         let (parts, receiver) = mpsc::channel(PART_BUFFER);
@@ -112,10 +124,7 @@ async fn drive_turn(
     // add the one tool that needs the active ACP connection.
     let base_tools = Arc::into_inner(tools.toolset)
         .expect("all_tools should return a fresh, uniquely owned collection");
-    let mut toolset = AsyncToolCollection::<InMemToolContext>::new().add_subtoolset(base_tools);
-    if user_input.is_some() {
-        toolset = toolset.add_tool::<AskUser, AskUserContext>();
-    }
+    let toolset = tools_for_turn(base_tools, user_input.is_some());
     let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = Arc::new(toolset);
     let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
     let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner);
