@@ -90,8 +90,8 @@ export const services: Service[] = [
 	},
 	{
 		name: "email-service",
-		dev: "https://email-service-dev.macro.com/api-doc/openapi.json",
-		prod: "https://email-service.macro.com/api-doc/openapi.json",
+		dev: "https://dev-gateway.macro.com/email/api-doc/openapi.json",
+		prod: "https://gateway.macro.com/email/api-doc/openapi.json",
 		local: "http://localhost:8087/api-doc/openapi.json",
 		output: "../src/lib/service-clients/service-email/",
 		orvalKey: "emailService",

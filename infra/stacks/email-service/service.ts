@@ -8,14 +8,19 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
+  ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   type DopplerEcsEnvironment,
+  getGatewayAlb,
+  GatewayService,
   stack,
 } from '../../packages/shared';
+
+const gatewayLoadBalancer = getGatewayAlb();
 
 const BASE_NAME = 'email-service';
 const REPO_ROOT = '../../..';
@@ -105,6 +110,22 @@ export class EmailService extends pulumi.ComponentResource {
     this.serviceAlbSg = sg.serviceAlbSg;
     this.serviceSg = sg.serviceSg;
 
+    const gatewayTargetGroup = new ServiceTargetGroup(
+      `${stack}-${BASE_NAME}`,
+      {
+        tags: this.tags,
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
+        vpcId: vpc.vpcId,
+        containerPort: serviceContainerPort,
+        service: GatewayService.EMAIL_SERVICE,
+        healthCheckPath,
+        pathPatterns: ['/email', '/email/*'],
+        serviceSecurityGroupId: this.serviceSg.id,
+        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+      },
+      { parent: this }
+    );
+
     // lb
     const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
       serviceName: BASE_NAME, // service name
@@ -134,6 +155,23 @@ export class EmailService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
+        // Register tasks in both the legacy ALB's target group and the gateway
+        // target group while we migrate to the gateway. An explicit
+        // `loadBalancers` replaces the list awsx derives from
+        // `portMappings.targetGroup`, so the legacy entry must be listed here
+        // too.
+        loadBalancers: [
+          {
+            targetGroupArn: targetGroup.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+          {
+            targetGroupArn: gatewayTargetGroup.target_group.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+        ],
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,

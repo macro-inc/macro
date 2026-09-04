@@ -40,7 +40,7 @@ const serverHostRemote = {
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,
   'unfurl-service': `${gatewayHost}/unfurl`,
   contacts: `${gatewayHost}/contacts`,
-  'email-service': `https://email-service${devServerSuffix}.macro.com`,
+  'email-service': `${gatewayHost}/email`,
   'image-proxy-service': `${gatewayHost}/image-proxy`,
   'scheduled-action': `${gatewayHost}/scheduled-action`,
   'agent-harness': `${gatewayHost}/agent-harness`,
