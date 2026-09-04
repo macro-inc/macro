@@ -41,18 +41,20 @@ export function TasksHeader() {
     TASK_TABS.find((tab) => tab.id === state.tab)?.label;
 
   return (
-    <div class="flex min-w-0 flex-col">
+    <div class="flex min-w-0 flex-col @max-[720px]/view-shell:gap-3">
       <Show
         when={isTouchDevice()}
         fallback={
           <>
-            <SplitPanel.ControlGroup class="hidden pb-2 @max-[720px]/view-shell:flex">
-              <SplitPanel.CloseButton />
-              <SplitPanel.BackButton />
-              <SplitPanel.ForwardButton />
-            </SplitPanel.ControlGroup>
+            <div class="hidden items-center @max-[720px]/view-shell:flex">
+              <SplitPanel.ControlGroup>
+                <SplitPanel.CloseButton />
+                <SplitPanel.BackButton />
+                <SplitPanel.ForwardButton />
+              </SplitPanel.ControlGroup>
+            </div>
 
-            <div class="mb-4 hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
+            <div class="hidden h-8 min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
               <Dropdown
                 open={navigationOpen()}
                 onOpenChange={setNavigationOpen}
