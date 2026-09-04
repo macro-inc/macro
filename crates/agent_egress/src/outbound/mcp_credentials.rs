@@ -89,12 +89,12 @@ where
     ) -> Result<UpstreamCall, EgressError> {
         // Macro and custom destinations are the composition root's to layer
         // on with [`crate::outbound::macro_mcp::WithMacroMcp`] and
-        // [`crate::outbound::native_mcp::WithNativeMcp`]; these rows can
+        // [`crate::outbound::custom_mcp::WithCustomMcp`]; these rows can
         // never answer for them.
         let McpDestination::Connected(slug) = destination else {
             return Err(EgressError::Internal(rootcause::report!(
                 "the Pipedream resolver was asked for a destination it does not own; \
-                 the composition root did not layer WithNativeMcp / WithMacroMcp"
+                 the composition root did not layer WithCustomMcp / WithMacroMcp"
             )));
         };
         let record = self.connection(owner, slug).await?;

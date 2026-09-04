@@ -1,6 +1,8 @@
 use super::*;
 use agent_egress::domain::model::{AdvertisedMcp, CustomMcpId};
 use mcp_client::domain::models::{McpServerRecord, StoredCredentials};
+use oauth2::{AccessToken, basic::BasicTokenType};
+use rmcp::transport::auth::{OAuthTokenResponse, VendorExtraTokenFields};
 
 fn slug(name: &str) -> McpServerSlug {
     McpServerSlug::parse(name).expect("a valid app slug")
@@ -95,7 +97,7 @@ async fn lists_enabled_app_slugs_verbatim() {
             connection("datadog", false),
             connection("Not A Slug!", true),
         ])),
-        None::<Arc<FixedNative>>,
+        None::<Arc<FixedCustom>>,
         "https://egress.macro.com",
     );
 
@@ -123,7 +125,7 @@ async fn lists_enabled_app_slugs_verbatim() {
 async fn restore_wraps_an_existing_token_in_a_fresh_listing() {
     let provisioner = EgressProvisioner::new(
         Arc::new(FixedConnections(vec![connection("linear", true)])),
-        None::<Arc<FixedNative>>,
+        None::<Arc<FixedCustom>>,
         "https://egress.macro.com",
     );
 
@@ -239,9 +241,9 @@ fn the_egress_environment_does_not_print_its_secrets() {
     );
 }
 
-struct FixedNative(Vec<McpServerRecord>);
+struct FixedCustom(Vec<McpServerRecord>);
 
-impl McpServerStore for FixedNative {
+impl McpServerStore for FixedCustom {
     type Err = std::convert::Infallible;
 
     async fn save(&self, _record: &McpServerRecord) -> Result<(), Self::Err> {
@@ -272,6 +274,14 @@ impl McpServerStore for FixedNative {
     }
 }
 
+fn token_response(access_token: &str) -> OAuthTokenResponse {
+    OAuthTokenResponse::new(
+        AccessToken::new(access_token.to_owned()),
+        BasicTokenType::Bearer,
+        VendorExtraTokenFields::default(),
+    )
+}
+
 fn native_record(
     url: &str,
     server_name: &str,
@@ -282,8 +292,14 @@ fn native_record(
         user_id: MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
         url: url.to_owned(),
         server_name: server_name.to_owned(),
-        credentials: credentialed
-            .then(|| StoredCredentials::new("client-id".to_owned(), None, vec![], None)),
+        credentials: credentialed.then(|| {
+            StoredCredentials::new(
+                "client-id".to_owned(),
+                Some(token_response("access-token")),
+                vec![],
+                None,
+            )
+        }),
         enabled,
     }
 }
@@ -295,10 +311,23 @@ async fn advertises_authenticated_native_servers_on_their_own_route() {
     let live = "https://mcp.example.com/mcp";
     let provisioner = EgressProvisioner::new(
         Arc::new(FixedConnections(vec![connection("linear", true)])),
-        Some(Arc::new(FixedNative(vec![
+        Some(Arc::new(FixedCustom(vec![
             native_record(live, "Example Server", true, true),
             native_record("https://disabled.example/mcp", "Disabled", false, true),
             native_record("https://public.example/mcp", "Public", true, false),
+            McpServerRecord {
+                user_id: MacroUserIdStr::try_from_email("owner@example.com")
+                    .expect("a valid user id"),
+                url: "https://tokenless.example/mcp".to_owned(),
+                server_name: "Tokenless".to_owned(),
+                credentials: Some(StoredCredentials::new(
+                    "client-id".to_owned(),
+                    None,
+                    vec![],
+                    None,
+                )),
+                enabled: true,
+            },
         ]))),
         "https://egress.macro.com",
     );
@@ -327,6 +356,50 @@ async fn advertises_authenticated_native_servers_on_their_own_route() {
             ),
             (
                 "example-server".to_owned(),
+                format!("https://egress.macro.com/mcp-custom/{id}")
+            ),
+        ]
+    );
+}
+
+/// A Pipedream slug that is already `custom-{id}` takes that ACP name.
+/// The custom server then uses the 16-hex id, and still dials `/mcp-custom/{id}`.
+#[tokio::test]
+async fn custom_id_falls_through_when_custom_prefix_is_taken() {
+    let live = "https://mcp.example.com/mcp";
+    let id = CustomMcpId::from_url(live);
+    let pipedream_slug = format!("custom-{id}");
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![connection(&pipedream_slug, true)])),
+        Some(Arc::new(FixedCustom(vec![native_record(
+            live, "", true, true,
+        )]))),
+        "https://egress.macro.com",
+    );
+
+    let provisioned = provisioner
+        .provision(
+            AgentSessionId::new(),
+            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            "https://github.com/macro-inc/macro",
+        )
+        .await
+        .expect("provisioned");
+
+    let entries: Vec<(String, String)> = provisioned.sandbox.server_entries().collect();
+    assert_eq!(
+        entries,
+        [
+            (
+                "macro".to_owned(),
+                "https://egress.macro.com/mcp-macro".to_owned()
+            ),
+            (
+                pipedream_slug.clone(),
+                format!("https://egress.macro.com/mcp/{pipedream_slug}")
+            ),
+            (
+                id.as_str().to_owned(),
                 format!("https://egress.macro.com/mcp-custom/{id}")
             ),
         ]

@@ -62,3 +62,5 @@ bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 mockall = { workspace = true }
 model_user = { path = "../model_user" }
+oauth2 = { version = "5.0", default-features = false }
+rmcp = { workspace = true, features = ["auth"] }

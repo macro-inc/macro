@@ -1,6 +1,6 @@
 //! Failures a proxied call can end in.
 
-use crate::domain::model::{McpServerSlug, RepoSlug};
+use crate::domain::model::{CustomMcpId, McpServerSlug, RepoSlug};
 
 /// Everything that can stop a sandbox's request from reaching its upstream.
 ///
@@ -40,6 +40,12 @@ pub enum EgressError {
     /// owner's settings to code the model wrote.
     #[error("no connected MCP server named {0}")]
     UnknownServer(McpServerSlug),
+
+    /// The owner has no custom server under this id. Same caller-facing
+    /// meaning as [`EgressError::UnknownServer`]: missing, disabled, or no
+    /// token are one fact.
+    #[error("no connected MCP server named {0}")]
+    UnknownCustom(CustomMcpId),
 
     /// We cannot mint a credential for the session's repository: our GitHub
     /// App is not installed on it, or the installation belongs to somebody

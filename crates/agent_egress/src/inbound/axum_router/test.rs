@@ -78,6 +78,7 @@ impl EgressService for SpyService {
             Some(EgressError::Upstream(_)) => {
                 Err(EgressError::Upstream(rootcause::report!("unreachable")))
             }
+            Some(EgressError::UnknownCustom(id)) => Err(EgressError::UnknownCustom(id.clone())),
             Some(_) => Err(EgressError::Unauthenticated("refused by the spy")),
         }
     }
@@ -216,6 +217,10 @@ async fn maps_each_refusal_to_the_status_that_tells_the_agent_what_to_do() {
             StatusCode::UNAUTHORIZED,
         ),
         (EgressError::SessionClosed, StatusCode::UNAUTHORIZED),
+        (
+            EgressError::UnknownCustom(CustomMcpId::from_url("https://mcp.example.com/mcp")),
+            StatusCode::NOT_FOUND,
+        ),
         (
             EgressError::RepoUnavailable(RepoSlug::parse("other", "repo").expect("slug")),
             StatusCode::FORBIDDEN,

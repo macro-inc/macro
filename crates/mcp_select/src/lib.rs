@@ -21,8 +21,20 @@ use mcp_client::domain::ports::McpServerStore;
 use mcp_client::domain::service::McpToolSet;
 use pipedream_mcp::domain::ports::{ConnectionStore, McpConnection};
 use pipedream_mcp::domain::service::PipedreamToolSet;
+use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
+
+fn pipedream_first<T>(pipedream: Vec<T>, native: Vec<T>, name: impl Fn(&T) -> &str) -> Vec<T> {
+    let taken: HashSet<String> = pipedream.iter().map(|item| name(item).to_owned()).collect();
+    let mut catalog = pipedream;
+    catalog.extend(
+        native
+            .into_iter()
+            .filter(|item| !taken.contains(name(item))),
+    );
+    catalog
+}
 
 /// Mangled MCP tool names start with this prefix on both stacks.
 const MANGLED_PREFIX: &str = "mcp__";
@@ -68,11 +80,11 @@ impl UserMcpTools {
         match self {
             UserMcpTools::Pipedream(tools) => tools.searchable_catalog(),
             UserMcpTools::Native(tools) => tools.searchable_catalog(),
-            UserMcpTools::Both { pipedream, native } => {
-                let mut catalog = pipedream.searchable_catalog();
-                catalog.extend(native.searchable_catalog());
-                catalog
-            }
+            UserMcpTools::Both { pipedream, native } => pipedream_first(
+                pipedream.searchable_catalog(),
+                native.searchable_catalog(),
+                |tool| tool.name.as_str(),
+            ),
         }
     }
 }
@@ -115,9 +127,11 @@ impl<Context: Clone + Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
             UserMcpTools::Pipedream(tools) => ToolSet::<Context>::request_schemas(tools),
             UserMcpTools::Native(tools) => ToolSet::<Context>::request_schemas(tools),
             UserMcpTools::Both { pipedream, native } => {
-                let mut schemas =
-                    ToolSet::<Context>::request_schemas(pipedream).unwrap_or_default();
-                schemas.extend(ToolSet::<Context>::request_schemas(native).unwrap_or_default());
+                let schemas = pipedream_first(
+                    ToolSet::<Context>::request_schemas(pipedream).unwrap_or_default(),
+                    ToolSet::<Context>::request_schemas(native).unwrap_or_default(),
+                    |schema| schema.name.as_str(),
+                );
                 (!schemas.is_empty()).then_some(schemas)
             }
         }
@@ -131,11 +145,11 @@ impl<Context: Clone + Send + Sync + 'static> ToolSet<Context> for UserMcpTools {
         match self {
             UserMcpTools::Pipedream(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
             UserMcpTools::Native(tools) => ToolSet::<Context>::searchable_toolset_names(tools),
-            UserMcpTools::Both { pipedream, native } => {
-                let mut names = ToolSet::<Context>::searchable_toolset_names(pipedream);
-                names.extend(ToolSet::<Context>::searchable_toolset_names(native));
-                names
-            }
+            UserMcpTools::Both { pipedream, native } => pipedream_first(
+                ToolSet::<Context>::searchable_toolset_names(pipedream),
+                ToolSet::<Context>::searchable_toolset_names(native),
+                String::as_str,
+            ),
         }
     }
 

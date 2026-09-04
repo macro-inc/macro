@@ -263,7 +263,9 @@ impl IntoResponse for EgressError {
     fn into_response(self) -> Response {
         let status = match &self {
             Self::Unauthenticated(_) | Self::SessionClosed => StatusCode::UNAUTHORIZED,
-            Self::UnknownServer(_) | Self::Unroutable(_) => StatusCode::NOT_FOUND,
+            Self::UnknownServer(_) | Self::UnknownCustom(_) | Self::Unroutable(_) => {
+                StatusCode::NOT_FOUND
+            }
             Self::RepoUnavailable(_) => StatusCode::FORBIDDEN,
             Self::MethodNotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             // The named upstream is unusable as configured. Someone has to
@@ -285,7 +287,7 @@ impl IntoResponse for EgressError {
             }
             Self::SessionClosed => "This session is no longer open.",
             Self::Unroutable(_) => "Nothing is served at that path.",
-            Self::UnknownServer(_) => "No such connected MCP server.",
+            Self::UnknownServer(_) | Self::UnknownCustom(_) => "No such connected MCP server.",
             Self::RepoUnavailable(_) => {
                 "This session's repository is not reachable with Macro's GitHub App."
             }

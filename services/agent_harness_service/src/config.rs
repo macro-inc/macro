@@ -6,7 +6,7 @@ use database_env_vars::DatabaseUrl;
 pub use macro_env::Environment;
 use macro_uuid::Uuid;
 
-use secretsmanager_client::{LocalOrRemoteSecret, OptionalLocalOrRemoteSecret};
+use secretsmanager_client::LocalOrRemoteSecret;
 
 macro_env_var::env_vars!(
     /// Comma-separated Kafka bootstrap servers.
@@ -177,10 +177,8 @@ pub struct Config {
     pub github_sync_app_client_id: String,
     /// PEM private key of that App.
     pub github_sync_app_pem_secret_key: LocalOrRemoteSecret<GithubSyncAppPemSecretKey>,
-    /// MCP credentials encryption key. Optional so deploy survives until
-    /// Doppler carries the same secret cognition already uses; when unset or
-    /// unusable, custom MCP stays off and Pipedream-only egress still works.
-    pub mcp_credentials_key_secret_name: OptionalLocalOrRemoteSecret<McpCredentialsKeySecretName>,
+    /// MCP credentials encryption key. Same key cognition uses for `mcp_servers`.
+    pub mcp_credentials_key_secret_name: LocalOrRemoteSecret<McpCredentialsKeySecretName>,
 }
 
 impl Config {

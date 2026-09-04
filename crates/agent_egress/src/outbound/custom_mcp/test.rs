@@ -108,7 +108,7 @@ const URL: &str = "https://mcp.example.com/mcp";
 #[tokio::test]
 async fn stamps_the_stored_access_token() {
     let inner = SpyInner::default();
-    let credentials = WithNativeMcp::new(
+    let credentials = WithCustomMcp::new(
         &inner,
         FixedStore(vec![record(
             URL,
@@ -154,13 +154,13 @@ async fn a_disabled_or_unauthenticated_row_is_unknown() {
             )),
         ),
     ] {
-        let credentials = WithNativeMcp::new(&inner, FixedStore(vec![row]));
+        let credentials = WithCustomMcp::new(&inner, FixedStore(vec![row]));
         let refusal = credentials
             .resolve(&owner(), &destination)
             .await
             .expect_err("refused");
         assert!(
-            matches!(refusal, EgressError::UnknownServer(_)),
+            matches!(refusal, EgressError::UnknownCustom(_)),
             "{refusal}"
         );
     }
@@ -169,7 +169,7 @@ async fn a_disabled_or_unauthenticated_row_is_unknown() {
 #[tokio::test]
 async fn an_unknown_id_is_unknown() {
     let inner = SpyInner::default();
-    let credentials = WithNativeMcp::new(&inner, FixedStore(Vec::new()));
+    let credentials = WithCustomMcp::new(&inner, FixedStore(Vec::new()));
     let (_id, destination) = custom(URL);
 
     let refusal = credentials
@@ -177,14 +177,14 @@ async fn an_unknown_id_is_unknown() {
         .await
         .expect_err("refused");
 
-    assert!(matches!(refusal, EgressError::UnknownServer(_)));
+    assert!(matches!(refusal, EgressError::UnknownCustom(_)));
 }
 
 #[tokio::test]
 async fn refuses_a_cleartext_upstream() {
     let inner = SpyInner::default();
     let url = "http://mcp.example.com/mcp";
-    let credentials = WithNativeMcp::new(
+    let credentials = WithCustomMcp::new(
         &inner,
         FixedStore(vec![record(url, true, Some(credentials("token")))]),
     );
@@ -201,7 +201,7 @@ async fn refuses_a_cleartext_upstream() {
 #[tokio::test]
 async fn every_other_destination_delegates_to_the_inner_resolver() {
     let inner = SpyInner::default();
-    let credentials = WithNativeMcp::new(&inner, FixedStore(Vec::new()));
+    let credentials = WithCustomMcp::new(&inner, FixedStore(Vec::new()));
 
     let refusal = credentials
         .resolve(&owner(), &connected("linear"))

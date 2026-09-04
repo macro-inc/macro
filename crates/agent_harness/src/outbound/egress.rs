@@ -33,27 +33,27 @@ mod test;
 const GITHUB_HOST: &str = "github.com";
 
 /// Mints session tokens and gathers the MCP servers a sandbox may dial.
-pub struct EgressProvisioner<Connections, Native> {
+pub struct EgressProvisioner<Connections, Custom> {
     connections: Arc<Connections>,
-    native: Option<Arc<Native>>,
+    custom: Option<Arc<Custom>>,
     base_url: String,
 }
 
-impl<Connections, Native> EgressProvisioner<Connections, Native>
+impl<Connections, Custom> EgressProvisioner<Connections, Custom>
 where
     Connections: ConnectionStore,
-    Native: McpServerStore,
+    Custom: McpServerStore,
 {
     /// Build the provisioner over the Pipedream connection store, optional
-    /// native MCP store, and the egress proxy's public address.
+    /// custom MCP store, and the egress proxy's public address.
     pub fn new(
         connections: Arc<Connections>,
-        native: Option<Arc<Native>>,
+        custom: Option<Arc<Custom>>,
         base_url: impl Into<String>,
     ) -> Self {
         Self {
             connections,
-            native,
+            custom,
             base_url: base_url.into().trim_end_matches('/').to_owned(),
         }
     }
@@ -61,9 +61,9 @@ where
     /// The owner's enabled Pipedream slugs, then authenticated custom servers.
     ///
     /// Pipedream `app_slug` is taken verbatim. Custom servers use a slugified
-    /// ACP name, or `custom-{id}` when that name is empty, reserved, or taken.
-    /// Macro's own server is not in the list. Disabled or unauthenticated
-    /// native rows are left out.
+    /// ACP name, then `custom-{id}`, then the 16-hex id, first unused wins.
+    /// Macro's own server is not in the list. Disabled or tokenless custom
+    /// rows are left out.
     async fn advertised(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<AdvertisedMcp>> {
         let records = self.connections.list(owner).await.map_err(|error| {
             HarnessError::Egress(rootcause::report!(
@@ -89,14 +89,20 @@ where
             servers.push(AdvertisedMcp::Pipedream(slug));
         }
 
-        if let Some(native) = &self.native {
-            let records = native.list(owner).await.map_err(|error| {
+        if let Some(custom) = &self.custom {
+            let records = custom.list(owner).await.map_err(|error| {
                 HarnessError::Egress(rootcause::report!(
-                    "could not list native MCP servers: {error:?}"
+                    "could not list custom MCP servers: {error:?}"
                 ))
             })?;
             for record in records {
-                if !(record.enabled && record.credentials.is_some()) {
+                if !(record.enabled
+                    && record
+                        .credentials
+                        .as_ref()
+                        .and_then(|credentials| credentials.token_response.as_ref())
+                        .is_some())
+                {
                     continue;
                 }
                 let id = CustomMcpId::from_url(&record.url);
@@ -116,11 +122,15 @@ where
 
 fn acp_name(server_name: &str, id: &CustomMcpId, taken: &HashSet<String>) -> String {
     let slug = slugify(server_name);
-    if slug.is_empty() || slug == "macro" || taken.contains(&slug) {
-        format!("custom-{id}")
-    } else {
-        slug
-    }
+    [
+        (!slug.is_empty() && slug != crate::domain::model::MACRO_MCP_NAME).then_some(slug),
+        Some(format!("custom-{id}")),
+        Some(id.as_str().to_owned()),
+    ]
+    .into_iter()
+    .flatten()
+    .find(|name| !taken.contains(name))
+    .unwrap_or_else(|| id.as_str().to_owned())
 }
 
 fn slugify(name: &str) -> String {
@@ -149,10 +159,10 @@ fn slugify(name: &str) -> String {
     result.trim_matches('-').to_owned()
 }
 
-impl<Connections, Native> SandboxEgressProvisioner for EgressProvisioner<Connections, Native>
+impl<Connections, Custom> SandboxEgressProvisioner for EgressProvisioner<Connections, Custom>
 where
     Connections: ConnectionStore,
-    Native: McpServerStore,
+    Custom: McpServerStore,
 {
     #[tracing::instrument(err, skip(self), fields(%session, %owner))]
     async fn provision(

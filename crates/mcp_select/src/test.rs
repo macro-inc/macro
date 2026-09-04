@@ -229,6 +229,16 @@ async fn pipedream_slug_returns_pipedream_when_that_slug_is_connected() {
     assert!(matches!(tools, Some(UserMcpTools::Pipedream(_))));
 }
 
+#[test]
+fn pipedream_first_keeps_pipedream_names_and_drops_native_collisions() {
+    let merged = pipedream_first(
+        vec!["linear".to_owned(), "slack".to_owned()],
+        vec!["linear".to_owned(), "github".to_owned()],
+        String::as_str,
+    );
+    assert_eq!(merged, ["linear", "slack", "github"]);
+}
+
 #[tokio::test]
 async fn empty_user_is_native_and_empty() {
     let tools = selector(vec![], vec![]).user_toolset(&user()).await;
