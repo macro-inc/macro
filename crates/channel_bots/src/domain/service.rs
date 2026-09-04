@@ -96,24 +96,31 @@ const ERROR_FALLBACK: &str = "Sorry — I ran into an error while responding.";
 /// time zone when one is known and parseable, UTC otherwise.
 fn current_time_block(now: chrono::DateTime<chrono::Utc>, time_zone: Option<&str>) -> String {
     const FORMAT: &str = "%A, %B %-d, %Y, %-I:%M %p";
-    let zoned = time_zone.and_then(|name| {
-        let tz = name
-            .parse::<chrono_tz::Tz>()
-            .inspect_err(|error| {
+    let parsed = time_zone.map(|name| {
+        (
+            name,
+            name.parse::<chrono_tz::Tz>().inspect_err(|error| {
                 tracing::warn!(error=?error, time_zone = name, "unparseable calendar time zone");
-            })
-            .ok()?;
-        Some(format!(
-            "{} — {name}, the time zone of the user's primary calendar",
-            now.with_timezone(&tz).format(FORMAT)
-        ))
-    });
-    let line = zoned.unwrap_or_else(|| {
-        format!(
-            "{} — UTC; the user's own time zone is unknown (no connected calendar)",
-            now.format(FORMAT)
+            }),
         )
     });
+    let line = match parsed {
+        Some((name, Ok(tz))) => format!(
+            "{} — {name}, the time zone of the user's primary calendar",
+            now.with_timezone(&tz).format(FORMAT)
+        ),
+        // A calendar IS connected here, so the no-calendar wording would
+        // mislead the model into denying the connection.
+        Some((_, Err(_))) => format!(
+            "{} — UTC; the user's own time zone is unknown (their calendar's time \
+             zone could not be interpreted)",
+            now.format(FORMAT)
+        ),
+        None => format!(
+            "{} — UTC; the user's own time zone is unknown (no connected calendar)",
+            now.format(FORMAT)
+        ),
+    };
     format!("\n<current_time>\n{line}\n</current_time>\n")
 }
 
@@ -207,17 +214,24 @@ where
         let mentioner = sender_label(event.requesting_user.as_ref());
         let trigger_id = event.message.id;
 
-        let nearby = self
-            .channels
-            .get_message_context(
-                event.channel_id,
-                trigger_id,
-                CONTEXT_MESSAGES_BEFORE,
-                CONTEXT_MESSAGES_AFTER,
-            )
-            .await
-            .inspect_err(|err| tracing::warn!(error=?err, "failed to load local channel context"))
-            .unwrap_or_default();
+        let (nearby, time_zone) = futures::join!(
+            async {
+                self.channels
+                    .get_message_context(
+                        event.channel_id,
+                        trigger_id,
+                        CONTEXT_MESSAGES_BEFORE,
+                        CONTEXT_MESSAGES_AFTER,
+                    )
+                    .await
+                    .inspect_err(
+                        |err| tracing::warn!(error=?err, "failed to load local channel context"),
+                    )
+                    .unwrap_or_default()
+            },
+            self.time_zones
+                .primary_time_zone(event.requesting_user.as_ref()),
+        );
 
         let mut prompt = String::new();
         if let Some(parent_id) = event.message.thread_id {
@@ -287,10 +301,6 @@ where
             );
         }
 
-        let time_zone = self
-            .time_zones
-            .primary_time_zone(event.requesting_user.as_ref())
-            .await;
         prompt.push_str(&current_time_block(
             chrono::Utc::now(),
             time_zone.as_deref(),

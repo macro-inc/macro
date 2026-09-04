@@ -25,6 +25,14 @@ impl ConnectionGatewayCalendarRefresh {
 
 impl CalendarRefreshNotifier for ConnectionGatewayCalendarRefresh {
     async fn calendar_changed(&self, owner_id: &str, email_link_id: Uuid) {
-        cg_refresh_calendar(&self.client, &self.db, owner_id, email_link_id).await;
+        // Spawned so the mutation response never waits on the gateway: the
+        // client has no request timeout and the fan-out posts serially per
+        // recipient, while the write this announces is already committed.
+        let client = self.client.clone();
+        let db = self.db.clone();
+        let owner_id = owner_id.to_string();
+        tokio::spawn(async move {
+            cg_refresh_calendar(&client, &db, &owner_id, email_link_id).await;
+        });
     }
 }

@@ -1050,7 +1050,7 @@ async fn run() -> anyhow::Result<()> {
         ),
         Arc::new(channel_bots::outbound::PrimaryCalendarTimeZones::new(
             Arc::new(calendar_events::domain::service::CalendarService::new(
-                calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
+                calendar_events::outbound::pg::PgCalendarRepository::new(readonly_db.clone()),
             )),
         )),
     );

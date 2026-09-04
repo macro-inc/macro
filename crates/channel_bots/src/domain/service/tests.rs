@@ -717,8 +717,17 @@ fn current_time_block_renders_the_users_zone() {
 #[test]
 fn current_time_block_falls_back_to_utc_for_missing_or_bad_zones() {
     let now = Utc.with_ymd_and_hms(2026, 1, 6, 18, 23, 0).unwrap();
-    let fallback = "\n<current_time>\nTuesday, January 6, 2026, 6:23 PM — UTC; the user's own \
-                    time zone is unknown (no connected calendar)\n</current_time>\n";
-    assert_eq!(current_time_block(now, None), fallback);
-    assert_eq!(current_time_block(now, Some("Not/AZone")), fallback);
+    assert_eq!(
+        current_time_block(now, None),
+        "\n<current_time>\nTuesday, January 6, 2026, 6:23 PM — UTC; the user's own \
+         time zone is unknown (no connected calendar)\n</current_time>\n"
+    );
+    // An unparseable zone still means a calendar is connected, so the line
+    // must not claim otherwise.
+    assert_eq!(
+        current_time_block(now, Some("Not/AZone")),
+        "\n<current_time>\nTuesday, January 6, 2026, 6:23 PM — UTC; the user's own \
+         time zone is unknown (their calendar's time zone could not be \
+         interpreted)\n</current_time>\n"
+    );
 }

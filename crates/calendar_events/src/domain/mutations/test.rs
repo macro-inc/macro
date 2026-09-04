@@ -706,13 +706,7 @@ type TestMutationService = CalendarMutationServiceImpl<
 >;
 
 fn service(repo: FakeRepo, provider: FakeProvider, tokens: FakeTokens) -> TestMutationService {
-    CalendarMutationServiceImpl::new(
-        repo,
-        provider,
-        tokens,
-        RecordingEventBroker::default(),
-        RecordingRefreshNotifier::default(),
-    )
+    service_with_broker(repo, provider, tokens, RecordingEventBroker::default())
 }
 
 fn service_with_broker(
@@ -2186,6 +2180,30 @@ async fn disconnecting_calendar_closes_every_open_watch_channel() {
             "stop:channel-a:resource-a".to_string(),
             "stop:channel-b:resource-b".to_string()
         ]
+    );
+}
+
+#[tokio::test]
+async fn disconnecting_calendar_nudges_the_links_calendar_viewers() {
+    let link_id = Uuid::now_v7();
+    let repo = FakeRepo {
+        disconnected: Some(disconnected(&[])),
+        ..FakeRepo::default()
+    };
+    let refresh = RecordingRefreshNotifier::default();
+    service_with_refresh(
+        repo,
+        FakeProvider::new(FakeProviderBehavior::Echo),
+        FakeTokens::ok(),
+        refresh.clone(),
+    )
+    .disconnect_calendar("macro|user", link_id)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        refresh.notified.lock().expect("notifier lock").as_slice(),
+        [("macro|user".to_string(), link_id)]
     );
 }
 

@@ -91,6 +91,21 @@ where
         }
     }
 
+    /// Announce retired events and, when anything was actually retired, nudge
+    /// the link's calendar viewers to refetch their projections.
+    async fn announce_retirements(
+        &self,
+        owner_id: &str,
+        email_link_id: Uuid,
+        retired: Vec<RetiredCalendarEvent>,
+    ) {
+        if retired.is_empty() {
+            return;
+        }
+        self.publish_retirements(retired);
+        self.refresh.calendar_changed(owner_id, email_link_id).await;
+    }
+
     /// Announce what a write did to the canonical row. A write that changed
     /// nothing publishes nothing, so an idempotent replay stays quiet.
     fn publish_write_outcome(&self, outcome: &CalendarEventWriteOutcome) {
@@ -399,13 +414,8 @@ where
                     )
                     .await
                     .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
-                let changed = !retired.is_empty();
-                self.publish_retirements(retired);
-                if changed {
-                    self.refresh
-                        .calendar_changed(&target.owner_id, target.email_link_id)
-                        .await;
-                }
+                self.announce_retirements(&target.owner_id, target.email_link_id, retired)
+                    .await;
                 Ok(())
             }
         }
@@ -475,6 +485,11 @@ where
             .map_err(internal)?
             .ok_or(CalendarMutationError::NotFound)?;
         self.release_watch_channels(email_link_id, &disconnected)
+            .await;
+        // The purge removed whole calendars, and no sync echo will ever
+        // arrive for a disconnected link, so viewers have to be nudged here.
+        self.refresh
+            .calendar_changed(requester_id, email_link_id)
             .await;
         Ok(())
     }
@@ -555,15 +570,10 @@ where
                 );
             })
             .unwrap_or_default();
-        let changed = !retired.is_empty();
         // The row may be gone now, so search cannot rediscover this by
         // re-reading Postgres — the retirement has to be announced.
-        self.publish_retirements(retired);
-        if changed {
-            self.refresh
-                .calendar_changed(&target.owner_id, target.email_link_id)
-                .await;
-        }
+        self.announce_retirements(&target.owner_id, target.email_link_id, retired)
+            .await;
     }
 }
 

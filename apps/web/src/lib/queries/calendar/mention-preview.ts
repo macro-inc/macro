@@ -24,13 +24,15 @@ export function invalidateCalendarEventPreviews(eventId?: string): void {
   } else {
     queryClient.invalidateQueries({
       queryKey: previewKeys._def,
-      // The key carries no type, so an entry without data has an unknown
-      // one: undefined while a first fetch is in flight, null for a cached
-      // channel-message-context miss under this same prefix. Refetch both
-      // rather than letting a pre-change answer land as fresh.
+      // The key carries no type, so it can only be read from cached data.
+      // Entries without data need no sweep: null is a cached
+      // channel-message-context miss (never a calendar event), and
+      // undefined means no fetch has resolved — invalidation cannot outrun
+      // it, since an in-flight fetch is joined rather than restarted and a
+      // fresh mount refetches regardless.
       predicate: (query) => {
         const data = query.state.data as PreviewItem | null | undefined;
-        return data == null || data.type === 'calendar_event';
+        return data != null && data.type === 'calendar_event';
       },
     });
   }
