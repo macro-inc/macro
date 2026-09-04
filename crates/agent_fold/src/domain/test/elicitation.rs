@@ -104,6 +104,7 @@ fn a_form_request_becomes_a_pending_part_and_the_live_slot() {
         request,
         outcome,
         reported,
+        tool_outcome,
     } = parts[0]
     else {
         unreachable!()
@@ -113,6 +114,7 @@ fn a_form_request_becomes_a_pending_part_and_the_live_slot() {
     assert_eq!(message, "Configure the service");
     assert_eq!(*outcome, ElicitationOutcome::Pending);
     assert_eq!(*reported, None);
+    assert_eq!(*tool_outcome, None, "no tool is under review");
 
     let pending = machine
         .metadata()
@@ -437,6 +439,7 @@ fn claude_code_absorbs_the_ask_user_question_tool_call() {
         request,
         outcome,
         reported,
+        ..
     } = &agent.parts[1]
     else {
         unreachable!()
@@ -694,4 +697,226 @@ fn a_bare_text_field_titled_other_without_a_select_is_left_alone() {
     };
     assert_eq!(schema.properties.len(), 1, "nothing to collapse onto");
     assert_eq!(schema.properties[0].name, "name_custom");
+}
+
+// --- a Macro user tool's review ---
+
+/// Macro's in-process agent calling `CreateCalendarEvent` natively: the
+/// call opens as a user tool, answered pending until the review lands.
+const CREATE_EVENT_CALL: &str = r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"_meta":{"macro":{"toolName":"CreateCalendarEvent"}},"toolCallId":"toolu_evt","sessionUpdate":"tool_call","title":"CreateCalendarEvent","kind":"edit","status":"in_progress","rawInput":{"title":"Q3 sync","time":{"kind":"allDay","startDate":"2026-08-20","endDate":"2026-08-21"}}}}}}"#;
+
+/// The review the finisher asks for that call: a form scoped to it, with
+/// the flat fields, the `_macro/json` draft field, and `_meta.macro.userTool`
+/// naming the tool and carrying the draft.
+const CREATE_EVENT_REVIEW: &str = r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":9,"method":"elicitation/create","params":{"sessionId":"s","toolCallId":"toolu_evt","mode":"form","message":"Create calendar event?","requestedSchema":{"type":"object","title":"Create calendar event","properties":{"title":{"type":"string","title":"title","default":"Q3 sync"},"draft":{"type":"_macro/json","title":"draft"}},"required":["title"]},"_meta":{"macro":{"userTool":{"name":"CreateCalendarEvent","draft":{"title":"Q3 sync","time":{"kind":"allDay","startDate":"2026-08-20","endDate":"2026-08-21"}}}}}}}}"#;
+
+/// The same review with no call open for it to absorb.
+const ORPHAN_REVIEW: &str = r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":9,"method":"elicitation/create","params":{"sessionId":"s","toolCallId":"toolu_gone","mode":"form","message":"Create calendar event?","requestedSchema":{"type":"object","properties":{"title":{"type":"string","default":"Q3 sync"}}},"_meta":{"macro":{"userTool":{"name":"CreateCalendarEvent","draft":{"title":"Q3 sync"}}}}}}}"#;
+
+fn tool_update(id: &str, status: &str, raw_output: &str) -> String {
+    format!(
+        r#"{{"direction":"to_server","content":{{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{{"sessionId":"s","update":{{"_meta":{{"macro":{{"toolName":"CreateCalendarEvent"}}}},"toolCallId":"{id}","sessionUpdate":"tool_call_update","status":"{status}","rawOutput":{raw_output}}}}}}}}}"#
+    )
+}
+
+fn draft() -> serde_json::Value {
+    serde_json::json!({"title": "Q3 sync", "time": {"kind": "allDay", "startDate": "2026-08-20", "endDate": "2026-08-21"}})
+}
+
+#[test]
+fn a_form_scoped_to_a_user_tool_call_is_that_tools_review() {
+    let (machine, _) = drive(&lines(&[
+        &announce("macro-inmem"),
+        PROMPT,
+        CREATE_EVENT_CALL,
+        CREATE_EVENT_REVIEW,
+    ]));
+
+    let agent = &machine.messages()[1];
+    assert_eq!(
+        agent.parts.len(),
+        1,
+        "the review took the call's row: {:#?}",
+        agent.parts
+    );
+    let MessagePart::Elicitation {
+        tool_call,
+        request,
+        outcome,
+        tool_outcome,
+        ..
+    } = &agent.parts[0]
+    else {
+        panic!("a question: {:?}", agent.parts[0]);
+    };
+    assert_eq!(*tool_call, Some(ToolUseId("toolu_evt".to_owned())));
+    assert_eq!(*outcome, ElicitationOutcome::Pending);
+    assert_eq!(*tool_outcome, None, "the tool has not run yet");
+    let ElicitationRequest::UserTool {
+        tool,
+        draft: reviewed,
+        schema,
+    } = request
+    else {
+        panic!("a user tool review: {request:?}");
+    };
+    assert_eq!(tool, "CreateCalendarEvent");
+    assert_eq!(**reviewed, draft(), "the draft is the call's own arguments");
+    assert_eq!(schema.title.as_deref(), Some("Create calendar event"));
+    let names: Vec<&str> = schema
+        .properties
+        .iter()
+        .map(|property| property.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        ["title", "draft"],
+        "the flat form is kept for a client without a composer"
+    );
+    assert!(
+        matches!(
+            schema.properties[1].schema,
+            ElicitationPropertySchema::Unrecognized { ref type_name, .. } if type_name == "_macro/json"
+        ),
+        "the draft field is Macro's extension type: {:?}",
+        schema.properties[1].schema
+    );
+
+    let pending = machine
+        .metadata()
+        .pending_elicitation
+        .as_ref()
+        .expect("the review is the live question");
+    assert_eq!(
+        pending.request, *request,
+        "the slot carries the same typed request"
+    );
+}
+
+#[test]
+fn a_reviewed_tools_own_result_lands_on_the_question() {
+    let accepted = accept(
+        9,
+        r#"{"title":"Q3 planning","draft":"{\"title\":\"Q3 planning\"}"}"#,
+    );
+    let created = r#"{"UserAction":{"eventId":"evt-1","title":"Q3 planning"}}"#;
+    let (machine, _) = drive(&lines(&[
+        &announce("macro-inmem"),
+        PROMPT,
+        CREATE_EVENT_CALL,
+        CREATE_EVENT_REVIEW,
+        &accepted,
+        &tool_update("toolu_evt", "completed", created),
+        END_TURN,
+    ]));
+
+    let parts = elicitations(&machine);
+    let MessagePart::Elicitation {
+        outcome,
+        tool_outcome,
+        ..
+    } = parts[0]
+    else {
+        unreachable!()
+    };
+    assert!(
+        matches!(outcome, ElicitationOutcome::Accepted { content: Some(_) }),
+        "the user's answer: {outcome:?}"
+    );
+    assert_eq!(
+        *tool_outcome,
+        Some(crate::domain::model::UserToolOutcome::Completed {
+            result: serde_json::json!({"eventId": "evt-1", "title": "Q3 planning"}),
+        }),
+        "the created event, read as the tool's user-tool response"
+    );
+    assert!(
+        machine.metadata().pending_elicitation.is_none(),
+        "answered and the turn over: nothing to offer"
+    );
+}
+
+#[test]
+fn a_declined_review_and_a_failed_tool_read_as_such() {
+    let (declined, _) = drive(&lines(&[
+        &announce("macro-inmem"),
+        PROMPT,
+        CREATE_EVENT_CALL,
+        CREATE_EVENT_REVIEW,
+        &answer(9, "decline"),
+        &tool_update("toolu_evt", "completed", r#""Rejected""#),
+    ]));
+    let MessagePart::Elicitation {
+        outcome,
+        tool_outcome,
+        ..
+    } = elicitations(&declined)[0]
+    else {
+        unreachable!()
+    };
+    assert_eq!(*outcome, ElicitationOutcome::Declined);
+    assert_eq!(
+        *tool_outcome,
+        Some(crate::domain::model::UserToolOutcome::Rejected)
+    );
+
+    let (failed, _) = drive(&lines(&[
+        &announce("macro-inmem"),
+        PROMPT,
+        CREATE_EVENT_CALL,
+        CREATE_EVENT_REVIEW,
+        &accept(9, "{}"),
+        &tool_update(
+            "toolu_evt",
+            "failed",
+            r#"{"error":"Failed to create the calendar event: no writable calendar"}"#,
+        ),
+    ]));
+    let MessagePart::Elicitation { tool_outcome, .. } = elicitations(&failed)[0] else {
+        unreachable!()
+    };
+    assert_eq!(
+        *tool_outcome,
+        Some(crate::domain::model::UserToolOutcome::Failed {
+            message: "Failed to create the calendar event: no writable calendar".to_owned(),
+        })
+    );
+}
+
+#[test]
+fn a_review_with_no_call_to_absorb_is_still_a_review_from_its_meta() {
+    let (machine, _) = drive(&lines(&[&announce("macro-inmem"), PROMPT, ORPHAN_REVIEW]));
+    let parts = elicitations(&machine);
+    let MessagePart::Elicitation {
+        tool_call, request, ..
+    } = parts[0]
+    else {
+        unreachable!()
+    };
+    assert_eq!(*tool_call, Some(ToolUseId("toolu_gone".to_owned())));
+    let ElicitationRequest::UserTool { tool, draft, .. } = request else {
+        panic!("a user tool review: {request:?}");
+    };
+    assert_eq!(tool, "CreateCalendarEvent");
+    assert_eq!(**draft, serde_json::json!({"title": "Q3 sync"}));
+}
+
+#[test]
+fn a_form_scoped_to_an_ordinary_tool_call_stays_a_form() {
+    // A Macro tool that is not a user tool, asked about with no `_meta.macro.userTool`.
+    let read_call = r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"_meta":{"macro":{"toolName":"ReadContent"}},"toolCallId":"toolu_read","sessionUpdate":"tool_call","title":"ReadContent","kind":"read","status":"in_progress","rawInput":{"documentId":"d"}}}}}"#;
+    let question = r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":3,"method":"elicitation/create","params":{"sessionId":"s","toolCallId":"toolu_read","mode":"form","message":"Which section?","requestedSchema":{"type":"object","properties":{"section":{"type":"string"}}}}}}"#;
+    let (machine, _) = drive(&lines(&[
+        &announce("macro-inmem"),
+        PROMPT,
+        read_call,
+        question,
+    ]));
+    let MessagePart::Elicitation { request, .. } = elicitations(&machine)[0] else {
+        unreachable!()
+    };
+    assert!(
+        matches!(request, ElicitationRequest::Form { .. }),
+        "not a user tool: {request:?}"
+    );
 }

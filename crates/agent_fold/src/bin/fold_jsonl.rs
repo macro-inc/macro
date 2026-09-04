@@ -13,8 +13,8 @@ use agent_fold::domain::fold::FoldMachineImpl;
 use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::{
     Author, Control, ControlOutcome, ElicitationOutcome, ElicitationPropertySchema,
-    ElicitationRequest, FoldedMessage, MessagePart, PermissionOption, PermissionOutcome,
-    PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUseId,
+    ElicitationRequest, ElicitationSchema, FoldedMessage, MessagePart, PermissionOption,
+    PermissionOutcome, PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUseId,
 };
 use agent_fold::domain::ports::FoldMachine;
 use agent_fold::domain::ports::LogRepo;
@@ -313,58 +313,15 @@ fn render_elicitation(
     let _ = writeln!(out, "[question · {state}]");
     let _ = writeln!(out, "{}", indent(question.trim_end()));
     match request {
-        ElicitationRequest::Form { schema } => {
-            for property in &schema.properties {
-                let label = property.title.as_deref().unwrap_or(&property.name);
-                let required = if schema.required.contains(&property.name) {
-                    "*"
-                } else {
-                    ""
-                };
-                let shape = match &property.schema {
-                    ElicitationPropertySchema::String {
-                        options,
-                        custom_field,
-                        ..
-                    } if !options.is_empty() => {
-                        let choices: Vec<&str> = options
-                            .iter()
-                            .map(|option| option.title.as_deref().unwrap_or(&option.value))
-                            .collect();
-                        let other = if custom_field.is_some() {
-                            " | other…"
-                        } else {
-                            ""
-                        };
-                        format!("select: {}{other}", choices.join(" | "))
-                    }
-                    ElicitationPropertySchema::String { .. } => "text".to_owned(),
-                    ElicitationPropertySchema::Number { .. } => "number".to_owned(),
-                    ElicitationPropertySchema::Integer { .. } => "integer".to_owned(),
-                    ElicitationPropertySchema::Boolean { .. } => "boolean".to_owned(),
-                    ElicitationPropertySchema::MultiSelect {
-                        options,
-                        custom_field,
-                        ..
-                    } => {
-                        let choices: Vec<&str> = options
-                            .iter()
-                            .map(|option| option.title.as_deref().unwrap_or(&option.value))
-                            .collect();
-                        let other = if custom_field.is_some() {
-                            " | other…"
-                        } else {
-                            ""
-                        };
-                        format!("multi-select: {}{other}", choices.join(" | "))
-                    }
-                    ElicitationPropertySchema::Unrecognized { type_name, .. } => {
-                        format!("unrecognized type {type_name}")
-                    }
-                };
-                let _ = writeln!(out, "{}", indent(&format!("{label}{required} ({shape})")));
-            }
+        ElicitationRequest::UserTool {
+            tool,
+            draft,
+            schema,
+        } => {
+            let _ = writeln!(out, "{}", indent(&format!("review {tool}: {draft}")));
+            render_form_fields(&mut out, schema);
         }
+        ElicitationRequest::Form { schema } => render_form_fields(&mut out, schema),
         ElicitationRequest::Url { url, .. } => {
             let _ = writeln!(out, "{}", indent(&format!("open {url}")));
         }
@@ -376,6 +333,60 @@ fn render_elicitation(
         let _ = writeln!(out, "{}", indent(&format!("agent read: {reported}")));
     }
     out
+}
+
+/// One line per form field: `label* (shape)`.
+fn render_form_fields(out: &mut String, schema: &ElicitationSchema) {
+    for property in &schema.properties {
+        let label = property.title.as_deref().unwrap_or(&property.name);
+        let required = if schema.required.contains(&property.name) {
+            "*"
+        } else {
+            ""
+        };
+        let shape = match &property.schema {
+            ElicitationPropertySchema::String {
+                options,
+                custom_field,
+                ..
+            } if !options.is_empty() => {
+                let choices: Vec<&str> = options
+                    .iter()
+                    .map(|option| option.title.as_deref().unwrap_or(&option.value))
+                    .collect();
+                let other = if custom_field.is_some() {
+                    " | other…"
+                } else {
+                    ""
+                };
+                format!("select: {}{other}", choices.join(" | "))
+            }
+            ElicitationPropertySchema::String { .. } => "text".to_owned(),
+            ElicitationPropertySchema::Number { .. } => "number".to_owned(),
+            ElicitationPropertySchema::Integer { .. } => "integer".to_owned(),
+            ElicitationPropertySchema::Boolean { .. } => "boolean".to_owned(),
+            ElicitationPropertySchema::MultiSelect {
+                options,
+                custom_field,
+                ..
+            } => {
+                let choices: Vec<&str> = options
+                    .iter()
+                    .map(|option| option.title.as_deref().unwrap_or(&option.value))
+                    .collect();
+                let other = if custom_field.is_some() {
+                    " | other…"
+                } else {
+                    ""
+                };
+                format!("multi-select: {}{other}", choices.join(" | "))
+            }
+            ElicitationPropertySchema::Unrecognized { type_name, .. } => {
+                format!("unrecognized type {type_name}")
+            }
+        };
+        let _ = writeln!(out, "{}", indent(&format!("{label}{required} ({shape})")));
+    }
 }
 
 /// A tool call: `[label · status]` then whatever detail the fold recovered.

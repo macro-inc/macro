@@ -58,15 +58,6 @@ impl FoldState {
         let (tool_call, elicitation_request) = decode_request(self.reader(), &request, params);
         let message_text = request.message.clone();
 
-        let part = MessagePart::Elicitation {
-            request_id: id.clone(),
-            tool_call: tool_call.clone(),
-            message: message_text.clone(),
-            request: elicitation_request.clone(),
-            outcome: ElicitationOutcome::Pending,
-            reported: None,
-        };
-
         // Absorb the tool call the question was asked for, when this fold has
         // it open: the part takes the tool's place so the question renders
         // once, in the position the tool row already had - nested under a
@@ -76,6 +67,34 @@ impl FoldState {
             .as_ref()
             .and_then(|tool| self.tool_positions.get(tool).cloned())
             .filter(|at| matches!(self.part_at_mut(at), Some(MessagePart::ToolUse { .. })));
+
+        // A form asked on behalf of one of Macro's user tools is that tool's
+        // review: the call is what is being decided, and a client with the
+        // tool's composer renders the draft rather than the form.
+        let elicitation_request = match elicitation_request {
+            ElicitationRequest::Form { schema } => {
+                let absorbed_user_tool = absorbed.as_ref().and_then(|at| self.user_tool_at(at));
+                match absorbed_user_tool.or_else(|| user_tool_from_meta(&request)) {
+                    Some((tool, draft)) => ElicitationRequest::UserTool {
+                        tool,
+                        draft: Box::new(draft),
+                        schema: Box::new(schema),
+                    },
+                    None => ElicitationRequest::Form { schema },
+                }
+            }
+            other => other,
+        };
+
+        let part = MessagePart::Elicitation {
+            request_id: id.clone(),
+            tool_call: tool_call.clone(),
+            message: message_text.clone(),
+            request: elicitation_request.clone(),
+            outcome: ElicitationOutcome::Pending,
+            reported: None,
+            tool_outcome: None,
+        };
         let (changed, at) = match absorbed {
             Some(at) => {
                 *self.part_at_mut(&at)? = part;
@@ -198,19 +217,51 @@ impl FoldState {
     }
 
     /// A `tool_call_update` for a tool id whose part is now an elicitation:
-    /// the harness telling us what it made of the answer. Returns `None` when
-    /// the update carries nothing this fold reads.
+    /// the harness telling us what it made of the answer, or - for a user
+    /// tool's review - the tool reporting how it ended once the user
+    /// answered. Returns `None` when the update carries nothing this fold
+    /// reads.
     pub(super) fn patch_absorbed_elicitation(
         &mut self,
         at: &ToolPath,
         frame: &ToolFrame<'_>,
     ) -> Option<Changed> {
-        let answer = self.reader().reported_elicitation_answer(frame)?;
-        let Some(MessagePart::Elicitation { reported, .. }) = self.part_at_mut(at) else {
+        let reader = self.reader();
+        let answer = reader.reported_elicitation_answer(frame);
+        let Some(MessagePart::Elicitation {
+            request,
+            reported,
+            tool_outcome,
+            ..
+        }) = self.part_at_mut(at)
+        else {
             return None;
         };
-        *reported = Some(answer);
-        Some(Changed::updated(at.message))
+        let mut changed = false;
+        if let Some(answer) = answer {
+            *reported = Some(answer);
+            changed = true;
+        }
+        if let (ElicitationRequest::UserTool { tool, .. }, Some(raw)) =
+            (&*request, frame.raw_output)
+        {
+            *tool_outcome = Some(crate::domain::harness::user_tool_outcome(reader, tool, raw));
+            changed = true;
+        }
+        changed.then(|| Changed::updated(at.message))
+    }
+
+    /// The Macro user tool at `at`, with its draft, when the part there is a
+    /// tool call this fold classified as one.
+    fn user_tool_at(&mut self, at: &ToolPath) -> Option<(String, Value)> {
+        match self.part_at_mut(at) {
+            Some(MessagePart::ToolUse {
+                name,
+                detail: crate::domain::model::ToolDetail::UserTool { input, .. },
+                ..
+            }) => Some((name.display().to_owned(), input.clone())),
+            _ => None,
+        }
     }
 
     /// Drop the metadata's pending elicitation when `matches` says so.
@@ -291,6 +342,21 @@ fn decode_request(
             (tool_call, ElicitationRequest::Unrecognized { mode, raw })
         }
     }
+}
+
+/// The user tool a request names under `_meta.macro.userTool`, with the
+/// draft it carries there - how Macro's own agent labels a review, so the
+/// fold reads it even when the call it is scoped to is not open here. The
+/// name is required; the draft defaults to nothing.
+fn user_tool_from_meta(request: &CreateElicitationRequest) -> Option<(String, Value)> {
+    let user_tool = request
+        .meta
+        .as_ref()?
+        .get(crate::domain::harness::macro_inmem::NAMESPACE)?
+        .get("userTool")?;
+    let name = user_tool.get("name")?.as_str()?.to_owned();
+    let draft = user_tool.get("draft").cloned().unwrap_or(Value::Null);
+    Some((name, draft))
 }
 
 fn scope_tool_call(scope: &ElicitationScope) -> Option<ToolUseId> {
