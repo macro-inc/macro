@@ -10,6 +10,7 @@ use axum::Router;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::post;
+use subtle::ConstantTimeEq;
 
 use crate::api::context::ApiContext;
 use email_service::pubsub::context::calendar_watch_config;
