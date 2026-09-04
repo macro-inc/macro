@@ -38,13 +38,16 @@ const scrollCurrentTabIntoView = (root: HTMLElement) => {
   const reduceMotion = window.matchMedia(
     '(prefers-reduced-motion: reduce)'
   ).matches;
-  window.setTimeout(() => {
-    if (!selected.isConnected) return;
-    selected.scrollIntoView({
-      block: 'end',
-      behavior: reduceMotion ? 'auto' : 'smooth',
-    });
-  }, reduceMotion ? 0 : MENU_OPEN_MS);
+  window.setTimeout(
+    () => {
+      if (!selected.isConnected) return;
+      selected.scrollIntoView({
+        block: 'end',
+        behavior: reduceMotion ? 'auto' : 'smooth',
+      });
+    },
+    reduceMotion ? 0 : MENU_OPEN_MS
+  );
 };
 
 export const TabsInsetDropdown = (props: TabsInsetDropdownProps) => {
