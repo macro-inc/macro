@@ -48,7 +48,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         api_router(state.clone())
             .layer(cors.clone())
             .layer(DefaultBodyLimit::disable())
-            .layer(RequestBodyLimitLayer::new(1024 * 1024 * 1024)) // 1GB
+            .layer(RequestBodyLimitLayer::new(1024 * 1024 * 1024))
             .layer(
                 ServiceBuilder::new()
                     .layer(TraceLayer::new_for_http())

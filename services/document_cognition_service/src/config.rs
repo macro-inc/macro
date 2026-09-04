@@ -119,9 +119,6 @@ pub struct Config {
     pub kafka_brokers: KafkaBrokers,
 }
 
-/// Slack and GitHub have the OAuth redirect URIs registered on the dedicated
-/// hosts, so this stays there while `DocumentCognitionServiceUrl` moves API
-/// clients onto the gateway.
 fn default_mcp_public_url(environment: Environment) -> &'static str {
     match environment {
         Environment::Production => "https://document-cognition.macro.com",
