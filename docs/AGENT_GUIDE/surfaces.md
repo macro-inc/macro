@@ -81,9 +81,9 @@ list / delete personal keys; the secret is shown only once and is sent as
 Workspace → `Team`, `Tags`, `CRM`, `Connections` (Connected / Discover), `Macro MCP`
 (setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE; signposts
 inbound connectors to Connections Discover). Connections signposts outbound
-Macro MCP to `Macro MCP`. `Bots`; `Log out`.
-Harness and Agents stay off the nav. `/app/settings/harness?pair=` still
-mounts Harness so pairing works.
+Macro MCP to `Macro MCP`. `Bots`; Agents → `Agents`, `Harness` (gated by
+enable-chat-v3-agents). `Log out`.
+`/app/settings/harness?pair=` still mounts Harness so pairing works.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
 ## Settings — Connections — `/app/settings/connections`
