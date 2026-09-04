@@ -5,6 +5,10 @@ import type {
 } from './nodes/AgentContextNode';
 import type { AwaitDecoratorProps, AwaitNode } from './nodes/AwaitNode';
 import type {
+  ConnectAppDecoratorProps,
+  ConnectAppNode,
+} from './nodes/ConnectAppNode';
+import type {
   ContactMentionDecoratorProps,
   ContactMentionNode,
 } from './nodes/ContactMentionNode';
@@ -162,6 +166,10 @@ export interface NodeDecoratorMap {
   TagMentionNode: {
     klass: typeof TagMentionNode;
     props: TagMentionDecoratorProps;
+  };
+  ConnectAppNode: {
+    klass: typeof ConnectAppNode;
+    props: ConnectAppDecoratorProps;
   };
   WatermarkNode: {
     klass: typeof WatermarkNode;

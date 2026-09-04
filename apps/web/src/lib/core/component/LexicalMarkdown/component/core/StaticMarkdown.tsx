@@ -14,6 +14,7 @@ import {
   type AgentContextNode,
   type AwaitNode,
   type ClassedBlockNode,
+  type ConnectAppNode,
   type ContactMentionNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
@@ -77,6 +78,7 @@ import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
 import { Await as AwaitDecorator } from '../decorator/Await';
+import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
@@ -399,6 +401,20 @@ const ThemeMention: TypedRenderableEntity<ThemeMentionNode> = {
   render: (props) => (
     <span>
       {ThemeMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const ConnectApp: TypedRenderableEntity<ConnectAppNode> = {
+  guard: (node: LexicalNode): node is ConnectAppNode =>
+    node.__type === 'connect-app',
+  render: (props) => (
+    <span>
+      {ConnectAppDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -903,6 +919,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(Equation),
   eraseRenderableEntity(ThemeMention),
   eraseRenderableEntity(TagMention),
+  eraseRenderableEntity(ConnectApp),
   eraseRenderableEntity(UnknownMention),
   eraseRenderableEntity(Watermark),
   eraseRenderableEntity(Paste),

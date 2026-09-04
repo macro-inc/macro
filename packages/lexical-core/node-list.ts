@@ -18,6 +18,7 @@ import { AwaitNode } from './nodes/AwaitNode';
 import { ClassedBlockNode } from './nodes/ClassedBlockNode';
 import { CommentNode } from './nodes/CommentNode';
 import { CompletionNode } from './nodes/CompletionNode';
+import { ConnectAppNode } from './nodes/ConnectAppNode';
 import { ContactMentionNode } from './nodes/ContactMentionNode';
 import { CustomCodeNode } from './nodes/CustomCodeNode';
 import { DateMentionNode } from './nodes/DateMentionNode';
@@ -110,6 +111,7 @@ export const SupportedNodeTypes = [
   WatermarkNode,
   ThemeMentionNode,
   TagMentionNode,
+  ConnectAppNode,
   UnknownMentionNode,
   AwaitNode,
   MagicChipNode,

@@ -33,6 +33,8 @@ The AI does not need to know the name — an empty string is fine and the fronte
 - Calendar event mention: `<m-document-mention>{"documentId":"{event_id}","documentName":"","blockName":"calendar","blockParams":{}}</m-document-mention>`
 - Calendar event occurrence mention: `<m-document-mention>{"documentId":"{event_id}","documentName":"","blockName":"calendar","blockParams":{"occurrenceKey":"{recurrence_id}"}}</m-document-mention>`
 
+If a tool result tells you an app is not connected for the person you are working for and hands you a `<m-connect-app>{"appSlug":"...","name":"..."}</m-connect-app>` tag, include that tag verbatim in your reply: it renders as a button that connects the app. Never invent one; only repeat the tag a tool result gave you. End that reply by asking them to let you know once they have connected the app so you can try again.
+
 The `blockName` for an email thread is always exactly `email` — never `thread` or `email_thread`, which the frontend cannot resolve.
 The `blockName` for a calendar event is always exactly `calendar` — never `calendar_event`, which the frontend cannot resolve. `documentId` is the `eventId` a calendar tool returned. To point at one instance of a recurring event, pass that occurrence's `recurrenceId` from ListCalendarEvents as the `occurrenceKey` block param; otherwise omit it and the mention previews the nearest instance. A calendar event mention resolves only for users who have that event on their own calendar.
 When a tool returns both a channel id and a channel message id, link the specific message using the channel message mention format. Do not link only the channel unless you are referring to the whole channel.
