@@ -1,8 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { ThrownResultError } from '@core/util/result';
-import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import HardDrivesIcon from '@phosphor/hard-drives.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import {
@@ -13,10 +13,11 @@ import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
+import { providerIcon } from './connections/provider-meta';
 import { openConnectionsProvider } from './connections/view-state';
 import { HarnessPairingDialog } from './HarnessPairingDialog';
 import { ConnectAction, StatusDot } from './integration-ui';
-import { SettingsCard, SettingsPage } from './primitives';
+import { IntegrationRow, SettingsCard, SettingsPage } from './primitives';
 
 const BYOA_DOCS_URL = 'https://docs.macro.com/AI/bring-your-own';
 
@@ -93,30 +94,19 @@ export function Harness() {
           </div>
         </section>
 
-        <section class="flex gap-4 px-6 py-5">
-          <HarnessIcon>
-            <CursorIcon />
-          </HarnessIcon>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <h2 class="text-sm font-medium text-ink">Cursor</h2>
-            </div>
-            <p class="mt-1 text-sm text-ink-muted">
-              Use your Cursor account to run agent sessions in Macro. The API
-              key and default model live in Connections.
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              depth={3}
-              class="mt-4"
-              onClick={openCursorConnections}
-            >
-              Manage in Connections
-            </Button>
-          </div>
-        </section>
+        <button
+          type="button"
+          class="w-full text-left outline-none hover:bg-ink/4 focus-visible:bg-ink/6"
+          onClick={openCursorConnections}
+        >
+          <IntegrationRow
+            icon={providerIcon('cursor')}
+            title="Cursor"
+            description="Use your Cursor account to run agent sessions in Macro."
+          >
+            <CaretRightIcon class="size-4 text-ink-extra-muted" />
+          </IntegrationRow>
+        </button>
 
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>

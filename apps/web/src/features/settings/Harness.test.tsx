@@ -139,7 +139,7 @@ describe('Harness', () => {
     render(() => <Harness />);
 
     expect(screen.getByRole('heading', { name: 'In-memory' })).toBeTruthy();
-    expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Cursor/ })).toBeTruthy();
     expect(
       screen.getByRole('heading', { name: 'Bring your own agent' })
     ).toBeTruthy();
@@ -157,11 +157,8 @@ describe('Harness', () => {
 
     expect(screen.queryByText('Connected')).toBeNull();
     expect(screen.queryByLabelText('API key')).toBeNull();
-    expect(screen.getByText(/live in Connections/)).toBeTruthy();
 
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Manage in Connections' })
-    );
+    fireEvent.click(screen.getByRole('button', { name: /Cursor/ }));
     expect(mocks.selectTab).toHaveBeenCalledWith('Connected');
   });
 
