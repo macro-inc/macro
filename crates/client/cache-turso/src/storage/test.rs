@@ -156,7 +156,7 @@ async fn expect_every_storage_method_latched(
 }
 
 #[test]
-fn search_projection_is_write_through_and_recent_query_uses_projection_index() {
+fn search_projection_is_write_through_and_queries_use_projection_indexes() {
     block_on(async {
         let mut storage = TursoStorage::open_in_memory("search-projection").unwrap();
         let mut document = Record::default();
@@ -248,6 +248,44 @@ fn search_projection_is_write_through_and_recent_query_uses_projection_index() {
         );
         assert!(!details.contains("records"));
 
+        let rowid_plan = driver::query(
+            &storage.connection(),
+            &format!("EXPLAIN QUERY PLAN {SEARCH_ROWID}"),
+            vec![
+                text(SearchProfile::QuickAccessV1.as_str()),
+                text("GraphqlSoupDocument"),
+                text("d1"),
+            ],
+        )
+        .unwrap();
+        let rowid_details = rowid_plan
+            .iter()
+            .filter_map(|row| required_text(row, 3).ok())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert!(
+            rowid_details.contains("sqlite_autoindex_search_documents_1")
+                && rowid_details.contains("profile=? AND __typename=? AND id=?"),
+            "rowid lookup did not use the complete primary-key index: {rowid_details}"
+        );
+        assert!(
+            !rowid_details.contains("SCAN search_documents"),
+            "rowid lookup scanned the projection table: {rowid_details}"
+        );
+
+        raw_execute(
+            &storage,
+            SEARCH_UPSERT,
+            vec![
+                text("future-profile"),
+                text("GraphqlSoupDocument"),
+                text("d1"),
+                text("document"),
+                text("future profile row"),
+                Value::from_i64(123),
+                text("future-profile-hash"),
+            ],
+        );
         storage
             .delete_batch(&[key("GraphqlSoupDocument:d2")])
             .await
@@ -262,6 +300,13 @@ fn search_projection_is_write_through_and_recent_query_uses_projection_index() {
                 .await
                 .unwrap()
                 .is_empty()
+        );
+        assert_eq!(
+            raw_scalar(
+                &storage,
+                "SELECT COUNT(*) FROM search_documents WHERE profile = 'future-profile' AND __typename = 'GraphqlSoupDocument' AND id = 'd1'",
+            ),
+            1
         );
     });
 }

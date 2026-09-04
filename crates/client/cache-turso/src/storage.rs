@@ -91,7 +91,10 @@ const CREATE_SCHEMA: [&str; 28] = [
 const RECORD_GET: &str = "SELECT value FROM records WHERE __typename = ?1 AND id = ?2";
 const RECORD_UPSERT: &str = "INSERT INTO records (__typename, id, value) VALUES (?1, ?2, ?3) ON CONFLICT (__typename, id) DO UPDATE SET value = excluded.value";
 const RECORD_DELETE: &str = "DELETE FROM records WHERE __typename = ?1 AND id = ?2";
-const SEARCH_DELETE: &str = "DELETE FROM search_documents WHERE __typename = ?1 AND id = ?2";
+// Turso otherwise chooses the browse index's profile prefix for a direct composite-key delete.
+// Force a point lookup through the existing primary-key index, then delete by its rowid.
+const SEARCH_ROWID: &str = "SELECT rowid FROM search_documents INDEXED BY sqlite_autoindex_search_documents_1 WHERE profile = ?1 AND __typename = ?2 AND id = ?3";
+const SEARCH_DELETE: &str = "DELETE FROM search_documents WHERE rowid = ?1";
 const SEARCH_UPSERT: &str = "INSERT INTO search_documents (profile, __typename, id, bucket, search_text, timestamp_ms, source_hash) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (profile, __typename, id) DO UPDATE SET bucket = excluded.bucket, search_text = excluded.search_text, timestamp_ms = excluded.timestamp_ms, source_hash = excluded.source_hash";
 const SEARCH_LOAD: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents WHERE profile = ?1";
 const SEARCH_BROWSE: &str = "SELECT __typename, id, bucket, search_text, timestamp_ms, source_hash FROM search_documents INDEXED BY search_documents_browse_idx WHERE profile = ?1 AND bucket = ?2 ORDER BY timestamp_ms DESC, __typename ASC, id ASC LIMIT ?3";
@@ -858,7 +861,8 @@ impl Storage for TursoStorage {
             let connection = self.connection();
             driver::write_transaction(&connection, || {
                 let mut record_statement = driver::prepare(&connection, RECORD_DELETE)?;
-                let mut search_statement = driver::prepare(&connection, SEARCH_DELETE)?;
+                let mut search_rowid_statement = driver::prepare(&connection, SEARCH_ROWID)?;
+                let mut search_delete_statement = driver::prepare(&connection, SEARCH_DELETE)?;
                 for (index, key) in keys.iter().enumerate() {
                     let changed = driver::execute_prepared(
                         &mut record_statement,
@@ -867,13 +871,12 @@ impl Storage for TursoStorage {
                     if !(0..=1).contains(&changed) {
                         return Err(invariant());
                     }
-                    let search_changed = driver::execute_prepared(
-                        &mut search_statement,
-                        vec![text(&key.typename), text(&key.id)],
+                    delete_search_document(
+                        &mut search_rowid_statement,
+                        &mut search_delete_statement,
+                        SearchProfile::QuickAccessV1,
+                        key,
                     )?;
-                    if search_changed < 0 {
-                        return Err(invariant());
-                    }
                     self.fault_after(TestFaultSite::Delete, index)?;
                 }
                 Ok(())
@@ -1421,7 +1424,8 @@ impl PredicateIndexStorage for TursoStorage {
             let connection = self.connection();
             driver::write_transaction(&connection, || {
                 let mut record_statement = driver::prepare(&connection, RECORD_DELETE)?;
-                let mut search_statement = driver::prepare(&connection, SEARCH_DELETE)?;
+                let mut search_rowid_statement = driver::prepare(&connection, SEARCH_ROWID)?;
+                let mut search_delete_statement = driver::prepare(&connection, SEARCH_DELETE)?;
                 for key in &keys {
                     let changed = driver::execute_prepared(
                         &mut record_statement,
@@ -1430,9 +1434,11 @@ impl PredicateIndexStorage for TursoStorage {
                     if !(0..=1).contains(&changed) {
                         return Err(invariant());
                     }
-                    driver::execute_prepared(
-                        &mut search_statement,
-                        vec![text(&key.typename), text(&key.id)],
+                    delete_search_document(
+                        &mut search_rowid_statement,
+                        &mut search_delete_statement,
+                        SearchProfile::QuickAccessV1,
+                        key,
                     )?;
                 }
                 for key in projection_keys {
@@ -2594,6 +2600,7 @@ fn initialize(
         RECORD_GET,
         RECORD_UPSERT,
         RECORD_DELETE,
+        SEARCH_ROWID,
         SEARCH_DELETE,
         SEARCH_UPSERT,
         SEARCH_LOAD,
@@ -4089,20 +4096,43 @@ fn prepare_records(
         .collect()
 }
 
+fn delete_search_document(
+    rowid_statement: &mut turso_core::Statement,
+    delete_statement: &mut turso_core::Statement,
+    profile: SearchProfile,
+    key: &RecordKey,
+) -> Result<(), TursoStorageError> {
+    let rows = driver::query_prepared(
+        rowid_statement,
+        vec![text(profile.as_str()), text(&key.typename), text(&key.id)],
+    )?;
+    match rows.as_slice() {
+        [] => Ok(()),
+        [row] => require_changed(
+            driver::execute_prepared(
+                delete_statement,
+                vec![Value::from_i64(required_i64(row, 0)?)],
+            )?,
+            1,
+        ),
+        _ => Err(invariant()),
+    }
+}
+
 fn write_search_documents(
     connection: &Arc<Connection>,
     entries: &[EncodedRecord],
 ) -> Result<(), TursoStorageError> {
+    let mut rowid = driver::prepare(connection, SEARCH_ROWID)?;
     let mut delete = driver::prepare(connection, SEARCH_DELETE)?;
     let mut upsert = driver::prepare(connection, SEARCH_UPSERT)?;
     for entry in entries {
-        let changed = driver::execute_prepared(
+        delete_search_document(
+            &mut rowid,
             &mut delete,
-            vec![text(&entry.key.typename), text(&entry.key.id)],
+            SearchProfile::QuickAccessV1,
+            &entry.key,
         )?;
-        if changed < 0 {
-            return Err(invariant());
-        }
         for document in &entry.search_documents {
             require_changed(
                 driver::execute_prepared(
