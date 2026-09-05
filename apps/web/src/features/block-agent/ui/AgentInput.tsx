@@ -39,7 +39,7 @@ export interface AgentInputProps {
   /** Receives the composed markdown, including any `<m-document-mention>` tags. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
-  /** Model pill on the same row as send, after the editor. */
+  /** Model control: right of the text on desktop, footer-left on touch. */
   modelControl?: JSX.Element;
   /**
    * Ref-style: receives the quote-insert function once the editor mounts
@@ -157,9 +157,12 @@ export function AgentInput(props: AgentInputProps) {
     <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
       {/* h-auto beats Surface's size-full so the in-flow controls are not
           clipped over the editor (that was Auto sitting on the placeholder). */}
-      <Surface class="rounded-xl touch:rounded-3xl h-auto" depth={2} solid>
+      <Surface class="rounded-xl touch:rounded-2xl h-auto" depth={2} solid>
+        {/* Desktop: one row, controls right of the text. Touch: the text
+            gets the whole width and the controls drop to a footer row
+            (model left, send right) — the chat-tall / channel footer shape. */}
         <div
-          class="flex items-end gap-1 px-2 py-1.5"
+          class="flex items-end gap-1 px-2 py-1.5 touch:flex-col touch:items-stretch touch:gap-1.5 touch:px-3 touch:pt-2.5 touch:pb-2"
           onPointerDown={focusEditor}
         >
           {/* No vertical padding of its own: the shell is min-h-8 and editor
@@ -167,7 +170,7 @@ export function AgentInput(props: AgentInputProps) {
             the same 44px single-line height as ChatInput. */}
           <div
             ref={bodyRef}
-            class="min-w-0 flex-1 pl-1 text-sm text-ink"
+            class="min-w-0 flex-1 pl-1 text-sm text-ink touch:pl-0 touch:text-base"
             classList={{
               // While empty only the placeholder renders; keep it to one clipped
               // line so it doesn't wrap into the single-line height.
@@ -187,43 +190,47 @@ export function AgentInput(props: AgentInputProps) {
             />
           </div>
 
-          {/* In-flow next to the editor — never absolute over the text. */}
-          <div class="flex shrink-0 items-center gap-1 pb-0.5">
-            <Show when={props.modelControl}>{props.modelControl}</Show>
-            <Show
-              when={props.busy && props.onStop}
-              fallback={
-                <SendButton
-                  tooltip="Send"
-                  disabled={!canSend()}
-                  onClick={send}
-                />
-              }
-            >
+          {/* In-flow — never absolute over the text. */}
+          <div class="flex shrink-0 items-center gap-1 pb-0.5 touch:pb-0">
+            <div class="min-w-0">
+              <Show when={props.modelControl}>{props.modelControl}</Show>
+            </div>
+            <div class="ml-auto shrink-0">
               <Show
-                when={canSendNext()}
+                when={props.busy && props.onStop}
                 fallback={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    label="Stop"
-                    onClick={() => props.onStop?.()}
-                    class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
-                  >
-                    <div class="size-3.5 rounded-sm bg-current" />
-                  </Button>
+                  <SendButton
+                    tooltip="Send"
+                    disabled={!canSend()}
+                    onClick={send}
+                  />
                 }
               >
-                <SendButton
-                  aria-label="Send next queued message"
-                  tooltip="Send next queued message"
-                  shortcut="Enter"
-                  onClick={sendNext}
+                <Show
+                  when={canSendNext()}
+                  fallback={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      label="Stop"
+                      onClick={() => props.onStop?.()}
+                      class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+                    >
+                      <div class="size-3.5 rounded-sm bg-current" />
+                    </Button>
+                  }
                 >
-                  <EnterIcon />
-                </SendButton>
+                  <SendButton
+                    aria-label="Send next queued message"
+                    tooltip="Send next queued message"
+                    shortcut="Enter"
+                    onClick={sendNext}
+                  >
+                    <EnterIcon />
+                  </SendButton>
+                </Show>
               </Show>
-            </Show>
+            </div>
           </div>
         </div>
       </Surface>
