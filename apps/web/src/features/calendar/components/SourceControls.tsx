@@ -1,6 +1,8 @@
+import ArrowsInLineHorizontalIcon from '@phosphor/arrows-in-line-horizontal.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
+import ColumnsIcon from '@phosphor/columns.svg';
 import RssIcon from '@phosphor/rss.svg';
-import { Checkbox } from '@ui';
+import { Checkbox, Tooltip } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
 import { groupCalendarSourcesByAccount } from '../utils/calendar-source-groups';
@@ -9,7 +11,13 @@ interface SourceControlsProps {
   sources: CalendarSource[];
   isVisible: (sourceId: string) => boolean;
   onVisibilityChange: (sourceId: string, visible: boolean) => void;
+  /** Whether a calendar's copies of shared events fold into one chip. */
+  isMerged?: (sourceId: string) => boolean;
+  onMergedChange?: (sourceId: string, merged: boolean) => void;
 }
+
+const SPLIT_LABEL = 'Show duplicates side by side';
+const MERGE_LABEL = 'Merge duplicates into one event';
 
 /**
  * Controls which calendar sources are visible, folded under a collapsible
@@ -87,7 +95,7 @@ export function SourceControls(props: SourceControlsProps) {
                       onChange={(checked) =>
                         props.onVisibilityChange(source.id, checked)
                       }
-                      class="flex w-full items-center rounded-lg py-1.5 pr-2 pl-7 text-xs text-ink hover:bg-hover"
+                      class="group flex w-full items-center rounded-lg py-1.5 pr-2 pl-7 text-xs text-ink hover:bg-hover"
                     >
                       <Checkbox.Label class="flex min-w-0 flex-1 items-center gap-2">
                         <span
@@ -110,6 +118,41 @@ export function SourceControls(props: SourceControlsProps) {
                           </span>
                         </Show>
                       </Checkbox.Label>
+                      <Show when={props.onMergedChange}>
+                        {(onMergedChange) => {
+                          const merged = () =>
+                            props.isMerged?.(source.id) !== false;
+                          const label = () =>
+                            merged() ? SPLIT_LABEL : MERGE_LABEL;
+                          return (
+                            <Tooltip label={label()} as="span" class="flex">
+                              <button
+                                type="button"
+                                class="mr-1 flex shrink-0 items-center justify-center rounded-md p-0.5 text-ink-muted opacity-0 transition-opacity hover:text-ink focus-visible:opacity-100 group-hover:opacity-100"
+                                classList={{
+                                  'text-ink opacity-100': !merged(),
+                                }}
+                                aria-label={label()}
+                                aria-pressed={!merged()}
+                                onClick={(event) => {
+                                  event.preventDefault();
+                                  event.stopPropagation();
+                                  onMergedChange()(source.id, !merged());
+                                }}
+                              >
+                                <Show
+                                  when={merged()}
+                                  fallback={
+                                    <ArrowsInLineHorizontalIcon class="size-3" />
+                                  }
+                                >
+                                  <ColumnsIcon class="size-3" />
+                                </Show>
+                              </button>
+                            </Tooltip>
+                          );
+                        }}
+                      </Show>
                       <Checkbox.Control />
                     </Checkbox>
                   )}

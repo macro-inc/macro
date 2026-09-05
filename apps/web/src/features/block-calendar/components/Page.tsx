@@ -235,6 +235,7 @@ export function Page(props: {
     range,
     sourceById: calendarView.sourceById,
     isSourceVisible: calendarView.isSourceVisible,
+    isSourceMerged: calendarView.isSourceMerged,
     queryOptions: () => ({
       pollWhileSyncing: isActive(),
       refetchOnWindowFocus: isActive(),

@@ -132,6 +132,12 @@ function optionalText(value: string | null | undefined) {
 interface CalendarOccurrenceMappingOptions {
   sourceById?: ReadonlyMap<string, CalendarSource>;
   isSourceVisible?: (sourceId: string) => boolean;
+  /**
+   * Whether a calendar's copies fold into the one chip an event renders as.
+   * A calendar that is not merged shows each of its copies as its own chip
+   * beside the merged one. Every calendar is merged by default.
+   */
+  isSourceMerged?: (sourceId: string) => boolean;
 }
 
 /**
@@ -184,13 +190,64 @@ export function mapCalendarOccurrence(
   item: CalendarOccurrenceItem,
   options: CalendarOccurrenceMappingOptions = {}
 ): CalendarEvent {
+  const sources = item.event.sources ?? [];
+  return buildCalendarEvent(
+    item,
+    options,
+    sources,
+    selectEventSource(item.event, options.isSourceVisible)
+  );
+}
+
+/**
+ * Maps one occurrence into every chip it renders as: one merged chip for the
+ * copies on merged calendars, plus one chip per copy on a calendar the viewer
+ * split out, so duplicates sit side by side the way the provider shows them.
+ * An event with a single copy always renders as one chip.
+ */
+export function mapCalendarOccurrenceChips(
+  item: CalendarOccurrenceItem,
+  options: CalendarOccurrenceMappingOptions = {}
+): CalendarEvent[] {
+  const sources = item.event.sources ?? [];
+  const isSourceMerged = options.isSourceMerged;
+  if (sources.length <= 1 || !isSourceMerged) {
+    return [mapCalendarOccurrence(item, options)];
+  }
+  const merged = sources.filter((copy) => isSourceMerged(copy.calendarId));
+  const split = sources.filter((copy) => !isSourceMerged(copy.calendarId));
+  const chips =
+    merged.length > 0
+      ? [
+          buildCalendarEvent(
+            item,
+            options,
+            merged,
+            selectEventSource({ sources: merged }, options.isSourceVisible)
+          ),
+        ]
+      : [];
+  for (const copy of split) {
+    chips.push(
+      buildCalendarEvent(item, options, [copy], copy, copy.calendarId)
+    );
+  }
+  return chips;
+}
+
+function buildCalendarEvent(
+  item: CalendarOccurrenceItem,
+  options: CalendarOccurrenceMappingOptions,
+  copies: CalendarEventSourceContent[],
+  selected: CalendarEventSourceContent | undefined,
+  splitCalendarId?: string
+): CalendarEvent {
   const { event, occurrence } = item;
   const time = occurrence.time;
   const range =
     time.kind === 'timed'
       ? { allDay: false, start: time.startsAt, end: time.endsAt }
       : { allDay: true, start: time.startDate, end: time.endDate };
-  const selected = selectEventSource(event, options.isSourceVisible);
   const content = selected ?? event;
   const canonical = event.sources?.[0] ?? event;
   const calendarId = selected?.calendarId ?? event.calendarId ?? undefined;
@@ -200,7 +257,10 @@ export function mapCalendarOccurrence(
 
   return {
     ...range,
-    id: JSON.stringify([event.id, occurrence.occurrenceKey]),
+    id:
+      splitCalendarId === undefined
+        ? JSON.stringify([event.id, occurrence.occurrenceKey])
+        : JSON.stringify([event.id, occurrence.occurrenceKey, splitCalendarId]),
     eventId: event.id,
     occurrenceKey: occurrence.occurrenceKey,
     recurrenceId: occurrence.recurrenceId ?? undefined,
@@ -221,7 +281,7 @@ export function mapCalendarOccurrence(
     reminderEventType: canonical.eventType ?? undefined,
     eventType: content.eventType ?? undefined,
     calendarId,
-    sourceCalendarIds: (event.sources ?? []).map((copy) => copy.calendarId),
+    sourceCalendarIds: copies.map((copy) => copy.calendarId),
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: content.title,
     calendar: source,
