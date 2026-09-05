@@ -85,6 +85,12 @@ export function ComposeAgentSession() {
     }
     return IN_MEMORY_MODELS;
   };
+  const overrideModels = () => {
+    const defaultModel = selectedPersona()?.defaultModel;
+    return defaultModel
+      ? availableModels().filter((model) => model.id !== defaultModel)
+      : availableModels();
+  };
   const defaultModelLabel = () => {
     const defaultModel = selectedPersona()?.defaultModel;
     if (!defaultModel) return 'Persona default';
@@ -197,7 +203,7 @@ export function ComposeAgentSession() {
               onChange={(event) => setModelOverride(event.currentTarget.value)}
             >
               <option value="">{defaultModelLabel()}</option>
-              <For each={availableModels()}>
+              <For each={overrideModels()}>
                 {(model) => <option value={model.id}>{model.name}</option>}
               </For>
             </select>
