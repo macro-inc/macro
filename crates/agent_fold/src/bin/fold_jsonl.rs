@@ -12,9 +12,10 @@
 use agent_fold::domain::fold::FoldMachineImpl;
 use agent_fold::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use agent_fold::domain::model::{
-    Author, Control, ControlOutcome, ElicitationOutcome, ElicitationPropertySchema,
-    ElicitationRequest, ElicitationSchema, FoldedMessage, MessagePart, PermissionOption,
-    PermissionOutcome, PlanEntryStatus, StopReason, ToolDetail, ToolStatus, ToolUseId,
+    AnsweredField, AnsweredValue, Author, Control, ControlOutcome, ElicitationOutcome,
+    ElicitationPropertySchema, ElicitationRequest, ElicitationSchema, FoldedMessage, MessagePart,
+    PermissionOption, PermissionOutcome, PlanEntryStatus, StopReason, ToolDetail, ToolStatus,
+    ToolUseId,
 };
 use agent_fold::domain::ports::FoldMachine;
 use agent_fold::domain::ports::LogRepo;
@@ -283,7 +284,7 @@ fn render_part(part: &MessagePart) -> String {
                 question,
                 request,
                 outcome,
-                reported.as_ref(),
+                reported.as_deref(),
             )),
         }
     }
@@ -295,15 +296,13 @@ fn render_elicitation(
     question: &str,
     request: &ElicitationRequest,
     outcome: &ElicitationOutcome,
-    reported: Option<&serde_json::Value>,
+    reported: Option<&[AnsweredField]>,
 ) -> String {
     let mut out = String::new();
     let state = match outcome {
         ElicitationOutcome::Pending => "pending".to_owned(),
-        ElicitationOutcome::Accepted { content } => match content {
-            Some(content) => format!("accepted {content}"),
-            None => "accepted".to_owned(),
-        },
+        ElicitationOutcome::Accepted { answers } if answers.is_empty() => "accepted".to_owned(),
+        ElicitationOutcome::Accepted { answers } => format!("accepted {}", render_answers(answers)),
         ElicitationOutcome::Declined => "declined".to_owned(),
         ElicitationOutcome::Cancelled => "cancelled".to_owned(),
         ElicitationOutcome::Completed => "completed".to_owned(),
@@ -330,9 +329,36 @@ fn render_elicitation(
         }
     }
     if let Some(reported) = reported {
-        let _ = writeln!(out, "{}", indent(&format!("agent read: {reported}")));
+        let _ = writeln!(
+            out,
+            "{}",
+            indent(&format!("agent read: {}", render_answers(reported)))
+        );
     }
     out
+}
+
+/// Answers as `label=value`, comma separated.
+fn render_answers(answers: &[AnsweredField]) -> String {
+    answers
+        .iter()
+        .map(|answer| {
+            let value = match &answer.value {
+                AnsweredValue::Text { text } | AnsweredValue::Custom { text } => text.clone(),
+                AnsweredValue::Number { text } => text.clone(),
+                AnsweredValue::Boolean { checked } => checked.to_string(),
+                AnsweredValue::Choice { choice } => choice.value.clone(),
+                AnsweredValue::Choices { choices } => choices
+                    .iter()
+                    .map(|choice| choice.value.as_str())
+                    .collect::<Vec<_>>()
+                    .join("+"),
+                AnsweredValue::Unrecognized { raw } => raw.to_string(),
+            };
+            format!("{}={value}", answer.label)
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// One line per form field: `label* (shape)`.

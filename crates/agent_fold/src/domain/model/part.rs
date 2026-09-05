@@ -6,7 +6,9 @@ use serde::Serialize;
 use specta::Type;
 
 use super::ToolUseId;
-use super::elicitation::{ElicitationOutcome, ElicitationRequest, ElicitationRequestId};
+use super::elicitation::{
+    AnsweredField, ElicitationOutcome, ElicitationRequest, ElicitationRequestId,
+};
 use super::permission::{PermissionOption, PermissionOutcome};
 use super::plan::PlanEntry;
 use super::tool::{ToolDetail, ToolName, ToolStatus};
@@ -82,8 +84,12 @@ pub enum MessagePart {
         /// The harness's own reading of the answer, when it reported one
         /// after the response went back (Claude Code echoes the chosen
         /// option through its tool result). Absent otherwise.
-        #[specta(type = specta_typescript::Unknown)]
-        reported: Option<serde_json::Value>,
+        ///
+        /// Shaped like [`ElicitationOutcome::Accepted`]'s answers so a reader
+        /// renders one vocabulary either way, though a harness keys these by
+        /// question prose rather than by property, so each `name` is that
+        /// prose rather than a schema property.
+        reported: Option<Vec<AnsweredField>>,
         /// For a user tool's review ([`ElicitationRequest::UserTool`]): how
         /// the tool itself ended once the user answered - run with the
         /// reviewed draft, rejected, or failed - read from the absorbed

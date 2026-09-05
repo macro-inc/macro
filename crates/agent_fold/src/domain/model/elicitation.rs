@@ -190,6 +190,86 @@ pub struct ElicitationOption {
     pub description: Option<String>,
 }
 
+/// One property's answer, resolved against the schema that asked for it.
+///
+/// The correlation happens here so that no client repeats it: an option's
+/// title is looked up where the options live, and the harness "Other" idiom -
+/// a free-text answer arriving under a *different* key than the property it
+/// replaces, sometimes alongside the choice it replaces (see the
+/// `elicitation_claude_single_select` fixture, which carries both) - collapses
+/// to a single [`AnsweredValue::Custom`].
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AnsweredField {
+    /// The property this answers, or the key it arrived under when no
+    /// property claimed it.
+    pub name: String,
+    /// What to show as the label: the property's title, else its name.
+    pub label: String,
+    /// The answer.
+    pub value: AnsweredValue,
+}
+
+/// An answer's value, in the vocabulary the property declared.
+#[derive(Debug, Clone, PartialEq, Serialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AnsweredValue {
+    /// Free text.
+    Text {
+        /// The text as submitted.
+        text: String,
+    },
+    /// A number, whole or not, exactly as it was submitted.
+    ///
+    /// Text rather than `f64`: a JSON integer can outrun `f64`'s exact range,
+    /// and `f64` has a `number | null` TypeScript face because a non-finite
+    /// float serializes as null. Nothing computes with an answer - it is
+    /// rendered - so the digits are what matter.
+    Number {
+        /// The number as written.
+        text: String,
+    },
+    /// A yes/no.
+    Boolean {
+        /// Whether it was checked.
+        checked: bool,
+    },
+    /// One of the offered options.
+    Choice {
+        /// The option chosen, with the title it was offered under.
+        choice: AnsweredChoice,
+    },
+    /// Several of the offered options.
+    Choices {
+        /// The options chosen, in the order they were submitted.
+        choices: Vec<AnsweredChoice>,
+    },
+    /// The free-text escape: the user typed their own answer instead of
+    /// picking, and it arrived under the property's `customField`.
+    Custom {
+        /// What they typed.
+        text: String,
+    },
+    /// A value this fold could not read as any of the above - a nested
+    /// object, or an array of something other than strings.
+    Unrecognized {
+        /// The value, verbatim.
+        #[specta(type = specta_typescript::Unknown)]
+        raw: serde_json::Value,
+    },
+}
+
+/// A chosen option, with the title it was offered under when the schema gave
+/// one. `title` is `None` for a value no option declared.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "camelCase")]
+pub struct AnsweredChoice {
+    /// The value submitted.
+    pub value: String,
+    /// The label it was offered under.
+    pub title: Option<String>,
+}
+
 /// How an elicitation has resolved so far.
 ///
 /// [`Self::Pending`] is a legitimate final state on a dead session, like an
@@ -201,9 +281,11 @@ pub enum ElicitationOutcome {
     Pending,
     /// The user submitted the form, or consented to open the URL.
     Accepted {
-        /// The submitted values, absent for a URL consent.
-        #[specta(type = specta_typescript::Unknown)]
-        content: Option<serde_json::Value>,
+        /// What they answered: one entry per property the schema declared and
+        /// the content answered, in declaration order, then any key no
+        /// property claimed. Empty for a URL consent, which carries no
+        /// content.
+        answers: Vec<AnsweredField>,
     },
     /// The user explicitly said no.
     Declined,

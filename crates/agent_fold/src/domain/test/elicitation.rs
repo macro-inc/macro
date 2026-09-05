@@ -9,8 +9,8 @@
 use super::util::{capturing_warnings, parse_log};
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::model::{
-    ElicitationOutcome, ElicitationPropertySchema, ElicitationRequest, ElicitationRequestId,
-    FoldEvent, MessagePart, ToolDetail, ToolUseId,
+    AnsweredChoice, AnsweredField, AnsweredValue, ElicitationOutcome, ElicitationPropertySchema,
+    ElicitationRequest, ElicitationRequestId, FoldEvent, MessagePart, ToolDetail, ToolUseId,
 };
 use crate::domain::ports::FoldMachine;
 use crate::testing::fixtures::ELICITATION_CLAUDE_SINGLE_SELECT;
@@ -255,13 +255,88 @@ fn accept_resolves_the_part_with_its_content_and_frees_the_slot() {
     let MessagePart::Elicitation { outcome, .. } = parts[0] else {
         unreachable!()
     };
+    // Shaped against the schema that asked: the property's title becomes the
+    // label, declaration order is kept, and properties the content did not
+    // answer are absent rather than empty.
     assert_eq!(
         *outcome,
         ElicitationOutcome::Accepted {
-            content: Some(serde_json::json!({ "zeta": "svc", "port": 8080 })),
+            answers: vec![
+                AnsweredField {
+                    name: "zeta".to_owned(),
+                    label: "Name".to_owned(),
+                    value: AnsweredValue::Text {
+                        text: "svc".to_owned()
+                    },
+                },
+                AnsweredField {
+                    name: "port".to_owned(),
+                    label: "Port".to_owned(),
+                    value: AnsweredValue::Number {
+                        text: "8080".to_owned()
+                    },
+                },
+            ],
         }
     );
     assert_eq!(machine.metadata().pending_elicitation, None);
+}
+
+/// Multi-select answers resolve to the titles they were offered under, and a
+/// key no property declared still surfaces - labelled by the key itself, after
+/// the schema's own fields - rather than being dropped.
+#[test]
+fn accept_titles_the_choices_and_keeps_a_key_no_property_claimed() {
+    let (machine, _) = drive(&lines(&[
+        PROMPT,
+        FORM,
+        &accept(7, r#"{"colours":["r","g"],"alpha":"x","surprise":true}"#),
+    ]));
+
+    let parts = elicitations(&machine);
+    let MessagePart::Elicitation { outcome, .. } = parts[0] else {
+        unreachable!()
+    };
+    let ElicitationOutcome::Accepted { answers } = outcome else {
+        unreachable!("{outcome:?}")
+    };
+    assert_eq!(
+        *answers,
+        vec![
+            AnsweredField {
+                name: "colours".to_owned(),
+                label: "Colours".to_owned(),
+                value: AnsweredValue::Choices {
+                    choices: vec![
+                        AnsweredChoice {
+                            value: "r".to_owned(),
+                            title: Some("Red".to_owned()),
+                        },
+                        AnsweredChoice {
+                            value: "g".to_owned(),
+                            title: Some("Green".to_owned()),
+                        },
+                    ],
+                },
+            },
+            // An untitled `enum`: the value is its own label, so no title.
+            AnsweredField {
+                name: "alpha".to_owned(),
+                label: "alpha".to_owned(),
+                value: AnsweredValue::Choice {
+                    choice: AnsweredChoice {
+                        value: "x".to_owned(),
+                        title: None,
+                    },
+                },
+            },
+            AnsweredField {
+                name: "surprise".to_owned(),
+                label: "surprise".to_owned(),
+                value: AnsweredValue::Boolean { checked: true },
+            },
+        ]
+    );
 }
 
 #[test]
@@ -477,17 +552,33 @@ fn claude_code_absorbs_the_ask_user_question_tool_call() {
         ["Red", "Blue", "Green"]
     );
 
-    // The recording's client sent both keys; the adapter took the custom text
-    // and said so through its tool result.
+    // The recording's client sent both keys - the choice *and* the custom
+    // text. The fold resolves that once, the way the adapter did: the custom
+    // text wins, and it claims the choice's key rather than leaving it to
+    // surface as a second answer.
     assert_eq!(
         *outcome,
         ElicitationOutcome::Accepted {
-            content: Some(serde_json::json!({ "question_0": "Red", "question_0_custom": "blue" })),
+            answers: vec![AnsweredField {
+                name: "question_0".to_owned(),
+                label: "Best colour".to_owned(),
+                value: AnsweredValue::Custom {
+                    text: "blue".to_owned()
+                },
+            }],
         }
     );
+    // The harness keys its own reading by the question's prose, so that prose
+    // is the label - the same shape, a different source.
     assert_eq!(
         *reported,
-        Some(serde_json::json!({ "What is the best colour?": "blue" }))
+        Some(vec![AnsweredField {
+            name: "What is the best colour?".to_owned(),
+            label: "What is the best colour?".to_owned(),
+            value: AnsweredValue::Text {
+                text: "blue".to_owned()
+            },
+        }])
     );
 }
 
@@ -820,7 +911,7 @@ fn a_reviewed_tools_own_result_lands_on_the_question() {
         unreachable!()
     };
     assert!(
-        matches!(outcome, ElicitationOutcome::Accepted { content: Some(_) }),
+        matches!(outcome, ElicitationOutcome::Accepted { answers } if !answers.is_empty()),
         "the user's answer: {outcome:?}"
     );
     assert_eq!(
