@@ -61,7 +61,12 @@ $$;
 -- is at least this fresh, a user edit through another copy lands when it is
 -- at least this fresh, and the writing copy keeps writing it until then.
 -- Retiring the writing copy hands the schedule back to the canonical one.
+-- content_source_id names the copy whose content the entity mirrors, so a
+-- ranking change that happens without a source write (a calendar's role or
+-- primary flag changing) can be detected and the entity re-projected.
 ALTER TABLE calendar_events
+    ADD COLUMN content_source_id uuid
+        REFERENCES calendar_event_sources(id) ON DELETE SET NULL,
     ADD COLUMN schedule_source_id uuid
         REFERENCES calendar_event_sources(id) ON DELETE SET NULL,
     ADD COLUMN schedule_updated_at timestamptz NOT NULL DEFAULT now();
@@ -134,9 +139,10 @@ JOIN multi_source ON multi_source.event_id = canonical.event_id
 WHERE event.id = canonical.event_id
   AND canonical.id = calendar_event_canonical_source_id(event.id);
 
--- Every entity's schedule is attributed to its canonical copy.
+-- Every entity's content and schedule are attributed to its canonical copy.
 UPDATE calendar_events event
-SET schedule_source_id = canonical.id,
+SET content_source_id = canonical.id,
+    schedule_source_id = canonical.id,
     schedule_updated_at = canonical.source_updated_at
 FROM calendar_event_sources canonical
 WHERE canonical.id = calendar_event_canonical_source_id(event.id);

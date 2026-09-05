@@ -824,7 +824,8 @@ impl CalendarRepository for PgCalendarRepository {
             owns_schedule
         };
         if is_canonical {
-            apply_content_projection(&mut tx, event_id, &projection, source_kind).await?;
+            apply_content_projection(&mut tx, event_id, source_id, &projection, source_kind)
+                .await?;
         }
         if writes_schedule {
             if is_canonical {
@@ -1601,6 +1602,34 @@ impl CalendarRepository for PgCalendarRepository {
         .execute(&mut *tx)
         .await
         .map_err(report)?;
+
+        // A calendar's access role or primary flag can change without any of
+        // its events changing, which moves the canonical copy without a source
+        // write. Re-project the entities whose content still mirrors another copy.
+        let reranked_event_ids = sqlx::query_scalar!(
+            r#"
+            SELECT event.id AS "id!"
+            FROM calendar_events event
+            WHERE event.id IN (
+                SELECT source.event_id
+                FROM calendar_event_sources source
+                WHERE source.account_id = $1
+                GROUP BY source.event_id
+                HAVING count(*) > 1
+            )
+              AND event.content_source_id
+                  IS DISTINCT FROM calendar_event_canonical_source_id(event.id)
+            "#,
+            account_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(report)?;
+        for event_id in reranked_event_ids {
+            if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+                retired.push(outcome);
+            }
+        }
 
         tx.commit().await.map_err(report)?;
         Ok(retired)
@@ -2821,17 +2850,20 @@ async fn schedule_owner(
     })
 }
 
-/// Rewrite the entity's copy-specific content from its canonical copy.
+/// Rewrite the entity's copy-specific content from its canonical copy and
+/// record which copy it now mirrors.
 async fn apply_content_projection(
     tx: &mut Transaction<'_, Postgres>,
     event_id: Uuid,
+    source_id: Uuid,
     projection: &StoredSourceProjection,
     source_kind: &str,
 ) -> Result<(), Report> {
     sqlx::query!(
         r#"
         UPDATE calendar_events
-        SET title = $2,
+        SET content_source_id = $17,
+            title = $2,
             description = $3,
             location = $4,
             visibility = $5,
@@ -2864,6 +2896,7 @@ async fn apply_content_projection(
         serde_json::to_value(&projection.event.reminders.overrides).map_err(report)?,
         projection.event.created_at,
         projection.event.updated_at,
+        source_id,
     )
     .execute(&mut **tx)
     .await
@@ -3034,7 +3067,7 @@ async fn apply_canonical_projection(
     source_kind: &str,
     calendar_id: Option<Uuid>,
 ) -> Result<(), Report> {
-    apply_content_projection(tx, event_id, projection, source_kind).await?;
+    apply_content_projection(tx, event_id, source_id, projection, source_kind).await?;
     let schedule = schedule_owner(tx, event_id).await?;
     if schedule.source_id.is_none_or(|owner| owner == source_id)
         || projection.event.updated_at >= schedule.updated_at
