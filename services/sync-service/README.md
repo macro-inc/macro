@@ -24,8 +24,8 @@ When a connection is established, the worker checks if a Durable Object already 
 
 The in-memory state and loro_document are initialized using a loro-snapshot retrieved from the Durable Object's persistent storage. By default, Durable Objects evict in-memory state after 10 seconds of inactivity. This can occur even when connections to the Durable Object exist, as long as there are no WebSocket messages or alarm invocations within that timeframe.
 
-Since generating and importing loro snapshots is computationally expensive, we want to maintain the in-memory state as long as active connections exist. To accomplish this, we implement a "heartbeat" system by scheduling an alarm for 5 seconds into the future, similar to a debounce mechanism. Even without incoming WebSocket messages, this alarm fires regularly, preventing the in-memory state from being evicted.
-When a client updates a document via a WebSocket message, we apply the update to the in-memory loro document. Whenever the alarm fires, we generate a new loro snapshot and store it in the Durable Object's persistent storage. When a new user connects to the document, we retrieve both the latest snapshot and any pending operations from persistent storage, then send a complete snapshot to the client.
+Since generating and importing loro snapshots is computationally expensive, we want to maintain the in-memory state as long as active connections exist. To accomplish this, we implement a heartbeat system that schedules an alarm every 5 seconds while clients are connected. Even without incoming WebSocket messages, this alarm fires regularly, preventing the in-memory state from being evicted.
+When a client updates a document via a WebSocket message, we apply the update to the in-memory loro document and schedule a snapshot save 100 milliseconds later. Updates arriving in that window share the same alarm and snapshot. After the save, the 5-second heartbeat resumes. When a new user connects to the document, we retrieve both the latest snapshot and any pending operations from persistent storage, then send a complete snapshot to the client.
 
 ### Authentication
 

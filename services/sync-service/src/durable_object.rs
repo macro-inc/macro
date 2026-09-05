@@ -19,7 +19,7 @@ use worker::{
 use crate::{
     ai_peer::is_ai_peer,
     auth::{AccessLevel, TokenFrom, decode_jwt},
-    constants::USER_PEER_D1_BINDING,
+    constants::{KEEPALIVE_INTERVAL_MS, SAVE_INTERVAL_MS, USER_PEER_D1_BINDING},
     d1::{PeerWithUserId, get_user_id_from_peer_id, insert_user_mapping},
     dss_internal::{DssInternal, DssInternalClient, InteractionReason},
     error::ResultExt,
@@ -45,7 +45,9 @@ pub mod status_codes {
 }
 
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
-const SAVE_INTERVAL_MS: i64 = 100;
+
+#[cfg(test)]
+mod test;
 
 mod path {
     pub const CONNECT: &str = "connect";
@@ -430,19 +432,22 @@ async fn report_interaction(document_id: &str, env: &Env, reason: InteractionRea
     }
 }
 
-/// Schedule a save alarm, batching updates that arrive within the interval.
-async fn bump_alarm(state: &State) -> Result<()> {
-    let current_alarm = state.storage().get_alarm().await?;
+fn should_schedule_alarm(current_alarm: Option<f64>, now_ms: f64, delay_ms: i64) -> bool {
+    current_alarm.is_none_or(|alarm_ms| alarm_ms <= now_ms || alarm_ms > now_ms + delay_ms as f64)
+}
 
-    if let Some(current_alarm) = current_alarm
-        && current_alarm as f64 > Date::now().as_millis() as f64
-    {
+/// Schedule an alarm unless an earlier one is already pending.
+async fn schedule_alarm(state: &State, delay_ms: i64) -> Result<()> {
+    let current_alarm = state.storage().get_alarm().await?;
+    let now_ms = Date::now().as_millis() as f64;
+
+    if !should_schedule_alarm(current_alarm.map(|alarm| alarm as f64), now_ms, delay_ms) {
         return Ok(());
     }
 
     state
         .storage()
-        .set_alarm(ScheduledTime::from(SAVE_INTERVAL_MS))
+        .set_alarm(ScheduledTime::from(delay_ms))
         .await?;
 
     Ok(())
@@ -1188,7 +1193,7 @@ impl DurableObject for DocumentSyncSession {
                 })
                 .context("failed to process websocket message")?;
 
-                bump_alarm(&self.state)
+                schedule_alarm(&self.state, SAVE_INTERVAL_MS)
                     .await
                     .inspect_err(|_| {
                         telemetry.record_error_stage("alarm");
@@ -1273,7 +1278,7 @@ impl DurableObject for DocumentSyncSession {
         // snapshot to every client on every alarm tick only burned bandwidth
         // and stalled clients on large documents.
         if !self.state.get_websockets().is_empty() {
-            bump_alarm(&self.state)
+            schedule_alarm(&self.state, KEEPALIVE_INTERVAL_MS)
                 .await
                 .context("failed to keep document alive")?;
         } else {

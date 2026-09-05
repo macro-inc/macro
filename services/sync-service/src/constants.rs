@@ -6,3 +6,6 @@ pub mod header_names {
 }
 
 pub const USER_PEER_D1_BINDING: &str = "USER_PEER_MAPPING";
+
+pub const SAVE_INTERVAL_MS: i64 = 100;
+pub const KEEPALIVE_INTERVAL_MS: i64 = 5_000;
