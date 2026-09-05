@@ -11,13 +11,17 @@
  * owner named as the one it waits on.
  *
  * URL mode never opens anything on its own. The card shows the full URL and
- * its host, warns on punycode, and only after the user presses Open does it
- * send the consent and open a new tab - never an iframe, never a prefetch.
+ * its host, and only after the user presses Open does it send the consent and
+ * open a new tab - never an iframe, never a prefetch.
  */
 
 import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
 import { EmailDraftComposer } from '@core/component/AI/component/tool/email/DraftComposer';
-import type { MessagePart } from '@service-agent-fold/generated/types';
+import type {
+  AnsweredField,
+  AnsweredValue,
+  MessagePart,
+} from '@service-agent-fold/generated/types';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
 import type {
@@ -30,12 +34,9 @@ import { createStore } from 'solid-js/store';
 import { match } from 'ts-pattern';
 import { useAgentSession } from '../../context/AgentSessionContext';
 import {
-  describeContent,
   type FieldValue,
   initialValues,
-  looksSuspicious,
   toContent,
-  urlHost,
   validate,
 } from '../../state/elicitation-form';
 import { createElicitationReviewSink } from '../../state/elicitation-review-sink';
@@ -167,10 +168,7 @@ function DeclineCancel(props: {
 function LiveForm(props: {
   schema: Extract<ElicitationPartData['request'], { kind: 'form' }>['schema'];
   locked: boolean;
-  onRespond: (answer: {
-    action: 'accept' | 'decline' | 'cancel';
-    content?: Record<string, unknown>;
-  }) => unknown;
+  onRespond: (answer: ElicitationAnswer) => unknown;
 }) {
   const [values, setValues] = createStore(initialValues(props.schema));
   const [touched, setTouched] = createSignal(false);
@@ -312,12 +310,6 @@ function LiveUrl(props: {
       <div class="rounded-md border border-edge-muted bg-surface px-2 py-1 font-mono text-xs text-ink-muted break-all">
         {props.url}
       </div>
-      <Show when={looksSuspicious(props.url)}>
-        <div class="text-xs text-failure">
-          This address uses an encoded (punycode) domain. Check it carefully
-          before opening.
-        </div>
-      </Show>
       <div class="flex items-center gap-2">
         <Button variant="cta" size="xs" disabled={props.locked} onClick={open}>
           Open
@@ -364,28 +356,43 @@ function ResolvedElicitation(props: { part: ElicitationPartData }) {
   );
 }
 
+/** The host of a URL-mode request, for the consent card, or the raw text. */
+function urlHost(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
+/** One answer as a line of text. The fold has already resolved the values. */
+function answerText(value: AnsweredValue): string {
+  return match(value)
+    .with(
+      { kind: 'text' },
+      { kind: 'custom' },
+      { kind: 'number' },
+      (v) => v.text
+    )
+    .with({ kind: 'boolean' }, (v) => (v.checked ? 'Yes' : 'No'))
+    .with({ kind: 'choice' }, (v) => v.choice.title ?? v.choice.value)
+    .with({ kind: 'choices' }, (v) =>
+      v.choices.map((choice) => choice.title ?? choice.value).join(', ')
+    )
+    .with({ kind: 'unrecognized' }, (v) => JSON.stringify(v.raw))
+    .exhaustive();
+}
+
 function ResolvedQuestion(props: { part: ElicitationPartData }) {
-  const lines = () =>
-    match(props.part)
-      .with(
-        { request: { kind: 'form' }, outcome: { kind: 'accepted' } },
-        (part) => describeContent(part.request.schema, part.outcome.content)
-      )
-      .otherwise(() => []);
-  const reported = () => {
-    const value = props.part.reported;
-    if (typeof value !== 'object' || value === null) return [];
-    return Object.entries(value as Record<string, unknown>).map(
-      ([question, answer]) => ({ label: question, value: String(answer) })
-    );
-  };
   const refusal = () =>
     props.part.outcome.kind === 'errored'
       ? props.part.outcome.message
       : undefined;
   // The harness's own reading outranks what we sent: it is what the agent
-  // actually acted on.
-  const shown = () => (reported().length > 0 ? reported() : lines());
+  // actually acted on. Both arrive from the fold in the same shape.
+  const shown = (): AnsweredField[] =>
+    props.part.reported ??
+    (props.part.outcome.kind === 'accepted' ? props.part.outcome.answers : []);
 
   return (
     <ToolCard
@@ -398,10 +405,12 @@ function ResolvedQuestion(props: { part: ElicitationPartData }) {
       <Show when={shown().length > 0 || refusal()}>
         <div class="flex flex-col gap-2 py-1">
           <For each={shown()}>
-            {(line) => (
+            {(answer) => (
               <div class="flex min-w-0 flex-col gap-0.5">
-                <div class="text-xs text-ink-muted">{line.label}</div>
-                <div class="text-sm text-ink wrap-break-word">{line.value}</div>
+                <div class="text-xs text-ink-muted">{answer.label}</div>
+                <div class="text-sm text-ink wrap-break-word">
+                  {answerText(answer.value)}
+                </div>
               </div>
             )}
           </For>

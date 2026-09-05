@@ -64,9 +64,9 @@ vi.mock('../../ui', () => ({
           data-testid="pick-red"
           onClick={() =>
             props.onChange(first.name, {
-              kind: 'choice',
-              value: 'Red',
-              custom: '',
+              kind: 'select',
+              values: ['Red'],
+              custom: undefined,
             })
           }
         />
@@ -75,8 +75,8 @@ vi.mock('../../ui', () => ({
           data-testid="type-other"
           onClick={() =>
             props.onChange(first.name, {
-              kind: 'choice',
-              value: undefined,
+              kind: 'select',
+              values: [],
               custom: 'blue',
             })
           }
@@ -288,9 +288,24 @@ describe('ElicitationPart', () => {
         part={part({
           outcome: {
             kind: 'accepted',
-            content: { question_0: 'Red', question_0_custom: 'blue' },
+            answers: [
+              {
+                name: 'question_0',
+                label: 'Best colour',
+                value: {
+                  kind: 'choice',
+                  choice: { value: 'Red', title: 'Red' },
+                },
+              },
+            ],
           },
-          reported: { 'What is the best colour?': 'blue' },
+          reported: [
+            {
+              name: 'What is the best colour?',
+              label: 'What is the best colour?',
+              value: { kind: 'text', text: 'blue' },
+            },
+          ],
         })}
       />
     ));
@@ -452,7 +467,7 @@ describe('ElicitationPart', () => {
         <ElicitationPart
           part={part({
             request,
-            outcome: { kind: 'accepted', content: { draft: '{}' } },
+            outcome: { kind: 'accepted', answers: [] },
             toolOutcome: {
               kind: 'completed',
               result: { eventId: 'evt-1', title: 'Q3 sync' },
