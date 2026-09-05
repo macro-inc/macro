@@ -15,6 +15,7 @@ import {
   SoupEntityContextMenu,
   useSoupListNavigationHotkeys,
 } from '@app/features/soup';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
 import {
   addUnique,
@@ -102,6 +103,9 @@ export function TaskList() {
   const panel = useSplitPanelOrThrow();
   const { state, setState } = useTasksView();
   const userId = useUserId();
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);
   const setGroupExpanded = (groupId: string, expanded: boolean) =>
@@ -446,13 +450,13 @@ export function TaskList() {
             triggerBehavior="spring-back"
           >
             <Switch>
-              <Match when={source.isLoading()}>
+              <Match when={!forceEmptyState() && source.isLoading()}>
                 <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
                   <SpinnerIcon class="size-5 animate-spin" />
                 </div>
               </Match>
 
-              <Match when={source.error()}>
+              <Match when={!forceEmptyState() && source.error()}>
                 <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
                   <span>Tasks couldn’t be loaded.</span>
                   <Button
@@ -466,10 +470,10 @@ export function TaskList() {
                 </div>
               </Match>
 
-              <Match when={visibleRows().length === 0}>
+              <Match when={forceEmptyState() || visibleRows().length === 0}>
                 <div class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-sm text-ink-muted">
                   <span>{emptyMessage()}</span>
-                  <Show when={source.hasMore()}>
+                  <Show when={!forceEmptyState() && source.hasMore()}>
                     <Button
                       variant="outline"
                       size="sm"

@@ -1,4 +1,5 @@
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -21,6 +22,7 @@ import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../channels-view-context';
 import { filterChannelsForScope } from '../queries';
 import type { ChannelsQueryScope } from '../types';
+import { ChannelsEmptyState } from './ChannelsEmptyState';
 import { ConversationCard } from './rail/ChannelRailItems';
 import { useChannelCallState } from './rail/useChannelCallState';
 import { useChannelRailActivity } from './rail/useChannelRailActivity';
@@ -51,6 +53,9 @@ export function ChannelsMobileView(props: {
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacer);
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
   const listId = createUniqueId();
   const { callActivity, incomingCallIds, callStatuses } = useChannelCallState();
   const channelActivity = useChannelRailActivity(
@@ -113,13 +118,6 @@ export function ChannelsMobileView(props: {
     });
   };
 
-  const emptyLabel = () => {
-    if (props.tab === 'channels') return 'No channels';
-    if (props.tab === 'direct_messages') return 'No direct messages';
-
-    return 'No recent conversations';
-  };
-
   return (
     <>
       <SplitHeaderLeft>
@@ -151,7 +149,7 @@ export function ChannelsMobileView(props: {
             class="h-[calc(var(--mobile-content-inset-top,0px)+0.75rem)]"
           />
           <Switch>
-            <Match when={props.source.isLoading}>
+            <Match when={!forceEmptyState() && props.source.isLoading}>
               <div class="grid min-h-32 place-items-center text-ink-muted">
                 <SpinnerIcon
                   aria-label="Loading conversations"
@@ -159,7 +157,7 @@ export function ChannelsMobileView(props: {
                 />
               </div>
             </Match>
-            <Match when={props.source.error}>
+            <Match when={!forceEmptyState() && props.source.error}>
               <div class="flex min-h-32 flex-col items-center justify-center gap-3 px-(--mobile-chrome-gutter) text-sm text-ink-muted">
                 <span>Conversations couldn’t be loaded.</span>
                 <Button
@@ -171,26 +169,8 @@ export function ChannelsMobileView(props: {
                 </Button>
               </div>
             </Match>
-            <Match when={visibleChannels().length === 0}>
-              <div class="flex min-h-32 flex-col items-center justify-center gap-3 px-(--mobile-chrome-gutter) text-sm text-ink-muted">
-                <span>{emptyLabel()}</span>
-                <Show when={props.source.hasNextPage}>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={props.source.isFetchingNextPage}
-                    onClick={loadNextPage}
-                  >
-                    <Show
-                      when={props.source.isFetchingNextPage}
-                      fallback="Search more"
-                    >
-                      <SpinnerIcon class="size-3 animate-spin" />
-                      Searching
-                    </Show>
-                  </Button>
-                </Show>
-              </div>
+            <Match when={forceEmptyState() || visibleChannels().length === 0}>
+              <ChannelsEmptyState scope={props.tab} />
             </Match>
             <Match when={true}>
               <Virtualizer
