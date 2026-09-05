@@ -1144,7 +1144,12 @@ mod elicitation {
         let mut machine = live_machine();
         machine.handle(create(RequestId::Number(0), form_for("acp-42")));
 
-        let content = BTreeMap::from([("strategy".to_owned(), serde_json::json!("balanced"))]);
+        let content = BTreeMap::from([(
+            "strategy".to_owned(),
+            agent_runtime_protocol::domain::action::ElicitationContentValue::Text(
+                "balanced".to_owned(),
+            ),
+        )]);
         let effects = machine.handle(answer(
             ElicitationRequestId::Number(0),
             ElicitationAnswer::Accept {

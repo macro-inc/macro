@@ -1236,7 +1236,9 @@
               "content": {
                 "type": ["object", "null"],
                 "description": "Form: the submitted values keyed by property. URL: omitted.",
-                "additionalProperties": {},
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/ElicitationContentValue"
+                },
                 "propertyNames": {
                   "type": "string"
                 }
@@ -1267,6 +1269,36 @@
           }
         ],
         "description": "What the user decided about an elicitation. Mirrors ACP's three actions;\nthere is no `Other` because we never originate an action we do not know."
+      },
+      "ElicitationContentValue": {
+        "oneOf": [
+          {
+            "type": "string",
+            "description": "A string, and the shape a whole draft rides in as JSON text."
+          },
+          {
+            "type": "boolean",
+            "description": "A yes/no."
+          },
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "A whole number."
+          },
+          {
+            "type": "number",
+            "format": "double",
+            "description": "A number that is not whole."
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "A multi-select's chosen values."
+          }
+        ],
+        "description": "A value ACP accepts in an elicitation answer.\n\nMirrors ACP's `ElicitationContentValue` so that the contract a caller\nanswers against is the closed union ACP will accept, rather than arbitrary\nJSON narrowed on the way out. An object, a null, or a mixed array is\nrefused when the request is deserialized - where the caller learns of it -\ninstead of at send time, when the elicitation slot has already been\nreleased."
       },
       "ElicitationRequestId": {
         "oneOf": [

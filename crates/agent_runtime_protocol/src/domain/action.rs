@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 
 use agent_client_protocol::schema::v1::{
     CancelNotification, ClientRequest, CreateElicitationResponse, ElicitationAcceptAction,
-    ElicitationAction, ElicitationContentValue, PromptRequest, RequestId, SessionId,
-    SetSessionConfigOptionRequest,
+    ElicitationAction, ElicitationContentValue as AcpContentValue, PromptRequest, RequestId,
+    SessionId, SetSessionConfigOptionRequest,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use macro_uuid::Uuid;
@@ -196,9 +196,45 @@ impl std::fmt::Display for ElicitationRequestId {
     }
 }
 
+/// A value ACP accepts in an elicitation answer.
+///
+/// Mirrors ACP's `ElicitationContentValue` so that the contract a caller
+/// answers against is the closed union ACP will accept, rather than arbitrary
+/// JSON narrowed on the way out. An object, a null, or a mixed array is
+/// refused when the request is deserialized - where the caller learns of it -
+/// instead of at send time, when the elicitation slot has already been
+/// released.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(untagged)]
+pub enum ElicitationContentValue {
+    /// A string, and the shape a whole draft rides in as JSON text.
+    Text(String),
+    /// A yes/no.
+    Boolean(bool),
+    /// A whole number.
+    Integer(i64),
+    /// A number that is not whole.
+    Number(f64),
+    /// A multi-select's chosen values.
+    Strings(Vec<String>),
+}
+
+impl From<&ElicitationContentValue> for AcpContentValue {
+    fn from(value: &ElicitationContentValue) -> Self {
+        match value {
+            ElicitationContentValue::Text(text) => Self::String(text.clone()),
+            ElicitationContentValue::Boolean(flag) => Self::Boolean(*flag),
+            ElicitationContentValue::Integer(number) => Self::Integer(*number),
+            ElicitationContentValue::Number(number) => Self::Number(*number),
+            ElicitationContentValue::Strings(values) => Self::StringArray(values.clone()),
+        }
+    }
+}
+
 /// What the user decided about an elicitation. Mirrors ACP's three actions;
 /// there is no `Other` because we never originate an action we do not know.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum ElicitationAnswer {
@@ -206,7 +242,7 @@ pub enum ElicitationAnswer {
     Accept {
         /// Form: the submitted values keyed by property. URL: omitted.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        content: Option<BTreeMap<String, serde_json::Value>>,
+        content: Option<BTreeMap<String, ElicitationContentValue>>,
     },
     /// The user explicitly said no.
     Decline,
@@ -215,7 +251,7 @@ pub enum ElicitationAnswer {
 }
 
 /// Answer an elicitation the agent is waiting on.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct AgentRespondElicitationAction {
@@ -228,7 +264,7 @@ pub struct AgentRespondElicitationAction {
 }
 
 /// One thing a caller wants an agent to do.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, strum::AsRefStr)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, strum::AsRefStr)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[strum(serialize_all = "snake_case")]
@@ -383,7 +419,7 @@ impl AgentAction {
             // minted action id and is deliberately unused - the frame must
             // carry the id the agent asked with, or nothing answers it.
             Self::RespondElicitation(action) => {
-                let response = action.to_acp_response()?;
+                let response = action.to_acp_response();
                 let result = serde_json::to_value(&response)
                     .map_err(|error| ActionError::Acp(error.to_string()))?;
                 let frame =
@@ -397,59 +433,25 @@ impl AgentAction {
 impl AgentRespondElicitationAction {
     /// The ACP response body for this answer.
     ///
-    /// Form content is checked against ACP's restricted value set here rather
-    /// than on the wire: a value that is not a string, integer, number,
-    /// boolean, or string array cannot be expressed and is refused before
-    /// anything is sent.
-    pub fn to_acp_response(&self) -> Result<CreateElicitationResponse, ActionError> {
+    /// Total: every value the type can hold is one ACP accepts, so answering
+    /// cannot fail here. That matters because the session machine releases the
+    /// elicitation slot before this runs - a failure would leave the agent
+    /// blocked on a request nothing can answer any more.
+    #[must_use]
+    pub fn to_acp_response(&self) -> CreateElicitationResponse {
         let action = match &self.answer {
             ElicitationAnswer::Accept { content } => {
-                let content = content
-                    .as_ref()
-                    .map(|content| {
-                        content
-                            .iter()
-                            .map(|(key, value)| {
-                                elicitation_content_value(key, value)
-                                    .map(|value| (key.clone(), value))
-                            })
-                            .collect::<Result<BTreeMap<_, _>, _>>()
-                    })
-                    .transpose()?;
+                let content = content.as_ref().map(|content| {
+                    content
+                        .iter()
+                        .map(|(key, value)| (key.clone(), AcpContentValue::from(value)))
+                        .collect::<BTreeMap<_, _>>()
+                });
                 ElicitationAction::Accept(ElicitationAcceptAction::new().content(content))
             }
             ElicitationAnswer::Decline => ElicitationAction::Decline,
             ElicitationAnswer::Cancel => ElicitationAction::Cancel,
         };
-        Ok(CreateElicitationResponse::new(action))
-    }
-}
-
-/// Narrow a submitted JSON value to ACP's `ElicitationContentValue`.
-fn elicitation_content_value(
-    key: &str,
-    value: &serde_json::Value,
-) -> Result<ElicitationContentValue, ActionError> {
-    use serde_json::Value;
-    match value {
-        Value::String(text) => Ok(ElicitationContentValue::String(text.clone())),
-        Value::Bool(flag) => Ok(ElicitationContentValue::Boolean(*flag)),
-        Value::Number(number) => number
-            .as_i64()
-            .map(ElicitationContentValue::Integer)
-            .or_else(|| number.as_f64().map(ElicitationContentValue::Number))
-            .ok_or_else(|| ActionError::Acp(format!("`{key}` is not a representable number"))),
-        Value::Array(items) => items
-            .iter()
-            .map(|item| {
-                item.as_str()
-                    .map(str::to_owned)
-                    .ok_or_else(|| ActionError::Acp(format!("`{key}` may only hold strings")))
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map(ElicitationContentValue::StringArray),
-        Value::Null | Value::Object(_) => Err(ActionError::Acp(format!(
-            "`{key}` must be a string, number, boolean, or list of strings"
-        ))),
+        CreateElicitationResponse::new(action)
     }
 }
