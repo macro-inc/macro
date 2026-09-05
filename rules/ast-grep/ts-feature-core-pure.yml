@@ -9,7 +9,8 @@ note: |-
   and the functions that describe, group, and summarize it. Wire types,
   clients, reactivity, and UI stay outside so a schema rename or a
   framework upgrade cannot churn core tests. Decode lives in `queries/`,
-  reactive view models in `primitives/`. The `dateBucket` import from next-soup
+  reactive view models in `primitives/`. The `dateBucket` import from
+  `soup/collection/date-buckets` (a pure date-fns module, not the soup barrel)
   is the documented exception for feed labels that must match soup views.
 files:
   - apps/web/src/features/activity/core/**

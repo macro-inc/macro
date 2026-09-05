@@ -1,4 +1,4 @@
-import { dateBucket } from '@app/features/next-soup/soup-view/group-by-date';
+import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import type { ActivityEvent } from './event';
 
 export type FeedGroup = {
