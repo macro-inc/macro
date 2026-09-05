@@ -182,7 +182,7 @@ required presentation providers unless the task explicitly changes them.
 Register the adopting feature's layer globs in both the `ts-` and `tsx-` versions
 of all four `rules/ast-grep/*feature-*` families: `core-pure`,
 `components-presentational`, `data-no-ui`, and `layers-use-context`. The detailed
-document maps each family to its layers. They currently warn and cover activity;
+document maps each family to its layers. They currently warn and cover adopting features;
 a clean scan does not prove the whole dependency graph is valid.
 These rules do not yet enforce separate composition or source-contract dependency
 inversion; review those boundaries explicitly and report remaining gaps.
@@ -210,3 +210,36 @@ for dependency leaks or describe the reference as entirely free of `vi.mock`.
 Report the boundaries changed, relevant verification, and any remaining concrete
 exceptions or limitations. For a review, distinguish a violated architecture rule
 from an activity-specific implementation choice.
+## Lessons verified by the email migration
+
+Read [docs/EMAIL_FEATURE_ARCHITECTURE.md](../../../docs/EMAIL_FEATURE_ARCHITECTURE.md)
+for a complete application of the stronger boundaries. Prefer its separate
+production entries and domain contracts over activity's documented migration gaps.
+
+- Keep scoped screen/form providers in `views/` and their view-state types in
+  `primitives/`; reserve `context/` for replaceable capabilities and their provider
+  mechanism. Do not turn a capability record into a prepared screen-state object.
+- Pass lazy content factories to host frames that establish providers. Verify
+  where the factory executes; a JSX element created before the provider is too
+  early even if the final DOM is nested correctly.
+- Resolve owner-dependent accessors during component setup and capture them in
+  host callbacks. Block signals resolve `.get` through their active provider;
+  looking up `.get` inside a later DOM event can fail despite passing TypeScript.
+  Exercise host callbacks in the mounted application as well as isolated state.
+- Preserve completion as well as status when adapting queries. An operation that
+  used to be awaited must not become fire-and-forget at the contract boundary.
+- Test cached error data on a fresh mount, not only success followed by failure.
+  Keep request identity available before data arrives and keep snapshot retention
+  policy in primitives. Check both pending-resource safety and cached-data access.
+- Scope editor lifetimes and undo recovery to stable instance identities. Server
+  echoes should not reset an engaged editor; switching the actual reply target
+  must reset the form lifetime. Test two owners and cleanup after replacement.
+- Inspect transitive imports of shared utility barrels. A single apparently pure
+  editor helper can initialize rendering plugins or query persistence. Extract a
+  narrow shared helper when needed, while preserving its existing public export.
+- When an adapter begins translating result errors into rejected promises, update
+  its consumers' error handling. Preserve pending guards so mutually exclusive
+  operations, such as scheduling and immediate sending, cannot overlap.
+- Register the feature rules and add focused import-graph checks when a migration
+  has hard ownership restrictions. A folder rename and a passing TypeScript check
+  alone do not establish isolation.

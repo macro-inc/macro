@@ -18,6 +18,18 @@ Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
 
+Threads open at `/app/email/<thread-id>`. Click a message header to expand or
+collapse it; `Show N hidden messages` reveals the collapsed middle of a longer
+conversation. A link with `?email_message_id=<message-id>` reveals that message.
+Replies appear inline on desktop and in a composer drawer on touch devices.
+An edited reply remains a draft when navigating away and returning.
+
+While a schedule change is pending, immediate send and further schedule changes
+are disabled. A failed schedule or unschedule keeps the last confirmed time.
+If scheduling succeeds but marking the thread done fails, the email remains
+scheduled and a notice explains the separate failure. Check the confirmed time
+before retrying; do not treat that notice as a failed schedule.
+
 ## Search
 
 Sidebar `Search` button → `/app/.../component/search` with a focused query box. Results

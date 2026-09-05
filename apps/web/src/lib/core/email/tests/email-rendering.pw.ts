@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { EMAIL_BODY_CONTAINMENT_CSS } from '@app/features/email-message/core/email-body-containment-css';
+import { fitToWidthZoom } from '@app/features/email-message/core/fit-to-width-zoom';
 import { expect, type Page, test } from '@playwright/test';
 import { DEFAULT_THEMES } from '@theme/constants';
-import { EMAIL_BODY_CONTAINMENT_CSS } from '../../../../features/block-email/util/emailBodyContainmentCss';
-import { fitToWidthZoom } from '../../../../features/block-email/util/fitToWidthZoom';
 
 /**
  * Email fixture format - matches the structure from email service.

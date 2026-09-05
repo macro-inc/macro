@@ -1,10 +1,11 @@
+import { useEmailContext } from '@app/features/email-thread/views/email-thread-context';
+import { getPermissions } from '@core/component/SharePermissions';
 import {
   ShareBlockModal,
   ShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { createSignal, type ParentProps, Show } from 'solid-js';
-import { useEmailContext } from './EmailContext';
 
 export function ModalsProvider(props: ParentProps<{ subject?: string }>) {
   const email = useEmailContext();
@@ -21,7 +22,7 @@ export function ModalsProvider(props: ParentProps<{ subject?: string }>) {
       <Show when={ENABLE_EMAIL_SHARING}>
         <ShareBlockModal
           name={props.subject}
-          userPermissions={email.permissions().type}
+          userPermissions={getPermissions(email.thread()?.access_level)}
         />
       </Show>
     </ShareDialogContext.Provider>

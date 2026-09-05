@@ -1,8 +1,8 @@
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
+import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
-import { EMAIL_COMPOSE_TO_INPUT_ID } from '@block-email/constants';
 import {
   endTrackedDocumentSpan,
   registerDocumentSpan,

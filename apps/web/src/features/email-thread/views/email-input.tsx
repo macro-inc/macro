@@ -1,0 +1,118 @@
+import { decodeBase64Utf8 } from '@app/features/email-compose/core/decode-base64';
+import { plainTextToHtml } from '@app/features/email-compose/core/plain-text-to-html';
+import { ReplyInputView } from '@app/features/email-compose/views/reply-input';
+import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import { Layer } from '@ui';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  type Setter,
+  Show,
+} from 'solid-js';
+import { revealMessageAfterLayout } from '../primitives/scroll-to-message';
+import { useEmailContext } from './email-thread-context';
+import { useEmailThreadEnvironment } from './thread-environment';
+
+interface EmailInputProps {
+  replyingTo: Accessor<EmailMessage | undefined>;
+  draft?: EmailMessage;
+  setShowReply?: Setter<boolean>;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
+  unframed?: boolean;
+  mobileDrawer?: {
+    onClose: () => void;
+  };
+}
+
+/** A reply target owns one editor/form lifetime; changing targets must reset the draft latch. */
+export function EmailInput(props: EmailInputProps) {
+  return (
+    <Show when={props.replyingTo()?.db_id ?? props.draft?.db_id ?? 'new'} keyed>
+      {(_identity) => <EmailInputSession {...props} />}
+    </Show>
+  );
+}
+
+function EmailInputSession(props: EmailInputProps) {
+  const ctx = useEmailContext();
+  const environment = useEmailThreadEnvironment();
+
+  // The seed identity of this composer: which version of which draft it
+  // mounts from. When the server sends a newer save of that draft (a thread
+  // opened from a cached snapshot revalidates, or the draft was edited on
+  // another device), the key changes and the input remounts, seeding from
+  // the newer draft through the ordinary mount path — but only until the
+  // user engages with the composer. From then on the mounted instance is
+  // authoritative (later fetches are typically echoes of its own saves), so
+  // the key latches and the input never remounts underneath the user.
+  const [engaged, setEngaged] = createSignal(false);
+  const seedKey = createMemo<string>((prev) =>
+    engaged() && prev !== undefined
+      ? prev
+      : props.draft
+        ? `${props.draft.db_id}:${props.draft.updated_at}`
+        : 'no-draft'
+  );
+
+  const draftHTML = createMemo(() => {
+    const encoded = props.draft?.body_html_sanitized;
+    if (!encoded) {
+      const plainText = props.draft?.body_text;
+      if (!plainText) return '';
+      return plainTextToHtml(plainText);
+    }
+    const decodedHtml = decodeBase64Utf8(encoded);
+    return decodedHtml;
+  });
+
+  async function afterSend(newMessageId: string | null) {
+    // Collapse the input after sending (Gmail-style).
+    props.setShowReply?.(false);
+
+    if (!newMessageId) return;
+
+    ctx.messages.setFocused(newMessageId);
+    await ctx.query.refetch();
+    revealMessageAfterLayout(
+      newMessageId,
+      ctx.messages.list(),
+      ctx.messagesListRef()
+    );
+  }
+
+  return (
+    <Show when={ctx.drafts.initialDraftsSettled()}>
+      <Show when={seedKey()} keyed>
+        {(seed) => (
+          <Layer depth={props.mobileDrawer ? 0 : 2}>
+            <ReplyInputView
+              services={environment.compose}
+              session={ctx}
+              sourceEntityId={
+                ctx.thread()?.db_id ??
+                props.replyingTo()?.thread_db_id ??
+                props.draft?.thread_db_id ??
+                ''
+              }
+              replyingTo={props.replyingTo}
+              draft={props.draft}
+              preloadedHtml={draftHTML()}
+              formSeed={seed}
+              onEngaged={() => setEngaged(true)}
+              sideEffectOnSend={afterSend}
+              onMarkDone={ctx.archiveThread}
+              setShowReply={props.setShowReply}
+              markdownDomRef={props.markdownDomRef}
+              unframed={props.unframed}
+              mobileDrawer={props.mobileDrawer}
+              isEditingExisting={
+                props.replyingTo() == null && props.draft != null
+              }
+            />
+          </Layer>
+        )}
+      </Show>
+    </Show>
+  );
+}

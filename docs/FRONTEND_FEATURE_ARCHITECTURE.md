@@ -616,3 +616,18 @@ general exceptions without a concrete need and an updated explanation.
   adapter tests verify wire behavior? Are any remaining integration stubs explained?
 - Are external consumers, route wrappers, presentation providers, and both lint
   language variants covered by the migration?
+
+
+## Email application of the stronger boundaries
+
+[Email feature architecture](EMAIL_FEATURE_ARCHITECTURE.md) documents the complete
+`block-email` experiment: separate `email-thread`, `email-message`, and
+`email-compose` ownership, a thin block adapter, production entry points, domain
+sources, and tests of imports and instance lifetimes. Use it alongside activity
+when applying the composition and source-contract rules.
+
+The four feature-rule families now cover these email packages as well as activity.
+Email additionally has error-level rules against block dependencies and an import
+graph regression test. Its two narrow shared pure utility exceptions are the
+base64 codec and validated Macro identity helper; see the email document for the
+remaining shared UI integration limits.

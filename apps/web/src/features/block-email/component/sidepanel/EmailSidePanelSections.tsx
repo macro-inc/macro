@@ -1,4 +1,5 @@
 import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
+import { useEmailContext } from '@app/features/email-thread/views/email-thread-context';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -7,7 +8,6 @@ import { SidePanel } from '@components/app/side-panel';
 import { References } from '@core/component/References';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import { Show, Suspense } from 'solid-js';
-import { useEmailContext } from '../EmailContext';
 
 interface EmailSidePanelSectionsProps {
   threadId: string;

@@ -1,23 +1,29 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { SignaturePreview } from '@app/features/email-compose/components/signature-preview';
 import {
   ComposeLayout,
   EmailComposeToolbar,
-} from '@block-email/component/compose';
+} from '@app/features/email-compose/compose-layout';
+import { decodeBase64Utf8 } from '@app/features/email-compose/core/decode-base64';
+import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
+import { convertContactInfoToEmailRecipient } from '@app/features/email-compose/core/recipient-conversion';
+import { createComposeBodyActions } from '@app/features/email-compose/editor-adapter';
+import type { DraftFormAttachment } from '@app/features/email-compose/primitives/email-form-state';
+import { prepareEmailBody } from '@app/features/email-compose/primitives/prepare-email-body';
 import {
   type ComposeContextValue,
   ComposeProvider,
   type ComposeValidationError,
-} from '@block-email/component/compose/ComposeContext';
-import { SignaturePreview } from '@block-email/component/compose/SignaturePreview';
-import type { DraftFormAttachment } from '@block-email/component/createEmailFormState';
-import type { EmailRecipient } from '@block-email/component/EmailContext';
-import { decodeBase64Utf8 } from '@block-email/util/decodeBase64';
-import { prepareEmailBody } from '@block-email/util/prepareEmailBody';
-import { convertContactInfoToEmailRecipient } from '@block-email/util/recipientConversion';
+} from '@app/features/email-compose/views/compose-context';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';
 import { toast } from '@core/component/Toast/Toast';
-import { enableEmailSignatures } from '@core/constant/featureFlags';
+import {
+  ENABLE_EMAIL_SCHEDULED_SEND,
+  enableEmailSignatures,
+} from '@core/constant/featureFlags';
+import { isMobile } from '@core/mobile/isMobile';
+import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 
 import { useChatQuery } from '@queries/chat';
 import { useEmailLinksQuery, useEmailSignature } from '@queries/email/link';
@@ -362,6 +368,10 @@ export function ComposeTool(props: ComposeToolProps) {
   };
 
   const ctx: ComposeContextValue = {
+    bodyActions: createComposeBodyActions(),
+    isMobile,
+    scheduleEnabled: ENABLE_EMAIL_SCHEDULED_SEND,
+    attachmentFailure: toast.failure,
     subject,
     attachments: () => [],
     sendTime: () => undefined,
@@ -409,6 +419,8 @@ export function ComposeTool(props: ComposeToolProps) {
       <Show when={previewSignatureHtml()}>
         {(html) => (
           <SignaturePreview
+            mobile={isMobile()}
+            prepareLinks={interceptMailtoLinks}
             html={html()}
             onDismiss={() => {
               setIncludeSignature(false);

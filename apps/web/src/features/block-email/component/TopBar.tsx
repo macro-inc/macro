@@ -3,6 +3,7 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
+import { useEmailContext } from '@app/features/email-thread/views/email-thread-context';
 import { makeMoveToProjectAction } from '@app/features/next-soup/actions';
 import { useMaybeSoup } from '@app/features/next-soup/soup-context';
 import {
@@ -47,7 +48,6 @@ import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-cl
 import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';
 import { onCleanup, Show } from 'solid-js';
-import { useEmailContext } from './EmailContext';
 
 export function TopBar(props: {
   id: string;
