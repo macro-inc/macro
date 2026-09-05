@@ -84,8 +84,9 @@ where
         Ok(session)
     }
 
-    /// Provision the managed-default bot's runtime, open a session on it,
-    /// and deliver the first prompt if one came with the request.
+    /// Provision the selected managed persona's runtime, open a session on it,
+    /// and deliver the first prompt if one came with the request. An omitted
+    /// profile uses the deployment's default coding persona.
     ///
     /// Nothing is announced: a managed session opened this way has no
     /// originating mention and no thread to answer back into. The runtime is
@@ -95,7 +96,28 @@ where
         &self,
         request: agent_session::domain::ports::OpenManagedSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
-        let defaults = self.inner.defaults.managed();
+        let managed_defaults = self.inner.defaults.managed();
+        let (bot_id, model, harness, instructions, mcp_servers) =
+            if let Some(selected) = request.profile {
+                let bot_id = selected.bot_id;
+                let profile = selected.profile;
+                (
+                    bot_id,
+                    profile.model,
+                    profile.harness,
+                    Some(profile.instructions).filter(|value| !value.trim().is_empty()),
+                    profile.mcp_servers,
+                )
+            } else {
+                (
+                    managed_defaults.bot_id,
+                    managed_defaults.model.clone(),
+                    managed_defaults.harness.clone(),
+                    request.instructions,
+                    AgentMcpServers::OwnerConnections,
+                )
+            };
+        let defaults = self.inner.defaults.for_bot(bot_id);
         let sandbox_size = self
             .inner
             .sessions
@@ -108,12 +130,7 @@ where
         let egress = self
             .inner
             .egress
-            .provision(
-                session_id,
-                &request.owner,
-                &defaults.repo_url,
-                &AgentMcpServers::OwnerConnections,
-            )
+            .provision(session_id, &request.owner, &defaults.repo_url, &mcp_servers)
             .await
             .map_err(into_session_error)?;
         let session = self
@@ -122,18 +139,17 @@ where
             .create_session(CreateAgentSessionParams {
                 id: session_id,
                 owner_id: request.owner.clone(),
-                bot_id: defaults.bot_id,
+                bot_id,
                 thread_id: None,
                 originating_message_id: None,
-                model: defaults.model.clone(),
-                harness: defaults.harness.clone(),
+                model,
+                harness,
                 repo_url: Some(defaults.repo_url.clone()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
-                instructions: request.instructions,
-                // A fixed system agent has no configuration to select from.
-                mcp_servers: AgentMcpServers::OwnerConnections,
+                instructions,
+                mcp_servers,
                 egress_token_hash: Some(egress.session_token_hash),
             })
             .await?;

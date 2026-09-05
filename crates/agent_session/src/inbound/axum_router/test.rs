@@ -135,6 +135,10 @@ impl SessionOpener for RecordingOpener {
         &self,
         request: OpenManagedSession,
     ) -> crate::domain::error::Result<AgentSession> {
+        let bot_id = request
+            .profile
+            .as_ref()
+            .map_or(BotId::TEST_B, |selected| selected.bot_id);
         let session = AgentSession {
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
@@ -142,7 +146,7 @@ impl SessionOpener for RecordingOpener {
             thread_id: None,
             thread_channel_id: None,
             originating_message_id: None,
-            bot_id: BotId::TEST_A,
+            bot_id,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
             repo_url: Some("https://github.com/macro-inc/macro".to_owned()),
@@ -182,7 +186,9 @@ impl OneBotDirectory {
                 has_agent: true,
                 is_managed: false,
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                owner_team_id: None,
                 harness_id: Some(harness_id::HarnessId::TEST_A),
+                managed_profile: None,
             },
         }
     }
@@ -192,8 +198,15 @@ impl OneBotDirectory {
             facts: BotFacts {
                 has_agent: true,
                 is_managed: true,
-                owner_user_id: None,
+                owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                owner_team_id: None,
                 harness_id: None,
+                managed_profile: Some(crate::domain::ports::ManagedAgentProfile {
+                    model: "persona-model".to_owned(),
+                    harness: "in-memory".to_owned(),
+                    instructions: "persona instructions".to_owned(),
+                    mcp_servers: Default::default(),
+                }),
             },
         }
     }
@@ -204,7 +217,9 @@ impl OneBotDirectory {
                 has_agent: false,
                 is_managed: false,
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                owner_team_id: None,
                 harness_id: None,
+                managed_profile: None,
             },
         }
     }
@@ -213,6 +228,14 @@ impl OneBotDirectory {
 impl BotDirectory for OneBotDirectory {
     async fn bot_facts(&self, bot: BotId) -> crate::domain::error::Result<Option<BotFacts>> {
         Ok((bot == BotId::TEST_A).then(|| self.facts.clone()))
+    }
+
+    async fn user_has_team(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _team_id: Uuid,
+    ) -> crate::domain::error::Result<bool> {
+        Ok(false)
     }
 }
 
@@ -576,6 +599,48 @@ async fn a_managed_open_carries_its_instructions() {
             .collect::<Vec<_>>(),
         vec![Some(INSTRUCTIONS)]
     );
+}
+
+#[tokio::test]
+async fn an_owner_can_select_a_managed_persona() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({
+            "botId": BotId::TEST_A.as_uuid(),
+            "prompt": "fix it"
+        })
+        .to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    let selected = managed[0].profile.as_ref().expect("selected persona");
+    assert_eq!(selected.bot_id, BotId::TEST_A);
+    assert_eq!(selected.profile.model, "persona-model");
+    assert_eq!(selected.profile.instructions, "persona instructions");
+}
+
+#[tokio::test]
+async fn a_stranger_cannot_select_someone_elses_managed_persona() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        STRANGER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid() }).to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    assert!(opener.managed.lock().unwrap().is_empty());
 }
 
 /// Whitespace-only instructions are absence stated clumsily, and are
