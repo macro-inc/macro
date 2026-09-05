@@ -3,12 +3,12 @@ language: tsx
 # Twin of ts-feature-components-presentational — ast-grep rules are
 # single-language, and `typescript` only scans .ts files.
 severity: warning
-message: Feature components take resolved values and return JSX. Data, reactivity wiring, and navigation belong to state/ and views/.
+message: Feature components take resolved values and return JSX. Data, reactivity wiring, and navigation belong to primitives/ and views/.
 note: |-
   Rule FE-31 in docs/STYLE_GUIDE.md. `components/` never imports
-  `queries/`, `state/`, `views/`, `@queries/*`, urql, or the split
+  `queries/`, `primitives/`, `views/`, `@queries/*`, urql, or the split
   navigation helpers. It renders what views hand it: domain values from
-  `core/`, resolved display (typed in `deps.ts`), and event handlers. The
+  `core/`, resolved display (typed in `context/`), and event handlers. The
   one sanctioned `queries/` import is `property-value`, which parses
   untyped wire JSON for property-changed rows.
 files:
@@ -16,7 +16,7 @@ files:
 rule:
   any:
     - kind: string
-      regex: ^['"](@queries/|@urql|urql|@app/lib/urql|@core/util/useSplitNavigationHandler|(\.\./)+(state|views)/)
+      regex: ^['"](@queries/|@urql|urql|@app/lib/urql|@core/util/useSplitNavigationHandler|(\.\./)+(primitives|views)/)
       any:
         - inside:
             kind: import_statement

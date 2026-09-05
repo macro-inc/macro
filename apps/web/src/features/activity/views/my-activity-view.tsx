@@ -5,11 +5,14 @@ import { Button } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { ActionGraph } from '../components/action-graph';
 import { TopEntitiesSection, TopEntityRow } from '../components/top-entities';
+import {
+  type OpenEntityTarget,
+  useActivityContext,
+} from '../context/activity-context';
 import type { ActivityEvent, ActivityTopEntity } from '../core/event';
-import { type OpenEntityTarget, useActivityDeps } from '../deps';
-import { createActorName } from '../state/actor-name';
-import { createEntityOpener } from '../state/entity-opener';
-import { createMyActivityState } from '../state/my-activity';
+import { createActorName } from '../primitives/actor-name';
+import { createEntityOpener } from '../primitives/entity-opener';
+import { createMyActivityState } from '../primitives/my-activity';
 import { ActivityTimelineRow } from './activity-timeline-row';
 
 function OverviewInset(props: { children: JSX.Element }) {
@@ -29,14 +32,14 @@ function FeedStatus(props: { children: JSX.Element }) {
 }
 
 /**
- * The user's own activity, newest first. Needs `ActivityDeps` in context;
+ * The user's own activity, newest first. Reads `ActivityContext`;
  * the host decides what a row click opens.
  */
 export function MyActivityView(props: {
   onOpen: (target: OpenEntityTarget) => void;
 }) {
-  const deps = useActivityDeps();
-  const state = createMyActivityState(deps);
+  const context = useActivityContext();
+  const state = createMyActivityState(context);
   const overview = () => {
     const current = state.overview();
     return current.t === 'ready' ? current.overview : undefined;
@@ -142,8 +145,8 @@ function NamedActivityRow(props: {
   event: ActivityEvent;
   onOpen: (target: OpenEntityTarget) => void;
 }) {
-  const deps = useActivityDeps();
-  const name = createActorName(deps, () => props.event.actorId);
+  const context = useActivityContext();
+  const name = createActorName(context, () => props.event.actorId);
   return (
     <ActivityTimelineRow
       event={props.event}
@@ -157,9 +160,9 @@ function OpenableTopEntityRow(props: {
   entity: ActivityTopEntity;
   onOpen: (target: OpenEntityTarget) => void;
 }) {
-  const deps = useActivityDeps();
+  const context = useActivityContext();
   const opener = createEntityOpener(
-    deps,
+    context,
     () => props.entity.entityId,
     () => props.entity.entityType,
     props.onOpen

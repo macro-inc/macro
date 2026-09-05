@@ -1,8 +1,8 @@
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createdEvent } from '../queries/fixtures';
-import { createMockActivityDeps } from '../testing/mock-deps';
-import { soupPage } from '../testing/wire';
+import { createMockActivityContext } from '../tests/mock-context';
+import { soupPage } from '../tests/wire';
 import {
   createEntityActivityState,
   type EntityActivityState,
@@ -14,17 +14,17 @@ afterEach(() => {
 });
 
 function setup(entityType: 'DOCUMENT' | 'USER' = 'DOCUMENT') {
-  const deps = createMockActivityDeps();
+  const context = createMockActivityContext();
   let state!: EntityActivityState;
   const dispose = createRoot((rootDispose) => {
-    state = createEntityActivityState(deps, {
+    state = createEntityActivityState(context, {
       entityId: () => 'doc-1',
       entityType: () => entityType,
     });
     return rootDispose;
   });
   disposals.push(dispose);
-  return { state, graphql: deps.graphqlMock };
+  return { state, graphql: context.graphqlMock };
 }
 
 describe('createEntityActivityState', () => {

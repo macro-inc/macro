@@ -1,7 +1,7 @@
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo } from 'solid-js';
+import type { ActivityContext } from '../context/activity-context';
 import type { ActivityEvent } from '../core/event';
-import type { ActivityDeps } from '../deps';
 import { createEntityActivityQuery } from '../queries/entity-query';
 
 export type EntityActivityView =
@@ -21,10 +21,10 @@ export type EntityActivityState = {
  * know about reads as an error, not as an empty history.
  */
 export function createEntityActivityState(
-  deps: Pick<ActivityDeps, 'graphql'>,
+  context: Pick<ActivityContext, 'graphql'>,
   options: { entityId: Accessor<string>; entityType: Accessor<EntityType> }
 ): EntityActivityState {
-  const query = createEntityActivityQuery(deps, {
+  const query = createEntityActivityQuery(context, {
     entityType: options.entityType,
     entityId: options.entityId,
     enabled: () => true,

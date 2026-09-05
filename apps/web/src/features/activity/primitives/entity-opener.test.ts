@@ -1,11 +1,11 @@
 import { createRoot } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+import type { OpenEntityTarget } from '../context/activity-context';
 import type { ActivityEntityType } from '../core/event';
-import type { OpenEntityTarget } from '../deps';
 import {
-  createMockActivityDeps,
-  type MockActivityDeps,
-} from '../testing/mock-deps';
+  createMockActivityContext,
+  type MockActivityContext,
+} from '../tests/mock-context';
 import { createEntityOpener } from './entity-opener';
 
 function click(shiftKey: boolean) {
@@ -16,13 +16,13 @@ function click(shiftKey: boolean) {
 }
 
 function setup(
-  deps: MockActivityDeps,
+  context: MockActivityContext,
   entityType: ActivityEntityType,
   onOpen?: (target: OpenEntityTarget) => void
 ) {
   return createRoot(() =>
     createEntityOpener(
-      deps,
+      context,
       () => 'doc-1',
       () => entityType,
       onOpen
@@ -33,7 +33,7 @@ function setup(
 describe('createEntityOpener', () => {
   it('hands the host a target, asking for a new split on shift-click', () => {
     const onOpen = vi.fn();
-    const opener = setup(createMockActivityDeps(), 'document', onOpen);
+    const opener = setup(createMockActivityContext(), 'document', onOpen);
 
     opener()?.handlers?.onClick(click(false));
     opener()?.handlers?.onClick(click(true));
@@ -46,14 +46,14 @@ describe('createEntityOpener', () => {
   });
 
   it('resolves display without handlers when the host does not open', () => {
-    const opener = setup(createMockActivityDeps(), 'document');
+    const opener = setup(createMockActivityContext(), 'document');
     expect(opener()?.display.name()).toBe('Entity doc-1');
     expect(opener()?.handlers).toBeUndefined();
   });
 
   it('is undefined for entity kinds the app cannot link to', () => {
     const opener = setup(
-      createMockActivityDeps(),
+      createMockActivityContext(),
       { kind: 'unsupported', raw: 'TEAM' },
       vi.fn()
     );
@@ -62,7 +62,7 @@ describe('createEntityOpener', () => {
 
   it('does nothing when the display has no block mapping', () => {
     const onOpen = vi.fn();
-    const deps = createMockActivityDeps({
+    const context = createMockActivityContext({
       entityDisplay: () => ({
         name: () => 'Team',
         icon: () => null,
@@ -72,7 +72,7 @@ describe('createEntityOpener', () => {
       }),
     });
 
-    setup(deps, 'document', onOpen)()?.handlers?.onClick(click(false));
+    setup(context, 'document', onOpen)()?.handlers?.onClick(click(false));
 
     expect(onOpen).not.toHaveBeenCalled();
   });

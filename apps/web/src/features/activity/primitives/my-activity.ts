@@ -1,7 +1,7 @@
 import { type Accessor, createMemo } from 'solid-js';
+import type { ActivityContext } from '../context/activity-context';
 import type { ActivityOverview } from '../core/event';
 import { type FeedGroup, groupEventsByDay } from '../core/group-events';
-import type { ActivityDeps } from '../deps';
 import { createMyActivityQuery } from '../queries/feed-query';
 import { createMyActivityOverviewQuery } from '../queries/overview-query';
 
@@ -28,12 +28,12 @@ export type MyActivityState = {
  * refetch never blanks rows the user is reading.
  */
 export function createMyActivityState(
-  deps: Pick<ActivityDeps, 'graphql'>
+  context: Pick<ActivityContext, 'graphql'>
 ): MyActivityState {
-  const overviewQuery = createMyActivityOverviewQuery(deps, {
+  const overviewQuery = createMyActivityOverviewQuery(context, {
     enabled: () => true,
   });
-  const feedQuery = createMyActivityQuery(deps, { enabled: () => true });
+  const feedQuery = createMyActivityQuery(context, { enabled: () => true });
   const groups = createMemo(() => groupEventsByDay(feedQuery.data ?? []));
 
   const overview = createMemo<OverviewView>(() => {

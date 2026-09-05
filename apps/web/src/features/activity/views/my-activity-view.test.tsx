@@ -1,9 +1,9 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ActivityDepsProvider } from '../deps';
+import { ActivityContextProvider } from '../context/activity-context';
 import { createdEvent, messagedEvent } from '../queries/fixtures';
-import { createMockActivityDeps } from '../testing/mock-deps';
-import { feedPage, overviewPage } from '../testing/wire';
+import { createMockActivityContext } from '../tests/mock-context';
+import { feedPage, overviewPage } from '../tests/wire';
 import { MyActivityView } from './my-activity-view';
 
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
@@ -36,14 +36,14 @@ vi.mock('@service-storage/websocket', () => ({
 afterEach(cleanup);
 
 function renderView() {
-  const deps = createMockActivityDeps();
+  const context = createMockActivityContext();
   const onOpen = vi.fn();
   const result = render(() => (
-    <ActivityDepsProvider value={deps}>
+    <ActivityContextProvider value={context}>
       <MyActivityView onOpen={onOpen} />
-    </ActivityDepsProvider>
+    </ActivityContextProvider>
   ));
-  return { ...result, onOpen, graphql: deps.graphqlMock };
+  return { ...result, onOpen, graphql: context.graphqlMock };
 }
 
 const rows = () => document.querySelectorAll('[data-activity-row]');

@@ -1,7 +1,7 @@
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { type JSX, Show } from 'solid-js';
+import type { EntityDisplay } from '../context/activity-context';
 import type { ActivityTopEntity } from '../core/event';
-import type { EntityDisplay } from '../deps';
 import { EntityMention } from './entity-mention';
 
 /** The "Most active" section chrome; the view supplies the rows. */

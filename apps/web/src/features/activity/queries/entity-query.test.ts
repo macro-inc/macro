@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { soupPage } from '../testing/wire';
+import { soupPage } from '../tests/wire';
 import { createdEvent } from './fixtures';
 import { selectEntityActivity } from './select-entity-activity';
 

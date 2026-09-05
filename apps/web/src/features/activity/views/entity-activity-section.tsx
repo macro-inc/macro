@@ -6,10 +6,10 @@ import { cn } from '@ui';
 import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
 import { ActionPhrase } from '../components/action-phrase';
 import { ActorName } from '../components/actor-name';
+import { useActivityContext } from '../context/activity-context';
 import type { ActivityEvent } from '../core/event';
-import { useActivityDeps } from '../deps';
-import { createActorName } from '../state/actor-name';
-import { createEntityActivityState } from '../state/entity-activity';
+import { createActorName } from '../primitives/actor-name';
+import { createEntityActivityState } from '../primitives/entity-activity';
 import { useEntityActivityFlag } from '../use-entity-activity-flag';
 
 /** Rows shown before the section collapses behind a "Show all" toggle. */
@@ -36,10 +36,10 @@ export function EntityActivitySectionConditional(
   );
 }
 
-/** The section itself. Needs `ActivityDeps` in context. */
+/** The section itself. Reads `ActivityContext`. */
 export function EntityActivitySection(props: EntityActivitySectionProps) {
-  const deps = useActivityDeps();
-  const state = createEntityActivityState(deps, {
+  const context = useActivityContext();
+  const state = createEntityActivityState(context, {
     entityType: () => props.entityType,
     entityId: () => props.entityId,
   });
@@ -108,9 +108,9 @@ function ReadyActivityList(props: { events: ActivityEvent[] }) {
 }
 
 function ActivityRow(props: { event: ActivityEvent }) {
-  const deps = useActivityDeps();
-  const name = createActorName(deps, () => props.event.actorId);
-  const definition = deps.propertyDefinition(() => {
+  const context = useActivityContext();
+  const name = createActorName(context, () => props.event.actorId);
+  const definition = context.propertyDefinition(() => {
     const action = props.event.action;
     return action.kind === 'property-changed' ? action.property : undefined;
   });

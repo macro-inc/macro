@@ -2,8 +2,8 @@
  * @vitest-environment jsdom
  */
 
-import { ActivityDepsProvider } from '@app/features/activity/deps';
-import { createMockActivityDeps } from '@app/features/activity/testing/mock-deps';
+import { ActivityContextProvider } from '@app/features/activity/context/activity-context';
+import { createMockActivityContext } from '@app/features/activity/tests/mock-context';
 import type { PropertyDefinitionDomain } from '@property/types';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { cleanup, render, screen } from '@solidjs/testing-library';
@@ -56,7 +56,7 @@ vi.mock(
   })
 );
 
-const deps = createMockActivityDeps({
+const context = createMockActivityContext({
   propertyDefinition: (id) => () =>
     definitions.find((definition) => definition.id === id()),
   entityDisplay: () => ({
@@ -86,7 +86,7 @@ function renderTool(
   };
 
   return render(() => (
-    <ActivityDepsProvider value={deps}>
+    <ActivityContextProvider value={context}>
       <Dynamic
         component={
           readActivityHandler.render as Component<Record<string, unknown>>
@@ -99,7 +99,7 @@ function renderTool(
         isComplete
         renderContext={{ isStreaming: false, grouped: false }}
       />
-    </ActivityDepsProvider>
+    </ActivityContextProvider>
   ));
 }
 

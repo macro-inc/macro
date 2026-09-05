@@ -1,8 +1,8 @@
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createdEvent, editedEvent } from '../queries/fixtures';
-import { createMockActivityDeps } from '../testing/mock-deps';
-import { feedPage, overviewPage } from '../testing/wire';
+import { createMockActivityContext } from '../tests/mock-context';
+import { feedPage, overviewPage } from '../tests/wire';
 import { createMyActivityState, type MyActivityState } from './my-activity';
 
 const disposals: Array<() => void> = [];
@@ -11,14 +11,14 @@ afterEach(() => {
 });
 
 function setup() {
-  const deps = createMockActivityDeps();
+  const context = createMockActivityContext();
   let state!: MyActivityState;
   const dispose = createRoot((rootDispose) => {
-    state = createMyActivityState(deps);
+    state = createMyActivityState(context);
     return rootDispose;
   });
   disposals.push(dispose);
-  return { deps, state, graphql: deps.graphqlMock };
+  return { context, state, graphql: context.graphqlMock };
 }
 
 describe('createMyActivityState', () => {

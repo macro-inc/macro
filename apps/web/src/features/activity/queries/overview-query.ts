@@ -5,8 +5,8 @@ import {
   type MyActivityOverviewQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import type { Accessor } from 'solid-js';
+import type { ActivityContext } from '../context/activity-context';
 import type { ActivityOverview } from '../core/event';
-import type { ActivityDeps } from '../deps';
 import { decodeActivityOverview } from './decode';
 
 function browserTimeZone(): string {
@@ -14,7 +14,7 @@ function browserTimeZone(): string {
 }
 
 export function createMyActivityOverviewQuery(
-  deps: Pick<ActivityDeps, 'graphql'>,
+  context: Pick<ActivityContext, 'graphql'>,
   options: { enabled: Accessor<boolean> }
 ) {
   return createUrqlQuery<
@@ -23,7 +23,7 @@ export function createMyActivityOverviewQuery(
     ActivityOverview
   >(() => ({
     query: MyActivityOverviewDocument,
-    client: deps.graphql(),
+    client: context.graphql(),
     variables: {
       input: { timeZone: browserTimeZone() },
     },

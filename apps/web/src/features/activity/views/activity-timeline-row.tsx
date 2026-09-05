@@ -1,7 +1,10 @@
 import { ActivityTimelineRow as ActivityTimelineRowView } from '../components/activity-timeline-row';
+import {
+  type OpenEntityTarget,
+  useActivityContext,
+} from '../context/activity-context';
 import type { ActivityEvent } from '../core/event';
-import { type OpenEntityTarget, useActivityDeps } from '../deps';
-import { createEntityOpener } from '../state/entity-opener';
+import { createEntityOpener } from '../primitives/entity-opener';
 
 /**
  * Feed and tool row: presentational chrome plus the entity mention. Pass
@@ -13,14 +16,14 @@ export function ActivityTimelineRow(props: {
   showActor?: boolean;
   onOpen?: (target: OpenEntityTarget) => void;
 }) {
-  const deps = useActivityDeps();
+  const context = useActivityContext();
   const opener = createEntityOpener(
-    deps,
+    context,
     () => props.event.entityId,
     () => props.event.entityType,
     props.onOpen
   );
-  const definition = deps.propertyDefinition(() => {
+  const definition = context.propertyDefinition(() => {
     const action = props.event.action;
     return action.kind === 'property-changed' ? action.property : undefined;
   });

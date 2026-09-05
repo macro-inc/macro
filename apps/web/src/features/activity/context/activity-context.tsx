@@ -28,11 +28,12 @@ export type OpenEntityTarget = {
 /**
  * The ambient capabilities activity reads the same way on every surface.
  * Production resolves them from the app below; tests swap them through
- * `ActivityDepsProvider`. Per-surface policy (what a click opens) is a
- * callback prop, not a dep. No file under `queries/`, `state/`,
- * `components/`, or `views/` imports these capabilities directly.
+ * `ActivityContextProvider`. Per-surface policy (what a click opens) is a
+ * callback prop, not a context field. No file under `queries/`,
+ * `primitives/`, `components/`, or `views/` imports these capabilities
+ * directly.
  */
-export type ActivityDeps = {
+export type ActivityContext = {
   /** GraphQL client for the activity queries. */
   graphql: Accessor<Client>;
   /** The signed-in user, so their own rows read "You". */
@@ -53,16 +54,16 @@ export type ActivityDeps = {
   ) => Accessor<PropertyDefinitionDomain | undefined>;
 };
 
-const ActivityDepsContext = createContext<ActivityDeps>();
+const ActivityContextValue = createContext<ActivityContext>();
 
-/** Test seam. Production never mounts this; `useActivityDeps` falls back to the app. */
-export const ActivityDepsProvider = ActivityDepsContext.Provider;
+/** Test seam. Production never mounts this; `useActivityContext` falls back to the app. */
+export const ActivityContextProvider = ActivityContextValue.Provider;
 
-export function useActivityDeps(): ActivityDeps {
-  return useContext(ActivityDepsContext) ?? appActivityDeps();
+export function useActivityContext(): ActivityContext {
+  return useContext(ActivityContextValue) ?? appActivityContext();
 }
 
-function appActivityDeps(): ActivityDeps {
+function appActivityContext(): ActivityContext {
   const userId = useUserId();
   return {
     graphql: () => getGraphqlSoupClient(),

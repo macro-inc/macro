@@ -1,7 +1,7 @@
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { Show } from 'solid-js';
-import type { EntityDisplay } from '../deps';
+import type { EntityDisplay } from '../context/activity-context';
 
 /**
  * An activity row's entity reference rendered as a real document mention —

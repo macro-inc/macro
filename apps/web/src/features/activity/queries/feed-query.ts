@@ -5,8 +5,8 @@ import {
   type MyActivityQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
 import type { Accessor } from 'solid-js';
+import type { ActivityContext } from '../context/activity-context';
 import type { ActivityEvent } from '../core/event';
-import type { ActivityDeps } from '../deps';
 import { decodeActivityEvent } from './decode';
 
 /** Rows fetched per feed page. */
@@ -17,7 +17,7 @@ export const ACTIVITY_FEED_PAGE_LIMIT = 50;
  * Pages chase the server's opaque keyset cursor until it comes back null.
  */
 export function createMyActivityQuery(
-  deps: Pick<ActivityDeps, 'graphql'>,
+  context: Pick<ActivityContext, 'graphql'>,
   options: { enabled: Accessor<boolean> }
 ) {
   return createUrqlInfiniteQuery<
@@ -27,7 +27,7 @@ export function createMyActivityQuery(
     ActivityEvent[]
   >(() => ({
     query: MyActivityDocument,
-    client: deps.graphql(),
+    client: context.graphql(),
     initialPageParam: null,
     variables: (cursor) => ({
       input: { limit: ACTIVITY_FEED_PAGE_LIMIT, cursor },

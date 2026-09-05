@@ -1,7 +1,11 @@
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { type Accessor, createMemo, type JSX } from 'solid-js';
+import type {
+  ActivityContext,
+  EntityDisplay,
+  OpenEntityTarget,
+} from '../context/activity-context';
 import { type ActivityEntityType, toPropertyEntityType } from '../core/event';
-import type { ActivityDeps, EntityDisplay, OpenEntityTarget } from '../deps';
 
 export type EntityOpener = {
   display: EntityDisplay;
@@ -18,7 +22,7 @@ export type EntityOpener = {
  * new split). Undefined for entity kinds the app cannot link to.
  */
 export function createEntityOpener(
-  deps: Pick<ActivityDeps, 'entityDisplay'>,
+  context: Pick<ActivityContext, 'entityDisplay'>,
   entityId: Accessor<string>,
   entityType: Accessor<ActivityEntityType>,
   onOpen: ((target: OpenEntityTarget) => void) | undefined
@@ -26,7 +30,7 @@ export function createEntityOpener(
   return createMemo(() => {
     const type = toPropertyEntityType(entityType());
     if (!type) return undefined;
-    const display = deps.entityDisplay(entityId, () => type);
+    const display = context.entityDisplay(entityId, () => type);
     if (!onOpen) return { display };
     const handlers = useSplitNavigationHandler<HTMLDivElement>((event) => {
       const block = display.blockOrFileType();
