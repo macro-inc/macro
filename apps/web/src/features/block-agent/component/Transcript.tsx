@@ -202,9 +202,9 @@ export function Transcript() {
               }}
             >
               {(message) => (
-                // Half-pane on desktop so expanding the side panel does
-                // not yank a max-w-3xl column. Mobile stays full-bleed.
-                <div class="w-full md:w-1/2 mx-auto px-4 pb-4 min-w-0">
+                // Always half the pane so expanding Context grows down,
+                // not out. Same width on phone and desktop.
+                <div class="w-1/2 mx-auto px-2 pb-4 min-w-0">
                   <Message message={message} />
                 </div>
               )}

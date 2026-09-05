@@ -61,7 +61,7 @@ function AgentMessagePart(props: {
 function UserMessage(props: { message: FoldedMessage }) {
   return (
     <div class="flex w-full">
-      <div class="relative ml-auto max-w-[calc(100%-8rem)] overflow-hidden rounded-lg border border-edge-muted bg-hover px-3 py-2 text-ink">
+      <div class="relative w-full overflow-hidden rounded-lg border border-edge-muted bg-hover px-3 py-2 text-ink">
         <For each={props.message.parts}>
           {(part, index) => (
             <AgentMessagePart
