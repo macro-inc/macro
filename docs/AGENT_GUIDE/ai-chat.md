@@ -56,8 +56,9 @@ transcript (and in the originating channel thread).
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. Tap the box to type; the model
-pill sits in the composer footer opposite send (not overlaid on the bar). Tap
-the session title
+pill sits in the composer on the same row as send (right of the text, not over
+the placeholder). Transcript messages stay at half pane width so expanding
+**Context** only grows vertically. Tap the session title
 to open the title menu (caret), then **Rename** — that opens the same style of
 rename dialog automations use. Do not expect a tap on the name itself to start
 an inline edit.

@@ -39,7 +39,7 @@ export interface AgentInputProps {
   /** Receives the composed markdown, including any `<m-document-mention>` tags. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
-  /** Model pill in the composer footer, opposite send. */
+  /** Model pill on the same row as send, after the editor. */
   modelControl?: JSX.Element;
   /**
    * Ref-style: receives the quote-insert function once the editor mounts
@@ -155,14 +155,19 @@ export function AgentInput(props: AgentInputProps) {
 
   return (
     <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
-      <Surface class="rounded-xl touch:rounded-3xl" depth={2} solid>
-        <div class="flex flex-col px-2 py-1.5" onPointerDown={focusEditor}>
+      {/* h-auto beats Surface's size-full so the in-flow controls are not
+          clipped over the editor (that was Auto sitting on the placeholder). */}
+      <Surface class="rounded-xl touch:rounded-3xl h-auto" depth={2} solid>
+        <div
+          class="flex items-end gap-1 px-2 py-1.5"
+          onPointerDown={focusEditor}
+        >
           {/* No vertical padding of its own: the shell is min-h-8 and editor
             paragraphs carry my-1.5, so the row's py-1.5 is the whole frame —
             the same 44px single-line height as ChatInput. */}
           <div
             ref={bodyRef}
-            class="pl-1 text-sm text-ink"
+            class="min-w-0 flex-1 pl-1 text-sm text-ink"
             classList={{
               // While empty only the placeholder renders; keep it to one clipped
               // line so it doesn't wrap into the single-line height.
@@ -182,48 +187,43 @@ export function AgentInput(props: AgentInputProps) {
             />
           </div>
 
-          {/* Channel / chat-tall: model and send live in the bar, not
-              absolutely over the editor or the mobile dock. */}
-          <div class="flex items-center justify-between gap-1 pt-0.5">
-            <div class="min-w-0">
-              <Show when={props.modelControl}>{props.modelControl}</Show>
-            </div>
-            <div class="shrink-0">
+          {/* In-flow next to the editor — never absolute over the text. */}
+          <div class="flex shrink-0 items-center gap-1 pb-0.5">
+            <Show when={props.modelControl}>{props.modelControl}</Show>
+            <Show
+              when={props.busy && props.onStop}
+              fallback={
+                <SendButton
+                  tooltip="Send"
+                  disabled={!canSend()}
+                  onClick={send}
+                />
+              }
+            >
               <Show
-                when={props.busy && props.onStop}
+                when={canSendNext()}
                 fallback={
-                  <SendButton
-                    tooltip="Send"
-                    disabled={!canSend()}
-                    onClick={send}
-                  />
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    label="Stop"
+                    onClick={() => props.onStop?.()}
+                    class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+                  >
+                    <div class="size-3.5 rounded-sm bg-current" />
+                  </Button>
                 }
               >
-                <Show
-                  when={canSendNext()}
-                  fallback={
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      label="Stop"
-                      onClick={() => props.onStop?.()}
-                      class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
-                    >
-                      <div class="size-3.5 rounded-sm bg-current" />
-                    </Button>
-                  }
+                <SendButton
+                  aria-label="Send next queued message"
+                  tooltip="Send next queued message"
+                  shortcut="Enter"
+                  onClick={sendNext}
                 >
-                  <SendButton
-                    aria-label="Send next queued message"
-                    tooltip="Send next queued message"
-                    shortcut="Enter"
-                    onClick={sendNext}
-                  >
-                    <EnterIcon />
-                  </SendButton>
-                </Show>
+                  <EnterIcon />
+                </SendButton>
               </Show>
-            </div>
+            </Show>
           </div>
         </div>
       </Surface>
