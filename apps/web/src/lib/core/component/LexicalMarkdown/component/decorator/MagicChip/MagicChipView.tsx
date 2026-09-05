@@ -3,17 +3,17 @@ import {
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
-import { type Component, Match, Show, Switch } from 'solid-js';
+import {
+  type Component,
+  createEffect,
+  Match,
+  on,
+  onCleanup,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import type { MagicChipActivity, MagicChipPresentation } from './presentation';
-
-/**
- * Keep the chip inside the message column. A default grid track sizes to
- * min-content, so a streaming thought, path, or unbreakable token can grow
- * the chip past the chat edge — the reply is still in the DOM, just off
- * screen, which looks like the agent never answered.
- */
-const CHIP_BOUNDS = 'w-full min-w-0 max-w-full overflow-x-hidden';
-const CHIP_STACK = `grid ${CHIP_BOUNDS} grid-cols-[minmax(0,1fr)] gap-1`;
 
 function working(presentation: MagicChipPresentation) {
   return presentation.kind === 'working' ? presentation : undefined;
@@ -35,7 +35,7 @@ const ActivityLine: Component<{
 }> = (props) => (
   <button
     type="button"
-    class={`flex h-6 ${CHIP_BOUNDS} items-center gap-2 text-left`}
+    class="flex h-6 w-full min-w-0 items-center gap-2 text-left"
     data-magic-chip={props.agentSessionId}
     data-message-reply-preview={`${props.activity.label}${
       props.activity.detail ? ` ${props.activity.detail}` : ''
@@ -56,7 +56,7 @@ const ActivityLine: Component<{
     </span>
     <Show when={props.activity.detail}>
       {(detail) => (
-        <span class="min-w-0 flex-1 truncate text-xs text-ink-extra-muted">
+        <span class="min-w-0 truncate text-xs text-ink-extra-muted">
           {detail()}
         </span>
       )}
@@ -64,17 +64,60 @@ const ActivityLine: Component<{
   </button>
 );
 
-/** The response, quoted as if the agent had answered inline. */
-const AnswerBody: Component<{ markdown: string }> = (props) => (
-  <div
-    class={`${CHIP_BOUNDS} wrap-break-word border-l-2 border-accent pl-3 text-left text-sm leading-6`}
-    data-message-reply-preview
-  >
-    <StaticMarkdownContext theme={channelTheme}>
-      <StaticMarkdown markdown={props.markdown} target="external" />
-    </StaticMarkdownContext>
-  </div>
-);
+function pinToBottom(el: HTMLElement) {
+  el.scrollTop = el.scrollHeight;
+}
+
+/**
+ * Quoted answer preview. Fixed height so the thread does not grow as the
+ * agent writes; the latest text stays in view, and a click opens the session.
+ */
+const AnswerBody: Component<{
+  markdown: string;
+  onOpen?: () => void;
+}> = (props) => {
+  let scroller: HTMLDivElement | undefined;
+
+  onMount(() => {
+    const el = scroller;
+    if (!el) return;
+    pinToBottom(el);
+    const inner = el.firstElementChild;
+    if (!inner || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => pinToBottom(el));
+    observer.observe(inner);
+    onCleanup(() => observer.disconnect());
+  });
+
+  createEffect(
+    on(
+      () => props.markdown,
+      () => {
+        const el = scroller;
+        if (el) pinToBottom(el);
+      }
+    )
+  );
+
+  return (
+    <div
+      ref={(el) => {
+        scroller = el;
+      }}
+      class="h-36 w-full min-w-0 max-w-full overflow-auto overscroll-contain border-l-2 border-accent pl-3 text-left text-sm leading-6"
+      data-magic-chip-preview
+      data-message-reply-preview
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={props.onOpen}
+    >
+      <div class="pointer-events-none min-w-0 max-w-full wrap-break-word">
+        <StaticMarkdownContext theme={channelTheme}>
+          <StaticMarkdown markdown={props.markdown} target="external" />
+        </StaticMarkdownContext>
+      </div>
+    </div>
+  );
+};
 
 /**
  * The answer as it is being written, with the activity line beneath it.
@@ -89,9 +132,12 @@ const StreamingAnswer: Component<{
   activity: MagicChipActivity;
   onOpen?: () => void;
 }> = (props) => (
-  <div class={CHIP_STACK} data-magic-chip={props.agentSessionId}>
-    <AnswerBody markdown={props.markdown} />
-    <div class={`${CHIP_BOUNDS} pl-3`}>
+  <div
+    class="grid w-full min-w-0 justify-items-start gap-1"
+    data-magic-chip={props.agentSessionId}
+  >
+    <AnswerBody markdown={props.markdown} onOpen={props.onOpen} />
+    <div class="w-full pl-3">
       <ActivityLine
         agentSessionId={props.agentSessionId}
         activity={props.activity}
@@ -107,8 +153,11 @@ const SettledAnswer: Component<{
   markdown: string;
   onOpen?: () => void;
 }> = (props) => (
-  <div class={CHIP_STACK} data-magic-chip={props.agentSessionId}>
-    <AnswerBody markdown={props.markdown} />
+  <div
+    class="grid w-full min-w-0 justify-items-start gap-1"
+    data-magic-chip={props.agentSessionId}
+  >
+    <AnswerBody markdown={props.markdown} onOpen={props.onOpen} />
     <button
       type="button"
       class="pl-3.5 mb-2 text-xs text-ink-extra-muted hover:text-ink"

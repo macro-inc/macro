@@ -2,69 +2,110 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen } from '@solidjs/testing-library';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MagicChipView } from './MagicChipView';
 
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
   () => ({
     StaticMarkdownContext: (props: { children: unknown }) => props.children,
-    StaticMarkdown: (props: { markdown: string }) => <p>{props.markdown}</p>,
+    StaticMarkdown: (props: { markdown: string }) => (
+      <div data-testid="chip-markdown">{props.markdown}</div>
+    ),
   })
 );
 
-import { MagicChipView } from './MagicChipView';
+vi.mock('@core/component/LexicalMarkdown/theme', () => ({
+  channelTheme: {},
+}));
 
-const LONG_PATH =
-  '/home/ubuntu/.cursor/projects/workspace/terminals/261831.txt'.repeat(8);
+afterEach(cleanup);
 
 describe('MagicChipView', () => {
-  it('keeps a streaming thought inside the message column', () => {
+  it('keeps working state as a single activity line', () => {
     const { container } = render(() => (
-      <div style={{ width: '320px' }}>
-        <MagicChipView
-          agentSessionId="session-1"
-          presentation={{
-            kind: 'working',
-            activity: {
-              label: 'Thinking',
-              detail: LONG_PATH,
-              busy: true,
-            },
-          }}
-        />
-      </div>
+      <MagicChipView
+        agentSessionId="session"
+        presentation={{
+          kind: 'working',
+          activity: { label: 'Booting agent', busy: true },
+        }}
+      />
     ));
 
-    const chip = container.querySelector('[data-magic-chip="session-1"]');
-    expect(chip?.className).toContain('min-w-0');
-    expect(chip?.className).toContain('max-w-full');
-    expect(chip?.className).toContain('overflow-x-hidden');
-    expect(screen.getByText('Thinking')).toBeTruthy();
-    expect(screen.getByText(LONG_PATH).className).toContain('truncate');
+    expect(container.querySelector('[data-magic-chip-preview]')).toBeNull();
+    expect(container.textContent).toContain('Booting agent');
   });
 
-  it('keeps a streaming answer inside the message column', () => {
+  it('caps the answering preview and opens the session on click', () => {
+    const onOpen = vi.fn();
     const { container } = render(() => (
-      <div style={{ width: '320px' }}>
-        <MagicChipView
-          agentSessionId="session-2"
-          presentation={{
-            kind: 'answering',
-            markdown: `Inspecting \`${LONG_PATH}\``,
-            activity: {
-              label: 'Reading files',
-              detail: LONG_PATH,
-              busy: true,
-            },
-          }}
-        />
-      </div>
+      <MagicChipView
+        agentSessionId="session"
+        presentation={{
+          kind: 'answering',
+          markdown: 'Hello from the agent',
+          activity: { label: 'Writing response', busy: false },
+        }}
+        onOpen={onOpen}
+      />
     ));
 
-    const chip = container.querySelector('[data-magic-chip="session-2"]');
-    expect(chip?.className).toContain('grid-cols-[minmax(0,1fr)]');
-    expect(chip?.className).toContain('overflow-x-hidden');
-    expect(screen.getByText('Reading files')).toBeTruthy();
+    const preview = container.querySelector('[data-magic-chip-preview]');
+    expect(preview).toBeTruthy();
+    expect(preview?.className).toContain('h-36');
+    expect(preview?.className).toContain('overflow-auto');
+    expect(container.textContent).toContain('Hello from the agent');
+    expect(container.textContent).toContain('Writing response');
+
+    fireEvent.click(preview!);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the settled preview the same height and clickable', () => {
+    const onOpen = vi.fn();
+    const { container } = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={{
+          kind: 'settled',
+          markdown: 'All done',
+        }}
+        onOpen={onOpen}
+      />
+    ));
+
+    const preview = container.querySelector('[data-magic-chip-preview]');
+    expect(preview?.className).toContain('h-36');
+    fireEvent.click(preview!);
+    expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('pins the preview to the bottom as the answer grows', () => {
+    const [markdown, setMarkdown] = createSignal('first');
+    const { container } = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={{
+          kind: 'answering',
+          markdown: markdown(),
+          activity: { label: 'Writing response', busy: true },
+        }}
+      />
+    ));
+
+    const preview = container.querySelector(
+      '[data-magic-chip-preview]'
+    ) as HTMLDivElement;
+    Object.defineProperty(preview, 'scrollHeight', {
+      configurable: true,
+      get: () => 400,
+    });
+    preview.scrollTop = 0;
+
+    setMarkdown('first\n\nsecond paragraph of the answer');
+    expect(preview.scrollTop).toBe(400);
   });
 });
