@@ -11,7 +11,11 @@
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
-`Create` → `Coding Agent A`, or keyboard `c` then `a`.
+`Create` → `Coding Agent A`, or keyboard `c` then `a`, opens the agent-session
+composer. Enter an optional first request, choose a **Persona**, and optionally
+choose a **Model override** (the default leaves the persona's configured model
+unchanged). Press **Create Session** or `Cmd/Ctrl+Enter`; the composer closes and
+the new `/app/agent/<uuid>` session opens while its runtime starts.
 
 ## Start a doc-scoped chat
 

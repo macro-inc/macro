@@ -1,4 +1,3 @@
-import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -411,23 +410,12 @@ export function runCreateAction(
       setCreateMenuOpen(false, false);
       openStandaloneReminderComposer();
       return;
-    // Nothing to ask for: a managed session's bot, repository and workspace
-    // are all deployment configuration, so this opens one straight away.
-    //
-    // Opened against a placeholder rather than awaited: the create does not
-    // answer until its sandbox has booted and cloned the repo, and no one
-    // should watch a spinner for that. The block mounts now — composer live,
-    // prompts queueing — and adopts the real id when it lands
-    // (`block-agent/context/pending-session.ts`).
-    case 'agent': {
-      const { openWithSplit } = useSplitLayout();
-      setCreateMenuOpen(false, false);
-      openWithSplit(
-        { type: 'agent', id: startPendingSession() },
-        { referredFrom: 'launcher', preferNewSplit: shouldInsert }
-      );
+    case 'agent':
+      createComponent({
+        componentId: 'agent-session-compose',
+        asPopover: true,
+      });
       return;
-    }
   }
 }
 
