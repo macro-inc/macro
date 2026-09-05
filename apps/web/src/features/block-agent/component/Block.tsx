@@ -63,7 +63,9 @@ function AgentBlockContent() {
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}
               <FloatRegionOrInline region="accessory">
-                <div class="flex w-full justify-center shrink-0 px-4 pb-4 touch:px-(--mobile-chrome-gutter) touch:pb-0 touch:pointer-events-auto">
+                {/* Home/chat: re-enable pointer events on the accessory
+                    contribution — the float host is pointer-transparent. */}
+                <div class="flex w-full justify-center shrink-0 px-4 pb-4 pointer-events-auto touch:px-(--mobile-chrome-gutter) touch:pb-0">
                   <div class="w-full max-w-3xl">
                     <AgentComposer />
                   </div>

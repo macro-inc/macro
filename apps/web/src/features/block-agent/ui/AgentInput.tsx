@@ -11,6 +11,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
 import { isMobile } from '@core/mobile/isMobile';
+import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
 import { Button, SendButton, Surface } from '@ui';
@@ -63,7 +64,9 @@ const SINGLE_LINE_HEIGHT = 40;
 
 export function AgentInput(props: AgentInputProps) {
   const [markdown, setMarkdown] = createSignal('');
+  let containerRef: HTMLDivElement | undefined;
   let bodyRef: HTMLDivElement | undefined;
+  useTouchOutsideToDismissKeyboard(() => containerRef);
 
   // Sending while busy is allowed — the service queues prompts behind the
   // running turn.
@@ -139,16 +142,21 @@ export function AgentInput(props: AgentInputProps) {
     onCleanup(() => props.registerQuoteInsert?.(undefined));
   });
 
+  // MarkdownShell only focuses on click when !isMobile(), so padding taps
+  // on a phone miss the empty contenteditable. Focus from this gesture
+  // (channel EditorShell / chat surface) so the whole box is tappable,
+  // including on touch — pointerdown stays inside the user gesture that
+  // iOS needs to raise the keyboard.
+  const focusEditor = (event: Event) => {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('button')) return;
+    editor.controls.focus();
+  };
+
   return (
-    <div class="flex flex-col gap-1.5">
-      {/* Above the surface rather than inside it: the pill belongs to the
-          composer, not to the outlined field, so it must not eat into the
-          editor's frame or sit within its border. */}
-      <Show when={props.modelControl}>
-        <div class="flex items-center px-0.5">{props.modelControl}</div>
-      </Show>
+    <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
       <Surface class="rounded-xl touch:rounded-3xl" depth={2} solid>
-        <div class="relative px-2 py-1.5">
+        <div class="relative px-2 py-1.5" onPointerDown={focusEditor}>
           {/* No vertical padding of its own: the shell is min-h-8 and editor
             paragraphs carry my-1.5, so the row's py-1.5 is the whole frame —
             the same 44px single-line height as ChatInput. */}
@@ -156,8 +164,10 @@ export function AgentInput(props: AgentInputProps) {
             ref={bodyRef}
             class="pl-1 text-sm text-ink"
             classList={{
-              'pr-10': !isMultiline(),
-              'pb-8': isMultiline(),
+              // Room for model + send on one line (chat's right-controls inset).
+              'pr-28': !isMultiline() && !!props.modelControl,
+              'pr-10': !isMultiline() && !props.modelControl,
+              'pb-10': isMultiline(),
               // While empty only the placeholder renders; keep it to one clipped
               // line so it doesn't wrap into the single-line height.
               'overflow-hidden whitespace-nowrap':
@@ -176,7 +186,8 @@ export function AgentInput(props: AgentInputProps) {
             />
           </div>
 
-          <div class="absolute right-1.5 bottom-1.5">
+          <div class="absolute right-1.5 bottom-1.5 flex items-center gap-1">
+            <Show when={props.modelControl}>{props.modelControl}</Show>
             <Show
               when={props.busy && props.onStop}
               fallback={

@@ -55,9 +55,11 @@ transcript (and in the originating channel thread).
 
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
-stays tappable and clear of the home indicator. Tap the session title to open
-the title menu (caret), then **Rename**; do not expect a tap on the name itself
-to start an inline edit. Desktop still double-clicks the title to rename.
+stays tappable and clear of the home indicator. Tap the box to type; the model
+pill sits inside the composer next to send, like AI chat. Tap the session title
+to open the title menu (caret), then **Rename** — that opens the same style of
+rename dialog automations use. Do not expect a tap on the name itself to start
+an inline edit.
 
 - Sending is never blocked by a running turn. A prompt sent mid-turn is queued
   **server-side** and dispatches automatically when the current turn ends, one per turn.
