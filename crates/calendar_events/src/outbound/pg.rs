@@ -1672,22 +1672,22 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
-        for event_id in &reranked_event_ids {
-            if let Some(outcome) = restore_best_source_or_delete(&mut tx, *event_id).await? {
+        for event_id in reranked_event_ids {
+            if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
                 retired.push(outcome);
             }
         }
-        let reranked: HashSet<Uuid> = reranked_event_ids.into_iter().collect();
         retired.extend(
             refreshed_events
                 .into_iter()
-                .filter(|row| !reranked.contains(&row.id))
                 .map(|row| RetiredCalendarEvent {
                     event_id: row.id,
                     owner_id: row.owner_id,
                     deleted: false,
                 }),
         );
+        let mut announced = HashSet::new();
+        retired.retain(|outcome| announced.insert(outcome.event_id));
 
         tx.commit().await.map_err(report)?;
         Ok(retired)

@@ -5719,6 +5719,23 @@ async fn a_calendar_role_change_moves_the_entity_to_the_new_canonical_copy_on_re
         .await
         .unwrap();
     let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let dropped_calendar_id = repo
+        .upsert_calendar_fixture(
+            account_id,
+            ProviderCalendar {
+                provider_calendar_id: "c_third@group.calendar.google.com".to_string(),
+                name: "Team".to_string(),
+                description: None,
+                time_zone: Some("UTC".to_string()),
+                color: None,
+                access_role: Some("reader".to_string()),
+                is_primary: false,
+                is_selected: true,
+                default_reminders: Vec::new(),
+            },
+        )
+        .await
+        .unwrap();
     let uid = "projects@example.com";
     let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
 
@@ -5742,6 +5759,15 @@ async fn a_calendar_role_change_moves_the_entity_to_the_new_canonical_copy_on_re
     );
     reader_copy.event.title = "[teo] Planning".to_string();
     repo.upsert_event_fixture(reader_copy).await.unwrap();
+    repo.upsert_event_fixture(shared_copy_upsert(
+        member,
+        link_id,
+        (account_id, dropped_calendar_id),
+        uid,
+        starts_at,
+    ))
+    .await
+    .unwrap();
     assert_eq!(entity_content(&pool, event_id).await.title, "Planning");
 
     sqlx::query!(
@@ -5751,18 +5777,27 @@ async fn a_calendar_role_change_moves_the_entity_to_the_new_canonical_copy_on_re
     .execute(&pool)
     .await
     .unwrap();
-    repo.reconcile_google_calendar_list(
-        key,
-        lease_token,
-        account_id,
-        vec![
-            primary_calendar_id,
-            secondary_calendar_id,
-            shared_calendar_id,
-        ],
-    )
-    .await
-    .unwrap();
+    let announced = repo
+        .reconcile_google_calendar_list(
+            key,
+            lease_token,
+            account_id,
+            vec![
+                primary_calendar_id,
+                secondary_calendar_id,
+                shared_calendar_id,
+            ],
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        announced
+            .iter()
+            .map(|outcome| (outcome.event_id, outcome.deleted))
+            .collect::<Vec<_>>(),
+        vec![(event_id, false)],
+        "losing a copy and unlocking another announce the event once"
+    );
 
     let content = entity_content(&pool, event_id).await;
     assert_eq!(
