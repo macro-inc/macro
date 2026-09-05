@@ -13,7 +13,8 @@ import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { useMutation } from '@tanstack/solid-query';
-import { calendarKeys } from './keys';
+import { calendarKeys, RSVP_MUTATION_KEY } from './keys';
+import { invalidateCalendarEventPreviews } from './mention-preview';
 import {
   type CalendarOccurrencesData,
   invalidateCalendarOccurrences,
@@ -99,8 +100,6 @@ type RsvpCallbacks = MutationCallbacks<
   RsvpCalendarEventArgs,
   RsvpMutationContext
 >;
-
-const RSVP_MUTATION_KEY = ['calendar', 'rsvp'] as const;
 
 type RsvpMutationContext = CalendarMutationContext & {
   /** Drops this mutation's writer stamps once it has settled. */
@@ -249,11 +248,12 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
           };
         },
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: (_data, _error, _args, context) => {
+        onSettled: (_data, _error, args, context) => {
           context?.release();
           if (queryClient.isMutating({ mutationKey: RSVP_MUTATION_KEY }) > 1) {
             return;
           }
+          invalidateCalendarEventPreviews(args.eventId);
           return invalidateCalendarOccurrences();
         },
       },
@@ -317,7 +317,10 @@ export function useDeleteCalendarEventMutation(callbacks?: DeleteCallbacks) {
             items.filter((item) => survivesDeletion(item, args))
           ),
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: () => invalidateCalendarOccurrences(),
+        onSettled: (_data, _error, args) => {
+          invalidateCalendarEventPreviews(args.eventId);
+          return invalidateCalendarOccurrences();
+        },
       },
       callbacks
     ),
@@ -394,7 +397,10 @@ export function useUpdateCalendarEventMutation(callbacks?: UpdateCallbacks) {
             )
           ),
         onError: (_error, _args, context) => context?.rollback(),
-        onSettled: () => invalidateCalendarOccurrences(),
+        onSettled: (_data, _error, args) => {
+          invalidateCalendarEventPreviews(args.eventId);
+          return invalidateCalendarOccurrences();
+        },
       },
       callbacks
     ),

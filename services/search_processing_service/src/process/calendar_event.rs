@@ -75,6 +75,7 @@ pub async fn upsert_calendar_event(
             &UpsertCalendarEventArgs {
                 event_id: event.id.to_string(),
                 title: event.title,
+                source_names: event.source_titles,
                 owner_id: event.owner_id,
                 source_link_id: event.source_link_id.to_string(),
                 ical_uid: event.ical_uid,

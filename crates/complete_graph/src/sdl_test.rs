@@ -73,6 +73,14 @@ fn soup_response_schema_exposes_frontend_fields() {
         "union SoupPatch = SoupUpdated | GraphqlCacheDeletion",
         "type GraphqlMutationSuccess {",
         "effects: [SoupPatch!]!",
+        "setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!",
+        "reorderFavorites(input: ReorderFavoritesInput!): [GraphqlFavorite!]!",
+        "input ReorderFavoritesInput {",
+        "favorites: [EntityRefInput!]!",
+        "type GraphqlFavorite {",
+        "entityType: GraphqlEntityType!",
+        "entityId: ID!",
+        "sortOrder: Float!",
         "recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!",
         "updateNotifications(input: UpdateNotificationsInput!): [GraphqlNotification!]!",
         "updateNotificationsForEntity(input: UpdateNotificationsForEntityInput!): [GraphqlNotification!]!",
@@ -188,6 +196,7 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "isFavorited",
         "viewerPermission",
         "frecencyScore",
+        "cacheProjection",
         "activity",
     ] {
         assert!(
@@ -195,6 +204,16 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
             "Soup interface missing shared field {shared_field}"
         );
     }
+    let cache_projection = entity
+        .fields
+        .get("cacheProjection")
+        .expect("Soup interface cache projection field exists");
+    assert!(
+        cache_projection.arguments.is_empty(),
+        "cacheProjection must remain argument-free"
+    );
+    assert_eq!(cache_projection.ty.to_string(), "SoupCacheProjection");
+
     assert!(
         !schema.types.contains_key("GraphqlSoupItem"),
         "soup items are entities directly; no query-scoped wrapper type"
@@ -216,11 +235,50 @@ fn soup_interface_exposes_the_complete_shared_entity_contract() {
         "viewerPermission",
         "properties",
         "notifications",
+        "cacheProjection",
         "activity",
     ] {
         assert!(
             document.fields.contains_key(shared_field),
             "Soup document missing shared field {shared_field}"
+        );
+    }
+    assert!(
+        !document.fields.contains_key("isEmailAttachment"),
+        "relation-backed projection facts must not become document business fields"
+    );
+
+    for name in [
+        "GraphqlSoupCalendarEvent",
+        "GraphqlSoupDocument",
+        "GraphqlSoupChat",
+        "GraphqlSoupProject",
+        "GraphqlSoupEmailThread",
+        "GraphqlSoupChannel",
+        "GraphqlSoupChannelMessage",
+        "GraphqlSoupCall",
+        "GraphqlSoupCrmCompany",
+        "GraphqlSoupForeignEntity",
+        "GraphqlSoupReminder",
+    ] {
+        let ExtendedType::Object(object) = schema.types.get(name).expect("Soup object exists")
+        else {
+            panic!("{name} must be an object");
+        };
+        assert!(
+            object.fields.contains_key("cacheProjection"),
+            "{name} must implement the shared cacheProjection field"
+        );
+    }
+
+    for name in ["SoupPage", "SoupUpdated"] {
+        let ExtendedType::Object(object) = schema.types.get(name).expect("Soup wrapper exists")
+        else {
+            panic!("{name} must be an object");
+        };
+        assert!(
+            !object.fields.contains_key("cacheProjection"),
+            "{name} must not carry entity projection metadata"
         );
     }
 }

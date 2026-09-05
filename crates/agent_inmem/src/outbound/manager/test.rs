@@ -40,7 +40,7 @@ async fn attach_retrying(
 ) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
-        let transport = manager.attach(facts.clone()).await;
+        let transport = manager.attach(facts.clone(), None).await;
         match sessions
             .attach_session(id, RuntimeAttachment::solo(transport))
             .await
@@ -86,7 +86,11 @@ fn owner() -> MacroUserIdStr<'static> {
 }
 
 fn manager(repo: &InMemoryAgentSessionRepo, engine: Arc<ScriptedEngine>) -> InMemAgentManager {
-    InMemAgentManager::new(engine, Arc::new(LogFrameSource::new(repo.clone())))
+    InMemAgentManager::new(
+        engine,
+        Arc::new(LogFrameSource::new(repo.clone())),
+        Arc::new(crate::domain::mcp::NoMcpServers),
+    )
 }
 
 fn facts(id: AgentSessionId) -> SessionFacts {
@@ -154,6 +158,7 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
             instructions: None,
+            mcp_servers: Default::default(),
             egress_token_hash: None,
         })
         .await
@@ -165,7 +170,7 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
             "streamed reply".to_owned(),
         )])),
     );
-    let transport = manager.attach(facts(id)).await;
+    let transport = manager.attach(facts(id), None).await;
     sessions
         .attach_session(id, RuntimeAttachment::solo(transport))
         .await
@@ -222,7 +227,7 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
     // disconnect-then-resume order the harness's deliver path drives.
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
-        let transport = manager.attach(facts(id)).await;
+        let transport = manager.attach(facts(id), None).await;
         match sessions
             .attach_session(id, RuntimeAttachment::solo(transport))
             .await
@@ -288,6 +293,7 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
             instructions: None,
+            mcp_servers: Default::default(),
             egress_token_hash: None,
         })
         .await
@@ -299,7 +305,7 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
             "streamed reply".to_owned(),
         )])),
     );
-    let transport = before.attach(facts(id)).await;
+    let transport = before.attach(facts(id), None).await;
     sessions
         .attach_session(id, RuntimeAttachment::solo(transport))
         .await
@@ -341,10 +347,13 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
     loop {
         let transport = after
-            .attach(SessionFacts {
-                acp_session_id: row.acp_session_id.clone(),
-                ..facts(id)
-            })
+            .attach(
+                SessionFacts {
+                    acp_session_id: row.acp_session_id.clone(),
+                    ..facts(id)
+                },
+                None,
+            )
             .await;
         match sessions
             .attach_session(id, RuntimeAttachment::solo(transport))
@@ -426,6 +435,7 @@ async fn instructions_reach_every_turn_including_after_a_reattach() {
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
             instructions: Some(INSTRUCTIONS.to_owned()),
+            mcp_servers: Default::default(),
             egress_token_hash: None,
         })
         .await
@@ -495,6 +505,7 @@ async fn a_session_without_instructions_hands_the_engine_none() {
             workspace: "/workspace".to_owned(),
             sandbox_size: agent_session::domain::model::SandboxSize::Default,
             instructions: None,
+            mcp_servers: Default::default(),
             egress_token_hash: None,
         })
         .await
@@ -504,7 +515,7 @@ async fn a_session_without_instructions_hands_the_engine_none() {
         "acknowledged".to_owned(),
     )]));
     let manager = manager(&repo, Arc::clone(&engine));
-    let transport = manager.attach(facts(id)).await;
+    let transport = manager.attach(facts(id), None).await;
     sessions
         .attach_session(id, RuntimeAttachment::solo(transport))
         .await
@@ -521,4 +532,26 @@ async fn a_session_without_instructions_hands_the_engine_none() {
     await_turns(&engine, "hello").await;
 
     assert_eq!(engine.requests()[0].instructions, None);
+}
+
+/// The egress token has no container environment to live in here, so the
+/// manager keeps what spawn handed it: a resume finds it, teardown forgets it.
+#[tokio::test]
+async fn the_manager_remembers_the_egress_token_from_spawn_until_teardown() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let manager = manager(&repo, Arc::new(ScriptedEngine::new(Vec::new())));
+    let id = AgentSessionId::new();
+    assert_eq!(manager.session_token(id), None);
+
+    let _spawned = manager
+        .attach(facts(id), Some("session-token".to_owned()))
+        .await;
+    assert_eq!(manager.session_token(id).as_deref(), Some("session-token"));
+
+    // A resume passes nothing and keeps what spawn stored.
+    let _resumed = manager.attach(facts(id), None).await;
+    assert_eq!(manager.session_token(id).as_deref(), Some("session-token"));
+
+    manager.teardown(id);
+    assert_eq!(manager.session_token(id), None);
 }

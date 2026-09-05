@@ -57,7 +57,6 @@ const tokenSections = [
     tokens: [
       'surface',
       'inset',
-      'lift',
       'page',
       'panel',
       'dialog',
@@ -541,13 +540,12 @@ function RampEditor(props: { tokens: readonly string[] }) {
           </div>
         </div>
         <Checkbox
-          as="label"
           checked={overwrite()}
           onChange={setOverwriteAll}
           class="flex items-center gap-2 text-xs text-ink-muted"
         >
           <Checkbox.Control />
-          <span>Overwrite custom stops</span>
+          <Checkbox.Label>Overwrite custom stops</Checkbox.Label>
         </Checkbox>
       </div>
 

@@ -1,6 +1,11 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getMacroApiToken, stack } from '../../packages/shared';
+import {
+  BASE_DOMAIN,
+  config,
+  getMacroApiToken,
+  stack,
+} from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
 import { ImageProxyService } from './image-proxy-service';
 
@@ -72,4 +77,6 @@ const imageProxyService = new ImageProxyService(
 
 export const imageProxyServiceSgId = imageProxyService.serviceSg.id;
 export const imageProxyServiceAlbSgId = imageProxyService.serviceAlbSg.id;
-export const imageProxyServiceUrl = pulumi.interpolate`${imageProxyService.domain}`;
+export const imageProxyServiceUrl = `https://${
+  stack === 'prod' ? '' : `${stack}-`
+}gateway.${BASE_DOMAIN}/image-proxy`;

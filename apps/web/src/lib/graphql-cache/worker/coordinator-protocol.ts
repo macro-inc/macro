@@ -128,6 +128,11 @@ export type CoordinatorToTabEnvelope =
       coordinatorVersion: 2;
       kind: 'protocol-error';
       error: string;
+    }
+  | {
+      coordinatorVersion: 2;
+      kind: 'terminal-error';
+      error: string;
     };
 
 export type PageToEngineEnvelope = {
@@ -430,6 +435,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'id',
           'kind',
           'originOpId',
+          'uuid',
           'query',
           'operationName',
           'variables',
@@ -442,6 +448,7 @@ export function isCacheRequest(value: unknown): value is CacheRequest {
           'leaseExpiresAtMs',
         ]) &&
         isOptionalString(value.originOpId) &&
+        isString(value.uuid) &&
         isString(value.query) &&
         isOptionalString(value.operationName) &&
         isOptionalRecord(value.variables) &&
@@ -795,6 +802,7 @@ export function validateCoordinatorToTabEnvelope(
       }
       break;
     case 'protocol-error':
+    case 'terminal-error':
       if (
         hasOnlyKeys(value, ['coordinatorVersion', 'kind', 'error']) &&
         isNonEmptyString(value.error)

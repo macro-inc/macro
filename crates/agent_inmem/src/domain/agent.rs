@@ -15,12 +15,12 @@ use std::time::Duration;
 use agent::types::{AssistantMessagePart, ChatMessage};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, InitializeRequest,
-    InitializeResponse, NewSessionRequest, NewSessionResponse, PromptRequest, PromptResponse,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionId,
-    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, StopReason, ToolCall as AcpToolCall, ToolCallStatus,
-    ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, Implementation,
+    InitializeRequest, InitializeResponse, Meta, NewSessionRequest, NewSessionResponse,
+    PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
+    SessionCapabilities, SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
+    ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
@@ -31,7 +31,10 @@ use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
+use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
+use agent_client_protocol::schema::v1::McpServer as AcpMcpServer;
+use mcp_toolset::RemoteMcpToolSet;
 
 #[cfg(test)]
 mod test;
@@ -39,6 +42,17 @@ mod test;
 /// A turn that produces nothing for this long is treated as hung and
 /// cancelled, so it cannot wedge the session's turn lock forever.
 const TURN_IDLE_TIMEOUT: Duration = Duration::from_secs(5 * 60);
+
+/// What this agent calls itself in the `initialize` response. The fold
+/// recognizes the harness by this name, so it is a contract, not a label.
+pub const AGENT_NAME: &str = "macro-inmem";
+
+/// The `_meta` namespace this agent writes its own keys under, mirroring
+/// Claude Code's `claudeCode` layout so the fold reads both the same way.
+pub const META_NAMESPACE: &str = "macro";
+
+/// The one tool in the Macro toolset that delegates to another agent.
+const SUBAGENT_TOOL: &str = "Subagent";
 
 /// What one turn reads out of its session's state before running.
 struct TurnInput {
@@ -66,9 +80,33 @@ pub struct AgentState {
     /// Serializes turns: the client may queue prompts, the engine runs one at
     /// a time.
     pub turn_lock: tokio::sync::Mutex<()>,
+    /// Dials the MCP servers `session/new` and `session/resume` hand over.
+    pub mcp: Arc<dyn DynMcpToolConnector>,
+    /// The tools of those servers, once dialed; `None` until then or when
+    /// there were none.
+    pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
 }
 
 impl AgentState {
+    /// Dial the servers a session request carried and keep their tools for
+    /// every turn that follows. Done at `session/new`/`session/resume`, the
+    /// same moment a sandboxed harness connects its servers, so the first
+    /// turn already has them.
+    async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
+        let tools = self.mcp.connect_dyn(dialable_servers(servers)).await;
+        *self
+            .mcp_tools
+            .lock()
+            .expect("mcp tools lock should not be poisoned") = tools;
+    }
+
+    fn current_mcp_tools(&self) -> Option<RemoteMcpToolSet> {
+        self.mcp_tools
+            .lock()
+            .expect("mcp tools lock should not be poisoned")
+            .clone()
+    }
+
     fn expect_session(&self, requested: &SessionId) -> Result<(), AcpError> {
         let matches = self
             .store
@@ -161,11 +199,11 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
         .on_receive_request(
             async move |request: InitializeRequest, responder, _connection| {
                 responder.respond(
-                    InitializeResponse::new(request.protocol_version).agent_capabilities(
-                        AgentCapabilities::new().session_capabilities(
+                    InitializeResponse::new(request.protocol_version)
+                        .agent_capabilities(AgentCapabilities::new().session_capabilities(
                             SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
-                        ),
-                    ),
+                        ))
+                        .agent_info(Implementation::new(AGENT_NAME, env!("CARGO_PKG_VERSION"))),
                 )
             },
             agent_client_protocol::on_receive_request!(),
@@ -173,10 +211,11 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
         .on_receive_request(
             {
                 let state = Arc::clone(&state);
-                async move |_request: NewSessionRequest, responder, _connection| {
+                async move |request: NewSessionRequest, responder, _connection| {
                     let state = Arc::clone(&state);
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
+                    state.connect_mcp(request.mcp_servers).await;
                     responder.respond(NewSessionResponse::new(acp_id))
                 }
             },
@@ -192,6 +231,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     // attach replayed the frame log back into it (see
                     // `domain::replay`).
                     state.bind_acp_session(request.session_id, true);
+                    state.connect_mcp(request.mcp_servers).await;
                     responder.respond(ResumeSessionResponse::new())
                 }
             },
@@ -299,11 +339,13 @@ async fn run_turn(
         model,
         instructions,
         messages,
+        mcp_tools: state.current_mcp_tools(),
         cancel: cancel.clone(),
     });
 
     let mut accumulator = StreamAccumulator::new();
     let mut failure = None;
+    let mut was_cancelled = false;
     loop {
         match tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()).await {
             Ok(Some(Ok(part))) => {
@@ -318,7 +360,11 @@ async fn run_turn(
                 accumulator.push(part);
             }
             Ok(Some(Err(error))) => {
-                failure = Some(error.to_string());
+                if error.was_cancelled() {
+                    was_cancelled = true;
+                } else {
+                    failure = Some(error.to_string());
+                }
                 break;
             }
             Ok(None) => break,
@@ -353,7 +399,7 @@ async fn run_turn(
     }
     state.push_turn(prompt, turn_parts);
 
-    if cancel.is_cancelled() {
+    if was_cancelled || cancel.is_cancelled() {
         StopReason::Cancelled
     } else {
         StopReason::EndTurn
@@ -379,7 +425,8 @@ fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
                 AcpToolCall::new(call.id.clone(), title)
                     .kind(tool_kind(&call.name))
                     .status(ToolCallStatus::InProgress)
-                    .raw_input(call.json.clone()),
+                    .raw_input(call.json.clone())
+                    .meta(tool_call_meta(call)),
             ))
         }
         StreamPart::ToolResponse(ToolResponse::Json { id, json, .. }) => {
@@ -401,6 +448,25 @@ fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
         // Recorded by the loop's usage recorder; nothing to render.
         StreamPart::Usage(_) => None,
     }
+}
+
+/// The `_meta` this agent stamps on a tool call so the fold can read it by
+/// name rather than guess from the title: `macro.toolName` (an MCP tool as
+/// `mcp__<server>__<tool>`, the convention Claude Code set) and
+/// `macro.subagent` on a delegation.
+fn tool_call_meta(call: &agent::ToolCall) -> Meta {
+    let tool_name = match &call.mcp {
+        Some(mcp) => format!("mcp__{}__{}", mcp.service, mcp.tool_name),
+        None => call.name.clone(),
+    };
+    let mut ours = serde_json::Map::new();
+    ours.insert("toolName".to_owned(), serde_json::Value::String(tool_name));
+    if call.mcp.is_none() && call.name == SUBAGENT_TOOL {
+        ours.insert("subagent".to_owned(), serde_json::Value::Bool(true));
+    }
+    let mut meta = Meta::new();
+    meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
+    meta
 }
 
 /// A coarse [`ToolKind`] for a Macro tool name, for client iconography only.

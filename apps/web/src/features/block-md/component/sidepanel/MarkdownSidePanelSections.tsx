@@ -24,7 +24,8 @@ import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  ENABLE_HISTORY_COMPONENT,
+  enableHistoryComponent,
+  isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
@@ -123,7 +124,7 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
-      <Show when={ENABLE_HISTORY_COMPONENT()}>
+      <Show when={isFeatureEnabled(enableHistoryComponent)}>
         <SidePanel.Section id="history" title="History" order={35}>
           <HistorySectionContent />
         </SidePanel.Section>

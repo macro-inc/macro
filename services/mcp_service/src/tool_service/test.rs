@@ -109,7 +109,7 @@ async fn empty_toolset_lists_no_tools() {
 /// newly added tool can't quietly regress the submission.
 #[test]
 fn every_exposed_tool_meets_directory_requirements() {
-    let tools = ai_tools::mcp_tools();
+    let tools = ai_tools::tools_for(ai_tools::AiHost::Mcp);
     assert!(
         !tools.toolset.tools.is_empty(),
         "the MCP toolset should not be empty"

@@ -80,8 +80,6 @@ export async function acquireAgentSessionFold(args: {
     references: 0,
   };
   state.references += 1;
-  if (onChange) state.foldedSinks.add(onChange);
-  if (onMetadata) state.metadataSinks.add(onMetadata);
   sessions.set(agentSessionId, state);
 
   let released = false;
@@ -100,6 +98,14 @@ export async function acquireAgentSessionFold(args: {
     const snapshot = await sessionMessages(agentSessionId);
     const bot = state.bot;
     if (!bot) throw new Error(`agent session ${agentSessionId} has no bot`);
+
+    // Add sinks after getting the initial snapshot to avoid duplicate
+    // notifications: buffered entries replayed during opening would otherwise
+    // notify the sinks, and then the caller would also process the snapshot
+    // (which includes those same messages).
+    if (onChange) state.foldedSinks.add(onChange);
+    if (onMetadata) state.metadataSinks.add(onMetadata);
+
     return {
       bot,
       messages: snapshot.messages,

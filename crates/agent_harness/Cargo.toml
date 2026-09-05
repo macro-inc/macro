@@ -19,6 +19,7 @@ anyhow = { workspace = true }
 axum = { workspace = true, features = ["ws"] }
 base64 = { workspace = true }
 bot_id = { path = "../bot_id" }
+harness_id = { path = "../harness_id" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
 channels = { path = "../channels", features = ["ports"] }
@@ -33,7 +34,9 @@ macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+opentelemetry = { workspace = true, features = ["trace"] }
 reqwest = { workspace = true }
+redis = { workspace = true, features = ["aio", "tokio-comp"] }
 rootcause = { workspace = true }
 rustls = { workspace = true }
 serde = { workspace = true }
@@ -50,6 +53,7 @@ tokio = { workspace = true, features = [
 tokio-util = { workspace = true, features = ["rt"] }
 tokio-tungstenite = { workspace = true }
 tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true }
 url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
@@ -57,4 +61,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
+harness_id = { path = "../harness_id", features = ["test-utils"] }
 mockall = { workspace = true }
+model_user = { path = "../model_user" }

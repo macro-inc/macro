@@ -3,9 +3,9 @@
 //!
 //! Consumption mirrors the scheduled-action executor
 //! (`services/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
-//! the full static toolset, the tool-use system prompt plus the agent-session
-//! preamble and the owner's memory, and usage recorded per turn against the
-//! session owner.
+//! the full static toolset, the agent-session preamble, the static Macro
+//! prompt (immediately before any session instructions), and the owner's
+//! memory, with usage recorded per turn against the session owner.
 //!
 //! This is also where a session's own instructions become a system prompt.
 //! Nothing has to be transported for it - the loop runs in this process - which
@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart};
-use ai_tools::{ToolServiceContext, ToolSetWithPrompt, all_tools};
+use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
 use ai_toolset::ToolSet as AiToolSet;
 use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -75,10 +75,11 @@ async fn drive_turn(
         model,
         instructions,
         messages,
+        mcp_tools,
         cancel,
     } = request;
 
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
     let system_prompt = system_prompt(
         &tools.prompt,
@@ -86,7 +87,13 @@ async fn drive_turn(
         user_memory.as_deref(),
     );
 
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
+    // The MCP servers the session was handed sit next to the native tools
+    // the way they do in chat: static tools on every request, MCP tools in
+    // the searchable catalog behind `SearchTools`.
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
+        Some(mcp) => Arc::new(mcp_select::CombinedToolSet::new(tools.toolset, mcp)),
+        None => tools.toolset,
+    };
     let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
     let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner);
     // Carry the feature on the context so tool-spawned subagents attribute to it.
@@ -126,20 +133,21 @@ async fn drive_turn(
     result
 }
 
-/// The turn's system prompt: the toolset's, the agent-session preamble, then
-/// the session's own instructions and the owner's memory when there are any.
+/// The turn's system prompt: the agent-session preamble, the static Macro
+/// prompt (how to use the product: mentions, tools, terminology), then the
+/// session's own instructions and the owner's memory when there are any.
 ///
-/// Instructions land after the preamble and before the memory block for the
-/// same reason DCS puts `additional_instructions` there - they are the
-/// caller's word on how this session works, so they qualify the standing
-/// prompt rather than being qualified by it, and memory stays last so a
-/// remembered fact is never read as an instruction.
+/// The static Macro prompt sits immediately before `<session_instructions>`
+/// so it is the preamble the model reads as it takes in the caller's word —
+/// the same reason DCS puts `additional_instructions` after the standing
+/// prompt. Memory stays last so a remembered fact is never read as an
+/// instruction.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> String {
-    let mut prompt = format!("{}\n{}", tools_prompt, prompt::agent_session::PROMPT);
+    let mut prompt = format!("{}\n{}", prompt::agent_session::PROMPT, tools_prompt);
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
@@ -162,7 +170,7 @@ async fn fetch_user_memory(
     tool_context: &ToolServiceContext,
     owner: &MacroUserIdStr<'static>,
 ) -> Option<String> {
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let tools = ToolSetWithPrompt {
         toolset: tools.toolset,
         prompt: tools.prompt,

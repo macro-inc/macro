@@ -165,6 +165,7 @@ function CalendarChatComposeContent(props: CalendarChatComposeProps) {
       label: calendarDisplayLabel(calendar, calendarsSpanInboxes()),
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
+      isPrimary: calendar.isPrimary,
     }))
   );
 

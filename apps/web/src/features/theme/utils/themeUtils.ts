@@ -28,9 +28,9 @@ import type {
   ThemeV3,
 } from '../types/themeTypes';
 import { getOklch } from './colorUtil';
+import { normalizeThemeColorTokens } from './themeColorTokens';
 import { convertThemev2v3 } from './themeMigrations';
 import { isThemeV2, isThemeV3 } from './themeValidation';
-import { normalizeThemeColorTokens } from './themeVNext';
 
 export function exportTheme(themeId?: string) {
   const id = themeId ?? currentThemeId();
@@ -135,7 +135,6 @@ function syncLegacyCompatibilityTokens(): void {
 const LAYER_RELATIVE_TOKENS = {
   surface: 'var(--layer-surface)',
   inset: 'var(--layer-inset)',
-  lift: 'var(--layer-lift)',
 } as const;
 
 function renderThemeColorToken(token: string, value: string): void {

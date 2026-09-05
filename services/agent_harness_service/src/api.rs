@@ -19,6 +19,8 @@ use agent_session::inbound::axum_router::{
 };
 use anyhow::Context;
 use axum::Router;
+use axum::extract::State;
+use axum::http::StatusCode;
 use axum::routing::get;
 use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::MacroAuthorizationService;
@@ -28,19 +30,36 @@ use utoipa_swagger_ui::SwaggerUi;
 
 pub mod swagger;
 
+#[cfg(test)]
+mod test;
+
+/// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
+/// alongside `/` so the dedicated ALB keeps working during cutover.
+const GATEWAY_PATH_PREFIX: &str = "/agent-harness";
+
+fn mount_at_root_and_prefix(inner: Router) -> Router {
+    Router::new()
+        .merge(inner.clone())
+        .nest(GATEWAY_PATH_PREFIX, inner)
+}
+
+fn health_router(ready: tokio::sync::watch::Receiver<bool>) -> Router {
+    Router::new().route("/health", get(health).with_state(ready))
+}
+
 /// Serve the sandbox-facing egress proxy on its own listener.
 ///
 /// No CORS layer and no Swagger: nothing browses this. Its only client is a
 /// sandbox, and its only credential is a session token.
 pub async fn serve_egress<Service>(
-    service: Service,
+    service: std::sync::Arc<Service>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
 where
     Service: EgressService + 'static,
 {
-    let app = egress_router(EgressRouterState::new(std::sync::Arc::new(service)));
+    let app = egress_router(EgressRouterState::new(service));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -59,7 +78,8 @@ pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
-    gateway_state: RuntimeGatewayState<Bots, Auth>,
+    gateway_state: RuntimeGatewayState<Auth>,
+    runtime_commands_ready: tokio::sync::watch::Receiver<bool>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
@@ -71,11 +91,16 @@ where
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let app = api_router(read_state, control_state, create_state, gateway_state)
+    let inner = api_router(read_state, control_state, create_state, gateway_state)
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
-        .merge(Router::new().route("/health", get(health)))
-        .layer(macro_cors::cors_layer())
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+        .merge(health_router(runtime_commands_ready))
+        .layer(macro_cors::cors_layer());
+    let app = mount_at_root_and_prefix(inner)
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(SwaggerUi::new("/agent-harness/docs").url(
+            "/agent-harness/api-doc/openapi.json",
+            swagger::ApiDoc::openapi(),
+        ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -93,7 +118,7 @@ fn api_router<T, R, Opener, Bots, Access, Auth>(
     read_state: AgentSessionRouterState<T, Access, Auth>,
     control_state: AgentSessionControlState<R, Access, Auth>,
     create_state: CreateSessionState<Opener, Bots, Auth>,
-    gateway_state: RuntimeGatewayState<Bots, Auth>,
+    gateway_state: RuntimeGatewayState<Auth>,
 ) -> Router
 where
     T: AgentSessionService,
@@ -112,6 +137,10 @@ where
         .nest("/runtime", runtime_gateway_router(gateway_state))
 }
 
-async fn health() -> &'static str {
-    "ok"
+async fn health(State(ready): State<tokio::sync::watch::Receiver<bool>>) -> StatusCode {
+    if *ready.borrow() {
+        StatusCode::OK
+    } else {
+        StatusCode::SERVICE_UNAVAILABLE
+    }
 }

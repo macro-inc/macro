@@ -10,7 +10,10 @@ import {
 } from '@app/features/next-soup/utils';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { HotkeyGroup } from '@core/hotkey/types';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
@@ -20,7 +23,7 @@ import {
   toNotificationEntityRef,
 } from '@queries/notification/entity-mutations';
 import { type UndoHandle, useUndoableMutation } from '@queries/undo';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
@@ -87,6 +90,7 @@ type MarkDoneExecuteOpts = Pick<
 >;
 
 type MarkDoneExecuteWithSoupOpts = MarkDoneExecuteOpts & {
+  anchorKey?: string;
   nextEntityId?: string;
 };
 
@@ -252,7 +256,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       scopeChannelNotificationsToEntity: scopeChannelNotifications,
     });
 
-    const useEntityMutations = ENABLE_GRAPHQL_SOUP();
+    const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
     // A whole-channel row in the new inbox intentionally excludes notification
     // stacks rendered as separate thread rows. The entity endpoint cannot
     // express "channel except its threads", so only that selective case keeps
@@ -300,7 +304,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 
   const executeWithSoup = async (
     entities: EntityData[],
-    soup: SoupState,
+    soup: EntityActionListState,
     onNavigate?: (entity: EntityData) => void,
     opts?: MarkDoneExecuteWithSoupOpts
   ) => {
@@ -310,7 +314,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const targets = entities.filter(isMarkDoneTarget);
     if (targets.length === 0) return;
 
-    const focusedIdBeforeMarkDone = soup.focus.id();
+    const focusedIdBeforeMarkDone = opts?.anchorKey ?? soup.focus.id();
     const markedEntityIds = new Set(targets.map((entity) => entity.id));
     const adjacentRow = (direction: 1 | -1) => {
       let previousCandidateIndex: number | undefined;
@@ -362,6 +366,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         void openEntityInSplitFromUnifiedList(nextRow.original, {
           splitHandle: controller,
           mergeHistory: true,
+          notificationSource: options.notificationSource(),
         });
       }
       onNavigate?.(nextRow.original);

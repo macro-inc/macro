@@ -47,12 +47,14 @@ use super::connection::RuntimeAttachment;
 use super::error::{AgentSessionError, Result};
 use super::model::{
     AgentSession, AgentSessionId, AgentSessionLog, AgentSessionRenamed, AuthorKind, ChannelSession,
-    CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS, Message, MessageId,
-    SandboxSize, SessionLog, StoredAgentSessionLog,
+    ClaimOutcome, CreateAgentSessionParams, LogAppended, MAX_AGENT_SESSION_NAME_CHARS, Message,
+    MessageId, ReplicaId, SandboxSize, SessionClaim, SessionLog, SessionManagement,
+    StoredAgentSessionLog,
 };
 use super::ports::{
     AgentConnector, AgentSessionLogRepo, AgentSessionLogWriter, AgentSessionNameGenerator,
-    AgentSessionRealtime, AgentSessionRepo, NoOpAgentSessionNameGenerator,
+    AgentSessionQueueChanged, AgentSessionRealtime, AgentSessionRepo,
+    NoOpAgentSessionNameGenerator, NoOpTurnObserver, SessionOwnership, SessionTurnObserver,
 };
 use super::session::actors::{SessionActor, SessionCommand, Stepped};
 use super::session::{CloseReason, Input};
@@ -148,6 +150,14 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// Persist that a session disconnected before a live actor could report it.
     fn mark_disconnected(&self, id: AgentSessionId) -> impl Future<Output = Result<()>> + Send;
 
+    /// Where the session's live actor runs, from this instance's viewpoint:
+    /// unmanaged (claimable here), ours, or a live peer's - in which case
+    /// commands belong at the peer's address rather than in this process.
+    fn management(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<SessionManagement>> + Send;
+
     /// Attach a new transport to an existing persisted session.
     ///
     /// The attachment carries the connection's handshake gate as well as the
@@ -193,6 +203,17 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// that have to be kept agreeing. See [`SessionLog`].
     fn session_log(&self, id: AgentSessionId) -> impl Future<Output = Result<SessionLog>> + Send;
 
+    /// Push a session's changed queue - the whole queue, every time - to its
+    /// viewers.
+    ///
+    /// Here because this service is the harness's one door to the realtime
+    /// stream and its audience: the queue itself lives above, but who is
+    /// watching a session is answered here for log frames already.
+    fn publish_queue_changed(
+        &self,
+        event: AgentSessionQueueChanged,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Persist the sandbox size this session is running at.
     fn set_sandbox_size(
         &self,
@@ -229,7 +250,14 @@ pub struct AgentSessionServiceImpl<R, Folds, Rt, Namer = NoOpAgentSessionNameGen
     folds: Folds,
     realtime: Rt,
     name_generator: Namer,
+    /// Told when a session's turn ends or its actor stops - the harness's
+    /// prompt-queue gate. Erased so wiring it is not another type parameter.
+    turn_observer: Arc<dyn SessionTurnObserver>,
     active: Arc<ActiveSessions>,
+    /// This service's identity in the session-management lease. Minted at
+    /// construction: a restarted process is a new replica, and its claims
+    /// are recovered by heartbeat staleness, never inherited.
+    replica: ReplicaId,
     tasks: TaskTracker,
     cancellation: CancellationToken,
     lifecycle: Arc<Mutex<()>>,
@@ -248,7 +276,9 @@ impl<R, Folds, Rt> AgentSessionServiceImpl<R, Folds, Rt> {
             folds,
             realtime,
             name_generator: NoOpAgentSessionNameGenerator,
+            turn_observer: Arc::new(NoOpTurnObserver),
             active: Arc::new(DashMap::new()),
+            replica: ReplicaId::mint(),
             tasks: TaskTracker::new(),
             cancellation: CancellationToken::new(),
             lifecycle: Arc::new(Mutex::new(())),
@@ -268,11 +298,41 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             folds: self.folds,
             realtime: self.realtime,
             name_generator,
+            turn_observer: self.turn_observer,
             active: self.active,
+            replica: self.replica,
             tasks: self.tasks,
             cancellation: self.cancellation,
             lifecycle: self.lifecycle,
         }
+    }
+
+    /// Replace the no-op turn observer with whoever gates prompts on turns -
+    /// in production, the harness's queue.
+    #[must_use]
+    pub fn with_turn_observer(mut self, turn_observer: Arc<dyn SessionTurnObserver>) -> Self {
+        self.turn_observer = turn_observer;
+        self
+    }
+
+    /// This service's identity in the session-management lease, for the
+    /// composition root to heartbeat while the process lives.
+    #[must_use]
+    pub fn replica_id(&self) -> ReplicaId {
+        self.replica
+    }
+
+    /// Adopt a caller-minted replica identity, replacing the constructor's.
+    ///
+    /// For processes with more than one attach-capable service instance: the
+    /// lease's replica is the *process* (commands forward to an address, and
+    /// every instance in a process shares one), so the composition root mints
+    /// a single id and stamps it on each instance. The instances' session
+    /// sets are disjoint by construction, so they never contend for a lease.
+    #[must_use]
+    pub fn with_replica(mut self, replica: ReplicaId) -> Self {
+        self.replica = replica;
+        self
     }
 
     /// Stop active actors and wait for their tasks to release their transports.
@@ -322,9 +382,10 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         session: AgentSession,
         attachment: RuntimeAttachment<Connector>,
         reservation: AttachReservation,
+        claim: SessionClaim,
     ) -> Result<()>
     where
-        R: AgentSessionRepo + AgentSessionLogRepo + Clone,
+        R: AgentSessionRepo + AgentSessionLogRepo + SessionOwnership + Clone,
         Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
         Connector: AgentConnector,
     {
@@ -348,8 +409,10 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         // rather than the bare repository - see module docs. Its fold starts
         // empty and catches itself up on the stored log on the first frame,
         // which costs an attach nothing until the session actually says
-        // something.
-        let logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
+        // something. Fenced under the claim taken above: if another replica
+        // supersedes this one, the store rejects the next append and the
+        // actor tears down through its ordinary log-failure path.
+        let logs = LiveSessionLogWriter::fenced(self.repo.clone(), self.realtime.clone(), claim);
         let actor = SessionActor::new(
             id,
             session.acp_session_id,
@@ -359,6 +422,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             logs,
             command_rx,
             attachment.handshake,
+            Arc::clone(&self.turn_observer),
         );
         self.tasks.spawn(
             run_session(
@@ -367,6 +431,9 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
                 marker,
                 stopped_tx,
                 self.cancellation.clone(),
+                self.repo.clone(),
+                claim,
+                Arc::clone(&self.turn_observer),
             )
             .with_current_subscriber(),
         );
@@ -476,7 +543,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
 
 impl<R, Folds, Rt, Namer> AgentSessionService for AgentSessionServiceImpl<R, Folds, Rt, Namer>
 where
-    R: AgentSessionRepo + AgentSessionLogRepo + Clone,
+    R: AgentSessionRepo + AgentSessionLogRepo + SessionOwnership + Clone,
     Folds: FoldedMessageRepo + Clone + Send + Sync + 'static,
     Rt: AgentSessionRealtime + Clone + Send + Sync + 'static,
     Namer: AgentSessionNameGenerator + Clone,
@@ -547,6 +614,14 @@ where
         Ok(())
     }
 
+    async fn management(&self, id: AgentSessionId) -> Result<SessionManagement> {
+        Ok(match self.repo.manager_of(id).await? {
+            None => SessionManagement::Unmanaged,
+            Some(manager) if manager.replica == self.replica => SessionManagement::Ours,
+            Some(manager) => SessionManagement::Peer(manager),
+        })
+    }
+
     async fn mark_disconnected(&self, id: AgentSessionId) -> Result<()> {
         let mut logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
         tokio::time::timeout(
@@ -571,10 +646,42 @@ where
     where
         Connector: AgentConnector,
     {
+        // Reservation first: it is the in-process exclusion, so no sibling
+        // attach of this instance can race us to the claim below - which
+        // matters because every successful claim bumps the fence, and bumping
+        // it under a live actor of our own would fence that actor out.
         let reservation = self.reserve_attach(id).await?;
-        let session = self.repo.get(id).await?;
-        self.activate_reserved(session, attachment, reservation)
-            .await
+        let claim = match self.repo.claim(id, self.replica).await? {
+            ClaimOutcome::Claimed(claim) => claim,
+            ClaimOutcome::ManagedElsewhere(holder) => {
+                tracing::info!(%id, %holder, "agent session is managed by another live replica");
+                return Err(AgentSessionError::ManagedElsewhere(id));
+            }
+        };
+        let activated = async {
+            let session = self.repo.get(id).await?;
+            self.activate_reserved(session, attachment, reservation, claim)
+                .await
+        }
+        .await;
+        if let Err(error) = activated {
+            // The actor that would have released this claim never started;
+            // free it here so another replica is not left waiting out our
+            // heartbeat to resume the session.
+            self.repo
+                .release(&claim)
+                .await
+                .inspect_err(|release_error| {
+                    tracing::error!(
+                        error = ?release_error,
+                        %id,
+                        "failed to release an agent session claim after a failed attach"
+                    );
+                })
+                .ok();
+            return Err(error);
+        }
+        Ok(())
     }
 
     async fn send_action(
@@ -614,6 +721,10 @@ where
             bot: self.repo.session_bot(session.bot_id).await?,
             entries,
         })
+    }
+
+    async fn publish_queue_changed(&self, event: AgentSessionQueueChanged) -> Result<()> {
+        Ok(self.realtime.publish_queue_changed(event).await?)
     }
 
     async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
@@ -740,6 +851,12 @@ pub struct LiveSessionLogWriter<R, Rt> {
     repo: R,
     realtime: Rt,
     fold: Option<FoldMachineImpl>,
+    /// The management claim this writer appends under, when it has one. A
+    /// session actor always writes fenced; the unfenced constructor exists
+    /// for writers outside any live-management contest - `seed_jsonl`
+    /// replaying a recording, and `mark_disconnected` recording that a
+    /// runtime dropped before anything attached.
+    claim: Option<SessionClaim>,
 }
 
 impl<R, Rt> LiveSessionLogWriter<R, Rt> {
@@ -754,6 +871,18 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             repo,
             realtime,
             fold: None,
+            claim: None,
+        }
+    }
+
+    /// [`new`](Self::new), with every append conditioned on `claim` still
+    /// holding the session's current fence. What a live actor writes with.
+    pub fn fenced(repo: R, realtime: Rt, claim: SessionClaim) -> Self {
+        Self {
+            repo,
+            realtime,
+            fold: None,
+            claim: Some(claim),
         }
     }
 }
@@ -783,7 +912,10 @@ where
 
         // Durable first: projections are rebuildable, but a frame omitted from
         // session history is not.
-        let stored = AgentSessionLogRepo::create(&self.repo, log.clone()).await?;
+        let stored = match &self.claim {
+            Some(claim) => self.repo.create_fenced(log.clone(), claim).await?,
+            None => AgentSessionLogRepo::create(&self.repo, log.clone()).await?,
+        };
 
         if let Some(fold) = &mut self.fold {
             let _ = fold.push(log.clone());
@@ -967,16 +1099,24 @@ where
     }
 }
 
-/// Step the actor until its machine stops, then release the registry entry.
-async fn run_session<Connector, Logs>(
+/// Step the actor until its machine stops, then release the registry entry
+/// and the session's management claim.
+// One argument per fact the loop owns; a struct here would only move the
+// same list one level down.
+#[allow(clippy::too_many_arguments)]
+async fn run_session<Connector, Logs, Ownership>(
     mut actor: SessionActor<Connector, Logs>,
     active: std::sync::Weak<ActiveSessions>,
     marker: Arc<()>,
     stopped: watch::Sender<bool>,
     cancellation: CancellationToken,
+    ownership: Ownership,
+    claim: SessionClaim,
+    turn_observer: Arc<dyn SessionTurnObserver>,
 ) where
     Connector: AgentConnector,
     Logs: AgentSessionLogWriter + AgentSessionRepo,
+    Ownership: SessionOwnership,
 {
     loop {
         let input = tokio::select! {
@@ -997,10 +1137,21 @@ async fn run_session<Connector, Logs>(
 
     // Tear down the old transport before allowing another actor to attach.
     drop(actor);
+    // Give the claim back before announcing the stop: fence-conditioned, so
+    // if a successor already took over this quietly does nothing. Releasing
+    // here rather than waiting for heartbeat staleness is what lets another
+    // replica resume this session immediately after a graceful stop.
+    if let Err(error) = ownership.release(&claim).await {
+        tracing::error!(error = ?error, %id, "failed to release an agent session claim");
+    }
     let _ = stopped.send(true);
     if let Some(active) = active.upgrade() {
         active.remove_if(&id, |_, current| {
             current.commands.is_some() && Arc::ptr_eq(&current.marker, &marker)
         });
     }
+    // Last, after the registry entry is gone: whatever the observer does with
+    // the fact - clear a busy flag, dispatch nothing - it sees a session that
+    // really has no actor anymore.
+    turn_observer.session_stopped(id);
 }

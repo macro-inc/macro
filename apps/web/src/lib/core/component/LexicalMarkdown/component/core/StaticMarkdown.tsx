@@ -14,6 +14,7 @@ import {
   type AgentContextNode,
   type AwaitNode,
   type ClassedBlockNode,
+  type ConnectAppNode,
   type ContactMentionNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
@@ -27,6 +28,7 @@ import {
   type MagicChipNode,
   normalizedLanguage,
   type PasteNode,
+  type ReplyTargetNode,
   type SnapshotNode,
   SupportedNodeTypes,
   type TagMentionNode,
@@ -71,12 +73,12 @@ import {
 } from '@core/constant/featureFlags';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchNode';
-import { getCachedItemPreview } from '@queries/preview';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
 import { Await as AwaitDecorator } from '../decorator/Await';
+import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
@@ -88,6 +90,7 @@ import { MagicChip as MagicChipDecorator } from '../decorator/MagicChip';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { PasteNode as PasteNodeDecorator } from '../decorator/PasteNode';
+import { ReplyTarget as ReplyTargetDecorator } from '../decorator/ReplyTarget';
 import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
 import { TagMention as TagMentionDecorator } from '../decorator/TagMention';
 import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
@@ -375,9 +378,7 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
         key,
         theme: props.theme,
       });
-    const shouldRenderLazy =
-      options.lazy &&
-      getCachedItemPreview(componentProps.documentId) === undefined;
+    const shouldRenderLazy = options.lazy;
 
     return (
       <span class={getTextClassName(props.node, props.theme)}>
@@ -400,6 +401,20 @@ const ThemeMention: TypedRenderableEntity<ThemeMentionNode> = {
   render: (props) => (
     <span>
       {ThemeMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const ConnectApp: TypedRenderableEntity<ConnectAppNode> = {
+  guard: (node: LexicalNode): node is ConnectAppNode =>
+    node.__type === 'connect-app',
+  render: (props) => (
+    <span>
+      {ConnectAppDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -505,6 +520,25 @@ const AgentContext: TypedRenderableEntity<AgentContextNode> = {
       key={props.node.getKey()}
       theme={props.theme}
     />
+  ),
+};
+
+const ReplyTarget: TypedRenderableEntity<ReplyTargetNode> = {
+  guard: (node: LexicalNode): node is ReplyTargetNode =>
+    node.__type === 'reply-target',
+  render: (props) => (
+    // `data-reply-target-node` mirrors the editor block wrapper so the shared
+    // spacing rule applies in static markdown too.
+    <div
+      class="max-w-full"
+      data-reply-target-node={props.node.__targetMessageId}
+    >
+      <ReplyTargetDecorator
+        {...props.node.exportComponentProps()}
+        key={props.node.getKey()}
+        theme={props.theme}
+      />
+    </div>
   ),
 };
 
@@ -755,7 +789,10 @@ const Equation: TypedRenderableEntity<EquationNode> = {
   guard: (node: LexicalNode): node is EquationNode =>
     node.__type === 'equation',
   render: (props) => (
-    <EquationDecorator equation={props.node.__equation} inline={true} />
+    <EquationDecorator
+      equation={props.node.__equation}
+      inline={props.node.__inline}
+    />
   ),
 };
 
@@ -873,6 +910,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(GroupMention),
   eraseRenderableEntity(Await),
   eraseRenderableEntity(AgentContext),
+  eraseRenderableEntity(ReplyTarget),
   eraseRenderableEntity(MagicChip),
   eraseRenderableEntity(Snapshot),
   eraseRenderableEntity(Image),
@@ -881,6 +919,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(Equation),
   eraseRenderableEntity(ThemeMention),
   eraseRenderableEntity(TagMention),
+  eraseRenderableEntity(ConnectApp),
   eraseRenderableEntity(UnknownMention),
   eraseRenderableEntity(Watermark),
   eraseRenderableEntity(Paste),

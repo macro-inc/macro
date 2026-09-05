@@ -100,6 +100,10 @@ type CompleteMutationRoot {
 	"""
 	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!
 	"""
+	Persist the authenticated user's complete favorites order and return the authoritative list.
+	"""
+	reorderFavorites(input: ReorderFavoritesInput!): [GraphqlFavorite!]!
+	"""
 	Record a view or interaction in the authenticated user's channel activity.
 	"""
 	recordChannelActivity(input: RecordChannelActivityInput!): GraphqlChannelActivity!
@@ -1689,6 +1693,10 @@ input GraphqlEmailLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+	"""
+	The per-viewer viewed at option.
+	"""
+	viewedAt: GraphqlDateLiteral
 }
 
 """
@@ -2042,6 +2050,44 @@ enum GraphqlEntityType {
 	AI coding agent session entity.
 	"""
 	AGENT_SESSION
+}
+
+"""
+GraphQL fields for an ordered favorite.
+"""
+type GraphqlFavorite {
+	"""
+	Canonical type of the favorited entity.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Canonical identifier of the favorited entity.
+	"""
+	entityId: ID!
+	"""
+	Manual ordering value; lower values sort first.
+	"""
+	sortOrder: Float!
+	"""
+	Time at which the entity was first favorited, in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	File type of a favorited document, when applicable.
+	"""
+	fileType: String
+	"""
+	Document subtype of a favorited document, when applicable.
+	"""
+	documentSubType: String
+	"""
+	Channel type of a favorited channel, when applicable.
+	"""
+	channelType: String
+	"""
+	Owning channel id of a favorited channel message, when applicable.
+	"""
+	channelId: ID
 }
 
 """
@@ -3597,6 +3643,10 @@ type GraphqlSoupCalendarEvent implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -3688,6 +3738,10 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible call name.
 	"""
@@ -3815,6 +3869,10 @@ type GraphqlSoupChannel implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -3922,6 +3980,10 @@ type GraphqlSoupChannelMessage implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	Channel messages do not have a separate display name.
 	"""
@@ -4067,6 +4129,10 @@ type GraphqlSoupChat implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Server-only projection facts are unavailable for chats.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -4146,6 +4212,10 @@ type GraphqlSoupCrmCompany implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible company name.
 	"""
@@ -4230,6 +4300,10 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque authoritative server-only projection facts.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible display name.
 	"""
@@ -4683,6 +4757,10 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -4827,6 +4905,10 @@ interface GraphqlSoupEntity {
 	"""
 	id: ID!
 	"""
+	Opaque supplement containing authoritative server-only projection facts.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	The canonical entity type.
 	"""
 	entityType: GraphqlSoupEntityType!
@@ -4927,6 +5009,10 @@ type GraphqlSoupForeignEntity implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	Foreign entities do not expose a common display name.
 	"""
 	displayName: String
@@ -5003,6 +5089,10 @@ type GraphqlSoupProject implements GraphqlSoupEntity {
 	"""
 	entityType: GraphqlSoupEntityType!
 	"""
+	Server-only projection facts are unavailable for projects.
+	"""
+	cacheProjection: SoupCacheProjection
+	"""
 	User-visible display name.
 	"""
 	displayName: String
@@ -5078,6 +5168,10 @@ type GraphqlSoupReminder implements GraphqlSoupEntity {
 	Canonical entity kind.
 	"""
 	entityType: GraphqlSoupEntityType!
+	"""
+	Opaque cache projection metadata, unavailable for this entity variant.
+	"""
+	cacheProjection: SoupCacheProjection
 	"""
 	User-visible display name — a reminder's description is its name.
 	"""
@@ -5469,6 +5563,16 @@ input RenameEntityInput {
 }
 
 """
+Input for persisting the authenticated user's complete favorites order.
+"""
+input ReorderFavoritesInput {
+	"""
+	Favorited entities in the desired order.
+	"""
+	favorites: [EntityRefInput!]!
+}
+
+"""
 Input for assigning or updating an entity property.
 """
 input SetEntityPropertyInput {
@@ -5489,6 +5593,11 @@ input SetEntityPropertyInput {
 	"""
 	value: GraphqlSetPropertyValue
 }
+
+"""
+Opaque versioned supplement containing authoritative server-only facts.
+"""
+scalar SoupCacheProjection
 
 """
 Input for continuing a Soup query.

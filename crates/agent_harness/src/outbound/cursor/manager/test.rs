@@ -77,6 +77,7 @@ impl AgentSessionRepo for StubSessions {
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             sandbox_size: SandboxSize::Default,
             instructions: None,
+            mcp_servers: Default::default(),
             acp_session_id: self
                 .acp_session_id
                 .lock()

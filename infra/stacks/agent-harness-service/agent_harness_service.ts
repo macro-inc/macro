@@ -15,9 +15,13 @@ import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
+  getGatewayAlb,
   getKafkaClusterPolicy,
+  GatewayService,
   stack,
 } from '../../packages/shared';
+
+const gatewayLoadBalancer = getGatewayAlb();
 
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
@@ -59,12 +63,13 @@ type Args = {
 };
 
 /**
- * The agent harness service. Like agent-proxy before it, this component pins
- * `desiredCount` to 1 and forces a stop-then-start deployment (min healthy
- * 0%, max 100%) with no autoscaling: the harness owns the live agent-session
- * actors in process memory with no cross-instance sync, and its Kafka consumer
- * groups must not split partitions across two momentarily-coexisting tasks
- * (see the consumer groups in `services/agent_harness_service`).
+ * The agent harness service. Replicated in every environment: each replica
+ * claims the sessions whose live actors it holds through Postgres ownership,
+ * and commands are broadcast through the shared Redis deployment so the
+ * responsible replica can execute them. The Kafka consumer group splits
+ * partitions across live tasks; ownership plus Redis routing is what makes
+ * that split correct.
+ *
  */
 export class AgentHarnessService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
@@ -248,6 +253,22 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     this.serviceAlbSg = serviceAlbSg;
     this.serviceSg = serviceSg;
 
+    const gatewayTargetGroup = new ServiceTargetGroup(
+      `${stack}-${BASE_NAME}`,
+      {
+        tags: this.tags,
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
+        vpcId: vpc.vpcId,
+        containerPort: serviceContainerPort,
+        service: GatewayService.AGENT_HARNESS_SERVICE,
+        healthCheckPath,
+        pathPatterns: ['/agent-harness', '/agent-harness/*'],
+        serviceSecurityGroupId: serviceSg.id,
+        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+      },
+      { parent: this }
+    );
+
     const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
       serviceName: BASE_NAME,
       serviceContainerPort,
@@ -265,11 +286,12 @@ export class AgentHarnessService extends pulumi.ComponentResource {
     this.lb = lb;
     this.listener = listener;
 
-    // The egress proxy listener, published on the same ALB under its own
-    // hostname. The default action still forwards to the control API, so
-    // nothing about the existing surface changes; only requests naming the
-    // egress host reach the egress port. The component also opens the
-    // ALB-to-service holes for the egress port.
+    // Egress stays host-routed on this dedicated ALB, not the shared
+    // gateway. Control API authenticates Macro users; egress authenticates
+    // sandbox session tokens on a second container port. Mixing those
+    // trust domains onto the gateway (or under `/agent-harness`) would
+    // collapse that boundary. This rule's priority 10 is scoped to this
+    // listener and does not collide with the gateway's DSS priority 10.
     // Not `${BASE_NAME}-egress`: with the helper's `-tg` suffix that is 36
     // chars, and target group names cap at 32.
     const egress = new ServiceTargetGroup(
@@ -310,19 +332,40 @@ export class AgentHarnessService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
-        // Never run 2 tasks at once, even transiently during a deploy: stop
-        // the old one before the new one starts (see the class doc comment).
-        // This blackout covers the egress proxy too - sandbox git and MCP
-        // calls fail for the whole window, they are not more available than
-        // the control API.
-        deploymentMinimumHealthyPercent: 0,
-        deploymentMaximumPercent: 100,
-        desiredCount: 1,
+        deploymentMinimumHealthyPercent: 100,
+        deploymentMaximumPercent: 200,
+        // Every environment runs two, so dev stays prod-shaped: forwarding is
+        // dead code at one task (management() can only answer Ours or
+        // Unmanaged), and a path only dev never exercises is one whose
+        // regressions surface in prod.
+        desiredCount: 2,
         // ALB checks /health every 10s and fails the target after two
         // misses (~20s). HTTP does not listen until after DB, AWS config,
         // and JWT secrets, so a 0s grace period trips the circuit breaker
-        // on this stop-then-start replace. Ignore those checks until bind.
+        // before the replacement binds. Ignore those checks until then.
         healthCheckGracePeriodSeconds: 120,
+        // Register the control port in both the dedicated ALB and the
+        // gateway target group during cutover. An explicit `loadBalancers`
+        // replaces the list awsx derives from `portMappings.targetGroup`,
+        // so the legacy control entry and the egress entry must be listed
+        // here too.
+        loadBalancers: [
+          {
+            targetGroupArn: targetGroup.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+          {
+            targetGroupArn: gatewayTargetGroup.target_group.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+          {
+            targetGroupArn: this.egressTargetGroup.arn,
+            containerName: 'service',
+            containerPort: egressContainerPort,
+          },
+        ],
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
@@ -390,6 +433,10 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        // ECS refuses a service whose target group is not yet associated
+        // with a load balancer; it is the listener rule that creates that
+        // association.
+        dependsOn: [gatewayTargetGroup.listener_rule],
       }
     );
 

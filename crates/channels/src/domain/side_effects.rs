@@ -1220,9 +1220,12 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
         ChannelEvent::ChannelCreated {
             channel_type: ChannelType::Private | ChannelType::DirectMessage,
             actor,
+            on_behalf_of,
             participant_user_ids,
             ..
-        } if actor.as_user().is_some() => Some(participant_user_ids.iter().cloned().collect()),
+        } if actor.as_user().is_some() || on_behalf_of.is_some() => {
+            Some(participant_user_ids.iter().cloned().collect())
+        }
         ChannelEvent::ParticipantsAdded {
             channel_type: ChannelType::Private | ChannelType::Team,
             invited_by,
@@ -1252,12 +1255,14 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
         ChannelEvent::ChannelCreated {
             channel_id,
             actor,
+            on_behalf_of,
             channel_type,
             channel_name,
             participant_user_ids,
         } => vec![ChannelMacroEvent::created(ChannelCreatedMetadata {
             channel_id: *channel_id,
             actor: actor.clone(),
+            on_behalf_of: on_behalf_of.clone(),
             channel_type: *channel_type,
             channel_name: channel_name.clone(),
             participant_user_ids: participant_user_ids.clone(),

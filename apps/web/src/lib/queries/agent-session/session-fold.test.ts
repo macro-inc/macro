@@ -82,6 +82,10 @@ describe('buffer overlap', () => {
 
 describe('shared session folds', () => {
   it('buffers realtime overlap while fetching and replays only its suffix', async () => {
+    // This test verifies that buffered entries are replayed during opening.
+    // Sinks are registered AFTER getting the snapshot to prevent duplicate
+    // notifications: replayed entries update the worker but don't notify sinks,
+    // then the caller receives the full snapshot (including replayed messages).
     let resolveFetch!: (
       value: Result<AgentSessionLogResponse, unknown>
     ) => void;

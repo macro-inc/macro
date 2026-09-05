@@ -415,6 +415,14 @@ function EventDetailsPopover(props: EventDetailsPopoverProps) {
                 event.preventDefault();
               }
             }}
+            onOpenAutoFocus={(event) => {
+              // Aims can arrive while the keyboard is elsewhere — arrow-key
+              // scanning in the inbox previews a calendar notification here,
+              // and auto-focusing the popover would silence the list's
+              // navigation hotkeys (hotkey scope follows focus). Escape
+              // still closes it from anywhere via the document listener.
+              event.preventDefault();
+            }}
             onFocusOutside={(event) => {
               // Deep links open this popover while their freshly-opened
               // split is still claiming focus; that focus movement lands

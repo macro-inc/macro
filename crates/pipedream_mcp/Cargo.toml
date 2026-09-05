@@ -13,6 +13,7 @@ macro_authorization = { path = "../macro_authorization", default-features = fals
   "axum",
 ] }
 macro_user_id = { path = "../macro_user_id" }
+mcp_toolset = { path = "../mcp_toolset" }
 model-error-response = { path = "../model-error-response" }
 reqwest.workspace = true
 url.workspace = true
@@ -27,5 +28,4 @@ utoipa.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-regex.workspace = true
 tokio.workspace = true

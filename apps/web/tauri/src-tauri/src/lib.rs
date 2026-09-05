@@ -51,8 +51,8 @@ impl AppEnvironment {
 
     fn auth_service_url(self) -> &'static str {
         match self {
-            Self::Development => "https://auth-service-dev.macro.com/",
-            Self::Production => "https://auth-service.macro.com/",
+            Self::Development => "https://dev-gateway.macro.com/auth/",
+            Self::Production => "https://gateway.macro.com/auth/",
         }
     }
 
@@ -161,6 +161,7 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_haptics::init())
+            .plugin(tauri_plugin_edit_menu::init())
             .plugin(tauri_plugin_input_accessory::init())
             .plugin(tauri_plugin_network_status::init())
             .plugin(tauri_plugin_pasteboard::init())

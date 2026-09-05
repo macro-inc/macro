@@ -18,6 +18,10 @@ import {
   Show,
 } from 'solid-js';
 import {
+  getRenderedMessageReplyText,
+  getSelectedMessageText,
+} from './browser-selection';
+import {
   useMessage,
   useMessageActionMenuVisibility,
   useMessageActions,
@@ -61,12 +65,14 @@ type ActionMenuProps = {
 function ActionButton(props: {
   action: ActionItem;
   onClick: JSX.EventHandlerUnion<HTMLButtonElement, MouseEvent>;
+  onPointerDown?: JSX.EventHandlerUnion<HTMLButtonElement, PointerEvent>;
 }) {
   return (
     <Button
       aria-label={props.action.label}
       data-message-action={props.action.id}
       onClick={props.onClick}
+      onPointerDown={props.onPointerDown}
       tooltip={props.action.label}
       size="icon-sm"
       variant="ghost"
@@ -85,6 +91,8 @@ function ActionMenuContent(props: ActionMenuProps) {
   const actions = useMessageActions();
   const actionMenuVisibility = useMessageActionMenuVisibility();
   const [emojiMenuOpen, setEmojiMenuOpen] = createSignal(false);
+  let selectedReplyText: string | undefined;
+  let renderedReplyText: string | undefined;
 
   const handleEmojiMenuOpenChange = (isOpen: boolean) => {
     setEmojiMenuOpen(isOpen);
@@ -237,8 +245,42 @@ function ActionMenuContent(props: ActionMenuProps) {
               {(action) => (
                 <ActionButton
                   action={action}
+                  onPointerDown={(event) => {
+                    if (action.id !== 'reply') return;
+                    selectedReplyText = getSelectedMessageText(
+                      event.currentTarget,
+                      message().id
+                    );
+                    renderedReplyText = getRenderedMessageReplyText(
+                      event.currentTarget,
+                      message().id
+                    );
+                  }}
                   onClick={(event) => {
-                    void action.onClick?.({ message: message(), event });
+                    const selectedText =
+                      action.id === 'reply'
+                        ? (selectedReplyText ??
+                          getSelectedMessageText(
+                            event.currentTarget,
+                            message().id
+                          ))
+                        : undefined;
+                    selectedReplyText = undefined;
+                    const renderedText =
+                      action.id === 'reply'
+                        ? (renderedReplyText ??
+                          getRenderedMessageReplyText(
+                            event.currentTarget,
+                            message().id
+                          ))
+                        : undefined;
+                    renderedReplyText = undefined;
+                    void action.onClick?.({
+                      message: message(),
+                      event,
+                      selectedText,
+                      renderedText,
+                    });
                   }}
                 />
               )}

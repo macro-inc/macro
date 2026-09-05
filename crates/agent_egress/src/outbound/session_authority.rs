@@ -20,7 +20,7 @@ use agent_session::domain::model::SessionStatus;
 use agent_session::domain::ports::AgentSessionRepo;
 
 use crate::domain::error::EgressError;
-use crate::domain::model::{RepoSlug, SessionGrant, SessionToken};
+use crate::domain::model::{McpServerListing, McpServerSlug, RepoSlug, SessionGrant, SessionToken};
 use crate::domain::ports::SessionAuthority;
 
 /// Resolves a presented session token to its session by the digest stored
@@ -99,10 +99,29 @@ where
                 ))
             })?;
 
+        // The agent's own names for the apps it listed, off the row's
+        // snapshot, so a refusal can say "Google Sheets" rather than
+        // "google_sheets". Not a permission: any slug resolves against the
+        // owner's connections. A slug the strict parse refuses could never
+        // have been advertised, so skipping it changes nothing the sandbox
+        // can see.
+        let mcp_servers = session
+            .mcp_servers
+            .servers()
+            .iter()
+            .filter_map(|server| {
+                McpServerSlug::parse(&server.app_slug).map(|slug| McpServerListing {
+                    slug,
+                    name: server.server_name.clone(),
+                })
+            })
+            .collect();
+
         Ok(SessionGrant {
             session: session.id,
             owner: session.owner_id,
             repo,
+            mcp_servers,
         })
     }
 }

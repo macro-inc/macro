@@ -101,6 +101,7 @@ where
             MacroAuthorization::User(user) | MacroAuthorization::Internal(Some(user)) => {
                 user.macro_user_id
             }
+            MacroAuthorization::Harness(_) => return Err(ExtractorError::Unauthorized),
             MacroAuthorization::Bot(_) | MacroAuthorization::Internal(None) => {
                 unreachable!("bot and identity-less internal access returned above")
             }

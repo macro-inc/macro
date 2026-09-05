@@ -35,6 +35,14 @@ fn resolved_with_random_ids(emails: &[&str]) -> ResolvedFilters {
     r
 }
 
+fn build_message_email_filter(ast: &Expr<EmailLiteral>, resolved: &ResolvedFilters) -> SqlFragment {
+    super::filters::build_message_email_filter(ast, resolved, "t.updated_at")
+}
+
+fn build_thread_email_filter(ast: &Expr<EmailLiteral>, sort_ts_field: &str) -> SqlFragment {
+    super::filters::build_thread_email_filter(ast, sort_ts_field, &ResolvedFilters::empty())
+}
+
 #[test]
 fn unresolved_sender_short_circuits() {
     let expr = Expr::Literal(EmailLiteral::Sender(complete("missing@x.com")));
@@ -278,15 +286,15 @@ fn test_notification_seen_compiles_to_thread_is_read() {
 }
 
 #[test]
-fn test_notification_seen_is_noop_in_message_filter() {
+fn test_notification_seen_is_correlated_in_message_filter() {
     for seen in [true, false] {
         let result = build_message_email_filter(
             &Expr::Literal(EmailLiteral::NotificationSeen(seen)),
             &ResolvedFilters::empty(),
         );
         let debug = result.to_debug_sql();
-        assert!(debug.contains("TRUE"));
-        assert!(!debug.contains("is_read"));
+        assert!(debug.contains("email_filter_thread.is_read"));
+        assert!(debug.contains("email_filter_thread.id = m.thread_id"));
     }
 }
 
@@ -331,15 +339,14 @@ fn test_importance_compiles_to_thread_signal_flag() {
 }
 
 #[test]
-fn test_importance_is_noop_in_message_filter() {
-    // The heuristic lives in the denormalized flag now; the lateral must not
-    // re-evaluate it per message.
+fn test_importance_is_correlated_to_thread_signal_flag_in_message_filter() {
     for imp in [true, false] {
         let result = build_message_email_filter(
             &Expr::Literal(EmailLiteral::Importance(imp)),
             &ResolvedFilters::empty(),
         );
         let debug = result.to_debug_sql();
+        assert!(debug.contains("email_filter_thread.is_signal"));
         assert!(!debug.contains("email_filters"));
         assert!(!debug.contains("CATEGORY"));
         assert!(!debug.contains("is_important"));
@@ -784,6 +791,34 @@ fn test_build_query_defers_user_history_join_for_updated_at_sort() {
 }
 
 #[test]
+fn test_viewed_at_filter_keeps_user_history_join_inline_for_updated_sort() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 3, 1, 0, 0, 0).unwrap();
+    let expr = Expr::Literal(EmailLiteral::ViewedAt(DateLiteral::GreaterThanOrEqual(dt)));
+    let sql = super::query::debug_build_query_sql_with_sort(
+        &view,
+        &expr,
+        models_pagination::SimpleSortMethod::UpdatedAt,
+    );
+
+    assert_eq!(
+        sql.matches("LEFT JOIN email_user_history").count(),
+        1,
+        "viewed_at filtering needs one inline history join: {sql}"
+    );
+    let uh_pos = sql.find("LEFT JOIN email_user_history").unwrap();
+    let el_pos = sql.find("JOIN email_links el").unwrap();
+    assert!(
+        uh_pos < el_pos,
+        "viewed_at filter must join history before the candidate filter: {sql}"
+    );
+    assert!(sql.contains("uh.updated_at >="));
+}
+
+#[test]
 fn test_build_query_keeps_user_history_join_inline_for_viewed_at_sort() {
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
     let expr = Expr::Literal(EmailLiteral::Sender(Email::Domain("acme.com".to_string())));
@@ -844,45 +879,114 @@ fn test_build_thread_email_filter_multiple_thread_ids() {
 }
 
 #[test]
-fn test_build_thread_email_filter_maps_sender_to_true() {
+fn test_build_thread_email_filter_correlates_sender() {
+    let contact_id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::Sender(complete("test@example.com")));
-    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
+    let resolved = resolved_with(&[("test@example.com", contact_id)]);
+    let result = super::filters::build_thread_email_filter(&expr, DEFAULT_SORT_TS, &resolved);
     let debug = result.to_debug_sql();
 
-    assert!(debug.contains("TRUE"));
-    assert!(!debug.contains("t.id"));
+    assert!(debug.contains("EXISTS (SELECT 1 FROM email_messages m"));
+    assert!(debug.contains("m.thread_id = t.id"));
+    assert!(debug.contains("m.from_contact_id"));
+    assert!(result.has_bind_uuid(&contact_id));
 }
 
 #[test]
-fn test_build_message_email_filter_maps_thread_id_to_true() {
+fn test_build_message_email_filter_correlates_thread_id() {
     let id = Uuid::new_v4();
     let expr = Expr::Literal(EmailLiteral::ThreadId(id));
     let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
     let debug = result.to_debug_sql();
 
-    assert!(debug.contains("TRUE"));
-    assert!(!debug.contains("t.id"));
+    assert!(debug.contains("SELECT email_filter_thread.id ="));
+    assert!(debug.contains("email_filter_thread.id = m.thread_id"));
+    assert!(result.has_bind_uuid(&id));
 }
 
 #[test]
-fn test_combined_thread_id_and_sender_splits_correctly() {
+fn test_combined_thread_id_and_sender_uses_both_predicates_at_each_level() {
     let id = Uuid::new_v4();
     let contact_id = Uuid::new_v4();
     let expr = Expr::and(
         Expr::Literal(EmailLiteral::ThreadId(id)),
         Expr::Literal(EmailLiteral::Sender(complete("sender@example.com"))),
     );
-
-    let thread_result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
-    let thread_debug = thread_result.to_debug_sql();
-    assert!(thread_result.has_bind_uuid(&id));
-    assert!(!thread_debug.contains("from_contact_id"));
-
     let resolved = resolved_with(&[("sender@example.com", contact_id)]);
+
+    let thread_result =
+        super::filters::build_thread_email_filter(&expr, DEFAULT_SORT_TS, &resolved);
+    let thread_debug = thread_result.to_debug_sql();
+    assert!(thread_debug.contains("t.id ="));
+    assert!(thread_debug.contains("m.from_contact_id"));
+    assert!(thread_result.has_bind_uuid(&id));
+    assert!(thread_result.has_bind_uuid(&contact_id));
+
     let message_result = build_message_email_filter(&expr, &resolved);
     let message_debug = message_result.to_debug_sql();
-    assert!(message_debug.contains("from_contact_id"));
+    assert!(message_debug.contains("email_filter_thread.id ="));
+    assert!(message_debug.contains("m.from_contact_id"));
+    assert!(message_result.has_bind_uuid(&id));
     assert!(message_result.has_bind_uuid(&contact_id));
+}
+
+#[test]
+fn test_mixed_sender_or_viewed_at_keeps_both_correlated_predicates() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let contact_id = Uuid::new_v4();
+    let cutoff = chrono::Utc.with_ymd_and_hms(2024, 3, 1, 0, 0, 0).unwrap();
+    let expr = Expr::or(
+        Expr::Literal(EmailLiteral::Sender(complete("sender@example.com"))),
+        Expr::Literal(EmailLiteral::ViewedAt(DateLiteral::GreaterThanOrEqual(
+            cutoff,
+        ))),
+    );
+    let resolved = resolved_with(&[("sender@example.com", contact_id)]);
+
+    let thread = super::filters::build_thread_email_filter(&expr, DEFAULT_SORT_TS, &resolved);
+    let thread_sql = thread.to_debug_sql();
+    assert!(thread_sql.contains("EXISTS (SELECT 1 FROM email_messages m"));
+    assert!(thread_sql.contains("m.from_contact_id"));
+    assert!(thread_sql.contains("OR uh.updated_at >="));
+    assert!(thread.has_bind_uuid(&contact_id));
+
+    let message = build_message_email_filter(&expr, &resolved);
+    let message_sql = message.to_debug_sql();
+    assert!(message_sql.contains("m.from_contact_id"));
+    assert!(message_sql.contains("OR (SELECT email_filter_history.updated_at >="));
+    assert!(message_sql.contains("email_filter_thread.id = m.thread_id"));
+    assert!(message.has_bind_uuid(&contact_id));
+}
+
+#[test]
+fn test_mixed_not_sender_or_viewed_at_keeps_both_correlated_predicates() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let contact_id = Uuid::new_v4();
+    let cutoff = chrono::Utc.with_ymd_and_hms(2024, 3, 1, 0, 0, 0).unwrap();
+    let expr = Expr::is_not(Expr::or(
+        Expr::Literal(EmailLiteral::Sender(complete("sender@example.com"))),
+        Expr::Literal(EmailLiteral::ViewedAt(DateLiteral::GreaterThanOrEqual(
+            cutoff,
+        ))),
+    ));
+    let resolved = resolved_with(&[("sender@example.com", contact_id)]);
+
+    let thread = super::filters::build_thread_email_filter(&expr, DEFAULT_SORT_TS, &resolved);
+    let thread_sql = thread.to_debug_sql();
+    assert!(thread_sql.contains("(NOT ("));
+    assert!(thread_sql.contains("m.from_contact_id"));
+    assert!(thread_sql.contains("uh.updated_at >="));
+
+    let message = build_message_email_filter(&expr, &resolved);
+    let message_sql = message.to_debug_sql();
+    assert!(message_sql.contains("(NOT ("));
+    assert!(message_sql.contains("m.from_contact_id"));
+    assert!(message_sql.contains("email_filter_history.updated_at >="));
+    assert!(message_sql.contains("email_filter_thread.id = m.thread_id"));
 }
 
 #[test]
@@ -950,13 +1054,14 @@ fn test_build_thread_email_filter_multiple_project_ids() {
 }
 
 #[test]
-fn test_build_message_email_filter_maps_project_id_to_true() {
+fn test_build_message_email_filter_correlates_project_id() {
     let expr = Expr::Literal(EmailLiteral::ProjectId("project-123".to_string()));
     let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
     let debug = result.to_debug_sql();
 
-    assert!(debug.contains("TRUE"));
-    assert!(!debug.contains("project_id"));
+    assert!(debug.contains("email_filter_thread.project_id ="));
+    assert!(debug.contains("email_filter_thread.id = m.thread_id"));
+    assert!(result.has_bind_string("project-123"));
 }
 
 #[test]
@@ -972,25 +1077,28 @@ fn test_has_message_literals_false_when_only_project_id() {
 }
 
 #[test]
-fn test_combined_project_id_and_sender_splits_correctly() {
+fn test_combined_project_id_and_sender_uses_both_predicates_at_each_level() {
     let contact_id = Uuid::new_v4();
     let expr = Expr::and(
         Expr::Literal(EmailLiteral::ProjectId("project-123".to_string())),
         Expr::Literal(EmailLiteral::Sender(complete("sender@example.com"))),
     );
+    let resolved = resolved_with(&[("sender@example.com", contact_id)]);
 
-    let thread_result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
+    let thread_result =
+        super::filters::build_thread_email_filter(&expr, DEFAULT_SORT_TS, &resolved);
     let thread_debug = thread_result.to_debug_sql();
     assert!(thread_debug.contains("t.project_id = "));
+    assert!(thread_debug.contains("m.from_contact_id"));
     assert!(thread_result.has_bind_string("project-123"));
-    assert!(!thread_debug.contains("from_contact_id"));
+    assert!(thread_result.has_bind_uuid(&contact_id));
 
-    let resolved = resolved_with(&[("sender@example.com", contact_id)]);
     let message_result = build_message_email_filter(&expr, &resolved);
     let message_debug = message_result.to_debug_sql();
-    assert!(message_debug.contains("from_contact_id"));
+    assert!(message_debug.contains("email_filter_thread.project_id ="));
+    assert!(message_debug.contains("m.from_contact_id"));
     assert!(message_result.has_bind_uuid(&contact_id));
-    assert!(!message_result.has_bind_string("project-123"));
+    assert!(message_result.has_bind_string("project-123"));
 }
 
 #[test]
@@ -1523,12 +1631,13 @@ fn test_build_thread_email_filter_calendar_only_false_maps_to_true() {
 }
 
 #[test]
-fn test_build_message_email_filter_maps_calendar_only_to_true() {
+fn test_build_message_email_filter_correlates_calendar_only() {
     let expr = Expr::Literal(EmailLiteral::CalendarOnly(true));
     let result = build_message_email_filter(&expr, &ResolvedFilters::empty());
     let debug = result.to_debug_sql();
 
-    assert!(debug.contains("TRUE"));
+    assert!(debug.contains("email_filter_thread.has_calendar_attachment"));
+    assert!(debug.contains("email_filter_thread.id = m.thread_id"));
     assert!(!debug.contains("email_attachments"));
 }
 
@@ -1616,6 +1725,22 @@ fn test_has_thread_literals_true_when_created_at_present() {
     let dt = chrono::Utc.with_ymd_and_hms(2024, 1, 1, 0, 0, 0).unwrap();
     let expr = Expr::Literal(EmailLiteral::CreatedAt(DateLiteral::GreaterThan(dt)));
     assert!(has_thread_literals(&expr));
+}
+
+#[test]
+fn test_build_thread_email_filter_viewed_at_uses_user_history_timestamp() {
+    use chrono::TimeZone;
+    use item_filters::ast::date::DateLiteral;
+
+    let dt = chrono::Utc.with_ymd_and_hms(2024, 3, 1, 0, 0, 0).unwrap();
+    let expr = Expr::Literal(EmailLiteral::ViewedAt(DateLiteral::GreaterThanOrEqual(dt)));
+    let result = build_thread_email_filter(&expr, DEFAULT_SORT_TS);
+    let debug = result.to_debug_sql();
+
+    assert!(debug.contains("uh.updated_at >="));
+    assert!(debug.contains("2024-03-01"));
+    assert!(has_thread_literals(&expr));
+    assert!(!has_message_literals(&expr));
 }
 
 #[test]

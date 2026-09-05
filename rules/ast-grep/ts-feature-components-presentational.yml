@@ -5,7 +5,7 @@ language: typescript
 severity: warning
 message: Feature components take resolved values and return JSX. Data, reactivity wiring, and navigation belong to primitives/ and views/.
 note: |-
-  Rule FE-31 in docs/STYLE_GUIDE.md. `components/` never imports
+  Rule FE-33 in docs/STYLE_GUIDE.md. `components/` never imports
   `queries/`, `primitives/`, `views/`, `@queries/*`, urql, or the split
   navigation helpers. It renders what views hand it: domain values from
   `core/`, resolved display (typed in `context/`), and event handlers. The

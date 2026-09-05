@@ -1,3 +1,4 @@
+import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import {
@@ -8,6 +9,7 @@ import {
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
 import { Collapsible } from '@kobalte/core/collapsible';
+import AirplaneTiltIcon from '@phosphor/airplane-tilt.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
@@ -25,6 +27,7 @@ import XIcon from '@phosphor/x.svg';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
 import type { EventReminderOverride } from '@service-storage/generated/schemas/eventReminderOverride';
+import { createCallback } from '@solid-primitives/rootless';
 import { Avatar, Button, cn } from '@ui';
 import {
   type Accessor,
@@ -37,6 +40,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
 import { isSameLocalDate, parseLocalDate } from '../utils/calendar-date';
+import {
+  parseMacroAppLink,
+  sanitizeCalendarDescription,
+} from '../utils/calendar-description';
 import {
   type CalendarPerson,
   eventAttribution,
@@ -500,6 +507,20 @@ export function EventDetails(props: {
   const originalTimeZone = createMemo(() =>
     formatOriginalTimeZone(props.event, props.timeFormat)
   );
+  const descriptionHtml = createMemo(() =>
+    sanitizeCalendarDescription(props.event.description ?? '')
+  );
+  const openDescriptionLink = createCallback((event: MouseEvent) => {
+    const anchor = (event.target as Element | null)?.closest('a[href]');
+    if (!(anchor instanceof HTMLAnchorElement)) return;
+    event.preventDefault();
+    const target = parseMacroAppLink(anchor.href);
+    if (target) {
+      openDocument(target.blockName, target.documentId);
+      return;
+    }
+    openExternalUrl(anchor.href);
+  });
   const recurrenceDescription = createMemo(() => {
     const description = formatRecurrenceDescription(
       props.event.recurrenceLines
@@ -530,6 +551,12 @@ export function EventDetails(props: {
         <div class="select-text text-sm text-ink-muted sm:text-xs">
           {formatEventSchedule(props.event, props.timeFormat)}
         </div>
+        <Show when={props.event.eventType === 'out_of_office'}>
+          <div class="flex select-text items-center gap-1.5 text-sm text-ink-extra-muted sm:text-xs">
+            <AirplaneTiltIcon aria-hidden="true" class="size-4 sm:size-3.5" />
+            Out of office
+          </div>
+        </Show>
         <Show when={recurrenceDescription()}>
           {(description) => (
             <div class="select-text text-sm text-ink-extra-muted sm:text-xs">
@@ -569,13 +596,15 @@ export function EventDetails(props: {
         {(location) => <EventLocationItem location={location()} />}
       </Show>
 
-      <Show when={props.event.description}>
-        {(description) => (
+      <Show when={descriptionHtml()}>
+        {(html) => (
           <div class="contents">
             <TextAlignLeftIcon class="mt-0.5 size-5 text-ink-extra-muted sm:size-4" />
-            <p class="select-text leading-relaxed text-ink-muted">
-              {description()}
-            </p>
+            <div
+              class="select-text leading-relaxed text-ink-muted [&_a]:text-accent [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-4 [&_p+p]:mt-1 [&_ul]:list-disc [&_ul]:pl-4"
+              innerHTML={html()}
+              onClick={openDescriptionLink}
+            />
           </div>
         )}
       </Show>

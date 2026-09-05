@@ -16,9 +16,9 @@ mod test;
 pub enum ChannelKind {
     /// The thread the session was created from, where the bot was pinged.
     MentionThread,
-    /// The session's thread, where the message quote-replied without a
-    /// mention.
-    QuoteReply,
+    /// The session's thread, where the message explicitly targeted another
+    /// message without a mention.
+    ExplicitReply,
     /// The session's thread, where a model inferred the message was addressed
     /// to the agent.
     Inferred,

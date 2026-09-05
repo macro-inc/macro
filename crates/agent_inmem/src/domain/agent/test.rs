@@ -7,6 +7,8 @@ use agent_client_protocol::schema::v1::{
     TextContent,
 };
 use agent_client_protocol::{Client, ConnectionTo};
+use rig_agent::agent::StreamingError;
+use rig_agent::completion::PromptError;
 
 use super::*;
 use crate::domain::engine::TurnEngine;
@@ -14,6 +16,27 @@ use crate::testing::{HangingEngine, ScriptedEngine};
 
 struct Harness {
     notifications: std::sync::Mutex<Vec<SessionNotification>>,
+}
+
+struct CancelledEngine;
+
+impl TurnEngine for CancelledEngine {
+    fn run_turn(
+        &self,
+        _request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let cancellation = PromptError::PromptCancelled {
+                chat_history: Vec::new(),
+                reason: "user cancelled".to_owned(),
+            };
+            let error =
+                agent::AgentError::Streaming(StreamingError::Prompt(Box::new(cancellation)));
+            let _ = parts.send(Err(error)).await;
+        });
+        receiver
+    }
 }
 
 /// Drive the served agent as a scripted ACP client: initialize, open a
@@ -38,6 +61,8 @@ where
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
+        mcp: Arc::new(crate::domain::mcp::NoMcpServers),
+        mcp_tools: std::sync::Mutex::new(None),
     });
 
     let (client_channel, agent_channel) = AcpChannel::duplex();
@@ -74,6 +99,14 @@ where
                         .resume
                         .is_some(),
                     "the agent must declare resume support or reattachment dies"
+                );
+                assert_eq!(
+                    initialized
+                        .agent_info
+                        .as_ref()
+                        .map(|info| info.name.as_str()),
+                    Some(AGENT_NAME),
+                    "the fold recognizes this harness by its announced name"
                 );
                 let session = connection
                     .send_request(NewSessionRequest::new("/"))
@@ -148,6 +181,64 @@ async fn a_prompt_streams_updates_and_ends_the_turn() {
             "tool_call",
             "tool_call_update",
             "message"
+        ]
+    );
+}
+
+/// Every tool call is stamped with the tool's name under `_meta.macro`, the
+/// way Claude Code stamps `_meta.claudeCode.toolName`: an MCP tool as
+/// `mcp__<server>__<tool>`, a delegation flagged `subagent`.
+#[tokio::test]
+async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-1".into(),
+            name: "ReadContent".into(),
+            json: serde_json::json!({"documentId": "d"}),
+            mcp: None,
+        }),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-2".into(),
+            name: "Subagent".into(),
+            json: serde_json::json!({"task": "count the beans"}),
+            mcp: None,
+        }),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-3".into(),
+            name: "slack__search".into(),
+            json: serde_json::json!({"query": "standup"}),
+            mcp: Some(agent::McpInfo {
+                service: "slack".into(),
+                tool_name: "search".into(),
+                display_name: Some("Search Slack".into()),
+            }),
+        }),
+    ]));
+
+    let (notifications, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "go"))
+            .block_task()
+            .await
+            .expect("the prompt should complete")
+    })
+    .await;
+
+    let metas: Vec<serde_json::Value> = notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(serde_json::Value::Object(
+                call.meta.clone().expect("meta is stamped"),
+            )),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        metas,
+        vec![
+            serde_json::json!({"macro": {"toolName": "ReadContent"}}),
+            serde_json::json!({"macro": {"toolName": "Subagent", "subagent": true}}),
+            serde_json::json!({"macro": {"toolName": "mcp__slack__search"}}),
         ]
     );
 }
@@ -232,6 +323,22 @@ async fn cancel_stops_the_turn_with_the_cancelled_stop_reason() {
 }
 
 #[tokio::test]
+async fn engine_cancellation_is_not_rendered_as_an_error_message() {
+    let (notifications, response) =
+        with_agent(Arc::new(CancelledEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "cancel me"))
+                .block_task()
+                .await
+                .expect("a cancelled prompt still completes")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+    assert!(notifications.is_empty());
+}
+
+#[tokio::test]
 async fn a_prompt_for_an_unknown_session_is_refused() {
     let engine = Arc::new(ScriptedEngine::new(vec![]));
 
@@ -247,4 +354,86 @@ async fn a_prompt_for_an_unknown_session_is_refused() {
         );
     })
     .await;
+}
+
+/// Records the servers it was asked to dial and dials none of them.
+struct SpyConnector {
+    asked: std::sync::Mutex<Vec<Vec<String>>>,
+}
+
+impl crate::domain::mcp::McpToolConnector for Arc<SpyConnector> {
+    async fn connect(
+        &self,
+        servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
+    ) -> Option<mcp_toolset::RemoteMcpToolSet> {
+        self.asked
+            .lock()
+            .expect("asked lock")
+            .push(servers.into_iter().map(|server| server.name).collect());
+        None
+    }
+}
+
+/// The servers `session/new` carries are dialed then and there, minus Macro's
+/// own, whose tools this runtime already has natively.
+#[tokio::test]
+async fn session_new_dials_the_advertised_servers_except_macros_own() {
+    use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
+
+    let spy = Arc::new(SpyConnector {
+        asked: std::sync::Mutex::new(Vec::new()),
+    });
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("test-model".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        engine: Arc::new(ScriptedEngine::new(Vec::new())),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        mcp: Arc::new(Arc::clone(&spy)),
+        mcp_tools: std::sync::Mutex::new(None),
+    });
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    let servers = ["macro", "linear", "notion"]
+        .into_iter()
+        .map(|name| {
+            AcpMcpServer::Http(
+                McpServerHttp::new(name, format!("https://egress.test/mcp/{name}")).headers(vec![
+                    HttpHeader::new("Authorization", "Bearer session-token"),
+                ]),
+            )
+        })
+        .collect::<Vec<_>>();
+    Client
+        .builder()
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                connection
+                    .send_request(NewSessionRequest::new("/").mcp_servers(servers))
+                    .block_task()
+                    .await?;
+                Ok(())
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
+
+    assert_eq!(
+        *spy.asked.lock().expect("asked lock"),
+        vec![vec!["linear".to_owned(), "notion".to_owned()]]
+    );
 }

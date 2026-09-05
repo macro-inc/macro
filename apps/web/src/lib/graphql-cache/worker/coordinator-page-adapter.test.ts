@@ -391,6 +391,34 @@ describe('CacheCoordinatorPageAdapter', () => {
     await adapter.dispose();
   });
 
+  it('treats retry exhaustion from the coordinator as terminal', async () => {
+    const coordinatorPort = new FakeCoordinatorPort();
+    const terminalErrors: string[] = [];
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({
+        port: coordinatorPort as unknown as MessagePort,
+      }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onTerminalError: (error) => terminalErrors.push(error.message),
+    });
+    const started = adapter.start();
+    await vi.waitFor(() => expect(coordinatorPort.messages).toHaveLength(1));
+    coordinatorPort.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+
+    coordinatorPort.receive({
+      ...version,
+      kind: 'terminal-error',
+      error: 'cache recovery failed after 5 attempts',
+    });
+
+    expect(terminalErrors).toEqual(['cache recovery failed after 5 attempts']);
+    expect(coordinatorPort.closed).toBe(true);
+  });
+
   it('terminates an owned engine before closing a failed SharedWorker transport', async () => {
     const order: string[] = [];
     const coordinatorPort = new FakeCoordinatorPort();

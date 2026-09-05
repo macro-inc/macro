@@ -15,6 +15,8 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD as BASE64URL_NO_PAD;
 use bytes::Bytes;
 use http::header::{self, HeaderMap, HeaderName};
 use http::{HeaderValue, Method};
+use http_body_util::BodyExt;
+use http_body_util::Full;
 use http_body_util::combinators::UnsyncBoxBody;
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -216,7 +218,10 @@ pub fn is_macro_staff(user: &MacroUserIdStr<'_>) -> bool {
 /// What a verified session token entitles its holder to.
 ///
 /// The owner is the whole authorization story: a session spends the
-/// credentials of the person who opened it, and nobody else's.
+/// credentials of the person who opened it, and nobody else's. The listed
+/// servers are not a permission - any slug resolves against the owner's own
+/// connections - only the names the agent's author gave the apps it was
+/// handed, so a refusal can call an app what the person knows it as.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SessionGrant {
     /// The session the sandbox is running.
@@ -225,6 +230,151 @@ pub struct SessionGrant {
     pub owner: MacroUserIdStr<'static>,
     /// The one repository this session works on. Git egress is pinned to it.
     pub repo: RepoSlug,
+    /// The apps the agent listed for this session, for naming only.
+    pub mcp_servers: Vec<McpServerListing>,
+}
+
+impl SessionGrant {
+    /// What to call `slug` when speaking to the model: the agent's own name
+    /// for it when the agent listed it, otherwise the slug made readable
+    /// (`google_sheets` → `Google Sheets`).
+    pub fn display_name(&self, slug: &McpServerSlug) -> String {
+        self.mcp_servers
+            .iter()
+            .find(|listing| listing.slug == *slug)
+            .map(|listing| listing.name.clone())
+            .unwrap_or_else(|| readable_slug(slug))
+    }
+}
+
+/// `google_sheets` → `Google Sheets`: the fallback name for an app nobody
+/// gave a display name.
+fn readable_slug(slug: &McpServerSlug) -> String {
+    slug.as_str()
+        .split(['_', '-'])
+        .filter(|word| !word.is_empty())
+        .map(|word| {
+            let mut chars = word.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().chain(chars).collect::<String>(),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// One app an agent listed for its sessions: the slug the proxy routes on and
+/// the name anything human-facing calls it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct McpServerListing {
+    /// Pipedream's app slug, verbatim.
+    pub slug: McpServerSlug,
+    /// Display name, e.g. `Linear`.
+    pub name: String,
+}
+
+/// How a destination resolved: to a call the owner's grant backs, or to one
+/// that can be addressed for the owner without any grant behind it.
+///
+/// The second exists because Pipedream scopes a call by user id and app slug
+/// alone, so an app the owner never connected is still *addressable* - and
+/// listing its tools works, only calling them does not. The service decides
+/// what to do with that; the resolver only reports it.
+#[derive(Clone, Debug)]
+pub enum McpResolution {
+    /// The owner holds an enabled connection for this destination.
+    Connected(UpstreamCall),
+    /// The owner holds no enabled connection, but the upstream can be
+    /// addressed for them anyway.
+    Unconnected(UpstreamCall),
+}
+
+/// The most a JSON-RPC request body may be for the proxy to read it.
+///
+/// Only read on the unconnected path, where the proxy has to know the method
+/// to answer `tools/call` itself. MCP requests are small
+/// JSON; the streaming rationale on [`ProxyBody`] is about responses and
+/// packfiles, neither of which is a request body on the MCP route.
+pub const MAX_MCP_REQUEST_BYTES: usize = 1 << 20;
+
+/// The MCP method whose result the model reads as a tool's own answer.
+pub const TOOLS_CALL_METHOD: &str = "tools/call";
+
+/// The parts of a JSON-RPC request the proxy cares about.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct JsonRpcCall {
+    /// The method name.
+    pub method: String,
+    /// The request id, echoed on the response. Absent on notifications,
+    /// which get no response at all.
+    pub id: serde_json::Value,
+}
+
+/// Reads the method and id off a single JSON-RPC request.
+///
+/// `None` for anything else - a notification (no id), a batch, or a body
+/// that is not JSON - all of which the caller forwards untouched, since
+/// there is nothing here to answer in their place.
+pub fn peek_json_rpc(body: &[u8]) -> Option<JsonRpcCall> {
+    let value: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let object = value.as_object()?;
+    let method = object.get("method")?.as_str()?.to_owned();
+    let id = object.get("id")?.clone();
+    if id.is_null() {
+        return None;
+    }
+    Some(JsonRpcCall { method, id })
+}
+
+/// The markup an agent includes in a reply to give the reader a button that
+/// connects the app. Mirrors the frontend's `m-connect-app` Lexical node; the
+/// payload shape is `{"appSlug": ..., "name": ...}`.
+pub const CONNECT_APP_TAG: &str = "m-connect-app";
+
+/// The tool result the proxy answers a `tools/call` with when the session
+/// owner has not connected the app.
+///
+/// A `result` with `isError: true`, not a JSON-RPC `error`: the former is
+/// what MCP clients hand the model as the tool's own answer, the latter is
+/// rendered as a transport failure the model never sees. The wording is our
+/// own fixed text plus the app's slug and display name - the slug already
+/// validated by [`McpServerSlug::parse`], the name from the agent's own
+/// configuration or derived from that slug.
+pub fn not_connected_tool_result(
+    slug: &McpServerSlug,
+    name: &str,
+    id: serde_json::Value,
+) -> ProxyResponse {
+    let payload = serde_json::json!({
+        "appSlug": slug.as_str(),
+        "name": name,
+    });
+    let text = format!(
+        "{name} is not connected for the person running this session, or they have it          turned off, so this tool cannot run yet. Tell them so in your reply, and include          this exact markup so they get a button that connects it:          <{tag}>{payload}</{tag}>          Close your reply by asking them to let you know once they have connected {name} so \
+         you can try again - when they do, call this tool again; nothing else needs to change.",
+        name = name,
+        tag = CONNECT_APP_TAG,
+    );
+    let body = serde_json::json!({
+        "jsonrpc": "2.0",
+        "id": id,
+        "result": {
+            "isError": true,
+            "content": [{ "type": "text", "text": text }],
+        },
+    });
+    let bytes = Bytes::from(serde_json::to_vec(&body).expect("a JSON value serializes"));
+    let mut response = http::Response::new(
+        Full::new(bytes)
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    );
+    response.headers_mut().insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/json"),
+    );
+    response
 }
 
 /// A GitHub repository, as `owner/name`.
@@ -486,6 +636,27 @@ pub enum McpDestination {
     Macro,
     /// One of the owner's Pipedream-connected apps.
     Connected(McpServerSlug),
+}
+
+/// The route Macro's own MCP server is served on.
+pub const MACRO_MCP_PATH: &str = "/mcp-macro";
+
+/// The route prefix a connected app's slug follows.
+pub const CONNECTED_MCP_PATH_PREFIX: &str = "/mcp/";
+
+impl McpDestination {
+    /// Read a destination off a proxy URL's path.
+    ///
+    /// This is how an in-process client names its server: it is handed the
+    /// same egress URLs a sandbox is, so it reads them the same way the
+    /// router does rather than being told the answer a second way.
+    pub fn from_path(path: &str) -> Option<Self> {
+        if path == MACRO_MCP_PATH {
+            return Some(Self::Macro);
+        }
+        let slug = path.strip_prefix(CONNECTED_MCP_PATH_PREFIX)?;
+        McpServerSlug::parse(slug).map(Self::Connected)
+    }
 }
 
 /// A resolved destination and the credential to reach it with.

@@ -19,7 +19,6 @@ use agent_runtime_protocol::domain::ports::{Transport, TransportError, Transport
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::model::{AgentSessionId, SandboxSize};
 use agent_session::domain::service::AgentSessionService;
-use bot_id::BotId;
 
 #[cfg(test)]
 mod test;
@@ -67,11 +66,9 @@ impl TransportSender<ToRuntimeMessage> for RoutedSender {
     }
 }
 
-/// The in-memory runtime and the bot whose sessions it serves.
+/// The shared in-memory runtime used by every in-memory agent session.
 pub struct InMemRuntime {
-    /// Sessions of this bot run in-process.
-    pub bot: BotId,
-    /// Their provisioner.
+    /// In-memory session provisioner.
     pub manager: InMemAgentManager,
 }
 
@@ -120,8 +117,8 @@ where
             .get_session(session)
             .await
             .map_err(HarnessError::Session)?;
-        if let Some(inmem) = &self.inmem
-            && row.bot_id == inmem.bot
+        if self.inmem.is_some()
+            && AgentKind::for_session(row.bot_id, &row.harness) == AgentKind::InMemory
         {
             return Ok(Route::InMem(SessionFacts {
                 id: session,
@@ -131,7 +128,7 @@ where
                 acp_session_id: row.acp_session_id,
             }));
         }
-        if AgentKind::of(row.bot_id) == AgentKind::InMemory {
+        if AgentKind::for_session(row.bot_id, &row.harness) == AgentKind::InMemory {
             return Err(HarnessError::Container(format!(
                 "session {session} belongs to the in-process bot, which this deployment does not serve"
             )));
@@ -155,7 +152,10 @@ where
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         match self.route(command.session_id).await? {
             Route::InMem(facts) => Ok(RoutedTransport::InMem(
-                self.inmem().manager.attach(facts).await,
+                self.inmem()
+                    .manager
+                    .attach(facts, Some(command.egress.session_token))
+                    .await,
             )),
             Route::Sandbox => self
                 .sandbox
@@ -185,7 +185,7 @@ where
     async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
         match self.route(session).await? {
             Route::InMem(facts) => Ok(RoutedTransport::InMem(
-                self.inmem().manager.attach(facts).await,
+                self.inmem().manager.attach(facts, None).await,
             )),
             Route::Sandbox => self
                 .sandbox
@@ -195,11 +195,13 @@ where
         }
     }
 
-    /// An in-process session has no container and no egress environment, so
-    /// there is no token to read back; sandboxes delegate to their provider.
+    /// An in-process session has no container environment to read a token
+    /// back from, so the manager remembers the one spawn handed it; a
+    /// session this process never spawned yields none. Sandboxes delegate to
+    /// their provider.
     async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
         match self.route(session).await? {
-            Route::InMem(_) => Ok(None),
+            Route::InMem(_) => Ok(self.inmem().manager.session_token(session)),
             Route::Sandbox => self.sandbox.session_token(session).await,
         }
     }

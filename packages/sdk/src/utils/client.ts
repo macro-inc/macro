@@ -34,7 +34,7 @@ export class MacroClient {
   readonly storage: StorageSdk;
   readonly webAppUrl: string;
   readonly wsVerify?: string;
-  readonly events?: MacroEvents;
+  readonly events: MacroEvents;
   /** Resolved authentication config (distinct from `auth`, the auth-service SDK). */
   readonly authConfig: MacroAuth;
   /** Resolved service base urls: env defaults, then the local-stack portmap,
@@ -93,9 +93,7 @@ export class MacroClient {
         ? process.env.MACRO_WEBHOOK_SECRET
         : undefined;
     const webhookSecret = opts.webhookSecret ?? envWebhookSecret;
-    if (webhookSecret) {
-      this.events = new MacroEvents(this, webhookSecret);
-    }
+    this.events = new MacroEvents(this, webhookSecret);
   }
 
   /** Whether requests have a user identity accepted by acting-user endpoints. */

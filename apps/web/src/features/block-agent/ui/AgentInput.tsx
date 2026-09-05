@@ -1,15 +1,17 @@
 /**
  * The agent block's composer: the chat input's look and its markdown editing
- * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), without the
- * rest of `ChatInput`'s machinery — no mentions, attachments, upload queue,
- * or contexts; model plumbing arrives through the `modelControl` slot. Visual
- * chrome mirrors `@core/component/AI/component/input/ChatInput.tsx`.
+ * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), including `@`
+ * mentions so users can attach Macro items the same way they do in chat.
+ * Attachments, upload queue, and chat contexts stay out; model plumbing
+ * arrives through the `modelControl` slot. Visual chrome mirrors
+ * `@core/component/AI/component/input/ChatInput.tsx`.
  */
 
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
+import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
 import { Button, SendButton, Surface } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 
@@ -20,6 +22,11 @@ export interface AgentInputProps {
   placeholder?: string;
   /** The agent is working: the send button becomes a stop square. */
   busy?: boolean;
+  /**
+   * A waiting action can be advanced by ending the current turn. While the
+   * input is empty, Enter and the matching button do exactly that.
+   */
+  hasQueuedMessages?: boolean;
   disabled?: boolean;
   autofocus?: boolean;
   /**
@@ -27,7 +34,7 @@ export interface AgentInputProps {
    * typing `/` opens a typeahead over them. `/` stays plain text while empty.
    */
   commands?: () => AgentCommandItem[];
-  /** Receives the composed markdown. */
+  /** Receives the composed markdown, including any `<m-document-mention>` tags. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
   /** Sits as a pill above the input box, e.g. the session's model selector. */
@@ -38,6 +45,16 @@ export interface AgentInputProps {
    * chip can quote selected text into this composer.
    */
   registerQuoteInsert?: (insert: QuoteInsert | undefined) => void;
+  /**
+   * Up (or Shift+Tab/Left, the app's focus-leave convention) at the very
+   * start of the input: focus moves to whatever sits above — the queued
+   * prompt about to dispatch. Ordinary in-text cursor movement never
+   * triggers it.
+   */
+  onNavigateUp?: () => void;
+  /** Ref-style: how the queue's Down-past-the-end refocuses this input;
+   *  `undefined` again on unmount. */
+  registerFocus?: (focus: (() => void) | undefined) => void;
 }
 
 /** Past this height the controls drop below the text instead of overlaying it. */
@@ -47,8 +64,8 @@ export function AgentInput(props: AgentInputProps) {
   const [markdown, setMarkdown] = createSignal('');
   let bodyRef: HTMLDivElement | undefined;
 
-  // Sending while busy is allowed — the block queues prompts and flushes
-  // them when the running turn settles.
+  // Sending while busy is allowed — the service queues prompts behind the
+  // running turn.
   const canSend = () => markdown().trim().length > 0 && !props.disabled;
 
   // Same content-driven switch as ChatInput: once the editor body wraps past
@@ -66,8 +83,26 @@ export function AgentInput(props: AgentInputProps) {
     props.onSend(content);
   };
 
+  const canSendNext = () =>
+    markdown().trim().length === 0 &&
+    props.busy &&
+    props.hasQueuedMessages &&
+    !props.disabled &&
+    props.onStop !== undefined;
+
+  const sendNext = () => {
+    if (!canSendNext()) return;
+    // Stop bypasses the server queue. The cancelled turn ending immediately
+    // dispatches its oldest waiting action, so the queue remains FIFO.
+    props.onStop?.();
+  };
+
   const editor = buildConfig('chat')
     .namespace('agent-input')
+    .withMentions({
+      showOpenTabs: true,
+      block: 'agent',
+    })
     .withEmojis()
     .withLinks({ floatingMenu: true, autoLinkMatchMode: 'common-tlds' })
     .withHistory({ timeGap: 400 })
@@ -75,12 +110,24 @@ export function AgentInput(props: AgentInputProps) {
     .withRestoreFocus()
     .withAgentCommands({ commands: () => props.commands?.() ?? [] })
     .onEnter(() => {
-      send();
+      if (canSend()) send();
+      else sendNext();
       return true;
+    })
+    .onFocusLeave({
+      onStart: (event) => {
+        if (!props.onNavigateUp) return;
+        event.preventDefault();
+        props.onNavigateUp();
+      },
+      // Nothing sits below the input; the key keeps its default behavior.
+      onEnd: () => {},
     })
     .onChange(setMarkdown);
 
   onMount(() => {
+    props.registerFocus?.(() => editor.controls.focus());
+    onCleanup(() => props.registerFocus?.(undefined));
     props.registerQuoteInsert?.((text) => {
       // Discrete so the chip is committed to the DOM before focus moves in.
       editor.lexical.update(() => $insertReferencedPaste(text), {
@@ -118,7 +165,9 @@ export function AgentInput(props: AgentInputProps) {
           >
             <MarkdownShell
               config={editor}
-              placeholder={props.placeholder ?? 'Message the agent'}
+              placeholder={
+                props.placeholder ?? 'Message the agent, @mention anything'
+              }
               autofocus={props.autofocus}
             />
           </div>
@@ -134,15 +183,29 @@ export function AgentInput(props: AgentInputProps) {
                 />
               }
             >
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                label="Stop"
-                onClick={() => props.onStop?.()}
-                class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+              <Show
+                when={canSendNext()}
+                fallback={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    label="Stop"
+                    onClick={() => props.onStop?.()}
+                    class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+                  >
+                    <div class="size-3.5 rounded-sm bg-current" />
+                  </Button>
+                }
               >
-                <div class="size-3.5 rounded-sm bg-current" />
-              </Button>
+                <SendButton
+                  aria-label="Send next queued message"
+                  tooltip="Send next queued message"
+                  shortcut="Enter"
+                  onClick={sendNext}
+                >
+                  <EnterIcon />
+                </SendButton>
+              </Show>
             </Show>
           </div>
         </div>

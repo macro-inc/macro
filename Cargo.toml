@@ -45,6 +45,9 @@ members = [
   "crates/graphql_properties",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/harness_id",
+  "crates/harness_token",
+  "crates/harnesses",
   "crates/import",
   "crates/item_filter_index",
   "crates/integration_tests/local_e2e",
@@ -58,6 +61,7 @@ members = [
   "crates/maybe_send",
   "crates/memory",
   "crates/mcp_select",
+  "crates/mcp_toolset",
   "crates/pipedream_mcp",
   "crates/onboarding",
   "crates/predicate_index",
@@ -72,6 +76,7 @@ members = [
   "crates/system_skills",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/user_api_key",
   "crates/webhook_signature",
   "crates/worker-rs-otel",
   "crates/workspace-hack",
@@ -136,6 +141,7 @@ apollo-parser = "0.8"
 # https://github.com/agentclientprotocol/rust-sdk/pull/294
 # Swap back to a plain version once upstream cuts a release containing it.
 agent-client-protocol = { git = "https://github.com/agentclientprotocol/rust-sdk", rev = "8769d16d10e0c9fa7e662ee18424a4313b06ea88" }
+arboard = { version = "3.6.1", default-features = false, features = ["wayland-data-control"] }
 askama = "0.14"
 async-graphql = "7.2.1"
 async-lock = "3"
@@ -171,14 +177,17 @@ chrono-tz = { version = "0.10.4", features = ["serde"] }
 clap = { version = "4.5.20", features = ["derive"] }
 cloudfront_sign = "0.3.0"
 constant_time_eq = "0.3.1"
+crossterm = "0.28"
 cookie = "0.18.1"
 cron = "0.16.0"
 csv = "1"
 dashmap = "6.1.0"
 dateparser = "0.2.1"
+determinator = "0.12.0"
 dotenvy = "0.15.7"
 ego-tree = "0.6.2"
 either = "1"
+eventsource-stream = "0.2.3"
 futures = "0.3.31"
 getrandom = "0.3"
 glob = "0.3.3"
@@ -195,12 +204,14 @@ http-body-util = "0.1.2"
 httpdate = "1"
 image = "0.25"
 indexmap = "2"
+indoc = "2"
 inquire = "0.7"
 itertools = "0.14"
 jsonwebtoken = { git = "https://github.com/whutchinson98/jsonwebtoken", features = [
   "rust_crypto",
 ] }
 lambda_runtime = "0.13.0"
+lazy-regex = "3.6.1"
 lazy_static = "1.5.0"
 livekit-api = { version = "0.4.16", default-features = false, features = [
   "access-token",
@@ -215,6 +226,7 @@ lru = "0.16"
 mockall = "0.13"
 nom = "8"
 opentelemetry = { version = "0.31.0", default-features = false }
+opentelemetry-appender-tracing = { version = "0.31.1", default-features = false }
 opentelemetry-http = { version = "0.31.0", default-features = false }
 opentelemetry-otlp = { version = "0.31.0", default-features = false, features = [
   "grpc-tonic",
@@ -235,6 +247,7 @@ postcard = { version = "1", features = ["use-std"] }
 pollster = "0.4"
 quote = "1"
 rand = "0.9.0"
+ratatui = "0.29"
 # uses vendored to fix lambda builds failing.
 rdkafka = { version = "0.37", default-features = false, features = [
   "cmake-build",
@@ -253,6 +266,7 @@ reqwest = { version = "0.13", default-features = false, features = [
   "rustls",
 ] }
 rmcp = "1.6.0"
+sse-stream = "0.2"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs"] }
 rootcause-tracing = "0.12.1"
@@ -265,6 +279,7 @@ serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 serde_yaml = "0.9"
+shell-words = "1.1.1"
 specta = { version = "=2.0.0-rc.25", features = ["derive"] }
 specta-serde = "=0.0.12"
 specta-typescript = "=0.0.12"
@@ -277,6 +292,7 @@ sqlx = { version = "0.8.6", features = [
 ] }
 sqlx-core = { version = "0.8.6" }
 strum = { version = "0.27.1", features = ["derive"] }
+tempfile = "3"
 thiserror = "2.0.0"
 time = "0.3.37"
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
@@ -294,10 +310,12 @@ tower-http = { version = "0.6.1", features = [
   "trace",
 ] }
 toml = "0.8"
+toml_edit = "0.22"
 tracing = "0.1.44"
 tracing-opentelemetry = "0.32.1"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
+tui-input = { version = "0.14.0", default-features = false }
 # Pin the official upstream revision used by the browser cache. Cache writes use
 # deferred transactions so browser WASM does not initialize Turso's temp database.
 turso_core = { git = "https://github.com/tursodatabase/turso", rev = "79163249538197d01dec5ea7f65519454ed792e2", default-features = false }
@@ -321,6 +339,7 @@ wasm-bindgen-futures = "0.4"
 wasm-bindgen-test = "0.3"
 web-sys = "0.3"
 web-time = "1.1.0"
+webbrowser = { version = "=1.2.2", features = ["hardened"] }
 worker = "0.8.1"
 # this is pinned to match axum 0.7.9 dependency requirements
 async-stripe = { version = "0.41", default-features = false, features = [
@@ -346,6 +365,7 @@ url = "2.5.0"
 zip = "=2.4.2"
 ammonia = "4.1.4"
 html-escape = "0.2"
+subtle = "2.6.1"
 
 # Retain Rust DWARF for local cache profiling while keeping release-level LLVM
 # optimization. wasm-pack's custom profile metadata prevents the final

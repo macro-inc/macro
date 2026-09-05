@@ -1,9 +1,14 @@
 use crate::constants::header_names::MACRO_INTERNAL_AUTH_KEY_HEADER_KEY;
+use crate::durable_object::EditAttribution;
 use serde_json::json;
 use tracing::{debug, error};
 use worker::{Fetch, Method, Request, RequestInit};
 
-pub async fn update(document_id: &str, env: &worker::Env) -> worker::Result<()> {
+pub async fn update(
+    document_id: &str,
+    env: &worker::Env,
+    attribution: Option<EditAttribution>,
+) -> worker::Result<()> {
     let internal_auth_key = env
         .secret("SPS_API_SECRET_KEY")
         .inspect_err(|e| error!(error=%e, "Could not find API SPS key binding"))?
@@ -18,6 +23,8 @@ pub async fn update(document_id: &str, env: &worker::Env) -> worker::Result<()> 
         "documents": [{
             "document_id": document_id,
             "file_type": "md",
+            "actor": attribution.as_ref().map(|a| &a.actor),
+            "on_behalf_of": attribution.as_ref().and_then(|a| a.on_behalf_of.as_ref()),
         }]
     });
 

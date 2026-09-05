@@ -5,7 +5,7 @@ language: tsx
 severity: warning
 message: Layered features reach the app only through context/. Add the capability to the feature's Context type and wire it in context/.
 note: |-
-  Rule FE-31 in docs/STYLE_GUIDE.md. Inside a layered feature, `queries/`,
+  Rule FE-33 in docs/STYLE_GUIDE.md. Inside a layered feature, `queries/`,
   `primitives/`, `components/`, and `views/` never import the app's singletons
   or context hooks (GraphQL soup client, user context, display names,
   entity display, openDocument, PostHog). Those arrive through the

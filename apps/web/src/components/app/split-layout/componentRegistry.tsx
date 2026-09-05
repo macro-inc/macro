@@ -2,8 +2,10 @@ import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { ChannelsView } from '@app/features/channels-view/channels-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
+import { InboxView } from '@app/features/inbox-view/inbox-view';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
@@ -12,9 +14,11 @@ import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-prese
 import { NonMemberChannelPreview } from '@app/features/next-soup/soup-view/non-member-channel-preview';
 import { SoupView } from '@app/features/next-soup/soup-view/soup-view';
 import { useRecentViewFlag } from '@app/features/next-soup/use-recent-view-flag';
+import { ReminderEditorSplit } from '@app/features/reminders/ReminderEditorSplit';
 import { SettingsPanelComponentWrapper } from '@app/features/settings/Settings';
+import { TasksView } from '@app/features/tasks-view/tasks-view';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { usePosthog } from '@app/lib/analytics/posthog';
+import { useFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
 import { ChannelCompose } from '@block-channel/component/Compose';
@@ -30,16 +34,28 @@ import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
-  ENABLE_CRM,
-  ENABLE_REMINDERS,
+  enableCrm,
+  enableNewAppViews,
+  enableReminders,
+  isFeatureEnabled,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useUserContext } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
 import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
 import { EmptyStatePanel } from '@ui';
-import { type Component, type JSXElement, lazy, onMount, Show } from 'solid-js';
+import {
+  type Component,
+  createRenderEffect,
+  type JSXElement,
+  lazy,
+  Match,
+  onMount,
+  Show,
+  Switch,
+} from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
 import { previewEmptyStateForContent } from './previewController';
@@ -50,6 +66,24 @@ function usePageViewTracking(pageTitle: string) {
     analytics.pageView(pageTitle);
     analytics.track('open_view', { viewId: pageTitle });
   });
+}
+
+function useNewAppViews() {
+  const panel = useSplitPanelOrThrow();
+  const posthog = usePosthog();
+  const flag = useFeatureFlag(enableNewAppViews);
+  const ready = () =>
+    enableNewAppViews.override !== undefined || posthog.flagsLoaded();
+  const enabled = () => ready() && flag().enabled;
+
+  createRenderEffect(() => {
+    if (!ready()) return;
+    panel.handle.updateMeta?.({
+      splitPanelLayout: enabled() ? 'composable' : 'legacy',
+    });
+  });
+
+  return { ready, enabled };
 }
 
 /**
@@ -138,12 +172,31 @@ function RedirectSplit(props: { to: SplitContent }) {
   return null;
 }
 
+/**
+ * A reminder view carries its reminder id in the id slot — `reminder-view~<id>`
+ * — because component params are dropped on URL restore (see `contentUrlSegments`)
+ * and split identity is keyed on the id, so each reminder needs a distinct one.
+ */
+const REMINDER_VIEW_PREFIX = 'reminder-view~';
+
 export function resolveComponent(
   name: string,
   params?: ComponentParams
 ): ResolvedComponent {
   const registration = REGISTRY.get(name);
-  if (!registration) throw new Error(`Component '${name}' not registered`);
+  if (!registration) {
+    if (name.startsWith(REMINDER_VIEW_PREFIX)) {
+      const base = REGISTRY.get('reminder-view');
+      if (base) {
+        const reminderId = name.slice(REMINDER_VIEW_PREFIX.length);
+        return {
+          element: () => base.factory({ ...(params ?? {}), reminderId }),
+          initialMeta: base.initialMeta,
+        };
+      }
+    }
+    throw new Error(`Component '${name}' not registered`);
+  }
   return {
     element: () => registration.factory(params ?? {}),
     initialMeta: registration.initialMeta,
@@ -171,22 +224,32 @@ registerComponent(
   })
 );
 
-registerComponent(
-  'inbox',
-  withAuth(() => {
-    usePageViewTracking('inbox');
-    const preset = getViewPreset('inbox');
-    return (
-      <SoupView
-        viewName="Inbox"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-        disableLocalSearch
-      />
-    );
-  })
-);
+function LegacyInboxView() {
+  const preset = getViewPreset('inbox');
+  return (
+    <SoupView
+      viewName="Inbox"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      initialGroupBy={preset?.groupBy}
+      disableLocalSearch
+    />
+  );
+}
+
+function RegisteredInboxView() {
+  usePageViewTracking('inbox');
+  const newAppViews = useNewAppViews();
+  return (
+    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+      <Show when={newAppViews.enabled()} fallback={<LegacyInboxView />}>
+        <InboxView />
+      </Show>
+    </Show>
+  );
+}
+
+registerComponent('inbox', withAuth(RegisteredInboxView));
 
 registerComponent('recent', withAuth(RecentViewWrapper));
 
@@ -270,7 +333,7 @@ registerComponent(
   withAuth(() => {
     // Registered even when the flag is closed so a bookmarked /reminders or a
     // restored split recovers to the inbox instead of an empty split.
-    if (!ENABLE_REMINDERS()) {
+    if (!isFeatureEnabled(enableReminders)) {
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('reminders');
@@ -362,41 +425,79 @@ registerComponent(
   })
 );
 
-registerComponent(
-  'tasks',
-  withAuth(() => {
-    usePageViewTracking('tasks');
-    const user = useUserContext();
-    const preset = getViewPreset('tasks', undefined, {
-      userId: user.userId(),
-      isTeamAdmin: false,
-    });
-    return (
-      <SoupView
-        viewName="Tasks"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
+function LegacyTasksView() {
+  const user = useUserContext();
+  const preset = getViewPreset('tasks', undefined, {
+    userId: user.userId(),
+    isTeamAdmin: false,
+  });
 
-registerComponent(
-  'channels',
-  withAuth(() => {
-    usePageViewTracking('channels');
-    const preset = getViewPreset('channels');
-    return (
-      <SoupView
-        viewName="Channels"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-      />
-    );
-  })
-);
+  return (
+    <SoupView
+      viewName="Tasks"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      initialGroupBy={preset?.groupBy}
+    />
+  );
+}
+
+function RegisteredTasksView() {
+  usePageViewTracking('tasks');
+  const newAppViews = useNewAppViews();
+
+  return (
+    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+      <Show when={newAppViews.enabled()} fallback={<LegacyTasksView />}>
+        <TasksView />
+      </Show>
+    </Show>
+  );
+}
+
+registerComponent('tasks', withAuth(RegisteredTasksView));
+
+function LegacyChannelsView() {
+  const preset = getViewPreset('channels');
+
+  return (
+    <SoupView
+      viewName="Channels"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      initialGroupBy={preset?.groupBy}
+    />
+  );
+}
+
+function FeatureGatedChannelsView() {
+  const newAppViews = useNewAppViews();
+
+  return (
+    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+      <Show when={newAppViews.enabled()} fallback={<LegacyChannelsView />}>
+        <ChannelsView />
+      </Show>
+    </Show>
+  );
+}
+
+function RegisteredChannelsView() {
+  usePageViewTracking('channels');
+
+  return (
+    <Switch>
+      <Match when={isTouchDevice()}>
+        <LegacyChannelsView />
+      </Match>
+      <Match when={!isTouchDevice()}>
+        <FeatureGatedChannelsView />
+      </Match>
+    </Switch>
+  );
+}
+
+registerComponent('channels', withAuth(RegisteredChannelsView));
 
 registerComponent(
   'calls',
@@ -419,7 +520,7 @@ registerComponent(
   withAuth(() => {
     // Registered even when the CRM feature is off so direct navigation /
     // restored splits redirect instead of throwing in resolveComponent.
-    if (!ENABLE_CRM()) {
+    if (!isFeatureEnabled(enableCrm)) {
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('companies');
@@ -601,6 +702,10 @@ registerComponent('skill-compose', (params) => {
   usePageViewTracking('skill-compose');
   return <ComposeSkill {...params} />;
 });
+registerComponent('reminder-view', (params) => {
+  usePageViewTracking('reminder-view');
+  return <ReminderEditorSplit reminderId={params.reminderId as string} />;
+});
 registerComponent(
   'import-linear',
   lazy(() => import('@app/features/integrations/import-linear/ImportLinear'))
@@ -630,14 +735,6 @@ if (LOCAL_ONLY) {
   registerComponent(
     'data',
     lazy(() => import('@core/internal/DataDebug'))
-  );
-  registerComponent(
-    'noise',
-    lazy(() => import('@core/internal/PcNoiseGridDemo'))
-  );
-  registerComponent(
-    'svg-noise',
-    lazy(() => import('@core/internal/SvgNoiseGridDemo'))
   );
   registerComponent(
     'chat',
@@ -739,11 +836,6 @@ if (DEV_MODE_ENV) {
     )
   );
 
-  // NOTE (seamus) : putting pixel icons on dev/staging for aidan
-  registerComponent(
-    'pixel-icon',
-    lazy(() => import('@core/internal/PixelArtIconDemo'))
-  );
   registerComponent(
     'md-parse',
     lazy(

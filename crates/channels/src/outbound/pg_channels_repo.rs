@@ -744,9 +744,10 @@ fn id_to_display_name(user_id: &MacroUserIdStr<'static>, name_lookup: &NameLooku
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX: &str = r#"
     WITH user_channels AS (
-        SELECT c.*
+        SELECT c.*, a.viewed_at
         FROM comms_channels c
         INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id
+        LEFT JOIN comms_activity a ON a.channel_id = c.id AND a.user_id = $1
         WHERE cp.user_id = $1 AND cp.left_at IS NULL
 "#;
 
@@ -756,8 +757,9 @@ static CHANNEL_LIST_PREFIX: &str = r#"
 #[cfg(feature = "list")]
 static CHANNEL_LIST_PREFIX_WITH_TEAM_CHANNELS: &str = r#"
     WITH user_channels AS (
-        SELECT c.*
+        SELECT c.*, a.viewed_at
         FROM comms_channels c
+        LEFT JOIN comms_activity a ON a.channel_id = c.id AND a.user_id = $1
         WHERE (
             EXISTS (
                 SELECT 1
@@ -787,8 +789,18 @@ static CHANNEL_LIST_SELECT: &str = r#"
         WHERE
             ($4::timestamptz IS NULL)
             OR
-            ((CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END), uc.id::text) < ($4, $5)
-        ORDER BY (CASE $2 WHEN 'created_at' THEN uc.created_at ELSE uc.updated_at END) DESC, uc.id::text DESC
+            ((CASE $2
+                WHEN 'created_at' THEN uc.created_at
+                WHEN 'viewed_at' THEN COALESCE(uc.viewed_at, '1970-01-01 00:00:00+00')
+                WHEN 'viewed_updated' THEN COALESCE(uc.viewed_at, uc.updated_at)
+                ELSE uc.updated_at
+            END), uc.id::text) < ($4, $5)
+        ORDER BY (CASE $2
+            WHEN 'created_at' THEN uc.created_at
+            WHEN 'viewed_at' THEN COALESCE(uc.viewed_at, '1970-01-01 00:00:00+00')
+            WHEN 'viewed_updated' THEN COALESCE(uc.viewed_at, uc.updated_at)
+            ELSE uc.updated_at
+        END) DESC, uc.id::text DESC
         LIMIT $3
     ),
     channel_participants_json AS (
@@ -828,7 +840,12 @@ static CHANNEL_LIST_SELECT: &str = r#"
         ) as "is_participant"
     FROM paged_channels pc
     LEFT JOIN channel_participants_json cpj ON cpj.channel_id = pc.id
-    ORDER BY (CASE $2 WHEN 'created_at' THEN pc.created_at ELSE pc.updated_at END) DESC, pc.id::text DESC
+    ORDER BY (CASE $2
+        WHEN 'created_at' THEN pc.created_at
+        WHEN 'viewed_at' THEN COALESCE(pc.viewed_at, '1970-01-01 00:00:00+00')
+        WHEN 'viewed_updated' THEN COALESCE(pc.viewed_at, pc.updated_at)
+        ELSE pc.updated_at
+    END) DESC, pc.id::text DESC
 "#;
 
 #[cfg(feature = "list")]

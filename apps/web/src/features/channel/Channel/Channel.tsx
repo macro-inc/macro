@@ -73,7 +73,6 @@ import { queryClient } from '@queries/client';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { useBeforeLeave } from '@solidjs/router';
 import {
-  type Accessor,
   createEffect,
   createMemo,
   createSignal,
@@ -92,7 +91,7 @@ import {
 import { ChannelInputContainer } from '../Input/ChannelInputContainer';
 import { hasSendableInputContent } from '../Input/utils/sendable-content';
 import { ChannelThread } from '../Thread';
-import { buildQuoteReplyValue } from '../Thread/utils/message-actions';
+import { buildReplyTargetValue } from '../Thread/utils/message-actions';
 import { isUnifiedInputMode } from '../unified-input-mode';
 import { ActiveCallMessage } from './ActiveCallMessage';
 import { ChannelDropZone } from './ChannelDropZone';
@@ -111,14 +110,11 @@ import {
 } from './create-target-message-controller';
 import { buildChannelMessageListMeta } from './message-list-meta';
 import { ScrollToBottomOverlay } from './ScrollToBottomOverlay';
-import { createStickyScrollEffect } from './sticky-scroll';
 import {
-  defaultThreadListTargetFromMessage,
   ThreadList,
   type ThreadListNavigation,
   type ThreadListScrollSnapshot,
   type ThreadListScrollState,
-  type ThreadListScrollTarget,
 } from './ThreadList';
 import {
   createThreadManager,
@@ -199,8 +195,7 @@ export function Channel(props: ChannelProps) {
     initialTargetMessageReplyId: props.targetMessageReplyId,
     // changing the array reference is required to trigger the scroll effect
     messageKeys: () => [...messageIndex.keys],
-    navigation: threadListNavigation,
-    didInitialScroll: () => threadListScrollState()?.didInitialScroll ?? false,
+    isReady: () => !!threadListNavigation(),
   });
 
   const [channelInputSnapshot, setChannelInputSnapshot] =
@@ -250,17 +245,6 @@ export function Channel(props: ChannelProps) {
 
   const messages = createMemo(() => [...messageIndex.items]);
   const messageById = () => messageIndex.byId;
-  const keepMountedTargetThreadIndexes = createMemo(() => {
-    const threadId = targetMessageController.activeTargetMessageId();
-    const hasPendingElementScroll =
-      targetMessageController.pendingScrollTargetId() !== undefined ||
-      targetMessageController.pendingTargetReplyId() !== undefined;
-    if (!threadId || !hasPendingElementScroll) return [];
-
-    const index = messageIndex.keys.indexOf(threadId);
-    return index === -1 ? [] : [index];
-  });
-
   const participants = useChannelParticipants(() => props.channelId);
   const channelBotMentionUsers = useChannelBotMentionUsers(
     () => props.channelId
@@ -331,13 +315,6 @@ export function Channel(props: ChannelProps) {
       }
     },
   });
-
-  const threadListInitialScrollTarget: Accessor<ThreadListScrollTarget> = () =>
-    defaultThreadListTargetFromMessage(
-      targetMessageController.activeTargetMessageId()
-    );
-
-  const shift = () => threadPaginator.isShifting();
 
   const activityTracker = createActivityTracker({
     lastViewedAt: () => activity()?.viewed_at,
@@ -416,13 +393,20 @@ export function Channel(props: ChannelProps) {
     return state;
   };
 
-  const openQuoteReplyInput = (message: MessageData) => {
+  const openReplyTargetInput = (
+    message: MessageData,
+    selectedText?: string,
+    renderedText?: string
+  ) => {
     const threadId = message.thread_id ?? message.id;
     const state = threadManager.getOrCreateThreadState(threadId);
     const beforeSnapshot = state.replyInputState();
     const nextSnapshot: InputSnapshot = {
-      value: buildQuoteReplyValue({
-        quotedContent: message.content,
+      value: buildReplyTargetValue({
+        channelId: props.channelId,
+        message,
+        selectedText,
+        renderedText,
         existingValue: beforeSnapshot?.value,
       }),
       mentions: beforeSnapshot?.mentions ?? [],
@@ -457,7 +441,7 @@ export function Channel(props: ChannelProps) {
     removeReaction: removeReactionMutation.mutate,
     onReply: (ctx) => {
       if (ctx.message.thread_id) {
-        openQuoteReplyInput(ctx.message);
+        openReplyTargetInput(ctx.message, ctx.selectedText, ctx.renderedText);
         return;
       }
       openReplyInput(ctx.message);
@@ -500,6 +484,7 @@ export function Channel(props: ChannelProps) {
   };
 
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
+    cancelLatestNavigation();
     if (replyId) {
       clearSelection();
       prepareTargetReply(messageId);
@@ -538,52 +523,73 @@ export function Channel(props: ChannelProps) {
     isMessageLoaded: (id) => messageIndex.keys.includes(id),
   });
 
-  const handleScrollToBottom = () => {
-    if (messagesQuery.hasPreviousPage) {
+  // A latest request waits for both the query and the rendered list. Keeping
+  // its identity prevents a late response from overriding newer navigation.
+  let pendingLatest: { phase: 'loading' | 'waiting-for-layout' } | undefined;
+  const cancelLatestNavigation = () => {
+    pendingLatest = undefined;
+  };
+  onCleanup(cancelLatestNavigation);
+
+  const finishLatestNavigation = () => {
+    if (
+      pendingLatest?.phase !== 'waiting-for-layout' ||
+      messagesQuery.isPending ||
+      messagesQuery.hasPreviousPage
+    )
+      return;
+    // Retained data is usable after a pagination error. Wait only if the query
+    // has no data yet or the message index still contains the old page.
+    const latestMessageId = messagesQuery.data?.pages.find(
+      (page) => page.items.length > 0
+    )?.items[0]?.id;
+    if (
+      latestMessageId !== undefined &&
+      messageIndex.keys.at(-1) === latestMessageId &&
+      threadListNavigation()?.scrollToLatest()
+    )
+      cancelLatestNavigation();
+  };
+
+  const goToLatest: ChannelHandle['goToLatest'] = async () => {
+    const request: NonNullable<typeof pendingLatest> = { phase: 'loading' };
+    pendingLatest = request;
+    try {
+      const needsLatestPage =
+        messagesQuery.hasPreviousPage ||
+        !!targetMessageController.loadAroundMessageId();
       targetMessageController.reset();
-      const defaultKey = getChannelMessagesQueryKey(props.channelId, null);
-      queryClient.resetQueries({ queryKey: defaultKey });
-    } else {
-      threadListNavigation()?.scrollToBottom('end');
+      if (needsLatestPage) {
+        await queryClient.resetQueries(
+          { queryKey: getChannelMessagesQueryKey(props.channelId, null) },
+          { throwOnError: true }
+        );
+      }
+      if (pendingLatest !== request) return;
+      request.phase = 'waiting-for-layout';
+      finishLatestNavigation();
+    } catch {
+      // The query presents the error; the failed request must not scroll later.
+      if (pendingLatest === request) cancelLatestNavigation();
     }
   };
 
-  const [pendingScrollToLatest, setPendingScrollToLatest] = createSignal(false);
-
-  const goToLatest: ChannelHandle['goToLatest'] = () => {
-    handleScrollToBottom();
-    setPendingScrollToLatest(true);
+  const onThreadListScroll = (
+    state: ThreadListScrollState,
+    snapshot: ThreadListScrollSnapshot | undefined
+  ) => {
+    setThreadListScrollState(state);
+    if (snapshot) setThreadListScrollSnapshot(snapshot);
+    finishLatestNavigation();
   };
-
-  // When handleScrollToBottom resets a mid-history slice, the newest page
-  // arrives asynchronously and swaps the message set, so a single scroll can
-  // settle mid-list. Keep scrolling until the viewport rests at the bottom of
-  // fully loaded data.
-  createEffect(() => {
-    if (!pendingScrollToLatest()) return;
-    // A specific message navigation supersedes scroll-to-latest: once a target
-    // scroll is pending, abandon the latest-scroll so it can't yank the view
-    // back to the bottom.
-    if (targetMessageController.pendingScrollTargetId()) {
-      setPendingScrollToLatest(false);
-      return;
-    }
-    const navigation = threadListNavigation();
-    const scrollState = threadListScrollState();
-    if (!navigation || !scrollState?.didInitialScroll) return;
-    if (messageIndex.keys.length === 0) return;
-    if (messagesQuery.isFetching || messagesQuery.hasPreviousPage) return;
-    if (scrollState.isNearBottom) {
-      setPendingScrollToLatest(false);
-      return;
-    }
-    navigation.scrollToBottom('end');
-  });
 
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
     createChannelHotkeys({
       selection,
-      navigation: threadListNavigation,
+      scrollToMessage: (id, options) => {
+        cancelLatestNavigation();
+        return threadListNavigation()?.scrollToMessage(id, options) ?? false;
+      },
       messageById,
       getMessageActions,
       userId,
@@ -591,18 +597,11 @@ export function Channel(props: ChannelProps) {
       isInputEmpty: () =>
         (channelInputSnapshot()?.value.trim().length ?? 0) === 0,
       onOpenFindBar: findBar.open,
-      onGoToBottom: handleScrollToBottom,
+      onGoToBottom: goToLatest,
     });
 
-  createStickyScrollEffect({
-    isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
-    hasMoreBelow: () => threadPaginator.hasMorePrepend(),
-    messages,
-    scrollToBottom: () => threadListNavigation()?.scrollToBottom(),
-  });
-
   createChannelKeyboardHandler({
-    navigation: threadListNavigation,
+    scrollToLatest: () => threadListNavigation()?.scrollToLatest(),
     isNearBottom: () => threadListScrollState()?.isNearBottom ?? false,
     // The unified input's current binding — the edited message (the edit
     // face covers the reply face), else the reply target.
@@ -687,24 +686,24 @@ export function Channel(props: ChannelProps) {
     );
   };
 
-  const isChannelReady = () => {
-    return (
-      messagesQuery.isFetched &&
-      threadListNavigation() &&
-      threadListScrollState()?.didInitialScroll
-    );
+  const onThreadListReady = (navigation: ThreadListNavigation) => {
+    setThreadListNavigation(navigation);
+    finishLatestNavigation();
+    return () =>
+      setThreadListNavigation((current) =>
+        current === navigation ? undefined : current
+      );
   };
 
-  createEffect(
-    on(isChannelReady, () => {
-      if (props.onHandleReady)
-        props.onHandleReady({
-          goToMessage,
-          goToLatest,
-          getMessagesStateSnapshot,
-        });
-    })
-  );
+  // Channel commands can queue before rows exist. Publish them on mount so
+  // empty channels also support navigation and saving their input/thread state.
+  onMount(() => {
+    props.onHandleReady?.({
+      goToMessage,
+      goToLatest,
+      getMessagesStateSnapshot,
+    });
+  });
 
   return (
     <EntityLoadGate
@@ -745,27 +744,33 @@ export function Channel(props: ChannelProps) {
                         triggerBehavior="spring-back"
                       >
                         <ThreadList
-                          channelId={props.channelId}
                           keys={() => messageIndex.keys}
-                          initialScrollTarget={threadListInitialScrollTarget()}
-                          initialScrollHandledByTargetElement={
-                            targetMessageController.pendingScrollTargetId() !==
-                            undefined
+                          targetId={
+                            targetMessageController.hasPendingElementScroll()
+                              ? targetMessageController.activeTargetMessageId()
+                              : undefined
                           }
-                          keepMounted={keepMountedTargetThreadIndexes}
-                          fullFrameScrollInsets={threadListScrollInsets}
-                          shift={shift}
-                          prepend={threadPaginator.isPrepending}
+                          insets={threadListScrollInsets()}
+                          followOnAppend={!messagesQuery.hasPreviousPage}
                           onScrollNearTop={threadPaginator.shiftPaginate}
                           onScrollNearBottom={threadPaginator.prependPaginate}
-                          onNavigationReady={setThreadListNavigation}
-                          onScrollStateChange={setThreadListScrollState}
-                          initialScrollSnapshot={
-                            props.targetMessageId
-                              ? undefined
+                          onReady={onThreadListReady}
+                          onScroll={onThreadListScroll}
+                          onUserNavigation={cancelLatestNavigation}
+                          initialPosition={
+                            targetMessageController.activeTargetMessageId()
+                              ? {
+                                  type: 'element',
+                                  id: targetMessageController.activeTargetMessageId()!,
+                                }
                               : props.initialMessagesStateSnapshot?.scroll
+                                ? {
+                                    type: 'restore',
+                                    snapshot:
+                                      props.initialMessagesStateSnapshot.scroll,
+                                  }
+                                : { type: 'latest' }
                           }
-                          onScrollSnapshotChange={setThreadListScrollSnapshot}
                         >
                           {(item) => {
                             const message = () => messageById().get(item.id);
@@ -797,13 +802,8 @@ export function Channel(props: ChannelProps) {
                                           : targetMessageController.pendingTargetReplyId(),
                                       activeTargetReplyId:
                                         targetMessageController.activeTargetMessageReplyId,
-                                      positionTarget: (
-                                        threadRow,
-                                        targetElement
-                                      ) =>
-                                        threadListNavigation()?.scrollToElementInItem(
-                                          item.id,
-                                          threadRow,
+                                      positionTarget: (_, targetElement) =>
+                                        threadListNavigation()?.scrollToElement(
                                           targetElement
                                         ) ?? false,
                                       onTargetMessageScrolled:
@@ -855,7 +855,7 @@ export function Channel(props: ChannelProps) {
                       <Show when={!findBar.isOpen()}>
                         <ScrollToBottomOverlay
                           scrollState={threadListScrollState}
-                          onScrollToBottom={handleScrollToBottom}
+                          onScrollToBottom={goToLatest}
                           class="touch:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
                         />
                       </Show>
@@ -910,7 +910,7 @@ export function Channel(props: ChannelProps) {
                               getTargetMessage={() => {
                                 const target = unifiedInput.replyTarget();
                                 if (target?.message) return target.message;
-                                // A restored quote-reply has no resolvable
+                                // A restored referenced reply has no resolvable
                                 // message (messageById only indexes thread
                                 // roots) — don't misattribute it to the root.
                                 if (target?.replyId) return undefined;

@@ -1,11 +1,11 @@
 use super::*;
 use crate::domain::model::{
-    AgentSessionId, BearerToken, GitEndpoint, GitService, McpDestination, McpServerSlug, ProxyBody,
-    RepoSlug, SessionGrant, UpstreamCall, UpstreamCredential,
+    AgentSessionId, BearerToken, GitEndpoint, GitService, McpDestination, McpServerListing,
+    McpServerSlug, ProxyBody, RepoSlug, SessionGrant, UpstreamCall, UpstreamCredential,
 };
 use http::header::{AUTHORIZATION, HeaderMap, HeaderName, HeaderValue};
 use http::{Method, StatusCode};
-use http_body_util::{BodyExt, Empty};
+use http_body_util::{BodyExt, Empty, Full};
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Mutex;
 use url::Url;
@@ -42,10 +42,16 @@ struct StubSessions(Result<SessionGrant, ()>);
 
 impl StubSessions {
     fn granting() -> Self {
+        Self::granting_with(Vec::new())
+    }
+
+    /// A grant whose session was opened by an agent that listed `servers`.
+    fn granting_with(servers: Vec<McpServerListing>) -> Self {
         Self(Ok(SessionGrant {
             session: AgentSessionId::new(),
             owner: owner(),
             repo: session_repo(),
+            mcp_servers: servers,
         }))
     }
 
@@ -62,10 +68,21 @@ impl SessionAuthority for StubSessions {
     }
 }
 
+/// How the spy answers a slug it is asked about.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Knowledge {
+    /// The owner holds an enabled grant.
+    Connected,
+    /// Addressable for the owner, but no grant behind it.
+    Unconnected,
+    /// Nothing to address at all.
+    Unknown,
+}
+
 /// Records who it was asked about, and answers with a fixed upstream.
 struct SpyCredentials {
     asked: Mutex<Vec<(String, String)>>,
-    known: bool,
+    known: Knowledge,
     url: String,
     scope: HeaderMap,
 }
@@ -79,9 +96,21 @@ impl SpyCredentials {
     fn at(url: &str) -> Self {
         Self {
             asked: Mutex::default(),
-            known: true,
+            known: Knowledge::Connected,
             url: url.to_owned(),
             scope: HeaderMap::new(),
+        }
+    }
+
+    /// An app the owner has not connected, the way the Pipedream adapter
+    /// reports one: addressable, with the owner's scoping, but no grant.
+    fn unconnected() -> Self {
+        Self {
+            known: Knowledge::Unconnected,
+            ..Self::scoped(&[
+                ("x-pd-external-user-id", "owner"),
+                ("x-pd-app-slug", "datadog"),
+            ])
         }
     }
 
@@ -104,7 +133,7 @@ impl SpyCredentials {
     fn empty() -> Self {
         Self {
             asked: Mutex::default(),
-            known: false,
+            known: Knowledge::Unknown,
             url: String::new(),
             scope: HeaderMap::new(),
         }
@@ -116,7 +145,7 @@ impl McpCredentials for SpyCredentials {
         &self,
         owner: &MacroUserIdStr<'static>,
         destination: &McpDestination,
-    ) -> Result<UpstreamCall, EgressError> {
+    ) -> Result<McpResolution, EgressError> {
         let McpDestination::Connected(slug) = destination else {
             unreachable!("these tests only dial connected servers");
         };
@@ -125,15 +154,20 @@ impl McpCredentials for SpyCredentials {
             .expect("lock")
             .push((owner.to_string(), slug.to_string()));
 
-        if !self.known {
+        if self.known == Knowledge::Unknown {
             return Err(EgressError::UnknownServer(slug.clone()));
         }
 
-        Ok(UpstreamCall::bearer(
+        let call = UpstreamCall::bearer(
             Url::parse(&self.url).expect("url"),
             BearerToken::new("upstream-token"),
         )?
-        .scoped_by(self.scope.clone()))
+        .scoped_by(self.scope.clone());
+        Ok(match self.known {
+            Knowledge::Connected => McpResolution::Connected(call),
+            Knowledge::Unconnected => McpResolution::Unconnected(call),
+            Knowledge::Unknown => unreachable!("returned above"),
+        })
     }
 }
 
@@ -225,6 +259,250 @@ fn request(method: Method, header_pairs: &[(&str, &str)]) -> ProxyRequest {
     *request.method_mut() = method;
     *request.headers_mut() = header_map(header_pairs);
     request
+}
+
+fn json_request(body: &str) -> ProxyRequest {
+    let mut request = http::Request::new(
+        Full::new(bytes::Bytes::from(body.to_owned()))
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    );
+    *request.method_mut() = Method::POST;
+    request
+}
+
+fn listing(slug: &str, name: &str) -> McpServerListing {
+    McpServerListing {
+        slug: McpServerSlug::parse(slug).expect("slug"),
+        name: name.to_owned(),
+    }
+}
+
+fn selected(listings: &[(&str, &str)]) -> Vec<McpServerListing> {
+    listings
+        .iter()
+        .map(|(slug, name)| listing(slug, name))
+        .collect()
+}
+
+async fn body_json(response: ProxyResponse) -> serde_json::Value {
+    let bytes = response
+        .into_body()
+        .collect()
+        .await
+        .expect("body")
+        .to_bytes();
+    serde_json::from_slice(&bytes).expect("json body")
+}
+
+/// An app the owner has not connected is still addressed for them: the
+/// handshake and listing go through whether or not the agent named the app,
+/// since every valid slug resolves against the owner's own connections.
+#[tokio::test]
+async fn an_unconnected_app_is_forwarded_even_when_the_agent_did_not_list_it() {
+    let service = EgressServiceImpl::new(
+        StubSessions::granting(),
+        SpyCredentials::unconnected(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(r#"{"jsonrpc":"2.0","id":1,"method":"tools/list"}"#),
+        )
+        .await
+        .expect("forwarded");
+
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert!(service.forward.was_called());
+}
+
+/// With no name from the agent, the refusal calls the app by its slug made
+/// readable, so the person sees "Google Sheets" rather than "google_sheets".
+#[tokio::test]
+async fn an_unlisted_unconnected_app_is_named_from_its_slug() {
+    let service = EgressServiceImpl::new(
+        StubSessions::granting(),
+        SpyCredentials::unconnected(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+    let sheets = EgressTarget::McpServer(McpDestination::Connected(
+        McpServerSlug::parse("google_sheets").expect("slug"),
+    ));
+
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            sheets,
+            json_request(r#"{"jsonrpc":"2.0","id":1,"method":"tools/call"}"#),
+        )
+        .await
+        .expect("answered");
+
+    let body = body_json(response).await;
+    let text = body["result"]["content"][0]["text"]
+        .as_str()
+        .expect("a text content block");
+    assert!(text.contains("Google Sheets is not connected"), "{text}");
+    assert!(
+        text.contains(
+            r#"<m-connect-app>{"appSlug":"google_sheets","name":"Google Sheets"}</m-connect-app>"#
+        ),
+        "{text}"
+    );
+}
+
+/// A listed app the owner has connected proxies exactly like before.
+#[tokio::test]
+async fn a_listed_connected_app_is_forwarded() {
+    let service = EgressServiceImpl::new(
+        StubSessions::granting_with(selected(&[("datadog", "Datadog")])),
+        SpyCredentials::knowing(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(r#"{"jsonrpc":"2.0","id":1,"method":"tools/call"}"#),
+        )
+        .await
+        .expect("proxied");
+
+    assert_eq!(response.status(), StatusCode::ACCEPTED);
+    assert!(service.forward.was_called());
+}
+
+/// A `tools/call` to an app the owner has not connected is answered by the
+/// proxy as the tool's own result, under the name the agent gave the app: the
+/// model reads that the app is not connected and how to get it connected,
+/// and nothing reaches the upstream.
+#[tokio::test]
+async fn a_tools_call_to_an_unconnected_app_is_answered_locally() {
+    let service = EgressServiceImpl::new(
+        StubSessions::granting_with(selected(&[("datadog", "Datadog")])),
+        SpyCredentials::unconnected(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+
+    let response = service
+        .proxy(
+            &SessionToken::new("token"),
+            datadog(),
+            json_request(
+                r#"{"jsonrpc":"2.0","id":"call-7","method":"tools/call","params":{"name":"list_monitors","arguments":{"secret":"do-not-echo"}}}"#,
+            ),
+        )
+        .await
+        .expect("answered");
+
+    assert!(!service.forward.was_called());
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.headers()[http::header::CONTENT_TYPE],
+        "application/json"
+    );
+    let body = body_json(response).await;
+    assert_eq!(body["jsonrpc"], "2.0");
+    assert_eq!(body["id"], "call-7");
+    assert_eq!(body["result"]["isError"], true);
+    let text = body["result"]["content"][0]["text"]
+        .as_str()
+        .expect("a text content block");
+    assert!(text.contains("Datadog is not connected"), "{text}");
+    assert!(
+        text.contains(r#"<m-connect-app>{"appSlug":"datadog","name":"Datadog"}</m-connect-app>"#),
+        "{text}"
+    );
+    assert!(
+        text.contains("let you know once they have connected Datadog"),
+        "{text}"
+    );
+    assert!(!text.contains("do-not-echo"), "{text}");
+    assert!(!text.contains("list_monitors"), "{text}");
+}
+
+/// Everything but `tools/call` goes through for an unconnected app,
+/// addressed for the owner, so the client's handshake and tool listing work
+/// from the first turn; the body it read is put back intact.
+#[tokio::test]
+async fn the_handshake_and_listing_of_an_unconnected_app_are_forwarded() {
+    for (method, body) in [
+        (
+            Method::POST,
+            Some(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#),
+        ),
+        (
+            Method::POST,
+            Some(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#),
+        ),
+        (
+            Method::POST,
+            Some(r#"{"jsonrpc":"2.0","method":"notifications/initialized"}"#),
+        ),
+        (Method::GET, None),
+        (Method::DELETE, None),
+    ] {
+        let service = EgressServiceImpl::new(
+            StubSessions::granting_with(selected(&[("datadog", "Datadog")])),
+            SpyCredentials::unconnected(),
+            SpyGithubTokens::default(),
+            SpyForwarder::answering(&[]),
+        );
+        let request = match body {
+            Some(body) => json_request(body),
+            None => request(method.clone(), &[]),
+        };
+
+        let response = service
+            .proxy(&SessionToken::new("token"), datadog(), request)
+            .await
+            .expect("forwarded");
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED, "{method} {body:?}");
+        assert!(service.forward.was_called(), "{method} {body:?}");
+        service.forward.forwarded(|parts| {
+            assert_eq!(parts.method, method);
+            assert_eq!(
+                parts
+                    .headers
+                    .get("x-pd-external-user-id")
+                    .map(|value| value.to_str().expect("ascii")),
+                Some("owner"),
+                "{method} {body:?}: the owner's scoping is stamped on"
+            );
+        });
+    }
+}
+
+/// The one path that reads a request body is bounded.
+#[tokio::test]
+async fn an_oversized_request_to_an_unconnected_app_is_refused() {
+    let service = EgressServiceImpl::new(
+        StubSessions::granting_with(selected(&[("datadog", "Datadog")])),
+        SpyCredentials::unconnected(),
+        SpyGithubTokens::default(),
+        SpyForwarder::answering(&[]),
+    );
+    let huge = format!(
+        r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"pad":"{}"}}}}"#,
+        "x".repeat(crate::domain::model::MAX_MCP_REQUEST_BYTES)
+    );
+
+    let error = service
+        .proxy(&SessionToken::new("token"), datadog(), json_request(&huge))
+        .await
+        .expect_err("refused");
+
+    assert!(matches!(error, EgressError::RequestTooLarge));
+    assert!(!service.forward.was_called());
 }
 
 fn datadog() -> EgressTarget {
@@ -400,6 +678,7 @@ async fn a_session_owned_outside_macro_gets_nothing() {
             session: AgentSessionId::new(),
             owner: MacroUserIdStr::try_from_email("visitor@example.com").expect("a valid user id"),
             repo: session_repo(),
+            mcp_servers: Vec::new(),
         })),
         SpyCredentials::knowing(),
         SpyGithubTokens::default(),

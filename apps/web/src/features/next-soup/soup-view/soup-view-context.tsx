@@ -9,6 +9,7 @@ import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import {
   createSoupState,
   type GroupMeta,
+  type SortConfig,
   type SoupEntity,
   type SoupRow,
   type SoupState,
@@ -39,6 +40,7 @@ import {
   INBOX_FILTER_ENTRY_KEY,
   registerInboxFilterSplit,
 } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
+import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupFilterPersistence } from '@app/features/next-soup/use-soup-filter-persistence';
 import { deduplicateEntities } from '@app/features/next-soup/utils';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
@@ -50,9 +52,10 @@ import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import {
   ENABLE_FEATURED_SEARCH_RESULTS,
-  ENABLE_REMINDERS,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+  enableInboxNotifiedSort,
+  enableReminders,
+  enableSupportedSoupForeignEntities,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -118,8 +121,11 @@ type DataSource<T> = {
   hasNextPage: Accessor<boolean>;
   fetchNextPage: VoidFunction;
   /**
-   * Full refresh (e.g. mobile pull-to-refresh): invalidate every soup query
-   * plus notification state. Resolves once the active refetches settle.
+   * Full refresh (e.g. mobile pull-to-refresh): starts invalidation of every
+   * soup query plus notification state, then resolves once the refetch of the
+   * list currently on screen settles — rejecting when that refetch fails. The
+   * invalidations are not awaited, so another panel's queries can neither
+   * delay this refresh nor report it as failed.
    */
   refresh: () => Promise<void>;
 };
@@ -176,6 +182,9 @@ interface SoupViewContextValues {
   setInboxFilter: Setter<string[] | undefined>;
   activeTab: Accessor<string | undefined>;
   setActiveTab: Setter<string | undefined>;
+  /** The sort the rows are rendered in: the active tab's forced sort when
+   * it has one the client can reproduce, else the sort state. */
+  clientSort: Accessor<SortConfig<SoupEntity>[]>;
   getPersistedActiveTab: (view: ListView) => string | undefined;
   viewMode: Accessor<SoupViewMode>;
   setViewMode: Setter<SoupViewMode>;
@@ -258,7 +267,11 @@ const resolveTabId = (
   // A remembered tab can also be flag-gated out of the tab bar (see
   // `useVisibleViewTabs`): restoring the inbox onto Reminders with the flag
   // off would leave a hidden tab active, still querying reminders.
-  if (view === 'inbox' && remembered === 'reminders' && !ENABLE_REMINDERS()) {
+  if (
+    view === 'inbox' &&
+    remembered === 'reminders' &&
+    !isFeatureEnabled(enableReminders)
+  ) {
     return config.default;
   }
   return remembered;
@@ -272,7 +285,7 @@ const persistedPredicatesFor = (
 
 type ApiSortMethod = Exclude<
   NonNullable<SoupParams['sort_method']>,
-  'frecency' | 'touched_by_me'
+  'frecency' | 'touched_by_me' | 'notified_at'
 >;
 const VALID_API_SORT_METHODS: ApiSortMethod[] = [
   'viewed_at',
@@ -660,9 +673,27 @@ export const SoupViewContextProvider: FlowComponent<
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
   const isTeamAdmin = useIsTeamAdmin();
+  const notifiedSortFF = useFeatureFlag(enableInboxNotifiedSort);
 
   // Sits below `activeTab`/`userId` because the page direction comes from the
   // active tab's preset, which some views resolve against user context.
+  const activePreset = createMemo(() => {
+    const view = activeListView();
+    return view
+      ? getViewPreset(view, activeTab(), {
+          userId: userId(),
+          isTeamAdmin: isTeamAdmin(),
+        })
+      : undefined;
+  });
+
+  const presetSortMethod = () => {
+    const method = activePreset()?.sortMethod;
+    return method === 'notified_at' && !notifiedSortFF().enabled
+      ? 'updated_at'
+      : method;
+  };
+
   const soupParams = createMemo(() => {
     const sortId = soup.sort.active()[0]?.id ?? 'updated_at';
 
@@ -677,21 +708,26 @@ export const SoupViewContextProvider: FlowComponent<
     // user's own touches — not to the sort method state, so the preset owns
     // them. Omitted when absent so the server default (desc) applies and
     // the query keys of every existing view stay byte-identical.
-    const preset = view
-      ? getViewPreset(view, activeTab(), {
-          userId: userId(),
-          isTeamAdmin: isTeamAdmin(),
-        })
-      : undefined;
-    const sortDirection = preset?.sortDirection;
+    const sortDirection = activePreset()?.sortDirection;
 
     return {
       // Mail views use a smaller page size
       limit: view === 'mail' ? 30 : 100,
-      sort_method: preset?.sortMethod ?? sortMethod,
+      sort_method: presetSortMethod() ?? sortMethod,
       ...(sortDirection ? { sort_direction: sortDirection } : {}),
     };
   });
+
+  // A tab whose preset forces the notified server sort pins the client sort
+  // to match, so the rows keep the page's order and the date headers bucket
+  // on the same stamp; every other tab sorts by the sort state, so the
+  // inbox's All and Reminders tabs stay on update recency even when a row
+  // carries a notification stamp from a Signal page or a live delivery.
+  const clientSort = createMemo((): SortConfig<SoupEntity>[] =>
+    presetSortMethod() === 'notified_at'
+      ? [SORT_CONFIGS.notified_at]
+      : soup.sort.active()
+  );
 
   // Active deal-stage set (team-customized when present). Drives the
   // Customers view's stage grouping, stage filter and group labels.
@@ -891,10 +927,7 @@ export const SoupViewContextProvider: FlowComponent<
   };
 
   const showSupportedForeignEntitiesFF = useFeatureFlag(
-    ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-    {
-      enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
-    }
+    enableSupportedSoupForeignEntities
   );
   // Create filter context for context-aware filter predicates
   const getFilterContext = (): FilterContext => ({
@@ -1098,7 +1131,7 @@ export const SoupViewContextProvider: FlowComponent<
 
     transformed = deduplicateEntities(next);
 
-    const sorts = soup.sort.active();
+    const sorts = clientSort();
     if (sorts.length > 0 && !search.isSearching()) {
       transformed.sort((a, b) => {
         for (const sort of sorts) {
@@ -1328,9 +1361,19 @@ export const SoupViewContextProvider: FlowComponent<
       >();
       const order: string[] = [];
       const now = new Date();
+      // Under the inbox's notified sort a row belongs to the day it was last
+      // notified about, not the day its content last changed — otherwise a
+      // fresh comment on a stale task sits under "Yesterday" while sorting
+      // as today's.
+      const bucketOnNotification =
+        clientSort()[0]?.id === SORT_CONFIGS.notified_at.id;
 
       for (const entity of all) {
-        const ts = entity.sortTs ?? entity.updatedAt ?? entity.createdAt;
+        const ts =
+          (bucketOnNotification ? entity.notifiedAt : undefined) ??
+          entity.sortTs ??
+          entity.updatedAt ??
+          entity.createdAt;
         const bucket = dateBucket(ts, now);
         let group = buckets.get(bucket.key);
 
@@ -1493,19 +1536,31 @@ export const SoupViewContextProvider: FlowComponent<
 
         resetToInitialPage();
 
-        await Promise.all([
-          queryClient.invalidateQueries(
-            { queryKey: soupKeys._def },
-            // Reject on refetch failure so pull-to-refresh can surface it
-            // instead of retracting as if the refresh succeeded.
-            { throwOnError: true }
-          ),
-          // urql pages are outside the TanStack cache invalidation above.
-          itemsQuery.transport === 'graphql'
-            ? itemsQuery.refresh()
-            : Promise.resolve(),
-          invalidateUserNotifications(),
-        ]);
+        // Reconcile everything else in the background. Awaiting it would hold
+        // the caller (mobile pull-to-refresh) hostage to every active soup
+        // query in the app — other mounted panels refetch their whole page
+        // chain one request at a time — and would let an unrelated view's
+        // failure report the visible refresh as failed.
+        void queryClient
+          .invalidateQueries({ queryKey: soupKeys._def })
+          .catch(() => undefined);
+        void invalidateUserNotifications().catch(() => undefined);
+
+        // Only the visible list decides the outcome. It throws on refetch
+        // failure, so pull-to-refresh can tell "nothing came back" apart from
+        // "still on its way" instead of retracting as if it had succeeded.
+
+        // Search renders its own results and disables the items query, whose
+        // refresh then no-ops — awaiting that would settle as success without
+        // anything on screen having been refetched.
+        if (search.isSearching()) {
+          await search.refresh();
+          return;
+        }
+
+        // This covers both transports: urql pages sit outside the TanStack
+        // invalidation above, and the REST refetch dedupes against it.
+        await itemsQuery.refresh();
       },
     },
     items,
@@ -1532,6 +1587,7 @@ export const SoupViewContextProvider: FlowComponent<
     setInboxFilter,
     activeTab,
     setActiveTab,
+    clientSort,
     getPersistedActiveTab,
     viewMode,
     setViewMode,

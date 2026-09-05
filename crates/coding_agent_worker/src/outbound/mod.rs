@@ -8,4 +8,5 @@
 
 pub mod agent_session;
 pub mod link;
-pub mod registration;
+pub mod pairing;
+pub mod stream;

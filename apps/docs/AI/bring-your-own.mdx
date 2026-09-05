@@ -12,10 +12,12 @@ description: "Connect a self-hosted ACP agent harness to Macro with macrod."
 
 You can run any [Agent Client Protocol (ACP)](https://zed.dev/acp)-compatible agent harness directly in Macro.
 
-Macro provides `macrod`, a small daemon that runs on your computer and waits for agent sessions. When you start a session or @mention your custom agent, `macrod` launches your configured harness, sends it the prompt, and bridges its ACP connection to Macro.
+Macro provides `macrod`, a small daemon that runs on your computer and waits for agent sessions. When you @mention an agent that runs on your harness, `macrod` launches your configured harness, sends it the prompt, and bridges its ACP connection to Macro.
+
+A harness can be **private** (only you can run agents on it) or **team** (any teammate can create agents that run on it).
 
 <Warning>
-  Self-hosted agents can run real commands on your computer. Anyone who can prompt the agent may be able to affect its configured workspace. Use a dedicated workspace and grant channel access carefully.
+  Self-hosted agents can run real commands on your computer. Anyone who can prompt an agent bound to your harness may be able to affect its configured workspace. Use a dedicated workspace, grant channel access carefully, and think twice before sharing a harness with your team.
 </Warning>
 
 ## Before you start
@@ -31,12 +33,6 @@ You need:
 </Tip>
 
 <Steps>
-  <Step title="Create a Macro agent">
-    Open **Settings → Bots → Create bot**. Enable **Make this bot a coding agent**, choose the channels it can join, and create it.
-
-    Copy the agent token when it appears. Macro shows it only once, but you can create a new one later if you lose it.
-  </Step>
-
   <Step title="Prepare an agent harness">
     Install your preferred ACP-compatible agent and identify the command that starts its ACP server. Verify that command before configuring `macrod`.
 
@@ -74,15 +70,16 @@ You need:
   </Step>
 
   <Step title="Configure macrod">
-    Create `macro.toml` beside the `macrod` binary:
+    Create `macro.toml` beside the `macrod` binary. No tokens or account details go here - identity comes from pairing in the next step.
 
     ```toml
     [macro]
-    api_url = "https://agent-harness.macro.com"
-    storage_url = "https://cloud-storage.macro.com"
-    owner_user_id = "macro|you@example.com"
-    bot_token = "mbot_..."
-    bot_scope = "user"
+    api_url = "https://gateway.macro.com/agent-harness"
+    storage_url = "https://gateway.macro.com/dss"
+
+    [identity]
+    # Optional: how this machine shows up in Settings. Defaults to its hostname.
+    name = "my-macbook"
 
     [server]
     port = 8790
@@ -97,20 +94,30 @@ You need:
     repo_url = "https://github.com/you/your-repository"
     ```
 
-    Change `you@example.com` in `owner_user_id` to the email address you use to sign in to Macro. Replace `mbot_...` with the token from the first step. Set `command` and `args` to the ACP launch command from the second step.
+    Set `command` and `args` to the ACP launch command from the first step.
   </Step>
 
-  <Step title="Start the agent">
-    Keep the HTTPS tunnel running, then start `macrod` from a shell where your harness command is available:
+  <Step title="Pair the daemon">
+    Start `macrod` from a shell where your harness command is available:
 
     ```bash
     ./macrod --config ./macro.toml
     ```
 
-    When `macrod` reports that it is listening for agent triggers, @mention the agent in one of its Macro channels.
+    On first run it prints a pairing code and a link into Macro's **Settings → Harness** page. Open the link, confirm the code matches, choose **Private** or **Team**, and approve. `macrod` picks the credential up automatically and saves it to `macro.credentials.json` next to the config.
+
+    To pair again later (for example after revoking the harness), run `./macrod login`.
+  </Step>
+
+  <Step title="Create an agent on your harness">
+    Open **Settings → Agents → New agent** and pick your harness under **Harness**. If the harness is shared with your team, teammates can do the same.
+
+    Then @mention the agent in a channel it can reach. `macrod` opens the session and your local harness answers.
   </Step>
 </Steps>
 
 ## Keep it connected
 
-Both `macrod` and your HTTPS tunnel must stay running for you to start self-hosted agent sessions from Macro.
+Both `macrod` and your HTTPS tunnel must stay running for you to start self-hosted agent sessions from Macro. The **Settings → Harness** page shows whether your daemon is currently connected.
+
+To stop a harness for good, remove it from **Settings → Harness**; that revokes its credential, and the daemon will tell you to run `macrod login` if you start it again.

@@ -64,7 +64,7 @@ impl McpCredentials for &SpyInner {
         &self,
         _owner: &MacroUserIdStr<'static>,
         destination: &McpDestination,
-    ) -> Result<UpstreamCall, EgressError> {
+    ) -> Result<McpResolution, EgressError> {
         let McpDestination::Connected(slug) = destination else {
             unreachable!("the decorator answers Macro's own destination itself");
         };
@@ -83,10 +83,13 @@ async fn answers_macros_own_destination_with_a_minted_token() {
     let inner = SpyInner::default();
     let credentials = WithMacroMcp::new(&inner, &tokens, macro_url(), false).expect("constructed");
 
-    let call = credentials
+    let McpResolution::Connected(call) = credentials
         .resolve(&owner(), &McpDestination::Macro)
         .await
-        .expect("resolved");
+        .expect("resolved")
+    else {
+        panic!("Macro's own server is always connected");
+    };
 
     assert_eq!(call.url().as_str(), "https://mcp.macro.com/mcp");
     assert!(
@@ -160,10 +163,13 @@ async fn refuses_a_cleartext_url_unless_local_dev_permits_it() {
 
     let inner = SpyInner::default();
     let permitted = WithMacroMcp::new(&inner, &tokens, url, true).expect("constructed");
-    let call = permitted
+    let McpResolution::Connected(call) = permitted
         .resolve(&owner(), &McpDestination::Macro)
         .await
-        .expect("resolved");
+        .expect("resolved")
+    else {
+        panic!("Macro's own server is always connected");
+    };
     assert_eq!(call.url().as_str(), "http://mcp-service:8080/mcp");
 }
 

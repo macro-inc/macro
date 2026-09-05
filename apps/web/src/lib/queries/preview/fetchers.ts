@@ -416,7 +416,7 @@ function doFetch(
   return Promise.resolve([]);
 }
 
-export async function fetchPreviewBatch(
+export async function fetchRestPreviewBatch(
   items: ItemEntity[]
 ): Promise<Map<string, PreviewItem>> {
   const results = await Promise.all([

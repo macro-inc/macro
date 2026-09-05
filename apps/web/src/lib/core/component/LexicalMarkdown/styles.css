@@ -533,6 +533,18 @@ in a cell — move the indent inside the box so markers stay visible.
   margin-top: -1rem;
 }
 
+/*
+A ReplyTarget preview acts as a header for the message body that follows it, so
+pull the next block up close. This only shrinks the *following* block's top
+margin, leaving the reply target's own margins untouched -- so spacing against
+the container (and when the reply target is the last block) stays exactly as it
+would naturally be.
+Scoped under .md to outrank the block's Tailwind `mt-4`.
+*/
+.md [data-reply-target-node] + * {
+  margin-top: 0.375rem;
+}
+
 mark {
   color: currentColor;
   background-color: unset;

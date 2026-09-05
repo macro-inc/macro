@@ -113,7 +113,9 @@ infer = "0.19.0"
 item_filters = { path = "../../crates/item_filters" }
 lol_html = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
-macro_authorization = { path = "../../crates/macro_authorization" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
 macro_cors = { path = "../../crates/macro_cors" }
 macro_config = { path = "../../crates/macro_config" }
 macro_db_client = { path = "../../crates/macro_db_client" }
@@ -179,6 +181,7 @@ urlencoding = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
+subtle = { workspace = true }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

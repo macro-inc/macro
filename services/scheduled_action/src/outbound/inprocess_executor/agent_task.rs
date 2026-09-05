@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
 use agent::{AgentLoop, StreamAccumulator};
-use ai_tools::{ToolServiceContext, ToolSetWithPrompt, all_tools};
+use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
 use ai_toolset::ToolSet as AiToolSet;
 use anyhow::{Context, Result};
 use chat::domain::models::CreateChatArgs;
@@ -61,7 +61,7 @@ async fn fetch_user_memory(
     tool_context: &ToolServiceContext,
     owner: &macro_user_id::user_id::MacroUserIdStr<'static>,
 ) -> Option<String> {
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let tools = ToolSetWithPrompt {
         toolset: tools.toolset,
         prompt: tools.prompt,
@@ -127,7 +127,7 @@ async fn run_tool_loop(
     action: &ScheduledAction,
     agent_task: &AgentTask,
 ) -> Result<Vec<AssistantMessagePart>> {
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let user_memory = fetch_user_memory(db, tool_context, &action.owner).await;
     let system_prompt = match user_memory {
         Some(memory) => format!(

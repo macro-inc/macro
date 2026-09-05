@@ -18,7 +18,7 @@ use url::Url;
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{ProvisionedEgress, SandboxEgress};
 use crate::domain::ports::SandboxEgressProvisioner;
-use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::model::{AgentMcpServers, AgentSessionId};
 
 #[cfg(test)]
 mod test;
@@ -47,35 +47,62 @@ where
         }
     }
 
-    /// The slugs of the owner's enabled Pipedream connections, verbatim.
+    /// The slugs to advertise for one session, verbatim.
     ///
     /// `app_slug`, exactly as the proxy resolves it - the same value at both
     /// ends by equality is what makes a server entry dialable, and there is
     /// no derivation for the two to disagree over. Macro's own server is not
-    /// in the list: every session has it, on its own route. An app the owner
-    /// turned off is left out here as well as refused by the proxy: an agent
-    /// that can see a server in its list will try it, and a tool call that
-    /// always fails is worse than a tool that is absent.
-    async fn slugs(&self, owner: &MacroUserIdStr<'static>) -> Result<Vec<McpServerSlug>> {
-        let records = self.connections.list(owner).await.map_err(|error| {
-            HarnessError::Egress(rootcause::report!(
-                "could not list Pipedream connections: {error:?}"
-            ))
-        })?;
+    /// in the list: every session has it, on its own route.
+    ///
+    /// Under [`AgentMcpServers::OwnerConnections`] an app the owner turned
+    /// off is left out here as well as refused by the proxy: an agent that
+    /// can see a server in its list will try it, and a call the proxy answers
+    /// with a bare "no such server" is worse than a tool that is absent.
+    ///
+    /// Under [`AgentMcpServers::Selected`] the agent's list is advertised
+    /// whole, including apps the owner has not connected. That is deliberate,
+    /// and the reason the proxy answers those differently: a call to a
+    /// selected-but-unconnected app comes back as a tool result that says so
+    /// and names the fix, which the model can act on, and the moment the
+    /// owner connects the app the same advertised server starts working with
+    /// nothing re-attached.
+    async fn advertised(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        selection: &AgentMcpServers,
+    ) -> Result<Vec<McpServerSlug>> {
+        let raw: Vec<String> = match selection {
+            AgentMcpServers::OwnerConnections => self
+                .connections
+                .list(owner)
+                .await
+                .map_err(|error| {
+                    HarnessError::Egress(rootcause::report!(
+                        "could not list Pipedream connections: {error:?}"
+                    ))
+                })?
+                .into_iter()
+                .filter(|record| record.enabled)
+                .map(|record| record.app_slug)
+                .collect(),
+            AgentMcpServers::Selected { servers } => servers
+                .iter()
+                .map(|server| server.app_slug.clone())
+                .collect(),
+        };
 
-        let slugs: Vec<McpServerSlug> = records
+        let slugs: Vec<McpServerSlug> = raw
             .into_iter()
-            .filter(|record| record.enabled)
-            .filter_map(|record| {
-                let slug = McpServerSlug::parse(&record.app_slug);
+            .filter_map(|app_slug| {
+                let slug = McpServerSlug::parse(&app_slug);
                 if slug.is_none() {
                     // An app slug the strict parse refuses could never be
                     // dialed - the proxy would refuse the same path segment -
                     // so leaving it out is the only honest rendering.
                     tracing::warn!(
                         %owner,
-                        app_slug = %record.app_slug,
-                        "a Pipedream connection's app slug is not a valid path segment; skipped"
+                        %app_slug,
+                        "an MCP server's app slug is not a valid path segment; skipped"
                     );
                 }
                 slug
@@ -83,7 +110,8 @@ where
             .collect();
         tracing::debug!(
             mcp_servers = slugs.len(),
-            "advertising the owner's connected MCP servers"
+            scope = selection.scope_str(),
+            "advertising MCP servers"
         );
         Ok(slugs)
     }
@@ -99,6 +127,7 @@ where
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
         repo_url: &str,
+        selection: &AgentMcpServers,
     ) -> Result<ProvisionedEgress> {
         // Validated even though nothing here uses it: it is the deployment's
         // repository URL, and a session whose git traffic could never resolve
@@ -112,7 +141,7 @@ where
             sandbox: SandboxEgress {
                 base_url: self.base_url.clone(),
                 session_token: token.as_str().to_owned(),
-                mcp_servers: self.slugs(owner).await?,
+                mcp_servers: self.advertised(owner, selection).await?,
             },
         })
     }
@@ -122,11 +151,12 @@ where
         &self,
         owner: &MacroUserIdStr<'static>,
         session_token: String,
+        selection: &AgentMcpServers,
     ) -> Result<SandboxEgress> {
         Ok(SandboxEgress {
             base_url: self.base_url.clone(),
             session_token,
-            mcp_servers: self.slugs(owner).await?,
+            mcp_servers: self.advertised(owner, selection).await?,
         })
     }
 }

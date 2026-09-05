@@ -4,7 +4,7 @@ import type { PreviewItem } from '../types';
 const fetchPreviewBatch = vi.fn();
 
 vi.mock('../fetchers', () => ({
-  fetchPreviewBatch: (...args: unknown[]) => fetchPreviewBatch(...args),
+  fetchRestPreviewBatch: (...args: unknown[]) => fetchPreviewBatch(...args),
 }));
 
 vi.mock('@service-storage/client', () => ({

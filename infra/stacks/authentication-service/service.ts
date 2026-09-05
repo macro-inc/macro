@@ -8,15 +8,20 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
+  ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
+  getGatewayAlb,
+  GatewayService,
   getKafkaClusterPolicy,
   stack,
 } from '../../packages/shared';
+
+const gatewayLoadBalancer = getGatewayAlb();
 
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
@@ -378,6 +383,22 @@ export class AuthenticationService extends pulumi.ComponentResource {
     this.serviceAlbSg = sg.serviceAlbSg;
     this.serviceSg = sg.serviceSg;
 
+    const gatewayTargetGroup = new ServiceTargetGroup(
+      `${stack}-${BASE_NAME}`,
+      {
+        tags: this.tags,
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
+        vpcId: vpc.vpcId,
+        containerPort: serviceContainerPort,
+        service: GatewayService.AUTHENTICATION_SERVICE,
+        healthCheckPath,
+        pathPatterns: ['/auth', '/auth/*'],
+        serviceSecurityGroupId: this.serviceSg.id,
+        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+      },
+      { parent: this }
+    );
+
     // lb
     const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
       serviceName: BASE_NAME, // service name
@@ -413,6 +434,23 @@ export class AuthenticationService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
+        // Register tasks in both the legacy ALB's target group and the gateway
+        // target group while we migrate to the gateway. An explicit
+        // `loadBalancers` replaces the list awsx derives from
+        // `portMappings.targetGroup`, so the legacy entry must be listed here
+        // too.
+        loadBalancers: [
+          {
+            targetGroupArn: targetGroup.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+          {
+            targetGroupArn: gatewayTargetGroup.target_group.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+        ],
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
@@ -479,12 +517,19 @@ export class AuthenticationService extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        // ECS refuses a service whose target group is not yet associated with
+        // a load balancer; it is the listener rule that creates that
+        // association
+        dependsOn: [gatewayTargetGroup.listener_rule],
       }
     );
 
     this.service = service;
 
-    this.setupAutoScaling();
+    this.setupAutoScaling({
+      gatewayAlbArnSuffix: gatewayLoadBalancer.albArnSuffix,
+      gatewayTargetGroup: gatewayTargetGroup.target_group,
+    });
 
     this.setupServiceAlarms();
 
@@ -610,7 +655,13 @@ export class AuthenticationService extends pulumi.ComponentResource {
     return { serviceAlbSg, serviceSg };
   }
 
-  setupAutoScaling() {
+  setupAutoScaling({
+    gatewayAlbArnSuffix,
+    gatewayTargetGroup,
+  }: {
+    gatewayAlbArnSuffix: pulumi.Output<string>;
+    gatewayTargetGroup: aws.lb.TargetGroup;
+  }) {
     if (!this.service) return;
 
     const serviceScalableTarget = new aws.appautoscaling.Target(
@@ -626,19 +677,7 @@ export class AuthenticationService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const lbPortion: pulumi.Output<string> = this.lb.arn.apply((arn) => {
-      const parts = arn.split(':loadbalancer/');
-      return parts[1];
-    });
-
-    const tgPortion: pulumi.Output<string> = this.targetGroup.arn.apply(
-      (arn) => {
-        const parts = arn.split(':');
-        return parts[parts.length - 1];
-      }
-    );
-
-    const resourceLabel = pulumi.interpolate`${lbPortion}/${tgPortion}`;
+    const resourceLabel = pulumi.interpolate`${gatewayAlbArnSuffix}/${gatewayTargetGroup.arnSuffix}`;
 
     // Create an Auto Scaling policy for request count.
     new aws.appautoscaling.Policy(

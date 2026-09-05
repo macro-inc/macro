@@ -2,11 +2,14 @@
 
 use std::collections::HashSet;
 
-use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
+use entity_access::domain::{
+    models::{AccessError, EntityAccessReceipt, ViewAccessLevel},
+    ports::EntityAccessService,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
-use crate::domain::models::{Favorite, FavoritesError};
+use crate::domain::models::{Favorite, FavoritesError, FavoritesMutationActor};
 
 /// Outbound persistence port for favorites.
 pub trait FavoritesRepo: Send + Sync + 'static {
@@ -60,6 +63,63 @@ pub trait FavoritesRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'_>,
         entities: &[Entity<'_>],
     ) -> impl Future<Output = Result<HashSet<Entity<'static>>, Self::Err>> + Send;
+}
+
+/// Authorization port used by favorites mutation use cases.
+pub trait FavoritesAuthorizer: Send + Sync + 'static {
+    /// Verify that the actor can view the entity being added to favorites.
+    fn authorize_favorite(
+        &self,
+        actor: &FavoritesMutationActor,
+        entity: &Entity<'static>,
+    ) -> impl Future<Output = Result<EntityAccessReceipt<ViewAccessLevel>, FavoritesError>> + Send;
+}
+
+impl<A> FavoritesAuthorizer for A
+where
+    A: EntityAccessService,
+{
+    async fn authorize_favorite(
+        &self,
+        actor: &FavoritesMutationActor,
+        entity: &Entity<'static>,
+    ) -> Result<EntityAccessReceipt<ViewAccessLevel>, FavoritesError> {
+        self.generate_entity_access_receipt::<ViewAccessLevel>(
+            &actor.user_id,
+            actor.organization_id,
+            &entity.entity_id,
+            entity.entity_type,
+        )
+        .await
+        .map_err(|error| match error {
+            AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
+                FavoritesError::Unauthorized
+            }
+            AccessError::NotFound(_) => FavoritesError::NotFound,
+            AccessError::BadRequest(message) => FavoritesError::BadRequest(message.to_string()),
+            error @ (AccessError::Unavailable(_) | AccessError::Internal(_)) => {
+                FavoritesError::Internal(anyhow::Error::new(error))
+            }
+        })
+    }
+}
+
+/// Inbound service port for favorite and ordering mutations.
+pub trait FavoritesMutationService: Send + Sync + 'static {
+    /// Set whether an entity belongs to the actor's favorites collection.
+    fn set_favorite(
+        &self,
+        actor: FavoritesMutationActor,
+        entity: Entity<'static>,
+        favorite: bool,
+    ) -> impl Future<Output = Result<Entity<'static>, FavoritesError>> + Send;
+
+    /// Persist a complete manual order and return the authoritative collection.
+    fn reorder_favorites(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        ordered: Vec<Entity<'static>>,
+    ) -> impl Future<Output = Result<Vec<Favorite>, FavoritesError>> + Send;
 }
 
 /// Inbound service port: the favorites API used by drivers (HTTP, soup enrichment).

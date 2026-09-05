@@ -29,7 +29,8 @@ export type CoordinatorState =
       previousEpoch: OwnerEpoch;
       nextEpoch: OwnerEpoch;
       reason: string;
-    };
+    }
+  | { kind: 'failed'; reason: string };
 
 export type CoordinatorSnapshot = {
   scope: string;
@@ -89,7 +90,8 @@ export type CoordinatorAction =
       routeId?: RouteId;
       reason: 'stale-epoch' | 'unknown-route' | 'inactive-engine';
     }
-  | { kind: 'protocol-violation'; error: string };
+  | { kind: 'protocol-violation'; error: string }
+  | { kind: 'terminal-failure'; error: string };
 
 export type EngineReady = {
   tabId: string;
@@ -144,6 +146,9 @@ export class CoordinatorCore {
   registerTab(tabId: string): CoordinatorAction[] {
     if (this.tabs.includes(tabId)) return [];
     this.tabs.push(tabId);
+    if (this.stateValue.kind === 'failed') {
+      return [{ kind: 'terminal-failure', error: this.stateValue.reason }];
+    }
     if (this.stateValue.kind !== 'waiting-for-tab') return [];
     return this.activateNext(this.stateValue.nextDatabaseAction);
   }
@@ -156,6 +161,9 @@ export class CoordinatorCore {
     }
     if (this.retiringTabs.has(tabId)) {
       return [this.reject(tabId, request.id, 'requester tab is retiring')];
+    }
+    if (this.stateValue.kind === 'failed') {
+      return [this.reject(tabId, request.id, this.stateValue.reason)];
     }
 
     const queued = { tabId, request };
@@ -301,6 +309,16 @@ export class CoordinatorCore {
     reason: string
   ): CoordinatorAction[] {
     return this.transitionToAbruptLoss(tabId, ownerEpoch, reason);
+  }
+
+  /** Stops owner recovery and fails every current or future page connection. */
+  terminalFailure(reason: string): CoordinatorAction[] {
+    if (this.stateValue.kind === 'failed') return [];
+    this.queuedRequests.length = 0;
+    this.inFlight.clear();
+    this.stateValue = { kind: 'failed', reason };
+    this.assertInvariants();
+    return [{ kind: 'terminal-failure', error: reason }];
   }
 
   departForNavigation(

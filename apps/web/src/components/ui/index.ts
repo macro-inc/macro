@@ -116,6 +116,8 @@ export { SendButton } from './components/SendButton';
 export { SideNav } from './components/SideNav';
 export { Surface } from './components/Surface';
 export { TabbedControl } from './components/TabbedControl';
+export type { TabItem, TabsProps } from './components/Tabs';
+export { Tabs } from './components/Tabs';
 export type { ToggleSwitchProps } from './components/ToggleSwitch';
 export { ToggleSwitch } from './components/ToggleSwitch';
 export { Tooltip } from './components/Tooltip';

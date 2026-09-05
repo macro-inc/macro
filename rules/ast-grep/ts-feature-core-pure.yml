@@ -5,7 +5,7 @@ language: typescript
 severity: warning
 message: Feature core modules stay pure TypeScript — no Solid, urql, queries, generated GraphQL, app modules, or sibling layers.
 note: |-
-  Rule FE-31 in docs/STYLE_GUIDE.md. `core/` owns the feature's vocabulary
+  Rule FE-33 in docs/STYLE_GUIDE.md. `core/` owns the feature's vocabulary
   and the functions that describe, group, and summarize it. Wire types,
   clients, reactivity, and UI stay outside so a schema rename or a
   framework upgrade cannot churn core tests. Decode lives in `queries/`,

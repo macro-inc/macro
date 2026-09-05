@@ -290,7 +290,6 @@ where
             .map(|receipt| {
                 let canonical_entity_type = receipt.entity_type();
                 let storage_entity_type = match canonical_entity_type {
-                    AccessEntityType::CalendarEvent => EntityType::CalendarEvent,
                     AccessEntityType::Document => Uuid::parse_str(receipt.entity_id())
                         .ok()
                         .and_then(|document_id| document_sub_types.get(&document_id))
@@ -300,18 +299,11 @@ where
                                 EntityType::Document
                             }
                         }),
-                    AccessEntityType::EmailThread => EntityType::Thread,
-                    AccessEntityType::Call => EntityType::CallRecord,
-                    AccessEntityType::CrmCompany => EntityType::Company,
-                    AccessEntityType::Chat => EntityType::Chat,
-                    AccessEntityType::Channel => EntityType::Channel,
-                    AccessEntityType::Project => EntityType::Project,
-                    AccessEntityType::User => EntityType::User,
-                    unsupported => {
-                        return Err(PropertiesErr::Validation(format!(
-                            "Unsupported property target type: {unsupported}"
-                        )));
-                    }
+                    other => super::model::storage_entity_type(other).ok_or_else(|| {
+                        PropertiesErr::Validation(format!(
+                            "Unsupported property target type: {other}"
+                        ))
+                    })?,
                 };
 
                 Ok(ResolvedPropertySubject {
@@ -684,7 +676,7 @@ where
         if property_definition_id == SystemPropertyKey::ASSIGNEES_UUID
             && entity_type == EntityType::Task
         {
-            self.handle_task_assignees_property(entity_id, value, access.authenticated_user())
+            self.handle_task_assignees_property(entity_id, value, access.acting_user_id())
                 .await?;
         }
 

@@ -5,7 +5,7 @@ language: typescript
 severity: warning
 message: Feature queries/ and primitives/ never import components, views, or UI primitives. They produce data and view-state; views render it.
 note: |-
-  Rule FE-31 in docs/STYLE_GUIDE.md. `queries/` decodes wire types and
+  Rule FE-33 in docs/STYLE_GUIDE.md. `queries/` decodes wire types and
   builds query factories; `primitives/` turns query results into view-state
   unions and actions with Solid primitives but no JSX. Both are tested
   under `createRoot` against a mock client, which only stays possible

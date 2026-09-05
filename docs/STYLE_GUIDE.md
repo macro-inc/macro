@@ -184,7 +184,9 @@ TypeScript · `[ui]` UI / UX conventions
   (#3898)
 - **FE-10** `[solid]` `createEffect` is for external/imperative systems only (DOM APIs,
   third-party libs, navigation events) — never for deriving state; use `on()` to make
-  dependencies explicit when an effect is warranted. (#3750, #3898 · also: AGENTS.md)
+  dependencies explicit when an effect is warranted. Prefer wrapping the setter over
+  `createEffect(() => { if (signal()) sideEffect() })` when setting a value should also
+  clear related UI, blur a control, or scroll. (#3750, #3898, #6038 · also: AGENTS.md)
 - **FE-11** `[solid]` Check `solid-primitives` before writing a custom reactive utility.
   (also: AGENTS.md)
 - **FE-12** `[async]` `async`/`await` with `try`/`catch`, not `.then()`/`.catch()`
@@ -242,7 +244,14 @@ TypeScript · `[ui]` UI / UX conventions
   string can't carry structure, props, or behavior. Extract a component, or inline the
   literal at its single use; styling variants are component props, not exported
   strings. (enforced: ast-grep `tsx-no-class-string-consts`, warning)
-- **FE-31** `[arch]` Layered feature layout. A feature that adopts it (today:
+- **FE-31** `[ts]` Never cast a string to `ItemType` — parse it with `stringToItemType`
+  from `@service-storage/client`, the one owner of entity-type spellings (email
+  threads alone are stored as `email`, `thread`, and `email_thread`). (#6043 ·
+  enforced: ast-grep `ts-no-item-type-cast` + `tsx-no-item-type-cast`, CI error)
+- **FE-32** `[ui]` Prefer styling in the component (Tailwind on the markup). Reserve
+  `@utility` in `apps/web/src/index.css` for styles widely shared across many
+  components — not one-off or two-callsite layouts. (#6038 · also: apps/web/AGENTS.md)
+- **FE-33** `[arch]` Layered feature layout. A feature that adopts it (today:
   `features/activity`) is split into `core/` (pure TS: types and functions, no
   Solid, urql, generated GraphQL, or app modules), `queries/` (decode wire types
   and build query factories that take the feature's context), `primitives/`

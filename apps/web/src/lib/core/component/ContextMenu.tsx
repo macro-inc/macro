@@ -272,16 +272,6 @@ export function MenuGroup(props: { children: JSX.Element; class?: string }) {
   );
 }
 
-export function GroupLabel(props: { children: JSX.Element }) {
-  return (
-    <ContextMenu.GroupLabel
-      class={cn(MENU_ITEM_CLASS, 'text-xs! text-ink-extra-muted')}
-    >
-      {props.children}
-    </ContextMenu.GroupLabel>
-  );
-}
-
 export function MenuSeparator() {
   return (
     <ContextMenu.Separator class="my-1.5 -mx-1.5 w-[calc(100%+0.75rem)] border-t border-edge" />

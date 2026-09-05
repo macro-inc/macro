@@ -294,6 +294,11 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
     /// Builds a query targeting the title field (TITLE_KEY)
     pub fn build_title_term_query<'a>(&'a self) -> Result<QueryType<'a>> {
+        self.build_field_term_query(T::TITLE_KEY)
+    }
+
+    /// Builds a query matching every term against one text field.
+    pub fn build_field_term_query<'a>(&'a self, field: &'a str) -> Result<QueryType<'a>> {
         if self.terms.is_empty() {
             return Err(OpensearchClientError::NoTermsProvided);
         }
@@ -304,7 +309,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         Ok(generate_terms_must_query(
             query_key,
-            T::TITLE_KEY,
+            field,
             terms,
             self.term_combine,
         ))

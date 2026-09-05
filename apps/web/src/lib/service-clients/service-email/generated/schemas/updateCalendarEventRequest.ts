@@ -5,9 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UpdateCalendarEventRequestAttendees } from './updateCalendarEventRequestAttendees';
+import type { UpdateCalendarEventRequestCalendarId } from './updateCalendarEventRequestCalendarId';
 import type { UpdateCalendarEventRequestConference } from './updateCalendarEventRequestConference';
 import type { UpdateCalendarEventRequestDescription } from './updateCalendarEventRequestDescription';
 import type { UpdateCalendarEventRequestLocation } from './updateCalendarEventRequestLocation';
+import type { UpdateCalendarEventRequestOutOfOffice } from './updateCalendarEventRequestOutOfOffice';
 import type { UpdateCalendarEventRequestRecurrenceId } from './updateCalendarEventRequestRecurrenceId';
 import type { UpdateCalendarEventRequestRecurrenceLines } from './updateCalendarEventRequestRecurrenceLines';
 import type { UpdateCalendarEventRequestReminders } from './updateCalendarEventRequestReminders';
@@ -23,11 +25,15 @@ import type { UpdateCalendarEventRequestVisibility } from './updateCalendarEvent
 export interface UpdateCalendarEventRequest {
   /** Replacement attendee list. */
   attendees?: UpdateCalendarEventRequestAttendees;
+  /** Calendar whose copy of the event is patched, for an event synced from
+more than one calendar. Omit to patch the canonical copy. */
+  calendarId?: UpdateCalendarEventRequestCalendarId;
   conference?: UpdateCalendarEventRequestConference;
   /** Replacement description; an empty string clears it. */
   description?: UpdateCalendarEventRequestDescription;
   /** Replacement location; an empty string clears it. */
   location?: UpdateCalendarEventRequestLocation;
+  outOfOffice?: UpdateCalendarEventRequestOutOfOffice;
   /** Original-start key of the occurrence the update targets. */
   recurrenceId?: UpdateCalendarEventRequestRecurrenceId;
   /** Replacement recurrence properties; an empty list clears them. */

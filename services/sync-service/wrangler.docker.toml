@@ -59,7 +59,7 @@ name = "sync-service-dev3"
 [env.dev.vars]
 INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_DEV"
 ENVIRONMENT = "development"
-SPS_URL = "https://search-processing-dev.macro.com"
+SPS_URL = "https://dev-gateway.macro.com/search-processing"
 
 [env.dev.durable_objects]
 bindings = [
@@ -96,7 +96,7 @@ name = "sync-service-prod2"
 [env.prod.vars]
 INTERNAL_API_SECRET_KEY = "SYNC_SERVICE_KEY_PROD"
 ENVIRONMENT = "production"
-SPS_URL = "https://search-processing.macro.com"
+SPS_URL = "https://gateway.macro.com/search-processing"
 
 [env.prod.durable_objects]
 bindings = [

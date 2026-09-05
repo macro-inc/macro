@@ -32,7 +32,7 @@ export function EmailThreadTitle(props: {
         <CopySubjectButton
           subject={props.title}
           class={cn(
-            'ml-1.5 select-none text-inherit transition-opacity',
+            'ml-1.5 select-none text-inherit transition-opacity duration-150 ease',
             copyHidden() ? 'opacity-0' : 'opacity-100'
           )}
         />

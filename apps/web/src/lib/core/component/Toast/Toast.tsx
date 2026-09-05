@@ -275,8 +275,8 @@ function ActionButtons(props: { actions: ToastAction[]; mobile?: boolean }) {
           size={props.mobile ? 'sm' : 'md'}
           onClick={action.onClick}
           variant="outline"
-          class="px-2 py-1 bg-lift"
-          depth={3}
+          class="px-2 py-1 bg-surface"
+          depth={4}
         >
           <Show when={action.icon}>
             {(icon) => (

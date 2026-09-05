@@ -92,11 +92,33 @@ impl CalendarRepository for FakeRepo {
             .collect())
     }
 
+    async fn list_team_out_of_office(
+        &self,
+        _requester_id: &str,
+        _range: OccurrenceRange,
+        _limit: u16,
+    ) -> Result<Vec<crate::domain::models::TeamOutOfOffice>, Report> {
+        Ok(Vec::new())
+    }
+
     async fn get_event_mutation_target(
         &self,
         _requester_id: &str,
         _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
     ) -> Result<Option<CalendarEventMutationTarget>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn get_event_attendees(&self, _event_id: Uuid) -> Result<Vec<CalendarAttendee>, Report> {
+        unreachable!("mutation lookups are not exercised by sync tests")
+    }
+
+    async fn get_occurrence_override_attendees(
+        &self,
+        _event_id: Uuid,
+        _recurrence_id: &str,
+    ) -> Result<Option<Vec<CalendarAttendee>>, Report> {
         unreachable!("mutation lookups are not exercised by sync tests")
     }
 
@@ -114,6 +136,10 @@ impl CalendarRepository for FakeRepo {
         _requester_id: &str,
     ) -> Result<Vec<crate::domain::models::VisibleCalendar>, Report> {
         Ok(Vec::new())
+    }
+
+    async fn primary_time_zone(&self, _requester_id: &str) -> Result<Option<String>, Report> {
+        Ok(None)
     }
 
     async fn owned_inbox_emails(&self, _requester_id: &str) -> Result<Vec<String>, Report> {
@@ -200,6 +226,7 @@ fn valid_upsert() -> CalendarEventUpsert {
             owner_id: "macro|calendar@example.com".to_string(),
             ical_uid: "meeting@example.com".to_string(),
             calendar_id: None,
+            sources: Vec::new(),
             title: "Meeting".to_string(),
             description: None,
             location: None,

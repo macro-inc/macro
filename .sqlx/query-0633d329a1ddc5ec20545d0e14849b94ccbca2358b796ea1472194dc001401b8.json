@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT event.id AS \"id!\"\n            FROM calendar_events event\n            WHERE event.id IN (\n                SELECT source.event_id\n                FROM calendar_event_sources source\n                WHERE source.account_id = $1\n                GROUP BY source.event_id\n                HAVING count(*) > 1\n            )\n              AND event.content_source_id\n                  IS DISTINCT FROM calendar_event_canonical_source_id(event.id)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0633d329a1ddc5ec20545d0e14849b94ccbca2358b796ea1472194dc001401b8"
+}

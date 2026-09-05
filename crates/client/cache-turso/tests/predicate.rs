@@ -109,6 +109,7 @@ async fn begin_optimistic_projection(
         .begin_optimistic_write_with_projections(
             None,
             BeginOptimisticWrite {
+                uuid: "00000000-0000-4000-8000-000000001000",
                 query: r#"
                     mutation SetEntityProperty($input: SetEntityPropertyInput!) {
                       setEntityProperty(input: $input) {
@@ -465,6 +466,7 @@ fn turso_rehydrates_and_queries_durable_optimistic_projection_layers() {
             .begin_optimistic_write_with_projections(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000001001",
                     query: r#"
                         mutation SetEntityProperty($input: SetEntityPropertyInput!) {
                           setEntityProperty(input: $input) {

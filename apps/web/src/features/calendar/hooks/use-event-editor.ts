@@ -17,10 +17,13 @@ import {
   calendarDisplayLabel,
   spansMultipleInboxes,
 } from '../utils/calendar-label';
+import {
+  guestListChanged,
+  viewerCanEditGuests,
+} from '../utils/event-guest-editing';
 
 const EDIT_DISABLED_FIELDS = {
   calendar: true,
-  guests: true,
 } satisfies EventEditorDisabledFields;
 
 interface UseEventEditorProps {
@@ -64,6 +67,7 @@ export function useEventEditor(props: UseEventEditorProps) {
           label: event.calendar.name || 'Calendar',
           color: event.calendar.color,
           defaultReminders: calendar?.defaultReminders,
+          isPrimary: calendar?.isPrimary ?? event.calendar.isPrimary,
         },
       ];
     }
@@ -73,6 +77,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       label: calendarDisplayLabel(calendar, spansInboxes()),
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
+      isPrimary: calendar.isPrimary,
     }));
   });
 
@@ -110,8 +115,14 @@ export function useEventEditor(props: UseEventEditorProps) {
           ...(recurrenceChanged
             ? { recurrenceLines: values.recurrenceLines }
             : {}),
+          ...(guestListChanged(event, values.guestEmails)
+            ? {
+                attendees: values.guestEmails.map((email) => ({ email })),
+              }
+            : {}),
           ...(values.conference ? { conference: values.conference } : {}),
           ...(values.reminders ? { reminders: values.reminders } : {}),
+          ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
         },
       });
       return;
@@ -127,6 +138,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       attendees: values.guestEmails.map((email) => ({ email })),
       ...(values.conference ? { conference: values.conference } : {}),
       ...(values.reminders ? { reminders: values.reminders } : {}),
+      ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
     });
   };
 
@@ -134,8 +146,15 @@ export function useEventEditor(props: UseEventEditorProps) {
     isEdit() &&
     ((props.event()?.recurrenceLines.length ?? 0) > 0 ||
       props.event()?.recurrenceId !== undefined);
-  const disabledFields = createMemo(() =>
-    isEdit() ? EDIT_DISABLED_FIELDS : undefined
+  const disabledFields = createMemo<EventEditorDisabledFields | undefined>(
+    () => {
+      const event = props.event();
+      if (!event) return undefined;
+      return {
+        ...EDIT_DISABLED_FIELDS,
+        guests: !viewerCanEditGuests(event),
+      };
+    }
   );
 
   return {

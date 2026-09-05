@@ -5,17 +5,20 @@ use super::{
     manage_channel_participants::{ManageChannelParticipants, ParticipantAction},
     parse_participants,
     rename_channel::RenameChannel,
+    send_channel_message::SendChannelMessage,
 };
 use crate::domain::{
     models::{
         AddParticipantsRequest, ChannelMetadata, ChannelType, CreateChannelRequest,
-        CreateChannelResponse, PatchChannelRequest, RemoveParticipantsRequest, Sender,
+        CreateChannelResponse, PatchChannelRequest, PostMessageRequest, PostMessageResponse,
+        RemoveParticipantsRequest, Sender,
     },
     ports::{ChannelMutationErr, ChannelService},
 };
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, schema::generate_validated_input_schema,
 };
+use bot_id::BotId;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, CallChannelInfo, EntityAccessReceipt,
@@ -36,10 +39,15 @@ fn user_id() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from(TEST_USER_ID.to_string()).expect("valid macro user id")
 }
 
-type CreatedChannelCall = (Sender, Option<i64>, CreateChannelRequest);
+type CreatedChannelCall = (
+    Sender,
+    Option<MacroUserIdStr<'static>>,
+    CreateChannelRequest,
+);
 type PatchChannelCall = (Sender, Uuid, PatchChannelRequest);
 type AddParticipantsCall = (Sender, Uuid, AddParticipantsRequest);
 type RemoveParticipantsCall = (Sender, Uuid, RemoveParticipantsRequest);
+type PostMessageCall = (Sender, Uuid, PostMessageRequest);
 
 #[derive(Clone, Default)]
 struct ToolTestChannelService {
@@ -50,7 +58,25 @@ struct ToolTestChannelService {
     patch_error: Option<String>,
     adds: Arc<Mutex<Vec<AddParticipantsCall>>>,
     removes: Arc<Mutex<Vec<RemoveParticipantsCall>>>,
+    posts: Arc<Mutex<Vec<PostMessageCall>>>,
     metadata_name: Option<String>,
+}
+
+impl ToolTestChannelService {
+    fn record_created(
+        &self,
+        actor: Sender,
+        on_behalf_of: Option<MacroUserIdStr<'static>>,
+        req: CreateChannelRequest,
+    ) -> Result<CreateChannelResponse, ChannelMutationErr> {
+        if let Some(message) = &self.create_error {
+            return Err(ChannelMutationErr::BadRequest(message.clone()));
+        }
+        *self.created.lock().expect("create lock") = Some((actor, on_behalf_of, req));
+        Ok(CreateChannelResponse {
+            id: self.created_id.unwrap_or_else(Uuid::new_v4).to_string(),
+        })
+    }
 }
 
 impl ChannelService for ToolTestChannelService {
@@ -142,16 +168,20 @@ impl ChannelService for ToolTestChannelService {
     async fn create_channel(
         &self,
         actor: Sender,
-        actor_org_id: Option<i64>,
+        _actor_org_id: Option<i64>,
         req: CreateChannelRequest,
     ) -> Result<CreateChannelResponse, ChannelMutationErr> {
-        if let Some(message) = &self.create_error {
-            return Err(ChannelMutationErr::BadRequest(message.clone()));
-        }
-        *self.created.lock().expect("create lock") = Some((actor, actor_org_id, req));
-        Ok(CreateChannelResponse {
-            id: self.created_id.unwrap_or_else(Uuid::new_v4).to_string(),
-        })
+        let on_behalf_of = actor.as_user().cloned();
+        self.record_created(actor, on_behalf_of, req)
+    }
+
+    async fn create_channel_on_behalf(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        actor: BotId,
+        req: CreateChannelRequest,
+    ) -> Result<CreateChannelResponse, ChannelMutationErr> {
+        self.record_created(Sender::new_from_bot(actor), Some(owner), req)
     }
 
     async fn patch_channel(
@@ -168,6 +198,22 @@ impl ChannelService for ToolTestChannelService {
             .expect("patch lock")
             .push((actor, channel_id, req));
         Ok(())
+    }
+
+    async fn post_message(
+        &self,
+        actor: Sender,
+        channel_id: Uuid,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        self.posts
+            .lock()
+            .expect("post lock")
+            .push((actor, channel_id, req));
+        Ok(PostMessageResponse {
+            id: Uuid::new_v4().to_string(),
+            nonce: None,
+        })
     }
 
     async fn add_participants(
@@ -266,9 +312,13 @@ impl EntityAccessService for ToolTestAccessService {
         _user_id: Option<&MacroUserId<Lowercase<'_>>>,
         _entity_id: &str,
         _entity_type: EntityType,
-        _required_level: AccessLevel,
+        required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::internal("test access failure"))
+        match self.receipt_error {
+            Some(ReceiptFail::Unauthorized) => Err(AccessError::Unauthorized),
+            Some(ReceiptFail::NotFound) => Err(AccessError::NotFound("missing")),
+            None => Ok(required_level),
+        }
     }
 
     async fn check_public_access(
@@ -469,13 +519,16 @@ async fn create_private_channel_does_not_resolve_a_team() {
     assert_eq!(response.name, "Planning");
     assert_eq!(response.channel_type, NewChannelType::Private);
     assert_eq!(response.participants, vec!["macro|bo@acme.com"]);
-    let (actor, org_id, req) = created
+    let (actor, on_behalf_of, req) = created
         .lock()
         .expect("create lock")
         .clone()
         .expect("called");
-    assert_eq!(actor.as_user(), Some(&user_id()));
-    assert_eq!(org_id, None);
+    assert_eq!(
+        actor.as_bot().map(|id| id.bot_id()),
+        Some(bot_id::MACRO_AI_BOT_ID)
+    );
+    assert_eq!(on_behalf_of.as_ref(), Some(&user_id()));
     assert_eq!(req.channel_type, ChannelType::Private);
     assert_eq!(req.team_id, None);
     assert!(!req.auto_join_team);
@@ -508,14 +561,73 @@ async fn create_team_channel_injects_the_caller_when_participants_are_empty() {
     .expect("team create injects the caller");
 
     assert_eq!(response.participants, vec![TEST_USER_ID]);
-    let (_, _, req) = created
+    let (actor, on_behalf_of, req) = created
         .lock()
         .expect("create lock")
         .clone()
         .expect("called");
+    assert_eq!(
+        actor.as_bot().map(|id| id.bot_id()),
+        Some(bot_id::MACRO_AI_BOT_ID)
+    );
+    assert_eq!(on_behalf_of.as_ref(), Some(&user_id()));
     assert_eq!(req.channel_type, ChannelType::Team);
     assert_eq!(req.team_id, Some(team_id));
     assert!(req.participants.contains(&user_id()));
+}
+
+#[tokio::test]
+async fn create_private_channel_uses_the_context_actor_for_the_user() {
+    let default_service = ToolTestChannelService::default();
+    let default_created = default_service.created.clone();
+    let custom_service = ToolTestChannelService::default();
+    let custom_created = custom_service.created.clone();
+
+    let tool = CreateChannel {
+        name: "Planning".to_string(),
+        channel_type: NewChannelType::Private,
+        participants: Vec::new(),
+    };
+
+    tool.call(
+        ServiceContext(ChannelToolContext::new(
+            default_service,
+            NoOpEntityAccessService,
+        )),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("default actor can create");
+    tool.call(
+        ServiceContext(
+            ChannelToolContext::new(custom_service, NoOpEntityAccessService)
+                .with_actor(BotId::TEST_A),
+        ),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("custom actor can create");
+
+    let (default_actor, default_on_behalf_of, _) = default_created
+        .lock()
+        .expect("create lock")
+        .clone()
+        .expect("called");
+    let (custom_actor, custom_on_behalf_of, _) = custom_created
+        .lock()
+        .expect("create lock")
+        .clone()
+        .expect("called");
+    assert_eq!(
+        default_actor.as_bot().map(|id| id.bot_id()),
+        Some(bot_id::MACRO_AI_BOT_ID)
+    );
+    assert_eq!(default_on_behalf_of.as_ref(), Some(&user_id()));
+    assert_eq!(
+        custom_actor.as_bot().map(|id| id.bot_id()),
+        Some(BotId::TEST_A)
+    );
+    assert_eq!(custom_on_behalf_of.as_ref(), Some(&user_id()));
 }
 
 #[tokio::test]
@@ -656,6 +768,52 @@ async fn rename_channel_surfaces_dm_rename_rejection() {
     assert_eq!(
         error.description,
         "cannot change channel_name for direct message channels"
+    );
+}
+
+#[tokio::test]
+async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
+    let channel_id = Uuid::new_v4();
+    let service = ToolTestChannelService::default();
+    let posts = service.posts.clone();
+
+    let tool = SendChannelMessage {
+        content: "hello".to_string(),
+        channel_id,
+        thread_id: None,
+    };
+
+    tool.call(
+        ServiceContext(ChannelToolContext::new(
+            service.clone(),
+            ToolTestAccessService::default(),
+        )),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("member can post");
+    tool.call(
+        ServiceContext(
+            ChannelToolContext::new(service, ToolTestAccessService::default())
+                .with_actor(BotId::TEST_A),
+        ),
+        RequestContext::new(user_id()),
+    )
+    .await
+    .expect("member can post");
+
+    let posts = posts.lock().expect("post lock");
+    let [(default_actor, _, default_req), (custom_actor, _, _)] = posts.as_slice() else {
+        panic!("expected two posts, got {}", posts.len());
+    };
+    assert_eq!(
+        default_actor.as_bot().map(|id| id.bot_id()),
+        Some(bot_id::MACRO_AI_BOT_ID)
+    );
+    assert_eq!(default_req.triggered_by.as_deref(), Some(TEST_USER_ID));
+    assert_eq!(
+        custom_actor.as_bot().map(|id| id.bot_id()),
+        Some(BotId::TEST_A)
     );
 }
 

@@ -3,9 +3,11 @@
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
-    self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionResponse, ControlRequest,
-    CreateAgentSessionRequest, CreateAgentSessionResponse, CreateSessionThread, LogDirectionDto,
-    LogFrameDto, RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto,
+    self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionQueueResponse,
+    AgentSessionResponse, ControlRequest, ControlResponse, ControlStatusDto,
+    CreateAgentSessionRequest, CreateAgentSessionResponse, CreateSessionThread,
+    EditQueuedActionRequest, LogDirectionDto, LogFrameDto, QueuedActionDto,
+    RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto,
 };
 use utoipa::OpenApi;
 
@@ -18,6 +20,9 @@ use utoipa::OpenApi;
         axum_router::rename_agent_session_handler,
         axum_router::get_agent_session_log_handler,
         axum_router::control_agent_session_handler,
+        axum_router::get_agent_session_queue_handler,
+        axum_router::edit_queued_action_handler,
+        axum_router::remove_queued_action_handler,
         axum_router::delete_agent_session_handler,
         axum_router::put_agent_session_sandbox_size_handler,
         axum_router::get_agent_sandbox_size_handler,
@@ -28,6 +33,11 @@ use utoipa::OpenApi;
         CreateAgentSessionResponse,
         CreateSessionThread,
         ControlRequest,
+        ControlResponse,
+        ControlStatusDto,
+        AgentSessionQueueResponse,
+        QueuedActionDto,
+        EditQueuedActionRequest,
         AgentAction,
         AgentActionId,
         AgentSessionResponse,

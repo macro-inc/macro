@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, \"organizationId\" as \"organization_id?\"\n        FROM \"User\"\n        WHERE \"macro_user_id\" = $1\n        AND LOWER(email) = LOWER($2)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "organization_id?",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true
+    ]
+  },
+  "hash": "66c5645ff47fc80c380a5e47c61a3776c6b89f53a720380fa12f9e7305c8dbc2"
+}

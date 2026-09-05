@@ -1,6 +1,5 @@
 ---
 source: crates/agent_fold/src/domain/test/real_recordings.rs
-assertion_line: 258
 expression: messages
 input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
 ---
@@ -12,7 +11,11 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
         author: User {
             user_id: None,
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                826d1392-b8c8-4208-8f79-856aa3c17b0b,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Control {
@@ -34,7 +37,11 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                 macro|eric@example.com,
             ),
         },
-        request_id: None,
+        request_id: Some(
+            AgentActionId(
+                415b0c72-3eb8-43bd-b58c-ca2a40ad1ec1,
+            ),
+        ),
         parts: NonEmpty {
             inner: [
                 Text {
@@ -56,7 +63,9 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                     id: ToolUseId(
                         "toolu_01VWRTvryJTnQLFGHiTsBXYT",
                     ),
-                    label: "ToolSearch",
+                    name: Native {
+                        name: "ToolSearch",
+                    },
                     status: Completed,
                     detail: Other {
                         kind: "other",
@@ -70,42 +79,14 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                             },
                         ),
                     },
-                    raw_input: Some(
-                        Object {
-                            "query": String("todo list write tasks"),
-                            "max_results": Number(5),
-                        },
-                    ),
-                    raw_output: Some(
-                        Array [
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("TaskList"),
-                            },
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("CronList"),
-                            },
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("ListMcpResourcesTool"),
-                            },
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("mcp__macro__ListEntities"),
-                            },
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("mcp__macro__ListCompanies"),
-                            },
-                        ],
-                    ),
                 },
                 ToolUse {
                     id: ToolUseId(
                         "toolu_01DCbqRyKnRaqmDNHoFB7MNi",
                     ),
-                    label: "ToolSearch",
+                    name: Native {
+                        name: "ToolSearch",
+                    },
                     status: Completed,
                     detail: Other {
                         kind: "other",
@@ -119,24 +100,6 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                             },
                         ),
                     },
-                    raw_input: Some(
-                        Object {
-                            "query": String("select:TaskCreate,TaskUpdate"),
-                            "max_results": Number(3),
-                        },
-                    ),
-                    raw_output: Some(
-                        Array [
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("TaskCreate"),
-                            },
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("TaskUpdate"),
-                            },
-                        ],
-                    ),
                 },
                 Plan {
                     entries: [
