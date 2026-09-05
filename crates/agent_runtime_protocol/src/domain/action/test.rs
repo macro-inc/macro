@@ -1,3 +1,4 @@
+use super::ElicitationContentValue as ContentValue;
 use agent_client_protocol::schema::v1::{ClientRequest, ContentBlock, SessionId};
 
 use super::*;
@@ -162,11 +163,17 @@ fn an_elicitation_answer_is_a_response_on_the_agents_own_id() {
 
     let session_id = SessionId::new("acp-abc");
     let content = BTreeMap::from([
-        ("strategy".to_owned(), serde_json::json!("balanced")),
-        ("port".to_owned(), serde_json::json!(3000)),
-        ("ratio".to_owned(), serde_json::json!(0.5)),
-        ("logging".to_owned(), serde_json::json!(true)),
-        ("colours".to_owned(), serde_json::json!(["red", "blue"])),
+        (
+            "strategy".to_owned(),
+            ContentValue::Text("balanced".to_owned()),
+        ),
+        ("port".to_owned(), ContentValue::Integer(3000)),
+        ("ratio".to_owned(), ContentValue::Number(0.5)),
+        ("logging".to_owned(), ContentValue::Boolean(true)),
+        (
+            "colours".to_owned(),
+            ContentValue::Strings(vec!["red".to_owned(), "blue".to_owned()]),
+        ),
     ]);
     let translated = AgentAction::respond_elicitation(
         ElicitationRequestId::Number(0),
@@ -236,22 +243,28 @@ fn decline_and_cancel_carry_no_content_and_string_ids_survive() {
     }
 }
 
+/// A value ACP cannot express is refused where the caller finds out about it -
+/// reading the control request - rather than on the way to the wire, by which
+/// point the session has already released the elicitation slot and the agent
+/// would wait on a request nothing can answer.
 #[test]
-fn nested_content_is_refused_before_it_reaches_the_wire() {
-    let translated = AgentAction::respond_elicitation(
-        ElicitationRequestId::Number(1),
-        ElicitationAnswer::Accept {
-            content: Some(BTreeMap::from([(
-                "nested".to_owned(),
-                serde_json::json!({ "a": 1 }),
-            )])),
-        },
-    )
-    .to_runtime(
-        &SessionId::new("acp-abc"),
-        RequestId::Str("unused".to_owned()),
-    );
-    assert!(matches!(translated, Err(ActionError::Acp(_))));
+fn content_acp_cannot_express_is_refused_when_the_request_is_read() {
+    for unrepresentable in [
+        serde_json::json!({ "a": 1 }),
+        serde_json::json!(null),
+        serde_json::json!(["a", 1]),
+    ] {
+        let body = serde_json::json!({
+            "type": "respondElicitation",
+            "requestId": 1,
+            "action": "accept",
+            "content": { "field": unrepresentable },
+        });
+        assert!(
+            serde_json::from_value::<AgentAction>(body).is_err(),
+            "{unrepresentable} is not an ACP content value"
+        );
+    }
 }
 
 #[test]
@@ -270,7 +283,7 @@ fn the_control_body_for_an_answer_reads_as_documented() {
             ElicitationAnswer::Accept {
                 content: Some(BTreeMap::from([(
                     "strategy".to_owned(),
-                    serde_json::json!("balanced")
+                    ContentValue::Text("balanced".to_owned())
                 )])),
             },
         )

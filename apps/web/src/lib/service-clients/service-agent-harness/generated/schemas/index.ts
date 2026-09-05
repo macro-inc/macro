@@ -62,6 +62,7 @@ export * from './elicitationAnswerOneOfFive';
 export * from './elicitationAnswerOneOfFiveAction';
 export * from './elicitationAnswerOneOfSeven';
 export * from './elicitationAnswerOneOfSevenAction';
+export * from './elicitationContentValue';
 export * from './elicitationRequestId';
 export * from './externalSessionResponse';
 export * from './externalSessionResponseName';

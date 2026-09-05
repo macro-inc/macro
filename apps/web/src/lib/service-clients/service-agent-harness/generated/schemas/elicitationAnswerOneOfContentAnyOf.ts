@@ -4,8 +4,11 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ElicitationContentValue } from './elicitationContentValue';
 
 /**
  * Form: the submitted values keyed by property. URL: omitted.
  */
-export type ElicitationAnswerOneOfContentAnyOf = { [key: string]: unknown };
+export type ElicitationAnswerOneOfContentAnyOf = {
+  [key: string]: ElicitationContentValue;
+};
