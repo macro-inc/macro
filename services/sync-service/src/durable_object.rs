@@ -45,6 +45,7 @@ pub mod status_codes {
 }
 
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
+const SAVE_INTERVAL_MS: u64 = 100;
 
 mod path {
     pub const CONNECT: &str = "connect";
@@ -429,7 +430,7 @@ async fn report_interaction(document_id: &str, env: &Env, reason: InteractionRea
     }
 }
 
-/// Schedule an alarm 5 seconds from now.
+/// Schedule a save alarm, batching updates that arrive within the interval.
 async fn bump_alarm(state: &State) -> Result<()> {
     let current_alarm = state.storage().get_alarm().await?;
 
@@ -439,7 +440,10 @@ async fn bump_alarm(state: &State) -> Result<()> {
         return Ok(());
     }
 
-    state.storage().set_alarm(ScheduledTime::from(5000)).await?;
+    state
+        .storage()
+        .set_alarm(ScheduledTime::from(SAVE_INTERVAL_MS))
+        .await?;
 
     Ok(())
 }
