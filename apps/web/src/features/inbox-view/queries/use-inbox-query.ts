@@ -41,6 +41,7 @@ import {
 } from '../../next-soup/filters/predicates';
 import { INBOX_FACETS, type InboxFacetContext } from '../inbox-facets';
 import type { InboxTab, InboxViewState } from '../types';
+import { soupItemMatchesInboxTab } from './inbox-item-filter';
 import {
   buildInboxQuery,
   type InboxQueryCapabilities,
@@ -130,10 +131,19 @@ export function useInboxDataSource(
 
   const queryArgs = createMemo(() => buildInboxQuery(viewContext()));
 
-  const query = useSoupAstItemsQuery(queryArgs, () => ({
-    enabled: true,
-    showSupportedForeignEntities: foreignEntities().enabled,
-  }));
+  const query = useSoupAstItemsQuery(queryArgs, () => {
+    // Capture the tab alongside the query args so the insert gate stays bound
+    // to the query it was registered on: after a tab switch the previous
+    // tab's cached query keeps gating cache inserts by its own membership.
+    const tab = viewContext().tab;
+    return {
+      enabled: true,
+      showSupportedForeignEntities: foreignEntities().enabled,
+      meta: {
+        insertFilter: (item) => soupItemMatchesInboxTab(item, tab),
+      },
+    };
+  });
 
   const transformEntities = (entities: EntityData[]) => {
     const context = viewContext();

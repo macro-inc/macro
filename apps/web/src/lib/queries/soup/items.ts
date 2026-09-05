@@ -71,6 +71,8 @@ interface SoupItemsQueryOptions {
     groupBy?: GroupByField;
     groupKey?: string;
     itemFilter?: (item: SoupApiItem) => boolean;
+    /** Gates optimistic cache inserts only — fetched rows never run through it. */
+    insertFilter?: (item: SoupApiItem) => boolean;
   };
   showSupportedForeignEntities?: boolean;
   /** Resets view-owned GraphQL state before a mutation-driven network refresh. */
