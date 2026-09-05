@@ -23,8 +23,11 @@ impl CursorApiKeys for TestCursorKeys {
     }
 }
 
+/// Every (method, path) the fake Cursor API was asked for.
+type RecordedCalls = Arc<Mutex<Vec<(String, String)>>>;
+
 async fn cursor_api(
-    State(calls): State<Arc<Mutex<Vec<(String, String)>>>>,
+    State(calls): State<RecordedCalls>,
     request: Request,
 ) -> Json<serde_json::Value> {
     calls.lock().unwrap().push((

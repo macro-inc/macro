@@ -235,7 +235,7 @@ async fn run_runtime<H>(
                             acp_open = false;
                         }
                     }
-                    ToRuntimeMessage::ModelProbeRequest { request_id } => {
+                    ToRuntimeMessage::ModelProbeRequest => {
                         let model_probes = Arc::clone(&model_probes);
                         let outbound = outbound.clone();
                         probes.spawn(async move {
@@ -245,10 +245,7 @@ async fn run_runtime<H>(
                                 }
                                 Err(message) => ModelProbeResult::Error { message },
                             };
-                            let _ = outbound.send(ToServerMessage::ModelProbeResponse {
-                                request_id,
-                                result,
-                            });
+                            let _ = outbound.send(ToServerMessage::ModelProbeResponse { result });
                         });
                     }
                 }

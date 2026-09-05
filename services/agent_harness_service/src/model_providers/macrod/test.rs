@@ -28,15 +28,13 @@ async fn connected_runtime_returns_its_fresh_probe_options() {
     let (release, held) = tokio::sync::oneshot::channel();
 
     let response = tokio::spawn(async move {
-        let ToRuntimeMessage::ModelProbeRequest { request_id } =
-            runtime.rx.recv().await.expect("probe request")
-        else {
-            panic!("expected model probe request");
-        };
+        assert!(matches!(
+            runtime.rx.recv().await.expect("probe request"),
+            ToRuntimeMessage::ModelProbeRequest
+        ));
         runtime
             .tx
             .send(ToServerMessage::ModelProbeResponse {
-                request_id,
                 result: ModelProbeResult::Available {
                     config_options: vec![SessionConfigOption::select(
                         "model",

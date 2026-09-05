@@ -28,10 +28,10 @@ use agent_runtime_protocol::domain::ports::{
     Transport, TransportError, TransportReceiver, TransportSender,
 };
 use agent_runtime_protocol::domain::schema::v0::{
-    AcpMessage, ModelProbeId, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
+    AcpMessage, ModelProbeResult, SystemEvent, ToRuntimeMessage, ToServerMessage,
 };
 use dashmap::DashMap;
-use tokio::sync::{Mutex, mpsc, oneshot, watch};
+use tokio::sync::{Mutex, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::model::{AgentSessionId, SessionClaim};
@@ -58,7 +58,7 @@ pub(crate) enum Routed {
     /// The whole connection's business: a system event, or its end.
     Connection,
     /// A connection-level model probe response, never session traffic.
-    Probe(ModelProbeId),
+    Probe,
     /// Nothing owns it. Kept as its own answer rather than folded into
     /// `Connection` so it can be counted and logged as the anomaly it is.
     Orphan,
@@ -96,8 +96,8 @@ impl Routes {
     /// expectation is consumed - a second answer to one request has no owner.
     /// Anything carrying a `sessionId` belongs to that ACP session's owner.
     pub(crate) fn route(&mut self, message: &ToServerMessage) -> Routed {
-        if let ToServerMessage::ModelProbeResponse { request_id, .. } = message {
-            return Routed::Probe(request_id.clone());
+        if matches!(message, ToServerMessage::ModelProbeResponse { .. }) {
+            return Routed::Probe;
         }
         let ToServerMessage::Acp(AcpMessage(frame)) = message else {
             return Routed::Connection;
@@ -199,7 +199,9 @@ impl<Connector> RuntimeAttachment<Connector> {
 
 /// Every session this connection carries, and where to reach it.
 type Bound = DashMap<AgentSessionId, mpsc::Sender<ToServerMessage>>;
-type PendingProbes = DashMap<ModelProbeId, oneshot::Sender<ModelProbeResult>>;
+
+/// The latest model probe answer, or `None` for "no answer is coming".
+type ProbeAnswers = watch::Sender<Option<ModelProbeResult>>;
 
 /// One runtime connection and the sessions riding on it.
 ///
@@ -216,7 +218,10 @@ pub struct RuntimeConnection<Sender> {
     /// afterwards has to be able to learn it happened.
     runtime_ready: AtomicBool,
     bound: Bound,
-    pending_probes: PendingProbes,
+    /// Answers to model probes, broadcast rather than correlated: every probe
+    /// on this connection asks the same parameterless question, so any answer
+    /// serves any waiter.
+    probe_answers: ProbeAnswers,
     routes: Mutex<Routes>,
     router: OnceLock<tokio::task::AbortHandle>,
     /// Cancelled once this connection's transport has ended.
@@ -248,7 +253,7 @@ where
             handshake,
             runtime_ready: AtomicBool::new(false),
             bound: DashMap::new(),
-            pending_probes: DashMap::new(),
+            probe_answers: watch::channel(None).0,
             routes: Mutex::new(Routes::default()),
             router: OnceLock::new(),
             closed: CancellationToken::new(),
@@ -261,7 +266,8 @@ where
     /// Stop serving this connection: it has been displaced by a newer dial.
     pub fn evict(&self) {
         self.bound.clear();
-        self.pending_probes.clear();
+        // Nothing will answer a probe on a connection that is no longer served.
+        let _ = self.probe_answers.send(None);
         if let Some(router) = self.router.get() {
             router.abort();
         }
@@ -280,31 +286,37 @@ where
         self.closed.cancelled().await;
     }
 
-    /// Ask the runtime to inspect a separate fresh ACP process and await only
-    /// the response correlated to this request.
+    /// Ask the runtime to inspect a separate fresh ACP process and await the
+    /// next answer this connection produces.
+    ///
+    /// Answers are not correlated to requests because they cannot disagree:
+    /// the request has no parameters and the runtime hosts one configured
+    /// harness, so concurrent probes are the same question asked twice.
     pub async fn probe_models(
         &self,
     ) -> Result<Vec<agent_client_protocol::schema::v1::SessionConfigOption>, ModelProbeError> {
-        let request_id = ModelProbeId::new();
-        let (reply, response) = oneshot::channel();
-        self.pending_probes.insert(request_id.clone(), reply);
-        let pending = PendingProbe {
-            request_id: request_id.clone(),
-            probes: &self.pending_probes,
-        };
+        // Subscribe before asking: an answer can land before this task is
+        // polled again, and a missed wakeup would wait for somebody else's
+        // next probe.
+        let mut answers = self.probe_answers.subscribe();
+        answers.mark_unchanged();
 
         self.outbound
-            .send(ToRuntimeMessage::ModelProbeRequest { request_id })
+            .send(ToRuntimeMessage::ModelProbeRequest)
             .await
             .map_err(ModelProbeError::Transport)?;
-        let result = tokio::select! {
-            result = response => result.map_err(|_| ModelProbeError::Closed)?,
+
+        let answer = tokio::select! {
+            changed = answers.changed() => {
+                changed.map_err(|_| ModelProbeError::Closed)?;
+                answers.borrow_and_update().clone()
+            }
             () = self.closed.cancelled() => return Err(ModelProbeError::Closed),
         };
-        drop(pending);
-        match result {
-            ModelProbeResult::Available { config_options } => Ok(config_options),
-            ModelProbeResult::Error { message } => Err(ModelProbeError::Runtime(message)),
+        match answer {
+            Some(ModelProbeResult::Available { config_options }) => Ok(config_options),
+            Some(ModelProbeResult::Error { message }) => Err(ModelProbeError::Runtime(message)),
+            None => Err(ModelProbeError::Closed),
         }
     }
 
@@ -405,7 +417,7 @@ where
             match routed {
                 Routed::Session(session) => self.deliver(session, message).await,
                 Routed::Connection => self.on_connection_message(message).await,
-                Routed::Probe(request_id) => self.complete_probe(request_id, message),
+                Routed::Probe => self.answer_probes(message),
                 Routed::Orphan => {
                     tracing::warn!(
                         frame = ?message,
@@ -415,23 +427,16 @@ where
             }
         }
         self.bound.clear();
-        self.pending_probes.clear();
         self.closed.cancel();
     }
 
-    fn complete_probe(&self, request_id: ModelProbeId, message: ToServerMessage) {
-        let ToServerMessage::ModelProbeResponse { result, .. } = message else {
+    /// Hand one answer to every probe waiting on this connection. An answer
+    /// nobody is waiting for is simply the last one, and is dropped.
+    fn answer_probes(&self, message: ToServerMessage) {
+        let ToServerMessage::ModelProbeResponse { result } = message else {
             unreachable!("only model probe responses receive probe routing")
         };
-        match self.pending_probes.remove(&request_id) {
-            Some((_, waiter)) => {
-                let _ = waiter.send(result);
-            }
-            None => tracing::warn!(
-                request_id = request_id.as_str(),
-                "dropping a model probe response with no matching waiter"
-            ),
-        }
+        let _ = self.probe_answers.send(Some(result));
     }
 
     async fn deliver(&self, session: AgentSessionId, message: ToServerMessage) {
@@ -525,17 +530,6 @@ pub enum ModelProbeError {
     /// The runtime safely reported a probe failure.
     #[error("runtime model probe failed: {0}")]
     Runtime(String),
-}
-
-struct PendingProbe<'a> {
-    request_id: ModelProbeId,
-    probes: &'a PendingProbes,
-}
-
-impl Drop for PendingProbe<'_> {
-    fn drop(&mut self) {
-        self.probes.remove(&self.request_id);
-    }
 }
 
 /// A bound session's queue. Only called just after inserting it.

@@ -107,37 +107,6 @@ pub struct AcpMessage(
     #[specta(type = std::collections::HashMap<String, Unknown>)] pub RawJsonRpcMessage,
 );
 
-/// Correlation id for one connection-level model probe.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Type)]
-#[serde(transparent)]
-pub struct ModelProbeId(String);
-
-impl ModelProbeId {
-    /// Allocate a globally unique probe id.
-    #[must_use]
-    pub fn new() -> Self {
-        Self(macro_uuid::generate_uuid_v7().to_string())
-    }
-
-    /// Construct an id from its wire representation.
-    #[must_use]
-    pub fn from_string(value: String) -> Self {
-        Self(value)
-    }
-
-    /// Borrow the wire representation.
-    #[must_use]
-    pub fn as_str(&self) -> &str {
-        &self.0
-    }
-}
-
-impl Default for ModelProbeId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 /// The result of probing a fresh ACP subprocess.
 #[derive(Debug, Clone, Serialize, Deserialize, Type)]
 #[serde(tag = "status", rename_all = "camelCase")]
@@ -164,11 +133,11 @@ pub enum ToRuntimeMessage {
     /// An ACP message routed to the hosted agent.
     Acp(AcpMessage),
     /// Probe a separate fresh agent process for its session configuration.
-    ModelProbeRequest {
-        /// Correlates this request with exactly one response.
-        #[serde(rename = "requestId")]
-        request_id: ModelProbeId,
-    },
+    ///
+    /// The request carries no parameters: it asks this connection's one
+    /// configured harness what it advertises. Answers are therefore
+    /// interchangeable, so nothing correlates a response to a request.
+    ModelProbeRequest,
 }
 
 /// Agent Runtime to Agent Service traffic on the logical protocol stream.
@@ -184,11 +153,8 @@ pub enum ToServerMessage {
         #[specta(type = String)]
         event: SystemEvent,
     },
-    /// The answer to one connection-level model probe.
+    /// An answer to a connection-level model probe.
     ModelProbeResponse {
-        /// Correlates this response with exactly one request.
-        #[serde(rename = "requestId")]
-        request_id: ModelProbeId,
         /// Raw options or a safe failure.
         result: ModelProbeResult,
     },
