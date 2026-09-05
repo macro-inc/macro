@@ -2,19 +2,10 @@ import type { SoupApiItem } from '@service-storage/generated/schemas';
 import { describe, expect, it } from 'vitest';
 import { soupItemMatchesInboxTab } from './inbox-item-filter';
 
-function emailItem(
-  overrides: { isDraft?: boolean; labelNames?: string[] } = {}
-): SoupApiItem {
+function emailItem(overrides: { isSignal?: boolean } = {}): SoupApiItem {
   return {
     tag: 'emailThread',
-    data: {
-      id: 'thread-1',
-      isDraft: overrides.isDraft ?? false,
-      labels: (overrides.labelNames ?? []).map((name) => ({
-        name,
-        providerLabelId: name,
-      })),
-    },
+    data: { id: 'thread-1', isSignal: overrides.isSignal },
   } as unknown as SoupApiItem;
 }
 
@@ -28,49 +19,22 @@ const reminderItem = {
   data: { id: 'reminder-1' },
 } as unknown as SoupApiItem;
 
-// The macro-3272 shape: a GitHub PR notification email (CATEGORY_UPDATES,
-// often also Gmail's IMPORTANT) restored into the cache by a websocket
-// notification must not enter the Signal feed.
-const githubNoiseEmail = emailItem({
-  labelNames: ['CATEGORY_UPDATES', 'IMPORTANT', 'INBOX', 'UNREAD'],
-});
+// The macro-3272 shape: a noise email (server is_signal = false) restored
+// into the cache by a websocket notification must not enter the Signal feed.
+const noiseEmail = emailItem({ isSignal: false });
+const signalEmail = emailItem({ isSignal: true });
 
 describe('signal tab', () => {
-  it('rejects category-labeled noise emails, IMPORTANT notwithstanding', () => {
-    expect(soupItemMatchesInboxTab(githubNoiseEmail, 'signal')).toBe(false);
+  it('rejects noise emails', () => {
+    expect(soupItemMatchesInboxTab(noiseEmail, 'signal')).toBe(false);
   });
 
-  it('accepts personal emails', () => {
-    expect(
-      soupItemMatchesInboxTab(
-        emailItem({ labelNames: ['CATEGORY_PERSONAL', 'INBOX'] }),
-        'signal'
-      )
-    ).toBe(true);
+  it('accepts signal emails', () => {
+    expect(soupItemMatchesInboxTab(signalEmail, 'signal')).toBe(true);
   });
 
-  it('accepts uncategorized emails', () => {
-    expect(
-      soupItemMatchesInboxTab(emailItem({ labelNames: ['INBOX'] }), 'signal')
-    ).toBe(true);
-  });
-
-  it('accepts drafts regardless of labels', () => {
-    expect(
-      soupItemMatchesInboxTab(
-        emailItem({ isDraft: true, labelNames: ['CATEGORY_UPDATES'] }),
-        'signal'
-      )
-    ).toBe(true);
-  });
-
-  it('accepts threads the viewer replied into, even when categorized', () => {
-    expect(
-      soupItemMatchesInboxTab(
-        emailItem({ labelNames: ['SENT', 'CATEGORY_UPDATES'] }),
-        'signal'
-      )
-    ).toBe(true);
+  it('rejects emails cached before the isSignal field shipped', () => {
+    expect(soupItemMatchesInboxTab(emailItem(), 'signal')).toBe(false);
   });
 
   it('accepts non-email items', () => {
@@ -79,17 +43,16 @@ describe('signal tab', () => {
 });
 
 describe('noise tab', () => {
-  it('accepts category-labeled noise emails', () => {
-    expect(soupItemMatchesInboxTab(githubNoiseEmail, 'noise')).toBe(true);
+  it('accepts noise emails', () => {
+    expect(soupItemMatchesInboxTab(noiseEmail, 'noise')).toBe(true);
   });
 
   it('rejects signal emails', () => {
-    expect(
-      soupItemMatchesInboxTab(
-        emailItem({ labelNames: ['CATEGORY_PERSONAL'] }),
-        'noise'
-      )
-    ).toBe(false);
+    expect(soupItemMatchesInboxTab(signalEmail, 'noise')).toBe(false);
+  });
+
+  it('rejects emails cached before the isSignal field shipped', () => {
+    expect(soupItemMatchesInboxTab(emailItem(), 'noise')).toBe(false);
   });
 
   it('rejects non-email items', () => {
@@ -99,13 +62,8 @@ describe('noise tab', () => {
 
 describe('all tab', () => {
   it('accepts emails of either importance', () => {
-    expect(soupItemMatchesInboxTab(githubNoiseEmail, 'all')).toBe(true);
-    expect(
-      soupItemMatchesInboxTab(
-        emailItem({ labelNames: ['CATEGORY_PERSONAL'] }),
-        'all'
-      )
-    ).toBe(true);
+    expect(soupItemMatchesInboxTab(noiseEmail, 'all')).toBe(true);
+    expect(soupItemMatchesInboxTab(signalEmail, 'all')).toBe(true);
   });
 });
 
@@ -113,6 +71,6 @@ describe('reminders tab', () => {
   it('accepts only reminders', () => {
     expect(soupItemMatchesInboxTab(reminderItem, 'reminders')).toBe(true);
     expect(soupItemMatchesInboxTab(taskItem, 'reminders')).toBe(false);
-    expect(soupItemMatchesInboxTab(githubNoiseEmail, 'reminders')).toBe(false);
+    expect(soupItemMatchesInboxTab(noiseEmail, 'reminders')).toBe(false);
   });
 });

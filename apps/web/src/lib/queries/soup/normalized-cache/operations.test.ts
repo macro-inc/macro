@@ -1317,14 +1317,10 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
  * `soupItemMatchesInboxTab` as each tab query's `insertFilter`.
  */
 describe('inbox tab gate (Signal vs Noise)', () => {
-  function inboxEmailItem(id: string, labelNames: string[]): SoupApiItem {
+  function inboxEmailItem(id: string, isSignal: boolean): SoupApiItem {
     return {
       tag: 'emailThread',
-      data: {
-        id,
-        isDraft: false,
-        labels: labelNames.map((name) => ({ name, providerLabelId: name })),
-      },
+      data: { id, isSignal },
       frecency_score: 1,
     } as unknown as SoupApiItem;
   }
@@ -1355,16 +1351,13 @@ describe('inbox tab gate (Signal vs Noise)', () => {
   }
 
   it('restores a cached noise email into Noise but not Signal', () => {
-    const noiseEmail = inboxEmailItem('e-noise', [
-      'CATEGORY_UPDATES',
-      'IMPORTANT',
-    ]);
+    const noiseEmail = inboxEmailItem('e-noise', false);
     cacheEmail(noiseEmail);
     const signalKey = seedInboxTabQuery('signal', [
-      inboxEmailItem('e-signal', ['CATEGORY_PERSONAL']),
+      inboxEmailItem('e-signal', true),
     ]);
     const noiseKey = seedInboxTabQuery('noise', [
-      inboxEmailItem('e-old-noise', ['CATEGORY_PROMOTIONS']),
+      inboxEmailItem('e-old-noise', false),
     ]);
 
     restoreSoupEntityToDoneFilteredQueries('e-noise');
@@ -1379,13 +1372,13 @@ describe('inbox tab gate (Signal vs Noise)', () => {
 
   it('inserts a new signal email into Signal but not Noise', () => {
     const signalKey = seedInboxTabQuery('signal', [
-      inboxEmailItem('e-signal', ['CATEGORY_PERSONAL']),
+      inboxEmailItem('e-signal', true),
     ]);
     const noiseKey = seedInboxTabQuery('noise', [
-      inboxEmailItem('e-old-noise', ['CATEGORY_PROMOTIONS']),
+      inboxEmailItem('e-old-noise', false),
     ]);
 
-    insertSoupEntity(inboxEmailItem('e-new', []));
+    insertSoupEntity(inboxEmailItem('e-new', true));
 
     const pageOf = (key: unknown[]) =>
       testQueryClient
