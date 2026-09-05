@@ -1,6 +1,6 @@
 //! PostgreSQL implementation of the calendar repository port.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, NaiveDate, Utc};
 use futures::try_join;
@@ -1603,6 +1603,53 @@ impl CalendarRepository for PgCalendarRepository {
         .await
         .map_err(report)?;
 
+        // A copy's read-only flag mirrors its calendar's access role as of the
+        // event's last sync, and Google only resends events that changed, so a
+        // role change on the calendar list would otherwise leave every copy on
+        // that calendar stale. Refresh the copies from their calendars' live
+        // roles, including the stored projection a restore would replay, and
+        // the entities that mirror them.
+        sqlx::query!(
+            r#"
+            UPDATE calendar_event_sources source
+            SET is_read_only = live.is_read_only,
+                normalized_payload = jsonb_set(
+                    source.normalized_payload,
+                    '{event,isReadOnly}',
+                    to_jsonb(live.is_read_only)
+                )
+            FROM (
+                SELECT
+                    calendar.id AS calendar_id,
+                    NOT COALESCE(calendar.access_role IN ('owner', 'writer'), false)
+                        AS is_read_only
+                FROM calendars calendar
+                WHERE calendar.account_id = $1
+            ) live
+            WHERE source.calendar_id = live.calendar_id
+              AND source.is_read_only IS DISTINCT FROM live.is_read_only
+            "#,
+            account_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        let refreshed_events = sqlx::query!(
+            r#"
+            UPDATE calendar_events event
+            SET is_read_only = source.is_read_only
+            FROM calendar_event_sources source
+            WHERE source.id = event.content_source_id
+              AND source.account_id = $1
+              AND event.is_read_only IS DISTINCT FROM source.is_read_only
+            RETURNING event.id, event.owner_id
+            "#,
+            account_id,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(report)?;
+
         // A calendar's access role or primary flag can change without any of
         // its events changing, which moves the canonical copy without a source
         // write. Re-project the entities whose content still mirrors another copy.
@@ -1625,11 +1672,22 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
-        for event_id in reranked_event_ids {
-            if let Some(outcome) = restore_best_source_or_delete(&mut tx, event_id).await? {
+        for event_id in &reranked_event_ids {
+            if let Some(outcome) = restore_best_source_or_delete(&mut tx, *event_id).await? {
                 retired.push(outcome);
             }
         }
+        let reranked: HashSet<Uuid> = reranked_event_ids.into_iter().collect();
+        retired.extend(
+            refreshed_events
+                .into_iter()
+                .filter(|row| !reranked.contains(&row.id))
+                .map(|row| RetiredCalendarEvent {
+                    event_id: row.id,
+                    owner_id: row.owner_id,
+                    deleted: false,
+                }),
+        );
 
         tx.commit().await.map_err(report)?;
         Ok(retired)

@@ -5769,6 +5769,10 @@ async fn a_calendar_role_change_moves_the_entity_to_the_new_canonical_copy_on_re
         content.title, "[teo] Planning",
         "the fresher copy is canonical once its calendar is writable"
     );
+    assert!(
+        !content.is_read_only,
+        "the copy's read-only flag follows the calendar's new role"
+    );
     let mirrors_canonical = sqlx::query_scalar!(
         r#"
         SELECT content_source_id = calendar_event_canonical_source_id(id) AS "mirrors!"
@@ -5787,16 +5791,95 @@ async fn a_calendar_role_change_moves_the_entity_to_the_new_canonical_copy_on_re
         .unwrap()
         .expect("owner sees the mutation target");
     assert_eq!(target.calendar_id, shared_calendar_id);
+    assert!(!target.is_read_only);
     let (event, _) = listed_event(&repo, member, starts_at).await;
     assert_eq!(event.calendar_id, Some(shared_calendar_id));
     assert_eq!(
         event
             .sources
             .iter()
-            .map(|copy| copy.calendar_id)
+            .map(|copy| (copy.calendar_id, copy.is_read_only))
             .collect::<Vec<_>>(),
-        vec![shared_calendar_id, secondary_calendar_id]
+        vec![(shared_calendar_id, false), (secondary_calendar_id, false)]
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_calendar_role_change_refreshes_the_read_only_flag_of_its_only_copy(pool: PgPool) {
+    let member = "macro|teo@example.com";
+    insert_user(&pool, member).await;
+    let link_id = insert_link(&pool, member).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+    let (account_id, primary_calendar_id) = provider_ids(&repo, link_id).await;
+    let shared_calendar_id = insert_shared_calendar(&repo, account_id, "reader", &[]).await;
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+    let event_id = repo
+        .upsert_event_fixture(shared_copy_upsert(
+            member,
+            link_id,
+            (account_id, shared_calendar_id),
+            "vacation@example.com",
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    assert!(entity_content(&pool, event_id).await.is_read_only);
+
+    sqlx::query!(
+        "UPDATE calendars SET access_role = 'writer' WHERE id = $1",
+        shared_calendar_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let announced = repo
+        .reconcile_google_calendar_list(
+            key,
+            lease_token,
+            account_id,
+            vec![primary_calendar_id, shared_calendar_id],
+        )
+        .await
+        .unwrap();
+
+    assert!(!entity_content(&pool, event_id).await.is_read_only);
+    assert_eq!(
+        announced
+            .iter()
+            .map(|outcome| (outcome.event_id, outcome.deleted))
+            .collect::<Vec<_>>(),
+        vec![(event_id, false)],
+        "the unlocked event announces itself so search and clients refresh"
+    );
+    let target = repo
+        .get_event_mutation_target(member, event_id, None)
+        .await
+        .unwrap()
+        .expect("owner sees the mutation target");
+    assert_eq!(target.calendar_id, shared_calendar_id);
+    assert!(!target.is_read_only);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
