@@ -18,6 +18,9 @@ function settled(presentation: MagicChipPresentation) {
   return presentation.kind === 'settled' ? presentation : undefined;
 }
 
+/** Stay inside the chat column; wide streaming markdown must not grow it. */
+const CHIP_SHELL = 'w-full min-w-0 max-w-full overflow-x-hidden';
+
 /** Fixed-height activity line — no box, just a shimmering label in the flow. */
 const ActivityLine: Component<{
   agentSessionId: string;
@@ -26,7 +29,7 @@ const ActivityLine: Component<{
 }> = (props) => (
   <button
     type="button"
-    class="flex h-6 w-full min-w-0 items-center gap-2 text-left"
+    class={`flex h-6 items-center gap-2 overflow-hidden text-left ${CHIP_SHELL}`}
     data-magic-chip={props.agentSessionId}
     data-message-reply-preview={`${props.activity.label}${
       props.activity.detail ? ` ${props.activity.detail}` : ''
@@ -58,7 +61,7 @@ const ActivityLine: Component<{
 /** The response, quoted as if the agent had answered inline. */
 const AnswerBody: Component<{ markdown: string }> = (props) => (
   <div
-    class="w-full border-l-2 border-accent pl-3 text-left text-sm leading-6"
+    class="chat-markdown-container w-full min-w-0 max-w-full overflow-x-auto wrap-break-word whitespace-pre-wrap border-l-2 border-accent pl-3 text-left text-sm leading-6"
     data-message-reply-preview
   >
     <StaticMarkdownContext theme={channelTheme}>
@@ -81,11 +84,11 @@ const StreamingAnswer: Component<{
   onOpen?: () => void;
 }> = (props) => (
   <div
-    class="grid w-full min-w-0 justify-items-start gap-1"
+    class={`grid justify-items-stretch gap-1 ${CHIP_SHELL}`}
     data-magic-chip={props.agentSessionId}
   >
     <AnswerBody markdown={props.markdown} />
-    <div class="w-full pl-3">
+    <div class={`pl-3 ${CHIP_SHELL}`}>
       <ActivityLine
         agentSessionId={props.agentSessionId}
         activity={props.activity}
@@ -102,7 +105,7 @@ const SettledAnswer: Component<{
   onOpen?: () => void;
 }> = (props) => (
   <div
-    class="grid w-full min-w-0 justify-items-start gap-1"
+    class={`grid justify-items-stretch gap-1 ${CHIP_SHELL}`}
     data-magic-chip={props.agentSessionId}
   >
     <AnswerBody markdown={props.markdown} />
