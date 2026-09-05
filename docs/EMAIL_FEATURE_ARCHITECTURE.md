@@ -10,7 +10,8 @@ same application routes.
 
 | Package | Owns | Does not own |
 | --- | --- | --- |
-| `email-message` | A received or sent message, its sender/header, HTML or Markdown body, quoted content, containment, theme treatment, and attachment presentation | Thread ordering, pagination, selection policy, drafts, reply placement, navigation, block state |
+| `packages/email-renderer` | Deterministic preparation of HTML/plaintext bodies; framework-independent browser containment, colors, layout, and resource lifecycle | Solid, message DTOs, threads, app services, sender classification, block state |
+| `email-message` | A received or sent message, its sender/header, body renderer lifecycle and policy, Macro Markdown, quote expansion controls, and attachment presentation | Thread ordering, pagination, selection policy, drafts, reply placement, navigation, block state |
 | `email-thread` | A conversation, chronological ordering, hidden middle messages, pagination, draft association, reading stops, selection, scroll coordination, and where a reply appears | Rendering the internals of an email, editing or sending a draft, block lifecycle |
 | `email-compose` | Form state, recipient rules, editor content, attachments, draft persistence, sending, scheduling, signatures, and undo recovery | Thread pagination/rendering, block identity, app routes or split navigation |
 | `block-email` | The document-block host: load gate, read marker, block hotkeys/focus, location registration, header, modals, side panel, and host actions | Reusable thread, message, or composer state |
@@ -32,6 +33,8 @@ flowchart TD
   Thread --> Compose[email-compose view]
   Compose --> Model[email-message core types]
   Message --> Model
+  Message --> RendererBrowser[email-renderer/browser]
+  RendererBrowser --> RendererCore[email-renderer core]
   Adapters --> Contracts[feature-owned contracts]
   Thread --> Contracts
   Compose --> Contracts
@@ -81,7 +84,7 @@ test exercises this ordering.
 | `EmailThreadSource` | Requested identity, available domain thread, request status, pagination availability, and refresh/page completion |
 | `EmailThreadCommands` | Thread actions and their availability; no soup collection or mutation objects |
 | `EmailThreadHost` | Optional location target, focus, activation status, and keyboard registration |
-| `EmailRenderingDependencies` | Theme values, link preparation, and image resolution with disposal awareness |
+| `EmailRenderingDependencies` | Theme values, explicit image policy, link preparation, and image resolution with an abortable resource lifetime |
 | `EmailFormDependencies` | Viewer address and available inbox identities for recipient selection |
 | `EmailReplySession` | Relevant messages/drafts, recipient options, reply request, and selection callbacks |
 | `EmailComposeServices` | Account metadata and named draft, attachment, send, schedule, undo, and feedback operations |
@@ -106,6 +109,24 @@ feedback, uploads, signature link interception, and editor focus traversal are
 also supplied capabilities or host actions.
 
 ## State and lifetime rules
+
+Ordinary email body rendering is now owned by
+[`packages/email-renderer`](../packages/email-renderer/README.md). Its default
+entry point prepares serializable HTML from a narrow content input without DOM,
+Solid, flags, or services. Its `/browser` entry point owns Shadow DOM, computed
+styles, containment, width fitting, and resource cleanup. `email-message` only
+translates reactive values and registers the renderer's disposal with Solid.
+Production adapters supply theme, image proxy policy, CID resolution, native
+authenticated image fetching, and mailto interception. The package never imports
+the app to obtain those capabilities.
+
+Macro Markdown remains a separate app rendering path because document mentions
+and editor semantics belong to the app. That branch does not mount an invisible
+HTML renderer or start its resource requests. Ordinary plaintext is escaped and
+displayed literally, including Markdown punctuation. Missing replyless HTML
+falls back to recognized quote removal or the full body instead of a blank body.
+The shared editor HTML decorator still owns its Lexical/Solid lifecycle; its
+sanitization/color helpers delegate to the package through `@core/email`.
 
 1. Query availability and display policy are separate. The adapter can expose
    cached data even when a completed request failed. A pending resource is never
@@ -205,8 +226,52 @@ The final interaction runs reported no page errors.
 
 The five existing rendering fixture tests differ from their committed screenshots
 on this machine. The original pre-extraction renderer reproduces those failures.
-A separate comparison using the original assets as temporary baselines passes all
-12 screenshots, across both themes and narrow/wide panes, with **zero differing
-pixels** after extraction. Committed screenshots were not regenerated. The local
+A separate comparison using the original assets as temporary baselines passed all
+12 screenshots, across both themes and narrow/wide panes, under the harness's
+100-pixel tolerance. That harness shared containment/zoom helpers but bypassed
+the production parser and color adaptation; it did not establish equivalence of
+the full rendering pipeline. Committed screenshots were not regenerated then. The local
 seeded inbox has no real provider credentials, so these checks do not establish
 Gmail delivery or native iOS behavior.
+
+### Standalone renderer verification
+
+The fixture viewer and Chromium suite now call the same public preparation and
+mounting API as the app. Node tests cover preparation, content/resource policy,
+pure color calculations, and width fitting. A separate TypeScript build excludes
+DOM libraries from core. Import checks reject app/framework dependencies and
+browser imports from core. Browser tests cover CSS/layout, color round trips,
+quote expansion, image visibility, resource replacement, late cleanup, and
+adapter failures. App tests verify the Solid lifecycle and native image adapter.
+The package's Node tests are included in the app's default Vitest projects and
+existing CI job. They also compile production core without DOM libraries.
+
+The new visual baselines cover all five migrated fixtures across both themes,
+including narrow/wide panes. Resources are blocked before insertion and the
+suite asserts no external requests. Screenshots have a zero-pixel difference
+tolerance. A comparison with a captured bundle of the previous production
+renderer found identical calendar and wide-table images (six screenshots).
+The paragraph fixtures have contained outer margins: the new shadow host keeps
+layout and paint within the body, increasing the captured height by the margins
+that previously collapsed outside it. This is an intentional containment change.
+The package README documents additional explicit content policies, including
+literal plaintext and exclusion of origin-dependent URLs and external fonts.
+
+Use `bun run --cwd packages/email-renderer viewer` to inspect these fixtures
+without an account or backend. Full inbox interactions still require browser
+checks against the running app; passing package tests alone is insufficient.
+
+The completed extraction passes 53 package Node tests, 18 Chromium tests, and
+121 app email tests, plus the full frontend check, package type/lint checks,
+feature ast-grep scan, viewer production build, and five QC reviews. The package
+Node tests also pass when invoked through the app's Vitest project list.
+Linux's Nix dependency artifact passes a forced rebuild. The Darwin dependency
+hash was generated and verified using the same recipe with Bun's Darwin/arm64
+installation flags on Linux; a native macOS build was not run.
+
+Chrome checked message bodies and quote expansion against the previous and new
+implementations. Final checks covered deep-link reveal, keyboard reply,
+standalone compose, a saved reply surviving a fresh browser context, and the
+mobile reply drawer at 390px. The standalone scenarios reported no page errors.
+The combined script encountered full-page navigation timeouts before and after
+the extraction; persistence and compose were verified in separate contexts.

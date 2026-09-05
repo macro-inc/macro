@@ -1,3 +1,4 @@
+import type { ResourceLifetime } from '@macro-inc/email-renderer/browser';
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../tests/messages';
@@ -32,8 +33,8 @@ describe('independent email body', () => {
     );
     vi.stubGlobal('cancelAnimationFrame', cancelFrame);
     const resolveImages = vi.fn(
-      async (_root, _attachments, urls: string[], disposed: () => boolean) => {
-        if (!disposed()) urls.push('blob:email');
+      async (_root, _attachments, lifetime: ResourceLifetime) => {
+        lifetime.onDispose(() => URL.revokeObjectURL('blob:email'));
       }
     );
     const prepareLinks = vi.fn();
@@ -62,14 +63,14 @@ describe('independent email body', () => {
     });
     try {
       await Promise.resolve();
-      const host = root.body.host();
+      const host = root.body.host()!;
       expect(host.shadowRoot?.textContent).toContain('Hello Person');
       root.body.setShowFullHTML(true);
       await Promise.resolve();
-      expect(root.body.host().shadowRoot?.textContent).toContain(
+      expect(root.body.host()!.shadowRoot?.textContent).toContain(
         'Quoted thread'
       );
-      const link = root.body.host().shadowRoot?.querySelector('a');
+      const link = root.body.host()!.shadowRoot?.querySelector('a');
       expect(link?.target).toBe('_blank');
       expect(link?.rel).toBe('noopener noreferrer');
       expect(prepareLinks).toHaveBeenCalled();
@@ -85,5 +86,25 @@ describe('independent email body', () => {
     expect(revoke).toHaveBeenCalledWith('blob:email');
     expect(disconnect).toHaveBeenCalled();
     expect(cancelFrame).toHaveBeenCalled();
+  });
+  it('keeps the Macro Markdown branch free of hidden HTML resources', async () => {
+    const resolveImages = vi.fn(async () => {});
+    createRoot((dispose) => {
+      const body = createEmailMessageBody(
+        {
+          message: message('macro', { body_macro: 'A document mention' }),
+          isPersonal: true,
+          isBodyExpanded: () => true,
+          setExpandedMessageBody() {},
+          setFocusedMessageId() {},
+          isFocused: false,
+        },
+        { theme: () => theme, resolveImages }
+      );
+      expect(body.host()).toBeUndefined();
+      dispose();
+    });
+    await Promise.resolve();
+    expect(resolveImages).not.toHaveBeenCalled();
   });
 });

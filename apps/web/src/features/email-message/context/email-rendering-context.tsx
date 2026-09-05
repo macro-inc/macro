@@ -1,25 +1,22 @@
+import type { ImagePolicy } from '@macro-inc/email-renderer';
+import type {
+  ResourceLifetime,
+  ThemeColorParams,
+} from '@macro-inc/email-renderer/browser';
 import { type Accessor, createContext, useContext } from 'solid-js';
 import type { EmailAttachment } from '../core/email-message';
 
-export interface EmailRenderingTheme {
-  inkL: number;
-  inkC: number;
-  inkH: number;
-  panelL: number;
-  accentL: number;
-  accentC: number;
-  accentH: number;
-}
+export type EmailRenderingTheme = ThemeColorParams;
 
 /** Rendering capabilities shared by email surfaces; no thread or block state. */
 export interface EmailRenderingDependencies {
   theme: Accessor<EmailRenderingTheme>;
+  images?: ImagePolicy;
   prepareLinks?: (container: HTMLElement) => void;
   resolveImages(
     root: ShadowRoot,
     attachments: EmailAttachment[],
-    blobUrls: string[],
-    isDisposed: () => boolean
+    lifetime: ResourceLifetime
   ): Promise<void>;
 }
 

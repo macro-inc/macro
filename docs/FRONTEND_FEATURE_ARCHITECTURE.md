@@ -447,6 +447,21 @@ rollout state. Preserve route registration and fallback behavior during migratio
 
 ## Testing the boundaries
 
+Framework-independent behavior can live in a standalone workspace library when
+it should run without a feature's reactive runtime. Keep deterministic
+transformations in core and browser effects behind a separate browser export;
+the Solid feature translates accessors to plain values and registers disposal.
+Supply policy and host capabilities explicitly. Do not let the library import
+app flags, clients, routes, or block signals through a convenience barrel.
+
+[`packages/email-renderer`](../packages/email-renderer/README.md) demonstrates
+this split: HTML/CSS preparation compiles without DOM libraries and runs under
+Node; the browser layer handles Shadow DOM, computed colors, layout and resource
+lifetimes; the email-message adapter retains Solid and Macro Markdown integration.
+Its vanilla fixture viewer and browser tests call the exact production API.
+Pure output determinism and pixel determinism are different guarantees: browser,
+fonts, viewport, theme, and resources must also be controlled for screenshots.
+
 Test observable behavior at the layer that owns it. Dependency injection should
 make feature behavior testable without module-mocking the real query factories,
 current-user hook, or display resolvers.

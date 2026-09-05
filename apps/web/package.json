@@ -32,6 +32,7 @@
     "knip": "bunx --bun knip"
   },
   "dependencies": {
+    "@macro-inc/email-renderer": "workspace:*",
     "@aws-crypto/sha256-js": "^5.2.0",
     "@codemirror/lang-cpp": "^6.0.3",
     "@codemirror/lang-css": "^6.3.1",

@@ -14,7 +14,6 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     isPersonal,
     showFullHTML,
     setShowFullHTML,
-    isPlaintext,
     host,
     hasHiddenReplyStructure,
   } = createEmailMessageBody(props, useEmailRendering());
@@ -49,13 +48,6 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
                 />
               );
             }}
-          </Match>
-          <Match when={isPlaintext()}>
-            <StaticMarkdown
-              markdown={props.message.body_text!}
-              theme={channelTheme}
-              target="internal"
-            />
           </Match>
           <Match when={true}>{host()}</Match>
         </Switch>

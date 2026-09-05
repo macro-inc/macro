@@ -1,10 +1,10 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
-import { scrubActiveContent } from '@core/email';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode } from '@lexical/rich-text';
 import { $dfsIterator } from '@lexical/utils';
+import { sanitizeEmailHtml } from '@macro-inc/email-renderer';
 import type { DocumentMentionInfo } from '@macro-inc/lexical-core';
 import {
   $createClassedBlockNode,
@@ -172,10 +172,10 @@ const $appendPreviousEmail = (
     quoteNode.append(textNode);
   } else {
     const parser = new DOMParser();
-    const dom = parser.parseFromString(replyingToBodyHTML, 'text/html');
-    // The quoted body ends up in the live document (adopted nodes, or a shadow
-    // root inside the html-render node), so scrub it while it is still inert.
-    scrubActiveContent(dom);
+    const dom = parser.parseFromString(
+      sanitizeEmailHtml(replyingToBodyHTML),
+      'text/html'
+    );
     // Forwards always embed the original as a non-editable HTML Render Node so
     // the recipient gets the exact original markup. For replies, a table is a
     // good indicator of content we can't convert into editable nodes correctly.
@@ -351,12 +351,9 @@ function getAppendedReplyElement(
     quote.textContent = replyingTo.body_text ?? '';
   } else {
     const innerDom = new DOMParser().parseFromString(
-      replyingToBodyHTML,
+      sanitizeEmailHtml(replyingToBodyHTML),
       'text/html'
     );
-    // These nodes are adopted into the live document below, which starts image
-    // loads — scrub before that, not after.
-    scrubActiveContent(innerDom);
     // Extract style tags from head to preserve email styling for weirdo emails with initial style tags.
     const styleTags = innerDom.head?.querySelectorAll('style');
     styleTags?.forEach((style) => {

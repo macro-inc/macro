@@ -30,6 +30,7 @@ export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude],
     projects: [
+      '../../packages/email-renderer/vitest.config.ts',
       '../../packages/collaboration/vitest.collab.config.ts',
       '../../packages/collaboration/vitest.transport.config.ts',
       {

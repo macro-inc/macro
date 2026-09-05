@@ -87,7 +87,7 @@ cargo test -p {crate}
 
 `just test` does not exist. Leave `SQLX_OFFLINE` unset when you run `cargo test`. Run `just prepare_db` only if you changed SQL queries.
 
-Email rendering snapshots (Playwright HTML fixtures, not inbox e2e) live in `apps/web/src/lib/core/email/tests`. Run `just test-email-rendering`. Add a fixture under `fixtures/` then `just test-email-rendering-update`.
+Email body rendering lives in `packages/email-renderer`, independently of Solid and the app. Run `just test-email-rendering` for its Node and Chromium suites. Fixtures and visual baselines live under `packages/email-renderer/tests`; add a fixture under `fixtures/`, run `just test-email-rendering-update`, and review the resulting images. `bun run --cwd packages/email-renderer viewer` opens the standalone fixture viewer. These are renderer tests, not inbox e2e.
 
 ### Pre Commit
 ```bash

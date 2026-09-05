@@ -111,7 +111,9 @@ to retain rows during background failures in primitives. A source reports data
 availability; it must not return a precomputed screen view-state that moves those
 decisions into infrastructure.
 
-Solid accessors and factories are appropriate in these contracts. Accept Solid
+Solid accessors and factories are appropriate for reactive use-case contracts.
+Plain transformations and framework-independent renderers take plain values;
+do not introduce Solid merely because their caller is a Solid feature. Accept Solid
 as the reactive foundation instead of wrapping it in a custom framework. Preserve
 enabled inputs, updates, pagination, owner cleanup, and the chosen resource-read
 semantics; a promise-only replacement can lose required behavior. Factories must
@@ -123,6 +125,24 @@ query result types in the consumer contract. Avoid generic `Repository<T>` APIs
 or interfaces for every helper. If a wrapper merely forwards values and protects
 no independent behavior, do not create a new layer just to justify a contract.
 See the document's “Feature-owned contracts” section for the feed example.
+
+## Keep framework-independent behavior independent
+
+Extract a standalone library when substantial behavior should run and be tested
+without the application or UI framework. Keep deterministic transformations in
+its core and browser effects in an explicit browser entry point. The feature
+adapter translates accessors into values and owns disposal. Supply theme,
+resource policy, and host actions explicitly; the library must not read app flags,
+clients, routes, origins, or block signals. Do not build a custom reactive framework
+or move message/thread DTOs into a body renderer just to share them.
+
+`packages/email-renderer` is the example: parse5/css-tree preparation runs in
+Node without DOM libraries; Shadow DOM/colors/layout run in its framework-free
+browser layer; `email-message` supplies Solid lifetime and app adapters. Its
+vanilla fixture viewer and browser tests use the exact production API. Test pure
+output separately from pixels, and control browser, fonts, viewport, theme, and
+remote resources for visual comparisons. A screenshot harness that rebuilds only
+part of production rendering does not verify the whole pipeline.
 
 ## Choose context or props deliberately
 

@@ -1,15 +1,11 @@
-// Email body parsing utilities
+// Compatibility entry point for the editor's HTML decorator and quoted replies.
+// The implementation lives in the framework-independent renderer package.
 export {
   parseEmailContent,
   sanitizeEmailHtml,
-  scrubActiveContent,
   stripColorSchemeMediaQueries,
-} from './parse-email-html';
-
-// Image proxy utilities
-
-// Color transformation utilities
+} from '@macro-inc/email-renderer';
 export {
   processEmailColors,
   type ThemeColorParams,
-} from './transform-email-colors';
+} from '@macro-inc/email-renderer/browser';
