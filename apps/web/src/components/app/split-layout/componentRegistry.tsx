@@ -1,5 +1,6 @@
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { ComposeAgentSession } from '@app/features/block-agent/component/ComposeAgentSession';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
@@ -21,7 +22,6 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag, usePosthog } from '@app/lib/analytics/posthog';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { EventComposerSplit } from '@block-calendar/components/EventComposerSplit';
-import { ComposeAgentSession } from '@block-agent/component/ComposeAgentSession';
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { EmailCompose } from '@block-email/component/compose/Compose';
 import { ComposeSkill } from '@block-md/component/ComposeSkill';
