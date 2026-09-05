@@ -101,7 +101,6 @@ import { createChannelHotkeys } from './create-channel-hotkeys';
 import { createChannelKeyboardHandler } from './create-channel-keyboard-handler';
 import { createChannelMessageActions } from './create-channel-message-actions';
 import { createDeleteMessageConfirmation } from './create-delete-message-confirmation';
-import { createLatestNavigation } from './create-latest-navigation';
 import { createMessageEditor } from './create-message-editor';
 import { createMessageSelection } from './create-message-selection';
 import {
@@ -485,7 +484,7 @@ export function Channel(props: ChannelProps) {
   };
 
   const goToMessage: ChannelHandle['goToMessage'] = (messageId, replyId) => {
-    latestNavigation.cancel();
+    cancelLatestNavigation();
     if (replyId) {
       clearSelection();
       prepareTargetReply(messageId);
@@ -524,33 +523,56 @@ export function Channel(props: ChannelProps) {
     isMessageLoaded: (id) => messageIndex.keys.includes(id),
   });
 
-  const latestNavigation = createLatestNavigation({
-    loadLatest: () => {
+  // A latest request waits for both the query and the rendered list. Keeping
+  // its identity prevents a late response from overriding newer navigation.
+  let pendingLatest: { phase: 'loading' | 'waiting-for-layout' } | undefined;
+  const cancelLatestNavigation = () => {
+    pendingLatest = undefined;
+  };
+  onCleanup(cancelLatestNavigation);
+
+  const finishLatestNavigation = () => {
+    if (
+      pendingLatest?.phase !== 'waiting-for-layout' ||
+      messagesQuery.isPending ||
+      messagesQuery.hasPreviousPage
+    )
+      return;
+    // Retained data is usable after a pagination error. Wait only if the query
+    // has no data yet or the message index still contains the old page.
+    const latestMessageId = messagesQuery.data?.pages.find(
+      (page) => page.items.length > 0
+    )?.items[0]?.id;
+    if (
+      latestMessageId !== undefined &&
+      messageIndex.keys.at(-1) === latestMessageId &&
+      threadListNavigation()?.scrollToLatest()
+    )
+      cancelLatestNavigation();
+  };
+
+  const goToLatest: ChannelHandle['goToLatest'] = async () => {
+    const request: NonNullable<typeof pendingLatest> = { phase: 'loading' };
+    pendingLatest = request;
+    try {
       const needsLatestPage =
         messagesQuery.hasPreviousPage ||
         !!targetMessageController.loadAroundMessageId();
       targetMessageController.reset();
-      if (!needsLatestPage) return;
-      return queryClient.resetQueries({
-        queryKey: getChannelMessagesQueryKey(props.channelId, null),
-      });
-    },
-    scroll: () => {
-      if (!messagesQuery.isSuccess || messagesQuery.hasPreviousPage)
-        return false;
-      // The message index can still contain the old page during a query reset.
-      const latestMessageId = messagesQuery.data?.pages.find(
-        (page) => page.items.length > 0
-      )?.items[0]?.id;
-      return (
-        latestMessageId !== undefined &&
-        messageIndex.keys.at(-1) === latestMessageId &&
-        (threadListNavigation()?.scrollToLatest() ?? false)
-      );
-    },
-  });
-  const goToLatest: ChannelHandle['goToLatest'] = latestNavigation.goToLatest;
-  onCleanup(latestNavigation.cancel);
+      if (needsLatestPage) {
+        await queryClient.resetQueries(
+          { queryKey: getChannelMessagesQueryKey(props.channelId, null) },
+          { throwOnError: true }
+        );
+      }
+      if (pendingLatest !== request) return;
+      request.phase = 'waiting-for-layout';
+      finishLatestNavigation();
+    } catch {
+      // The query presents the error; the failed request must not scroll later.
+      if (pendingLatest === request) cancelLatestNavigation();
+    }
+  };
 
   const onThreadListScroll = (
     state: ThreadListScrollState,
@@ -558,14 +580,14 @@ export function Channel(props: ChannelProps) {
   ) => {
     setThreadListScrollState(state);
     if (snapshot) setThreadListScrollSnapshot(snapshot);
-    latestNavigation.onLayout();
+    finishLatestNavigation();
   };
 
   const { messageListScopeId, attachMessageListRef, attachInputRef } =
     createChannelHotkeys({
       selection,
       scrollToMessage: (id, options) => {
-        latestNavigation.cancel();
+        cancelLatestNavigation();
         return threadListNavigation()?.scrollToMessage(id, options) ?? false;
       },
       messageById,
@@ -666,7 +688,7 @@ export function Channel(props: ChannelProps) {
 
   const onThreadListReady = (navigation: ThreadListNavigation) => {
     setThreadListNavigation(navigation);
-    latestNavigation.onLayout();
+    finishLatestNavigation();
     return () =>
       setThreadListNavigation((current) =>
         current === navigation ? undefined : current
@@ -734,7 +756,7 @@ export function Channel(props: ChannelProps) {
                           onScrollNearBottom={threadPaginator.prependPaginate}
                           onReady={onThreadListReady}
                           onScroll={onThreadListScroll}
-                          onUserNavigation={latestNavigation.cancel}
+                          onUserNavigation={cancelLatestNavigation}
                           initialPosition={
                             targetMessageController.activeTargetMessageId()
                               ? {

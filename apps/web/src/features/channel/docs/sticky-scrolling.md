@@ -15,10 +15,12 @@ first measured layout and can return a cleanup to release it on unmount.
 an element or ready → disposed. Layout notifications advance it in the measurement
 microtask. Element positioning, a newer navigation, or a user scroll cancels the
 fallback permanently. There is no effect watching an initial-scroll boolean.
-`createLatestNavigation` owns an explicit request while the latest page loads and
-waits for layout. A message navigation cancels it; stale request completions cannot
-move the viewport. `onScroll` publishes state and a snapshot captured together before callers can
-start another navigation. Latest navigation consumes that layout callback.
+`Channel` keeps one pending latest request while the query loads and the rendered
+list catches up. A message navigation or user scroll cancels it; stale request
+completions cannot move the viewport. A pagination error still permits navigation
+within retained messages. `onScroll` publishes state and a snapshot captured
+together before callers can start another navigation, and attempts the pending
+latest request against that layout.
 The remaining list effects bridge changing insets and row indexes to DOM measurement.
 
 The virtualizer stays disabled while the message index is empty, so it evaluates
