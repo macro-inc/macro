@@ -45,6 +45,9 @@ an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention.
+The Magic Chip that streams the agent's reply stays inside the message column: long
+thoughts, file paths, and unbreakable tokens wrap or truncate instead of expanding the
+thread past the chat's right edge.
 
 ## Channel tabs
 
