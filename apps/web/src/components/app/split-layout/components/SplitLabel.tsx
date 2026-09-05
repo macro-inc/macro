@@ -32,6 +32,8 @@ import {
   createSignal,
   For,
   type JSX,
+  onCleanup,
+  onMount,
   type ParentProps,
   Show,
 } from 'solid-js';
@@ -51,19 +53,26 @@ export function StaticSplitLabel(props: {
   class?: string;
   colorIcon?: boolean;
   /** Enables double-click renaming while retaining the split title/menu
-   * chrome. */
+   * chrome. On touch, tapping the title opens the dropdown instead —
+   * callers that want a Rename item should drive it through
+   * `registerStartRename`. */
   onRename?: (name: string) => void;
   renameAriaLabel?: string;
+  /** Receives a function that starts inline rename (and `undefined` on
+   *  unmount), so the title menu can offer Rename without a tap on the
+   *  name itself stealing the dropdown. */
+  registerStartRename?: (start: (() => void) | undefined) => void;
 }) {
   const panel = useSplitPanelOrThrow();
   const [renaming, setRenaming] = createSignal(false);
   createEffect(() => {
     panel.handle.setDisplayName(props.label);
   });
+  const beginRename = () => setRenaming(true);
   const startRename = (event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    setRenaming(true);
+    beginRename();
   };
   const openTitleFileMenu = (e: MouseEvent) => {
     if (!isTouchDevice()) return;
@@ -73,6 +82,10 @@ export function StaticSplitLabel(props: {
     e.stopPropagation();
     trigger();
   };
+  onMount(() => {
+    props.registerStartRename?.(beginRename);
+    onCleanup(() => props.registerStartRename?.(undefined));
+  });
   return (
     <SplitLabelContextMenu>
       <HeaderIsland class="shrink" onClick={openTitleFileMenu}>
@@ -109,9 +122,11 @@ export function StaticSplitLabel(props: {
                   fallback={
                     <span
                       class="inline-block truncate text-sm font-semibold"
-                      onDblClick={startRename}
-                      onClick={(event) => {
-                        if (isTouchDevice()) startRename(event);
+                      onDblClick={(event) => {
+                        // Touch uses the title menu's Rename item; a second
+                        // tap must not steal that into an inline edit.
+                        if (isTouchDevice()) return;
+                        startRename(event);
                       }}
                     >
                       {props.label}

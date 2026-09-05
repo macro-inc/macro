@@ -19,6 +19,7 @@
 
 import { ScrollToBottomOverlay } from '@channel/Channel/ScrollToBottomOverlay';
 import type { ThreadListScrollState } from '@channel/Channel/ThreadList';
+import { createMobileKeyboardScrollPin } from '@core/component/AI/component/message/create-mobile-keyboard-scroll-pin';
 import { Scroll } from '@ui';
 import { createSignal, onCleanup } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
@@ -42,6 +43,7 @@ export function Transcript() {
   let growthObserver: ResizeObserver | undefined;
   let viewportObserver: ResizeObserver | undefined;
   const [transcriptEl, setTranscriptEl] = createSignal<HTMLDivElement>();
+  const [contentEl, setContentEl] = createSignal<HTMLDivElement>();
 
   onCleanup(() => {
     cancelPin?.();
@@ -158,11 +160,21 @@ export function Transcript() {
     viewportObserver.observe(el);
   };
 
+  // Full-frame mobile: keep pinned to the bottom across virtual-keyboard
+  // show/hide when the reader was already at the bottom — same recipe as
+  // the AI chat, now that the composer lives in the accessory float.
+  createMobileKeyboardScrollPin({
+    scrollEl: () => scrollRef,
+    wrapperEl: contentEl,
+    scrollToBottom: () => pinToBottom(),
+  });
+
   return (
     <div class="relative flex-1 min-h-0" ref={setTranscriptEl}>
       <Scroll scrollRef={attachScroller}>
         <div
-          class="flex flex-col [overflow-anchor:none]"
+          ref={setContentEl}
+          class="flex flex-col [overflow-anchor:none] touch:pt-[calc(var(--mobile-content-inset-top,0)+0.5rem)] touch:pb-(--mobile-content-inset-bottom)"
           style={{ 'min-height': `${viewportHeight()}px` }}
         >
           {/* Bottom-align short transcripts, chat-style. */}
@@ -201,6 +213,7 @@ export function Transcript() {
       <ScrollToBottomOverlay
         scrollState={scrollState}
         onScrollToBottom={pinToBottom}
+        class="touch:top-[calc(var(--mobile-content-inset-top,0)+1rem)]"
       />
       <ReplyToSelection container={transcriptEl()} onReply={quoteSelection} />
     </div>

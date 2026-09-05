@@ -78,7 +78,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
             <Dropdown.Trigger
               variant="ghost"
               size="sm"
-              class="h-6 gap-1 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10"
+              class="h-6 gap-1 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10 touch:h-8"
               disabled={props.disabled || props.changingTo !== undefined}
             >
               <TextShimmer
@@ -134,7 +134,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
             disabled={props.disabled || props.changingTo !== undefined}
             ariaLabel="Agent model"
             searchPlaceholder="Search models"
-            triggerClass="h-6 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10"
+            triggerClass="h-6 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10 touch:h-8"
             contentClass="overflow-hidden"
             placement="top-start"
           />

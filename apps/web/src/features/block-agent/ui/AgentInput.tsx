@@ -10,6 +10,7 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import { isMobile } from '@core/mobile/isMobile';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
 import { Button, SendButton, Surface } from '@ui';
@@ -146,7 +147,7 @@ export function AgentInput(props: AgentInputProps) {
       <Show when={props.modelControl}>
         <div class="flex items-center px-0.5">{props.modelControl}</div>
       </Show>
-      <Surface class="rounded-xl" depth={2} solid>
+      <Surface class="rounded-xl touch:rounded-3xl" depth={2} solid>
         <div class="relative px-2 py-1.5">
           {/* No vertical padding of its own: the shell is min-h-8 and editor
             paragraphs carry my-1.5, so the row's py-1.5 is the whole frame —
@@ -161,6 +162,9 @@ export function AgentInput(props: AgentInputProps) {
               // line so it doesn't wrap into the single-line height.
               'overflow-hidden whitespace-nowrap':
                 markdown().trim().length === 0,
+              // Long drafts must not eat the mobile viewport above the dock.
+              'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
+                isMultiline() && isMobile(),
             }}
           >
             <MarkdownShell

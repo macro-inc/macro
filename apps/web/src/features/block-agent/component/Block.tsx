@@ -1,3 +1,4 @@
+import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitPanelContext } from '@components/app/split-layout/context';
 import { useBlockId } from '@core/block';
@@ -59,9 +60,15 @@ function AgentBlockContent() {
             />
             <div class="size-full min-w-0 flex flex-col">
               <Transcript />
-              <div class="shrink-0 w-full max-w-3xl mx-auto px-4 pb-4">
-                <AgentComposer />
-              </div>
+              {/* Full-frame mobile: composer + queue float in the bottom
+                  accessory region above the dock; desktop stays inline. */}
+              <FloatRegionOrInline region="accessory">
+                <div class="flex w-full justify-center shrink-0 px-4 pb-4 touch:px-(--mobile-chrome-gutter) touch:pb-0 touch:pointer-events-auto">
+                  <div class="w-full max-w-3xl">
+                    <AgentComposer />
+                  </div>
+                </div>
+              </FloatRegionOrInline>
             </div>
             <Show when={sessionOriginThread(session())}>
               {(origin) => (

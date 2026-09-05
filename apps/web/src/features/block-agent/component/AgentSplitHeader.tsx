@@ -11,11 +11,13 @@ import {
 import { StaticSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildSimpleEntityUrl, openExternalUrl } from '@core/util/url';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import LinkIcon from '@phosphor/link.svg';
+import RenameIcon from '@phosphor/pencil-line.svg';
 import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
@@ -75,6 +77,18 @@ export function AgentSplitHeader(props: {
     toast.success('Link copied to clipboard');
   };
 
+  const canRename = () => props.session?.ownerId === userId();
+  let startRename: (() => void) | undefined;
+
+  const renameTool: BlockTool = {
+    group: 'file',
+    label: 'Rename',
+    icon: RenameIcon,
+    hotkeyToken: TOKENS.entity.action.rename,
+    action: () => startRename?.(),
+    condition: canRename,
+  };
+
   const tools: BlockTool[] = [
     {
       label: () => {
@@ -115,8 +129,11 @@ export function AgentSplitHeader(props: {
         <StaticSplitLabel
           iconType="agent"
           label={title()}
-          onRename={props.session?.ownerId === userId() ? rename : undefined}
+          onRename={canRename() ? rename : undefined}
           renameAriaLabel="Agent session name"
+          registerStartRename={(start) => {
+            startRename = start;
+          }}
         />
       </SplitHeaderLeft>
 
@@ -140,7 +157,7 @@ export function AgentSplitHeader(props: {
 
       <ResponsiveBlockToolbar
         tools={[]}
-        menuTools={tools}
+        menuTools={[renameTool, ...tools]}
         ops={ops}
         id={sessionId() ?? ''}
         itemType="foreign"
