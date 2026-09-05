@@ -214,3 +214,15 @@ fn build_voip_sns_attributes(voip_bundle_id: &str) -> HashMap<String, MessageAtt
         ),
     ])
 }
+
+impl<P: MobilePushOps + Send + Sync + 'static> crate::domain::ports::VoipPushDelivery
+    for MobilePushAdapter<P>
+{
+    async fn send_voip_push(
+        &self,
+        endpoint_arn: &str,
+        payload: &VoipPushPayload,
+    ) -> Result<String, Report> {
+        MobilePushAdapter::send_voip_push(self, endpoint_arn, payload).await
+    }
+}

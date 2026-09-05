@@ -9,8 +9,6 @@ use sqlx::{Executor, Postgres};
 pub async fn delete_message_with_tx(
     tx: &mut sqlx::PgConnection,
     message: &message::SimpleMessage,
-    // update thread-object vals (inbox_visible, latest timestamps)
-    update_thread_metadata: bool,
 ) -> anyhow::Result<Option<Uuid>> {
     // delete the message itself
     delete_db_message(&mut *tx, message.db_id).await?;
@@ -19,7 +17,11 @@ pub async fn delete_message_with_tx(
     let deleted_thread =
         threads::delete::delete_thread_if_empty(&mut *tx, message.thread_db_id).await?;
 
-    if !deleted_thread && update_thread_metadata {
+    // Drafts count toward inbox_visible, latest_inbound_message_ts, and
+    // is_signal, so every surviving thread needs the full recompute (which
+    // piggybacks the is_signal sync) — a discarded draft would otherwise
+    // leave the thread stranded in inbox views.
+    if !deleted_thread {
         threads::update::update_thread_metadata(&mut *tx, message.thread_db_id, message.link_id)
             .await?;
     }
@@ -29,13 +31,6 @@ pub async fn delete_message_with_tx(
     // email_attachments rows, so they can't move the flag.
     if !deleted_thread && !message.is_draft {
         threads::update::sync_thread_calendar_flag(&mut *tx, message.thread_db_id).await?;
-    }
-
-    // Callers that skip the metadata recompute (draft discard) still need
-    // is_signal refreshed — the deleted message may have been the thread's
-    // only signal message, and macro drafts get no Gmail echo.
-    if !deleted_thread && !update_thread_metadata {
-        threads::update::sync_thread_signal_flag(&mut *tx, message.thread_db_id).await?;
     }
 
     if deleted_thread {

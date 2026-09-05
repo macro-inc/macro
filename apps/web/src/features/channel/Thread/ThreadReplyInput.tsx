@@ -1,4 +1,10 @@
-import { type Accessor, createSignal, onCleanup, type Setter } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  onCleanup,
+  type Setter,
+  Show,
+} from 'solid-js';
 import { createEntityDropZone } from '../Channel/create-entity-drop-zone';
 import type { InputHandle, InputSnapshot } from '../Input';
 import type { FocusRequest } from './focus-request';
@@ -16,6 +22,15 @@ type ThreadReplyInputProps = {
   setReplyInputEl?: Setter<HTMLElement | undefined>;
   setReplyInputHandle?: Setter<InputHandle | undefined>;
   focusRequest?: FocusRequest;
+  /**
+   * Render the rail connector chrome. On by default for inner-rail consumers
+   * (standalone threads, discussions); channels have no inner rail.
+   */
+  connector?: boolean;
+  /** Rail column from which the optional connector should originate. */
+  connectorRail?: 'inner' | 'thread';
+  /** Optional layout-specific horizontal anchor for the composer. */
+  offsetX?: string;
 };
 
 /**
@@ -43,11 +58,13 @@ export function ThreadReplyInput(props: ThreadReplyInputProps) {
   return (
     <div
       class="relative pt-2"
-      style={{ 'margin-left': replyInputOffsetX }}
+      style={{ 'margin-left': props.offsetX ?? replyInputOffsetX }}
       ref={(el) => props.setReplyInputEl?.(el)}
       data-reply-input
     >
-      <ThreadReplyInputConnector />
+      <Show when={props.connector !== false}>
+        <ThreadReplyInputConnector rail={props.connectorRail} />
+      </Show>
       {(() => {
         const droppable = entityDropZone.droppable;
         false && droppable;

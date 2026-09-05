@@ -31,6 +31,62 @@ use uuid::Uuid;
 /// prefix-parseable string. An agent is a bot acting with `on_behalf_of`
 /// set — agent-ness is relational, not an identity kind.
 pub use channel_sender::ChannelSender as Actor;
+
+/// Who performed an action, and whose feed it belongs on.
+///
+/// Stored as `actor_id` plus `subject_id` (`on_behalf_of ?? actor`).
+#[derive(Debug, Clone, PartialEq)]
+pub enum Attribution {
+    /// The principal acted for themselves. Subject equals actor.
+    Direct {
+        /// Who mechanically acted.
+        actor: Actor<'static>,
+    },
+    /// A bot or the platform acted for a user. Subject is that user.
+    Delegated {
+        /// Who mechanically acted.
+        actor: Actor<'static>,
+        /// Whose activity feed this belongs on.
+        subject: MacroUserIdStr<'static>,
+    },
+}
+
+impl Attribution {
+    /// The principal acted for themselves.
+    pub fn direct(actor: Actor<'static>) -> Self {
+        Self::Direct { actor }
+    }
+
+    /// A bot or the platform acted for `subject`.
+    pub fn delegated(actor: Actor<'static>, subject: MacroUserIdStr<'static>) -> Self {
+        Self::Delegated { actor, subject }
+    }
+
+    /// Delegated to `on_behalf_of` when set, otherwise direct. Mirrors how
+    /// events carry attribution as an actor plus an optional subject.
+    pub fn new(actor: Actor<'static>, on_behalf_of: Option<MacroUserIdStr<'static>>) -> Self {
+        match on_behalf_of {
+            Some(subject) => Self::Delegated { actor, subject },
+            None => Self::Direct { actor },
+        }
+    }
+
+    /// Who mechanically acted.
+    pub fn actor(&self) -> Actor<'static> {
+        match self {
+            Self::Direct { actor } | Self::Delegated { actor, .. } => actor.clone(),
+        }
+    }
+
+    /// The initiating user when this action is delegated; `None` when direct.
+    pub fn on_behalf_of(&self) -> Option<MacroUserIdStr<'static>> {
+        match self {
+            Self::Direct { .. } => None,
+            Self::Delegated { subject, .. } => Some(subject.clone()),
+        }
+    }
+}
+
 /// The entity-kind vocabulary activities are recorded against (re-exported
 /// for domain mappings).
 pub use model_entity::EntityType;
@@ -140,6 +196,13 @@ impl From<CommonAction> for Action {
         }
     }
 }
+
+/// The stored `action` tags that [`Action::is_view`] classifies as views.
+///
+/// SQL surfaces that must exclude views (e.g. the soup touched-by-me page,
+/// which counts mutations only) filter on these tags instead of decoding
+/// every row; the pinned codec test keeps this list and `is_view` agreeing.
+pub const VIEW_ACTION_TAGS: &[&str] = &["opened"];
 
 impl Action {
     /// Whether this action is a view rather than a mutation — the only
@@ -373,6 +436,29 @@ pub struct Activity {
 }
 
 impl Activity {
+    /// Builds an activity for a [`CommonAction`] from a resolved
+    /// [`Attribution`].
+    pub fn attributed(
+        source_event_id: Uuid,
+        ordinal: u32,
+        attribution: Attribution,
+        entity_type: EntityType,
+        entity_id: impl Into<String>,
+        action: CommonAction,
+        occurred_at: DateTime<Utc>,
+    ) -> Self {
+        Self::common(
+            source_event_id,
+            ordinal,
+            attribution.actor(),
+            attribution.on_behalf_of(),
+            entity_type,
+            entity_id,
+            action,
+            occurred_at,
+        )
+    }
+
     /// Builds an activity for a [`CommonAction`] — valid on every entity
     /// kind by definition, so any (kind, id) pairing is accepted.
     #[allow(clippy::too_many_arguments)]

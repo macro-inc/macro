@@ -1,19 +1,52 @@
 //! Storage abstraction: the cold tier behind the in-memory hot tier.
 //!
-//! Implementations: in-memory (tests, Phase 1), IndexedDB via the `idb`
-//! crate (browser, Phase 2), SQLite (Tauri native, Phase 2). Futures are
-//! [`MaybeSend`]: `Send` on native targets (so hosts can drive the engine
-//! from a multi-threaded runtime), unbounded on wasm — wasm futures aren't
+//! Implementations: in-memory (tests) and Turso over OPFS (browser) or native
+//! filesystem IO (Tauri). Futures are [`MaybeSend`]: `Send` on native targets (so
+//! hosts can drive the engine from a multi-threaded runtime), unbounded on
+//! wasm — wasm futures aren't
 //! `Send`.
 
-use crate::queue::{
-    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
-    QueuedMutation,
+use crate::predicate::{
+    OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
+    PredicateQueryResult, ProjectionMutation, ProjectionState, StagedOptimisticProjection,
+    StagedOptimisticProjectionOwner, apply_authoritative_projection_mutations,
 };
+use crate::queue::{
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationQueueSnapshot,
+    MutationUpsertKind, MutationUpsertResult, NewQueuedMutation, QueuedMutation,
+};
+use crate::search::{SearchCursor, SearchDocument, SearchProfile, project_search_documents};
 use crate::value::{EntityKey, Record};
 use maybe_send::MaybeSend;
-use std::collections::{BTreeMap, HashMap};
+use predicate_index::{
+    EffectiveOptimisticProjection, IndexDocument, PendingOptimisticProjection,
+    RecordKey as PredicateRecordKey, evaluate_reference,
+};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::Infallible;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// Whether a storage implementation can provide queue diagnostics.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum QueueDiagnosticsAvailability {
+    /// This compatibility implementation has no authoritative diagnostics.
+    #[default]
+    Unavailable,
+    /// The depth and oldest timestamp were read from authoritative storage.
+    Available,
+}
+
+/// Payload-free durable mutation queue diagnostics.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct QueueDiagnostics {
+    /// Whether the numeric snapshot is authoritative.
+    pub availability: QueueDiagnosticsAvailability,
+    /// Number of durable mutations waiting for settlement.
+    pub depth: u64,
+    /// Oldest durable enqueue timestamp, or `None` when the queue is empty.
+    pub oldest_created_at_ms: Option<i64>,
+}
 
 /// Async KV over normalized records. Batch-oriented by design: the engine
 /// issues one `get_batch` per denormalization round, never per record.
@@ -32,31 +65,134 @@ pub trait Storage: MaybeSend {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// Atomically upserts records and generic projection lifecycle changes.
+    fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
     /// Deletes records (absent keys are ignored).
     fn delete_batch(
         &mut self,
         keys: &[EntityKey<'static>],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
-    /// Scans normalized records of the requested concrete types in ascending
-    /// entity-key order. `after` is exclusive.
-    fn scan_records(
+    /// Loads the compact catalog for text search. This must read only the
+    /// derived search table, never normalized record payloads.
+    fn load_search_documents(
         &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> impl Future<Output = Result<Vec<(EntityKey<'static>, Record)>, Self::Error>> + MaybeSend;
+        _profile: SearchProfile,
+    ) -> impl Future<Output = Result<Vec<SearchDocument>, Self::Error>> + MaybeSend {
+        async { Ok(Vec::new()) }
+    }
 
-    /// Atomically appends a mutation and its optimistic layer to the queue.
+    /// Reads one bucket in indexed recent order. `after` is exclusive.
+    fn browse_search_documents(
+        &self,
+        _profile: SearchProfile,
+        _bucket: &str,
+        _after: Option<&SearchCursor>,
+        _limit: usize,
+    ) -> impl Future<Output = Result<Vec<SearchDocument>, Self::Error>> + MaybeSend {
+        async { Ok(Vec::new()) }
+    }
+
+    /// Atomically inserts or replaces a mutation by its caller UUID.
     fn enqueue_mutation(
         &mut self,
         entry: NewQueuedMutation,
-    ) -> impl Future<Output = Result<MutationId, Self::Error>> + MaybeSend;
+    ) -> impl Future<Output = Result<MutationId, Self::Error>> + MaybeSend {
+        let now_ms = entry.mutation.created_at_ms;
+        async move {
+            self.upsert_mutation_with_shadow(
+                entry,
+                now_ms,
+                OptimisticUpsertReconciliation::default(),
+            )
+            .await
+            .map(|result| result.id)
+        }
+    }
+
+    /// Convenience upsert that assigns all supplied shadows to the new tail row.
+    fn enqueue_mutation_with_shadow(
+        &mut self,
+        entry: NewQueuedMutation,
+        projections: Vec<PendingOptimisticProjection>,
+    ) -> impl Future<Output = Result<MutationId, Self::Error>> + MaybeSend {
+        let now_ms = entry.mutation.created_at_ms;
+        let mut affected_keys = projections
+            .iter()
+            .map(|projection| projection.state.record_key().clone())
+            .collect::<Vec<_>>();
+        affected_keys.sort();
+        let mut replacements = projections
+            .into_iter()
+            .map(|projection| StagedOptimisticProjection {
+                owner: StagedOptimisticProjectionOwner::Enqueued,
+                state: projection.state,
+                uncertainty: projection.uncertainty,
+            })
+            .collect::<Vec<_>>();
+        replacements.sort_by(|left, right| left.state.record_key().cmp(right.state.record_key()));
+        let reconciliation = OptimisticUpsertReconciliation {
+            expected_queue: None,
+            affected_keys,
+            replacements,
+        };
+        async move {
+            self.upsert_mutation_with_shadow(entry, now_ms, reconciliation)
+                .await
+                .map(|result| result.id)
+        }
+    }
+
+    /// Atomically inserts or replaces a mutation, its layer, and effective shadows.
+    ///
+    /// A live UUID collision retains and supersedes the old row. Any other
+    /// collision removes the old row. Storage resolves `Enqueued` projection
+    /// owners to the fresh ID assigned inside the same transaction and rejects
+    /// an expected queue snapshot that no longer matches.
+    fn upsert_mutation_with_shadow(
+        &mut self,
+        entry: NewQueuedMutation,
+        now_ms: i64,
+        reconciliation: OptimisticUpsertReconciliation,
+    ) -> impl Future<Output = Result<MutationUpsertResult, Self::Error>> + MaybeSend;
+
+    /// Loads authoritative projection states aligned with `keys`.
+    fn load_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<ProjectionState>>, Self::Error>> + MaybeSend {
+        async { Ok(vec![None; keys.len()]) }
+    }
+
+    /// Loads current effective optimistic shadows aligned with `keys`.
+    fn load_optimistic_projections(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> impl Future<Output = Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error>> + MaybeSend
+    {
+        async { Ok(vec![None; keys.len()]) }
+    }
 
     /// Loads the complete mutation queue in ascending id order.
     fn load_mutation_queue(
         &self,
     ) -> impl Future<Output = Result<Vec<QueuedMutation>, Self::Error>> + MaybeSend;
+
+    /// Returns only queue depth and the oldest enqueue timestamp.
+    ///
+    /// The default preserves source compatibility for external storage
+    /// implementations and explicitly reports diagnostics as unavailable.
+    /// Production backends override it with an authoritative aggregate query.
+    fn queue_diagnostics(
+        &self,
+    ) -> impl Future<Output = Result<QueueDiagnostics, Self::Error>> + MaybeSend {
+        async { Ok(QueueDiagnostics::default()) }
+    }
 
     /// Claims the oldest mutation when it is runnable and not actively leased.
     /// Later mutations are never skipped.
@@ -85,6 +221,28 @@ pub trait Storage: MaybeSend {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
 
+    /// Atomically settles a mutation with real records and projection changes.
+    fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
+
+    /// Atomically commits authority, removes the strict head, and reconciles shadows.
+    fn complete_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend {
+        let _ = reconciliation;
+        self.complete_mutation_with_projections(id, claim, entries, projections)
+    }
+
     /// Atomically removes a permanently failed mutation and its optimistic
     /// layer. Returns `false` when the claim is stale.
     fn discard_mutation(
@@ -92,6 +250,17 @@ pub trait Storage: MaybeSend {
         id: MutationId,
         claim: MutationClaimToken,
     ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend;
+
+    /// Atomically removes the strict head and reconciles affected shadows.
+    fn discard_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + MaybeSend {
+        let _ = reconciliation;
+        self.discard_mutation(id, claim)
+    }
 
     /// Drops records, queued mutations, and optimistic layers (logout or
     /// identity mismatch).
@@ -102,14 +271,22 @@ pub trait Storage: MaybeSend {
 #[derive(Clone, Debug, Default)]
 pub struct InMemoryStorage {
     records: HashMap<EntityKey<'static>, Record>,
-    mutations: BTreeMap<
-        MutationId,
-        (
-            crate::queue::StoredMutation,
-            crate::queue::PersistedOptimisticLayer,
-        ),
-    >,
+    search_documents: HashMap<(SearchProfile, EntityKey<'static>), SearchDocument>,
+    projections: HashMap<PredicateRecordKey, ProjectionState>,
+    optimistic_projections: HashMap<PredicateRecordKey, EffectiveOptimisticProjection>,
+    mutations: BTreeMap<MutationId, InMemoryQueuedMutation>,
     next_mutation_id: MutationId,
+    record_get_count: Arc<AtomicUsize>,
+    search_catalog_load_count: Arc<AtomicUsize>,
+    mutation_queue_load_count: Arc<AtomicUsize>,
+}
+
+#[derive(Clone, Debug)]
+struct InMemoryQueuedMutation {
+    uuid: uuid::Uuid,
+    superseded: bool,
+    mutation: crate::queue::StoredMutation,
+    optimistic: crate::queue::PersistedOptimisticLayer,
 }
 
 impl InMemoryStorage {
@@ -124,12 +301,28 @@ impl InMemoryStorage {
     pub fn is_empty(&self) -> bool {
         self.records.is_empty()
     }
+
+    /// Number of normalized-record get calls (test diagnostics).
+    pub fn record_get_count(&self) -> usize {
+        self.record_get_count.load(Ordering::Relaxed)
+    }
+
+    /// Number of compact catalog loads (test diagnostics).
+    pub fn search_catalog_load_count(&self) -> usize {
+        self.search_catalog_load_count.load(Ordering::Relaxed)
+    }
+
+    /// Number of full mutation-queue loads (test diagnostics).
+    pub fn mutation_queue_load_count(&self) -> usize {
+        self.mutation_queue_load_count.load(Ordering::Relaxed)
+    }
 }
 
 impl Storage for InMemoryStorage {
     type Error = Infallible;
 
     async fn get_batch(&self, keys: &[EntityKey<'_>]) -> Result<Vec<Option<Record>>, Self::Error> {
+        self.record_get_count.fetch_add(1, Ordering::Relaxed);
         Ok(keys.iter().map(|k| self.records.get(k).cloned()).collect())
     }
 
@@ -137,76 +330,220 @@ impl Storage for InMemoryStorage {
         &mut self,
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<(), Self::Error> {
-        for (k, v) in entries {
-            self.records.insert(k, v);
+        for (key, record) in entries {
+            self.search_documents
+                .retain(|(_, existing_key), _| existing_key != &key);
+            for document in project_search_documents(&key, &record) {
+                self.search_documents
+                    .insert((document.profile, key.clone()), document);
+            }
+            self.records.insert(key, record);
         }
+        Ok(())
+    }
+
+    async fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.put_batch(entries).await?;
+        apply_in_memory_projection_mutations(&mut self.projections, projections);
         Ok(())
     }
 
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
-        for k in keys {
-            self.records.remove(k);
+        for key in keys {
+            self.records.remove(key);
+            self.search_documents
+                .retain(|(_, existing_key), _| existing_key != key);
         }
         Ok(())
     }
 
-    async fn scan_records(
+    async fn load_search_documents(
         &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
-        if limit == 0 || type_names.is_empty() {
-            return Ok(Vec::new());
-        }
-        let type_names: std::collections::HashSet<_> =
-            type_names.iter().map(String::as_str).collect();
-        let mut records: Vec<_> = self
-            .records
+        profile: SearchProfile,
+    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        self.search_catalog_load_count
+            .fetch_add(1, Ordering::Relaxed);
+        Ok(self
+            .search_documents
             .iter()
-            .filter(|(key, _)| after.as_ref().is_none_or(|after| *key > after))
-            .filter(|(key, _)| {
-                key.0
-                    .split_once(':')
-                    .is_some_and(|(type_name, _)| type_names.contains(type_name))
-            })
-            .map(|(key, record)| (key.clone(), record.clone()))
-            .collect();
-        records.sort_by(|(left, _), (right, _)| left.cmp(right));
-        records.truncate(limit);
-        Ok(records)
+            .filter(|((candidate, _), _)| *candidate == profile)
+            .map(|(_, document)| document.clone())
+            .collect())
     }
 
-    async fn enqueue_mutation(
+    async fn browse_search_documents(
+        &self,
+        profile: SearchProfile,
+        bucket: &str,
+        after: Option<&SearchCursor>,
+        limit: usize,
+    ) -> Result<Vec<SearchDocument>, Self::Error> {
+        let mut documents: Vec<_> = self
+            .search_documents
+            .values()
+            .filter(|document| document.profile == profile && document.bucket == bucket)
+            .filter(|document| {
+                after.is_none_or(|cursor| {
+                    document.timestamp_ms < cursor.timestamp_ms
+                        || (document.timestamp_ms == cursor.timestamp_ms
+                            && crate::search::compare_record_keys(
+                                &document.record_key,
+                                &cursor.record_key,
+                            )
+                            .is_gt())
+                })
+            })
+            .cloned()
+            .collect();
+        documents.sort_by(crate::search::compare_recent);
+        documents.truncate(limit);
+        Ok(documents)
+    }
+
+    async fn upsert_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,
-    ) -> Result<MutationId, Self::Error> {
+        now_ms: i64,
+        reconciliation: OptimisticUpsertReconciliation,
+    ) -> Result<MutationUpsertResult, Self::Error> {
+        debug_assert!(reconciliation.validate().is_ok());
+        if let Some(expected) = &reconciliation.expected_queue {
+            let actual = self
+                .mutations
+                .iter()
+                .map(|(id, queued)| MutationQueueSnapshot {
+                    id: *id,
+                    uuid: queued.uuid,
+                    superseded: queued.superseded,
+                    lease_owner: queued.mutation.lease_owner.clone(),
+                    lease_generation: queued.mutation.lease_generation,
+                    lease_expires_at_ms: queued.mutation.lease_expires_at_ms,
+                    next_attempt_at_ms: queued.mutation.next_attempt_at_ms,
+                })
+                .collect::<Vec<_>>();
+            assert_eq!(&actual, expected, "stale in-memory mutation upsert plan");
+        }
+
+        let collision = self
+            .mutations
+            .iter()
+            .find(|(_, queued)| queued.uuid == entry.uuid && !queued.superseded)
+            .map(|(id, queued)| {
+                (
+                    *id,
+                    queued
+                        .mutation
+                        .lease_expires_at_ms
+                        .is_some_and(|expiry| expiry > now_ms),
+                )
+            });
+        let kind = match collision {
+            None => MutationUpsertKind::Inserted,
+            Some((id, true)) => {
+                self.mutations
+                    .get_mut(&id)
+                    .expect("collision exists")
+                    .superseded = true;
+                MutationUpsertKind::AppendedAfterActive { active_id: id }
+            }
+            Some((id, false)) => {
+                self.mutations.remove(&id);
+                MutationUpsertKind::ReplacedPending { removed_id: id }
+            }
+        };
+
         self.next_mutation_id += 1;
         let id = self.next_mutation_id;
-        self.mutations
-            .insert(id, (entry.mutation, entry.optimistic));
-        Ok(id)
+        self.mutations.insert(
+            id,
+            InMemoryQueuedMutation {
+                uuid: entry.uuid,
+                superseded: false,
+                mutation: entry.mutation,
+                optimistic: entry.optimistic,
+            },
+        );
+        for key in reconciliation.affected_keys {
+            self.optimistic_projections.remove(&key);
+        }
+        for replacement in reconciliation.replacements {
+            let owner = match replacement.owner {
+                StagedOptimisticProjectionOwner::Existing(owner) => owner,
+                StagedOptimisticProjectionOwner::Enqueued => id,
+            };
+            debug_assert!(self.mutations.contains_key(&owner));
+            self.optimistic_projections.insert(
+                replacement.state.record_key().clone(),
+                EffectiveOptimisticProjection {
+                    owner,
+                    state: replacement.state,
+                    uncertainty: replacement.uncertainty,
+                },
+            );
+        }
+        Ok(MutationUpsertResult { id, kind })
+    }
+
+    async fn load_projection_states(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> Result<Vec<Option<ProjectionState>>, Self::Error> {
+        Ok(keys
+            .iter()
+            .map(|key| self.projections.get(key).cloned())
+            .collect())
+    }
+
+    async fn load_optimistic_projections(
+        &self,
+        keys: &[PredicateRecordKey],
+    ) -> Result<Vec<Option<EffectiveOptimisticProjection>>, Self::Error> {
+        Ok(keys
+            .iter()
+            .map(|key| self.optimistic_projections.get(key).cloned())
+            .collect())
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
+        self.mutation_queue_load_count
+            .fetch_add(1, Ordering::Relaxed);
         Ok(self
             .mutations
             .iter()
-            .map(|(id, (mutation, optimistic))| QueuedMutation {
+            .map(|(id, queued)| QueuedMutation {
                 id: *id,
-                mutation: mutation.clone(),
-                optimistic: optimistic.clone(),
+                uuid: queued.uuid,
+                superseded: queued.superseded,
+                mutation: queued.mutation.clone(),
+                optimistic: queued.optimistic.clone(),
             })
             .collect())
+    }
+
+    async fn queue_diagnostics(&self) -> Result<QueueDiagnostics, Self::Error> {
+        Ok(QueueDiagnostics {
+            availability: QueueDiagnosticsAvailability::Available,
+            depth: self.mutations.len() as u64,
+            oldest_created_at_ms: self
+                .mutations
+                .values()
+                .map(|queued| queued.mutation.created_at_ms)
+                .min(),
+        })
     }
 
     async fn claim_next_mutation(
         &mut self,
         request: MutationClaimRequest,
     ) -> Result<Option<ClaimedMutation>, Self::Error> {
-        let Some((&id, (mutation, optimistic))) = self.mutations.iter_mut().next() else {
+        let Some((&id, queued)) = self.mutations.iter_mut().next() else {
             return Ok(None);
         };
+        let mutation = &mut queued.mutation;
         if mutation
             .next_attempt_at_ms
             .is_some_and(|next| next > request.now_ms)
@@ -226,8 +563,10 @@ impl Storage for InMemoryStorage {
         Ok(Some(ClaimedMutation {
             queued: QueuedMutation {
                 id,
+                uuid: queued.uuid,
+                superseded: queued.superseded,
                 mutation: mutation.clone(),
-                optimistic: optimistic.clone(),
+                optimistic: queued.optimistic.clone(),
             },
             lease_generation: generation,
         }))
@@ -240,12 +579,13 @@ impl Storage for InMemoryStorage {
         next_attempt_at_ms: i64,
         error: String,
     ) -> Result<bool, Self::Error> {
-        let Some((mutation, _)) = self.mutations.get_mut(&id) else {
+        let Some(queued) = self.mutations.get_mut(&id) else {
             return Ok(false);
         };
-        if !claim_matches(mutation, &claim) {
+        if !claim_matches(&queued.mutation, &claim) {
             return Ok(false);
         }
+        let mutation = &mut queued.mutation;
         mutation.next_attempt_at_ms = Some(next_attempt_at_ms);
         mutation.last_error = Some(error);
         mutation.lease_owner = None;
@@ -259,16 +599,81 @@ impl Storage for InMemoryStorage {
         claim: MutationClaimToken,
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
-        let Some((mutation, _)) = self.mutations.get(&id) else {
+        self.complete_mutation_with_projections(id, claim, entries, Vec::new())
+            .await
+    }
+
+    async fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<bool, Self::Error> {
+        let Some(queued) = self.mutations.get(&id) else {
             return Ok(false);
         };
-        if !claim_matches(mutation, &claim) {
+        if !claim_matches(&queued.mutation, &claim) {
             return Ok(false);
         }
         for (key, record) in entries {
+            self.search_documents
+                .retain(|(_, existing_key), _| existing_key != &key);
+            for document in project_search_documents(&key, &record) {
+                self.search_documents
+                    .insert((document.profile, key.clone()), document);
+            }
             self.records.insert(key, record);
         }
+        apply_in_memory_projection_mutations(&mut self.projections, projections);
         self.mutations.remove(&id);
+        self.optimistic_projections
+            .retain(|_, projection| projection.owner != id);
+        Ok(true)
+    }
+
+    async fn complete_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> Result<bool, Self::Error> {
+        if reconciliation.validate(id).is_err()
+            || self.mutations.keys().copied().collect::<Vec<_>>() != reconciliation.expected_queue
+        {
+            return Ok(false);
+        }
+        let Some(queued) = self.mutations.get(&id) else {
+            return Ok(false);
+        };
+        if !claim_matches(&queued.mutation, &claim) {
+            return Ok(false);
+        }
+        for replacement in &reconciliation.replacements {
+            if replacement.owner == id || !self.mutations.contains_key(&replacement.owner) {
+                return Ok(false);
+            }
+        }
+        for (key, record) in entries {
+            self.search_documents
+                .retain(|(_, existing_key), _| existing_key != &key);
+            for document in project_search_documents(&key, &record) {
+                self.search_documents
+                    .insert((document.profile, key.clone()), document);
+            }
+            self.records.insert(key, record);
+        }
+        apply_in_memory_projection_mutations(&mut self.projections, projections);
+        self.mutations.remove(&id);
+        for key in reconciliation.affected_keys {
+            self.optimistic_projections.remove(&key);
+        }
+        for replacement in reconciliation.replacements {
+            self.optimistic_projections
+                .insert(replacement.state.record_key().clone(), replacement);
+        }
         Ok(true)
     }
 
@@ -277,21 +682,160 @@ impl Storage for InMemoryStorage {
         id: MutationId,
         claim: MutationClaimToken,
     ) -> Result<bool, Self::Error> {
-        let Some((mutation, _)) = self.mutations.get(&id) else {
+        let Some(queued) = self.mutations.get(&id) else {
             return Ok(false);
         };
-        if !claim_matches(mutation, &claim) {
+        if !claim_matches(&queued.mutation, &claim) {
             return Ok(false);
         }
         self.mutations.remove(&id);
+        self.optimistic_projections
+            .retain(|_, projection| projection.owner != id);
+        Ok(true)
+    }
+
+    async fn discard_mutation_with_shadow(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        reconciliation: OptimisticShadowReconciliation,
+    ) -> Result<bool, Self::Error> {
+        if reconciliation.validate(id).is_err()
+            || self.mutations.keys().copied().collect::<Vec<_>>() != reconciliation.expected_queue
+        {
+            return Ok(false);
+        }
+        let Some(queued) = self.mutations.get(&id) else {
+            return Ok(false);
+        };
+        if !claim_matches(&queued.mutation, &claim) {
+            return Ok(false);
+        }
+        for replacement in &reconciliation.replacements {
+            if replacement.owner == id || !self.mutations.contains_key(&replacement.owner) {
+                return Ok(false);
+            }
+        }
+        self.mutations.remove(&id);
+        for key in reconciliation.affected_keys {
+            self.optimistic_projections.remove(&key);
+        }
+        for replacement in reconciliation.replacements {
+            self.optimistic_projections
+                .insert(replacement.state.record_key().clone(), replacement);
+        }
         Ok(true)
     }
 
     async fn clear(&mut self) -> Result<(), Self::Error> {
         self.records.clear();
+        self.search_documents.clear();
+        self.projections.clear();
+        self.optimistic_projections.clear();
         self.mutations.clear();
         Ok(())
     }
+}
+
+impl PredicateIndexStorage for InMemoryStorage {
+    async fn delete_batch_with_projections(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projection_keys: &[PredicateRecordKey],
+    ) -> Result<(), Self::Error> {
+        self.delete_batch(keys).await?;
+        for key in projection_keys {
+            self.projections.remove(key);
+        }
+        Ok(())
+    }
+
+    async fn query_predicate_index(
+        &self,
+        query: &predicate_index::ValidatedIndexQuery,
+    ) -> Result<PredicateQueryResult, Self::Error> {
+        let descriptor = query.as_query();
+        let queried_partitions = descriptor
+            .partitions
+            .iter()
+            .map(|partition| &partition.partition)
+            .collect::<HashSet<_>>();
+        if self.projections.iter().any(|(key, projection)| {
+            !self.optimistic_projections.contains_key(key)
+                && projection.profile() == &descriptor.profile
+                && queried_partitions.contains(projection.partition())
+                && matches!(projection, ProjectionState::Incomplete { .. })
+        }) {
+            return Ok(PredicateQueryResult::Incomplete);
+        }
+
+        let mut has_relevant_shadow = false;
+        for (key, projection) in &self.optimistic_projections {
+            let current_scope = projection.state.profile() == &descriptor.profile
+                && queried_partitions.contains(projection.state.partition());
+            let shadows_queried_authority = self.projections.get(key).is_some_and(|authority| {
+                authority.profile() == &descriptor.profile
+                    && queried_partitions.contains(authority.partition())
+            });
+            if !current_scope && !shadows_queried_authority {
+                continue;
+            }
+            has_relevant_shadow = true;
+            if current_scope
+                && matches!(
+                    projection.state,
+                    predicate_index::OptimisticProjectionState::Incomplete { .. }
+                )
+            {
+                return Ok(PredicateQueryResult::Incomplete);
+            }
+            if current_scope
+                && query
+                    .dependent_attributes(projection.state.partition())
+                    .iter()
+                    .any(|attribute| projection.uncertainty.affects(attribute))
+            {
+                return Ok(PredicateQueryResult::Incomplete);
+            }
+        }
+
+        let documents = self
+            .projections
+            .iter()
+            .filter(|(key, _)| !self.optimistic_projections.contains_key(*key))
+            .filter_map(|(_, projection)| match projection {
+                ProjectionState::Complete(document) => Some(document.clone()),
+                ProjectionState::Incomplete { .. } => None,
+            })
+            .chain(
+                self.optimistic_projections
+                    .values()
+                    .filter_map(|projection| match &projection.state {
+                        predicate_index::OptimisticProjectionState::Complete(document) => {
+                            Some(document.clone())
+                        }
+                        predicate_index::OptimisticProjectionState::Deleted { .. }
+                        | predicate_index::OptimisticProjectionState::Incomplete { .. } => None,
+                    }),
+            )
+            .collect::<Vec<IndexDocument>>();
+        let keys = evaluate_reference(query, &documents)
+            .into_iter()
+            .map(|hit| hit.record_key)
+            .collect();
+        Ok(if has_relevant_shadow {
+            PredicateQueryResult::Optimistic(keys)
+        } else {
+            PredicateQueryResult::Complete(keys)
+        })
+    }
+}
+
+fn apply_in_memory_projection_mutations(
+    projections: &mut HashMap<PredicateRecordKey, ProjectionState>,
+    mutations: Vec<ProjectionMutation>,
+) {
+    apply_authoritative_projection_mutations(projections, &mutations);
 }
 
 fn claim_matches(mutation: &crate::queue::StoredMutation, claim: &MutationClaimToken) -> bool {

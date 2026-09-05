@@ -5,6 +5,7 @@ use crate::domain::ports::{
     DocumentService, create::DocumentCreationService, editing::EditingWorkerService,
 };
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::{
     models::{EditAccessLevel, EntityType},
@@ -71,6 +72,10 @@ pub struct EditDocumentResponse {
     pub clarification: Option<String>,
 }
 
+impl ToolAnnotated for EditDocument {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Edit document");
+}
+
 #[async_trait]
 impl<DSvc, ESvc, EDSvc> AsyncTool<DocumentToolContext<DSvc, ESvc, EDSvc>> for EditDocument
 where
@@ -115,6 +120,7 @@ where
             self.document_id.clone(),
             AccessLevel::Edit,
             &ctx.document_permission_jwt_secret,
+            Some(ctx.actor.into_storage_id().to_string()),
         )
         .map_err(|e| ToolCallError {
             description: "failed to mint document token".to_string(),

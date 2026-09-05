@@ -1,0 +1,362 @@
+import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
+import AirplaneTiltIcon from '@phosphor/airplane-tilt.svg';
+import SpinnerIcon from '@phosphor/spinner.svg';
+import { Button, cn, Layer } from '@ui';
+import { createEffect, createUniqueId, Show } from 'solid-js';
+import {
+  calendarDescriptionToEditorHtml,
+  exportCalendarDescription,
+} from '../../utils/calendar-description';
+import type { CalendarEventFormController } from './create-calendar-event-form-controller';
+import { EventDateTimeRangeFields } from './EventDateTimeRangeFields';
+import {
+  EventComposerCalendarPill,
+  EventComposerConferencePill,
+  EventComposerDeclineMessagePill,
+  EventComposerDeclinePill,
+  EventComposerGuestsPill,
+  EventComposerKindPill,
+  EventComposerLocationPill,
+  EventComposerRecurrencePill,
+  EventComposerRemindersPill,
+} from './EventPropertyPills';
+import type {
+  EventEditorDisabledFields,
+  EventEditorSubmitValues,
+} from './event-form-model';
+import { outOfOfficeNoticeFor } from './out-of-office';
+import { RecurrenceBuilder } from './RecurrenceBuilder';
+
+export interface EventFormProps {
+  controller: CalendarEventFormController;
+  isEdit?: boolean;
+  disabledFields?: EventEditorDisabledFields;
+  showRecurringEditNotice?: boolean;
+  /** Disable interaction without presenting the form as an in-flight save. */
+  disabled?: boolean;
+  pending: boolean;
+  class?: string;
+  onCalendarChange?: (calendarId: string, color: string) => void;
+  onDirtyChange?: (dirty: boolean) => void;
+  onCancel: () => void;
+  onSubmit: (values: EventEditorSubmitValues) => void;
+}
+
+/** Create/edit event form laid out like the standalone task composer. */
+export function EventForm(props: EventFormProps) {
+  const formId = createUniqueId();
+
+  const dateRangeErrorId = `event-composer-date-range-error-${formId}`;
+  const pastEventWarningId = `event-composer-past-event-warning-${formId}`;
+
+  const controller = props.controller;
+  const state = controller.state;
+  const isEdit = () => props.isEdit ?? false;
+  const formIsDisabled = () => props.pending || props.disabled === true;
+
+  // An invalid range already speaks for itself; only one line shows at a time.
+  const pastEventWarning = () =>
+    controller.dateRangeError() ? undefined : controller.pastEventWarning();
+  const dateRangeDescribedBy = () => {
+    if (controller.dateRangeError()) return dateRangeErrorId;
+    return pastEventWarning() ? pastEventWarningId : undefined;
+  };
+
+  const fieldIsReadOnly = (field: keyof EventEditorDisabledFields) =>
+    props.disabledFields?.[field] === true;
+  const fieldIsDisabled = (field: keyof EventEditorDisabledFields) =>
+    formIsDisabled() || fieldIsReadOnly(field);
+
+  const isOutOfOffice = () => controller.isOutOfOffice();
+  // The decline settings of an edited event are unknown until picked, and the
+  // disclosure must not claim behavior nobody chose.
+  const outOfOfficeNotice = () => {
+    const outOfOffice = state().outOfOffice;
+    if (!isOutOfOffice() || !outOfOffice) return undefined;
+    return outOfOfficeNoticeFor(
+      outOfOffice.autoDeclineMode,
+      outOfOffice.declineMessage
+    );
+  };
+
+  // The editor cannot hand the provider's string back: Lexical re-serializes
+  // whatever it loads. Only content that exports differently from what was
+  // loaded counts as an edit, so an untouched description stays byte-for-byte
+  // what the event was opened with.
+  const initialDescription = state().description;
+  let loadedDescription: string | undefined;
+
+  createEffect(() => {
+    const option = controller.selectedCalendarOption();
+    if (option) props.onCalendarChange?.(option.id, option.color);
+  });
+  createEffect(() => props.onDirtyChange?.(controller.isDirty()));
+
+  const submit = () => {
+    const values = controller.submitValues();
+    if (!values || formIsDisabled()) return;
+    props.onSubmit(values);
+  };
+
+  return (
+    <form
+      class={cn(
+        'flex min-h-0 flex-1 flex-col gap-4 text-sm text-ink-muted [&_:disabled]:cursor-not-allowed',
+        props.class
+      )}
+      onSubmit={(event) => {
+        event.preventDefault();
+        submit();
+      }}
+    >
+      <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto scrollbar-hidden">
+        <div class="flex min-w-0 flex-col gap-6 text-sm text-ink-muted">
+          <div class="flex min-w-0 flex-col gap-1">
+            <div class="flex min-w-0 flex-col gap-1">
+              <EventDateTimeRangeFields
+                start={state().start}
+                end={state().end}
+                allDay={state().allDay}
+                onStartChange={controller.setStart}
+                onEndChange={(end) => controller.setField('end', end)}
+                onAllDayChange={controller.setAllDay}
+                startDisabled={fieldIsDisabled('start')}
+                endDisabled={fieldIsDisabled('end')}
+                allDayDisabled={
+                  fieldIsDisabled('allDay') ||
+                  // Google requires timed out-of-office events. Leaving
+                  // all-day mode stays possible in case one was seeded.
+                  (isOutOfOffice() && !state().allDay)
+                }
+                invalid={controller.dateRangeError() !== undefined}
+                describedBy={dateRangeDescribedBy()}
+              />
+              <Show when={controller.dateRangeError()}>
+                {(error) => (
+                  <p
+                    id={dateRangeErrorId}
+                    role="alert"
+                    class="text-xs text-failure"
+                  >
+                    {error()}
+                  </p>
+                )}
+              </Show>
+              <Show when={pastEventWarning()}>
+                {(warning) => (
+                  <p
+                    id={pastEventWarningId}
+                    role="status"
+                    class="text-xs text-warning"
+                  >
+                    {warning()}
+                  </p>
+                )}
+              </Show>
+            </div>
+
+            <input
+              type="text"
+              value={state().title}
+              onInput={(event) =>
+                controller.setField('title', event.currentTarget.value)
+              }
+              placeholder="New event"
+              aria-label="Title"
+              autofocus={!isEdit()}
+              disabled={fieldIsDisabled('title')}
+              class="h-9 w-full bg-transparent px-2 text-lg font-semibold leading-snug text-ink outline-none placeholder:text-ink-placeholder"
+            />
+
+            {/* Google rejects a description on an out-of-office event. The
+                editor re-initializes from the kind switch's reset state, so
+                what it shows always matches what a save submits. */}
+            <Show when={!isOutOfOffice()}>
+              <div class="h-12 overflow-y-auto">
+                <MarkdownTextarea
+                  type="calendar"
+                  initialHtml={calendarDescriptionToEditorHtml(
+                    initialDescription
+                  )}
+                  editable={() => !fieldIsDisabled('description')}
+                  onInitialized={(editor) => {
+                    loadedDescription = exportCalendarDescription(editor);
+                  }}
+                  onChange={(_markdown, editor) => {
+                    if (!editor) return;
+                    const next = exportCalendarDescription(editor);
+                    controller.setField(
+                      'description',
+                      next === loadedDescription ? initialDescription : next
+                    );
+                  }}
+                  placeholder="Add description..."
+                  portalScope="local"
+                  domRef={(element) =>
+                    element.setAttribute('aria-label', 'Description')
+                  }
+                  class="h-full w-full bg-transparent px-2 text-sm text-ink outline-none"
+                />
+              </div>
+            </Show>
+          </div>
+
+          <div class="flex min-w-0 flex-wrap items-center gap-2">
+            <EventComposerKindPill
+              eventType={state().eventType}
+              onChange={controller.setEventKind}
+              disabled={formIsDisabled()}
+              readOnly={isEdit()}
+            />
+            <EventComposerCalendarPill
+              options={controller.calendarOptions()}
+              value={controller.selectedCalendarOption()}
+              onChange={(calendarId) =>
+                controller.setField('calendarId', calendarId)
+              }
+              disabled={formIsDisabled()}
+              readOnly={fieldIsReadOnly('calendar')}
+            />
+            <EventComposerRecurrencePill
+              options={controller.recurrenceOptions()}
+              value={controller.selectedRecurrenceOption()}
+              onChange={controller.changeRecurrenceChoice}
+              disabled={formIsDisabled()}
+              readOnly={fieldIsReadOnly('recurrence')}
+            />
+            <Show when={!isOutOfOffice()}>
+              <EventComposerGuestsPill
+                options={controller.guestOptions}
+                selected={controller.selectedGuests()}
+                onChange={controller.setSelectedGuests}
+                disabled={formIsDisabled()}
+                readOnly={fieldIsReadOnly('guests')}
+              />
+              <EventComposerConferencePill
+                value={state().conference}
+                canKeepExisting={
+                  controller.initialConferenceChoice() === 'existing'
+                }
+                onChange={(conference) =>
+                  controller.setField('conference', conference)
+                }
+                disabled={fieldIsDisabled('conference')}
+              />
+              <EventComposerLocationPill
+                value={state().location}
+                onChange={(location) =>
+                  controller.setField('location', location)
+                }
+                disabled={fieldIsDisabled('location')}
+              />
+            </Show>
+            <Show when={isOutOfOffice()}>
+              <EventComposerDeclinePill
+                value={state().outOfOffice}
+                onChange={controller.setOutOfOffice}
+                disabled={formIsDisabled()}
+              />
+              <Show
+                when={
+                  state().outOfOffice &&
+                  state().outOfOffice?.autoDeclineMode !== 'decline_none'
+                }
+              >
+                <EventComposerDeclineMessagePill
+                  value={state().outOfOffice?.declineMessage ?? ''}
+                  onChange={(declineMessage) =>
+                    controller.setOutOfOffice({
+                      autoDeclineMode:
+                        state().outOfOffice?.autoDeclineMode ?? 'decline_none',
+                      declineMessage,
+                    })
+                  }
+                  disabled={formIsDisabled()}
+                />
+              </Show>
+            </Show>
+            <EventComposerRemindersPill
+              minutes={controller.reminderMinutes()}
+              usedSlots={
+                controller.reminderMinutes().length +
+                controller.preservedReminderCount()
+              }
+              canAdd={controller.canAddReminder()}
+              onChange={controller.setReminderMinutes}
+              disabled={fieldIsDisabled('reminders')}
+            />
+          </div>
+
+          <Show when={outOfOfficeNotice()}>
+            {(notice) => (
+              <div
+                role="note"
+                aria-label="Out-of-office event"
+                class="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-bg p-3 text-xs text-warning-ink"
+              >
+                <AirplaneTiltIcon class="mt-px size-4 shrink-0" />
+                <div class="flex min-w-0 flex-col gap-1">
+                  <span class="font-medium">Out-of-office event</span>
+                  <span>{notice().effect}</span>
+                  <Show when={notice().declineMessage}>
+                    {(message) => (
+                      <span class="italic">
+                        Auto-decline reply: “{message()}”
+                      </span>
+                    )}
+                  </Show>
+                </div>
+              </div>
+            )}
+          </Show>
+        </div>
+
+        <Show when={controller.recurrenceChoice() === 'custom'}>
+          <Layer depth={3}>
+            <div class="rounded-xl bg-surface p-4 text-ink">
+              <RecurrenceBuilder
+                value={controller.customConfig()}
+                start={controller.startForRecurrence()}
+                allDay={state().allDay}
+                disabled={fieldIsDisabled('recurrence')}
+                onChange={controller.setCustomConfig}
+              />
+            </div>
+          </Layer>
+        </Show>
+      </div>
+
+      <div class="flex shrink-0 items-center justify-end gap-3">
+        <Show when={props.showRecurringEditNotice}>
+          <p class="mr-auto text-xs text-ink-extra-muted">
+            Changes apply to all occurrences
+          </p>
+        </Show>
+        <Button
+          type="button"
+          variant="ghost"
+          class="rounded-lg"
+          disabled={formIsDisabled()}
+          onClick={props.onCancel}
+        >
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          variant={controller.canSave() ? 'accent' : 'ghost'}
+          depth={3}
+          class="rounded-lg border-0"
+          disabled={!controller.canSave() || formIsDisabled()}
+          aria-label={isEdit() ? 'Save' : 'Create event'}
+        >
+          <Show
+            when={props.pending}
+            fallback={isEdit() ? 'Save' : 'Create event'}
+          >
+            <SpinnerIcon class="size-4 animate-spin" />
+          </Show>
+        </Button>
+      </div>
+    </form>
+  );
+}

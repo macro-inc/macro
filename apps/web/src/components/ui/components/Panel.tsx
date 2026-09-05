@@ -28,7 +28,7 @@ function PanelRoot(props: PanelProps) {
         'grid-template-rows': 'auto auto minmax(0, 1fr) auto',
         'grid-template-columns': 'minmax(0, 1fr)',
       }}
-      class={cn('grid min-h-0 min-w-0', local.class)}
+      class={cn('grid min-h-0 min-w-0 bg-panel', local.class)}
       {...surfaceProps}
     >
       {local.children}
@@ -42,7 +42,7 @@ function PanelHeader(props: SlotProps) {
     <Show when={resolved()}>
       <div
         class={cn(
-          'flex flex-none items-center h-full min-h-10 px-2 overflow-x-hidden border-b border-edge-muted overflow-hidden',
+          'flex flex-none items-center h-full min-h-10 px-2 border-b border-edge-muted overflow-hidden',
           props.class
         )}
         style={{ 'grid-area': 'header' }}
@@ -59,7 +59,7 @@ function PanelToolbar(props: SlotProps) {
     <Show when={resolved()}>
       <div
         class={cn(
-          'flex flex-none items-center p-2 overflow-x-hidden border-b border-edge-muted overflow-hidden',
+          'flex flex-none items-center p-2 border-b border-edge-muted overflow-hidden',
           props.class
         )}
         style={{ 'grid-area': 'toolbar' }}
@@ -99,7 +99,7 @@ function PanelFooter(props: SlotProps) {
     <Show when={resolved()}>
       <div
         class={cn(
-          'flex flex-none items-center min-h-10 px-2 overflow-x-hidden border-t border-edge-muted overflow-hidden',
+          'flex flex-none items-center min-h-10 px-2 border-t border-edge-muted overflow-hidden',
           props.class
         )}
         style={{ 'grid-area': 'footer' }}

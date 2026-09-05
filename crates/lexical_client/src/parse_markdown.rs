@@ -1,6 +1,7 @@
 use super::LexicalClient;
 use crate::types::{CognitionResponseData, CognitionV2ResponseData};
 
+use agent_fold::domain::model::MessageId;
 use anyhow::{Context, Result};
 use models_search::document::MarkdownParseResult;
 use serde::de::DeserializeOwned;
@@ -33,6 +34,34 @@ struct MentionsRequest<'a> {
     markdown: &'a str,
 }
 
+#[derive(Debug, serde::Serialize)]
+struct ExtractReplyRequest<'a> {
+    markdown: &'a str,
+}
+
+/// The leading `ReplyTargetNode` extracted from markdown by the lexical
+/// service `/extract-reply` endpoint, when the markdown is an explicit reply.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractedExplicitReply {
+    /// Channel containing the targeted message.
+    pub channel_id: String,
+    /// Targeted channel message.
+    pub target_message_id: String,
+    /// Thread containing the targeted message.
+    pub target_thread_id: String,
+    /// Static one-line preview rendered by the reply target.
+    pub display_text: String,
+    /// Sender of the targeted message — who the author replied to.
+    pub sender_id: String,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExtractReplyResponse {
+    reply: Option<ExtractedExplicitReply>,
+}
+
 /// An entity mention extracted from markdown by the lexical service
 /// `/mentions` endpoint, in the shape channel messages track them.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -47,6 +76,74 @@ pub struct ExtractedMention {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct MentionsResponse {
     mentions: Vec<ExtractedMention>,
+}
+
+/// The Magic Chip embedded in an agent-session announcement, in the shape the
+/// lexical service `/agent-announcement` endpoint validates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAnnouncementChip {
+    /// Agent session the chip anchors.
+    pub agent_session_id: String,
+    /// Dedicated channel of the agent session, for chips old enough to
+    /// predate sessions standing alone. New chips carry only the session.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
+    /// Folded user message that prompts the anchored agent response.
+    pub prompted_message: MessageId,
+    /// Persisted chip status (e.g. `booting`).
+    pub status: String,
+}
+
+/// The channel message targeted by an agent-session announcement, in the
+/// shape the lexical service's `ReplyTargetNode` validates.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentAnnouncementReplyTarget {
+    /// Channel containing the targeted message.
+    pub channel_id: String,
+    /// Targeted channel message.
+    pub target_message_id: String,
+    /// Thread containing the targeted message.
+    pub target_thread_id: String,
+    /// Static one-line preview rendered by the reply target.
+    pub display_text: String,
+    /// Sender of the targeted message.
+    pub sender_id: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentAnnouncementRequest<'a> {
+    reply_target: &'a AgentAnnouncementReplyTarget,
+    chip: &'a AgentAnnouncementChip,
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+struct AgentAnnouncementResponse {
+    markdown: String,
+}
+
+/// A channel message included as context for an agent prompt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub struct AgentContextMessage<'a> {
+    /// Display name of the message sender.
+    pub sender: &'a str,
+    /// Markdown content of the message.
+    pub content: &'a str,
+}
+
+#[derive(Debug, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentContextRequest<'a> {
+    prompt_markdown: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    messages: Option<&'a [AgentContextMessage<'a>]>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct AgentContextResponse {
+    markdown: String,
 }
 
 /// Rendering target supported by the lexical service `/markdown` endpoint.
@@ -234,6 +331,75 @@ impl LexicalClient {
         Ok(data.mentions)
     }
 
+    /// Composes the channel message announcing an agent session — a structured
+    /// reply target above the session's Magic Chip — via the lexical service,
+    /// so the markdown is built from real Lexical nodes.
+    #[tracing::instrument(skip(self, reply_target, chip), err)]
+    pub async fn compose_agent_announcement(
+        &self,
+        reply_target: &AgentAnnouncementReplyTarget,
+        chip: &AgentAnnouncementChip,
+    ) -> Result<String> {
+        let url = format!("{}/agent-announcement", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentAnnouncementRequest { reply_target, chip })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
+    /// Sanitizes an agent prompt and optionally composes it with prior-message
+    /// context via the lexical service, so internal nodes and escaping are
+    /// handled by Lexical rather than assembled manually by the caller.
+    #[tracing::instrument(skip(self, prompt_markdown, messages), err)]
+    pub async fn compose_agent_context(
+        &self,
+        prompt_markdown: &str,
+        messages: Option<&[AgentContextMessage<'_>]>,
+    ) -> Result<String> {
+        let url = format!("{}/agent-context", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentContextRequest {
+                    prompt_markdown,
+                    messages,
+                })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentContextResponse = response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
+    /// Parses `markdown` via the lexical service and returns the leading
+    /// `ReplyTargetNode` when it is followed by the author's non-empty reply.
+    /// Standard Markdown blockquotes carry no reply semantics.
+    #[tracing::instrument(skip(self, markdown), err)]
+    pub async fn extract_explicit_reply(
+        &self,
+        markdown: &str,
+    ) -> Result<Option<ExtractedExplicitReply>> {
+        let url = format!("{}/extract-reply", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&ExtractReplyRequest { markdown })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: ExtractReplyResponse = response.json().await.context("unexpected response")?;
+        Ok(data.reply)
+    }
+
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
         let response = check_response(self.client.get(url).send().await?).await?;
         response.json().await.context("unexpected response")
@@ -337,5 +503,30 @@ mod tests {
             }
             _ => panic!("expected dssImage node"),
         }
+    }
+
+    #[test]
+    fn extract_reply_response_deserializes_a_target() {
+        let json = r#"{
+            "reply": {
+                "channelId": "channel-1",
+                "targetMessageId": "message-1",
+                "targetThreadId": "thread-1",
+                "displayText": "please fix this",
+                "senderId": "bot|00000000-0000-0000-0000-00000000b07a"
+            }
+        }"#;
+
+        let response: ExtractReplyResponse = serde_json::from_str(json).unwrap();
+        let reply = response.reply.expect("reply");
+        assert_eq!(reply.channel_id, "channel-1");
+        assert_eq!(reply.target_message_id, "message-1");
+        assert_eq!(reply.sender_id, "bot|00000000-0000-0000-0000-00000000b07a");
+    }
+
+    #[test]
+    fn extract_reply_response_deserializes_null() {
+        let response: ExtractReplyResponse = serde_json::from_str(r#"{ "reply": null }"#).unwrap();
+        assert!(response.reply.is_none());
     }
 }

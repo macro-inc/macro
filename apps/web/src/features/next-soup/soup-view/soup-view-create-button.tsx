@@ -1,14 +1,16 @@
 import { isListViewID, type ListView } from '@app/constants/list-views';
 import {
   CREATABLE_BLOCKS,
+  type CreatableName,
   runCreateAction,
+  useCreatableEnabled,
 } from '@app/features/command/Launcher';
 import { openCreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import type { BlockAlias, BlockName } from '@core/block';
+import type { BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import {
   handleFolderSelect,
@@ -22,26 +24,21 @@ import UploadIcon from '@phosphor/upload-simple.svg';
 import { Button, cn, Dropdown } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { NewCallButton } from './NewCallButton';
+import { useMaybeSoupView } from './soup-view-context';
 
 // Which blocks to show as create options per view, in order
-const VIEW_CREATE_BLOCKNAMES: Partial<
-  Record<ListView, (BlockName | BlockAlias)[]>
-> = {
+const VIEW_CREATE_BLOCKNAMES: Partial<Record<ListView, CreatableName[]>> = {
   documents: ['md', 'snippet', 'canvas', 'code', 'project'],
   tasks: ['task'],
-  agents: ['chat', 'automation', 'skill'],
+  agents: ['agent', 'chat', 'automation', 'skill'],
   mail: ['email'],
   channels: ['channel'],
   folders: ['project'],
+  reminders: ['reminder'],
 };
 
 type CreateOption = {
-  id:
-    | BlockName
-    | BlockAlias
-    | 'import-file'
-    | 'import-folder'
-    | 'create-company';
+  id: CreatableName | 'import-file' | 'import-folder' | 'create-company';
   label: string;
 };
 
@@ -65,10 +62,9 @@ const CREATE_COMPANY_OPTION: CreateOption = {
  * (and thus aren't in CREATABLE_BLOCKS) but still need a create entry in
  * specific list views.
  */
-const VIEW_ONLY_BLOCK_LABELS: Partial<Record<BlockName | BlockAlias, string>> =
-  {
-    automation: 'Automation',
-  };
+const VIEW_ONLY_BLOCK_LABELS: Partial<Record<CreatableName, string>> = {
+  automation: 'Automation',
+};
 
 const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   agents: 'Agent',
@@ -77,14 +73,24 @@ const VIEW_CREATE_LABELS: Partial<Record<ListView, string>> = {
   documents: 'New',
   folders: 'Folder',
   mail: 'Email',
+  reminders: 'Reminder',
   tasks: 'Task',
 };
 
-function getViewCreateOptions(view: ListView): CreateOption[] {
+function getViewCreateOptions(
+  view: ListView,
+  isCreatableEnabled: (name: CreatableName) => boolean
+): CreateOption[] {
   const createNames = VIEW_CREATE_BLOCKNAMES[view] ?? [];
   const options: CreateOption[] = createNames.flatMap((name) => {
     const block = CREATABLE_BLOCKS.find((b) => b.blockName === name);
-    if (block) return [{ id: block.blockName, label: block.label }];
+    if (block) {
+      // A flagged-off entry is not offered here either, the same as in the
+      // create menus — `runCreateAction` would decline it anyway. Asked
+      // reactively, so an option appears once its flag resolves.
+      if (!isCreatableEnabled(block.blockName)) return [];
+      return [{ id: block.blockName, label: block.label }];
+    }
     const viewOnlyLabel = VIEW_ONLY_BLOCK_LABELS[name];
     if (viewOnlyLabel) return [{ id: name, label: viewOnlyLabel }];
     return [];
@@ -125,6 +131,8 @@ function CreateOptionIcon(props: { id: CreateOption['id'] }) {
 export const SoupViewCreateButton = () => {
   const panel = useSplitPanelOrThrow();
   const handleFileUpload = useHandleFileUpload();
+  const isCreatableEnabled = useCreatableEnabled();
+  const soupView = useMaybeSoupView();
 
   const currentView = createMemo(() => {
     const content = panel.handle.content();
@@ -132,13 +140,24 @@ export const SoupViewCreateButton = () => {
     return isListViewID(content.id) ? content.id : undefined;
   });
 
-  const options = createMemo<CreateOption[]>(() => {
+  // The inbox's Reminders tab is not a ListView of its own, but it offers the
+  // same create button the standalone Reminders view does — a reminder is the
+  // one thing you make from that list rather than triage into it.
+  const createView = createMemo(() => {
     const view = currentView();
+    if (view === 'inbox' && soupView?.activeTab() === 'reminders') {
+      return 'reminders';
+    }
+    return view;
+  });
+
+  const options = createMemo<CreateOption[]>(() => {
+    const view = createView();
     if (!view) return [];
-    return getViewCreateOptions(view);
+    return getViewCreateOptions(view, isCreatableEnabled);
   });
   const createLabel = createMemo(() => {
-    const view = currentView();
+    const view = createView();
     if (!view) return 'Create';
     return VIEW_CREATE_LABELS[view] ?? 'Create';
   });
@@ -171,7 +190,7 @@ export const SoupViewCreateButton = () => {
 
   const SingleOptionButton = (props: { hideLabel?: boolean }) => (
     <Button
-      variant="active"
+      variant="accent"
       class={cn(
         'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
         props.hideLabel && 'pr-1'
@@ -189,7 +208,7 @@ export const SoupViewCreateButton = () => {
   const MultiOptionButton = (props: { hideLabel?: boolean }) => (
     <Dropdown placement="bottom-start">
       <Dropdown.Trigger
-        variant="active"
+        variant="accent"
         class={cn(
           'border-0 rounded-full px-3 py-2 pl-1 font-semibold',
           props.hideLabel && 'pr-1'

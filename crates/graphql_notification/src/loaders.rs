@@ -3,61 +3,12 @@ use std::{collections::HashMap, sync::Arc};
 use async_graphql::dataloader::{DataLoader, Loader};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_notifications::NotifEvent;
-use notification::domain::models::{
-    UserNotificationRow,
-    request::{NotificationEntityRef, NotificationItemType},
-};
+use notification::domain::models::UserNotificationRow;
 use rootcause::markers::{Cloneable, Dynamic};
 
-/// Tests for notification entity mapping and batching.
+/// Tests for notification entity batching.
 #[cfg(test)]
 mod test;
-
-/// Map a shared entity type to the notification domain's item type.
-///
-/// Some Soup entities, such as CRM companies, do not have a corresponding
-/// notification type. Those entities have an empty notification edge rather
-/// than failing the whole DataLoader batch.
-fn notification_item_type(entity_type: model_entity::EntityType) -> Option<NotificationItemType> {
-    use model_entity::EntityType;
-    match entity_type {
-        EntityType::EmailThread => Some(NotificationItemType::Email),
-        EntityType::ChannelMessage => Some(NotificationItemType::Message),
-        EntityType::Channel => Some(NotificationItemType::Channel),
-        EntityType::Document => Some(NotificationItemType::Document),
-        EntityType::Project => Some(NotificationItemType::Project),
-        EntityType::Chat => Some(NotificationItemType::Chat),
-        EntityType::Call => Some(NotificationItemType::Call),
-        EntityType::ForeignEntity => Some(NotificationItemType::Github),
-        EntityType::Reminder => Some(NotificationItemType::Reminder),
-        EntityType::CalendarEvent => Some(NotificationItemType::Calendar),
-        EntityType::User
-        | EntityType::Team
-        | EntityType::StaticFile
-        | EntityType::CrmCompany
-        | EntityType::CrmContact
-        | EntityType::Skill => None,
-    }
-}
-
-/// Build notification-service references for the subset of entities that can
-/// own notifications.
-fn notification_refs(
-    keys: &[model_entity::Entity<'static>],
-) -> Vec<(model_entity::Entity<'static>, NotificationEntityRef)> {
-    keys.iter()
-        .filter_map(|key| {
-            let entity_type = notification_item_type(key.entity_type)?;
-            Some((
-                key.clone(),
-                NotificationEntityRef {
-                    entity_type,
-                    id: key.entity_id.to_string(),
-                },
-            ))
-        })
-        .collect()
-}
 
 /// Reader used by GraphQL notification edges.
 pub trait SoupNotificationEdgeReader: Send + Sync + 'static {
@@ -79,42 +30,17 @@ impl<T> SoupNotificationEdgeReader for Arc<T>
 where
     T: notification::domain::service::NotificationReader,
 {
-    async fn get_notifications(
+    fn get_notifications(
         &self,
         user_id: MacroUserIdStr<'static>,
         keys: Vec<model_entity::Entity<'static>>,
-    ) -> Result<
-        HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
-        rootcause::Report,
+    ) -> impl Future<
+        Output = Result<
+            HashMap<model_entity::Entity<'static>, Vec<UserNotificationRow<NotifEvent>>>,
+            rootcause::Report,
+        >,
     > {
-        let mut result = keys
-            .iter()
-            .cloned()
-            .map(|key| (key, Vec::new()))
-            .collect::<HashMap<_, _>>();
-
-        let requested_refs = notification_refs(&keys);
-        if requested_refs.is_empty() {
-            return Ok(result);
-        }
-
-        let entity_refs = requested_refs
-            .iter()
-            .map(|(_, entity_ref)| entity_ref.clone())
-            .collect();
-
-        let mut notifications_by_entity = self
-            .get_entity_notifications_batch::<NotifEvent>(user_id, entity_refs)
-            .await
-            .map_err(|err| rootcause::report!(err))?;
-
-        for (original_key, entity_ref) in requested_refs {
-            if let Some(notifications) = notifications_by_entity.remove(&entity_ref) {
-                result.insert(original_key, notifications);
-            }
-        }
-
-        Ok(result)
+        self.get_entity_notifications_batch::<NotifEvent>(user_id, keys)
     }
 }
 

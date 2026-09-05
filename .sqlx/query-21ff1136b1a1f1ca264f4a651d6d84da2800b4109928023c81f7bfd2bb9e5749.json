@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO calendar_event_sources (\n                    id, event_id, source_link_id, source_kind, account_id, calendar_id,\n                    provider_event_id, provider_recurring_event_id,\n                    provider_etag, raw_payload, source_sequence,\n                    source_updated_at, normalized_payload,\n                    title, description, location, event_type, visibility, transparency,\n                    is_read_only, reminders_use_default, reminder_overrides,\n                    creator_email, creator_name\n                )\n                VALUES (\n                    $1, $2, $3, 'google', $4, $5, $6, $7, $8, $9,\n                    $10, $11, $12,\n                    $13, $14, $15, $16, $17, $18,\n                    $19, $20, $21,\n                    $22, $23\n                )\n                ON CONFLICT (account_id, calendar_id, provider_event_id)\n                    WHERE source_kind = 'google'\n                DO UPDATE SET\n                    event_id = EXCLUDED.event_id,\n                    provider_recurring_event_id = EXCLUDED.provider_recurring_event_id,\n                    provider_etag = EXCLUDED.provider_etag,\n                    raw_payload = EXCLUDED.raw_payload,\n                    source_sequence = EXCLUDED.source_sequence,\n                    source_updated_at = EXCLUDED.source_updated_at,\n                    normalized_payload = EXCLUDED.normalized_payload,\n                    title = EXCLUDED.title,\n                    description = EXCLUDED.description,\n                    location = EXCLUDED.location,\n                    event_type = EXCLUDED.event_type,\n                    visibility = EXCLUDED.visibility,\n                    transparency = EXCLUDED.transparency,\n                    is_read_only = EXCLUDED.is_read_only,\n                    reminders_use_default = EXCLUDED.reminders_use_default,\n                    reminder_overrides = EXCLUDED.reminder_overrides,\n                    creator_email = EXCLUDED.creator_email,\n                    creator_name = EXCLUDED.creator_name,\n                    last_seen_at = now()\n                WHERE\n                    EXCLUDED.source_sequence > calendar_event_sources.source_sequence\n                    OR (\n                        EXCLUDED.source_sequence = calendar_event_sources.source_sequence\n                        AND EXCLUDED.source_updated_at >= calendar_event_sources.source_updated_at\n                    )\n                RETURNING id\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Int4",
+        "Timestamptz",
+        "Jsonb",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Bool",
+        "Bool",
+        "Jsonb",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "21ff1136b1a1f1ca264f4a651d6d84da2800b4109928023c81f7bfd2bb9e5749"
+}

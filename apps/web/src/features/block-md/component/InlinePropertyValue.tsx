@@ -2,21 +2,22 @@ import { useMaybeBlockId } from '@core/block';
 import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyT } from '@property/types';
-import { getEntityValues, hasValue } from '@property/utils';
-import { Layer } from '@ui';
-import { cn } from '@ui/utils/classname';
+import { getEntityValues } from '@property/utils';
 import { type Component, type JSX, Match, Switch } from 'solid-js';
 
 type InlinePropertyValueProps = {
   property: PropertyT;
+  /** Owning entity ID, when the pill is rendered outside its entity block. */
+  entityId?: string;
   /** Label rendered when the property is empty. Defaults to "None". */
   emptyLabel?: JSX.Element;
+  class?: string;
 };
 
 /**
  * Inline property pill shown beneath a task title when the side panel is
  * closed. Built from @property primitives — same visual surface as before,
- * but routes through Property.Root / Tooltip / EditTrigger so any property
+ * but routes through Property.Root / Tooltip / Pill so any property
  * type renders correctly without bespoke per-type components.
  */
 export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
@@ -24,9 +25,6 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
 ) => {
   const ctx = usePropertiesContext();
   const blockId = useMaybeBlockId();
-
-  const isReadOnly = () => !ctx.canEdit || props.property.isMetadata;
-  const isEmpty = () => !hasValue(props.property);
 
   const isUserEntity = () =>
     props.property.valueType === 'ENTITY' &&
@@ -43,48 +41,38 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       onRefresh={ctx.onRefresh}
     >
       <Property.Tooltip property={props.property}>
-        <Layer depth={2}>
-          <Property.EditTrigger
-            class={cn(
-              'inline-flex items-center gap-1.5 min-w-0 border border-edge-muted',
-              'px-2 py-1 leading-tight text-left rounded-full',
-              'bg-surface',
-              'focus-visible:bg-active focus-visible:ring-accent/10',
-              {
-                'hover:bg-hover': !isReadOnly(),
-                'text-ink-extra-muted': isEmpty(),
-              }
-            )}
+        <Property.Pill class={props.class} variant="outline">
+          <Switch
+            fallback={
+              <Property.Icon
+                property={props.property}
+                class="size-3 shrink-0"
+              />
+            }
           >
-            <Switch
-              fallback={
-                <Property.Icon
-                  property={props.property}
-                  class="size-3 shrink-0"
-                />
-              }
-            >
-              <Match when={isMultiUserEntity()}>
-                <Property.UserStack property={props.property} maxUsers={2} />
-              </Match>
-              <Match when={isUserEntity()}>
-                <Property.Icon property={props.property} />
-              </Match>
-            </Switch>
-            <Property.Text
-              property={props.property}
-              fallback={
-                <Property.Empty
-                  label={props.emptyLabel ?? props.property.displayName}
-                />
-              }
-            />
-            <Property.Caret />
-          </Property.EditTrigger>
-        </Layer>
+            <Match when={isMultiUserEntity()}>
+              <Property.UserStack property={props.property} maxUsers={2} />
+            </Match>
+            <Match when={isUserEntity()}>
+              <Property.Icon property={props.property} />
+            </Match>
+          </Switch>
+          <Property.Text
+            property={props.property}
+            fallback={
+              <Property.Empty
+                label={props.emptyLabel ?? props.property.displayName}
+              />
+            }
+          />
+          <Property.Caret />
+        </Property.Pill>
       </Property.Tooltip>
       <Property.PopoverEditor
-        entitySelfFilter={{ entityType: ctx.entityType, blockId }}
+        entitySelfFilter={{
+          entityType: ctx.entityType,
+          blockId: props.entityId ?? blockId,
+        }}
       />
     </Property.Root>
   );

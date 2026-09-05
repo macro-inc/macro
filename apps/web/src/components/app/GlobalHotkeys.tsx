@@ -22,11 +22,7 @@ import {
 import { useLogout } from '@core/auth/logout';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_SNIPPETS_FLAG,
-  ENABLE_SNIPPETS_OVERRIDE,
-  LOCAL_ONLY,
-} from '@core/constant/featureFlags';
+import { enableSnippets, LOCAL_ONLY } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   useSettingsState,
@@ -59,7 +55,7 @@ import {
   themeMode,
   themes,
 } from '@theme/signals/themeSignals';
-import type { ThemeV2 } from '@theme/types/themeTypes';
+import type { ThemeV3 } from '@theme/types/themeTypes';
 import {
   applySystemTheme,
   applyTheme,
@@ -146,9 +142,7 @@ export default function GlobalShortcuts() {
   const logout = useLogout();
 
   const handleFileUpload = useHandleFileUpload();
-  const snippetsFlag = useFeatureFlag(ENABLE_SNIPPETS_FLAG, {
-    enabledOverride: ENABLE_SNIPPETS_OVERRIDE,
-  });
+  const snippetsFlag = useFeatureFlag(enableSnippets);
 
   const handleCommandMenu = () => {
     const willOpen = !CommandState.isOpen();
@@ -198,12 +192,19 @@ export default function GlobalShortcuts() {
       description: item.description,
       condition: () =>
         (item.condition?.() ?? true) &&
+        (item.enabled?.() ?? true) &&
         (item.blockName !== 'snippet' || snippetsFlag().enabled),
+      // Entries that deliberately share a key (the flagged agent pair) opt
+      // into 'add' so both survive registration and the dispatcher picks the
+      // one whose condition passes, rather than the later silently winning.
+      registrationType: item.registrationType,
       keyDownHandler: item.keyDownHandler,
       icon: Plus,
       tags: item.tags,
       keywords: item.keywords,
-      hide: () => item.blockName === 'snippet' && !snippetsFlag().enabled,
+      hide: () =>
+        !(item.enabled?.() ?? true) ||
+        (item.blockName === 'snippet' && !snippetsFlag().enabled),
       runWithInputFocused: true,
     });
   });
@@ -379,7 +380,7 @@ export default function GlobalShortcuts() {
     displayPriority: 10,
   });
 
-  const ThemeDisplay: Component<{ theme: ThemeV2 }> = (props) => (
+  const ThemeDisplay: Component<{ theme: ThemeV3 }> = (props) => (
     <div class="flex items-center gap-2">
       {props.theme.name}
       <ThemeChips theme={props.theme} size="sm" />
@@ -388,7 +389,7 @@ export default function GlobalShortcuts() {
 
   // The per-mode theme the OS scheme currently resolves to — shown as the
   // "System preference" option's swatch and previewed on highlight.
-  const systemResolvedTheme = (): ThemeV2 | undefined =>
+  const systemResolvedTheme = (): ThemeV3 | undefined =>
     themes().find(
       (theme) =>
         theme.id ===

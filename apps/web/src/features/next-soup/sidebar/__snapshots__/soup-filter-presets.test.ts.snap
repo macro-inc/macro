@@ -1,0 +1,630 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`documents view GraphQL input contract > captures every production tab with snippets enabled=false 1`] = `
+{
+  "all": {
+    "initial": {
+      "emailView": undefined,
+      "expand": true,
+      "filters": {
+        "calendarEventFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "callFilter": {
+          "literal": {
+            "callId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelFilter": {
+          "literal": {
+            "channelId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelThreadFilter": {
+          "literal": {
+            "threadId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "chatFilter": {
+          "literal": {
+            "chatId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "crmCompanyFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "documentFilter": {
+          "not": {
+            "or": {
+              "left": {
+                "literal": {
+                  "subType": "TASK",
+                },
+              },
+              "right": {
+                "literal": {
+                  "subType": "SNIPPET",
+                },
+              },
+            },
+          },
+        },
+        "emailFilter": {
+          "tree": {
+            "literal": {
+              "threadId": "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        "foreignEntityFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "projectFilter": {
+          "literal": {
+            "projectId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      "limit": 100,
+      "sortDirection": undefined,
+      "sortMethod": "UPDATED_AT",
+    },
+  },
+  "attachments": {
+    "initial": {
+      "emailView": undefined,
+      "expand": true,
+      "filters": {
+        "calendarEventFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "callFilter": {
+          "literal": {
+            "callId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelFilter": {
+          "literal": {
+            "channelId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelThreadFilter": {
+          "literal": {
+            "threadId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "chatFilter": {
+          "literal": {
+            "chatId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "crmCompanyFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "documentFilter": {
+          "literal": {
+            "isEmailAttachment": true,
+          },
+        },
+        "emailFilter": {
+          "tree": {
+            "literal": {
+              "threadId": "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        "foreignEntityFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "projectFilter": {
+          "literal": {
+            "projectId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      "limit": 100,
+      "sortDirection": undefined,
+      "sortMethod": "UPDATED_AT",
+    },
+  },
+  "owned": {
+    "initial": {
+      "emailView": undefined,
+      "expand": true,
+      "filters": {
+        "calendarEventFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "callFilter": {
+          "literal": {
+            "callId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelFilter": {
+          "literal": {
+            "channelId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelThreadFilter": {
+          "literal": {
+            "threadId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "chatFilter": {
+          "literal": {
+            "chatId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "crmCompanyFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "documentFilter": {
+          "and": {
+            "left": {
+              "not": {
+                "or": {
+                  "left": {
+                    "literal": {
+                      "subType": "TASK",
+                    },
+                  },
+                  "right": {
+                    "literal": {
+                      "subType": "SNIPPET",
+                    },
+                  },
+                },
+              },
+            },
+            "right": {
+              "and": {
+                "left": {
+                  "literal": {
+                    "owner": "macro|phase-0@example.com",
+                  },
+                },
+                "right": {
+                  "literal": {
+                    "isEmailAttachment": false,
+                  },
+                },
+              },
+            },
+          },
+        },
+        "emailFilter": {
+          "tree": {
+            "literal": {
+              "threadId": "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        "foreignEntityFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "projectFilter": {
+          "literal": {
+            "projectId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      "limit": 100,
+      "sortDirection": undefined,
+      "sortMethod": "UPDATED_AT",
+    },
+  },
+  "shared": {
+    "initial": {
+      "emailView": undefined,
+      "expand": true,
+      "filters": {
+        "calendarEventFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "callFilter": {
+          "literal": {
+            "callId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelFilter": {
+          "literal": {
+            "channelId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelThreadFilter": {
+          "literal": {
+            "threadId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "chatFilter": {
+          "literal": {
+            "chatId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "crmCompanyFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "documentFilter": {
+          "and": {
+            "left": {
+              "not": {
+                "or": {
+                  "left": {
+                    "literal": {
+                      "subType": "TASK",
+                    },
+                  },
+                  "right": {
+                    "literal": {
+                      "subType": "SNIPPET",
+                    },
+                  },
+                },
+              },
+            },
+            "right": {
+              "and": {
+                "left": {
+                  "not": {
+                    "literal": {
+                      "owner": "macro|phase-0@example.com",
+                    },
+                  },
+                },
+                "right": {
+                  "literal": {
+                    "isEmailAttachment": false,
+                  },
+                },
+              },
+            },
+          },
+        },
+        "emailFilter": {
+          "tree": {
+            "literal": {
+              "threadId": "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        "foreignEntityFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "projectFilter": {
+          "literal": {
+            "projectId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      "limit": 100,
+      "sortDirection": undefined,
+      "sortMethod": "UPDATED_AT",
+    },
+  },
+}
+`;
+
+exports[`documents view GraphQL input contract > captures every production tab with snippets enabled=true 1`] = `
+{
+  "all": {
+    "initial": {
+      "emailView": undefined,
+      "expand": true,
+      "filters": {
+        "calendarEventFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "callFilter": {
+          "literal": {
+            "callId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelFilter": {
+          "literal": {
+            "channelId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelThreadFilter": {
+          "literal": {
+            "threadId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "chatFilter": {
+          "literal": {
+            "chatId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "crmCompanyFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "documentFilter": {
+          "not": {
+            "literal": {
+              "subType": "TASK",
+            },
+          },
+        },
+        "emailFilter": {
+          "tree": {
+            "literal": {
+              "threadId": "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        "foreignEntityFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "projectFilter": {
+          "literal": {
+            "projectId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      "limit": 100,
+      "sortDirection": undefined,
+      "sortMethod": "UPDATED_AT",
+    },
+  },
+  "attachments": {
+    "initial": {
+      "emailView": undefined,
+      "expand": true,
+      "filters": {
+        "calendarEventFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "callFilter": {
+          "literal": {
+            "callId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelFilter": {
+          "literal": {
+            "channelId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelThreadFilter": {
+          "literal": {
+            "threadId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "chatFilter": {
+          "literal": {
+            "chatId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "crmCompanyFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "documentFilter": {
+          "literal": {
+            "isEmailAttachment": true,
+          },
+        },
+        "emailFilter": {
+          "tree": {
+            "literal": {
+              "threadId": "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        "foreignEntityFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "projectFilter": {
+          "literal": {
+            "projectId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      "limit": 100,
+      "sortDirection": undefined,
+      "sortMethod": "UPDATED_AT",
+    },
+  },
+  "owned": {
+    "initial": {
+      "emailView": undefined,
+      "expand": true,
+      "filters": {
+        "calendarEventFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "callFilter": {
+          "literal": {
+            "callId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelFilter": {
+          "literal": {
+            "channelId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelThreadFilter": {
+          "literal": {
+            "threadId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "chatFilter": {
+          "literal": {
+            "chatId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "crmCompanyFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "documentFilter": {
+          "and": {
+            "left": {
+              "not": {
+                "literal": {
+                  "subType": "TASK",
+                },
+              },
+            },
+            "right": {
+              "and": {
+                "left": {
+                  "literal": {
+                    "owner": "macro|phase-0@example.com",
+                  },
+                },
+                "right": {
+                  "literal": {
+                    "isEmailAttachment": false,
+                  },
+                },
+              },
+            },
+          },
+        },
+        "emailFilter": {
+          "tree": {
+            "literal": {
+              "threadId": "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        "foreignEntityFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "projectFilter": {
+          "literal": {
+            "projectId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      "limit": 100,
+      "sortDirection": undefined,
+      "sortMethod": "UPDATED_AT",
+    },
+  },
+  "shared": {
+    "initial": {
+      "emailView": undefined,
+      "expand": true,
+      "filters": {
+        "calendarEventFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "callFilter": {
+          "literal": {
+            "callId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelFilter": {
+          "literal": {
+            "channelId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "channelThreadFilter": {
+          "literal": {
+            "threadId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "chatFilter": {
+          "literal": {
+            "chatId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "crmCompanyFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "documentFilter": {
+          "and": {
+            "left": {
+              "not": {
+                "literal": {
+                  "subType": "TASK",
+                },
+              },
+            },
+            "right": {
+              "and": {
+                "left": {
+                  "not": {
+                    "literal": {
+                      "owner": "macro|phase-0@example.com",
+                    },
+                  },
+                },
+                "right": {
+                  "literal": {
+                    "isEmailAttachment": false,
+                  },
+                },
+              },
+            },
+          },
+        },
+        "emailFilter": {
+          "tree": {
+            "literal": {
+              "threadId": "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        "foreignEntityFilter": {
+          "literal": {
+            "id": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+        "projectFilter": {
+          "literal": {
+            "projectId": "00000000-0000-0000-0000-000000000000",
+          },
+        },
+      },
+      "limit": 100,
+      "sortDirection": undefined,
+      "sortMethod": "UPDATED_AT",
+    },
+  },
+}
+`;

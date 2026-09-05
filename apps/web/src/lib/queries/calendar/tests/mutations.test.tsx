@@ -1,3 +1,4 @@
+import { previewKeys } from '@queries/preview/keys';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
@@ -419,7 +420,12 @@ describe('useRsvpCalendarEventMutation', () => {
 
     second.resolve(ok({ id: 'event-1' }));
     await secondMutation;
-    expect(invalidateSpy).toHaveBeenCalledTimes(1);
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: calendarKeys.occurrences._def,
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: previewKeys.item('event-1').queryKey,
+    });
   });
 });
 

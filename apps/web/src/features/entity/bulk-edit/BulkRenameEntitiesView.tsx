@@ -78,14 +78,14 @@ export const BulkRenameEntitiesView = (props: {
     let renameFn: (old?: string) => string = () => newValue;
     switch (mode()) {
       case 'prepend':
-        renameFn = (old: string) => newValue + old;
+        renameFn = (old) => newValue + (old ?? '');
         break;
       case 'append':
-        renameFn = (old: string) => old + newValue;
+        renameFn = (old) => (old ?? '') + newValue;
         break;
       case 'replace':
-        renameFn = (old: string) =>
-          old.replaceAll(replaceFind(), replaceWith());
+        renameFn = (old) =>
+          (old ?? '').replaceAll(replaceFind(), replaceWith());
         break;
       default:
     }
@@ -129,7 +129,7 @@ export const BulkRenameEntitiesView = (props: {
             )}
           </For>
           <Show when={props.entities.length > 2}>
-            <div class="text-muted-foreground text-xs px-2 py-1">
+            <div class="text-ink-muted text-xs px-2 py-1">
               +{props.entities.length - 2} more
             </div>
           </Show>
@@ -200,7 +200,7 @@ export const BulkRenameEntitiesView = (props: {
           </Button>
           <Button
             type="button"
-            variant="base"
+            variant="outline"
             class="rounded-xs"
             onClick={finishEditing}
           >

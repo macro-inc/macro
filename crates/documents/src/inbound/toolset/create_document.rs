@@ -1,5 +1,6 @@
 //! CreateDocument tool for reading document content.
 
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use std::str::FromStr;
 
 use crate::domain::create::{NewDocumentMetadata, NewPlainTextDocument};
@@ -66,6 +67,10 @@ pub struct CreateDocument {
     pub project_id: Option<uuid::Uuid>,
 }
 
+impl ToolAnnotated for CreateDocument {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::additive("Create document");
+}
+
 #[async_trait]
 impl<DSvc, ESvc, EDSvc> AsyncTool<DocumentToolContext<DSvc, ESvc, EDSvc>> for CreateDocument
 where
@@ -123,7 +128,8 @@ where
             None
         };
 
-        let mut metadata_builder = NewDocumentMetadata::builder(self.document_name.clone());
+        let mut metadata_builder = NewDocumentMetadata::builder(self.document_name.clone())
+            .attribution(service_context.attribution(user_id.clone()));
         if let Some(project_id) = self.project_id {
             metadata_builder = metadata_builder.project_id(project_id);
         }

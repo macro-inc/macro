@@ -321,7 +321,7 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
               setPermissions={props.setLinkShareAccessLevel}
             />
           </div>
-          <Button variant="base" onClick={props.copyLink}>
+          <Button variant="outline" onClick={props.copyLink}>
             <CopyIcon class="size-4" />
             <span>Copy Link</span>
           </Button>
@@ -979,7 +979,7 @@ export function ShareModal(props: ShareModalProps) {
               style={{ width: '800px' }}
             >
               {/* Card 1: Share form — gradient border */}
-              <Panel depth={2} class="rounded-xl">
+              <Panel depth={2} class="rounded-xl bg-dialog">
                 <Panel.Header class="px-4">
                   <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
                     <span class="shrink-0">Share:</span>
@@ -1015,7 +1015,7 @@ export function ShareModal(props: ShareModalProps) {
 
               {/* Card 2: Recipients — plain border */}
               <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
-                <Panel depth={2} class="rounded-xl">
+                <Panel depth={2} class="rounded-xl bg-dialog">
                   <Panel.Header class="px-4">
                     <span class="text-sm font-medium">
                       People with access to this{' '}
@@ -1149,7 +1149,7 @@ export function ShareModal(props: ShareModalProps) {
                   !isLinkSharingDisabledForItem(props.itemType)
                 }
               >
-                <Panel depth={2} class="rounded-xl">
+                <Panel depth={2} class="rounded-xl bg-dialog">
                   <Panel.Body>
                     <LinkSharingControls
                       linkShare={linkShare()}
@@ -1238,7 +1238,7 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
   });
 
   return (
-    <ButtonGroup variant="base" size="sm" class="bg-surface" depth={2}>
+    <ButtonGroup variant="outline" size="sm" class="bg-surface" depth={2}>
       <Tooltip
         label={shareStatus()?.tooltip ?? 'This item has been shared with you.'}
       >
@@ -1376,7 +1376,7 @@ export function ShareOptions(props: {
   return (
     <Dropdown modal={false} open={isOpen()} onOpenChange={setIsOpen}>
       <Dropdown.Trigger
-        variant="base"
+        variant="outline"
         disabled={props.disabled}
         class={`min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
         on:keydown={(e: KeyboardEvent) => {

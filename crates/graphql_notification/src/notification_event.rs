@@ -756,6 +756,15 @@ impl GraphqlReminderMetadata {
     async fn description(&self) -> &str {
         &self.0.description
     }
+
+    /// Which firing this notification is for, in RFC 3339 format.
+    ///
+    /// The counterpart of a calendar alarm's `occurrenceKey`: it is what tells
+    /// two notifications from the same recurring reminder apart. Absent on
+    /// notifications written before recurring dispatch existed.
+    async fn scheduled_for(&self) -> Option<String> {
+        self.0.scheduled_for.map(|timestamp| timestamp.to_rfc3339())
+    }
 }
 
 /// GraphQL wrapper for calendar event reminder metadata.

@@ -103,6 +103,17 @@ pub struct Link {
     /// grants where the user declined it); drives the per-inbox calendar
     /// upgrade prompt. Re-running the connect flow records the new grant.
     pub needs_calendar_permission: bool,
+    /// Whether the user turned calendar off for this inbox, which also removed
+    /// its calendar data. `needs_calendar_permission` is true either way, so
+    /// this is what separates "never granted" from "deliberately off" —
+    /// unprompted calendar nags must stay quiet for the latter.
+    pub calendar_disabled: bool,
+    /// Whether Macro holds calendar data for this inbox. Drives the turn-off
+    /// control on its own, so removing that data never depends on the recorded
+    /// scopes still matching the set Macro requests today — a set that changes
+    /// as the integration narrows, stranding data behind a capability check
+    /// that no longer recognizes an older grant.
+    pub has_calendar_data: bool,
     pub settings: Settings,
     pub is_primary: bool,
     pub created_at: DateTime<Utc>,
@@ -116,6 +127,8 @@ impl Link {
         sync_status: SyncStatus,
         photo_url: Option<String>,
         needs_calendar_permission: bool,
+        calendar_disabled: bool,
+        has_calendar_data: bool,
     ) -> Self {
         Link {
             id: source.id,
@@ -128,6 +141,8 @@ impl Link {
             sync_status,
             needs_reauth: source.needs_reauth,
             needs_calendar_permission,
+            calendar_disabled,
+            has_calendar_data,
             settings,
             is_primary: source.is_primary,
             created_at: source.created_at,

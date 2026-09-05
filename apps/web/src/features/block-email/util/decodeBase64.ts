@@ -1,16 +1,8 @@
-function normalizeBase64String(input: string): string {
-  const replaced = input.replace(/-/g, '+').replace(/_/g, '/');
-  const padding = (4 - (replaced.length % 4)) % 4;
-  return replaced + '='.repeat(padding);
-}
+import { decodeBase64Bytes } from '@core/util/base64';
 
 export function decodeBase64Utf8(input: string): string {
   try {
-    const normalized = normalizeBase64String(input);
-    const binary = atob(normalized);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    return new TextDecoder('utf-8').decode(bytes);
+    return new TextDecoder('utf-8').decode(decodeBase64Bytes(input));
   } catch {
     return input;
   }

@@ -4,10 +4,11 @@ use cache_core::engine::{BeginOptimisticWrite, Engine};
 use cache_core::link_patch::{
     LinkOperation, LinkPathSegment, ListItemByScalar, OptimisticLinkPatch,
 };
+use cache_core::predicate::{OptimisticUpsertReconciliation, ProjectionMutation};
 use cache_core::query_inspection::{MAX_INSPECTED_VARIANTS, QueryInspection, QueryInspectionError};
 use cache_core::queue::{
-    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, NewQueuedMutation,
-    QueuedMutation,
+    ClaimedMutation, MutationClaimRequest, MutationClaimToken, MutationId, MutationUpsertResult,
+    NewQueuedMutation, QueuedMutation,
 };
 use cache_core::store::{InMemoryStorage, Storage};
 use cache_core::value::{EntityKey, Record};
@@ -104,24 +105,29 @@ impl Storage for OwnerOnlyStorage {
         self.0.put_batch(entries).await
     }
 
+    async fn put_batch_with_projections(
+        &mut self,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
+        self.0
+            .put_batch_with_projections(entries, projections)
+            .await
+    }
+
     async fn delete_batch(&mut self, keys: &[EntityKey<'static>]) -> Result<(), Self::Error> {
         self.0.delete_batch(keys).await
     }
 
-    async fn scan_records(
-        &self,
-        type_names: &[String],
-        after: Option<&EntityKey<'static>>,
-        limit: usize,
-    ) -> Result<Vec<(EntityKey<'static>, Record)>, Self::Error> {
-        self.0.scan_records(type_names, after, limit).await
-    }
-
-    async fn enqueue_mutation(
+    async fn upsert_mutation_with_shadow(
         &mut self,
         entry: NewQueuedMutation,
-    ) -> Result<MutationId, Self::Error> {
-        self.0.enqueue_mutation(entry).await
+        now_ms: i64,
+        reconciliation: OptimisticUpsertReconciliation,
+    ) -> Result<MutationUpsertResult, Self::Error> {
+        self.0
+            .upsert_mutation_with_shadow(entry, now_ms, reconciliation)
+            .await
     }
 
     async fn load_mutation_queue(&self) -> Result<Vec<QueuedMutation>, Self::Error> {
@@ -154,6 +160,18 @@ impl Storage for OwnerOnlyStorage {
         entries: Vec<(EntityKey<'static>, Record)>,
     ) -> Result<bool, Self::Error> {
         self.0.complete_mutation(id, claim, entries).await
+    }
+
+    async fn complete_mutation_with_projections(
+        &mut self,
+        id: MutationId,
+        claim: MutationClaimToken,
+        entries: Vec<(EntityKey<'static>, Record)>,
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<bool, Self::Error> {
+        self.0
+            .complete_mutation_with_projections(id, claim, entries, projections)
+            .await
     }
 
     async fn discard_mutation(
@@ -479,6 +497,7 @@ mutation SetEntityProperty($input: SetEntityPropertyInput!) {
             .begin_optimistic_write(
                 None,
                 BeginOptimisticWrite {
+                    uuid: "00000000-0000-4000-8000-000000000002",
                     query: mutation,
                     operation_name: Some("SetEntityProperty"),
                     variables: &mutation_variables,

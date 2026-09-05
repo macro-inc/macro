@@ -130,15 +130,17 @@ impl ScopedBotFixture {
         .await
         .context("failed to insert scoped bot")?;
 
+        let hashed = bot_token::HashedBotToken::from_raw(&bot_token);
         sqlx::query(
             r#"
-            INSERT INTO bot_tokens (id, bot_id, token, label)
-            VALUES ($1, $2, $3, 'local E2E scoped access')
+            INSERT INTO bot_tokens (id, bot_id, token_hash, token_prefix, label)
+            VALUES ($1, $2, $3, $4, 'local E2E scoped access')
             "#,
         )
         .bind(bot_token_id)
         .bind(bot_id)
-        .bind(&bot_token)
+        .bind(&hashed.hash[..])
+        .bind(&hashed.prefix)
         .execute(&mut *transaction)
         .await
         .context("failed to insert scoped bot token")?;

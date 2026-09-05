@@ -13,7 +13,7 @@ import {
   Launcher,
   setCreateMenuOpen,
 } from '@app/features/command/Launcher';
-import { MobileSearchOuter } from '@app/features/command/mobile/MobileSearch';
+import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { CreateCompanyModal } from '@app/features/companies/CreateCompanyModal';
 import { CreateContactModal } from '@app/features/companies/CreateContactModal';
 import { DevStatusBar } from '@app/features/devtools/DevStatusBar';
@@ -41,16 +41,15 @@ import {
   type SidebarState,
 } from '@components/app/app-sidebar/sidebar';
 import { registerMailtoComposerHandler } from '@components/app/mailtoComposerHandler';
+import { SidebarRail } from '@components/app/sidebar-next/sidebar-rail';
+import { useSidebarNextFlag } from '@components/app/sidebar-next/use-sidebar-next-flag';
 import {
   isSidebarVisible,
   SidebarCollapseContext,
   SidebarVisibilityContext,
 } from '@components/app/sidebarVisibility';
 import { useIsAuthenticated } from '@core/auth';
-import {
-  ENABLE_REMINDERS_FLAG,
-  ENABLE_REMINDERS_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableReminders } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isSoloSettings } from '@core/constant/SettingsState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
@@ -83,8 +82,8 @@ import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { FloatRegion } from './mobile/float-regions/FloatRegion';
 import { FloatRegionHost } from './mobile/float-regions/FloatRegionHost';
-import { MobileDock } from './mobile/MobileDock';
-import { MobileBottomEdgeFade } from './mobile/MobileEdgeFade';
+import { MobileDockRow } from './mobile/MobileDockRow';
+import { MobileViewsRow } from './mobile/MobileViewsRow';
 import { SwipeDownDismissKeyboard } from './mobile/SwipeDownDismissKeyboard';
 import { useAppSquishHandlers } from './useAppSquishHandlers';
 
@@ -350,8 +349,12 @@ function LayoutInner(props: RouteSectionProps) {
     createSignal(false);
   const callCtx = useCallContextOptional();
   const incomingCallWidgetVisible = useIncomingCallWidgetVisible();
+  const sidebarNextEnabled = useSidebarNextFlag();
+  // SidebarRail is already narrow and has no slim mode, so nothing should arm
+  // the hover-peek overlay strip or the slim-mode call widget under it.
   const sidebarCollapsed = createMemo(
-    () => isSidebarVisible() && sidebarState() === 'slim'
+    () =>
+      !sidebarNextEnabled() && isSidebarVisible() && sidebarState() === 'slim'
   );
   const activeCallWidgetVisible = createMemo(
     () =>
@@ -457,13 +460,10 @@ function LayoutInner(props: RouteSectionProps) {
           <CreateChannelModal />
           <CreateCompanyModal />
           <CreateContactModal />
-          {/* Reactive, unlike the imperative ENABLE_REMINDERS() gate on the
+          {/* Reactive, unlike the imperative isFeatureEnabled(enableReminders) gate on the
               action: this decides whether the composer is mounted at all, so it
               has to pick up a late PostHog answer. */}
-          <ShowFeatureFlag
-            key={ENABLE_REMINDERS_FLAG}
-            enabledOverride={ENABLE_REMINDERS_OVERRIDE}
-          >
+          <ShowFeatureFlag flag={enableReminders}>
             <ReminderComposerModal />
           </ShowFeatureFlag>
           <Show when={isAddInboxDialogOpen()}>
@@ -491,19 +491,32 @@ function LayoutInner(props: RouteSectionProps) {
             sortables with the same drag-drop context as the entity drags. */}
         <ItemDndProvider>
           <Show when={isSidebarVisible()}>
-            <AppSidebar
-              sidebarState={sidebarState()}
-              overlayOpen={sidebarOverlayOpen()}
-              onOverlayOpenChange={setSidebarOverlayOpenGuarded}
-              onOpenChange={(open) => {
-                if (!open) {
-                  setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
-                  return;
-                }
+            <Show
+              when={sidebarNextEnabled()}
+              fallback={
+                <AppSidebar
+                  sidebarState={sidebarState()}
+                  overlayOpen={sidebarOverlayOpen()}
+                  onOverlayOpenChange={setSidebarOverlayOpenGuarded}
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      setSidebarState(isTouchDevice() ? 'hidden' : 'slim');
+                      return;
+                    }
 
-                setSidebarState('expanded');
-              }}
-            />
+                    setSidebarState('expanded');
+                  }}
+                />
+              }
+            >
+              <SidebarRail
+                sidebarState={sidebarState()}
+                onOpenChange={(open) =>
+                  // The rail has no slim mode, so `cmd+.` hides it outright.
+                  setSidebarState(open ? 'expanded' : 'hidden')
+                }
+              />
+            </Show>
           </Show>
           <Show when={sidebarCollapsed()}>
             <div
@@ -541,13 +554,13 @@ function LayoutInner(props: RouteSectionProps) {
         }
       >
         <FloatRegionHost />
-        <FloatRegion region="dock" active={() => !virtualKeyboardVisible()}>
-          <MobileBottomEdgeFade />
-          <MobileDock />
+        <MobileViewsRow />
+        <FloatRegion
+          region="dock"
+          active={() => !virtualKeyboardVisible() || SearchState.isOpen()}
+        >
+          <MobileDockRow />
         </FloatRegion>
-      </Show>
-      <Show when={isTouchDevice()}>
-        <MobileSearchOuter />
       </Show>
       <SwipeDownDismissKeyboard />
       <Suspense>

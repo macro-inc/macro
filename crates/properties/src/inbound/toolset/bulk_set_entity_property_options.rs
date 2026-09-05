@@ -4,8 +4,9 @@
 use crate::domain::model::{EditReceipt, EntityOptionUpdateOutcome};
 use crate::domain::service::PropertiesService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
-use entity_access::domain::models::EditAccessLevel;
+use entity_access::domain::models::{BotAccessScope, EditAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -93,6 +94,10 @@ fn entity_type_label(entity_type: ToolPropertyTargetEntityType) -> &'static str 
     }
 }
 
+impl ToolAnnotated for BulkSetEntityPropertyOptions {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Bulk-update properties");
+}
+
 #[async_trait]
 impl<T, A> AsyncTool<PropertiesToolContext<T, A>> for BulkSetEntityPropertyOptions
 where
@@ -148,9 +153,9 @@ where
             let entity_type = model_entity::EntityType::from(entity.entity_type);
             match service_context
                 .entity_access_service
-                .generate_entity_access_receipt::<EditAccessLevel>(
-                    &request_context.user_id,
-                    None,
+                .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                    service_context.actor,
+                    BotAccessScope::user(request_context.user_id.clone()),
                     &entity.entity_id,
                     entity_type,
                 )

@@ -181,7 +181,7 @@ export function PDFPopup(props: PDFPopupProps) {
   });
 
   onMount(() => {
-    const handler = (e: MouseEvent) => {
+    const handler = (e: Event) => {
       e.stopPropagation();
     };
 

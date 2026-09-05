@@ -16,7 +16,7 @@ import type {
   GroupedSoupContinuationInput as GraphqlGroupedSoupContinuationInput,
   GroupedSoupInput as GraphqlGroupedSoupInput,
   GraphqlProjectLiteral as GraphqlProjectLiteralInput,
-  GraphqlPropertiesLiteral as GraphqlPropertiesLiteralInput,
+  GraphqlFilterPropertiesLiteral as GraphqlPropertiesLiteralInput,
   GraphqlReminderLiteral as GraphqlReminderLiteralInput,
   SoupInitialInput as GraphqlSoupInitialInput,
   SoupInput as GraphqlSoupInput,
@@ -526,6 +526,10 @@ function mapSortMethod(
       return 'VIEWED_UPDATED';
     case 'frecency':
       return unsupported('sort_method frecency');
+    case 'touched_by_me':
+      return unsupported('sort_method touched_by_me');
+    case 'notified_at':
+      return unsupported('sort_method notified_at');
     case undefined:
       return undefined;
   }

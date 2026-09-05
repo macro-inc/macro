@@ -1,0 +1,439 @@
+use std::sync::Arc;
+
+use agent::StreamPart;
+use agent_client_protocol::schema::ProtocolVersion;
+use agent_client_protocol::schema::v1::{
+    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, SessionNotification,
+    TextContent,
+};
+use agent_client_protocol::{Client, ConnectionTo};
+use rig_agent::agent::StreamingError;
+use rig_agent::completion::PromptError;
+
+use super::*;
+use crate::domain::engine::TurnEngine;
+use crate::testing::{HangingEngine, ScriptedEngine};
+
+struct Harness {
+    notifications: std::sync::Mutex<Vec<SessionNotification>>,
+}
+
+struct CancelledEngine;
+
+impl TurnEngine for CancelledEngine {
+    fn run_turn(
+        &self,
+        _request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        let (parts, receiver) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            let cancellation = PromptError::PromptCancelled {
+                chat_history: Vec::new(),
+                reason: "user cancelled".to_owned(),
+            };
+            let error =
+                agent::AgentError::Streaming(StreamingError::Prompt(Box::new(cancellation)));
+            let _ = parts.send(Err(error)).await;
+        });
+        receiver
+    }
+}
+
+/// Drive the served agent as a scripted ACP client: initialize, open a
+/// session, then hand the connection to `scenario`.
+async fn with_agent<Engine, Out>(
+    engine: Arc<Engine>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
+) -> (Vec<SessionNotification>, Out)
+where
+    Engine: TurnEngine,
+{
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("test-model".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        engine,
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        mcp: Arc::new(crate::domain::mcp::NoMcpServers),
+        mcp_tools: std::sync::Mutex::new(None),
+    });
+
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    let harness = Arc::new(Harness {
+        notifications: std::sync::Mutex::new(Vec::new()),
+    });
+    let observed = Arc::clone(&harness);
+    let out = Client
+        .builder()
+        .on_receive_notification(
+            async move |notification: SessionNotification, _connection| {
+                observed
+                    .notifications
+                    .lock()
+                    .expect("notifications lock")
+                    .push(notification);
+                Ok(())
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                let initialized = connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                assert!(
+                    initialized
+                        .agent_capabilities
+                        .session_capabilities
+                        .resume
+                        .is_some(),
+                    "the agent must declare resume support or reattachment dies"
+                );
+                assert_eq!(
+                    initialized
+                        .agent_info
+                        .as_ref()
+                        .map(|info| info.name.as_str()),
+                    Some(AGENT_NAME),
+                    "the fold recognizes this harness by its announced name"
+                );
+                let session = connection
+                    .send_request(NewSessionRequest::new("/"))
+                    .block_task()
+                    .await?;
+                Ok(scenario(connection, session.session_id).await)
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
+
+    let notifications = harness
+        .notifications
+        .lock()
+        .expect("notifications lock")
+        .clone();
+    (notifications, out)
+}
+
+fn text_prompt(session: &SessionId, text: &str) -> PromptRequest {
+    PromptRequest::new(
+        session.clone(),
+        vec![ContentBlock::Text(TextContent::new(text))],
+    )
+}
+
+#[tokio::test]
+async fn a_prompt_streams_updates_and_ends_the_turn() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::Thinking("hmm".into()),
+        StreamPart::Content("Hello ".into()),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            json: serde_json::json!({"query": "roadmap"}),
+            mcp: None,
+        }),
+        StreamPart::ToolResponse(agent::ToolResponse::Json {
+            id: "call-1".into(),
+            json: serde_json::json!({"hits": 1}),
+            name: "NameSearch".into(),
+        }),
+        StreamPart::Content("world".into()),
+    ]));
+
+    let (notifications, response) = with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "find the roadmap"))
+            .block_task()
+            .await
+            .expect("the prompt should complete")
+    })
+    .await;
+
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
+    let kinds: Vec<&'static str> = notifications
+        .iter()
+        .map(|notification| match &notification.update {
+            SessionUpdate::AgentThoughtChunk(_) => "thought",
+            SessionUpdate::AgentMessageChunk(_) => "message",
+            SessionUpdate::ToolCall(_) => "tool_call",
+            SessionUpdate::ToolCallUpdate(_) => "tool_call_update",
+            _ => "other",
+        })
+        .collect();
+    assert_eq!(
+        kinds,
+        vec![
+            "thought",
+            "message",
+            "tool_call",
+            "tool_call_update",
+            "message"
+        ]
+    );
+}
+
+/// Every tool call is stamped with the tool's name under `_meta.macro`, the
+/// way Claude Code stamps `_meta.claudeCode.toolName`: an MCP tool as
+/// `mcp__<server>__<tool>`, a delegation flagged `subagent`.
+#[tokio::test]
+async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-1".into(),
+            name: "ReadContent".into(),
+            json: serde_json::json!({"documentId": "d"}),
+            mcp: None,
+        }),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-2".into(),
+            name: "Subagent".into(),
+            json: serde_json::json!({"task": "count the beans"}),
+            mcp: None,
+        }),
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-3".into(),
+            name: "slack__search".into(),
+            json: serde_json::json!({"query": "standup"}),
+            mcp: Some(agent::McpInfo {
+                service: "slack".into(),
+                tool_name: "search".into(),
+                display_name: Some("Search Slack".into()),
+            }),
+        }),
+    ]));
+
+    let (notifications, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "go"))
+            .block_task()
+            .await
+            .expect("the prompt should complete")
+    })
+    .await;
+
+    let metas: Vec<serde_json::Value> = notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(serde_json::Value::Object(
+                call.meta.clone().expect("meta is stamped"),
+            )),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        metas,
+        vec![
+            serde_json::json!({"macro": {"toolName": "ReadContent"}}),
+            serde_json::json!({"macro": {"toolName": "Subagent", "subagent": true}}),
+            serde_json::json!({"macro": {"toolName": "mcp__slack__search"}}),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn turns_accumulate_history_and_send_the_model() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        for prompt in ["first", "second"] {
+            connection
+                .send_request(text_prompt(&session, prompt))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        }
+    })
+    .await;
+
+    let requests = engine.requests();
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[0].model, "test-model");
+    assert_eq!(requests[0].messages, vec!["first".to_owned()]);
+    // The second turn carries the first turn's prompt and reply.
+    assert_eq!(
+        requests[1].messages,
+        vec!["first".to_owned(), "ok".to_owned(), "second".to_owned()]
+    );
+}
+
+#[tokio::test]
+async fn compact_clears_history_without_running_a_turn() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "remember this"))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+        let response = connection
+            .send_request(text_prompt(&session, "/compact"))
+            .block_task()
+            .await
+            .expect("compaction should complete");
+        assert_eq!(response.stop_reason, StopReason::EndTurn);
+        connection
+            .send_request(text_prompt(&session, "after"))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+    })
+    .await;
+
+    let requests = engine.requests();
+    assert_eq!(requests.len(), 2, "/compact must not reach the engine");
+    assert_eq!(
+        requests[1].messages,
+        vec!["after".to_owned()],
+        "compaction empties the conversation"
+    );
+}
+
+#[tokio::test]
+async fn cancel_stops_the_turn_with_the_cancelled_stop_reason() {
+    let engine = Arc::new(HangingEngine);
+
+    let (_notifications, response) = with_agent(engine, async |connection, session| {
+        let pending = connection.send_request(text_prompt(&session, "hang"));
+        let cancel = agent_client_protocol::schema::v1::CancelNotification::new(session.clone());
+        connection
+            .send_notification(cancel)
+            .expect("the cancel notification should send");
+        pending
+            .block_task()
+            .await
+            .expect("a cancelled prompt still completes")
+    })
+    .await;
+
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+}
+
+#[tokio::test]
+async fn engine_cancellation_is_not_rendered_as_an_error_message() {
+    let (notifications, response) =
+        with_agent(Arc::new(CancelledEngine), async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, "cancel me"))
+                .block_task()
+                .await
+                .expect("a cancelled prompt still completes")
+        })
+        .await;
+
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+    assert!(notifications.is_empty());
+}
+
+#[tokio::test]
+async fn a_prompt_for_an_unknown_session_is_refused() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+
+    with_agent(engine, async |connection, _session| {
+        let error = connection
+            .send_request(text_prompt(&SessionId::new("not-a-session"), "hi"))
+            .block_task()
+            .await
+            .expect_err("a foreign session id must be refused");
+        assert_eq!(
+            error.code,
+            agent_client_protocol::schema::v1::ErrorCode::InvalidParams
+        );
+    })
+    .await;
+}
+
+/// Records the servers it was asked to dial and dials none of them.
+struct SpyConnector {
+    asked: std::sync::Mutex<Vec<Vec<String>>>,
+}
+
+impl crate::domain::mcp::McpToolConnector for Arc<SpyConnector> {
+    async fn connect(
+        &self,
+        servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
+    ) -> Option<mcp_toolset::RemoteMcpToolSet> {
+        self.asked
+            .lock()
+            .expect("asked lock")
+            .push(servers.into_iter().map(|server| server.name).collect());
+        None
+    }
+}
+
+/// The servers `session/new` carries are dialed then and there, minus Macro's
+/// own, whose tools this runtime already has natively.
+#[tokio::test]
+async fn session_new_dials_the_advertised_servers_except_macros_own() {
+    use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
+
+    let spy = Arc::new(SpyConnector {
+        asked: std::sync::Mutex::new(Vec::new()),
+    });
+    let store = Arc::new(SessionStore::new());
+    let session_id = AgentSessionId::new();
+    store.insert(
+        session_id,
+        crate::domain::session::SessionState::new("test-model".into()),
+    );
+    let state = Arc::new(AgentState {
+        session_id,
+        owner: MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
+        engine: Arc::new(ScriptedEngine::new(Vec::new())),
+        store,
+        active_cancel: std::sync::Mutex::new(Vec::new()),
+        turn_lock: tokio::sync::Mutex::new(()),
+        mcp: Arc::new(Arc::clone(&spy)),
+        mcp_tools: std::sync::Mutex::new(None),
+    });
+    let (client_channel, agent_channel) = AcpChannel::duplex();
+    let agent = tokio::spawn(serve(state, agent_channel));
+
+    let servers = ["macro", "linear", "notion"]
+        .into_iter()
+        .map(|name| {
+            AcpMcpServer::Http(
+                McpServerHttp::new(name, format!("https://egress.test/mcp/{name}")).headers(vec![
+                    HttpHeader::new("Authorization", "Bearer session-token"),
+                ]),
+            )
+        })
+        .collect::<Vec<_>>();
+    Client
+        .builder()
+        .connect_with(
+            client_channel,
+            async move |connection: ConnectionTo<Agent>| {
+                connection
+                    .send_request(InitializeRequest::new(ProtocolVersion::V1))
+                    .block_task()
+                    .await?;
+                connection
+                    .send_request(NewSessionRequest::new("/").mcp_servers(servers))
+                    .block_task()
+                    .await?;
+                Ok(())
+            },
+        )
+        .await
+        .expect("the scripted client should run clean");
+    agent.abort();
+
+    assert_eq!(
+        *spy.asked.lock().expect("asked lock"),
+        vec![vec!["linear".to_owned(), "notion".to_owned()]]
+    );
+}

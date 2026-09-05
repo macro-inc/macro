@@ -2,6 +2,7 @@
 
 use crate::domain::ports::ChatService;
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::{
     models::{EntityType, ViewAccessLevel},
@@ -47,6 +48,10 @@ pub struct ReadChatResponse {
 pub struct ReadChat {
     #[schemars(description = "The id of the chat thread to read.")]
     pub chat_id: String,
+}
+
+impl ToolAnnotated for ReadChat {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read chat history");
 }
 
 #[async_trait]

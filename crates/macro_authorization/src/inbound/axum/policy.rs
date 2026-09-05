@@ -2,8 +2,11 @@ use std::fmt;
 
 use ::axum::http::StatusCode;
 use bot_id::BotId;
+use harness_id::HarnessId;
 
-use crate::{BotAuthentication, MacroAuthorization, MacroUserAuthentication};
+use crate::{
+    BotAuthentication, HarnessAuthentication, MacroAuthorization, MacroUserAuthentication,
+};
 
 use super::{ActingEntity, MacroAuthorizationRejection, rejection, status_rejection};
 
@@ -41,8 +44,17 @@ pub struct ActingUser;
 /// Admits only directly authenticated users.
 pub struct UserOnly;
 
+/// Admits directly authenticated users and authenticated bots.
+pub struct UserOrBot;
+
 /// Admits only authenticated bots.
 pub struct BotOnly;
+
+/// Admits only authenticated harnesses.
+pub struct HarnessOnly;
+
+/// Admits directly authenticated users, bots, and harnesses.
+pub struct UserBotOrHarness;
 
 /// Admits only authenticated internal services.
 pub struct InternalOnly;
@@ -97,6 +109,73 @@ impl UserOrInternalServiceAuthorization {
     }
 }
 
+/// A directly authenticated user or bot.
+#[derive(Clone, Debug)]
+pub enum UserOrBotAuthorization {
+    /// A directly authenticated user.
+    User(MacroUserAuthentication),
+    /// An authenticated bot, optionally acting for a user.
+    Bot(BotAuthentication),
+}
+
+impl UserOrBotAuthorization {
+    /// Return the authenticated or verified user the caller acts for, if any.
+    pub fn acting_user(&self) -> Option<&MacroUserAuthentication> {
+        match self {
+            Self::User(user) => Some(user),
+            Self::Bot(bot) => bot.acting_user.as_ref(),
+        }
+    }
+
+    /// Return whether the caller is a bot.
+    pub fn is_bot(&self) -> bool {
+        matches!(self, Self::Bot(_))
+    }
+}
+
+/// A directly authenticated user, bot, or harness.
+#[derive(Clone, Debug)]
+pub enum UserBotOrHarnessAuthorization {
+    /// A directly authenticated user.
+    User(MacroUserAuthentication),
+    /// An authenticated bot, optionally acting for a user.
+    Bot(BotAuthentication),
+    /// An authenticated harness, acting for its verified user.
+    Harness(HarnessAuthentication),
+}
+
+impl UserBotOrHarnessAuthorization {
+    /// Return the authenticated or verified user the caller acts for, if any.
+    pub fn acting_user(&self) -> Option<&MacroUserAuthentication> {
+        match self {
+            Self::User(user) => Some(user),
+            Self::Bot(bot) => bot.acting_user.as_ref(),
+            Self::Harness(harness) => Some(&harness.acting_user),
+        }
+    }
+}
+
+/// Acting entity for policies that admit users, bots, and harnesses.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserBotOrHarnessEntity<'a> {
+    /// A directly authenticated Macro user.
+    User(&'a str),
+    /// An authenticated bot.
+    Bot(BotId),
+    /// An authenticated harness.
+    Harness(HarnessId),
+}
+
+impl fmt::Display for UserBotOrHarnessEntity<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::User(user_id) => formatter.write_str(user_id),
+            Self::Bot(bot_id) => bot_id.fmt(formatter),
+            Self::Harness(harness_id) => harness_id.fmt(formatter),
+        }
+    }
+}
+
 /// Any principal narrowed to its verified acting user.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -134,6 +213,24 @@ impl fmt::Display for UserOrInternalEntity<'_> {
     }
 }
 
+/// Acting entity for policies that admit users and bots.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserOrBotEntity<'a> {
+    /// A directly authenticated Macro user.
+    User(&'a str),
+    /// An authenticated bot.
+    Bot(BotId),
+}
+
+impl fmt::Display for UserOrBotEntity<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::User(user_id) => formatter.write_str(user_id),
+            Self::Bot(bot_id) => bot_id.fmt(formatter),
+        }
+    }
+}
+
 /// Acting entity for internal-only endpoints.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct InternalEntity;
@@ -161,7 +258,7 @@ impl AuthorizationPolicy for UserOrInternal {
                 caller: UserOrInternalCaller::Internal,
             }),
             MacroAuthorization::Internal(None) => Err(rejection("unauthorized")),
-            MacroAuthorization::Bot(_) => Err(forbidden()),
+            MacroAuthorization::Bot(_) | MacroAuthorization::Harness(_) => Err(forbidden()),
         }
     }
 
@@ -187,7 +284,7 @@ impl AuthorizationPolicy for UserOrInternalService {
             MacroAuthorization::Internal(user) => {
                 Ok(UserOrInternalServiceAuthorization::Internal(user))
             }
-            MacroAuthorization::Bot(_) => Err(forbidden()),
+            MacroAuthorization::Bot(_) | MacroAuthorization::Harness(_) => Err(forbidden()),
         }
     }
 
@@ -233,12 +330,38 @@ impl AuthorizationPolicy for UserOnly {
     ) -> Result<Self::Output, MacroAuthorizationRejection> {
         match authorization {
             MacroAuthorization::User(user) => Ok(user),
-            MacroAuthorization::Bot(_) | MacroAuthorization::Internal(_) => Err(forbidden()),
+            MacroAuthorization::Bot(_)
+            | MacroAuthorization::Harness(_)
+            | MacroAuthorization::Internal(_) => Err(forbidden()),
         }
     }
 
     fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_> {
         output.macro_user_id.as_ref()
+    }
+}
+
+impl AuthorizationPolicy for UserOrBot {
+    type Output = UserOrBotAuthorization;
+    type ActingEntity<'a> = UserOrBotEntity<'a>;
+
+    fn narrow(
+        authorization: MacroAuthorization,
+    ) -> Result<Self::Output, MacroAuthorizationRejection> {
+        match authorization {
+            MacroAuthorization::User(user) => Ok(UserOrBotAuthorization::User(user)),
+            MacroAuthorization::Bot(bot) => Ok(UserOrBotAuthorization::Bot(bot)),
+            MacroAuthorization::Harness(_) | MacroAuthorization::Internal(_) => Err(forbidden()),
+        }
+    }
+
+    fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_> {
+        match output {
+            UserOrBotAuthorization::User(user) => {
+                UserOrBotEntity::User(user.macro_user_id.as_ref())
+            }
+            UserOrBotAuthorization::Bot(bot) => UserOrBotEntity::Bot(bot.bot_id),
+        }
     }
 }
 
@@ -251,12 +374,64 @@ impl AuthorizationPolicy for BotOnly {
     ) -> Result<Self::Output, MacroAuthorizationRejection> {
         match authorization {
             MacroAuthorization::Bot(bot) => Ok(bot),
-            MacroAuthorization::User(_) | MacroAuthorization::Internal(_) => Err(forbidden()),
+            MacroAuthorization::User(_)
+            | MacroAuthorization::Harness(_)
+            | MacroAuthorization::Internal(_) => Err(forbidden()),
         }
     }
 
     fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_> {
         output.bot_id
+    }
+}
+
+impl AuthorizationPolicy for HarnessOnly {
+    type Output = HarnessAuthentication;
+    type ActingEntity<'a> = HarnessId;
+
+    fn narrow(
+        authorization: MacroAuthorization,
+    ) -> Result<Self::Output, MacroAuthorizationRejection> {
+        match authorization {
+            MacroAuthorization::Harness(harness) => Ok(harness),
+            MacroAuthorization::User(_)
+            | MacroAuthorization::Bot(_)
+            | MacroAuthorization::Internal(_) => Err(forbidden()),
+        }
+    }
+
+    fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_> {
+        output.harness_id
+    }
+}
+
+impl AuthorizationPolicy for UserBotOrHarness {
+    type Output = UserBotOrHarnessAuthorization;
+    type ActingEntity<'a> = UserBotOrHarnessEntity<'a>;
+
+    fn narrow(
+        authorization: MacroAuthorization,
+    ) -> Result<Self::Output, MacroAuthorizationRejection> {
+        match authorization {
+            MacroAuthorization::User(user) => Ok(UserBotOrHarnessAuthorization::User(user)),
+            MacroAuthorization::Bot(bot) => Ok(UserBotOrHarnessAuthorization::Bot(bot)),
+            MacroAuthorization::Harness(harness) => {
+                Ok(UserBotOrHarnessAuthorization::Harness(harness))
+            }
+            MacroAuthorization::Internal(_) => Err(forbidden()),
+        }
+    }
+
+    fn acting_entity(output: &Self::Output) -> Self::ActingEntity<'_> {
+        match output {
+            UserBotOrHarnessAuthorization::User(user) => {
+                UserBotOrHarnessEntity::User(user.macro_user_id.as_ref())
+            }
+            UserBotOrHarnessAuthorization::Bot(bot) => UserBotOrHarnessEntity::Bot(bot.bot_id),
+            UserBotOrHarnessAuthorization::Harness(harness) => {
+                UserBotOrHarnessEntity::Harness(harness.harness_id)
+            }
+        }
     }
 }
 
@@ -269,7 +444,9 @@ impl AuthorizationPolicy for InternalOnly {
     ) -> Result<Self::Output, MacroAuthorizationRejection> {
         match authorization {
             MacroAuthorization::Internal(acting_user) => Ok(InternalAuthorization { acting_user }),
-            MacroAuthorization::User(_) | MacroAuthorization::Bot(_) => Err(forbidden()),
+            MacroAuthorization::User(_)
+            | MacroAuthorization::Bot(_)
+            | MacroAuthorization::Harness(_) => Err(forbidden()),
         }
     }
 
@@ -304,7 +481,10 @@ mod sealed {
     impl Sealed for super::UserOrInternalService {}
     impl Sealed for super::ActingUser {}
     impl Sealed for super::UserOnly {}
+    impl Sealed for super::UserOrBot {}
     impl Sealed for super::BotOnly {}
+    impl Sealed for super::HarnessOnly {}
+    impl Sealed for super::UserBotOrHarness {}
     impl Sealed for super::InternalOnly {}
     impl Sealed for super::AnyPrincipal {}
 }

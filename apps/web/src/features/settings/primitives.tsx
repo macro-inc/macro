@@ -30,8 +30,11 @@ export function SettingsPage(props: {
   children: JSX.Element;
 }) {
   return (
-    <div class="h-full overflow-y-auto">
-      <div class="mx-auto w-full max-w-[710px] px-10 pt-14 pb-24 touch:px-5 touch:pt-8 touch:pb-12">
+    <div class="h-full min-h-0 overflow-y-auto [overflow-anchor:none]">
+      {/* On mobile/tablet the page is full-frame: the chrome insets live inside the
+          scroll content (plus the usual breathing room) so pages scroll under
+          the floating header and bottom rows like every other block. */}
+      <div class="mx-auto w-full max-w-[710px] px-10 pt-14 pb-24 touch:px-5 touch:pt-[calc(var(--mobile-content-inset-top,0px)+2rem)] touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+3rem)]">
         {/* Headers are inset by the card's inner padding so the title and
             section labels line up with the leftmost content inside the cards,
             while the cards themselves stay full-width. */}
@@ -173,6 +176,48 @@ export function SettingsRow(props: {
         </div>
       </Show>
     </div>
+  );
+}
+
+/**
+ * A radio choice rendered as a bordered card: a title and one-line description
+ * beside the radio input. Used by the agent dialog's channel/share pickers and
+ * the harness pairing dialog's Private/Team picker.
+ */
+export function ChoiceRow(props: {
+  name: string;
+  value: string;
+  checked: boolean;
+  title: string;
+  description: string;
+  disabled?: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      class="flex min-w-0 items-start gap-3 rounded-lg border border-edge-muted p-3 has-checked:border-accent has-checked:bg-accent-bg"
+      classList={{
+        'cursor-not-allowed opacity-50': props.disabled,
+        'cursor-pointer': !props.disabled,
+      }}
+    >
+      <input
+        type="radio"
+        name={props.name}
+        value={props.value}
+        checked={props.checked}
+        disabled={props.disabled}
+        onChange={props.onChange}
+        aria-label={props.title}
+        class="mt-0.5 accent-accent"
+      />
+      <span class="min-w-0">
+        <span class="block text-sm font-medium text-ink">{props.title}</span>
+        <span class="mt-0.5 block text-xs text-ink-muted">
+          {props.description}
+        </span>
+      </span>
+    </label>
   );
 }
 

@@ -14,6 +14,7 @@ mod share;
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
+use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use sqlx::PgPool;
 
 use model_entity::{Entity, EntityType};
@@ -22,7 +23,8 @@ use sqlx::Row;
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
     BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
-    DocumentTeamShare, EditDocumentRepoArgs, TeamTaskMetadata, Thread,
+    DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
+    TeamTaskMetadata, Thread,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -36,6 +38,59 @@ impl PgDocumentRepo {
     /// Create a new repository backed by the given connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    async fn reused_email_document(
+        &self,
+        document_id: String,
+    ) -> Result<EmailImportRepoOutcome, sqlx::Error> {
+        let metadata = self.get_document_metadata(&document_id).await?;
+        Ok(EmailImportRepoOutcome::Reused(metadata))
+    }
+
+    async fn reused_linked_email_attachment(
+        &self,
+        email_attachment_id: uuid::Uuid,
+    ) -> Result<EmailImportRepoOutcome, sqlx::Error> {
+        let existing_id =
+            create::find_document_id_for_email_attachment(&self.pool, email_attachment_id)
+                .await?
+                .ok_or_else(|| {
+                    sqlx::Error::Protocol(
+                        "email attachment already linked but document is missing".into(),
+                    )
+                })?;
+        self.reused_email_document(existing_id).await
+    }
+
+    async fn find_reusable_email_document_by_sha(
+        &self,
+        owner: &str,
+        sha: &str,
+    ) -> Result<Option<String>, sqlx::Error> {
+        let mut conn = self.pool.acquire().await?;
+        create::find_live_email_document_id_by_sha(&mut conn, owner, sha).await
+    }
+
+    async fn link_existing_email_document(
+        &self,
+        document_id: &str,
+        email_attachment_id: uuid::Uuid,
+    ) -> Result<EmailImportRepoOutcome, sqlx::Error> {
+        let mut transaction = self.pool.begin().await?;
+        match create::link_document_email(&mut transaction, document_id, email_attachment_id).await
+        {
+            Ok(()) => {
+                transaction.commit().await?;
+                self.reused_email_document(document_id.to_string()).await
+            }
+            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
+                transaction.rollback().await?;
+                self.reused_linked_email_attachment(email_attachment_id)
+                    .await
+            }
+            Err(e) => Err(e),
+        }
     }
 }
 
@@ -403,125 +458,92 @@ impl DocumentRepo for PgDocumentRepo {
         Ok(content.content)
     }
 
-    #[tracing::instrument(err, skip(self, args))]
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_default_link_share(
+        &self,
+        user_id: &str,
+    ) -> Result<Option<TeamLinkShareDefault>, Self::Err> {
+        share_permission_db_utils::get_team_default_link_share(&self.pool, user_id).await
+    }
+
+    #[tracing::instrument(err, skip(self, args, share_permission))]
     async fn create_document(
         &self,
         args: CreateDocumentRepoArgs,
+        share_permission: SharePermissionV2,
     ) -> Result<DocumentMetadata, Self::Err> {
-        let CreateDocumentRepoArgs {
-            id,
-            sha,
-            document_name,
-            user_id,
-            file_type,
-            project_id,
-            team_id,
+        let mut transaction = self.pool.begin().await?;
+        let metadata =
+            create::insert_new_document(&mut transaction, args, &share_permission).await?;
+        transaction.commit().await?;
+        Ok(metadata)
+    }
+
+    #[tracing::instrument(err, skip(self, args, share_permission))]
+    async fn import_email_attachment_document(
+        &self,
+        args: ImportEmailAttachmentRepoArgs,
+        share_permission: SharePermissionV2,
+    ) -> Result<EmailImportRepoOutcome, Self::Err> {
+        let ImportEmailAttachmentRepoArgs {
             email_attachment_id,
-            created_at: provided_created_at,
-            sub_type: requested_sub_type,
-            skip_history,
+            create,
         } = args;
 
-        let now = chrono::Utc::now();
-        let created_at = provided_created_at.as_ref().unwrap_or(&now);
+        // Unlocked reuse: attachment already linked, or a live email doc with
+        // this sha already exists. The advisory lock is only required when a
+        // concurrent import might insert the first document for (owner, sha).
+        if let Some(existing_id) =
+            create::find_document_id_for_email_attachment(&self.pool, email_attachment_id).await?
+        {
+            return self.reused_email_document(existing_id).await;
+        }
+
+        if let Some(existing_id) = self
+            .find_reusable_email_document_by_sha(create.user_id.as_ref(), &create.sha)
+            .await?
+        {
+            return self
+                .link_existing_email_document(&existing_id, email_attachment_id)
+                .await;
+        }
 
         let mut transaction = self.pool.begin().await?;
 
-        // Fetch project name if project_id provided
-        let project_name: Option<String> = if let Some(ref proj_id) = project_id {
-            sqlx::query_scalar!(
-                r#"SELECT name FROM "Project" WHERE id = $1"#,
-                &proj_id.to_string(),
-            )
-            .fetch_optional(&mut *transaction)
-            .await?
-        } else {
-            None
-        };
-
-        let document_id = create::insert_document_row(
+        if let Some(existing_id) = create::reuse_email_document(
             &mut transaction,
-            id.as_ref(),
-            &user_id,
-            &document_name,
-            file_type,
-            project_id.as_ref(),
-            created_at,
+            create.user_id.as_ref(),
+            &create.sha,
+            email_attachment_id,
         )
-        .await?;
-
-        // Insert document sub-type
-        let sub_type: Option<DocumentSubType> =
-            create::set_document_sub_type(&mut transaction, &document_id, requested_sub_type)
-                .await?;
-
-        if sub_type == Some(DocumentSubType::Task)
-            && let Some(team_id) = team_id.as_ref()
+        .await?
         {
-            create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
+            transaction.commit().await?;
+            return self.reused_email_document(existing_id).await;
         }
 
-        // Insert document version (DocumentBom for docx, DocumentInstance for others)
-        let document_version = create::set_document_version(
+        let metadata =
+            create::insert_new_document(&mut transaction, create, &share_permission).await?;
+
+        match create::link_document_email(
             &mut transaction,
-            &document_id,
-            file_type,
-            sha,
-            created_at,
+            &metadata.document_id,
+            email_attachment_id,
         )
-        .await?;
-
-        // Create share permission
-        create::set_share_permission(&mut transaction, &document_id, file_type).await?;
-
-        // Add to user history (if not skipped)
-        if !skip_history {
-            create::insert_history(&mut transaction, &document_id, &user_id, created_at).await?;
-        }
-
-        // Insert user entity access (Owner level)
-        entity_access_db_utils::insert_entity_access_row(
-            &mut transaction,
-            &document_id,
-            entity_access_db_utils::EntityType::Document,
-            user_id.as_ref(),
-            entity_access_db_utils::EntityAccessSourceType::User,
-            entity_access_db_utils::AccessLevel::Owner,
-        )
-        .await?;
-
-        // Link to email attachment if provided
-        if let Some(attachment_id) = email_attachment_id {
-            sqlx::query!(
-                r#"
-                INSERT INTO "document_email" (document_id, email_attachment_id)
-                VALUES ($1, $2)
-                "#,
-                &document_id.to_string(),
-                attachment_id,
-            )
-            .execute(&mut *transaction)
-            .await?;
+        .await
+        {
+            Ok(()) => {}
+            Err(sqlx::Error::Database(ref db_err)) if db_err.is_unique_violation() => {
+                transaction.rollback().await?;
+                return self
+                    .reused_linked_email_attachment(email_attachment_id)
+                    .await;
+            }
+            Err(e) => return Err(e),
         }
 
         transaction.commit().await?;
-
-        Ok(DocumentMetadata::new_document(
-            &document_id.to_string(),
-            document_version.id,
-            user_id,
-            &document_name,
-            file_type,
-            &document_version.sha,
-            None,
-            None,
-            None,
-            project_id.map(|s| s.to_string()).as_deref(),
-            project_name.as_deref(),
-            document_version.created_at,
-            document_version.updated_at,
-            sub_type,
-        ))
+        Ok(EmailImportRepoOutcome::Created(metadata))
     }
 
     #[tracing::instrument(err, skip(self, args))]
@@ -1013,10 +1035,11 @@ impl DocumentRepo for PgDocumentRepo {
         Ok(children)
     }
 
-    #[tracing::instrument(err, skip(self, args))]
+    #[tracing::instrument(err, skip(self, args, share_permission))]
     async fn copy_document(
         &self,
         args: CopyDocumentRepoArgs,
+        share_permission: SharePermissionV2,
     ) -> Result<DocumentMetadata, Self::Err> {
         let CopyDocumentRepoArgs {
             original_document,
@@ -1059,9 +1082,7 @@ impl DocumentRepo for PgDocumentRepo {
         }
 
         // Create share permission
-        create::set_share_permission(&mut transaction, &document_id, file_type).await?;
-
-        // Insert user entity access (Owner level)
+        create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
 
         // Insert user entity access (Owner level)
         entity_access_db_utils::insert_entity_access_row(

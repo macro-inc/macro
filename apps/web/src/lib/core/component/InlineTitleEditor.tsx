@@ -1,10 +1,10 @@
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import { createSignal } from 'solid-js';
+import { cn } from '@ui/utils/classname';
+import { createSignal, onMount } from 'solid-js';
 
 /**
  * Inline-editable entity title, mirroring the markdown-document title UX:
- * the title is always editable in place — click to put the caret in it,
- * type, and the rename commits on blur/Enter (Escape discards). Blank or
+ * the title is edited in place with no pencil affordance — put the caret in
+ * it, type, and the rename commits on blur/Enter (Escape discards). Blank or
  * unchanged edits are dropped rather than committed.
  */
 export function InlineTitleEditor(props: {
@@ -13,10 +13,24 @@ export function InlineTitleEditor(props: {
   placeholder: string;
   ariaLabel: string;
   onRename: (name: string) => void;
+  /** Optional typography and sizing override for compact title contexts. */
+  class?: string;
+  /** Focus and select the name once mounted, for callers that mount the
+   * editor in response to an explicit edit gesture. */
+  autofocus?: boolean;
+  /** Runs after the editor loses focus, whether the edit committed or was
+   * discarded, so those callers can drop back to their static title. */
+  onExit?: () => void;
 }) {
   // Local draft while the user is typing; null = show the current value.
   const [draft, setDraft] = createSignal<string | null>(null);
   let inputRef: HTMLInputElement | undefined;
+
+  onMount(() => {
+    if (!props.autofocus) return;
+    inputRef?.focus();
+    inputRef?.select();
+  });
 
   const commit = () => {
     const raw = draft();
@@ -28,42 +42,32 @@ export function InlineTitleEditor(props: {
   };
 
   return (
-    <div class="group flex min-w-0 items-center gap-1.5">
-      <input
-        ref={inputRef}
-        type="text"
-        aria-label={props.ariaLabel}
-        autocomplete="off"
-        data-1p-ignore
-        class="field-sizing-content min-w-0 max-w-full truncate bg-transparent text-xl font-semibold outline-none"
-        placeholder={props.placeholder}
-        value={draft() ?? props.value}
-        onInput={(e) => setDraft(e.currentTarget.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            e.currentTarget.blur();
-          } else if (e.key === 'Escape') {
-            setDraft(null);
-            e.currentTarget.blur();
-          }
-        }}
-      />
-      {/* Hover-only affordance; the input itself is the tab stop, and the
-          pencil hides while editing (group-focus-within). */}
-      <button
-        type="button"
-        aria-hidden="true"
-        tabIndex={-1}
-        class="shrink-0 text-ink-muted opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-0"
-        onClick={() => {
-          inputRef?.focus();
-          inputRef?.select();
-        }}
-      >
-        <PencilIcon class="size-4" />
-      </button>
-    </div>
+    <input
+      ref={inputRef}
+      type="text"
+      aria-label={props.ariaLabel}
+      autocomplete="off"
+      data-1p-ignore
+      class={cn(
+        'field-sizing-content min-w-0 max-w-full truncate bg-transparent text-xl font-semibold outline-none',
+        props.class
+      )}
+      placeholder={props.placeholder}
+      value={draft() ?? props.value}
+      onInput={(e) => setDraft(e.currentTarget.value)}
+      onBlur={() => {
+        commit();
+        props.onExit?.();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.currentTarget.blur();
+        } else if (e.key === 'Escape') {
+          setDraft(null);
+          e.currentTarget.blur();
+        }
+      }}
+    />
   );
 }

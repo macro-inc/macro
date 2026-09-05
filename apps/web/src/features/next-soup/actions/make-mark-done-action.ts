@@ -8,24 +8,30 @@ import {
   resolveMarkEntitiesDoneVariables,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  ENABLE_NEW_INBOX_FLAG,
-  ENABLE_NEW_INBOX_OVERRIDE,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import type { HotkeyGroup } from '@core/hotkey/types';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
+import {
+  type NotificationEntityRef,
+  toNotificationEntityRef,
+} from '@queries/notification/entity-mutations';
 import { type UndoHandle, useUndoableMutation } from '@queries/undo';
-import type { SoupState } from '../create-soup-state';
+import type { EntityActionListState } from './entity-action-context';
 
 // Valid list views where the mark done should be allowed to run
 const VALID_MARK_DONE_LIST_VIEWS: `${ListView}-${string}`[] = [
   'inbox-signal',
   'inbox-noise',
+  // Marking a pending reminder done cancels it before it fires — same as the
+  // standalone Reminders view's Scheduled tab below.
+  'inbox-reminders',
   'mail-important',
   'mail-all',
   'mail-noise',
@@ -59,7 +65,12 @@ type MakeMarkDoneOptions = {
 type MarkDoneVariables = {
   entities: EntityData[];
   emailIds: string[];
-  notificationIds: string[];
+  /** Locally known IDs used only for the immediate optimistic cache patch. */
+  optimisticNotificationIds: string[];
+  /** Exact IDs used by undo/redo; entity mutation results are appended here. */
+  exactNotificationIds: { current: string[] };
+  /** Entity-wide targets used only by the initial committed mark-done. */
+  notificationEntities: NotificationEntityRef[];
   reminderIds: string[];
   restoreFocus?: () => void;
   /** Suppress the "Marked as done" toast, e.g. for send-triggered mark done
@@ -79,6 +90,7 @@ type MarkDoneExecuteOpts = Pick<
 >;
 
 type MarkDoneExecuteWithSoupOpts = MarkDoneExecuteOpts & {
+  anchorKey?: string;
   nextEntityId?: string;
 };
 
@@ -86,21 +98,16 @@ type MarkDoneExecuteWithSoupOpts = MarkDoneExecuteOpts & {
 export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
   const splitPanel = useSplitPanel();
 
-  const newInboxFlag = useFeatureFlag(ENABLE_NEW_INBOX_FLAG, {
-    enabledOverride: ENABLE_NEW_INBOX_OVERRIDE,
-  });
-
   // Channel and channel_thread entities share the same notification bucket.
-  // The new inbox renders them as separate rows, so marking a channel as done
+  // The inbox renders them as separate rows, so marking a channel as done
   // should not clear thread notifications.
   //
-  // TODO: This should probably be the default case after the new inbox is released
-  // or we should rework how notifications are sent to not be under just the 'channel'
+  // TODO: This should probably be the default case everywhere, or we should
+  // rework how notifications are sent to not be under just the 'channel'
   // entity
   const scopeChannelNotificationsToEntity = () =>
-    newInboxFlag().enabled &&
-    (splitPanel?.handle.content().id === 'inbox' ||
-      splitPanel?.handle.referredFrom() === 'inbox');
+    splitPanel?.handle.content().id === 'inbox' ||
+    splitPanel?.handle.referredFrom() === 'inbox';
 
   const { notificationSource, hotkeyGroup } = options;
   const mutation = useUndoableMutation<
@@ -114,15 +121,23 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       applyEntitiesDoneOptimistic({
         entityIds: variables.entities.map((entity) => entity.id),
         emailIds: variables.emailIds,
-        notificationIds: variables.notificationIds,
+        notificationIds: variables.optimisticNotificationIds,
         reminderIds: variables.reminderIds,
       }),
-    mutationFn: (variables) =>
-      executeMarkEntitiesDone({
+    mutationFn: async (variables) => {
+      const authoritativeNotificationIds = await executeMarkEntitiesDone({
         emailIds: variables.emailIds,
-        notificationIds: variables.notificationIds,
+        notificationIds: variables.exactNotificationIds.current,
+        notificationEntities: variables.notificationEntities,
         reminderIds: variables.reminderIds,
-      }),
+      });
+      variables.exactNotificationIds.current = [
+        ...new Set([
+          ...variables.exactNotificationIds.current,
+          ...authoritativeNotificationIds,
+        ]),
+      ];
+    },
     onError: (_err, _variables, context) => {
       context?.rollback();
       toast.failure('Failed to mark as done');
@@ -132,7 +147,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       try {
         await executeMarkEntitiesUndone({
           emailIds: variables.emailIds,
-          notificationIds: variables.notificationIds,
+          notificationIds: variables.exactNotificationIds.current,
           reminderIds: variables.reminderIds,
         });
       } catch (err) {
@@ -145,7 +160,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       try {
         await executeMarkEntitiesDone({
           emailIds: variables.emailIds,
-          notificationIds: variables.notificationIds,
+          notificationIds: variables.exactNotificationIds.current,
           reminderIds: variables.reminderIds,
         });
       } catch (err) {
@@ -233,17 +248,53 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const targets = entities.filter(isMarkDoneTarget);
     if (targets.length === 0) return;
 
-    const { emailIds, notificationIds, reminderIds } =
-      resolveMarkEntitiesDoneVariables({
-        entities: targets,
-        notificationSource: notificationSource(),
-        scopeChannelNotificationsToEntity: scopeChannelNotificationsToEntity(),
-      });
+    const source = notificationSource();
+    const scopeChannelNotifications = scopeChannelNotificationsToEntity();
+    const resolved = resolveMarkEntitiesDoneVariables({
+      entities: targets,
+      notificationSource: source,
+      scopeChannelNotificationsToEntity: scopeChannelNotifications,
+    });
+
+    const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
+    // A whole-channel row in the new inbox intentionally excludes notification
+    // stacks rendered as separate thread rows. The entity endpoint cannot
+    // express "channel except its threads", so only that selective case keeps
+    // an initial ID-scoped write. Channel-thread rows can use their canonical
+    // message entity because reply notifications point back to it as their
+    // secondary entity.
+    const selectiveChannelEntities: EntityData[] =
+      useEntityMutations && scopeChannelNotifications
+        ? targets.filter((entity) => entity.type === 'channel')
+        : [];
+    const selectiveChannelIds =
+      selectiveChannelEntities.length === 0
+        ? []
+        : resolveMarkEntitiesDoneVariables({
+            entities: selectiveChannelEntities,
+            notificationSource: source,
+            scopeChannelNotificationsToEntity: true,
+          }).notificationIds;
+
+    const notificationEntities: NotificationEntityRef[] = useEntityMutations
+      ? targets.flatMap((entity) => {
+          if (selectiveChannelEntities.includes(entity)) return [];
+          const entityRef = toNotificationEntityRef(entity);
+          return entityRef ? [entityRef] : [];
+        })
+      : [];
+
+    const exactNotificationIds = useEntityMutations
+      ? selectiveChannelIds
+      : resolved.notificationIds;
+
     await mutation.mutateAsync({
       entities: targets,
-      emailIds,
-      notificationIds,
-      reminderIds,
+      emailIds: resolved.emailIds,
+      optimisticNotificationIds: resolved.notificationIds,
+      exactNotificationIds: { current: exactNotificationIds },
+      notificationEntities,
+      reminderIds: resolved.reminderIds,
       restoreFocus,
       silent: opts?.silent,
       onUndoHandle: opts?.onUndoHandle,
@@ -253,7 +304,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
 
   const executeWithSoup = async (
     entities: EntityData[],
-    soup: SoupState,
+    soup: EntityActionListState,
     onNavigate?: (entity: EntityData) => void,
     opts?: MarkDoneExecuteWithSoupOpts
   ) => {
@@ -263,7 +314,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
     const targets = entities.filter(isMarkDoneTarget);
     if (targets.length === 0) return;
 
-    const focusedIdBeforeMarkDone = soup.focus.id();
+    const focusedIdBeforeMarkDone = opts?.anchorKey ?? soup.focus.id();
     const markedEntityIds = new Set(targets.map((entity) => entity.id));
     const adjacentRow = (direction: 1 | -1) => {
       let previousCandidateIndex: number | undefined;
@@ -315,6 +366,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         void openEntityInSplitFromUnifiedList(nextRow.original, {
           splitHandle: controller,
           mergeHistory: true,
+          notificationSource: options.notificationSource(),
         });
       }
       onNavigate?.(nextRow.original);

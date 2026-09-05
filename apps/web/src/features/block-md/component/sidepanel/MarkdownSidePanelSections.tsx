@@ -1,4 +1,4 @@
-import { EntityActivitySectionConditional } from '@app/features/activity/EntityActivitySection';
+import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -24,7 +24,8 @@ import { Notifications } from '@core/component/Notifications';
 import { References } from '@core/component/References';
 import { UserIcon } from '@core/component/UserIcon';
 import {
-  ENABLE_HISTORY_COMPONENT,
+  enableHistoryComponent,
+  isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
@@ -123,7 +124,7 @@ export function MarkdownSidePanelSections(
           <StatsSectionContent />
         </SidePanel.Section>
       </Show>
-      <Show when={ENABLE_HISTORY_COMPONENT()}>
+      <Show when={isFeatureEnabled(enableHistoryComponent)}>
         <SidePanel.Section id="history" title="History" order={35}>
           <HistorySectionContent />
         </SidePanel.Section>
@@ -238,7 +239,7 @@ function HistorySkeleton() {
       aria-hidden="true"
       class="hidden min-w-0 flex-col gap-2.5 overflow-hidden md:flex"
     >
-      <div class="skeleton-shimmer h-12 w-full rounded-md bg-ink/3" />
+      <div class="skeleton-shimmer h-12 w-full rounded-md bg-skeleton" />
     </div>
   );
 }
@@ -393,7 +394,7 @@ function FolderLink(props: { projectId: string; projectName: string }) {
   return (
     <span
       {...navHandlers}
-      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs hover:bg-hover focus:bg-active"
+      class="pointer-events-auto min-w-0 truncate py-0.5 rounded-xs text-link hover:text-link-hover hover:bg-hover focus:bg-active"
     >
       <span class="relative top-[0.125em] size-[1em] inline-flex mx-1">
         <EntityIcon targetType="project" size="fill" />

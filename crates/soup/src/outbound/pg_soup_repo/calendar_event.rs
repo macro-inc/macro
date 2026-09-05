@@ -38,6 +38,7 @@ struct CalendarEventRow {
     is_read_only: bool,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
+    last_reminder_fired_at: Option<DateTime<Utc>>,
 }
 
 struct CursorParts {
@@ -115,7 +116,9 @@ pub(super) async fn by_ids(
     query.push_bind(req.user_id.as_ref().to_string());
     query.push(")) AND event.id = ANY(");
     query.push_bind(ids);
-    query.push(") ORDER BY event.updated_at DESC, event.id DESC");
+    query.push(
+        ") ORDER BY GREATEST(event.updated_at, event.last_reminder_fired_at) DESC, event.id DESC",
+    );
     query
         .build_query_as::<CalendarEventRow>()
         .fetch_all(db)
@@ -191,7 +194,8 @@ fn select_sql() -> &'static str {
         event.conference_provider,
         event.is_read_only,
         event.created_at,
-        event.updated_at
+        event.updated_at,
+        event.last_reminder_fired_at
     FROM calendar_events event
     "#
 }
@@ -199,7 +203,14 @@ fn select_sql() -> &'static str {
 fn sort_sql(sort: SimpleSortMethod) -> &'static str {
     match sort {
         SimpleSortMethod::CreatedAt => "event.created_at",
-        SimpleSortMethod::UpdatedAt | SimpleSortMethod::ViewedUpdated => "event.updated_at",
+        // A fired alarm counts as the event's latest activity, so the inbox
+        // row a reminder surfaces sorts at delivery time rather than at the
+        // event's Google last-modified time. GREATEST ignores the NULL when
+        // no reminder has fired. Must mirror `cursor_timestamp` in
+        // models_soup or keyset pagination breaks.
+        SimpleSortMethod::UpdatedAt | SimpleSortMethod::ViewedUpdated => {
+            "GREATEST(event.updated_at, event.last_reminder_fired_at)"
+        }
         SimpleSortMethod::ViewedAt => "'1970-01-01 00:00:00+00'::timestamptz",
     }
 }
@@ -322,6 +333,7 @@ fn row_to_item(row: CalendarEventRow) -> Result<SoupItem<()>, sqlx::Error> {
         is_read_only: row.is_read_only,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        last_reminder_fired_at: row.last_reminder_fired_at,
         extra: (),
     }))
 }

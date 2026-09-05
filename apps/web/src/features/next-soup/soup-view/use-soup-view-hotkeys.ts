@@ -3,6 +3,7 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import {
+  markChannelNotificationsSeenOnOpen,
   markReminderSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
@@ -23,7 +24,11 @@ import { openSingleStackNotification } from '@notifications';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { SoupState } from '../create-soup-state';
-import { type TabbedListView, VIEW_TAB_LISTS } from './soup-view-tabs';
+import {
+  type TabbedListView,
+  useVisibleViewTabs,
+  VIEW_TAB_LISTS,
+} from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
   scopeId: string;
@@ -127,15 +132,18 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       filterValidNotifications(entity.notifications?.() ?? [])
     );
     const splitManager = globalSplitManager();
-    return (
+    const didOpen =
       !!splitManager &&
       openSingleStackNotification(
         validNotifs,
         splitManager,
         newSplit,
         splitHandle
-      )
-    );
+      );
+    if (didOpen) {
+      markChannelNotificationsSeenOnOpen(entity, notificationSource);
+    }
+    return didOpen;
   };
 
   // enter - Open entity in split, toggle group, or load more
@@ -184,6 +192,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         splitHandle,
         location,
         referredFrom: currentView(),
+        notificationSource,
       });
       return true;
     },
@@ -224,6 +233,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         splitHandle,
         replacePreview: true,
         referredFrom: currentView(),
+        notificationSource,
       });
       return true;
     },
@@ -300,9 +310,15 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
   }).withGroup(group);
 
   // escape - Multi-purpose: Clear selection / Close spotlight
+  // Deliberately outside the group and kept past this view's unmount: the
+  // soup selection and split spotlight it acts on live at the split-panel
+  // level, so escape keeps working after a list entity is opened in place.
+  // The token is required for a persistent registration: same-token override
+  // replacement is what dedupes it when this view remounts on the same split.
   registerHotkey({
     hotkey: ['escape'],
     scopeId,
+    hotkeyToken: TOKENS.soup.dismiss,
     description: escapeDescription,
     condition: () => clearMultiCondition() || closeSpotlightCondition(),
     keyDownHandler: () => {
@@ -317,6 +333,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
       }
       return false;
     },
+    disposeWithOwner: false,
   });
 
   // shift+enter - Open in new split
@@ -335,6 +352,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         splitHandle,
         openInNewSplit: true,
         referredFrom: currentView(),
+        notificationSource,
       });
       return true;
     },
@@ -343,10 +361,11 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const isTabbedView = (v: string): v is TabbedListView => v in VIEW_TAB_LISTS;
 
+  const visibleViewTabs = useVisibleViewTabs();
   const getTabKeys = () => {
     const view = currentView();
     if (!view || !isTabbedView(view)) return [];
-    return VIEW_TAB_LISTS[view].map((t) => t.value);
+    return visibleViewTabs(view).map((t) => t.value);
   };
 
   const switchToTabIndex = (index: number) => {

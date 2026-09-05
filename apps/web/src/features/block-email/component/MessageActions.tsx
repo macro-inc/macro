@@ -6,7 +6,6 @@ import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { type Setter, Show } from 'solid-js';
 import { useEmailContext } from './EmailContext';
-import { getEmailFormRegistry } from './EmailFormContext';
 import { openEmailReplyComposerForMessage } from './emailReplyActions';
 
 const EMAIL_MESSAGE_ACTIONS = ['reply', 'reply-all', 'forward'] as const;
@@ -20,7 +19,6 @@ export function MessageActions(props: {
   hiddenActions?: EmailMessageAction[];
 }) {
   const ctx = useEmailContext();
-  const formRegistry = getEmailFormRegistry();
 
   const canShowActions = () => {
     if (!props.showActions) return false;
@@ -36,7 +34,6 @@ export function MessageActions(props: {
     return createCallback(() => {
       openEmailReplyComposerForMessage({
         ctx,
-        formRegistry,
         message: props.message,
         replyType: type,
         isLastMessage: props.isLastMessage,
@@ -56,6 +53,7 @@ export function MessageActions(props: {
       <Show when={!props.hiddenActions?.includes('reply')}>
         <Button
           class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
+          noTouchResize
           onClick={onChangeReplyType('reply-all')}
           tooltip="Reply"
         >
@@ -65,6 +63,7 @@ export function MessageActions(props: {
       <Show when={!props.hiddenActions?.includes('forward')}>
         <Button
           class="size-6 p-0 border-0 bg-transparent rounded text-ink-muted hover:text-ink hover:bg-ink-muted/8"
+          noTouchResize
           onClick={onChangeReplyType('forward')}
           tooltip="Forward"
         >

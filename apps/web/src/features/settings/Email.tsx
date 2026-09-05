@@ -1,13 +1,16 @@
-import { useCalendarUiFlag } from '@app/features/calendar/use-calendar-ui-flag';
+import {
+  TurnOffCalendarDialog,
+  type TurnOffCalendarTarget,
+} from '@app/features/calendar/components/TurnOffCalendarDialog';
+import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { toast } from '@core/component/Toast/Toast';
 import {
-  ENABLE_EMAIL_SIGNATURES_FLAG,
-  ENABLE_EMAIL_SIGNATURES_OVERRIDE,
   ENABLE_INBOX_RESYNC,
   ENABLE_INBOX_SYNC_STATUS,
-  ENABLE_MULTI_INBOX_OVERRIDE,
+  enableEmailSignatures,
+  enableMultiInbox,
 } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
 import {
@@ -17,6 +20,7 @@ import {
 } from '@core/email-link';
 import GmailIcon from '@icon/mcp-gmail.svg';
 import ArrowsClockwiseIcon from '@phosphor-icons/core/regular/arrows-clockwise.svg?component-solid';
+import CalendarSlashIcon from '@phosphor-icons/core/regular/calendar-slash.svg?component-solid';
 import PlusIcon from '@phosphor-icons/core/regular/plus.svg?component-solid';
 import SignatureIcon from '@phosphor-icons/core/regular/signature.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
@@ -54,9 +58,7 @@ import {
 export function EmailCard() {
   const email = useEmail();
   const userId = useUserId();
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
 
   const { query: emailLinksQuery, resyncInbox } = useEmailLinks();
   const emailActive = useEmailLinksStatus();
@@ -93,6 +95,8 @@ export function EmailCard() {
     email: string;
     isOwn: boolean;
   } | null>(null);
+  const [turnOffCalendarTarget, setTurnOffCalendarTarget] =
+    createSignal<TurnOffCalendarTarget | null>(null);
   const [resyncingIds, setResyncingIds] = createSignal<ReadonlySet<string>>(
     new Set()
   );
@@ -189,6 +193,12 @@ export function EmailCard() {
                     isOwn: primary().macro_id === userId(),
                   })
                 }
+                onTurnOffCalendar={() =>
+                  setTurnOffCalendarTarget({
+                    linkId: primary().id,
+                    emailAddress: primary().email_address,
+                  })
+                }
               />
             )}
           </Show>
@@ -218,6 +228,12 @@ export function EmailCard() {
                     isOwn: link.macro_id === userId(),
                   })
                 }
+                onTurnOffCalendar={() =>
+                  setTurnOffCalendarTarget({
+                    linkId: link.id,
+                    emailAddress: link.email_address,
+                  })
+                }
               />
             )}
           </For>
@@ -228,7 +244,7 @@ export function EmailCard() {
             >
               <Tooltip label="Add inbox">
                 <Button
-                  variant="base"
+                  variant="outline"
                   size="icon-sm"
                   depth={3}
                   aria-label="Add inbox"
@@ -241,6 +257,11 @@ export function EmailCard() {
           </Show>
         </Show>
       </SettingsCard>
+
+      <TurnOffCalendarDialog
+        target={turnOffCalendarTarget()}
+        onClose={() => setTurnOffCalendarTarget(null)}
+      />
 
       <Dialog
         open={removeTarget() !== null}
@@ -275,7 +296,7 @@ export function EmailCard() {
             </Dialog.Description>
             <div class="pt-3 justify-end items-center gap-3 inline-flex">
               <Button
-                variant="base"
+                variant="outline"
                 depth={3}
                 onClick={() => setRemoveTarget(null)}
               >
@@ -375,7 +396,7 @@ function DisabledPrimaryRow(props: { email: string; onEnable: () => void }) {
         </div>
         <span class="text-xs text-ink-muted">Sync disabled</span>
       </div>
-      <Button variant="base" size="sm" depth={3} onClick={props.onEnable}>
+      <Button variant="outline" size="sm" depth={3} onClick={props.onEnable}>
         Enable
       </Button>
     </div>
@@ -392,10 +413,9 @@ function InboxRow(props: {
   onReconnect: () => void;
   onEnableCalendar: () => void;
   onRemove: () => void;
+  onTurnOffCalendar: () => void;
 }) {
-  const emailSignaturesFlag = useFeatureFlag(ENABLE_EMAIL_SIGNATURES_FLAG, {
-    enabledOverride: ENABLE_EMAIL_SIGNATURES_OVERRIDE,
-  });
+  const emailSignaturesFlag = useFeatureFlag(enableEmailSignatures);
   const calendarUiEnabled = useCalendarUiFlag();
   const showSignature = () => isSignatureExpanded(props.link.id);
   const signatureSectionId = `signature-section-${props.link.id}`;
@@ -460,7 +480,7 @@ function InboxRow(props: {
           <Show when={emailSignaturesFlag().enabled && props.isOwn}>
             <Tooltip label="Edit signature">
               <Button
-                variant="base"
+                variant="outline"
                 size="icon-sm"
                 depth={3}
                 onClick={() => toggleSignatureExpanded(props.link.id)}
@@ -479,7 +499,7 @@ function InboxRow(props: {
             }
           >
             <Button
-              variant="active"
+              variant="accent"
               size="sm"
               depth={3}
               onClick={props.onReconnect}
@@ -488,18 +508,15 @@ function InboxRow(props: {
               Reconnect
             </Button>
           </Show>
-          {/* A link that needs a full reconnect gets calendar access on the
-              pass after it: Reconnect restores the mailbox, then this button
-              appears to add the calendar scope. */}
+          {/* Its own consent flow, since Reconnect asks for the Gmail scopes
+              only. Shown alongside Reconnect rather than after it: this
+              request is a superset, so one consent repairs a dead grant and
+              enables calendar, sparing a full revoke two round trips. */}
           <Show
-            when={
-              calendarUiEnabled() &&
-              props.link.needs_calendar_permission &&
-              props.link.sync_status !== SyncStatus.NEEDS_REAUTH
-            }
+            when={calendarUiEnabled() && props.link.needs_calendar_permission}
           >
             <Button
-              variant="active"
+              variant="accent"
               size="sm"
               depth={3}
               onClick={props.onEnableCalendar}
@@ -508,10 +525,35 @@ function InboxRow(props: {
               Enable calendar
             </Button>
           </Show>
+          {/* Only the owner sees this: turning calendar off deletes the
+              inbox's calendar data, which a delegate must not do. Offered
+              whenever that data exists, not only while the grant satisfies
+              today's capability check — an inbox synced under an earlier scope
+              set still has events to remove. */}
+          <Show
+            when={
+              calendarUiEnabled() &&
+              props.isOwn &&
+              (!props.link.needs_calendar_permission ||
+                props.link.has_calendar_data)
+            }
+          >
+            <Tooltip label="Turn off calendar">
+              <Button
+                variant="outline"
+                size="icon-sm"
+                depth={3}
+                onClick={props.onTurnOffCalendar}
+                aria-label={`Turn off calendar for ${props.link.email_address}`}
+              >
+                <CalendarSlashIcon class="size-4" />
+              </Button>
+            </Tooltip>
+          </Show>
           <Show when={ENABLE_INBOX_RESYNC}>
             <Tooltip label="Force sync">
               <Button
-                variant="base"
+                variant="outline"
                 size="icon-sm"
                 depth={3}
                 disabled={
@@ -528,7 +570,7 @@ function InboxRow(props: {
           </Show>
           <Tooltip label="Remove inbox">
             <Button
-              variant="base"
+              variant="outline"
               size="icon-sm"
               depth={3}
               onClick={props.onRemove}

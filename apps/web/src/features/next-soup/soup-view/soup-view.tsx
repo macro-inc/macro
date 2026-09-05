@@ -3,9 +3,9 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
 import {
   makeMarkDoneAction,
+  resolveEntityActionViewContext,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
-import { canExecuteMarkDoneOnView } from '@app/features/next-soup/actions/make-mark-done-action';
 import type {
   GroupHeaderProps,
   SoupRow,
@@ -15,15 +15,17 @@ import type { Query } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
+import { DateGroupHeader } from '@app/features/next-soup/soup-view/date-group-header';
 import { registerDocumentsFilterSplit } from '@app/features/next-soup/soup-view/documents-filter-controllers';
-import { EmptyState } from '@app/features/next-soup/soup-view/empty-states';
+import {
+  EmptyState,
+  shouldShowLoadError,
+} from '@app/features/next-soup/soup-view/empty-states';
 import { InboxSelector } from '@app/features/next-soup/soup-view/filters-bar/inbox-selector';
 import { SoupFiltersBar } from '@app/features/next-soup/soup-view/filters-bar/soup-filters-bar';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
 import { useFilterRefinements } from '@app/features/next-soup/soup-view/filters-bar/use-filter-refinements';
-import { MaybeSoupEntityActionDrawerManager } from '@app/features/next-soup/soup-view/SoupEntityActionDrawerManager';
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
-import { SoupEntityContextMenu } from '@app/features/next-soup/soup-view/soup-entity-context-menu';
 import {
   persistSoupNavigationTouchHighlight,
   soupNavigationTouchHighlight,
@@ -38,22 +40,27 @@ import {
   SoupViewTabs,
   useApplyPreset,
 } from '@app/features/next-soup/soup-view/soup-view-tabs';
-import { useIsNewInboxEnabled } from '@app/features/next-soup/soup-view/use-is-new-inbox-enabled';
+import { useIsInboxView } from '@app/features/next-soup/soup-view/use-is-inbox-view';
 import { CompanyKanban } from '@app/features/next-soup/soup-view/views/companies/CompanyKanban';
 import { CompanyListEntity } from '@app/features/next-soup/soup-view/views/companies/CompanyListEntity';
 import { ResponsiveCompanyListHeader } from '@app/features/next-soup/soup-view/views/companies/CompanyListHeader';
 import { CrmDefaultViewLoader } from '@app/features/next-soup/soup-view/views/companies/CrmDefaultView';
-import { DateGroupHeader } from '@app/features/next-soup/soup-view/views/inbox/date-group-header';
 import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/TaskListEntity';
 import { ResponsiveTaskListHeader } from '@app/features/next-soup/soup-view/views/tasks/TaskListHeader';
 import { TaskGroupHeader } from '@app/features/next-soup/soup-view/views/tasks/task-group-header';
 import {
+  markChannelNotificationsSeenOnOpen,
   markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
   preventDuplicatePreviewEntityOpen,
+  restoreSoupFocus,
 } from '@app/features/next-soup/utils';
+import {
+  MaybeSoupEntityActionDrawerManager,
+  SoupEntityContextMenu,
+} from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { usePreference } from '@app/preferences/use-preference';
 import { useDealStages } from '@companies/crm/deal-stages';
@@ -61,7 +68,6 @@ import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
 import { useCrmUnavailable } from '@companies/crm/team-crm-config';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { FloatRegion } from '@components/app/mobile/float-regions/FloatRegion';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
@@ -71,6 +77,7 @@ import {
 } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { ENABLE_UNIFIED_LIST_AI_INPUT } from '@core/constant/featureFlags';
@@ -81,7 +88,6 @@ import {
 } from '@core/dom-selectors';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { openExternalUrl } from '@core/util/url';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
@@ -94,6 +100,7 @@ import {
   type ProjectEntity,
   type SearchLocation,
 } from '@entity';
+import type { SoupRowFamily } from '@entity/composed/list-entity/row-geometry';
 import SearchIcon from '@icon/macro-magnifying-glass.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChevronRightIcon from '@phosphor/caret-right.svg';
@@ -207,8 +214,43 @@ const MobileTabLoadingBar = () => (
 
 const SOUP_LIST_STATE_ENTRY_KEY = 'soup.listState';
 const DEFAULT_PREVIEW_VIEWS = new Set(['inbox', 'channels']);
+/** The row components a soup view can render. */
+type SoupRowComponent =
+  | typeof ListEntity
+  | typeof InboxListEntity
+  | typeof TaskListEntity
+  | typeof CompanyListEntity;
+
+type SoupRowEntry = {
+  component: SoupRowComponent;
+  /**
+   * The --soup-row-* geometry the component renders with (ListEntity.css).
+   * SoupList stamps it on the list container so group headers can line their
+   * label up with row content.
+   */
+  family: SoupRowFamily;
+};
+
+/**
+ * Per-view row config. A view absent from the table gets DEFAULT_SOUP_ROW.
+ * Adding a row component means adding it here — the entry can't omit its
+ * geometry family, so the two can't drift apart.
+ */
+const SOUP_ROW_BY_VIEW: Partial<Record<ListView, SoupRowEntry>> = {
+  inbox: { component: InboxListEntity, family: 'card' },
+  tasks: { component: TaskListEntity, family: 'row' },
+  companies: { component: CompanyListEntity, family: 'row' },
+};
+
+const DEFAULT_SOUP_ROW: SoupRowEntry = { component: ListEntity, family: 'row' };
+
 const CONDENSED_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
   'channels',
+]);
+// Mixed-type lists render every entity as one specially designed line (see
+// NarrowSingleLineLayout) instead of the taller per-type narrow layouts.
+const SINGLE_LINE_NARROW_LIST_VIEWS: ReadonlySet<ListView> = new Set([
+  'search',
 ]);
 type SoupListEntryState = {
   focus: string | undefined;
@@ -232,6 +274,13 @@ interface SoupViewProps {
   initialGroupBy?: string;
   disableLocalSearch?: boolean;
   /**
+   * Client sort ids applied when the user has no persisted sort preference.
+   * Defaults to `['updated_at']`. Pass `[]` for views whose ordering is the
+   * server's (e.g. Recent's touched-by-me order) so rows render as paged —
+   * an explicit user sort still wins once chosen.
+   */
+  initialClientSort?: string[];
+  /**
    * Client-side entities to merge into the soup results. Useful for entity
    * types (e.g. automation) that don't come back from the soup API.
    * Visibility is controlled by the active client filter set — use a tab
@@ -248,8 +297,9 @@ interface SoupViewProps {
 export const SoupView = (props: SoupViewProps) => {
   const soup = useSoup();
   const panel = useSplitPanelOrThrow();
+  const notificationSource = useGlobalNotificationSource();
   const soupView = useSoupView();
-  const isNewInboxEnabled = useIsNewInboxEnabled();
+  const isInboxView = useIsInboxView();
   const openFocusedEntityInPreview = () => {
     const focusedRow = soup.focus.row();
     if (
@@ -261,6 +311,7 @@ export const SoupView = (props: SoupViewProps) => {
     }
     void openEntityInSplitFromUnifiedList(focusedRow.original, {
       splitHandle: panel.handle,
+      notificationSource,
     });
   };
   const hasPreviewItems = useSoupPreviewAvailability({
@@ -352,9 +403,18 @@ export const SoupView = (props: SoupViewProps) => {
         ? (initialCrmView.groupBy ?? undefined)
         : (persistedGroupBy ?? props.initialGroupBy);
 
-      let initialSortIds = initialCrmView?.sort ?? sortPref();
+      // The inbox exposes no sort control on either desktop (the toolbar
+      // hides SoupViewContextSort) or mobile, so its order is fixed: update
+      // recency, which the Signal and Noise presets override with the
+      // notified order they serve (see `clientSort`). Ignore any sort
+      // persisted back when the control was reachable: honoring it would pin
+      // the list to an order the user can no longer change.
+      let initialSortIds =
+        contentId === 'inbox'
+          ? ['updated_at']
+          : (initialCrmView?.sort ?? sortPref());
       if (initialSortIds.length === 0) {
-        initialSortIds = ['updated_at'];
+        initialSortIds = props.initialClientSort ?? ['updated_at'];
       }
 
       const persistedViewActiveTab = isListViewID(contentId)
@@ -398,12 +458,18 @@ export const SoupView = (props: SoupViewProps) => {
     });
   });
 
-  // Fresh preview-default views engage as soon as the layout can form a pair,
+  // Preview-default views engage as soon as the layout can form a pair,
   // without waiting for rows. useSoupPreviewAvailability owns disengagement: a
   // settled result with no previewable rows only suspends the pair and
   // re-engages once an entity arrives, so an initially empty view still lands
   // in preview mode. Resolving here keeps a manual exit from being undone by
   // later Soup updates.
+  //
+  // The preference alone decides engagement, independent of navigation cause:
+  // navigating the Controller away dissolves its Preview Pair, so an entry
+  // restored via history back/forward has no pair left to revive and must
+  // re-engage here like a fresh arrival. Manual toggles write the preference,
+  // which keeps an explicit exit from being resurrected by history navigation.
   let initialPreviewResolved = false;
   createEffect(() => {
     if (initialPreviewResolved) return;
@@ -411,10 +477,7 @@ export const SoupView = (props: SoupViewProps) => {
       initialPreviewResolved = true;
       return;
     }
-    if (
-      panel.handle.lastNavigationCause() !== 'fresh' ||
-      panel.handle.isViewerSplit()
-    ) {
+    if (panel.handle.isViewerSplit()) {
       initialPreviewResolved = true;
       return;
     }
@@ -502,7 +565,6 @@ export const SoupView = (props: SoupViewProps) => {
   const isBoardRendered = createMemo(() => isBoardMode() && !crmUnavailable());
 
   const [narrowSearchExpanded, setNarrowSearchExpanded] = createSignal(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = createSignal(false);
   const [searchIsCollapsed, setSearchIsCollapsed] = createSignal(false);
 
   registerHotkey({
@@ -512,11 +574,6 @@ export const SoupView = (props: SoupViewProps) => {
     registrationType: 'add',
     description: 'Search',
     keyDownHandler: () => {
-      if (isMobile()) {
-        if (mobileSearchOpen()) return false;
-        setMobileSearchOpen(true);
-        return true;
-      }
       if (narrowSearchExpanded() || !searchIsCollapsed()) return false;
       setNarrowSearchExpanded(true);
       return true;
@@ -534,11 +591,18 @@ export const SoupView = (props: SoupViewProps) => {
             class={cn(
               'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
               {
-                'shrink-0': !narrowSearchExpanded(),
-                'flex-1 min-w-0': narrowSearchExpanded(),
+                'shrink-0': !isTouchDevice() && !narrowSearchExpanded(),
+                'flex-1 min-w-0': !isTouchDevice() && narrowSearchExpanded(),
+                'w-full flex-1 min-w-0': isTouchDevice(),
               }
             )}
           >
+            {/* On mobile/tablet the header strip hosts the filter pills instead of
+                the view title (the bottom accessory region now belongs to the
+                global views row). */}
+            <Show when={isTouchDevice()}>
+              <MobileSoupViewTabs />
+            </Show>
             <Show when={!isTouchDevice() && !narrowSearchExpanded()}>
               <div class="flex items-center gap-1">
                 <span class="text-sm font-semibold">{props.viewName}</span>
@@ -642,7 +706,7 @@ export const SoupView = (props: SoupViewProps) => {
                       fallback={
                         <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
                           <Button
-                            variant="base"
+                            variant="outline"
                             class="p-1 size-7 rounded-lg ml-2 bg-surface"
                             onClick={() => setNarrowSearchExpanded(true)}
                             depth={2}
@@ -682,15 +746,17 @@ export const SoupView = (props: SoupViewProps) => {
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
-          <Show when={!isBoardMode()} fallback={<CompanyKanban />}>
+          <Show
+            when={!isBoardMode()}
+            fallback={
+              <MaybeSoupEntityActionDrawerManager>
+                <CompanyKanban />
+              </MaybeSoupEntityActionDrawerManager>
+            }
+          >
             <SoupViewList />
           </Show>
         </Suspense>
-        <Show when={isTouchDevice()}>
-          <FloatRegion region="accessory">
-            <MobileSoupViewTabs />
-          </FloatRegion>
-        </Show>
       </div>
       <Suspense>
         {/* The board and Preview Controller hide the AI bar: it floats over
@@ -699,7 +765,7 @@ export const SoupView = (props: SoupViewProps) => {
           when={
             ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isTouchDevice() &&
-            !isNewInboxEnabled() &&
+            !isInboxView() &&
             !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
             !isComponentListView('search')
@@ -741,6 +807,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isSearchServiceLoading,
     isLocalSearchSettling,
     activeTab,
+    clientSort,
     fetchNextGroupPage,
     isFetchingGroupPage,
   } = useSoupView();
@@ -767,9 +834,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
   const narrowLayout = createMemo<NarrowLayoutVariant>(() => {
     const view = currentView();
-    return view && CONDENSED_NARROW_LIST_VIEWS.has(view)
-      ? 'condensed'
-      : 'standard';
+    if (!view) return 'standard';
+    if (SINGLE_LINE_NARROW_LIST_VIEWS.has(view)) return 'single-line';
+    return CONDENSED_NARROW_LIST_VIEWS.has(view) ? 'condensed' : 'standard';
   });
 
   const focusFirstEntity = () => {
@@ -833,12 +900,30 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   createEffect(() => {
     const ref = soupViewRef();
     if (!ref) return;
-    queueMicrotask(() => ref.focus());
+    queueMicrotask(() => {
+      // Claiming the hotkey scope must not yank focus from active text entry
+      // — e.g. the mobile dock search input, whose session swaps this view in
+      // via the pill row while the user keeps typing (blurring it would drop
+      // the virtual keyboard).
+      const active = document.activeElement;
+      if (
+        active instanceof HTMLElement &&
+        (active.isContentEditable || active.matches('input, textarea'))
+      ) {
+        return;
+      }
+      ref.focus();
+    });
   });
 
   const [attachHotkeys, soupViewScope] = useHotkeyDOMScope('soup-view');
 
   const scopeId = createMemo(() => props.scopeId ?? panel.splitHotkeyScope);
+  const entityActionViewContext = () =>
+    resolveEntityActionViewContext({
+      activeListView: panel.handle.content().id,
+      activeTab: activeTab(),
+    });
 
   // Register navigation hotkeys on the active list scope (usually the split
   // scope). Most handlers are disposed with SoupViewList, but j/k intentionally
@@ -858,22 +943,22 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   // Register entity action hotkeys
   useEntityActionHotkeys({
     scopeId: scopeId(),
-    soup,
-    activeSoupViewTab: activeTab,
+    list: soup,
+    selectedEntities: soup.selection.selected,
+    focusedEntity: soup.focus.item,
+    restoreFocus: restoreSoupFocus,
+    viewContext: entityActionViewContext,
     splitHandle: panel.handle,
   });
 
   // Register soup view hotkeys (jump navigation, enter, escape, cmd+k, etc.)
   const { applyTabPreset } = useApplyPreset();
 
-  const isNewInboxEnabled = useIsNewInboxEnabled();
-
-  // The per-row component depends on the active view (and the inbox flag).
-  const listEntityComponent = () => {
-    if (currentView() === 'tasks') return TaskListEntity;
-    if (currentView() === 'companies') return CompanyListEntity;
-    if (isNewInboxEnabled()) return InboxListEntity;
-    return ListEntity;
+  // The row component and its geometry family both come from one per-view
+  // lookup, so the list container can't disagree with the rows it renders.
+  const rowEntry = (): SoupRowEntry => {
+    const view = currentView();
+    return (view && SOUP_ROW_BY_VIEW[view]) ?? DEFAULT_SOUP_ROW;
   };
 
   const groupHeaderComponent = () => {
@@ -937,6 +1022,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       // Join button (or, in preview, the Viewer's Join prompt) is the only
       // affordance.
       if (!isNonMemberChannelEntity(entity)) {
+        markChannelNotificationsSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
       }
       return;
@@ -971,6 +1057,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         splitHandle: panel.handle,
         replacePreview: event.altKey,
         referredFrom: currentView(),
+        notificationSource,
       });
       return;
     }
@@ -983,6 +1070,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         location,
         splitHandle: panel.handle,
         referredFrom: currentView(),
+        notificationSource,
       });
     } finally {
       finishTouchHighlight?.();
@@ -1033,16 +1121,27 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       return;
     }
 
-    const newEntitiesForSelection = [];
     const sign = Math.sign(params.entityIndex - anchorIndex);
+
+    // Shift-clicking the anchor itself has zero range. Stepping the loop by
+    // `sign` (0) would spin forever, so just toggle the single entity.
+    if (sign === 0) {
+      soup.selection.toggle(params.entity);
+      lastClickedEntityId = params.entityIndex;
+      return;
+    }
+
+    const newEntitiesForSelection = [];
 
     for (
       let i = anchorIndex;
       sign > 0 ? i <= params.entityIndex : i >= params.entityIndex;
       i += sign
     ) {
+      // The anchor can be stale (rows changed since the last click), so guard
+      // against indexing past the current list.
       const entity = entityList[i];
-      if (!entity.isSelected()) {
+      if (entity && !entity.isSelected()) {
         newEntitiesForSelection.push(entity.original);
       }
     }
@@ -1090,6 +1189,17 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     ((!source.isFetching() || isPullRefreshing()) && !rows().length) ||
     forceEmptyState();
 
+  const showLoadError = () =>
+    !!source.error() &&
+    shouldShowLoadError({
+      hasData: source.hasData(),
+      forceEmptyState: forceEmptyState(),
+    });
+
+  const retryLoad = () => {
+    void source.refresh().catch(() => undefined);
+  };
+
   const entityById = createMemo(
     () => {
       const list = rows() ?? [];
@@ -1108,7 +1218,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
   );
 
   const isProjectList = panel.handle.content().type === 'project';
-  const contentId = panel.handle.content().id;
 
   const readListEntryState = () =>
     panel.handle.currentEntryState()?.[SOUP_LIST_STATE_ENTRY_KEY] as
@@ -1202,7 +1311,11 @@ const SoupViewListContent = (props: SoupViewListProps) => {
       >
         <SoupViewFileDropzone>
           <div class="@container/u-list size-full unified-list-root flex flex-col relative no-select-children">
-            <Show when={isTouchDevice() && source.isPlaceholderData()}>
+            <Show
+              when={
+                isTouchDevice() && source.isPlaceholderData() && !source.error()
+              }
+            >
               <MobileTabLoadingBar />
             </Show>
             <Show when={isTouchDevice()}>
@@ -1215,6 +1328,14 @@ const SoupViewListContent = (props: SoupViewListProps) => {
             </Show>
             <StaticMarkdownContext>
               <Switch>
+                <Match when={showLoadError()}>
+                  <div
+                    ref={setEmptyStateRef}
+                    class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+                  >
+                    <LoadErrorPanel onRetry={retryLoad} />
+                  </div>
+                </Match>
                 <Match
                   when={
                     source.isFetching() && !rows().length && !isPullRefreshing()
@@ -1234,7 +1355,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                     !isPullRefreshing()
                   }
                 >
-                  <div class="flex items-center gap-2 p-3 text-xs text-text-muted touch:mt-(--mobile-content-inset-top) touch:mb-(--mobile-content-inset-bottom)">
+                  <div class="flex items-center gap-2 p-3 text-xs text-ink-muted touch:mt-(--mobile-content-inset-top) touch:mb-(--mobile-content-inset-bottom)">
                     <Spinner class="size-3 animate-spin" />
                     Searching...
                   </div>
@@ -1272,13 +1393,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                         const entity = entityById().get(entityId);
                         if (!entity) return false;
 
-                        const tab = activeTab();
-
-                        if (
-                          !isListViewID(contentId) ||
-                          (tab && !canExecuteMarkDoneOnView(contentId, tab))
-                        )
+                        if (!entityActionViewContext().supportsMarkDone) {
                           return false;
+                        }
 
                         return markDoneAction.canExecute(entity.original);
                       }}
@@ -1305,9 +1422,18 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                       >
                         {(row, i) => {
                           const timestamp = () => {
+                            const sort_ = clientSort();
+                            // The notified order shows when you were told,
+                            // ahead of the row's own recency stamp.
+                            if (
+                              sort_[0]?.id === 'notified_at' &&
+                              row.original.notifiedAt
+                            ) {
+                              return row.original.notifiedAt;
+                            }
+
                             if (row.original.sortTs) return row.original.sortTs;
 
-                            const sort_ = soup.sort.active();
                             if (!sort_.length) return;
 
                             switch (sort_[0].id) {
@@ -1350,6 +1476,8 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                       }
                                       group={group()}
                                       highlighted={row.isFocused()}
+                                      isFirst={row.index === 0}
+                                      rowFamily={rowEntry().family}
                                     />
                                   )}
                                 </Match>
@@ -1379,7 +1507,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                           fallback={
                                             <Button
-                                              variant="base"
+                                              variant="outline"
                                               size="sm"
                                               depth={2}
                                               class={cn({
@@ -1395,7 +1523,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                           }
                                         >
                                           <Button
-                                            variant="base"
+                                            variant="outline"
                                             size="sm"
                                             depth={2}
                                             class={cn({
@@ -1420,9 +1548,14 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                 <Match
                                   when={!row.group || row.group?.isExpanded()}
                                 >
-                                  <SoupEntityContextMenu entity={row.original}>
+                                  <SoupEntityContextMenu
+                                    entity={row.original}
+                                    list={soup}
+                                    selectedEntities={soup.selection.selected}
+                                    viewContext={entityActionViewContext()}
+                                  >
                                     <Dynamic
-                                      component={listEntityComponent()}
+                                      component={rowEntry().component}
                                       entity={row.original}
                                       timestamp={timestamp()}
                                       highlighted={row.isFocused()}
@@ -1437,6 +1570,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                         soup.predicates.isActive('inbox') &&
                                         !soup.predicates.isActive('noise')
                                       }
+                                      isLastInGroup={(() => {
+                                        const next = rows()[i() + 1];
+                                        return !next || next.getIsGrouped();
+                                      })()}
                                       checked={row.isSelected()}
                                       onChecked={(
                                         next: boolean,
@@ -1500,7 +1637,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                     source.isFetchingNextPage())
                                 }
                               >
-                                <div class="flex items-center gap-2 p-3 text-xs text-text-muted">
+                                <div class="flex items-center gap-2 p-3 text-xs text-ink-muted">
                                   <Spinner class="size-3 animate-spin" />
                                   {source.isFetchingNextPage()
                                     ? 'Loading more...'
@@ -1574,6 +1711,7 @@ const SoupList = (props: SoupListProps) => {
     createSignal<VirtualizerHandle>();
 
   const overscan = createMemo(() => props.overscan ?? DEFAULT_OVERSCAN);
+
   const [topSpacerRef, setTopSpacerRef] = createSignal<HTMLDivElement>();
   const topSpacerSize = createElementSize(topSpacerRef);
 
@@ -1614,8 +1752,11 @@ const SoupList = (props: SoupListProps) => {
   return (
     <div
       ref={props.ref}
+      // `soup-list` scopes the --soup-inbox-* metrics (ListEntity.css) for
+      // everything in the list; the row geometry itself travels with the rows
+      // and the group headers, which each carry their own family class.
       class={cn(
-        'unified-table-body w-full flex-1 min-h-0 relative',
+        'soup-list unified-table-body w-full flex-1 min-h-0 relative',
         props.class
       )}
     >

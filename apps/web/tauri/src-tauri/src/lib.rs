@@ -51,8 +51,8 @@ impl AppEnvironment {
 
     fn auth_service_url(self) -> &'static str {
         match self {
-            Self::Development => "https://auth-service-dev.macro.com/",
-            Self::Production => "https://auth-service.macro.com/",
+            Self::Development => "https://dev-gateway.macro.com/auth/",
+            Self::Production => "https://gateway.macro.com/auth/",
         }
     }
 
@@ -161,7 +161,9 @@ pub fn run() {
     {
         builder = builder
             .plugin(tauri_plugin_haptics::init())
+            .plugin(tauri_plugin_edit_menu::init())
             .plugin(tauri_plugin_input_accessory::init())
+            .plugin(tauri_plugin_network_status::init())
             .plugin(tauri_plugin_pasteboard::init())
             .plugin(tauri_plugin_photo_library::init())
             .plugin(tauri_plugin_call_kit::init());
@@ -251,9 +253,12 @@ pub fn run() {
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
             graphql_cache_plugin::commands::graphql_cache_init,
+            graphql_cache_plugin::commands::graphql_cache_current_revision,
             graphql_cache_plugin::commands::graphql_cache_read,
-            graphql_cache_plugin::commands::graphql_cache_read_records,
+            graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
+            graphql_cache_plugin::commands::graphql_cache_search,
             graphql_cache_plugin::commands::graphql_cache_write,
+            graphql_cache_plugin::commands::graphql_cache_hydrate,
             graphql_cache_plugin::commands::graphql_cache_enqueue_optimistic_mutation,
             graphql_cache_plugin::commands::graphql_cache_inspect_query_variants,
             graphql_cache_plugin::commands::graphql_cache_inspect_query,
@@ -342,6 +347,16 @@ pub fn run() {
                             }
                         }
                     });
+                }
+            }
+            RunEvent::Exit => {
+                if let Some(state) = app_handle.try_state::<graphql_cache_plugin::CacheState>() {
+                    state
+                        .shutdown()
+                        .inspect_err(
+                            |error| tracing::error!(error=?error, "failed to close graphql cache"),
+                        )
+                        .ok();
                 }
             }
             _ => {}

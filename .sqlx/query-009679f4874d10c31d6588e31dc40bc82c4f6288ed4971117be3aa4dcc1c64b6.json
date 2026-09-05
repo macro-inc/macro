@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                calendar.id,\n                link.id AS email_link_id,\n                link.email_address,\n                calendar.name,\n                calendar.color,\n                calendar.is_primary,\n                calendar.access_role,\n                calendar.provider_calendar_id,\n                calendar.default_reminders\n            FROM email_links link\n            JOIN calendar_accounts account ON account.email_link_id = link.id\n            JOIN calendars calendar ON calendar.account_id = account.id\n            WHERE NOT calendar.is_deleted\n              AND account.sync_status <> 'disabled'\n              AND (\n                    link.macro_id = $1\n                    OR EXISTS (\n                        SELECT 1\n                        FROM macro_user_links delegation\n                        WHERE delegation.link_id = link.id\n                          AND delegation.primary_macro_id = $1\n                    )\n              )\n            ORDER BY\n                (link.macro_id = $1) DESC,\n                link.is_primary DESC,\n                link.created_at ASC,\n                calendar.is_primary DESC,\n                (calendar.access_role IN ('owner', 'writer')) DESC,\n                calendar.name ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "color",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_primary",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "access_role",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "provider_calendar_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "default_reminders",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "009679f4874d10c31d6588e31dc40bc82c4f6288ed4971117be3aa4dcc1c64b6"
+}

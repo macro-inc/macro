@@ -1,4 +1,5 @@
 use ai_toolset::{AsyncTool, RequestContext, ServiceContext, ToolCallError, ToolResult};
+use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,10 @@ pub struct ListSkills {}
 pub struct ListSkillsResponse {
     /// The user's skills, most recently updated first.
     pub results: Vec<SkillSearchResult>,
+}
+
+impl ToolAnnotated for ListSkills {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("List skills");
 }
 
 #[async_trait]

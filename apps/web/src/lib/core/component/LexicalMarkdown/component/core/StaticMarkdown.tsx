@@ -11,8 +11,10 @@ import type { HeadingNode, QuoteNode } from '@lexical/rich-text';
 import type { TableCellNode, TableNode, TableRowNode } from '@lexical/table';
 import {
   $isClassedBlockNode,
+  type AgentContextNode,
   type AwaitNode,
   type ClassedBlockNode,
+  type ConnectAppNode,
   type ContactMentionNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
@@ -23,8 +25,10 @@ import {
   type HorizontalRuleNode,
   type ImageNode,
   isSupportedLanguage,
+  type MagicChipNode,
   normalizedLanguage,
   type PasteNode,
+  type ReplyTargetNode,
   type SnapshotNode,
   SupportedNodeTypes,
   type TagMentionNode,
@@ -69,11 +73,12 @@ import {
 } from '@core/constant/featureFlags';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchNode';
-import { getCachedItemPreview } from '@queries/preview';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
+import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
 import { Await as AwaitDecorator } from '../decorator/Await';
+import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
@@ -81,9 +86,11 @@ import { DocumentMention as DocumentMentionDecorator } from '../decorator/Docume
 import { Equation as EquationDecorator } from '../decorator/Equation';
 import { GroupMention as GroupMentionDecorator } from '../decorator/GroupMention';
 import { LazyDecorator } from '../decorator/LazyDecorator';
+import { MagicChip as MagicChipDecorator } from '../decorator/MagicChip';
 import { MarkdownImage as ImageDecorator } from '../decorator/MarkdownImage';
 import { MarkdownVideo as VideoDecorator } from '../decorator/MarkdownVideo';
 import { PasteNode as PasteNodeDecorator } from '../decorator/PasteNode';
+import { ReplyTarget as ReplyTargetDecorator } from '../decorator/ReplyTarget';
 import { Snapshot as SnapshotDecorator } from '../decorator/Snapshot';
 import { TagMention as TagMentionDecorator } from '../decorator/TagMention';
 import { ThemeMention as ThemeMentionDecorator } from '../decorator/ThemeMention';
@@ -257,7 +264,7 @@ type StaticRenderOptions = {
   lazy: boolean;
 };
 
-type RenderableEntity<T extends LexicalNode = LexicalNode> = {
+type TypedRenderableEntity<T extends LexicalNode> = {
   guard: (node: LexicalNode) => node is T;
   render: (
     props: NodeComponent<T>,
@@ -265,7 +272,26 @@ type RenderableEntity<T extends LexicalNode = LexicalNode> = {
   ) => JSX.Element;
 };
 
-type RenderableElement<T extends ElementNode = ElementNode> = {
+type RenderableEntity = {
+  guard: (node: LexicalNode) => boolean;
+  render: (props: NodeComponent, options: StaticRenderOptions) => JSX.Element;
+};
+
+function eraseRenderableEntity<T extends LexicalNode>(
+  entity: TypedRenderableEntity<T>
+): RenderableEntity {
+  return {
+    guard: entity.guard,
+    render: (props, options) => {
+      if (!entity.guard(props.node)) {
+        throw new Error('Static entity renderer received an unsupported node');
+      }
+      return entity.render({ node: props.node, theme: props.theme }, options);
+    },
+  };
+}
+
+type TypedRenderableElement<T extends ElementNode> = {
   guard: (node: LexicalNode) => node is T;
   render: (
     props: ElementNodeComponent<T>,
@@ -273,7 +299,36 @@ type RenderableElement<T extends ElementNode = ElementNode> = {
   ) => JSX.Element;
 };
 
-const Text: RenderableEntity<TextNode> = {
+type RenderableElement = {
+  guard: (node: LexicalNode) => boolean;
+  render: (
+    props: ElementNodeComponent,
+    options: StaticRenderOptions
+  ) => JSX.Element;
+};
+
+function eraseRenderableElement<T extends ElementNode>(
+  element: TypedRenderableElement<T>
+): RenderableElement {
+  return {
+    guard: element.guard,
+    render: (props, options) => {
+      if (!element.guard(props.node)) {
+        throw new Error('Static element renderer received an unsupported node');
+      }
+      return element.render(
+        {
+          node: props.node,
+          children: props.children,
+          theme: props.theme,
+        },
+        options
+      );
+    },
+  };
+}
+
+const Text: TypedRenderableEntity<TextNode> = {
   guard: (node: LexicalNode): node is TextNode => node.__type === 'text',
   render: (props) => {
     return (
@@ -284,13 +339,13 @@ const Text: RenderableEntity<TextNode> = {
   },
 };
 
-const LineBreak: RenderableEntity<LineBreakNode> = {
+const LineBreak: TypedRenderableEntity<LineBreakNode> = {
   guard: (node: LexicalNode): node is LineBreakNode =>
     node.__type === 'linebreak',
   render: () => <br />,
 };
 
-const UserMention: RenderableEntity<UserMentionNode> = {
+const UserMention: TypedRenderableEntity<UserMentionNode> = {
   guard: (node: LexicalNode): node is UserMentionNode =>
     node.__type === 'user-mention',
   render: (props) => (
@@ -311,7 +366,7 @@ const MentionPlaceholder = () => (
   </span>
 );
 
-const DocumentMention: RenderableEntity<DocumentMentionNode> = {
+const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
   guard: (node: LexicalNode): node is DocumentMentionNode =>
     node.__type === 'document-mention',
   render: (props, options) => {
@@ -323,9 +378,7 @@ const DocumentMention: RenderableEntity<DocumentMentionNode> = {
         key,
         theme: props.theme,
       });
-    const shouldRenderLazy =
-      options.lazy &&
-      getCachedItemPreview(componentProps.documentId) === undefined;
+    const shouldRenderLazy = options.lazy;
 
     return (
       <span class={getTextClassName(props.node, props.theme)}>
@@ -342,7 +395,7 @@ const DocumentMention: RenderableEntity<DocumentMentionNode> = {
   },
 };
 
-const ThemeMention: RenderableEntity<ThemeMentionNode> = {
+const ThemeMention: TypedRenderableEntity<ThemeMentionNode> = {
   guard: (node: LexicalNode): node is ThemeMentionNode =>
     node.__type === 'theme-mention',
   render: (props) => (
@@ -356,7 +409,21 @@ const ThemeMention: RenderableEntity<ThemeMentionNode> = {
   ),
 };
 
-const TagMention: RenderableEntity<TagMentionNode> = {
+const ConnectApp: TypedRenderableEntity<ConnectAppNode> = {
+  guard: (node: LexicalNode): node is ConnectAppNode =>
+    node.__type === 'connect-app',
+  render: (props) => (
+    <span>
+      {ConnectAppDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const TagMention: TypedRenderableEntity<TagMentionNode> = {
   guard: (node: LexicalNode): node is TagMentionNode =>
     node.__type === 'tag-mention',
   render: (props) => (
@@ -370,7 +437,7 @@ const TagMention: RenderableEntity<TagMentionNode> = {
   ),
 };
 
-const Watermark: RenderableEntity<WatermarkNode> = {
+const Watermark: TypedRenderableEntity<WatermarkNode> = {
   guard: (node: LexicalNode): node is WatermarkNode =>
     node.__type === 'watermark',
   render: (props) => (
@@ -384,7 +451,7 @@ const Watermark: RenderableEntity<WatermarkNode> = {
   ),
 };
 
-const ContactMention: RenderableEntity<ContactMentionNode> = {
+const ContactMention: TypedRenderableEntity<ContactMentionNode> = {
   guard: (node: LexicalNode): node is ContactMentionNode =>
     node.__type === 'contact-mention',
   render: (props) => (
@@ -398,7 +465,7 @@ const ContactMention: RenderableEntity<ContactMentionNode> = {
   ),
 };
 
-const DateMention: RenderableEntity<DateMentionNode> = {
+const DateMention: TypedRenderableEntity<DateMentionNode> = {
   guard: (node: LexicalNode): node is DateMentionNode =>
     node.__type === 'date-mention',
   render: (props) => (
@@ -412,7 +479,7 @@ const DateMention: RenderableEntity<DateMentionNode> = {
   ),
 };
 
-const GroupMention: RenderableEntity<GroupMentionNode> = {
+const GroupMention: TypedRenderableEntity<GroupMentionNode> = {
   guard: (node: LexicalNode): node is GroupMentionNode =>
     node.__type === 'group-mention',
   render: (props) => (
@@ -426,7 +493,7 @@ const GroupMention: RenderableEntity<GroupMentionNode> = {
   ),
 };
 
-const Await: RenderableEntity<AwaitNode> = {
+const Await: TypedRenderableEntity<AwaitNode> = {
   guard: (node: LexicalNode): node is AwaitNode => node.__type === 'await',
   render: (props) => {
     const componentProps = props.node.exportComponentProps();
@@ -444,7 +511,52 @@ const Await: RenderableEntity<AwaitNode> = {
   },
 };
 
-const Snapshot: RenderableEntity<SnapshotNode> = {
+const AgentContext: TypedRenderableEntity<AgentContextNode> = {
+  guard: (node: LexicalNode): node is AgentContextNode =>
+    node.__type === 'agent-context',
+  render: (props) => (
+    <AgentContextDecorator
+      {...props.node.exportComponentProps()}
+      key={props.node.getKey()}
+      theme={props.theme}
+    />
+  ),
+};
+
+const ReplyTarget: TypedRenderableEntity<ReplyTargetNode> = {
+  guard: (node: LexicalNode): node is ReplyTargetNode =>
+    node.__type === 'reply-target',
+  render: (props) => (
+    // `data-reply-target-node` mirrors the editor block wrapper so the shared
+    // spacing rule applies in static markdown too.
+    <div
+      class="max-w-full"
+      data-reply-target-node={props.node.__targetMessageId}
+    >
+      <ReplyTargetDecorator
+        {...props.node.exportComponentProps()}
+        key={props.node.getKey()}
+        theme={props.theme}
+      />
+    </div>
+  ),
+};
+
+const MagicChip: TypedRenderableEntity<MagicChipNode> = {
+  guard: (node: LexicalNode): node is MagicChipNode =>
+    node.__type === 'magic-chip',
+  render: (props) => (
+    <div class="max-w-full">
+      <MagicChipDecorator
+        {...props.node.exportComponentProps()}
+        key={props.node.getKey()}
+        theme={props.theme}
+      />
+    </div>
+  ),
+};
+
+const Snapshot: TypedRenderableEntity<SnapshotNode> = {
   guard: (node: LexicalNode): node is SnapshotNode =>
     node.__type === 'snapshot',
   render: (props) => (
@@ -458,7 +570,7 @@ const Snapshot: RenderableEntity<SnapshotNode> = {
   ),
 };
 
-const UnknownMention: RenderableEntity<UnknownMentionNode> = {
+const UnknownMention: TypedRenderableEntity<UnknownMentionNode> = {
   guard: (node: LexicalNode): node is UnknownMentionNode =>
     node.__type === 'unknown-mention',
   render: (props) => (
@@ -472,23 +584,23 @@ const UnknownMention: RenderableEntity<UnknownMentionNode> = {
   ),
 };
 
-const Image: RenderableEntity<ImageNode> = {
+const Image: TypedRenderableEntity<ImageNode> = {
   guard: (node: LexicalNode): node is ImageNode => node.__type === 'image',
   render: (props) => ImageDecorator(props.node.exportComponentProps()),
 };
 
-const Video: RenderableEntity<VideoNode> = {
+const Video: TypedRenderableEntity<VideoNode> = {
   guard: (node: LexicalNode): node is VideoNode => node.__type === 'video',
   render: (props) => VideoDecorator(props.node.exportComponentProps()),
 };
 
-const Paragraph: RenderableElement<ParagraphNode> = {
+const Paragraph: TypedRenderableElement<ParagraphNode> = {
   guard: (node: LexicalNode): node is ParagraphNode =>
     node.__type === 'paragraph',
   render: (props) => <p class={props.theme.paragraph}>{props.children}</p>,
 };
 
-const Heading: RenderableElement<HeadingNode> = {
+const Heading: TypedRenderableElement<HeadingNode> = {
   guard: (node: LexicalNode): node is HeadingNode => node.__type === 'heading',
   render: (props) => {
     const tag = props.node.__tag as HeadingTag;
@@ -502,7 +614,7 @@ const Heading: RenderableElement<HeadingNode> = {
   },
 };
 
-const List: RenderableElement<ListNode> = {
+const List: TypedRenderableElement<ListNode> = {
   guard: (node: LexicalNode): node is ListNode => node.__type === 'list',
   render: (props) => {
     const type = props.node.__listType;
@@ -535,7 +647,7 @@ const List: RenderableElement<ListNode> = {
   },
 };
 
-const ListItem: RenderableElement<ListItemNode> = {
+const ListItem: TypedRenderableElement<ListItemNode> = {
   guard: (node: LexicalNode): node is ListItemNode =>
     node.__type === 'listitem',
   render: (props) => {
@@ -558,14 +670,14 @@ const ListItem: RenderableElement<ListItemNode> = {
   },
 };
 
-const Quote: RenderableElement<QuoteNode> = {
+const Quote: TypedRenderableElement<QuoteNode> = {
   guard: (node: LexicalNode): node is QuoteNode => node.__type === 'quote',
   render: (props) => (
     <blockquote class={props.theme.quote}>{props.children}</blockquote>
   ),
 };
 
-const Code: RenderableElement<CodeNode> = {
+const Code: TypedRenderableElement<CodeNode> = {
   guard: (node: LexicalNode): node is CodeNode => node.__type === 'code',
   render: (props) => {
     let language = props.node.__language ?? DEFAULT_LANGUAGE;
@@ -641,13 +753,13 @@ function StaticCodeContainer(props: {
   );
 }
 
-const HorizontalRule: RenderableEntity<HorizontalRuleNode> = {
+const HorizontalRule: TypedRenderableEntity<HorizontalRuleNode> = {
   guard: (node: LexicalNode): node is HorizontalRuleNode =>
     node.__type === 'horizontalrule',
   render: (props) => <div class={props.theme.hr} />,
 };
 
-const Link: RenderableElement<LinkNode> = {
+const Link: TypedRenderableElement<LinkNode> = {
   guard: (node: LexicalNode): node is LinkNode => node.__type === 'link',
   render: (props) => (
     <LinkWithPreview
@@ -660,12 +772,12 @@ const Link: RenderableElement<LinkNode> = {
   ),
 };
 
-const Mark: RenderableElement<MarkNode> = {
+const Mark: TypedRenderableElement<MarkNode> = {
   guard: (node: LexicalNode): node is MarkNode => node.__type === 'mark',
   render: (props) => <span class={props.theme.mark}>{props.children}</span>,
 };
 
-const SearchMatch: RenderableElement<SearchMatchNode> = {
+const SearchMatch: TypedRenderableElement<SearchMatchNode> = {
   guard: (node: LexicalNode): node is SearchMatchNode =>
     node.__type === 'search-match',
   render: (props) => (
@@ -673,15 +785,18 @@ const SearchMatch: RenderableElement<SearchMatchNode> = {
   ),
 };
 
-const Equation: RenderableEntity<EquationNode> = {
+const Equation: TypedRenderableEntity<EquationNode> = {
   guard: (node: LexicalNode): node is EquationNode =>
     node.__type === 'equation',
   render: (props) => (
-    <EquationDecorator equation={props.node.__equation} inline={true} />
+    <EquationDecorator
+      equation={props.node.__equation}
+      inline={props.node.__inline}
+    />
   ),
 };
 
-const DocumentCard: RenderableEntity<DocumentCardNode> = {
+const DocumentCard: TypedRenderableEntity<DocumentCardNode> = {
   guard: (node: LexicalNode): node is DocumentCardNode =>
     node.__type === 'document-card',
   render: (props) => {
@@ -705,7 +820,7 @@ const DocumentCard: RenderableEntity<DocumentCardNode> = {
   },
 };
 
-const Paste: RenderableEntity<PasteNode> = {
+const Paste: TypedRenderableEntity<PasteNode> = {
   guard: (node: LexicalNode): node is PasteNode => node.__type === 'paste',
   render: (props) =>
     PasteNodeDecorator({
@@ -716,7 +831,7 @@ const Paste: RenderableEntity<PasteNode> = {
 };
 
 // Table rendering components for Lexical tables
-const Table: RenderableElement<TableNode> = {
+const Table: TypedRenderableElement<TableNode> = {
   guard: (node: LexicalNode): node is TableNode => node.__type === 'table',
   render: (props) => (
     <div class={cn(props.theme?.static?.['table-container'])}>
@@ -730,20 +845,24 @@ const Table: RenderableElement<TableNode> = {
   ),
 };
 
-const TableRow: RenderableElement<TableRowNode> = {
+const TableRow: TypedRenderableElement<TableRowNode> = {
   guard: (node: LexicalNode): node is TableRowNode =>
     node.__type === 'tablerow',
   render: (props) => {
     const isFirstRow = props.node.getIndexWithinParent() === 0;
+    const height = props.node.getHeight();
     return (
-      <tr class={cn(props.theme.tableRow, isFirstRow && 'font-bold')}>
+      <tr
+        class={cn(props.theme.tableRow, isFirstRow && 'font-bold')}
+        style={height ? { height: `${height}px` } : undefined}
+      >
         {props.children}
       </tr>
     );
   },
 };
 
-const TableCell: RenderableElement<TableCellNode> = {
+const TableCell: TypedRenderableElement<TableCellNode> = {
   guard: (node: LexicalNode): node is TableCellNode =>
     node.__type === 'tablecell',
   render: (props) => {
@@ -760,7 +879,7 @@ const TableCell: RenderableElement<TableCellNode> = {
   },
 };
 
-const ClassedBlock: RenderableElement<ClassedBlockNode> = {
+const ClassedBlock: TypedRenderableElement<ClassedBlockNode> = {
   guard: (node: LexicalNode): node is ClassedBlockNode =>
     $isClassedBlockNode(node),
   render: (props) => {
@@ -780,43 +899,47 @@ const ClassedBlock: RenderableElement<ClassedBlockNode> = {
 };
 
 // The entities that cannot have children.
-const InlineEntities: Array<RenderableEntity> = [
-  Text,
-  LineBreak,
-  UserMention,
-  DocumentMention,
-  DocumentCard,
-  ContactMention,
-  DateMention,
-  GroupMention,
-  Await,
-  Snapshot,
-  Image,
-  Video,
-  HorizontalRule,
-  Equation,
-  ThemeMention,
-  TagMention,
-  UnknownMention,
-  Watermark,
-  Paste,
-] as const;
+const InlineEntities: RenderableEntity[] = [
+  eraseRenderableEntity(Text),
+  eraseRenderableEntity(LineBreak),
+  eraseRenderableEntity(UserMention),
+  eraseRenderableEntity(DocumentMention),
+  eraseRenderableEntity(DocumentCard),
+  eraseRenderableEntity(ContactMention),
+  eraseRenderableEntity(DateMention),
+  eraseRenderableEntity(GroupMention),
+  eraseRenderableEntity(Await),
+  eraseRenderableEntity(AgentContext),
+  eraseRenderableEntity(ReplyTarget),
+  eraseRenderableEntity(MagicChip),
+  eraseRenderableEntity(Snapshot),
+  eraseRenderableEntity(Image),
+  eraseRenderableEntity(Video),
+  eraseRenderableEntity(HorizontalRule),
+  eraseRenderableEntity(Equation),
+  eraseRenderableEntity(ThemeMention),
+  eraseRenderableEntity(TagMention),
+  eraseRenderableEntity(ConnectApp),
+  eraseRenderableEntity(UnknownMention),
+  eraseRenderableEntity(Watermark),
+  eraseRenderableEntity(Paste),
+];
 
 const Elements: RenderableElement[] = [
-  Paragraph,
-  Heading,
-  List,
-  ListItem,
-  Quote,
-  Code,
-  Link,
-  Mark,
-  SearchMatch,
-  Table,
-  TableRow,
-  TableCell,
-  ClassedBlock,
-] as const;
+  eraseRenderableElement(Paragraph),
+  eraseRenderableElement(Heading),
+  eraseRenderableElement(List),
+  eraseRenderableElement(ListItem),
+  eraseRenderableElement(Quote),
+  eraseRenderableElement(Code),
+  eraseRenderableElement(Link),
+  eraseRenderableElement(Mark),
+  eraseRenderableElement(SearchMatch),
+  eraseRenderableElement(Table),
+  eraseRenderableElement(TableRow),
+  eraseRenderableElement(TableCell),
+  eraseRenderableElement(ClassedBlock),
+];
 
 function Render(
   props: (NodeComponent | ElementNodeComponent) & StaticRenderOptions

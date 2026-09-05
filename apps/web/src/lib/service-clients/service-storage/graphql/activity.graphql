@@ -10,6 +10,27 @@ query MyActivity($input: ActivityFeedInput!) {
 	}
 }
 
+query MyActivityOverview($input: ActivityOverviewInput!) {
+	user {
+		id
+		activityOverview(input: $input) {
+			from
+			to
+			timeZone
+			total
+			days {
+				date
+				count
+			}
+			topEntities {
+				entityType
+				entityId
+				count
+			}
+		}
+	}
+}
+
 query EntityActivity($input: SoupInput!, $limit: Int) {
 	user {
 		id

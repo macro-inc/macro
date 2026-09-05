@@ -935,7 +935,7 @@ const shortcutSections: ShortcutSection[] = [
       {
         keys: ['cmd+escape'],
         codes: ['MetaLeft', 'Escape'],
-        description: 'Go home / close split',
+        description: 'Back to list / close split',
       },
       {
         keys: ['shift+escape'],
@@ -1019,7 +1019,7 @@ function Kbd(props: { shortcut: string; class?: string }) {
 function ShortcutRow(props: { item: ShortcutItem; spacer?: string }) {
   return (
     <div
-      class="group flex items-center gap-2 py-1.5 rounded-md hover:bg-surface-secondary/50 transition-colors"
+      class="group flex items-center gap-2 py-1.5 rounded-md hover:bg-hover transition-colors"
       onMouseEnter={() => setHoveredCodes(props.item.codes)}
       onMouseLeave={() => setHoveredCodes([])}
     >

@@ -17,6 +17,7 @@ macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 models_properties = { path = "../models_properties" }
 rootcause = { workspace = true }
+serde = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }

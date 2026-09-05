@@ -31,6 +31,8 @@ import type {
   SearchData,
   WithSearch,
 } from '@entity';
+import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
+import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
   CallRecordSearchResult,
   ChannelSearchResult,
@@ -542,6 +544,48 @@ export const useSearchResponseItemMapper = () => {
         ];
       }
 
+      case 'calendarEvent': {
+        if (!result.metadata) return [];
+        const search = getSearchData({
+          results: result.calendar_event_search_results,
+        });
+
+        // A recurring series is indexed once, as its master. The service
+        // resolves which instance this row means — next upcoming, else most
+        // recent past — so prefer that span over the master's, which for a
+        // long-running series is its original (stale) start.
+        const metadata = result.metadata;
+        const time = toCalendarEventTime(
+          metadata.occurrence?.time ?? metadata.time
+        );
+
+        return [
+          {
+            type: 'calendar_event',
+            id: result.id,
+            name: result.name,
+            ownerId: result.owner_id,
+            status: metadata.status,
+            time,
+            occurrenceKey: metadata.occurrence?.occurrenceKey,
+            isRecurring: metadata.isRecurring,
+            organizer: metadata.organizer
+              ? {
+                  name: metadata.organizer.name ?? undefined,
+                  email: metadata.organizer.email ?? undefined,
+                }
+              : undefined,
+            description: metadata.description ?? undefined,
+            conferenceUrl: metadata.conferenceUrl ?? undefined,
+            isReadOnly: metadata.isReadOnly,
+            createdAt: metadata.createdAt,
+            updatedAt: metadata.updatedAt,
+            properties: result.properties ?? undefined,
+            search,
+          },
+        ];
+      }
+
       case 'call': {
         if (!result.metadata) return [];
         const search = getSearchData({
@@ -971,7 +1015,19 @@ export const mapApiSoupItemToEntity = (
     })
     .exhaustive();
 
-  return withRawNotifications(entity, item);
+  // Attached once for every tag: only touched_by_me pages carry the field,
+  // and the Recent feed's client sort reads it off the entity. Resolved
+  // through the own-touch floor so a touched refetch that outran the
+  // activity consumer can't move a freshly-touched row back down.
+  const touchedAt = resolveOwnTouch(entity.id, item.touched_at ?? null);
+  const touched = touchedAt ? { ...entity, touchedAt } : entity;
+  // Likewise only notified_at pages carry this one; the inbox sorts and
+  // date-buckets on it. Resolved through the notified floor so a page that
+  // was in flight when a notification landed can't move the row back down.
+  const notifiedAt = resolveNotifiedAt(entity.id, item.notified_at ?? null);
+  const notified = notifiedAt ? { ...touched, notifiedAt } : touched;
+
+  return withRawNotifications(notified, item);
 };
 
 const toCalendarEventTime = (

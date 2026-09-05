@@ -5,7 +5,6 @@ import {
 import { queryClient } from '@queries/client';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import type { ThreadListNavigation } from './ThreadList';
 
 /**
  * How long a navigation target keeps its accent highlight after its scroll
@@ -20,16 +19,8 @@ type CreateTargetMessageControllerOptions = {
   initialTargetMessageId?: string | undefined;
   initialTargetMessageReplyId?: string | undefined;
   messageKeys: Accessor<string[]>;
-  navigation: Accessor<ThreadListNavigation | undefined>;
-  /**
-   * Whether the ThreadList has completed its initial scroll.
-   *
-   * The controller defers pending scroll execution until this returns `true`
-   * so that a `goToMessage` call that fires while the initial scroll is still
-   * in progress does not get overridden by the initial-scroll retry logic
-   * inside ThreadList.
-   */
-  didInitialScroll: Accessor<boolean>;
+  /** The list publishes its handle after initial layout and positioning. */
+  isReady: Accessor<boolean>;
 };
 
 export type TargetMessageController = ReturnType<
@@ -66,15 +57,22 @@ export function createTargetMessageController(
     flashTimeout = undefined;
   };
 
+  /**
+   * Whether a target element still owes the viewport a scroll — the root row,
+   * a nested reply, or both. A nested target acknowledges its outer row early
+   * (see the effect below) so the reply's own scroll can begin, so the root's
+   * pending id alone does not answer this.
+   */
+  const hasPendingElementScroll = () =>
+    targetMessageData['pendingScrollTargetId'] !== undefined ||
+    targetMessageData['pendingTargetReplyId'] !== undefined;
+
   const syncFlash = () => {
     cancelFlash();
 
     const activeTargetMessageId = targetMessageData['activeTargetMessageId'];
-    const hasPendingScroll =
-      targetMessageData['pendingScrollTargetId'] !== undefined ||
-      targetMessageData['pendingTargetReplyId'] !== undefined;
 
-    if (!activeTargetMessageId || hasPendingScroll) return;
+    if (!activeTargetMessageId || hasPendingElementScroll()) return;
 
     flashTimeout = setTimeout(() => {
       flashTimeout = undefined;
@@ -131,22 +129,13 @@ export function createTargetMessageController(
   createEffect(
     on(
       [
-        options.navigation,
+        options.isReady,
         () => targetMessageData['pendingScrollTargetId'],
         options.messageKeys,
-        options.didInitialScroll,
       ],
-      ([navigation, pendingTargetId, , didInitialScroll]) => {
-        if (!navigation || !pendingTargetId) return;
+      ([isReady, pendingTargetId]) => {
+        if (!isReady || !pendingTargetId) return;
         if (!hasMessageLoaded(pendingTargetId)) return;
-
-        // Defer the scroll until the ThreadList has completed its initial
-        // scroll. This prevents a goToMessage call from being overridden by
-        // the initial-scroll retry logic in ThreadList's handleScrollEnd,
-        // which validates position against the *original* scroll target.
-        // The pending target stays queued; once didInitialScroll flips to
-        // true the effect re-fires and executes the scroll.
-        if (!didInitialScroll) return;
 
         // Channel keeps a pending target's row mounted. Scrolling the whole
         // row first can land on the wrong part of a tall thread and creates a
@@ -202,6 +191,7 @@ export function createTargetMessageController(
     loadAroundMessageId: () => targetMessageData['loadAroundMessageId'],
     pendingScrollTargetId: () => targetMessageData['pendingScrollTargetId'],
     pendingTargetReplyId: () => targetMessageData['pendingTargetReplyId'],
+    hasPendingElementScroll,
 
     goToMessage,
     completePendingScroll,

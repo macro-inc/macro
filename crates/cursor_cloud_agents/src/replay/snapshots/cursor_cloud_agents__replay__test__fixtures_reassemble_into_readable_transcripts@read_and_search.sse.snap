@@ -1,0 +1,19 @@
+---
+source: crates/cursor_acp/src/replay/test.rs
+assertion_line: 239
+expression: transcript
+input_file: crates/cursor_acp/fixtures/real/read_and_search.sse
+---
+
+--- thinking ---
+I will locate the top-level README.md and report its first heading.
+--- assistant ---
+I'll locate the repo's top-level README.md and read it so I can report the first heading.
+--- thinking ---
+Found the top-level README.md. Reading it now to identify the first heading.
+--- assistant ---
+Found the top-level README. Next I’ll read it and check the message queue.
+--- thinking ---
+The top-level README.md starts with the heading "# Why Macro".Retrieving the schema for get-message-queue.I'll call the get-message-queue tool.The first heading in the top-level README.md is "# Why Macro".
+--- assistant ---
+The top-level `README.md` is at `/workspace/README.md`. Its first heading is **Why Macro**.

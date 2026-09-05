@@ -1,0 +1,17 @@
+---
+title: ListCalendarEvents
+description: "List the user's calendar events between two instants, across every calendar they have connected. Returns one entry per occurrence (a recurring event appears once per instance in the window), soonest first, with the `eventId` needed by UpdateCalendarEvent and DeleteCalendarEvent.  Use this to answer questions about the user's schedule (\"what's on my calendar tomorrow?\"), to find an event the user wants changed or removed, and to check for conflicts before creating an event. Keep the window as narrow as the request allows — a day or a week — since wide windows truncate at 200 occurrences. The window must be at most 370 days and within one year past to two years future. If `syncStatus` is `syncing`, tell the user results may still be incomplete."
+---
+
+# ListCalendarEvents
+
+List the user's calendar events between two instants, across every calendar they have connected. Returns one entry per occurrence (a recurring event appears once per instance in the window), soonest first, with the `eventId` needed by UpdateCalendarEvent and DeleteCalendarEvent.
+
+Use this to answer questions about the user's schedule ("what's on my calendar tomorrow?"), to find an event the user wants changed or removed, and to check for conflicts before creating an event. Keep the window as narrow as the request allows — a day or a week — since wide windows truncate at 200 occurrences. The window must be at most 370 days and within one year past to two years future. If `syncStatus` is `syncing`, tell the user results may still be incomplete.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `start` | string | Yes | Inclusive window start, RFC 3339 UTC (e.g. 2026-08-20T00:00:00Z). |
+| `end` | string | Yes | Exclusive window end, RFC 3339 UTC. Must be after start. |

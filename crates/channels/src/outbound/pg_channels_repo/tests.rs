@@ -1,11 +1,12 @@
 use crate::domain::models::{
     AttachmentEntityReference, BotId, BotSenderProfile, ChannelMessageFilters, ChannelType,
     ChannelWithParticipants, CreateChannelRequest, CreateEntityMentionOptions, GetChannelsParams,
-    GetChannelsRequest, GetThreadReplyRowsRequest, MessagePageDirection, NotificationFilters,
-    ParticipantRole, PatchChannelRequest,
+    GetChannelsRequest, GetThreadReplyRowsRequest, MessagePageDirection, NewChannelAttachment,
+    NotificationFilters, ParticipantRole, PatchChannelRequest,
 };
 use crate::domain::ports::{ChannelListRepo, ChannelRepo};
 use crate::outbound::pg_channels_repo::PgChannelsRepo;
+use chrono::{DateTime, Utc};
 use filter_ast::Expr;
 use item_filters::ast::{
     LiteralTree,
@@ -36,6 +37,7 @@ const NO_FILTERS: ChannelMessageFilters = ChannelMessageFilters {
 const CH1: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c01);
 const CH2: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c02);
 const CH3: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c03);
+const CH5_NO_ACTIVITY: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c05);
 const TEAM_A: Uuid = Uuid::from_u128(0x11111111_1111_1111_1111_111111111111);
 const TEAM_A_AUTO_ACTIVE: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c11);
 const TEAM_A_AUTO_LEFT: Uuid = Uuid::from_u128(0x00000000_0000_0000_0000_000000000c12);
@@ -104,6 +106,31 @@ fn channels_params(user_id: &str, filter: LiteralTree<ChannelLiteral>) -> GetCha
 
 fn channel_filter(literal: ChannelLiteral) -> LiteralTree<ChannelLiteral> {
     Some(Arc::new(Expr::val(literal)))
+}
+
+fn channel_list_fixture_viewed_at(channel_id: Uuid) -> Option<DateTime<Utc>> {
+    match channel_id {
+        CH1 => Some("2024-01-01T00:00:00Z".parse().unwrap()),
+        CH3 => Some("2024-01-04T00:00:00Z".parse().unwrap()),
+        CH5_NO_ACTIVITY => None,
+        id => panic!("unexpected channel {id}"),
+    }
+}
+
+fn channel_list_sort_timestamp(
+    channel: &ChannelWithParticipants,
+    sort: SimpleSortMethod,
+) -> DateTime<Utc> {
+    match sort {
+        SimpleSortMethod::CreatedAt => channel.channel.created_at,
+        SimpleSortMethod::UpdatedAt => channel.channel.updated_at,
+        SimpleSortMethod::ViewedAt => {
+            channel_list_fixture_viewed_at(channel.channel.id).unwrap_or_default()
+        }
+        SimpleSortMethod::ViewedUpdated => {
+            channel_list_fixture_viewed_at(channel.channel.id).unwrap_or(channel.channel.updated_at)
+        }
+    }
 }
 
 fn participant_roles(channel: &ChannelWithParticipants) -> Vec<(String, ParticipantRole)> {
@@ -266,8 +293,13 @@ async fn channel_list_cursor_pagination_matches_unpaginated_results(pool: Pool<P
     let repo = repo(pool);
 
     for (sort, expected_ids) in [
-        (SimpleSortMethod::CreatedAt, vec![CH3, CH1]),
-        (SimpleSortMethod::UpdatedAt, vec![CH1, CH3]),
+        (SimpleSortMethod::CreatedAt, vec![CH3, CH5_NO_ACTIVITY, CH1]),
+        (SimpleSortMethod::UpdatedAt, vec![CH1, CH5_NO_ACTIVITY, CH3]),
+        (SimpleSortMethod::ViewedAt, vec![CH3, CH1, CH5_NO_ACTIVITY]),
+        (
+            SimpleSortMethod::ViewedUpdated,
+            vec![CH3, CH5_NO_ACTIVITY, CH1],
+        ),
     ] {
         let unpaginated = repo
             .get_user_channels_with_participants(
@@ -306,17 +338,18 @@ async fn channel_list_cursor_pagination_matches_unpaginated_results(pool: Pool<P
                 break;
             };
             assert_eq!(page.len(), 1);
+            assert_eq!(
+                Some(last.channel.id),
+                expected_ids.get(paginated.len()).copied(),
+                "one-row {sort:?} page was out of order"
+            );
 
             query = Query::Cursor(Cursor {
                 id: last.channel.id,
                 limit: 1,
                 val: CursorVal {
                     sort_type: sort,
-                    last_val: match sort {
-                        SimpleSortMethod::CreatedAt => last.channel.created_at,
-                        SimpleSortMethod::UpdatedAt => last.channel.updated_at,
-                        _ => unreachable!("channel list test only uses supported sort methods"),
-                    },
+                    last_val: channel_list_sort_timestamp(last, sort),
                 },
                 filter: None,
             });
@@ -346,7 +379,9 @@ async fn channel_list_cursor_pagination_matches_unpaginated_results(pool: Pool<P
                     (USER_B.to_string(), ParticipantRole::Admin),
                     (USER_C.to_string(), ParticipantRole::Member),
                 ],
-                CH3 => vec![(USER_A.to_string(), ParticipantRole::Owner)],
+                CH3 | CH5_NO_ACTIVITY => {
+                    vec![(USER_A.to_string(), ParticipantRole::Owner)]
+                }
                 id => panic!("unexpected channel {id}"),
             };
             assert_eq!(participant_roles(actual), expected_participants);
@@ -446,6 +481,40 @@ async fn create_channel_persists_auto_join_team_and_adds_current_members(pool: P
         enabled_channel_id.participant_user_ids,
         vec![macro_user_id(LEFT_USER), macro_user_id(USER_A)]
     );
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn maybe_get_dm_finds_channel_regardless_of_argument_order(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let user_a = macro_user_id(USER_A);
+    let user_b = macro_user_id(USER_B);
+
+    let created = repo
+        .create_channel(
+            user_a.clone(),
+            None,
+            CreateChannelRequest {
+                name: None,
+                channel_type: ChannelType::DirectMessage,
+                team_id: None,
+                auto_join_team: false,
+                participants: HashSet::from([user_b.clone()]),
+            },
+        )
+        .await
+        .unwrap();
+
+    let forward = repo
+        .maybe_get_dm(user_a.clone(), user_b.clone())
+        .await
+        .unwrap();
+    let reverse = repo.maybe_get_dm(user_b, user_a).await.unwrap();
+
+    assert_eq!(forward, Some(created.id));
+    assert_eq!(reverse, Some(created.id));
 }
 
 #[sqlx::test(
@@ -2844,6 +2913,71 @@ async fn attachment_references_merges_channel_and_generic_newest_first(
     Ok(())
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_treats_email_alias_as_thread(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // Share-menu attachments historically stored entity_type = 'email'.
+    // Referencium queries 'thread', so the lookup must accept both.
+    sqlx::query(
+        r#"
+        INSERT INTO comms_attachments (id, message_id, channel_id, entity_type, entity_id, width, height, created_at)
+        VALUES (
+            '00000000-0000-0000-0000-00000000a0e1',
+            '00000000-0000-0000-0000-000000000001',
+            '00000000-0000-0000-0000-000000000c01',
+            'email',
+            'email-share-1',
+            NULL,
+            NULL,
+            '2024-01-01 10:05:00+00'
+        )
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    let repo = repo(pool);
+    let by_thread = repo
+        .get_attachment_references("thread", "email-share-1", USER_A)
+        .await?;
+    let by_email = repo
+        .get_attachment_references("email", "email-share-1", USER_A)
+        .await?;
+
+    assert_eq!(channel_refs(&by_thread).len(), 1);
+    assert_eq!(channel_refs(&by_email).len(), 1);
+    assert_eq!(channel_refs(&by_thread)[0].message_id, MSG1);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn add_attachments_normalizes_email_to_thread(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let inserted = repo(pool)
+        .add_attachments(
+            MSG1,
+            CH1,
+            vec![NewChannelAttachment {
+                entity_type: "email".to_string(),
+                entity_id: "email-norm-1".to_string(),
+                width: None,
+                height: None,
+            }],
+        )
+        .await?;
+
+    assert_eq!(inserted.len(), 1);
+    assert_eq!(inserted[0].entity_type, "thread");
+    assert_eq!(inserted[0].entity_id, "email-norm-1");
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn bot_profiles_includes_soft_deleted_bots(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let active = Uuid::new_v4();
@@ -2888,4 +3022,56 @@ async fn bot_profiles_includes_soft_deleted_bots(pool: Pool<Postgres>) -> anyhow
     );
     assert!(!profiles.contains_key(&missing));
     Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_channel_cascades_contacts_backfill_outbox_rows(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+    let created = repo
+        .create_channel(
+            macro_user_id(USER_A),
+            None,
+            CreateChannelRequest {
+                name: Some("delete-with-outbox".to_string()),
+                channel_type: ChannelType::Private,
+                team_id: None,
+                auto_join_team: false,
+                participants: HashSet::new(),
+            },
+        )
+        .await
+        .unwrap();
+
+    sqlx::query!(
+        "INSERT INTO contacts_backfill_outbox (comms_channel_id, user_ids) \
+         VALUES ($1, '[\"macro|user-a@test.com\"]'::jsonb)",
+        created.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    repo.delete_channel(created.id, USER_A.to_string())
+        .await
+        .expect("channel delete must succeed when contacts_backfill_outbox references the channel");
+
+    let channel_count = sqlx::query_scalar!(
+        "SELECT count(*) FROM comms_channels WHERE id = $1",
+        created.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(channel_count, 0);
+
+    let outbox_count = sqlx::query_scalar!(
+        "SELECT count(*) FROM contacts_backfill_outbox WHERE comms_channel_id = $1",
+        created.id,
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(outbox_count, 0);
 }

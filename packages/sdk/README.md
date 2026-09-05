@@ -94,7 +94,9 @@ Most entities carry user-defined properties and can be favorited:
 
 ```ts
 await doc.favorite();
-await doc.setProperty('prop_status', { text: 'In review' });
+await doc.setProperty(macro.properties.byId('prop_status'), {
+  text: 'In review',
+});
 const props = await doc.properties();
 ```
 
@@ -113,11 +115,57 @@ await channel.send(msg`Hey ${user}, take a look at ${doc}. cc ${here}`);
 
 These will render as @mentions in the Macro UI.
 
-# Webhook Events
+### Posting to a channel webhook
 
-Pass a `webhookSecret` (or set `MACRO_WEBHOOK_SECRET`) to receive events. You
-should use a framework like Hono or Express to handle the webhook request and
-pass it to the SDK which will handle verification and dispatching.
+The web UI can hand you a webhook URL and token for a channel. That token is a
+bot token, so it goes in the normal place:
+
+```ts
+const macro = new Macro({
+  auth: { type: 'bot', token: process.env.MACRO_WEBHOOK_TOKEN },
+});
+
+await macro.channels
+  .byId(channelId)
+  .send(msg`Deploy ${sha} finished. ${here}`);
+```
+
+# Events
+
+`macro.events` is always available. The default transport is a live SSE
+stream — no public URL, persisted webhook, or signing secret required.
+
+```ts
+const macro = new Macro({
+  token: process.env.MACRO_API_KEY,
+});
+
+const me = await macro.users.me();
+
+macro.events.on('channel.message_posted', async ({ metadata, message }) => {
+  if (metadata.sender === me.id) return; // don't reply to ourselves
+  await message.reply('hi!');
+});
+
+const stop = await macro.events.listen();
+// later: stop();
+```
+
+`listen()` opens `GET /webhook/events/stream` with the same `WebhookFilters`
+model as persisted webhooks. If you omit `filters`, it derives one filter from
+the event names already registered with `.on()`. Pass `scope: 'team'` for a
+team workspace (defaults to `'user'`). Delivery is best-effort: there is no
+replay if you disconnect.
+
+Handlers receive the same hydrated payloads as webhook deliveries — ORM
+handles for every entity the event names.
+
+### Persisted webhooks
+
+To receive the same events as HTTPS POSTs instead of (or in addition to) SSE,
+register a webhook and pass a `webhookSecret` (or set `MACRO_WEBHOOK_SECRET`).
+Use a framework like Hono or Express to handle the request; the SDK verifies
+the signature and dispatches.
 
 ```ts
 const macro = new Macro({
@@ -125,10 +173,8 @@ const macro = new Macro({
   webhookSecret: process.env.MACRO_WEBHOOK_SECRET,
 });
 
-const me = await macro.users.me();
-
 macro.events.on('channel.message_posted', async ({ metadata, message }) => {
-  if (metadata.sender === me.id) return; // don't reply to ourselves
+  if (metadata.sender === me.id) return;
   await message.reply('hi!');
 });
 
@@ -153,8 +199,9 @@ support by adding a wrapper to the appropriate model. There is CI to ensure that
 we don't forget to add coverage or explicitly skip coverage for new generated
 functions (endpoints).
 
-## Webhook events
+## Events
 
 Event names and payloads are **generated from the backend**: the Rust webhook
 crate exposes a `WebhookEvent` union in the storage OpenAPI spec, and
-`src/events/types.ts` derives `EventName` / `EventPayload` from it.
+`src/events/types.ts` derives `EventName` / `EventPayload` from it. SSE
+(`listen()`) and persisted webhooks (`webhook()`) dispatch the same union.

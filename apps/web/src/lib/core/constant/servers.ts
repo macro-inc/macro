@@ -12,10 +12,16 @@ const serverHostLocal: Servers = {
   contacts: 'http://localhost:8083',
   'email-service': 'http://localhost:8087',
   'image-proxy-service': 'http://localhost:8097',
-  'scheduled-action': 'http://localhost:8098',
+  'scheduled-action': 'http://localhost:8099',
+  'agent-harness': 'http://localhost:8101',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
+
+const gatewayHost =
+  import.meta.env.MODE === 'development'
+    ? 'https://dev-gateway.macro.com'
+    : 'https://gateway.macro.com';
 
 const authLogoutUrl =
   import.meta.env.MODE === 'development'
@@ -23,20 +29,21 @@ const authLogoutUrl =
     : 'https://auth.macro.com/oauth2/logout?client_id=75409999-7dc4-4241-b73b-a51818c3a71c&tenantId=a3e53c3d-8d6a-3e92-d64c-fa3bf30a60be';
 
 const serverHostRemote = {
-  'auth-service': `https://auth-service${devServerSuffix}.macro.com`,
+  'auth-service': `${gatewayHost}/auth`,
   'auth-logout': authLogoutUrl,
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
-  'document-storage-service': `https://cloud-storage${devServerSuffix}.macro.com`,
+  'document-storage-service': `${gatewayHost}/dss`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
   'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
-  'connection-gateway': `wss://connection-gateway${devServerSuffix}.macro.com`,
-  'notification-service': `https://notifications${devServerSuffix}.macro.com`,
+  'connection-gateway': `${gatewayHost.replace(/^http/, 'ws')}/connection-gateway`,
+  'notification-service': `${gatewayHost}/notification`,
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,
-  'unfurl-service': `https://unfurl-service${devServerSuffix}.macro.com`,
-  contacts: `https://contacts${devServerSuffix}.macro.com`,
-  'email-service': `https://email-service${devServerSuffix}.macro.com`,
-  'image-proxy-service': `https://image-proxy${devServerSuffix}.macro.com`,
-  'scheduled-action': `https://agent-schedule${devServerSuffix}.macro.com`,
+  'unfurl-service': `${gatewayHost}/unfurl`,
+  contacts: `${gatewayHost}/contacts`,
+  'email-service': `${gatewayHost}/email`,
+  'image-proxy-service': `${gatewayHost}/image-proxy`,
+  'scheduled-action': `${gatewayHost}/scheduled-action`,
+  'agent-harness': `${gatewayHost}/agent-harness`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;
@@ -94,10 +101,11 @@ function proxyServers(): Servers | undefined {
     'notification-service': `${proxyOrigin}/notification`,
     'static-file': `${proxyOrigin}/static-file`,
     'unfurl-service': `${proxyOrigin}/unfurl`,
+    'agent-harness': `${proxyOrigin}/agent-harness`,
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,
-    'scheduled-action': serverHostLocal['scheduled-action'], // no local container
+    'scheduled-action': `${proxyOrigin}/scheduled-action`,
   };
 }
 

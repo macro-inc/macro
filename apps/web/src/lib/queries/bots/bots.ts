@@ -10,6 +10,7 @@ type CreateBotParams = {
   avatarUrl?: string;
   description?: string;
   handle: string;
+  hasAgent?: boolean;
   name: string;
   teamId?: string;
 };
@@ -20,7 +21,8 @@ type CreateBotTokenParams = {
   expiresAt?: string;
 };
 
-type UpdateBotParams = Omit<CreateBotParams, 'teamId'> & {
+/** PATCH /bots/{bot_id} leaves every omitted field unchanged. */
+type UpdateBotParams = Partial<Omit<CreateBotParams, 'teamId'>> & {
   botId: string;
 };
 
@@ -58,6 +60,7 @@ export function useCreateBotMutation() {
           avatar_url: vars.avatarUrl,
           description: vars.description,
           handle: vars.handle,
+          has_agent: vars.hasAgent,
           name: vars.name,
           team_id: vars.teamId,
         })
@@ -77,6 +80,7 @@ export function useUpdateBotMutation() {
           avatar_url: vars.avatarUrl,
           description: vars.description,
           handle: vars.handle,
+          has_agent: vars.hasAgent,
           name: vars.name,
         })
       ),

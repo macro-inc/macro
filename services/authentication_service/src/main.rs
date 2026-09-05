@@ -34,7 +34,10 @@ use github::{
 };
 use loops_client::LoopsClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
-use macro_authorization::{InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState};
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationState,
+    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+};
 use macro_entrypoint::MacroEntrypoint;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use macro_service_urls::{
@@ -67,9 +70,14 @@ use referral::{
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
 
-use crate::api::context::{
-    ApiContext, AuthorizationService, MacroApiTokenContext, MacroApiTokenExpirySeconds,
-    MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
+use crate::{
+    api::context::{
+        ApiContext, AuthorizationService, MacroApiTokenContext, MacroApiTokenExpirySeconds,
+        MacroApiTokenIssuer, MacroApiTokenPrivateSecretKey, StripeWebhookSecretKey,
+    },
+    microsoft_token_cipher::{
+        EnvelopeMicrosoftTokenCipher, KmsDataKeyProvider, MicrosoftTokenCipher,
+    },
 };
 use std::{sync::Arc, time::Duration};
 use tokio_util::task::TaskTracker;
@@ -77,6 +85,7 @@ use tokio_util::task::TaskTracker;
 mod api;
 mod config;
 mod generate_password;
+mod microsoft_token_cipher;
 mod rate_limit_config;
 
 #[tokio::main]
@@ -92,9 +101,30 @@ async fn main() -> anyhow::Result<()> {
 
     // Parse our configuration from the environment.
     let config = Config::from_env().context("expected to be able to generate config")?;
+    let signup_policy = Arc::new(
+        config
+            .signup_policy()
+            .context("invalid signup policy configuration")?,
+    );
     let microsoft_credentials = config
         .microsoft_credentials()
         .context("invalid Microsoft OAuth configuration")?;
+    let microsoft_token_cipher = microsoft_credentials.as_ref().map(|credentials| {
+        Arc::new(EnvelopeMicrosoftTokenCipher::new(KmsDataKeyProvider::new(
+            aws_sdk_kms::Client::new(&aws_config),
+            credentials.token_kms_key_id.clone(),
+        ))) as Arc<dyn MicrosoftTokenCipher>
+    });
+
+    // A separate KMS key from the Microsoft one by design: sharing it would
+    // grant whatever decrypts Cursor keys access to the key protecting
+    // everyone's mailbox credentials.
+    let cursor_api_key_cipher = Arc::new(cursor_api_key::cipher::KmsCursorApiKeyCipher::new(
+        cursor_api_key::cipher::AwsKmsCiphertexts::new(
+            aws_sdk_kms::Client::new(&aws_config),
+            config.cursor_api_key_kms_key_id()?,
+        ),
+    )) as Arc<dyn cursor_api_key::cipher::CursorApiKeyCipher>;
 
     let internal_api_key = config.internal_api_key.clone();
 
@@ -223,6 +253,7 @@ async fn main() -> anyhow::Result<()> {
             default_user_id: None,
         },
         macro_authorization::NoBotAuthorizer,
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
     )));
 
     let redis_client = redis::Client::open(config.redis_uri.to_string().as_str())
@@ -412,6 +443,8 @@ async fn main() -> anyhow::Result<()> {
             db,
             github_link_service: Arc::new(github_link_service_impl),
             auth_client: Arc::new(auth_client),
+            microsoft_token_cipher,
+            cursor_api_key_cipher,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
@@ -420,6 +453,7 @@ async fn main() -> anyhow::Result<()> {
             notification_ingress_service,
             sqs_client,
             environment: config.environment,
+            signup_policy,
             rate_limit_service: rate_limit,
             calendar_scope_enabled: config.calendar_scope_enabled,
             jwt_args,

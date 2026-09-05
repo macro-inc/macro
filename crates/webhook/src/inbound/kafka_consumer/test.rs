@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::{
-    events::{WebhookDeletedMetadata, WebhookTopicEvent},
+    events::{WebhookDeletedMetadata, WebhookMacroEvent, WebhookTopicEvent},
     ingestion::WebhookEventIngestionError,
 };
 use channel_sender::ChannelSender;
@@ -41,6 +41,8 @@ fn document_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
         document_id: "doc_1".to_string(),
         actor_user_id: None,
+        actor: None,
+        on_behalf_of: None,
         project_id: None,
     }))
 }
@@ -62,7 +64,12 @@ fn declared_webhook_event() -> DeclaredMacroEvent {
 fn subscribes_to_all_ingestion_topics() {
     assert_eq!(
         DeclaredMacroEvent::topics(),
-        ["macro.documents", "macro.channels", "macro.webhooks"]
+        [
+            "macro.documents",
+            "macro.channels",
+            "macro.webhooks",
+            "macro.agent_sessions"
+        ]
     );
 }
 
@@ -75,9 +82,7 @@ fn decodes_document_events() {
 
     match decoded {
         DeclaredMacroEvent::DocumentMacroEvent(decoded) => assert_eq!(decoded.event(), &event),
-        DeclaredMacroEvent::ChannelMacroEvent(_) | DeclaredMacroEvent::WebhookMacroEvent(_) => {
-            panic!("decoded into the wrong topic variant")
-        }
+        _ => panic!("decoded into the wrong topic variant"),
     }
 }
 
@@ -94,9 +99,7 @@ fn decodes_channel_events() {
 
     match decoded {
         DeclaredMacroEvent::ChannelMacroEvent(decoded) => assert_eq!(decoded.event(), &event),
-        DeclaredMacroEvent::DocumentMacroEvent(_) | DeclaredMacroEvent::WebhookMacroEvent(_) => {
-            panic!("decoded into the wrong topic variant")
-        }
+        _ => panic!("decoded into the wrong topic variant"),
     }
 }
 
@@ -109,9 +112,7 @@ fn decodes_webhook_events() {
 
     match decoded {
         DeclaredMacroEvent::WebhookMacroEvent(decoded) => assert_eq!(decoded.event(), &event),
-        DeclaredMacroEvent::DocumentMacroEvent(_) | DeclaredMacroEvent::ChannelMacroEvent(_) => {
-            panic!("decoded into the wrong topic variant")
-        }
+        _ => panic!("decoded into the wrong topic variant"),
     }
 }
 
@@ -179,6 +180,13 @@ impl WebhookEventIngestionService for FlakyIngestionService {
     async fn ingest_webhook_event(
         &self,
         _event: Event<WebhookTopicEvent>,
+    ) -> Result<(), WebhookEventIngestionError> {
+        self.ingest()
+    }
+
+    async fn ingest_agent_trigger_event(
+        &self,
+        _event: Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent>,
     ) -> Result<(), WebhookEventIngestionError> {
         self.ingest()
     }

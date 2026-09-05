@@ -13,6 +13,8 @@ import type { WebhookStatus } from './webhookStatus';
 
 /**
  * Webhook returned after creation, including its signing secret.
+
+Clients deserialize this, so both derives are used.
  */
 export interface CreateWebhookResponse {
   /** Creation timestamp. */

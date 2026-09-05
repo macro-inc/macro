@@ -1,4 +1,5 @@
 export * from './actions';
+export * from './agent-commands';
 export * from './await';
 export * from './blame-tooltip';
 export * from './checklist';
@@ -43,4 +44,5 @@ export * from './tab-indentation';
 export * from './tables';
 export * from './tags';
 export * from './text-paste';
+export * from './trailing-paragraph';
 export * from './wordcount';

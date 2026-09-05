@@ -10,7 +10,7 @@ use axum::{
     extract::{FromRef, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
 };
 use chrono::{DateTime, NaiveDate, NaiveTime, Utc};
 use macro_authorization::{
@@ -18,10 +18,12 @@ use macro_authorization::{
 };
 use models_pagination::Base64Str;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        CalendarEvent, CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus,
+        CalendarEvent, CalendarMentionEvent, CalendarMentionPreview, CalendarMentionRequestItem,
+        CalendarOccurrence, CalendarOccurrenceCursor, CalendarSyncStatus, EventTime,
         OccurrenceRange,
     },
     ports::CalendarOccurrenceService,
@@ -69,6 +71,14 @@ where
     Router::new()
         .route("/calendar-events", get(list_occurrences::<S, Auth>))
         .route("/calendar-events/", get(list_occurrences::<S, Auth>))
+        .route(
+            "/calendar-events/preview",
+            post(mention_previews::<S, Auth>),
+        )
+        .route(
+            "/calendar-events/team-out-of-office",
+            get(list_team_out_of_office::<S, Auth>),
+        )
         .with_state(state)
 }
 
@@ -229,6 +239,271 @@ where
         next_cursor,
         sync_status,
     }))
+}
+
+/// Query parameters for the team out-of-office viewport.
+#[derive(Debug, Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamOutOfOfficeQuery {
+    /// Inclusive UTC viewport start.
+    start: DateTime<Utc>,
+    /// Exclusive UTC viewport end.
+    end: DateTime<Utc>,
+    /// Inclusive local date boundary for all-day events.
+    start_date: Option<NaiveDate>,
+    /// Exclusive local date boundary for all-day events.
+    end_date: Option<NaiveDate>,
+    /// Maximum number of occurrences, from 1 through 2,000.
+    #[param(minimum = 1, maximum = 2000)]
+    limit: Option<u16>,
+}
+
+/// One teammate's out-of-office occurrence.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamOutOfOfficeItem {
+    /// Macro user id of the teammate who is out.
+    owner_id: String,
+    /// The teammate's calendar event id.
+    event_id: Uuid,
+    /// Stable occurrence key within the event.
+    occurrence_key: String,
+    /// Event title, absent when the event's visibility withholds details.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    title: Option<String>,
+    /// Occurrence time span.
+    time: EventTime,
+}
+
+/// Team out-of-office viewport response.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct TeamOutOfOfficeResponse {
+    items: Vec<TeamOutOfOfficeItem>,
+    has_more: bool,
+}
+
+/// Return teammates' out-of-office occurrences in the requested viewport.
+#[tracing::instrument(skip_all, err)]
+#[utoipa::path(
+    get,
+    path = "/calendar-events/team-out-of-office",
+    tag = "calendar_events",
+    params(TeamOutOfOfficeQuery),
+    responses(
+        (status = 200, description = "Teammates' out-of-office occurrences in the requested viewport", body = TeamOutOfOfficeResponse),
+        (status = 400, description = "Invalid or unsupported calendar viewport"),
+        (status = 401, description = "Authentication required"),
+        (status = 500, description = "Calendar query failed"),
+    )
+)]
+pub async fn list_team_out_of_office<S, Auth>(
+    State(state): State<CalendarRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Query(query): Query<TeamOutOfOfficeQuery>,
+) -> Result<Json<TeamOutOfOfficeResponse>, CalendarApiError>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+{
+    let default_end_date = default_end_date(query.end);
+    let range = OccurrenceRange {
+        starts_at: query.start,
+        ends_at: query.end,
+        start_date: query.start_date.unwrap_or_else(|| query.start.date_naive()),
+        end_date: query
+            .end_date
+            .or(default_end_date)
+            .ok_or(CalendarApiError {
+                status: StatusCode::BAD_REQUEST,
+                message: "calendar end is outside the supported date range",
+            })?,
+    };
+    let (limit, repository_limit) = query_limits(query.limit)?;
+    let mut occurrences = state
+        .service
+        .list_team_out_of_office(
+            user.authorization.user.macro_user_id.as_ref(),
+            range,
+            repository_limit,
+        )
+        .await
+        .map_err(|error| {
+            if error
+                .as_ref()
+                .downcast_current_context::<CalendarValidationError>()
+                .is_some()
+            {
+                return CalendarApiError {
+                    status: StatusCode::BAD_REQUEST,
+                    message: "calendar range must be positive, at most 370 days, inside the maintained one-year-history/two-year-future window, with limit 1–2000",
+                };
+            }
+            tracing::error!(error = ?error, "failed to query team out-of-office occurrences");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "unable to query team out-of-office occurrences",
+            }
+        })?;
+    let has_more = occurrences.len() > usize::from(limit);
+    occurrences.truncate(usize::from(limit));
+    let items = occurrences
+        .into_iter()
+        .map(|row| TeamOutOfOfficeItem {
+            owner_id: row.owner_id,
+            event_id: row.event_id,
+            occurrence_key: row.occurrence_key,
+            title: row.title,
+            time: row.time,
+        })
+        .collect();
+
+    Ok(Json(TeamOutOfOfficeResponse { items, has_more }))
+}
+
+/// One mentioned event to resolve for the requester.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionPreviewRequestItem {
+    /// Mentioned calendar event id.
+    event_id: Uuid,
+    /// Occurrence the mention points at, when it targets one instance.
+    occurrence_key: Option<String>,
+}
+
+/// Batch calendar mention preview request.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionPreviewRequest {
+    /// Mentioned events to resolve, at most 100.
+    items: Vec<CalendarMentionPreviewRequestItem>,
+}
+
+/// Requester-relative visibility of one mentioned event.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CalendarMentionPreviewKind {
+    /// The requester holds a copy of the meeting on a visible calendar.
+    Access,
+    /// The event exists but is on no calendar the requester can see.
+    NoAccess,
+    /// No live event has this id.
+    DoesNotExist,
+}
+
+/// Resolution of one mentioned event, in request order.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionPreviewItem {
+    /// The mentioned event id, echoed from the request.
+    event_id: Uuid,
+    /// Visibility of the mentioned event to the requester.
+    #[serde(rename = "type")]
+    kind: CalendarMentionPreviewKind,
+    /// Preview of the requester's own copy, present only with access.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    event: Option<CalendarMentionEvent>,
+}
+
+/// Batch calendar mention preview response.
+#[derive(Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarMentionPreviewResponse {
+    items: Vec<CalendarMentionPreviewItem>,
+}
+
+/// Resolve mentioned calendar events to the requester's own projections.
+#[tracing::instrument(skip_all, err)]
+#[utoipa::path(
+    post,
+    path = "/calendar-events/preview",
+    tag = "calendar_events",
+    request_body = CalendarMentionPreviewRequest,
+    responses(
+        (status = 200, description = "Requester-relative previews for the mentioned events", body = CalendarMentionPreviewResponse),
+        (status = 400, description = "Too many events in one request"),
+        (status = 401, description = "Authentication required"),
+        (status = 500, description = "Calendar query failed"),
+    )
+)]
+pub async fn mention_previews<S, Auth>(
+    State(state): State<CalendarRouterState<S, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(request): Json<CalendarMentionPreviewRequest>,
+) -> Result<Json<CalendarMentionPreviewResponse>, CalendarApiError>
+where
+    S: CalendarOccurrenceService,
+    Auth: MacroAuthorizationService,
+{
+    let requested_ids: Vec<Uuid> = request.items.iter().map(|item| item.event_id).collect();
+    let items = request
+        .items
+        .into_iter()
+        .map(|item| CalendarMentionRequestItem {
+            event_id: item.event_id,
+            occurrence_key: item.occurrence_key,
+        })
+        .collect();
+    let previews = state
+        .service
+        .mention_previews(user.authorization.user.macro_user_id.as_ref(), items)
+        .await
+        .map_err(|error| {
+            if error
+                .as_ref()
+                .downcast_current_context::<CalendarValidationError>()
+                .is_some()
+            {
+                return CalendarApiError {
+                    status: StatusCode::BAD_REQUEST,
+                    message: "calendar mention previews accept at most 100 events per request",
+                };
+            }
+            tracing::error!(error = ?error, "failed to resolve calendar mention previews");
+            CalendarApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: "unable to resolve calendar mention previews",
+            }
+        })?;
+
+    // Positional pairing is only sound with one preview per requested item,
+    // which the port guarantees — treat any drift as a server error rather
+    // than silently mispairing.
+    if previews.len() != requested_ids.len() {
+        tracing::error!(
+            requested = requested_ids.len(),
+            resolved = previews.len(),
+            "calendar mention preview resolution returned a mismatched item count"
+        );
+        return Err(CalendarApiError {
+            status: StatusCode::INTERNAL_SERVER_ERROR,
+            message: "unable to resolve calendar mention previews",
+        });
+    }
+    let items = requested_ids
+        .into_iter()
+        .zip(previews)
+        .map(|(event_id, preview)| match preview {
+            CalendarMentionPreview::Accessible(event) => CalendarMentionPreviewItem {
+                event_id,
+                kind: CalendarMentionPreviewKind::Access,
+                event: Some(*event),
+            },
+            CalendarMentionPreview::NoAccess => CalendarMentionPreviewItem {
+                event_id,
+                kind: CalendarMentionPreviewKind::NoAccess,
+                event: None,
+            },
+            CalendarMentionPreview::DoesNotExist => CalendarMentionPreviewItem {
+                event_id,
+                kind: CalendarMentionPreviewKind::DoesNotExist,
+                event: None,
+            },
+        })
+        .collect();
+
+    Ok(Json(CalendarMentionPreviewResponse { items }))
 }
 
 fn decode_cursor(

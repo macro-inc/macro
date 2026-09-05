@@ -163,7 +163,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
         .sidebar-glow { animation: sidebar-glow-pulse 1.8s ease-in-out infinite; border-radius: 4px; }
       `}</style>
       <div class="flex size-full bg-surface rounded-sm border border-edge-muted">
-        <div class="px-2 shrink-0 bg-surface-secondary/50 flex flex-col items-center py-3 gap-1">
+        <div class="px-2 shrink-0 bg-panel flex flex-col items-center py-3 gap-1">
           <MacroIcon class="size-5 text-accent mb-3" />
           <button
             type="button"

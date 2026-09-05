@@ -227,8 +227,8 @@ impl ServiceUrlVarErr {
 ///         #[derive(Debug, Clone)]
 ///         pub struct DocumentStorageServiceUrl {
 ///             local: "http://localhost:8086",
-///             dev: "https://cloud-storage-dev.macro.com",
-///             prod: "https://cloud-storage.macro.com",
+///             dev: "https://dev-gateway.macro.com/dss",
+///             prod: "https://gateway.macro.com/dss",
 ///         }
 ///     }
 ///
@@ -503,38 +503,38 @@ service_url! {
         /// Authentication service API URL.
         pub AuthServiceUrl {
             local: "http://localhost:8080",
-            dev: "https://auth-service-dev.macro.com",
-            prod: "https://auth-service.macro.com",
-        },
-        /// PDF rendering service API URL.
-        pub PdfServiceUrl {
-            local: "http://localhost:4567",
-            dev: "https://pdf-service-dev.macro.com",
-            prod: "https://pdf-service.macro.com",
+            dev: "https://dev-gateway.macro.com/auth",
+            prod: "https://gateway.macro.com/auth",
         },
         /// Document storage service API URL.
         pub DocumentStorageServiceUrl {
             local: "http://localhost:8086",
-            dev: "https://cloud-storage-dev.macro.com",
-            prod: "https://cloud-storage.macro.com",
+            dev: "https://dev-gateway.macro.com/dss",
+            prod: "https://gateway.macro.com/dss",
         },
-        /// WebSocket service URL.
-        pub WebsocketServiceUrl {
-            local: "ws://localhost:6969",
-            dev: "wss://services-dev.macro.com",
-            prod: "wss://services.macro.com",
+        /// Convert service API URL.
+        pub ConvertServiceUrl {
+            local: "http://localhost:8080",
+            dev: "https://dev-gateway.macro.com/convert",
+            prod: "https://gateway.macro.com/convert",
+        },
+        /// Search processing service API URL.
+        pub SearchProcessingServiceUrl {
+            local: "http://localhost:8092",
+            dev: "https://dev-gateway.macro.com/search-processing",
+            prod: "https://gateway.macro.com/search-processing",
         },
         /// Connection gateway HTTP API URL.
         pub ConnectionGatewayUrl {
             local: "http://localhost:8082",
-            dev: "https://connection-gateway-dev.macro.com",
-            prod: "https://connection-gateway.macro.com",
+            dev: "https://dev-gateway.macro.com/connection-gateway",
+            prod: "https://gateway.macro.com/connection-gateway",
         },
         /// Connection gateway WebSocket URL.
         pub ConnectionGatewayWebsocketUrl {
             local: "ws://localhost:8082",
-            dev: "wss://connection-gateway-dev.macro.com",
-            prod: "wss://connection-gateway.macro.com",
+            dev: "wss://dev-gateway.macro.com/connection-gateway",
+            prod: "wss://gateway.macro.com/connection-gateway",
         },
         /// Document cognition service API URL.
         pub DocumentCognitionServiceUrl {
@@ -545,8 +545,8 @@ service_url! {
         /// Notification service API URL.
         pub NotificationServiceUrl {
             local: "http://localhost:8089",
-            dev: "https://notifications-dev.macro.com",
-            prod: "https://notifications.macro.com",
+            dev: "https://dev-gateway.macro.com/notification",
+            prod: "https://gateway.macro.com/notification",
         },
         /// Static file service/CDN URL.
         pub StaticFileServiceUrl {
@@ -554,29 +554,36 @@ service_url! {
             dev: "https://static-file-service-dev.macro.com",
             prod: "https://static-file-service.macro.com",
         },
+        /// Agent harness service API URL. Serves the agent-session control
+        /// routes, which run in the process that owns the live sessions.
+        pub AgentHarnessServiceUrl {
+            local: "http://localhost:8101",
+            dev: "https://dev-gateway.macro.com/agent-harness",
+            prod: "https://gateway.macro.com/agent-harness",
+        },
         /// Link unfurl service API URL.
         pub UnfurlServiceUrl {
             local: "http://localhost:8095",
-            dev: "https://unfurl-service-dev.macro.com",
-            prod: "https://unfurl-service.macro.com",
+            dev: "https://dev-gateway.macro.com/unfurl",
+            prod: "https://gateway.macro.com/unfurl",
         },
         /// Contacts service API URL.
         pub ContactsServiceUrl {
             local: "http://localhost:8083",
-            dev: "https://contacts-dev.macro.com",
-            prod: "https://contacts.macro.com",
+            dev: "https://dev-gateway.macro.com/contacts",
+            prod: "https://gateway.macro.com/contacts",
         },
         /// Email service API URL.
         pub EmailServiceUrl {
             local: "http://localhost:8087",
-            dev: "https://email-service-dev.macro.com",
-            prod: "https://email-service.macro.com",
+            dev: "https://dev-gateway.macro.com/email",
+            prod: "https://gateway.macro.com/email",
         },
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {
             local: "http://localhost:8097",
-            dev: "https://image-proxy-dev.macro.com",
-            prod: "https://image-proxy.macro.com",
+            dev: "https://dev-gateway.macro.com/image-proxy",
+            prod: "https://gateway.macro.com/image-proxy",
         },
         /// Lexical conversion service API URL.
         pub LexicalServiceUrl {

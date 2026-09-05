@@ -1,0 +1,16 @@
+# macrod configuration. Pairing adds a bearer token here; keep this file private.
+
+[macro]
+api_url = "https://agent-harness.macro.com"
+storage_url = "https://gateway.macro.com/dss"
+web_url = "https://macro.com/app"
+
+[identity]
+scope = "private"
+
+[harness]
+command = "hermes"
+args = ["acp"]
+
+[workspace]
+path = "."

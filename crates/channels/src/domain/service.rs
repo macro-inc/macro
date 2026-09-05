@@ -1,4 +1,5 @@
 use crate::domain::{
+    dm::{DmPair, EnsureDms, EnsureDmsSummary},
     events::ChannelEvent,
     models::{
         Activity, ActivityType, AddParticipantsRequest, AttachmentEntityReference, BotId,
@@ -18,6 +19,7 @@ use crate::domain::{
         ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
         ChannelReferenceSharePermissions, ChannelRepo, ChannelService,
     },
+    side_effects::bot_mention_ids,
 };
 use bot_id::BotIdStr;
 use bot_id::cowlike::CowLike;
@@ -331,7 +333,39 @@ where
         _actor_org_id: Option<i64>,
         req: crate::domain::models::CreateChannelRequest,
     ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
-        let actor = require_user_actor(&actor)?;
+        let owner = require_user_actor(&actor)?;
+        self.create_owned_channel(owner.clone(), Sender::new_from_user(owner), None, req)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn create_system_channel(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        self.create_channel_on_behalf(owner, bot_id::MACRO_SYSTEM_BOT_ID, req)
+            .await
+    }
+
+    #[tracing::instrument(err, skip(self, req))]
+    async fn create_channel_on_behalf(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        actor: BotId,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        self.create_owned_channel(owner.clone(), Sender::new_from_bot(actor), Some(owner), req)
+            .await
+    }
+
+    async fn create_owned_channel(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        activity_actor: Sender,
+        on_behalf_of: Option<MacroUserIdStr<'static>>,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
         if req.auto_join_team && req.channel_type != ChannelType::Team {
             return Err(ChannelMutationErr::BadRequest(
                 "auto-join is only available for team channels".to_string(),
@@ -343,7 +377,7 @@ where
             })?;
             let has_team = self
                 .repo
-                .user_has_team(actor.as_ref().to_string(), team_id)
+                .user_has_team(owner.as_ref().to_string(), team_id)
                 .await
                 .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
             if !has_team {
@@ -370,12 +404,13 @@ where
         let channel_name = req.name.clone();
 
         let created_channel = self
-            .create_channel_record(actor.copied(), org_id, req)
+            .create_channel_record(owner.copied(), org_id, req)
             .await?;
 
         self.events.dispatch(ChannelEvent::ChannelCreated {
             channel_id: created_channel.id,
-            actor: Sender::new_from_user(actor),
+            actor: activity_actor,
+            on_behalf_of,
             channel_type,
             channel_name,
             participant_user_ids: created_channel.participant_user_ids,
@@ -386,6 +421,35 @@ where
         })
     }
 
+    #[tracing::instrument(err, skip(self, command))]
+    async fn ensure_dms(&self, command: EnsureDms) -> Result<EnsureDmsSummary, ChannelMutationErr> {
+        let mut summary = EnsureDmsSummary::default();
+        for request in command.into_requests() {
+            let user_lo = request.pair.lo().as_ref().to_string();
+            let user_hi = request.pair.hi().as_ref().to_string();
+            match self.ensure_one_dm(request.pair, request.owner).await {
+                Ok(GetOrCreateChannelResponse {
+                    action: GetOrCreateAction::Create,
+                    ..
+                }) => summary.created += 1,
+                Ok(GetOrCreateChannelResponse {
+                    action: GetOrCreateAction::Get,
+                    ..
+                }) => summary.existing += 1,
+                Err(error) => {
+                    summary.failed += 1;
+                    tracing::error!(
+                        error=?error,
+                        user_lo,
+                        user_hi,
+                        "unable to ensure teammate direct message"
+                    );
+                }
+            }
+        }
+        Ok(summary)
+    }
+
     #[tracing::instrument(err, skip(self, recipient_id))]
     async fn get_or_create_dm(
         &self,
@@ -393,32 +457,12 @@ where
         GetOrCreateDmRequest { recipient_id }: GetOrCreateDmRequest,
     ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
         let actor = require_user_actor(&actor)?;
-
-        if actor == recipient_id {
-            return Err(ChannelMutationErr::BadRequest(
+        let pair = DmPair::new(actor.clone(), recipient_id).map_err(|_| {
+            ChannelMutationErr::BadRequest(
                 "recipient_id cannot be the same as the user_id".to_string(),
-            ));
-        }
-
-        let existing_channel_id = self
-            .repo
-            .maybe_get_dm(actor.clone(), recipient_id.clone())
-            .await
-            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
-
-        self.get_or_create_channel(
-            existing_channel_id,
-            actor.clone(),
-            None,
-            crate::domain::models::CreateChannelRequest {
-                name: None,
-                channel_type: ChannelType::DirectMessage,
-                team_id: None,
-                auto_join_team: false,
-                participants: HashSet::from([actor, recipient_id.clone()]),
-            },
-        )
-        .await
+            )
+        })?;
+        self.ensure_one_dm(pair, actor).await
     }
 
     #[tracing::instrument(err, skip(self, req))]
@@ -581,7 +625,16 @@ where
         }
     }
 
-    #[tracing::instrument(err, skip(self, req))]
+    #[tracing::instrument(
+        err,
+        skip(self, req),
+        fields(
+            channel.id = %channel_id,
+            channel.message.scope = tracing::field::Empty,
+            channel.message.mention_count = tracing::field::Empty,
+            agent.mention.bot_count = tracing::field::Empty,
+        )
+    )]
     async fn post_message(
         &self,
         actor: Sender,
@@ -595,6 +648,19 @@ where
         if actor.as_bot().is_some() && req.mentions.is_empty() {
             req.mentions = self.extract_content_mentions(&req.content).await;
         }
+        tracing::Span::current().record(
+            "channel.message.scope",
+            if req.thread_id.is_some() {
+                "thread"
+            } else {
+                "channel_top_level"
+            },
+        );
+        tracing::Span::current().record("channel.message.mention_count", req.mentions.len());
+        tracing::Span::current().record(
+            "agent.mention.bot_count",
+            bot_mention_ids(&req.mentions).len(),
+        );
 
         let message = self
             .repo
@@ -1248,6 +1314,32 @@ where
     P: ChannelReferenceSharePermissions,
     M: ChannelMentionExtractor,
 {
+    async fn ensure_one_dm(
+        &self,
+        pair: DmPair,
+        owner: MacroUserIdStr<'static>,
+    ) -> Result<GetOrCreateChannelResponse, ChannelMutationErr> {
+        let existing_channel_id = self
+            .repo
+            .maybe_get_dm(pair.lo().clone(), pair.hi().clone())
+            .await
+            .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
+
+        self.get_or_create_channel(
+            existing_channel_id,
+            owner,
+            None,
+            crate::domain::models::CreateChannelRequest {
+                name: None,
+                channel_type: ChannelType::DirectMessage,
+                team_id: None,
+                auto_join_team: false,
+                participants: HashSet::from([pair.lo().clone(), pair.hi().clone()]),
+            },
+        )
+        .await
+    }
+
     async fn create_channel_record<'a>(
         &self,
         owner_id: MacroUserIdStr<'a>,
@@ -1283,6 +1375,7 @@ where
         self.events.dispatch(ChannelEvent::ChannelCreated {
             channel_id: created_channel.id,
             actor: owner_sender,
+            on_behalf_of: None,
             channel_type,
             channel_name,
             participant_user_ids: created_channel.participant_user_ids,
@@ -1788,6 +1881,23 @@ where
         ChannelServiceImpl::create_channel(self, actor, None, req).await
     }
 
+    async fn create_system_channel(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        ChannelServiceImpl::create_system_channel(self, owner, req).await
+    }
+
+    async fn create_channel_on_behalf(
+        &self,
+        owner: MacroUserIdStr<'static>,
+        actor: BotId,
+        req: crate::domain::models::CreateChannelRequest,
+    ) -> Result<crate::domain::models::CreateChannelResponse, ChannelMutationErr> {
+        ChannelServiceImpl::create_channel_on_behalf(self, owner, actor, req).await
+    }
+
     #[tracing::instrument(err, skip(self, user_id))]
     async fn auto_join_by_team_id(
         &self,
@@ -1822,6 +1932,10 @@ where
             .restore_by_channel_ids(user_id, channel_ids)
             .await
             .map_err(|e| ChannelMutationErr::Repo(e.into()))
+    }
+
+    async fn ensure_dms(&self, command: EnsureDms) -> Result<EnsureDmsSummary, ChannelMutationErr> {
+        ChannelServiceImpl::ensure_dms(self, command).await
     }
 
     async fn get_or_create_dm(

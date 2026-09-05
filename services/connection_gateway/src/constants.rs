@@ -1,4 +1,5 @@
 use axum::http::HeaderValue;
+use std::time::Duration;
 
 pub const ORIGINS: [HeaderValue; 23] = [
     HeaderValue::from_static("http://localhost:3000"),
@@ -28,3 +29,6 @@ pub const ORIGINS: [HeaderValue; 23] = [
 
 /// The default timeout threshold is 1 minute
 pub const DEFAULT_TIMEOUT_THRESHOLD: u64 = 60_000;
+
+/// Emit diagnostics while a websocket queue or write remains blocked this long.
+pub(crate) const SLOW_WEBSOCKET_OPERATION_THRESHOLD: Duration = Duration::from_secs(1);

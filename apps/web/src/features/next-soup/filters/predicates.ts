@@ -137,6 +137,10 @@ export function callsFilter(entity: EntityData): boolean {
   return entity.type === 'call';
 }
 
+export function calendarEventFilter(entity: EntityData): boolean {
+  return entity.type === 'calendar_event';
+}
+
 export function crmCompanyFilter(entity: EntityData): boolean {
   return entity.type === 'crm_company';
 }
@@ -171,6 +175,14 @@ export function scheduledRemindersFilter(entity: EntityData): boolean {
     !entity.completedAt &&
     new Date(entity.nextRunAt).getTime() > Date.now()
   );
+}
+
+/**
+ * Reminders not yet dealt with — the scheduled ones still ahead and the fired
+ * ones waiting on their owner, together. Everything but Done.
+ */
+export function notDoneRemindersFilter(entity: EntityData): boolean {
+  return entity.type === 'reminder' && !entity.completedAt;
 }
 
 /** Reminders the owner has marked as dealt with. */

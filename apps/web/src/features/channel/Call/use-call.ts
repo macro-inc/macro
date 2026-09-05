@@ -10,6 +10,14 @@ import { callServiceClient } from '@service-call/client';
 import { useMutation } from '@tanstack/solid-query';
 import type { DisconnectReason } from 'livekit-client';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type ActiveCallLookup,
+  AUTO_REJOIN_DELAY_MS,
+  type AutoRejoinAttempt,
+  type AutoRejoinRefusal,
+  checkAutoRejoinTarget,
+  checkAutoRejoinTiming,
+} from './auto-rejoin';
 import { useCallContext } from './CallContext';
 import { publishCallResolution } from './call-resolution';
 import { LK_DISCONNECT_REASON, LK_ROOM_EVENT } from './livekit-loader';
@@ -27,7 +35,6 @@ type JoinCallContext = {
 };
 
 const JOIN_TIMEOUT_MS = 15_000;
-const AUTO_REJOIN_DELAY_MS = 750;
 const MAX_AUTO_REJOIN_ATTEMPTS = 1;
 
 type ActiveJoinAttempt = {
@@ -57,7 +64,21 @@ let activeJoinAttempt: ActiveJoinAttempt | null = null;
 // Module-level guard: only one leave can be in flight at a time across all
 // useCall() instances. Prevents a user-initiated leave and a concurrent
 // CallKit call-ended event from both proceeding to disconnect+leaveMutation.
-let leaveInFlight = false;
+// Tracked as a start timestamp so a leave stuck on a hung network request
+// cannot silently swallow every later leave tap.
+const LEAVE_IN_FLIGHT_STALE_MS = 10_000;
+let leaveInFlightSince: number | null = null;
+
+function isLeaveInFlight(): boolean {
+  if (leaveInFlightSince === null) return false;
+  // Deliberately wall-clock, not performance.now(): the performance timeline
+  // freezes while iOS suspends the webview, so a monotonic delta would keep a
+  // pre-suspension leave "in flight" after resume — the stuck-leave symptom
+  // this latch exists to prevent.
+  const elapsed = Date.now() - leaveInFlightSince;
+  // A backwards wall-clock jump must release the latch, not extend it.
+  return elapsed >= 0 && elapsed < LEAVE_IN_FLIGHT_STALE_MS;
+}
 
 /**
  * Hook that orchestrates joining/leaving calls by combining
@@ -76,6 +97,10 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
   let cleanupDisconnectListener: (() => void) | null = null;
   let autoRejoinAttempts = 0;
   let autoRejoinTimer: ReturnType<typeof globalThis.setTimeout> | null = null;
+  // Captured when the listener is attached, because LiveKit's own Disconnected
+  // handler resets the store before ours runs. An auto-rejoin needs it to tell
+  // "the call I dropped out of" from "whatever call is in this channel now".
+  let listeningCallId: string | null = null;
 
   function clearAutoRejoinTimer() {
     if (!autoRejoinTimer) return;
@@ -83,8 +108,76 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
     autoRejoinTimer = null;
   }
 
+  /** The channel's live call; `'unavailable'` when the lookup itself failed. */
+  async function lookupActiveCall(id: string): Promise<ActiveCallLookup> {
+    try {
+      const active = await throwOnErr(() =>
+        callServiceClient.checkActiveCall(id)
+      );
+      return active ? { callId: active.callId } : null;
+    } catch (e) {
+      console.error('auto-rejoin active-call lookup failed', e);
+      return 'unavailable';
+    }
+  }
+
+  /**
+   * Give up on reconnecting: drop the "Reconnecting…" banner and let the UI
+   * fall back to the pre-call surface, the same way it does when a call ends
+   * on its own. No server-side leave is issued — the session dropped because
+   * the transport died, so the RTC provider has already reaped this
+   * participant and the `participant_left` webhook cleaned up after it.
+   */
+  function abandonAutoRejoin(
+    attempt: AutoRejoinAttempt,
+    refusal: AutoRejoinRefusal
+  ) {
+    console.info('[call] skipping auto-rejoin', {
+      refusal,
+      channelId: attempt.channelId,
+      callId: attempt.callId,
+    });
+    callCtx.setJoinError(null);
+    options?.onLeave?.();
+  }
+
+  async function runAutoRejoin(attempt: AutoRejoinAttempt) {
+    if (isLeaveInFlight()) return;
+
+    const timingRefusal = checkAutoRejoinTiming({
+      attempt,
+      now: Date.now(),
+      currentChannelId: channelId(),
+    });
+    if (timingRefusal) {
+      abandonAutoRejoin(attempt, timingRefusal);
+      return;
+    }
+
+    // The join API is a get-or-create, so rejoining a call that has ended
+    // silently starts a new one and rings the channel. Confirm the call is
+    // still live first: recovery may re-enter a call, never open one.
+    const activeCall = await lookupActiveCall(attempt.channelId);
+
+    // `joinCall` reads the channel accessor, which can have moved on while the
+    // lookup was in flight (the split navigated). Joining now would drop the
+    // user into whichever channel they went to instead.
+    if (channelId() !== attempt.channelId) {
+      abandonAutoRejoin(attempt, 'channel_changed');
+      return;
+    }
+
+    const targetRefusal = checkAutoRejoinTarget({ attempt, activeCall });
+    if (targetRefusal) {
+      abandonAutoRejoin(attempt, targetRefusal);
+      return;
+    }
+
+    await joinCall().catch((e) => console.error('auto-rejoin call failed', e));
+  }
+
   function scheduleAutoRejoin(reason?: DisconnectReason) {
-    if (leaveInFlight) return;
+    if (isLeaveInFlight()) return;
 
     if (!shouldAutoRejoin(reason)) {
       options?.onLeave?.();
@@ -98,9 +191,14 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
 
     autoRejoinAttempts += 1;
     callCtx.setJoinError('Call disconnected. Reconnecting…');
+    const attempt: AutoRejoinAttempt = {
+      channelId: channelId(),
+      callId: listeningCallId,
+      scheduledAt: Date.now(),
+    };
     autoRejoinTimer = globalThis.setTimeout(() => {
       autoRejoinTimer = null;
-      joinCall().catch((e) => console.error('auto-rejoin call failed', e));
+      void runAutoRejoin(attempt);
     }, AUTO_REJOIN_DELAY_MS);
   }
 
@@ -110,6 +208,8 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
 
     const room = callCtx.room();
     if (!room) return;
+
+    listeningCallId = callCtx.activeCallId();
 
     const handleDisconnect = (reason?: DisconnectReason) => {
       // This listener is detached before explicit leave, so reaching this path
@@ -276,8 +376,9 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
   };
 
   async function leaveCall(leaveOptions?: { endNativeCall?: boolean }) {
-    if (leaveInFlight) return;
-    leaveInFlight = true;
+    if (isLeaveInFlight()) return;
+    const leaveStartedAt = Date.now();
+    leaveInFlightSince = leaveStartedAt;
     const id = channelId();
     // Detach before disconnect so the RoomEvent.Disconnected handler
     // doesn't double-fire onLeave.
@@ -297,7 +398,11 @@ export function useCall(channelId: () => string, options?: UseCallOptions) {
         await leaveMutation.mutateAsync(id);
       }
     } finally {
-      leaveInFlight = false;
+      // A staled-out leave releases the guard to a newer attempt; don't let
+      // its late completion clear that newer attempt's claim.
+      if (leaveInFlightSince === leaveStartedAt) {
+        leaveInFlightSince = null;
+      }
     }
   }
 

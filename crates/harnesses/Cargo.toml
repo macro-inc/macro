@@ -1,0 +1,48 @@
+[package]
+edition = "2024"
+name = "harnesses"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["inbound", "outbound", "ports"]
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "macro_authorization/axum",
+  "dep:model-error-response",
+  "dep:utoipa",
+  "ports",
+]
+outbound = ["dep:sqlx", "ports"]
+ports = ["dep:tokio"]
+test-utils = ["dep:mockall", "ports"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+bot_id = { path = "../bot_id", features = ["schema"] }
+chrono = { workspace = true }
+constant_time_eq = { workspace = true }
+harness_id = { path = "../harness_id", features = ["schema", "sqlx"] }
+harness_token = { path = "../harness_token" }
+hex = { workspace = true }
+macro_authorization = { path = "../macro_authorization", optional = true, default-features = false }
+macro_user_id = { path = "../macro_user_id" }
+mockall = { workspace = true, optional = true }
+model-error-response = { path = "../model-error-response", optional = true }
+rand = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, optional = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+harness_id = { path = "../harness_id", features = ["test-utils"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

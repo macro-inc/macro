@@ -1,5 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { GATEWAY_PRIORITIES, type GatewayService } from '../../../shared';
 import {
   DEFAULT_DEREGISTRATION_DELAY_SECONDS,
   DEFAULT_TARGET_GROUP_HEALTH_CHECK,
@@ -16,10 +17,16 @@ type ServiceTargetGroupArgs = {
   containerPort: number;
   // Health check
   healthCheckPath: string;
-  // Path patterns
-  pathPatterns: string[];
-  // Priority **MUST BE UNIQUE**
-  priority: number;
+  // Path patterns. Exactly one of pathPatterns and hostHeaders must be set.
+  pathPatterns?: string[];
+  // Host headers to match instead of paths, for a target group that owns a
+  // whole hostname on a shared listener.
+  hostHeaders?: string[];
+  // Shared-gateway tenant. Priority comes from GATEWAY_PRIORITIES.
+  // Exactly one of service and priority must be set.
+  service?: GatewayService;
+  // Dedicated-ALB rule priority. Do not use on the shared gateway.
+  priority?: number;
   // Health check
   healthCheck?: Partial<aws.types.input.lb.TargetGroupHealthCheck>;
   // Deregistration delay
@@ -45,6 +52,22 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
     super('my:components:ServiceTargetGroup', name, {}, opts);
 
     this.tags = args.tags;
+
+    if (!args.pathPatterns === !args.hostHeaders) {
+      throw new Error(
+        `${name}: exactly one of pathPatterns and hostHeaders must be set`
+      );
+    }
+
+    if (!args.service === !args.priority) {
+      throw new Error(
+        `${name}: exactly one of service and priority must be set`
+      );
+    }
+
+    const priority = args.service
+      ? GATEWAY_PRIORITIES[args.service]
+      : args.priority;
 
     this.target_group = new aws.lb.TargetGroup(
       `${name}-target-group`,
@@ -76,14 +99,12 @@ export class ServiceTargetGroup extends pulumi.ComponentResource {
       `${name}-listener-rule`,
       {
         listenerArn: args.listenerArn,
-        priority: args.priority,
+        priority,
 
         conditions: [
-          {
-            pathPattern: {
-              values: args.pathPatterns,
-            },
-          },
+          args.pathPatterns
+            ? { pathPattern: { values: args.pathPatterns } }
+            : { hostHeader: { values: args.hostHeaders ?? [] } },
         ],
 
         actions: [

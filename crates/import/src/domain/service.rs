@@ -24,9 +24,7 @@ use agent::{AgentLoop, PredefinedModel};
 use ai_toolset::{RequestContext, ToolResult, ToolSet, ToolSetError};
 use futures::StreamExt;
 use macro_user_id::user_id::MacroUserIdStr;
-use mcp_client::domain::models::McpServerRecord;
-use mcp_client::domain::ports::McpServerStore;
-use mcp_client::domain::service::McpToolSet;
+use mcp_select::{ConnectorSelect, UserMcpTools};
 use std::collections::HashSet;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -304,7 +302,7 @@ pub trait NotionPageImporter: Send + Sync + 'static {
 /// entity creator, and usage recording together.
 pub struct ImportServiceImpl<R, S, C> {
     repo: R,
-    mcp_store: Arc<S>,
+    mcp_tools: Arc<S>,
     creator: Arc<C>,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
     notifier: Option<ImportNotify>,
@@ -314,7 +312,7 @@ impl<R: Clone, S, C> Clone for ImportServiceImpl<R, S, C> {
     fn clone(&self) -> Self {
         Self {
             repo: self.repo.clone(),
-            mcp_store: self.mcp_store.clone(),
+            mcp_tools: self.mcp_tools.clone(),
             creator: self.creator.clone(),
             recorder: self.recorder.clone(),
             notifier: self.notifier.clone(),
@@ -326,13 +324,13 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
     /// Build the orchestrator.
     pub fn new(
         repo: R,
-        mcp_store: Arc<S>,
+        mcp_tools: Arc<S>,
         creator: Arc<C>,
         recorder: Arc<dyn ai_usage::UsageRecorder>,
     ) -> Self {
         Self {
             repo,
-            mcp_store,
+            mcp_tools,
             creator,
             recorder,
             notifier: None,
@@ -355,7 +353,7 @@ impl<R, S, C> ImportServiceImpl<R, S, C> {
 impl<R, S, C> ImportServiceImpl<R, S, C>
 where
     R: ImportRepo + Clone,
-    S: McpServerStore,
+    S: ConnectorSelect,
     C: EntityCreator,
 {
     /// Spawn the gather session for one source; finishes the run row either
@@ -492,7 +490,7 @@ where
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
         model: &str,
-        mcp_tools: Arc<McpToolSet>,
+        mcp_tools: Arc<UserMcpTools>,
     ) -> anyhow::Result<()> {
         let native = gather_toolset::<Self>();
         let toolset = NativePlusMcp::new(native, mcp_tools);
@@ -522,7 +520,7 @@ where
     async fn import_notion_page_direct(
         &self,
         user: &MacroUserIdStr<'static>,
-        mcp_tools: &McpToolSet,
+        mcp_tools: &UserMcpTools,
         row: &ImportEntity,
     ) -> anyhow::Result<()> {
         let fetch_tool = notion_fetch_tool_name(mcp_tools)
@@ -579,7 +577,7 @@ where
     async fn connector_tool_call(
         &self,
         user: &MacroUserIdStr<'static>,
-        mcp_tools: &McpToolSet,
+        mcp_tools: &UserMcpTools,
         tool_name: &str,
         arguments: &serde_json::Value,
     ) -> anyhow::Result<serde_json::Value> {
@@ -606,7 +604,7 @@ where
     async fn gather_slack_direct(
         &self,
         user: &MacroUserIdStr<'static>,
-        mcp_tools: &McpToolSet,
+        mcp_tools: &UserMcpTools,
     ) -> anyhow::Result<usize> {
         let search_tool = slack_channel_search_tool_name(mcp_tools)
             .ok_or_else(|| anyhow::anyhow!("connector exposes no channel-search tool"))?;
@@ -691,7 +689,7 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         rows: &[ImportEntity],
-        mcp_tools: Arc<McpToolSet>,
+        mcp_tools: Arc<UserMcpTools>,
     ) -> anyhow::Result<()> {
         let native = notion_import_toolset::<Self>();
         let toolset = NativePlusMcp::new(native, mcp_tools);
@@ -718,19 +716,12 @@ where
         &self,
         user: &MacroUserIdStr<'static>,
         source: ImportSource,
-    ) -> anyhow::Result<Arc<McpToolSet>> {
-        let url = source.mcp_server_url();
-        let records: Vec<McpServerRecord> = self
-            .mcp_store
-            .list(user)
-            .await
-            .map_err(|e| anyhow::anyhow!("mcp store: {e:?}"))?
-            .into_iter()
-            .filter(|r| r.url == url)
-            .collect();
-        anyhow::ensure!(!records.is_empty(), "no {} connection", source.as_ref());
-
-        let mcp_tools = McpToolSet::new(&records, self.mcp_store.clone()).await;
+    ) -> anyhow::Result<Arc<UserMcpTools>> {
+        let mcp_tools = self
+            .mcp_tools
+            .connector_toolset(user, source.connector_ref())
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("no {} connection", source.as_ref()))?;
         anyhow::ensure!(
             !mcp_tools.is_empty(),
             "could not load tools from {}",
@@ -874,7 +865,7 @@ where
     async fn process_notion_page(
         &self,
         user: &MacroUserIdStr<'static>,
-        mcp_tools: Arc<McpToolSet>,
+        mcp_tools: Arc<UserMcpTools>,
         row: &ImportEntity,
     ) -> anyhow::Result<()> {
         let outcome = tokio::time::timeout(NOTION_PAGE_IMPORT_TIMEOUT, async {
@@ -993,7 +984,7 @@ where
 impl<R, S, C> ImportService for ImportServiceImpl<R, S, C>
 where
     R: ImportRepo + Clone,
-    S: McpServerStore,
+    S: ConnectorSelect,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user), err)]
@@ -1171,7 +1162,7 @@ where
 impl<R, S, C> ImportStager for ImportServiceImpl<R, S, C>
 where
     R: ImportRepo + Clone,
-    S: McpServerStore,
+    S: ConnectorSelect,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user, metadata), err)]
@@ -1314,7 +1305,7 @@ where
 impl<R, S, C> NotionPageImporter for ImportServiceImpl<R, S, C>
 where
     R: ImportRepo + Clone,
-    S: McpServerStore,
+    S: ConnectorSelect,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user), fields(page = page_url_or_id), err)]
@@ -1444,7 +1435,7 @@ where
 impl<R, S, C> ImportFinalizer for ImportServiceImpl<R, S, C>
 where
     R: ImportRepo + Clone,
-    S: McpServerStore,
+    S: ConnectorSelect,
     C: EntityCreator,
 {
     #[tracing::instrument(skip(self, user, content_markdown), err)]
@@ -1510,7 +1501,7 @@ where
 
 /// The mangled name of the connector's Notion fetch tool. Notion exposes this
 /// as `notion-fetch` generally and as `fetch` on OpenAI-compatible surfaces.
-fn notion_fetch_tool_name(mcp_tools: &McpToolSet) -> Option<String> {
+fn notion_fetch_tool_name(mcp_tools: &UserMcpTools) -> Option<String> {
     ToolSet::<()>::request_schemas(mcp_tools)?
         .into_iter()
         .map(|schema| schema.name)
@@ -1527,7 +1518,7 @@ fn is_notion_fetch_tool_name(name: &str) -> bool {
 /// The mangled name of the connector's channel-search tool. Slack's hosted
 /// MCP has shipped several tool-name spellings, so this matches the shape —
 /// a search/list over channels — rather than one literal name.
-fn slack_channel_search_tool_name(mcp_tools: &McpToolSet) -> Option<String> {
+fn slack_channel_search_tool_name(mcp_tools: &UserMcpTools) -> Option<String> {
     ToolSet::<()>::request_schemas(mcp_tools)?
         .into_iter()
         .map(|schema| schema.name)
@@ -2718,11 +2709,11 @@ impl Drop for AbortOnDrop {
 struct NativePlusMcp<Context> {
     native: ai_toolset::AsyncToolCollection<Context>,
     native_names: HashSet<String>,
-    mcp: Arc<McpToolSet>,
+    mcp: Arc<UserMcpTools>,
 }
 
 impl<Context: Send + Sync + 'static> NativePlusMcp<Context> {
-    fn new(native: ai_toolset::AsyncToolCollection<Context>, mcp: Arc<McpToolSet>) -> Self {
+    fn new(native: ai_toolset::AsyncToolCollection<Context>, mcp: Arc<UserMcpTools>) -> Self {
         let native_names = native
             .request_schemas()
             .unwrap_or_default()

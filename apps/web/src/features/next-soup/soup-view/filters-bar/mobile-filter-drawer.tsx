@@ -29,7 +29,7 @@ import { pressPulse } from '@components/app/mobile/pressPulse';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
-import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
+import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { Accordion } from '@kobalte/core/accordion';
@@ -72,7 +72,10 @@ function scrollAccordionItemToTop(
   });
 }
 
-export const MobileFilterDrawer = () => {
+export const MobileFilterDrawer = (props: {
+  /** Extra classes on the trigger button (rendered only when filters exist). */
+  class?: string;
+}) => {
   const { consolidatedFiltersList, resetToTabDefaults, handleAssigneeChange } =
     useFilterRefinements();
 
@@ -132,13 +135,12 @@ export const MobileFilterDrawer = () => {
     selectedIds: inboxFilter,
     setSelectedIds: setInboxFilter,
   });
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const addInbox = useAddInboxFlow();
 
-  // Mirrors the desktop InboxSelector's visibility rule so the "Add inbox"
-  // action stays discoverable with zero or one inbox connected. Also stays
+  // Mirrors the desktop InboxSelector's visibility rule so the "Connect
+  // another account" action stays discoverable with zero or one inbox
+  // connected. Also stays
   // visible while a scope is active so it can be reset even if the linked
   // inboxes drop to one.
   const showInboxSection = () =>
@@ -155,8 +157,9 @@ export const MobileFilterDrawer = () => {
     return next.length ? picker.onChange(next) : picker.reset();
   };
 
+  // The inbox is deliberately absent: its order is fixed to updated_at, and
+  // the desktop toolbar hides SoupViewContextSort there for the same reason.
   const VIEW_SORT_OPTIONS: Partial<Record<ListView, SortOption[]>> = {
-    inbox: DEFAULT_SORT_OPTIONS,
     agents: DEFAULT_SORT_OPTIONS,
     mail: EMAIL_SORT_OPTIONS,
     documents: DOCUMENT_SORT_OPTIONS,
@@ -332,7 +335,10 @@ export const MobileFilterDrawer = () => {
           variant="ghost"
           size="sm"
           depth={3}
-          class="island bg-chrome pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-5"
+          class={cn(
+            'island bg-chrome pointer-events-auto relative size-10 shrink-0 rounded-full [&_svg]:size-6',
+            props.class
+          )}
           ref={pressPulse}
         >
           <SlidersHorizontalIcon />
@@ -513,7 +519,9 @@ export const MobileFilterDrawer = () => {
                             <span class="size-4 flex items-center justify-center shrink-0">
                               <PlusIcon class="size-4 text-ink-muted" />
                             </span>
-                            <span class="flex-1 truncate">Add inbox</span>
+                            <span class="flex-1 truncate">
+                              Connect another account
+                            </span>
                           </button>
                         </Show>
                       </Accordion.Content>
@@ -794,7 +802,7 @@ export const MobileFilterDrawer = () => {
                   </For>
                   <Button
                     onClick={() => resetToTabDefaults()}
-                    variant="base"
+                    variant="outline"
                     size="sm"
                     class="min-h-10 rounded-lg bg-active!"
                   >

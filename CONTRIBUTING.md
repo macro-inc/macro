@@ -44,7 +44,11 @@ No generated boilerplate, no exhaustive file-by-file change lists.
 
 ## Development setup
 
-See [docs/RUNNING_LOCALLY.md](docs/RUNNING_LOCALLY.md) for running the full app locally.
+You do not need the local stack if you only change the frontend.
+
+If you only change the frontend, run the [frontend against hosted services](docs/RUNNING_LOCALLY.md#run-the-frontend-against-hosted-services).
+
+If you change a backend service, the database, or behavior that must stay on your machine, [run the local stack](docs/RUNNING_LOCALLY.md#run-the-local-stack).
 
 ## Before you push
 
@@ -53,6 +57,22 @@ See [docs/RUNNING_LOCALLY.md](docs/RUNNING_LOCALLY.md) for running the full app 
 - Run the tests for the crates you touched: `cargo test -p <crate>`.
 - If you changed SQL queries or migrations, run `just prepare_db` from the
   repository root to refresh the sqlx cache.
+
+## Contributor License Agreement
+
+Before we can merge a PR from outside the macro-inc GitHub org, you need to
+have signed the Macro CLA. It's a one-time signature that covers all your
+future contributions:
+
+1. Every PR runs a required check named `cla`. If you haven't signed, it
+   shows red — that's expected and doesn't block review.
+2. Sign at **<https://macro-cla.macroverse.workers.dev/cla>** ("Sign with
+   GitHub"; we request no OAuth scopes, only your public identity).
+3. Comment `/macro-cla check` on your PR and the check re-runs and goes
+   green.
+
+macro-inc org members are exempt (employee agreements already cover their
+contributions), as are bot accounts like Dependabot.
 
 ## License
 

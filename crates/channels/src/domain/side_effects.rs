@@ -25,6 +25,7 @@ use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::collections::HashSet;
 use tokio::sync::mpsc::UnboundedSender;
+use tracing::Instrument as _;
 use uuid::Uuid;
 
 /// Entity type used by message mentions that target a bot.
@@ -44,6 +45,8 @@ pub struct ChannelBotTrigger {
     /// Bots explicitly mentioned in the message that are active in the
     /// channel. Empty when the message mentions no bot.
     pub mentioned_bot_ids: Vec<BotId>,
+    /// Trace active when the candidate was dispatched.
+    pub span: tracing::Span,
 }
 
 /// Sender for bot-trigger candidates derived from channel messages.
@@ -57,7 +60,12 @@ pub type ChannelBotTriggerSender = UnboundedSender<ChannelBotTrigger>;
 ///
 /// Ids must be in the canonical `bot|<uuid>` principal form; bare UUIDs are
 /// rejected (historical bare-UUID content is normalized by migration).
-fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
+///
+/// Public because out-of-process consumers have to derive the same answer: the
+/// in-process path gets [`ChannelBotTrigger::bot_ids`] for free, while anything
+/// reading `channel.message_posted` off Kafka only has the mention list and
+/// would otherwise reimplement these rules.
+pub fn bot_mention_ids(mentions: &[SimpleMention]) -> Vec<BotId> {
     let mut seen = HashSet::new();
     mentions
         .iter()
@@ -89,9 +97,10 @@ fn active_bot_mention_ids(
                 .map(|id| id.bot_id())
         })
         .collect();
-    // Macro AI is a code-defined system bot available in every channel; it
-    // has no participant row.
+    // Code-defined system bots are available in every channel and have no
+    // participant rows.
     active_bot_ids.insert(bot_id::MACRO_AI_BOT_ID);
+    active_bot_ids.insert(bot_id::MACRO_CODER_BOT_ID);
 
     bot_mention_ids(mentions)
         .into_iter()
@@ -417,6 +426,11 @@ impl<C, R, N, K, B> ChannelSideEffectService<C, R, N, K, B> {
                     channel_id,
                     message: message.clone(),
                     mentioned_bot_ids: active_bot_mention_ids(mentions, participants),
+                    span: tracing::info_span!(
+                        "channel.bot_trigger",
+                        channel.id = %channel_id,
+                        channel.message.id = %message.id,
+                    ),
                 })
                 .is_err()
         {
@@ -448,9 +462,12 @@ where
 {
     fn dispatch(&self, event: ChannelEvent) {
         let handler = self.handler.clone();
-        tokio::spawn(async move {
-            handler.handle(event).await;
-        });
+        tokio::spawn(
+            async move {
+                handler.handle(event).await;
+            }
+            .instrument(tracing::info_span!("channel.side_effects")),
+        );
     }
 }
 
@@ -1203,9 +1220,12 @@ fn contact_sync_users_for_event(event: &ChannelEvent) -> Option<HashSet<MacroUse
         ChannelEvent::ChannelCreated {
             channel_type: ChannelType::Private | ChannelType::DirectMessage,
             actor,
+            on_behalf_of,
             participant_user_ids,
             ..
-        } if actor.as_user().is_some() => Some(participant_user_ids.iter().cloned().collect()),
+        } if actor.as_user().is_some() || on_behalf_of.is_some() => {
+            Some(participant_user_ids.iter().cloned().collect())
+        }
         ChannelEvent::ParticipantsAdded {
             channel_type: ChannelType::Private | ChannelType::Team,
             invited_by,
@@ -1235,12 +1255,14 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
         ChannelEvent::ChannelCreated {
             channel_id,
             actor,
+            on_behalf_of,
             channel_type,
             channel_name,
             participant_user_ids,
         } => vec![ChannelMacroEvent::created(ChannelCreatedMetadata {
             channel_id: *channel_id,
             actor: actor.clone(),
+            on_behalf_of: on_behalf_of.clone(),
             channel_type: *channel_type,
             channel_name: channel_name.clone(),
             participant_user_ids: participant_user_ids.clone(),

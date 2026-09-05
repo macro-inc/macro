@@ -1,0 +1,88 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+expression: messages
+input_file: crates/agent_fold/fixtures/real/subagent_opencode.jsonl
+---
+[
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: User {
+            user_id: Some(
+                macro|eric@example.com,
+            ),
+        },
+        request_id: Some(
+            AgentActionId(
+                219d3ba0-a6bf-4104-a273-51b8bf4409c7,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "please spawn a subagent to use python to add 5+5",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                ToolUse {
+                    id: ToolUseId(
+                        "call_jD0TDWivCCvEOTvAR47QMvJG",
+                    ),
+                    name: Native {
+                        name: "task",
+                    },
+                    status: Completed,
+                    detail: Subagent {
+                        title: "Add numbers with Python",
+                        agent_type: Some(
+                            "general",
+                        ),
+                        description: Some(
+                            "Add numbers with Python",
+                        ),
+                        prompt: Some(
+                            "Use Python to calculate 5 + 5. Return only the numeric result. Do not modify files.",
+                        ),
+                        background: false,
+                        children: [],
+                        result: Some(
+                            SubagentResult {
+                                text: Some(
+                                    "10",
+                                ),
+                                error: None,
+                                agent_id: Some(
+                                    "ses_f9bd7ee76ffeshjLOLx06ArVK7",
+                                ),
+                                model: Some(
+                                    "openai/gpt-5.6-terra",
+                                ),
+                                duration_ms: None,
+                                tokens: None,
+                                tool_uses: None,
+                                stats: None,
+                            },
+                        ),
+                    },
+                },
+                Text {
+                    text: "10",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+]

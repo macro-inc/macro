@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 
 use async_graphql::{
-    Context, ID, Interface, Json, Object, ObjectType, OutputType, SimpleObject, Union,
+    Context, ID, InputValueError, InputValueResult, Interface, Json, Object, ObjectType,
+    OutputType, Scalar, ScalarType, SimpleObject, Union, Value as GraphqlValue,
 };
 use graphql_common::{
     GraphqlCacheDeletion, GraphqlEntity, GraphqlEntityType, GraphqlSoupEntityType,
@@ -27,12 +28,36 @@ use models_soup::{
     project::SoupProject,
     reminder::{SoupReminder, SoupReminderSchedule},
 };
+use predicate_index::RecordKey;
 use serde_json::Value;
-use soup::domain::models::{EnrichedSoupItem, SoupPropertiesField, grouping::NestedSoupGroups};
+use soup::domain::models::{
+    EnrichedSoupItem, SoupProjectionHydration, SoupPropertiesField, grouping::NestedSoupGroups,
+};
+use soup_filter_projection::{encode_cache_projection_supplement, project_soup_cache_supplement};
 use soup_realtime::domain::models::Patch;
 use uuid::Uuid;
 
 use crate::loaders::SoupItemDataLoader;
+
+/// Opaque, version-framed server-fact supplement selected only by cache-aware
+/// Soup operations.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SoupCacheProjection(String);
+
+/// Opaque versioned supplement containing authoritative server-only facts.
+#[Scalar(name = "SoupCacheProjection")]
+impl ScalarType for SoupCacheProjection {
+    fn parse(value: GraphqlValue) -> InputValueResult<Self> {
+        match value {
+            GraphqlValue::String(value) => Ok(Self(value)),
+            value => Err(InputValueError::expected_type(value)),
+        }
+    }
+
+    fn to_value(&self) -> GraphqlValue {
+        GraphqlValue::String(self.0.clone())
+    }
+}
 
 /// Extension fields attached to every top-level Soup entity.
 ///
@@ -117,6 +142,18 @@ impl<E: SoupEntityEdges> SoupPage<E> {
         }
     }
 
+    /// Construct a GraphQL page from authoritative item/server-fact hydration.
+    pub fn new_with_projection(page: PaginatedOpaqueCursor<SoupProjectionHydration>) -> Self {
+        Self {
+            items: page
+                .items
+                .into_iter()
+                .map(GraphqlSoupEntity::new_with_projection)
+                .collect(),
+            next_cursor: page.next_cursor,
+        }
+    }
+
     /// Construct a GraphQL page from frecency-enriched Soup items.
     pub fn new_from_enriched(page: PaginatedOpaqueCursor<EnrichedSoupItem>) -> Self {
         Self {
@@ -124,6 +161,20 @@ impl<E: SoupEntityEdges> SoupPage<E> {
                 .items
                 .into_iter()
                 .map(GraphqlSoupEntity::new_from_enriched)
+                .collect(),
+            next_cursor: page.next_cursor,
+        }
+    }
+
+    /// Construct a GraphQL page from server-fact hydration carrying frecency.
+    pub fn new_from_enriched_with_projection(
+        page: PaginatedOpaqueCursor<SoupProjectionHydration<EnrichedSoupItem>>,
+    ) -> Self {
+        Self {
+            items: page
+                .items
+                .into_iter()
+                .map(GraphqlSoupEntity::new_from_enriched_with_projection)
                 .collect(),
             next_cursor: page.next_cursor,
         }
@@ -182,6 +233,20 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
         Self::new(item.map_extra(|_| ())).with_frecency(score)
     }
 
+    /// Construct a GraphQL entity from authoritative server-fact hydration
+    /// carrying a frecency-enriched item.
+    pub fn new_from_enriched_with_projection(
+        hydration: SoupProjectionHydration<EnrichedSoupItem>,
+    ) -> Self {
+        let score = hydration
+            .item
+            .frecency_score
+            .as_ref()
+            .map(|f| f.data.frecency_score);
+        let hydration = hydration.map(|item| item.item.map_extra(|_| ()));
+        Self::new_with_projection(hydration).with_frecency(score)
+    }
+
     /// Attach the viewer's frecency score for this entity.
     fn with_frecency(mut self, score: Option<f64>) -> Self {
         match &mut self {
@@ -197,6 +262,24 @@ impl<E: SoupEntityEdges> GraphqlSoupEntity<E> {
             // Calendar events carry no frecency slot; scores never target them.
             Self::CalendarEvent(_) => {}
             Self::Reminder(entity) => entity.2 = score,
+        }
+        self
+    }
+
+    /// Attach authoritative server-only facts to a document entity.
+    fn with_cache_supplement(mut self, supplement: Option<SoupCacheProjection>) -> Self {
+        match &mut self {
+            Self::Document(entity) => entity.3 = supplement,
+            Self::Chat(_)
+            | Self::Project(_)
+            | Self::EmailThread(_)
+            | Self::Channel(_)
+            | Self::ChannelMessage(_)
+            | Self::Call(_)
+            | Self::CalendarEvent(_)
+            | Self::CrmCompany(_)
+            | Self::ForeignEntity(_)
+            | Self::Reminder(_) => {}
         }
         self
     }
@@ -231,6 +314,12 @@ pub struct GraphqlEntityMetadata {
 #[derive(Interface)]
 #[graphql(
     field(name = "id", ty = "ID", desc = "The canonical entity identifier."),
+    field(
+        name = "cacheProjection",
+        method = "cache_projection",
+        ty = "Option<SoupCacheProjection>",
+        desc = "Opaque supplement containing authoritative server-only projection facts."
+    ),
     field(
         name = "entity_type",
         ty = "GraphqlSoupEntityType",
@@ -336,6 +425,37 @@ where
         )
     }
 
+    /// Construct a GraphQL entity and opaque server-fact supplement from one
+    /// authoritative hydration value.
+    pub fn new_with_projection(hydration: SoupProjectionHydration) -> Self {
+        let entity = hydration.item.entity();
+        let supplement = Self::graphql_type_name_for(entity.entity_type)
+            .ok_or_else(|| "Soup item has no GraphQL entity type".to_owned())
+            .and_then(|type_name| {
+                RecordKey::new(format!("{type_name}:{}", entity.entity_id))
+                    .map_err(|error| error.to_string())
+            })
+            .and_then(|record_key| {
+                project_soup_cache_supplement(record_key, &hydration)
+                    .map_err(|error| error.to_string())
+            })
+            .and_then(|supplement| {
+                supplement
+                    .map(|supplement| {
+                        encode_cache_projection_supplement(&supplement)
+                            .map(SoupCacheProjection)
+                            .map_err(|error| error.to_string())
+                    })
+                    .transpose()
+            })
+            .inspect_err(|error| {
+                tracing::error!(error = ?error, "failed to compile Soup cache projection supplement");
+            })
+            .ok()
+            .flatten();
+        Self::new(hydration.item).with_cache_supplement(supplement)
+    }
+
     /// Construct a GraphQL entity from a plain Soup item.
     pub fn new(item: SoupItem<()>) -> Self {
         match item {
@@ -343,7 +463,7 @@ where
                 let edges = E::from_entity(
                     model_entity::EntityType::Document.with_entity_string(item.id.to_string()),
                 );
-                Self::Document(GraphqlSoupDocument(item, edges, None))
+                Self::Document(GraphqlSoupDocument(item, edges, None, None))
             }
             SoupItem::Chat(item) => {
                 let edges = E::from_entity(
@@ -426,6 +546,11 @@ where
     /// Canonical entity kind.
     async fn entity_type(&self) -> GraphqlSoupEntityType {
         GraphqlSoupEntityType::CalendarEvent
+    }
+
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
     }
 
     /// User-visible display name.
@@ -513,7 +638,12 @@ where
 }
 
 /// GraphQL document entity.
-pub struct GraphqlSoupDocument<E: SoupEntityEdges>(SoupDocument<()>, E, Option<f64>);
+pub struct GraphqlSoupDocument<E: SoupEntityEdges>(
+    SoupDocument<()>,
+    E,
+    Option<f64>,
+    Option<SoupCacheProjection>,
+);
 
 /// GraphQL representation of the soup document.
 #[Object(name = "GraphqlSoupDocument")]
@@ -529,6 +659,11 @@ where
     /// Canonical entity kind.
     async fn entity_type(&self) -> GraphqlSoupEntityType {
         GraphqlSoupEntityType::Document
+    }
+
+    /// Opaque authoritative server-only projection facts.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        self.3.clone()
     }
 
     /// User-visible display name.
@@ -677,6 +812,11 @@ where
         GraphqlSoupEntityType::Chat
     }
 
+    /// Server-only projection facts are unavailable for chats.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
     /// User-visible display name.
     async fn display_name(&self) -> Option<String> {
         Some(self.0.name.clone())
@@ -766,6 +906,11 @@ where
     /// Canonical entity kind.
     async fn entity_type(&self) -> GraphqlSoupEntityType {
         GraphqlSoupEntityType::Project
+    }
+
+    /// Server-only projection facts are unavailable for projects.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
     }
 
     /// User-visible display name.
@@ -923,6 +1068,11 @@ where
         GraphqlSoupEntityType::EmailThread
     }
 
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
     /// User-visible display name.
     async fn display_name(&self) -> Option<String> {
         self.0.thread.name.clone()
@@ -998,6 +1148,13 @@ where
     /// Whether the thread is marked important.
     async fn is_important(&self) -> bool {
         self.0.thread.is_important
+    }
+
+    /// The denormalized `email_threads.is_signal` importance classification —
+    /// the same flag the soup Importance filter evaluates, distinct from
+    /// `is_important` (Gmail's IMPORTANT label).
+    async fn is_signal(&self) -> bool {
+        self.0.thread.is_signal
     }
 
     /// The identifier of the project.
@@ -1248,6 +1405,11 @@ where
         GraphqlSoupEntityType::Channel
     }
 
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
     /// User-visible display name.
     async fn display_name(&self) -> Option<String> {
         self.0.channel.channel.name.clone()
@@ -1403,6 +1565,11 @@ where
         GraphqlSoupEntityType::ChannelMessage
     }
 
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
     /// Channel messages do not have a separate display name.
     async fn display_name(&self) -> Option<String> {
         None
@@ -1509,6 +1676,11 @@ where
     /// Canonical entity kind.
     async fn entity_type(&self) -> GraphqlSoupEntityType {
         GraphqlSoupEntityType::Call
+    }
+
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
     }
 
     /// User-visible call name.
@@ -1655,6 +1827,11 @@ where
         GraphqlSoupEntityType::CrmCompany
     }
 
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
+    }
+
     /// User-visible company name.
     async fn display_name(&self) -> Option<String> {
         self.0.name.clone()
@@ -1753,6 +1930,11 @@ where
     /// Canonical entity kind.
     async fn entity_type(&self) -> GraphqlSoupEntityType {
         GraphqlSoupEntityType::ForeignEntity
+    }
+
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
     }
 
     /// Foreign entities do not expose a common display name.
@@ -1862,6 +2044,11 @@ where
     /// Canonical entity kind.
     async fn entity_type(&self) -> GraphqlSoupEntityType {
         GraphqlSoupEntityType::Reminder
+    }
+
+    /// Opaque cache projection metadata, unavailable for this entity variant.
+    async fn cache_projection(&self) -> Option<SoupCacheProjection> {
+        None
     }
 
     /// User-visible display name — a reminder's description is its name.
@@ -2104,6 +2291,9 @@ impl<E: SoupEntityEdges> SoupUpdated<E> {
     async fn item(&self, ctx: &Context<'_>) -> async_graphql::Result<Option<GraphqlSoupEntity<E>>> {
         let loader = ctx.data::<SoupItemDataLoader>()?;
         let key = (self.user_id.clone(), self.entity.clone());
-        Ok(loader.load_one(key).await?.map(GraphqlSoupEntity::new))
+        Ok(loader
+            .load_one(key)
+            .await?
+            .map(GraphqlSoupEntity::new_with_projection))
     }
 }

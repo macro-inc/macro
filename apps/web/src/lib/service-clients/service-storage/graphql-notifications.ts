@@ -1,11 +1,17 @@
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import { notificationServiceClient } from '../service-notification/client';
 import type { NotificationUpdateOperation } from './graphql/generated/graphql';
 import { getGraphqlSoupClient } from './graphql-soup';
 import {
   executeGraphqlUpdateNotifications,
+  executeGraphqlUpdateNotificationsForEntities,
   type GraphqlUpdateNotificationsArgs,
+  type GraphqlUpdateNotificationsForEntitiesArgs,
+  type GraphqlUpdateNotificationsForEntitiesResult,
   type GraphqlUpdateNotificationsResult,
 } from './graphql-update-notifications';
 
@@ -15,7 +21,7 @@ export type { NotificationUpdateOperation };
 export async function updateNotifications(
   args: GraphqlUpdateNotificationsArgs
 ): Promise<GraphqlUpdateNotificationsResult> {
-  if (!ENABLE_GRAPHQL_SOUP()) {
+  if (!isFeatureEnabled(enableGraphqlSoup)) {
     const request = { notificationIds: args.notificationIds };
     switch (args.operation) {
       case 'MARK_SEEN':
@@ -51,4 +57,26 @@ export async function updateNotifications(
     throw new Error('updateNotifications mutation returned no data');
   }
   return result.data.updateNotifications;
+}
+
+/**
+ * Update every user-owned notification associated with the supplied entities.
+ *
+ * The entity mutation is GraphQL-only and intentionally waits for committed,
+ * authoritative rows so callers can retain the exact IDs for undo.
+ */
+export async function updateNotificationsForEntities(
+  args: GraphqlUpdateNotificationsForEntitiesArgs
+): Promise<GraphqlUpdateNotificationsForEntitiesResult> {
+  if (args.entities.length === 0) return [];
+
+  const result = await executeGraphqlUpdateNotificationsForEntities(
+    getGraphqlSoupClient(),
+    args
+  );
+  if (result.error) throw result.error;
+  if (!result.data) {
+    throw new Error('updateNotificationsForEntity mutation returned no data');
+  }
+  return result.data.updateNotificationsForEntity;
 }

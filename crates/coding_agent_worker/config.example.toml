@@ -1,0 +1,33 @@
+# Everything an agent harness daemon needs to serve one harness's sessions.
+#
+# This example omits credentials, so `macrod` starts in Quickstart. Pairing
+# shows a code for approval in the web app, then adds a `[credentials]` table
+# containing a bearer token to this file. Keep the resulting config private.
+
+[macro]
+# Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
+# gateway the daemon dials per session.
+api_url = "http://localhost:50009/agent-harness"
+# Base URL of the storage service (harness pairing + live event stream).
+storage_url = "http://localhost:50009/dss"
+# Optional: base URL of the Macro web app, used only to print the pairing
+# link. Defaults to https://macro.com/app.
+web_url = "http://localhost:3000/app"
+
+[identity]
+# Optional: the harness name pairing requests; the approving user may rename
+# it. Defaults to this machine's hostname.
+name = "erics-macbook"
+# Optional: "private" (default) or "team". Team harnesses can run agents any
+# of your teammates create. The approval dialog arrives preselected to this.
+scope = "private"
+
+[harness]
+command = "hermes"
+args = ["acp"]
+
+[workspace]
+# Every session this daemon serves runs here.
+path = "/workspace"
+# Informational: having the repo cloned at `path` is the operator's job.
+repo_url = "https://github.com/macro-inc/macro"

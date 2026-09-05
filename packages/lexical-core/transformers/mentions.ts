@@ -3,6 +3,11 @@ import type {
   TextMatchTransformer,
 } from '@lexical/markdown';
 import type { ElementNode, LexicalNode, TextNode } from 'lexical';
+import {
+  CONNECT_APP_TAG,
+  ConnectAppNode,
+  isConnectAppSlug,
+} from '../nodes/ConnectAppNode';
 import { ContactMentionNode } from '../nodes/ContactMentionNode';
 import { DateMentionNode } from '../nodes/DateMentionNode';
 import { DocumentCardNode } from '../nodes/DocumentCardNode';
@@ -485,6 +490,42 @@ export const I_THEME_MENTION: TextMatchTransformer = {
     } catch (e) {
       console.error('Error in I_THEME_MENTION replace:', e);
       replaceTextWithUnknownMention(node, 'Unknown Theme');
+    }
+  },
+};
+
+// Connect-app chips: an agent's "this app is not connected, here is how"
+// affordance. Same JSON-in-body shape as every other m-* tag.
+export const I_CONNECT_APP: TextMatchTransformer = {
+  dependencies: [ConnectAppNode, UnknownMentionNode],
+  type: 'text-match',
+  regExp: new RegExp(`<${CONNECT_APP_TAG}>(.*?)</${CONNECT_APP_TAG}>`),
+  importRegExp: new RegExp(`<${CONNECT_APP_TAG}>(.*?)</${CONNECT_APP_TAG}>`),
+  export: (node) => {
+    if (!(node instanceof ConnectAppNode)) return null;
+    const data = JSON.stringify({
+      appSlug: node.getAppSlug(),
+      name: node.getName(),
+    });
+    return `<${CONNECT_APP_TAG}>${data}</${CONNECT_APP_TAG}>`;
+  },
+  replace: (node: TextNode, match: RegExpMatchArray) => {
+    try {
+      const parsed: unknown = JSON.parse(match[1]);
+      if (typeof parsed !== 'object' || parsed === null) {
+        throw new Error('Invalid connect-app JSON');
+      }
+      const { appSlug, name } = parsed as Record<string, unknown>;
+      // The slug ends up in a URL and is model-authored: only the charset the
+      // proxy routes on is accepted, anything else falls back to the
+      // unknown-mention chip rather than being repaired.
+      if (!isConnectAppSlug(appSlug) || typeof name !== 'string' || !name) {
+        throw new Error('Invalid connect-app payload');
+      }
+      node.replace(new ConnectAppNode(appSlug, name));
+    } catch (e) {
+      console.error('Error in I_CONNECT_APP replace:', e);
+      replaceTextWithUnknownMention(node, 'Connect app');
     }
   },
 };

@@ -27,10 +27,15 @@ fn read_lambda(file: xtask_paths::RepoFile<'static>) -> Result<String> {
 /// FusionAuth container mounts. The kickstart is pure identity-provider config:
 /// run_local pre-seeds no users — passwordless login auto-creates any user on
 /// demand. `google` (from the resolved run env) additionally configures the
-/// `google`/`google_gmail` OIDC IdPs so the email connect flows work locally;
-/// the generated file is gitignored, and the init-snapshot key hashes it, so
-/// adding/removing the Google client re-inits the stack automatically.
-pub fn write_kickstart(instance: &Instance, google: Option<&kickstart::GoogleIdp>) -> Result<()> {
+/// `google`/`google_gmail` OIDC IdPs so the email connect flows work locally,
+/// and `github` the `github` IdP that `POST /link/github` resolves; the
+/// generated file is gitignored, and the init-snapshot key hashes it, so
+/// adding/removing either client re-inits the stack automatically.
+pub fn write_kickstart(
+    instance: &Instance,
+    google: Option<&kickstart::GoogleIdp>,
+    github: Option<&kickstart::GithubIdp>,
+) -> Result<()> {
     let dir = gen_compose::kickstart_dir(instance);
     std::fs::create_dir_all(&dir)
         .with_context(|| format!("creating kickstart dir {}", dir.display()))?;
@@ -38,9 +43,11 @@ pub fn write_kickstart(instance: &Instance, google: Option<&kickstart::GoogleIdp
     let doc = kickstart::build(
         instance.port(Port::Frontend),
         instance.port(Port::Auth),
+        instance.port(Port::DocCognition),
         &read_lambda(POPULATE_JWT_LAMBDA)?,
         &read_lambda(RECONCILE_LAMBDA)?,
         google,
+        github,
     );
     let json = serde_json::to_string_pretty(&doc)? + "\n";
     std::fs::write(dir.join("kickstart.json"), json)
@@ -66,9 +73,12 @@ pub fn wait_ready(stage: &Stage, instance: &Instance) -> Result<()> {
         instance.port(Port::FusionAuth),
         identity::APPLICATION_ID,
     );
+    // Require an actual 200: `curl -f` only fails on 400+, so FusionAuth's
+    // maintenance-mode 302 (e.g. after a boot-time DB connect failure) would
+    // otherwise pass as ready and every later login would 500.
     let script = format!(
-        "for i in $(seq 1 120); do curl -fsS --max-time 3 -H 'Authorization: {key}' {url} >/dev/null 2>&1 && exit 0; sleep 2; done; \
-         echo 'timed out waiting for the FusionAuth kickstart'; exit 1",
+        "for i in $(seq 1 120); do [ \"$(curl -sS -o /dev/null -w '%{{http_code}}' --max-time 3 -H 'Authorization: {key}' {url} 2>/dev/null)\" = 200 ] && exit 0; sleep 2; done; \
+         echo 'timed out waiting for the FusionAuth kickstart (a 302 here means maintenance mode: FusionAuth could not reach its db)'; exit 1",
         key = identity::FUSIONAUTH_API_KEY,
     );
     let mut cmd = Command::new("bash");

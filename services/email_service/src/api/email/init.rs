@@ -7,7 +7,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use calendar_events::domain::models::GoogleScopeSet;
+use calendar_events::domain::models::{CalendarGrantIntent, GoogleScopeSet};
 use email::domain::events::{EmailMacroEvent, LinkConnectedMetadata};
 use email::domain::models::UserProvider;
 use email::domain::ports::EmailRepo;
@@ -15,6 +15,7 @@ use email::outbound::EmailPgRepo;
 use email_api_client::domain::models::{EmailApiError, TokenFreshness};
 use email_service::pubsub::publish_email_event;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_db_client::in_progress_user_link::InProgressUserLink;
 use macro_user_id::email::EmailStr;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::response::ErrorResponse;
@@ -252,7 +253,7 @@ async fn init_user(
 ) -> Result<Response, InitError> {
     let macro_user_id = authorization.authorization.user.macro_user_id.clone();
     let user_context = authorization.authorization.user.user_context.clone();
-    let mut completed_google_grant: Option<Vec<String>> = None;
+    let mut completed_google_grant: Option<CompletedGoogleGrant> = None;
     tracing::info!(user_id = %user_context.user_id, ?link_id, "Init called");
 
     let pg_repo = EmailPgRepo::new(ctx.db.clone());
@@ -262,7 +263,8 @@ async fn init_user(
             macro_db_client::in_progress_user_link::get_in_progress_user_link(&ctx.db, &link_id)
                 .await
                 .context("Failed to fetch in_progress_user_link")?;
-        completed_google_grant = Some(in_progress.granted_google_scopes.clone());
+        let completed_grant = CompletedGoogleGrant::from_in_progress(&in_progress);
+        completed_google_grant = Some(completed_grant.clone());
 
         if in_progress.macro_user_id.to_string() != user_context.fusion_user_id {
             return Err(InitError::BadRequest(
@@ -333,13 +335,8 @@ async fn init_user(
                     .await
                     .context("Failed to commit graph delegation transaction")?;
 
-                apply_and_consume_calendar_grant(
-                    &ctx,
-                    child_link.id,
-                    link_id,
-                    &in_progress.granted_google_scopes,
-                )
-                .await?;
+                apply_and_consume_calendar_grant(&ctx, child_link.id, link_id, &completed_grant)
+                    .await?;
 
                 return Ok((
                     StatusCode::OK,
@@ -420,7 +417,7 @@ async fn init_user(
                     &ctx,
                     existing_link.id,
                     link_id,
-                    &in_progress.granted_google_scopes,
+                    &completed_grant,
                 )
                 .await?;
                 tracing::info!(
@@ -542,13 +539,8 @@ async fn init_user(
                     }
                 }
 
-                apply_and_consume_calendar_grant(
-                    &ctx,
-                    promoted.link_id,
-                    link_id,
-                    &in_progress.granted_google_scopes,
-                )
-                .await?;
+                apply_and_consume_calendar_grant(&ctx, promoted.link_id, link_id, &completed_grant)
+                    .await?;
 
                 return Ok((
                     StatusCode::OK,
@@ -633,8 +625,8 @@ async fn init_user(
         (link, email)
     };
 
-    if let (Some(scopes), Some(link_id)) = (completed_google_grant.as_deref(), link_id) {
-        apply_and_consume_calendar_grant(&ctx, link.id, link_id, scopes).await?;
+    if let (Some(grant), Some(link_id)) = (completed_google_grant.as_ref(), link_id) {
+        apply_and_consume_calendar_grant(&ctx, link.id, link_id, grant).await?;
     } else if completed_google_grant.is_none() {
         apply_grant_discovered_from_token(&ctx, &link).await;
     }
@@ -788,7 +780,12 @@ async fn apply_grant_discovered_from_token(ctx: &ApiContext, link: &link::Link) 
     };
     match fetch_token_scopes(token.expose_secret()).await {
         Ok(scopes) => {
-            apply_calendar_grant(ctx.calendar_service.as_ref(), link.id, &scopes)
+            apply_calendar_grant(
+                ctx.calendar_service.as_ref(),
+                link.id,
+                &scopes,
+                CalendarGrantIntent::Incidental,
+            )
                 .await
                 .inspect_err(|error| {
                     tracing::warn!(error = ?error, link_id = %link.id, "failed to apply discovered Google grant");
@@ -831,15 +828,45 @@ async fn fetch_token_scopes(access_token: &str) -> anyhow::Result<Vec<String>> {
         .collect())
 }
 
+/// The Google grant a completed link flow carries back, with what the consent
+/// request asked for — the grant alone cannot say whether calendar scopes were
+/// wanted or merely re-issued.
+#[derive(Clone)]
+struct CompletedGoogleGrant {
+    intent: CalendarGrantIntent,
+    granted_scopes: Vec<String>,
+}
+
+impl CompletedGoogleGrant {
+    /// Only a consent request that asked for calendar counts as the user
+    /// enabling it. Requests carry `include_granted_scopes=true`, so a plain
+    /// Gmail reconnect hands calendar scopes back from an earlier grant, and
+    /// that must not undo a deliberate opt-out.
+    fn from_in_progress(in_progress: &InProgressUserLink) -> Self {
+        let requested =
+            GoogleScopeSet::from_scopes(in_progress.requested_google_scopes.iter().cloned());
+        Self {
+            intent: if requested.has_calendar_capability() {
+                CalendarGrantIntent::CalendarRequested
+            } else {
+                CalendarGrantIntent::Incidental
+            },
+            granted_scopes: in_progress.granted_google_scopes.clone(),
+        }
+    }
+}
+
 async fn apply_calendar_grant(
     calendar_service: &CalendarGrantService,
     email_link_id: Uuid,
     granted_scopes: &[String],
+    intent: CalendarGrantIntent,
 ) -> Result<calendar_events::domain::models::AppliedGoogleGrant, InitError> {
     calendar_service
         .apply_google_grant(
             email_link_id,
             GoogleScopeSet::from_scopes(granted_scopes.iter().cloned()),
+            intent,
         )
         .await
         .map_err(|error| {
@@ -853,16 +880,35 @@ async fn apply_and_consume_calendar_grant(
     ctx: &ApiContext,
     email_link_id: Uuid,
     in_progress_link_id: Uuid,
-    granted_scopes: &[String],
+    grant: &CompletedGoogleGrant,
 ) -> Result<calendar_events::domain::models::AppliedGoogleGrant, InitError> {
-    let applied =
-        apply_calendar_grant(ctx.calendar_service.as_ref(), email_link_id, granted_scopes).await?;
+    let applied = apply_calendar_grant(
+        ctx.calendar_service.as_ref(),
+        email_link_id,
+        &grant.granted_scopes,
+        grant.intent,
+    )
+    .await?;
     macro_db_client::in_progress_user_link::delete_in_progress_user_link(
         &ctx.db,
         &in_progress_link_id,
     )
     .await
     .context("Failed to consume applied Google grant")?;
+
+    // Reaching here means consent completed for this inbox's mailbox and its
+    // refresh token was just replaced, so any reauth flag is stale. Links
+    // provisioned by this flow are upserted with the flag already clear; an
+    // inbox that merely reconnected is not, and would keep asking to reconnect
+    // until something happened to fetch a token. Best-effort: a stale badge is
+    // a worse outcome to trade a failed reconnect for.
+    email_db_client::links::update::clear_link_needs_reauth(&ctx.db, email_link_id)
+        .await
+        .inspect_err(|error| {
+            tracing::warn!(error = ?error, link_id = %email_link_id, "failed to clear the reauth flag after a completed consent");
+        })
+        .ok();
+
     Ok(applied)
 }
 

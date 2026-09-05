@@ -3,11 +3,7 @@ import type {
   SoupEntity,
 } from '@app/features/next-soup/create-soup-state';
 import { compareDateDesc } from '@core/util/date';
-import type {
-  EntityData,
-  TaskEntityWithProperties,
-  WithNotification,
-} from '@entity';
+import type { EntityData, TaskEntityWithProperties } from '@entity';
 import {
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
@@ -33,15 +29,16 @@ export interface SortOption {
   icon?: () => JSX.Element;
 }
 
-function _sortByNotifiedAt<T extends WithNotification<EntityData>>(a: T, b: T) {
-  const aNotification = a.notifications?.()[0];
-  const bNotification = b.notifications?.()[0];
-
-  if (aNotification && bNotification) {
-    return compareDateDesc(aNotification.created_at, bNotification.created_at);
-  } else if (aNotification) {
+// The inbox's order: when the viewer was last notified about each row,
+// newest first. Only `notified_at` pages carry the stamp, so a row without
+// one (a websocket insert, or a tab served by a recency sort) falls back to
+// update recency — which keeps the All and Reminders tabs ordered as before.
+function sortByNotifiedAt<T extends EntityData>(a: T, b: T): number {
+  if (a.notifiedAt && b.notifiedAt) {
+    return compareDateDesc(a.notifiedAt, b.notifiedAt);
+  } else if (a.notifiedAt) {
     return -1;
-  } else if (bNotification) {
+  } else if (b.notifiedAt) {
     return 1;
   }
 
@@ -58,6 +55,12 @@ function sortByUpdatedAt<T extends EntityData>(a: T, b: T) {
 
 function sortByViewedAt<T extends EntityData>(a: T, b: T) {
   return compareDateDesc(a.sortTs ?? a.viewedAt, b.sortTs ?? b.viewedAt);
+}
+
+// The Recent feed's order: the viewer's latest own mutation, newest first.
+// Untouched rows compare as epoch zero and sink below every touched row.
+function sortByTouchedAt<T extends EntityData>(a: T, b: T) {
+  return compareDateDesc(a.touchedAt, b.touchedAt);
 }
 
 /**
@@ -148,6 +151,14 @@ export const SORT_CONFIGS = {
   viewed_at: {
     id: 'viewed_at',
     fn: sortByViewedAt,
+  },
+  touched_at: {
+    id: 'touched_at',
+    fn: sortByTouchedAt,
+  },
+  notified_at: {
+    id: 'notified_at',
+    fn: sortByNotifiedAt,
   },
   priority: {
     id: 'priority',

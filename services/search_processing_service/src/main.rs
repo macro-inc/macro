@@ -16,7 +16,10 @@ use crate::{
 use anyhow::Context;
 use config::{Config, Environment};
 use lexical_client::LexicalClient;
-use macro_authorization::{InternalAuthConfig, MacroAuthorizationState, NoopMacroAuthJwtValidator};
+use macro_authorization::{
+    InternalAuthConfig, MacroAuthorizationState, NoopMacroAuthJwtValidator,
+    PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
+};
 use macro_entrypoint::MacroEntrypoint;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use opensearch_client::OpensearchClient;
@@ -146,22 +149,6 @@ async fn main() -> anyhow::Result<()> {
     let config = Config::from_env().context("expected to be able to generate config")?;
     tracing::trace!("initialized config");
 
-    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
-        NoopMacroAuthJwtValidator, // we only have internal calls in this service.
-        InternalAuthConfig {
-            api_key: config.internal_api_key.to_string(),
-            default_user_id: None,
-        },
-        macro_authorization::NoBotAuthorizer,
-    )));
-
-    let aws_config = macro_aws_config::get_macro_aws_config().await;
-    let search_event_queue = macro_queues::SearchEventQueue::new();
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
-        .search_event_queue(&search_event_queue);
-
-    let s3_client = Arc::new(s3_client::S3::new(macro_aws_config::s3_client().await));
-
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (5, 50),
         Environment::Develop => (1, 25),
@@ -180,6 +167,23 @@ async fn main() -> anyhow::Result<()> {
         max_connections,
         "initialized db connection"
     );
+
+    let authorization_state = MacroAuthorizationState::new(Arc::new(AuthorizationService::new(
+        NoopMacroAuthJwtValidator, // we only have internal calls in this service.
+        InternalAuthConfig {
+            api_key: config.internal_api_key.to_string(),
+            default_user_id: None,
+        },
+        macro_authorization::NoBotAuthorizer,
+        PgUserApiKeyAuthorizer::new(PgUserApiKeyAuthorizationRepo::new(db.clone())),
+    )));
+
+    let aws_config = macro_aws_config::get_macro_aws_config().await;
+    let search_event_queue = macro_queues::SearchEventQueue::new();
+    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&aws_config))
+        .search_event_queue(&search_event_queue);
+
+    let s3_client = Arc::new(s3_client::S3::new(macro_aws_config::s3_client().await));
 
     let opensearch_client = Arc::new(
         OpensearchClient::new(
@@ -254,6 +258,7 @@ async fn main() -> anyhow::Result<()> {
             s3_client: s3_client.clone(),
             opensearch_client: opensearch_client.clone(),
             lexical_client: lexical_client.clone(),
+            calendar_search_enabled: config.calendar_search_enabled,
         };
         run_search_processing_workers(search_processing_context, config.worker_count);
 
@@ -263,6 +268,7 @@ async fn main() -> anyhow::Result<()> {
             s3_client: s3_client.clone(),
             document_storage_bucket: config.document_storage_bucket.to_string(),
             lexical_client,
+            calendar_search_enabled: config.calendar_search_enabled,
         };
         tokio::spawn(supervise_event_consumer(
             config.kafka_brokers.as_ref().to_owned(),

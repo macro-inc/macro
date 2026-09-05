@@ -7,8 +7,9 @@ use email::domain::models::{
     AttachmentDraft, AttachmentForwarded, CreateDraftInput, CreatedDraft, EmailErr, EmailFilter,
     EmailSyncStatus, EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest,
     LabelListVisibility, LabelType, Link, LinkLabel, Message, MessageAttachment,
-    MessageListVisibility, ParsedMessage, ParsedThread, Thread, UpdateThreadLabelsResult,
-    UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings, UserProvider,
+    MessageListVisibility, ParsedMessage, ParsedThread, SenderPolicy, Thread,
+    UpdateThreadLabelsResult, UpsertEmailFilterInput, UserEmailLink, UserEmailLinkSettings,
+    UserProvider,
 };
 use entity_access::domain::models::{
     AccessError, AccessLevel, BotAccessScope, BotId, CallChannelInfo, EditAccessLevel,
@@ -29,9 +30,11 @@ use model_entity::EntityType as ModelEntityType;
 use model_user::UserContext;
 use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
 use models_soup::{
+    chat::SoupChat,
     document::SoupDocument,
     email_thread::{SoupContact, SoupEmailThreadPreview, SoupEnrichedEmailThreadPreview},
     item::SoupItem,
+    project::SoupProject,
 };
 use rootcause::Report;
 use soup_realtime::domain::models::Patch;
@@ -72,6 +75,39 @@ struct CountingSoupService {
     frecency_calls: Arc<AtomicUsize>,
     frecency_team_receipts: Arc<AtomicUsize>,
     grouped_calls: Arc<AtomicUsize>,
+}
+
+fn soup_document(id: Uuid) -> SoupItem<()> {
+    grouped_document(id).map_extra(|_| ())
+}
+
+fn soup_project(id: Uuid) -> SoupItem<()> {
+    SoupItem::Project(SoupProject {
+        id,
+        name: format!("Project {id}"),
+        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        parent_id: None,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        viewed_at: None,
+        deleted_at: None,
+        extra: (),
+    })
+}
+
+fn soup_chat(id: Uuid) -> SoupItem<()> {
+    SoupItem::Chat(SoupChat {
+        id,
+        name: format!("Chat {id}"),
+        owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+        project_id: None,
+        is_persistent: true,
+        created_at: Default::default(),
+        updated_at: Default::default(),
+        viewed_at: None,
+        deleted_at: None,
+        extra: (),
+    })
 }
 
 fn grouped_document(id: Uuid) -> SoupItem<soup::domain::models::SoupPropertiesField> {
@@ -123,9 +159,38 @@ impl SoupService for CountingSoupService {
         if self.return_empty_raw || raw_response.is_some() {
             let page: PaginatedCursor<SoupItem<()>, String, SimpleSortMethod, T> =
                 Paginated::from_parts(raw_response.unwrap_or_default(), None);
-            return Ok(soup::domain::ports::SoupOutput::Left(page));
+            return Ok(soup::domain::ports::SoupOutput::Simple(page));
         }
         Err(test_soup_err())
+    }
+
+    async fn get_user_soup_with_projection<T>(
+        &self,
+        req: soup::domain::models::SoupRequest<T>,
+        team_receipt: Option<EntityAccessReceipt<entity_access::domain::models::MemberTeamRole>>,
+    ) -> Result<
+        soup::domain::ports::SoupOutput<T, soup::domain::models::SoupProjectionHydration>,
+        soup::domain::models::SoupErr,
+    >
+    where
+        soup::domain::models::SoupRequest<T>: soup::domain::models::IntoSoupReqAst,
+        T: Clone + serde::Serialize + Send,
+    {
+        self.get_user_soup(req, team_receipt).await.map(|output| {
+            output.map(|item| {
+                let document_server_facts = matches!(&item, SoupItem::Document(_)).then_some(
+                    soup::domain::models::SoupDocumentServerFacts {
+                        is_email_attachment: false,
+                        is_important: true,
+                        status_option_ids: Vec::new(),
+                    },
+                );
+                soup::domain::models::SoupProjectionHydration {
+                    item,
+                    document_server_facts,
+                }
+            })
+        })
     }
 
     async fn get_user_soup_with_properties<T>(
@@ -419,6 +484,15 @@ impl EmailService for CountingEmailService {
         Err(test_email_err())
     }
 
+    async fn set_sender_policy(
+        &self,
+        _link: &Link,
+        _sender_email: &str,
+        _policy: SenderPolicy,
+    ) -> Result<(), EmailErr> {
+        Err(test_email_err())
+    }
+
     async fn delete_email_filter(&self, _link: &Link, _filter_id: Uuid) -> Result<bool, EmailErr> {
         Err(test_email_err())
     }
@@ -489,6 +563,7 @@ impl graphql_email::SoupEmailContentEdgeReader for RecordingEmailContentReader {
 struct RecordingActivityReader {
     edge_calls: Arc<Mutex<Vec<Vec<graphql_activity::ActivityEdgeKey>>>>,
     feed_calls: Arc<Mutex<Vec<(String, Option<(chrono::DateTime<chrono::Utc>, Uuid)>, u32)>>>,
+    overview_calls: Arc<Mutex<Vec<(String, activity::ActivityWindow)>>>,
     records: Arc<Mutex<Vec<activity::ActivityRecord>>>,
 }
 
@@ -559,6 +634,30 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
             records: page,
             next,
         })
+    }
+
+    async fn subject_overview(
+        &self,
+        subject_id: &str,
+        window: activity::ActivityWindow,
+    ) -> Result<activity::ActivityOverview, graphql_activity::ActivityReadFailed> {
+        self.overview_calls
+            .lock()
+            .expect("activity overview calls lock")
+            .push((subject_id.to_owned(), window.clone()));
+        Ok(activity::ActivityOverview::new(
+            window.clone(),
+            vec![activity::DayCount {
+                day: window.start,
+                count: std::num::NonZeroU64::new(2).unwrap(),
+            }],
+            vec![activity::EntityRank {
+                entity_type: ModelEntityType::Document,
+                entity_id: "overview-doc".to_owned(),
+                count: std::num::NonZeroU64::new(2).unwrap(),
+            }],
+        )
+        .unwrap())
     }
 }
 
@@ -670,7 +769,7 @@ impl EntityAccessService for CountingEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
@@ -680,7 +779,7 @@ impl EntityAccessService for CountingEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_access_level(
@@ -689,7 +788,7 @@ impl EntityAccessService for CountingEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn check_access(
@@ -699,7 +798,7 @@ impl EntityAccessService for CountingEntityAccessService {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn check_public_access(
@@ -708,7 +807,7 @@ impl EntityAccessService for CountingEntityAccessService {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_entity_permission(
@@ -718,7 +817,7 @@ impl EntityAccessService for CountingEntityAccessService {
         _entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_crm_entity_permission_with_team(
@@ -727,7 +826,7 @@ impl EntityAccessService for CountingEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<(EntityPermission, Uuid, TeamRole), AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_users_by_entity(
@@ -735,21 +834,21 @@ impl EntityAccessService for CountingEntityAccessService {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_call_channel(
         &self,
         _call_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_call_channel_by_channel_id(
         &self,
         _channel_id: &Uuid,
     ) -> Result<Option<CallChannelInfo>, AccessError> {
-        Err(AccessError::Internal)
+        Err(AccessError::internal("test access failure"))
     }
 
     async fn get_user_team(
@@ -840,6 +939,7 @@ struct TestHarness {
         TestState,
         NoOpEntityPropertyWriter,
         UnavailableEntityMutationService,
+        graphql_favorite::NoOpFavoriteMutationService,
         NoOpChannelActivityMutationService,
         NoOpNotificationMutationService,
         NoOpSoupNotificationEdgeReader,
@@ -987,10 +1087,9 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         receiver: Arc::new(Mutex::new(Some(receiver))),
         subscribed_user: Arc::clone(&subscribed_user),
     };
-    let soup_service = CountingSoupService {
-        return_empty_raw: true,
-        ..Default::default()
-    };
+    let soup_service = CountingSoupService::default();
+    let document_id = Uuid::from_u128(42);
+    soup_service.set_raw_response(vec![soup_document(document_id)]);
     let loader = graphql_soup::soup_item_loader(soup_service.clone(), Arc::new(NoOpEmailService));
     let schema: SoupSchema<
         CountingSoupService,
@@ -1002,6 +1101,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         SchemaOnlyState,
         NoOpEntityPropertyWriter,
         UnavailableEntityMutationService,
+        NoOpFavoriteMutationService,
         NoOpChannelActivityMutationService,
         NoOpNotificationMutationService,
         NoOpSoupNotificationEdgeReader,
@@ -1016,14 +1116,13 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         NoopWebSocketNotificationSubscriptionService,
     );
     let request = async_graphql::Request::new(
-        "subscription { soupUpdates { __typename ... on SoupUpdated { item { id } } ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
+        "subscription { soupUpdates { __typename ... on SoupUpdated { item { id cacheProjection } } ... on GraphqlCacheDeletion { graphqlTypeName entityId } } }",
     )
     .data(user_id.clone())
     .data(loader);
     let responses = schema.execute_stream(request);
     pin_mut!(responses);
 
-    let document_id = Uuid::from_u128(42);
     sender
         .send(Patch::Updated(
             ModelEntityType::Document.with_entity_string(document_id.to_string()),
@@ -1052,7 +1151,8 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
 
     assert_eq!(updates.len(), 2);
     assert_eq!(updates[0]["__typename"], "SoupUpdated");
-    assert!(updates[0]["item"].is_null());
+    assert_eq!(updates[0]["item"]["id"], document_id.to_string());
+    assert!(updates[0]["item"]["cacheProjection"].is_string());
     assert_eq!(updates[1]["__typename"], "GraphqlCacheDeletion");
     assert_eq!(updates[1]["graphqlTypeName"], "GraphqlSoupDocument");
     assert_eq!(updates[1]["entityId"], document_id.to_string());
@@ -1171,6 +1271,54 @@ async fn soup_passes_team_receipt_to_raw_path() {
         harness.frecency_soup_team_receipts.load(Ordering::SeqCst),
         0
     );
+}
+
+#[tokio::test]
+async fn flat_soup_emits_document_server_fact_supplement_only() {
+    let harness = harness();
+    let document_id = Uuid::from_u128(88);
+    let email_thread_id = Uuid::from_u128(89);
+    let project_id = Uuid::from_u128(90);
+    let chat_id = Uuid::from_u128(91);
+    harness.soup_service.set_raw_response(vec![
+        soup_document(document_id),
+        soup_email_thread(email_thread_id),
+        soup_project(project_id),
+        soup_chat(chat_id),
+    ]);
+
+    let response = harness
+        .execute(
+            "{ user { soup(input: {initial: {}}) { items { __typename id cacheProjection } } } }",
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    let items = data["user"]["soup"]["items"].as_array().unwrap();
+    let document = items
+        .iter()
+        .find(|item| item["__typename"] == "GraphqlSoupDocument")
+        .unwrap();
+    assert_eq!(document["id"], document_id.to_string());
+    assert!(document["cacheProjection"].is_string());
+    let email = items
+        .iter()
+        .find(|item| item["__typename"] == "GraphqlSoupEmailThread")
+        .unwrap();
+    assert_eq!(email["id"], email_thread_id.to_string());
+    assert!(email["cacheProjection"].is_null());
+    for (typename, id) in [
+        ("GraphqlSoupProject", project_id),
+        ("GraphqlSoupChat", chat_id),
+    ] {
+        let item = items
+            .iter()
+            .find(|item| item["__typename"] == typename)
+            .unwrap();
+        assert_eq!(item["id"], id.to_string());
+        assert!(item["cacheProjection"].is_null());
+    }
 }
 
 #[tokio::test]
@@ -1321,6 +1469,7 @@ fn soup_email_thread_with_read_status(thread_id: Uuid, is_read: bool) -> SoupIte
             is_read,
             is_draft: false,
             is_important: true,
+            is_signal: true,
             name: Some("Direct thread".to_owned()),
             snippet: Some("Direct thread snippet".to_owned()),
             sender_email: Some("sender@example.com".to_owned()),
@@ -1627,6 +1776,40 @@ async fn activity_feed_pages_by_cursor_and_carries_unknown_actions() {
     let (cursor_at, cursor_id) = feed_calls[1].1.expect("second page carries the cursor");
     assert_eq!(cursor_at, chrono::DateTime::from_timestamp(200, 0).unwrap());
     assert_eq!(cursor_id, Uuid::from_u128(2));
+}
+
+#[tokio::test]
+async fn activity_overview_uses_the_authenticated_subject_and_requested_zone() {
+    let harness = harness();
+
+    let response = harness
+        .execute(
+            r#"{ user { activityOverview(input: {timeZone: "America/Havana"}) { from to timeZone total days { date count } topEntities { entityType entityId count } } } }"#,
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let calls = harness
+        .activity_reader
+        .overview_calls
+        .lock()
+        .expect("activity overview calls lock")
+        .clone();
+    assert_eq!(calls.len(), 1);
+    assert_eq!(calls[0].0, VALID_USER_ID);
+    assert_eq!(calls[0].1.zone.name(), "America/Havana");
+
+    let data = response.data.into_json().unwrap();
+    let overview = &data["user"]["activityOverview"];
+    assert_eq!(overview["from"], calls[0].1.start.to_string());
+    assert_eq!(overview["to"], calls[0].1.end.to_string());
+    assert_eq!(overview["timeZone"], "America/Havana");
+    assert_eq!(overview["total"], 2);
+    assert_eq!(overview["days"][0]["date"], calls[0].1.start.to_string());
+    assert_eq!(overview["days"][0]["count"], 2);
+    assert_eq!(overview["topEntities"][0]["entityType"], "DOCUMENT");
+    assert_eq!(overview["topEntities"][0]["entityId"], "overview-doc");
+    assert_eq!(overview["topEntities"][0]["count"], 2);
 }
 
 #[tokio::test]

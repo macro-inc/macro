@@ -21,6 +21,9 @@ use ::email::domain::events::{
     ThreadStarredMetadata, ThreadTrashedMetadata, ThreadsReindexReason,
     ThreadsReindexRequestedMetadata,
 };
+use calendar_events::domain::events::{
+    CalendarEventMetadata, CalendarMacroEvent, CalendarTopicEvent,
+};
 use channels::domain::{
     broker_events::{
         ChannelCreatedMetadata, ChannelDeletedMetadata, ChannelMessageAttachmentCreatedMetadata,
@@ -40,8 +43,8 @@ use documents::domain::events::{
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEvent as _, MessageParts};
 use macro_event_topics::{
-    MacroCallsTopic, MacroChannelsTopic, MacroChatsTopic, MacroDocumentsTopic, MacroEmailTopic,
-    MacroProjectsTopic, MacroPropertiesTopic, Topic as _,
+    MacroCalendarTopic, MacroCallsTopic, MacroChannelsTopic, MacroChatsTopic, MacroDocumentsTopic,
+    MacroEmailTopic, MacroProjectsTopic, MacroPropertiesTopic, Topic as _,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
@@ -665,6 +668,7 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
             ChannelTopicEvent::Created(ChannelCreatedMetadata {
                 channel_id: CHANNEL_ID,
                 actor: sender.clone(),
+                on_behalf_of: None,
                 channel_type: ChannelType::Private,
                 channel_name: Some("general".to_string()),
                 participant_user_ids: vec![user_id()],
@@ -828,6 +832,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
             DocumentTopicEvent::Created(DocumentCreatedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
+                actor: None,
+                on_behalf_of: None,
                 document_name: "Document".to_string(),
                 file_type: Some(FileType::Pdf),
                 project_id: Some(PROJECT_ID.to_string()),
@@ -845,6 +851,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: Some(owner.clone()),
+                actor: None,
+                on_behalf_of: None,
                 document_name: Some("Renamed document".to_string()),
                 previous_project_id: Some(PROJECT_ID.to_string()),
                 project_id: None,
@@ -862,6 +870,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
                 actor_user_id: Some(owner.clone()),
+                actor: None,
+                on_behalf_of: None,
                 document_name: None,
                 previous_project_id: None,
                 project_id: Some(PROJECT_ID.to_string()),
@@ -878,6 +888,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
             DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
                 actor_user_id: Some(owner.clone()),
+                actor: None,
+                on_behalf_of: None,
                 project_id: Some(PROJECT_ID.to_string()),
             }),
             DocumentEventDescription {
@@ -908,6 +920,8 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
                 document_id: DOCUMENT_ID.to_string(),
                 file_type: FileType::Md,
                 document_version_id: None,
+                actor: None,
+                on_behalf_of: None,
             }),
             DocumentEventDescription {
                 action: DocumentIndexAction::ExtractSync {
@@ -1198,6 +1212,8 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 entity_type: EntityType::Document,
                 property_definition_id: PROPERTY_DEFINITION_ID,
                 actor_user_id: actor_user_id.clone(),
+                actor: None,
+                on_behalf_of: None,
                 value: None,
                 previous_value: None,
                 updated_at: Utc::now(),
@@ -1217,6 +1233,8 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 entity_type: EntityType::Chat,
                 property_definition_id: PROPERTY_DEFINITION_ID,
                 actor_user_id: actor_user_id.clone(),
+                actor: None,
+                on_behalf_of: None,
             }),
             PropertyEventDescription {
                 action: PropertyIndexAction::Reindex {
@@ -1231,6 +1249,8 @@ fn property_event_cases() -> Vec<(PropertyTopicEvent, PropertyEventDescription<'
                 entity_id: PROPERTY_ENTITY_ID.to_string(),
                 entity_type: EntityType::Thread,
                 actor_user_id,
+                actor: None,
+                on_behalf_of: None,
             }),
             PropertyEventDescription {
                 action: PropertyIndexAction::Reindex {
@@ -1258,6 +1278,7 @@ fn subscribes_to_declared_search_processing_topics_with_durable_group() {
     assert!(topics.contains(&MacroEmailTopic::TOPIC_STR));
     assert!(topics.contains(&MacroProjectsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroPropertiesTopic::TOPIC_STR));
+    assert!(topics.contains(&MacroCalendarTopic::TOPIC_STR));
 }
 
 #[test]
@@ -1402,6 +1423,8 @@ fn document_extraction_actions_preserve_optional_versions() {
             document_id: DOCUMENT_ID.to_string(),
             file_type: FileType::Md,
             document_version_id: Some("snapshot-7".to_string()),
+            actor: None,
+            on_behalf_of: None,
         });
     assert_eq!(
         describe_document_event(&sync_content_updated).action,
@@ -1534,6 +1557,71 @@ fn channel_envelope_decodes_round_trip() {
 }
 
 #[test]
+fn calendar_envelope_decodes_round_trip_keyed_by_event_id() {
+    let event_id = uuid::Uuid::now_v7();
+    let event = CalendarTopicEvent::Updated(CalendarEventMetadata {
+        event_id,
+        owner_id: "macro|user".to_string(),
+    });
+    let message = encoded_message(
+        MacroCalendarTopic::TOPIC_STR,
+        &event_id.to_string(),
+        Event::new(event.clone()),
+    );
+
+    let decoded = DeclaredMacroEvent::decode(&message).expect("decodable calendar event");
+    let DeclaredMacroEvent::CalendarMacroEvent(decoded_event) = decoded else {
+        panic!("expected calendar event");
+    };
+    assert_eq!(decoded_event.key(), event_id.to_string());
+    assert_eq!(decoded_event.event().event, event);
+}
+
+#[test]
+fn calendar_variants_choose_reindex_or_remove() {
+    // A deletion has no row left to read, so it drops the document directly
+    // instead of spending a query to learn the row is gone.
+    let metadata = CalendarEventMetadata {
+        event_id: uuid::Uuid::now_v7(),
+        owner_id: "macro|user".to_string(),
+    };
+    assert_eq!(
+        super::calendar_event::index_action(&CalendarTopicEvent::Created(metadata.clone())).0,
+        super::calendar_event::CalendarIndexAction::Reindex
+    );
+    assert_eq!(
+        super::calendar_event::index_action(&CalendarTopicEvent::Updated(metadata.clone())).0,
+        super::calendar_event::CalendarIndexAction::Reindex
+    );
+    assert_eq!(
+        super::calendar_event::index_action(&CalendarTopicEvent::Deleted(metadata)).0,
+        super::calendar_event::CalendarIndexAction::Remove
+    );
+}
+
+#[test]
+fn calendar_events_shard_by_event_id_so_one_event_stays_ordered() {
+    // Two changes to one event must land on the same worker, or a later
+    // update could be indexed before an earlier one.
+    let event_id = uuid::Uuid::now_v7();
+    let first = DeclaredMacroEvent::CalendarMacroEvent(CalendarMacroEvent::for_change(
+        CalendarTopicEvent::Created(CalendarEventMetadata {
+            event_id,
+            owner_id: "macro|user".to_string(),
+        }),
+    ));
+    // A different variant for the same entity must still shard together.
+    let second = DeclaredMacroEvent::CalendarMacroEvent(CalendarMacroEvent::for_change(
+        CalendarTopicEvent::Deleted(CalendarEventMetadata {
+            event_id,
+            owner_id: "macro|user".to_string(),
+        }),
+    ));
+    assert_eq!(ordering_key(&first), event_id.to_string());
+    assert_eq!(ordering_key(&first), ordering_key(&second));
+}
+
+#[test]
 fn project_envelope_decodes_round_trip_with_string_key() {
     let event = ProjectTopicEvent::Restored(ProjectRestoredMetadata {
         project_id: PROJECT_ID.to_string(),
@@ -1562,6 +1650,8 @@ fn property_envelope_decodes_round_trip_with_entity_key() {
         entity_id: PROPERTY_ENTITY_ID.to_string(),
         entity_type: EntityType::Document,
         actor_user_id: Some(user_id()),
+        actor: None,
+        on_behalf_of: None,
     });
     let message = encoded_message(
         MacroPropertiesTopic::TOPIC_STR,
@@ -1619,6 +1709,8 @@ fn exact_macro_documents_envelopes_decode_into_document_events() {
                     document_id: DOCUMENT_ID.to_string(),
                     file_type: FileType::Md,
                     document_version_id: None,
+                    actor: None,
+                    on_behalf_of: None,
                 }),
             ),
         ),
@@ -1794,6 +1886,8 @@ async fn unsupported_property_schema_message_is_commit_safe() {
         entity_id: PROPERTY_ENTITY_ID.to_string(),
         entity_type: EntityType::Document,
         actor_user_id: Some(user_id()),
+        actor: None,
+        on_behalf_of: None,
     });
     let message = encoded_message(
         MacroPropertiesTopic::TOPIC_STR,

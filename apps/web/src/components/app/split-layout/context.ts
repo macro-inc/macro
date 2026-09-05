@@ -1,3 +1,4 @@
+import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { NullableSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -7,6 +8,7 @@ import {
   type Setter,
 } from 'solid-js';
 import type { SplitHandle, SplitManager } from './layoutManager';
+import type { ReplaceOwnedSlot } from './utils/createOwnedSlots';
 import type { PriorityCollapser } from './utils/createPriorityCollapser';
 
 export const SplitLayoutContext = createContext<{
@@ -25,14 +27,35 @@ export type SplitFileMenuAction = {
   icon: Component;
   action?: (e?: MouseEvent) => void;
   children?: SplitFileMenuAction[];
-  group?: 'delete';
+  /** Only set when the token's shortcut is executable from the split. */
+  hotkeyToken?: HotkeyToken;
+  group?: SplitFileMenuActionGroup;
 };
 
+/** Menu sections, in render order. */
 export type SplitFileMenuActionGroups = {
-  primaryOps: SplitFileMenuAction[];
-  tools: SplitFileMenuAction[];
-  deleteOps: SplitFileMenuAction[];
+  /** Actions specific to the block's entity type, e.g. email's Mark done. */
+  entity: SplitFileMenuAction[];
+  /** Email sender actions. */
+  sender: SplitFileMenuAction[];
+  /** Share, Copy Link, Copy ID, and friends. */
+  sharing: SplitFileMenuAction[];
+  /** Macro platform features: Favorite, Mute, Remind me, Add tag. */
+  macro: SplitFileMenuAction[];
+  /** Non-destructive operations on the file itself: Duplicate, Rename, Move, Download. */
+  file: SplitFileMenuAction[];
+  /** Destructive actions, always last. */
+  delete: SplitFileMenuAction[];
 };
+
+/**
+ * Menu section an action renders in. Untagged tools and ops default to the
+ * entity section — a block's own actions are entity-specific unless said
+ * otherwise; a `group` tag moves an action to another section (Share and
+ * Download live with their injected siblings, email keeps sender actions
+ * right below its entity actions).
+ */
+export type SplitFileMenuActionGroup = keyof SplitFileMenuActionGroups;
 
 export type SplitFileMenuActionSection = {
   key: keyof SplitFileMenuActionGroups;
@@ -43,9 +66,12 @@ export function getSplitFileMenuActionSections(
   groups: SplitFileMenuActionGroups
 ): SplitFileMenuActionSection[] {
   const sections: SplitFileMenuActionSection[] = [
-    { key: 'tools', actions: groups.tools },
-    { key: 'primaryOps', actions: groups.primaryOps },
-    { key: 'deleteOps', actions: groups.deleteOps },
+    { key: 'entity', actions: groups.entity },
+    { key: 'sender', actions: groups.sender },
+    { key: 'sharing', actions: groups.sharing },
+    { key: 'macro', actions: groups.macro },
+    { key: 'file', actions: groups.file },
+    { key: 'delete', actions: groups.delete },
   ];
 
   return sections.filter((section) => section.actions.length > 0);
@@ -54,6 +80,8 @@ export function getSplitFileMenuActionSections(
 export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
+  /** Whether mounted block content is rendered in a passive inline preview. */
+  isInlinePreview?: boolean;
   isPanelActive: Accessor<boolean>;
   panelRef: Accessor<HTMLElement | null>;
   panelSize: NullableSize;
@@ -73,6 +101,7 @@ export type SplitPanelContextType = {
   setTitleFileMenuTrigger: Setter<(() => void) | undefined>;
   titleFileMenuActions: Accessor<SplitFileMenuActionGroups | undefined>;
   setTitleFileMenuActions: Setter<SplitFileMenuActionGroups | undefined>;
+  replaceOwnedSlot: ReplaceOwnedSlot;
   headerCollapser: PriorityCollapser;
   toolbarCollapser: PriorityCollapser;
 };

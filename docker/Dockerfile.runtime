@@ -8,8 +8,11 @@
 # rebuilding when Rust code changes. This is the `base` stage of docker/Dockerfile.dev
 # with the in-Docker `cargo build` and binary COPY removed.
 FROM debian:trixie-slim
+# docker-cli, for the agent harness's local container provider: it drives the
+# host's daemon over the socket the compose file mounts, so sandboxes are this
+# container's siblings. The client only - the daemon is the host's.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates dumb-init curl \
+    ca-certificates dumb-init curl docker-cli \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV PORT=8080

@@ -12,6 +12,7 @@ export const BulkDeleteView = (props: {
   entities: EntityData[];
   onFinish: () => void;
   onCancel: () => void;
+  onError?: (error: unknown) => void;
 }) => {
   const bulkDelete = createBulkDeleteDssItemsMutation();
   let deleteButton: HTMLButtonElement | undefined;
@@ -30,6 +31,7 @@ export const BulkDeleteView = (props: {
       props.onFinish();
     } catch (error) {
       console.error('Failed to delete entities:', error);
+      props.onError?.(error);
     }
   };
 
@@ -68,7 +70,7 @@ export const BulkDeleteView = (props: {
             )}
           </For>
           <Show when={props.entities.length > 2}>
-            <div class="text-muted-foreground text-xs px-2 py-1">
+            <div class="text-ink-muted text-xs px-2 py-1">
               +{props.entities.length - 2} more
             </div>
           </Show>

@@ -3,6 +3,9 @@ use chrono::{DateTime, Utc};
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
+mod test;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 /// common types of sorts based on timestamps
@@ -33,6 +36,57 @@ impl Sortable for SimpleSortMethod {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct Frecency;
+
+/// Sort by the requesting user's most recent mutation of each entity, as
+/// recorded in the activity log. Doubles as a filter: entities the user has
+/// never mutated have no value to sort on and are absent from the page.
+///
+/// Serializes as `null` like [`Frecency`]; cursors for the two are told
+/// apart by their value types ([`FrecencyValue`]'s tagged map vs a
+/// timestamp).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct TouchedByMe;
+
+impl Sortable for TouchedByMe {
+    type Value = DateTime<Utc>;
+}
+
+/// Sort by when the requesting user was last notified about each entity, as
+/// recorded in `user_notification`. Doubles as a filter: entities the user
+/// was never notified about have no value to sort on and are absent from the
+/// page.
+///
+/// Serializes as the string `"notified_at"` rather than `null`: its cursor
+/// value is a timestamp, exactly like [`TouchedByMe`]'s, so the marker is
+/// the only thing that tells the two cursors apart.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(into = "String", try_from = "String")]
+pub struct NotifiedAt;
+
+const NOTIFIED_AT_TAG: &str = "notified_at";
+
+impl From<NotifiedAt> for String {
+    fn from(_: NotifiedAt) -> Self {
+        NOTIFIED_AT_TAG.to_string()
+    }
+}
+
+impl TryFrom<String> for NotifiedAt {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value == NOTIFIED_AT_TAG {
+            Ok(NotifiedAt)
+        } else {
+            Err(format!("expected {NOTIFIED_AT_TAG:?}, got {value:?}"))
+        }
+    }
+}
+
+impl Sortable for NotifiedAt {
+    type Value = DateTime<Utc>;
+}
 
 /// the possible values of the cursor when sorting by frecency
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -72,22 +126,6 @@ impl std::cmp::Ord for FrecencyValue {
 
 impl Sortable for Frecency {
     type Value = FrecencyValue;
-}
-
-/// either a [SimpleSortMethod] or an [AdvancedSortMethod]
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum SortMethod {
-    /// A [SimpleSortMethod] with some extra params A
-    Simple(
-        /// the [SimplpleSortMethod]
-        SimpleSortMethod,
-    ),
-    /// A [AdvancedSortMethod] with some extra params B
-    Advanced(
-        /// the [AdvancedSortMethod]
-        Frecency,
-    ),
 }
 
 impl std::fmt::Display for SimpleSortMethod {

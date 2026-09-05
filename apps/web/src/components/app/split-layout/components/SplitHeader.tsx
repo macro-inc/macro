@@ -1,6 +1,8 @@
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
+import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
 import type { BlockName } from '@core/block';
 import {
@@ -14,7 +16,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import type { EntityDragEvent } from '@entity';
+import { type EntityDragEvent, isEntityDragEvent } from '@entity';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -44,6 +46,7 @@ import { Portal } from 'solid-js/web';
 import { splitBackInterceptor } from '../back-interceptor';
 import { SplitLayoutContext, SplitPanelContext } from '../context';
 import type { SplitContent } from '../layoutManager';
+import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { canSpotlight } from '../utils/canSpotlight';
 import { HeaderIsland } from './HeaderIsland';
 import {
@@ -76,9 +79,10 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   // references, which the caller navigates to instead.
   if (data.type === 'reminder') return undefined;
 
-  // A calendar event opens the calendar component split, not a block.
+  // Calendar events open the singleton calendar block; the full opening path
+  // supplies the event range used to focus the requested occurrence.
   if (data.type === 'calendar_event')
-    return { type: 'component', id: 'calendar' };
+    return { type: 'calendar', id: CALENDAR_BLOCK_ID };
 
   // CRM entity types map to their dedicated blocks (entity type !== block name).
   if (data.type === 'crm_company') return { type: 'company', id: data.id };
@@ -92,6 +96,8 @@ function SplitBackButton() {
   if (!context) return null;
   return (
     <Button
+      square
+      size="sm"
       class="p-1 rounded-lg touch:active:bg-transparent"
       label="Go Back"
       hotkey={TOKENS.split.go.back}
@@ -101,7 +107,7 @@ function SplitBackButton() {
         context.handle.goBack();
       }}
     >
-      <CaretLeft class="h-4" />
+      <CaretLeft />
     </Button>
   );
 }
@@ -111,13 +117,15 @@ function SplitForwardButton() {
   if (!context) return '';
   return (
     <Button
+      square
+      size="sm"
+      class="p-1 rounded-lg touch:active:bg-transparent"
       label="Go Forward"
       hotkey={TOKENS.split.go.forward}
       disabled={!context.handle.canGoForward()}
       onClick={context.handle.goForward}
-      class={cn('p-1 rounded-lg')}
     >
-      <CaretRight class="h-4" />
+      <CaretRight />
     </Button>
   );
 }
@@ -143,7 +151,9 @@ function SidebarExpandButton() {
       aria-hidden={!visible()}
     >
       <Button
-        class="p-1 rounded-lg"
+        class="rounded-lg"
+        square
+        size="sm"
         label="Expand Sidebar"
         hotkey={TOKENS.global.toggleSidebar}
         disabled={!visible()}
@@ -196,29 +206,17 @@ function SplitCloseButton() {
     return isOnlySplit && isNotUnifiedList ? 'Return to list' : 'Close';
   });
 
-  // A Viewer has no close affordance or close hotkey: it closes with its
-  // Controller, when its Preview Pair dissolves (external navigation or the
-  // Controller leaving its list view), or via the preview toggle.
-  const isPreviewViewer = () => context.handle.isViewerSplit();
-
-  // A Preview Pair occupies two split slots but is a single logical split: its
-  // Viewer isn't independently closable. Subtract one slot per pair so that
-  // when the only splits open are a single Preview Pair, the Controller hides
-  // its close button — just like a lone split does.
-  const hasMultipleSplits = createMemo(
-    () =>
-      layout.manager.splits().length - layout.manager.previewPairs().length > 1
-  );
-
   return (
-    <Show when={hasMultipleSplits() && !isPreviewViewer()}>
+    <Show when={shouldShowSplitCloseButton(layout.manager, context.handle)}>
       <Button
-        class="p-1 rounded-lg"
+        square
+        size="sm"
+        class="rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
         onClick={context.handle.close}
       >
-        <CloseIcon class="size-4" />
+        <CloseIcon />
       </Button>
     </Show>
   );
@@ -227,6 +225,7 @@ function SplitCloseButton() {
 function SoupNavigationButtons() {
   const context = useContext(SplitPanelContext);
   const soup = useSoup();
+  const notificationSource = useGlobalNotificationSource();
   if (!context) return null;
 
   const rows = createMemo(() => soup.rows());
@@ -269,6 +268,7 @@ function SoupNavigationButtons() {
       splitHandle: context.handle,
       mergeHistory: true,
       referredFrom: navigationReferredFrom(),
+      notificationSource,
     });
   };
 
@@ -464,6 +464,7 @@ export function SplitHeader(props: {
   collapseController: PriorityCollapseController;
 }) {
   const panel = useContext(SplitPanelContext);
+  const notificationSource = useGlobalNotificationSource();
   if (!panel) {
     throw new Error('<SplitHeader> must be used within a <SplitLayout>');
   }
@@ -485,11 +486,12 @@ export function SplitHeader(props: {
     );
   });
 
-  onDragEnd((event: EntityDragEvent) => {
-    if (event.droppable?.id !== droppableId) return;
+  onDragEnd((event) => {
+    if (!isEntityDragEvent(event) || event.droppable?.id !== droppableId) {
+      return;
+    }
 
-    const data = event.draggable?.data;
-    if (!data || data.dragType !== 'entity') return;
+    const data = event.draggable.data;
 
     const current = panel.handle.content();
     const next = getEntitySplitContent(data);
@@ -499,6 +501,7 @@ export function SplitHeader(props: {
     void openEntityInSplitFromUnifiedList(data, {
       splitHandle: panel.handle,
       allowDuplicate: true,
+      notificationSource,
     });
   });
 
@@ -508,15 +511,13 @@ export function SplitHeader(props: {
         class={cn(
           '@container/split-header isolate relative w-full h-full overflow-clip text-ink',
           // On mobile the header overlays the panel body as a transparent strip
-          // of floating islands
+          // of floating islands; the island utility's px min-size keeps them
+          // tappable regardless of the OS text-size setting (inert on desktop).
           'touch:absolute touch:inset-x-0 touch:top-(--safe-top) touch:z-mobile-nav-bar touch:h-11.25 touch:overflow-visible touch:pointer-events-none',
-          isTouchDevice() &&
-            isListViewID(panel.handle.content().id) &&
-            'hidden',
           isMobile() &&
             !isNativeMobilePlatform() &&
             'touch:top-[calc(var(--safe-top)+6px)]',
-          isEntityDraggingOver() && 'bg-active/50'
+          isEntityDraggingOver() && 'bg-active'
         )}
         data-split-header
         ref={mergeRefs(droppable, props.ref)}
@@ -556,11 +557,15 @@ export function SplitHeader(props: {
               </div>
             }
           >
-            {/* Back/forward island. */}
+            {/* Back/forward island. List views never render the back button
+                (their header hosts the filter pills instead), so the island
+                hides for them even when history allows going back. */}
             <HeaderIsland
               class={cn(
                 'relative gap-0 px-1',
-                !panel.handle.canGoBack() && 'hidden'
+                (!panel.handle.canGoBack() ||
+                  isListViewID(panel.handle.content().id)) &&
+                  'hidden'
               )}
             >
               <Show when={!isListViewID(panel.handle.content().id)}>

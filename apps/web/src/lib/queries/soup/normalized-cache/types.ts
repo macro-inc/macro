@@ -29,4 +29,8 @@ export type SoupEntityPartial<T extends SoupEntityTag = SoupEntityTag> = {
   tag: T;
   data: SoupPartialData<T>;
   frecency_score: number;
+  /** Optimistic own-touch stamp; only `bumpSoupEntityTouchedAt` sets it. */
+  touched_at?: string | null;
+  /** Latest-notification stamp; only `bumpSoupEntityNotifiedAt` sets it. */
+  notified_at?: string | null;
 };

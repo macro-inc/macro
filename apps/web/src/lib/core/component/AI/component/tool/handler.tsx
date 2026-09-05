@@ -3,8 +3,30 @@ import {
   deserializeToolResponse,
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
+import { createMemo } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { bashCodeExecutionHandler } from './BashCodeExecution';
+import {
+  configureBotHandler,
+  createBotHandler,
+  deleteBotHandler,
+  getBotWebhooksHandler,
+  issueBotCredentialHandler,
+  listBotsHandler,
+  manageBotChannelAccessHandler,
+} from './Bots';
+import {
+  createCalendarEventHandler,
+  deleteCalendarEventHandler,
+  listCalendarEventsHandler,
+  listCalendarsHandler,
+  updateCalendarEventHandler,
+} from './CalendarTools';
+import {
+  createChannelHandler,
+  manageChannelParticipantsHandler,
+  renameChannelHandler,
+} from './ChannelMutations';
 import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
@@ -37,6 +59,7 @@ import {
   getEntityPropertiesHandler,
   setEntityPropertyHandler,
 } from './Properties';
+import { readActivityHandler } from './ReadActivity';
 import { readCallRecordHandler } from './ReadCallRecord';
 import {
   readChannelMessageContextHandler,
@@ -48,6 +71,12 @@ import { readContentHandler } from './ReadContent';
 import { readMetadataHandler } from './ReadMetadata';
 import { readProjectHandler } from './ReadProject';
 import { readThreadHandler } from './ReadThread';
+import {
+  createReminderHandler,
+  deleteReminderHandler,
+  listRemindersHandler,
+  updateReminderHandler,
+} from './Reminders';
 import { renameDocumentHandler } from './RenameDocument';
 import { contentSearchHandler, nameSearchHandler } from './Search';
 import { listSkillsHandler, searchSkillsHandler } from './SearchSkills';
@@ -55,6 +84,7 @@ import { searchToolsHandler } from './SearchTools';
 import { selfKnowledgeHandler } from './SelfKnowledge';
 import { sendChannelMessageHandler } from './SendChannelMessage';
 import { sendEmailHandler } from './SendEmail';
+import { setSenderPolicyHandler } from './SetSenderPolicy';
 import { subagentHandler } from './Subagent';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import {
@@ -69,6 +99,19 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  ConfigureBot: configureBotHandler,
+  CreateChannel: createChannelHandler,
+  CreateBot: createBotHandler,
+  DeleteBot: deleteBotHandler,
+  GetBotWebhooks: getBotWebhooksHandler,
+  IssueBotCredential: issueBotCredentialHandler,
+  ListBots: listBotsHandler,
+  ManageBotChannelAccess: manageBotChannelAccessHandler,
+  CreateCalendarEvent: createCalendarEventHandler,
+  UpdateCalendarEvent: updateCalendarEventHandler,
+  DeleteCalendarEvent: deleteCalendarEventHandler,
+  ListCalendarEvents: listCalendarEventsHandler,
+  ListCalendars: listCalendarsHandler,
   CreateImportEntity: createImportEntityHandler,
   DeleteImportEntity: deleteImportEntityHandler,
   ImportNotionPage: importNotionPageHandler,
@@ -80,7 +123,9 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,
   ListSkills: listSkillsHandler,
+  ManageChannelParticipants: manageChannelParticipantsHandler,
   ListNotifications: listNotificationsHandler,
+  ListReminders: listRemindersHandler,
   ListTags: listTagsHandler,
   ListTeamMembers: listTeamMembersHandler,
   LoadTools: loadToolsHandler,
@@ -92,12 +137,15 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ContentSearch: contentSearchHandler,
   CreateDocument: createDocumentHandler,
   CreateProject: createProjectHandler,
+  CreateReminder: createReminderHandler,
   CreateTag: createTagHandler,
+  DeleteReminder: deleteReminderHandler,
   DeleteTag: deleteTagHandler,
   EditDocument: editDocumentHandler,
   EditTag: editTagHandler,
   GetThread: getThreadHandler,
   NameSearch: nameSearchHandler,
+  ReadActivity: readActivityHandler,
   ReadCallRecord: readCallRecordHandler,
   ReadChannelMessageContext: readChannelMessageContextHandler,
   ReadChannelMessages: readChannelMessagesHandler,
@@ -107,16 +155,19 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ReadContent: readContentHandler,
   ReadMetadata: readMetadataHandler,
   ReadProject: readProjectHandler,
+  RenameChannel: renameChannelHandler,
   RenameDocument: renameDocumentHandler,
   SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
   SelfKnowledge: selfKnowledgeHandler,
   SendChannelMessage: sendChannelMessageHandler,
   SendEmail: sendEmailHandler,
+  SetSenderPolicy: setSenderPolicyHandler,
   SetEntityProperty: setEntityPropertyHandler,
   BulkSetEntityPropertyOptions: bulkSetEntityPropertyOptionsHandler,
   Subagent: subagentHandler,
   TextEditorCodeExecution: textEditorCodeExecutionHandler,
+  UpdateReminder: updateReminderHandler,
   UpdateThreadLabels: updateThreadLabelsHandler,
   WebFetch: webFetchHandler,
   WebSearch: webSearchHandler,
@@ -165,18 +216,47 @@ export function RenderTool(props: ToolProps) {
     isComplete: props.isComplete,
   };
 
-  const response = () => {
-    if (!props.response) return undefined;
+  /*
+   Every streamed character rebuilds the message parts (and the response map),
+   giving `props.response` a fresh object identity even though its `json`
+   payload is reference-stable once the tool result has arrived. Compare by
+   field identity so the expensive parse below only re-runs when the response
+   actually changes.
+  */
+  const responseInput = createMemo(
+    () =>
+      props.response
+        ? {
+            id: props.tool_id,
+            json: props.response.json,
+            name: props.response.name,
+          }
+        : undefined,
+    undefined,
+    {
+      equals: (a, b) =>
+        a?.id === b?.id && a?.json === b?.json && a?.name === b?.name,
+    }
+  );
+
+  /*
+   Deserializing runs a full zod parse of the tool payload. Unmemoized, it
+   re-ran per read site in every tool component on each streamed character,
+   which made streaming crawl on messages with completed tool calls.
+  */
+  const response = createMemo(() => {
+    const input = responseInput();
+    if (!input) return undefined;
 
     const maybeResponse = deserializeToolResponse({
-      id: props.tool_id,
-      json: props.response.json,
-      name: props.response.name as ToolName,
+      id: input.id,
+      json: input.json,
+      name: input.name as ToolName,
     });
 
     if (maybeResponse.isErr()) return undefined;
     return maybeResponse.value;
-  };
+  });
 
   return (
     <ToolErrorContext.Provider

@@ -1,28 +1,97 @@
 //! Staged-progress UI, mirroring `tooling/scripts/lib/stage-ui.sh`.
 //!
 //! A bold `[+]` section header, then per-stage lines: an `indicatif` spinner
-//! that *resolves in place* into `✓ Done <elapsed>` / `✗ Failed <elapsed>` via
-//! the bar's own finish state (no clear-and-reprint), a captured-output dump on
-//! failure, and respect for `MACRO_LOCAL_VERBOSE`, `MACRO_LOCAL_DRY_RUN`, and
-//! `NO_COLOR`.
+//! that clears before its `✓ Done <elapsed>` / `✗ Failed <elapsed>` result is
+//! printed as ordinary scrollback, a captured-output dump on failure, and
+//! respect for `MACRO_LOCAL_VERBOSE`, `MACRO_LOCAL_DRY_RUN`, and `NO_COLOR`.
 //!
 //! Only the subprocess capture is hand-rolled, on purpose: stdout and stderr
 //! are drained on dedicated threads so a chatty child (e.g. `cargo zigbuild`)
 //! cannot deadlock by filling a pipe buffer while we wait. `indicatif` only
 //! animates — it never reads the child's pipes.
 
-use std::io::Read;
+use std::io::{self, Read};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
 use anyhow::{Result, bail};
 use console::Style;
-use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
+use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle, TermLike};
+
+#[cfg(test)]
+mod test;
 
 const WIDTH: usize = 48;
+/// Keep animated output away from the terminal's moving right edge. Indicatif
+/// normally pads every draw to the reported terminal width and relies on that
+/// edge to wrap the next write; a concurrent resize makes that position stale.
+const SPINNER_MAX_WIDTH: u16 = 64;
 /// Braille spinner frames + a trailing space (indicatif's "final" tick, which
-/// we never show — stages resolve via `finish_with_message`).
+/// we never show — stages resolve via `finish_and_clear`).
 const TICK_CHARS: &str = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ";
+
+/// An indicatif terminal that redraws only a short inline region. Delegating
+/// the cursor operations to `console::Term` preserves indicatif's clearing,
+/// while the capped width prevents its filler cells from reaching the edge
+/// that is changing during a resize.
+#[derive(Debug)]
+struct SpinnerTerm {
+    inner: console::Term,
+}
+
+impl SpinnerTerm {
+    fn stdout() -> Self {
+        Self {
+            inner: console::Term::buffered_stdout(),
+        }
+    }
+}
+
+impl TermLike for SpinnerTerm {
+    fn width(&self) -> u16 {
+        spinner_draw_width(self.inner.size().1)
+    }
+
+    fn height(&self) -> u16 {
+        self.inner.size().0
+    }
+
+    fn move_cursor_up(&self, n: usize) -> io::Result<()> {
+        self.inner.move_cursor_up(n)
+    }
+
+    fn move_cursor_down(&self, n: usize) -> io::Result<()> {
+        self.inner.move_cursor_down(n)
+    }
+
+    fn move_cursor_right(&self, n: usize) -> io::Result<()> {
+        self.inner.move_cursor_right(n)
+    }
+
+    fn move_cursor_left(&self, n: usize) -> io::Result<()> {
+        self.inner.move_cursor_left(n)
+    }
+
+    fn write_line(&self, s: &str) -> io::Result<()> {
+        self.inner.write_line(s)
+    }
+
+    fn write_str(&self, s: &str) -> io::Result<()> {
+        self.inner.write_str(s)
+    }
+
+    fn clear_line(&self) -> io::Result<()> {
+        self.inner.clear_line()
+    }
+
+    fn flush(&self) -> io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+fn spinner_draw_width(terminal_width: u16) -> u16 {
+    terminal_width.clamp(1, SPINNER_MAX_WIDTH)
+}
 
 /// Drives staged output. Construct once with [`Stage::from_env`] and reuse.
 pub struct Stage {
@@ -132,27 +201,34 @@ impl Stage {
         if !self.is_tty {
             return None;
         }
-        let pb = ProgressBar::with_draw_target(None, ProgressDrawTarget::stdout());
+        let pb = ProgressBar::with_draw_target(
+            None,
+            ProgressDrawTarget::term_like_with_hz(Box::new(SpinnerTerm::stdout()), 20),
+        );
         pb.set_style(
-            ProgressStyle::with_template("  {spinner:.cyan} {prefix} {msg:.cyan}")
+            ProgressStyle::with_template("  {spinner:.cyan} {wide_msg}")
                 .expect("valid spinner template")
                 .tick_chars(TICK_CHARS),
         );
-        pb.set_prefix(format!("{label:<WIDTH$}"));
-        pb.set_message("Running");
+        pb.set_message(format!(
+            "{label:<WIDTH$} {}",
+            Style::new().cyan().apply_to("Running")
+        ));
         pb.enable_steady_tick(Duration::from_millis(80));
         Some(pb)
     }
 
-    /// Settle a stage to its final line: resolved in place if a spinner is live
-    /// (TTY), else printed plainly (non-TTY).
+    /// Settle a stage to its final line. Clear a live spinner first, then print
+    /// the result normally so it ends with a real newline. `indicatif` leaves
+    /// its cursor at the measured right edge and relies on the next write to
+    /// wrap; that edge becomes stale during a terminal resize and makes later
+    /// rows start in the middle of the screen.
     fn resolve(&self, spinner: Option<ProgressBar>, line: String) {
-        match spinner {
-            Some(pb) => {
-                pb.set_style(ProgressStyle::with_template("{msg}").expect("valid template"));
-                pb.finish_with_message(line);
-            }
-            None => println!("{line}"),
+        if let Some(pb) = spinner {
+            pb.finish_and_clear();
+            println!("\r{line}");
+        } else {
+            println!("{line}");
         }
     }
 

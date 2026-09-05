@@ -6,6 +6,7 @@
 #![deny(missing_docs)]
 
 pub mod about_macro;
+pub mod agent_session;
 pub mod channel_mention;
 pub mod citations;
 pub mod connected_toolsets;
@@ -19,6 +20,7 @@ pub mod skills;
 pub mod tone;
 pub mod tool_usage;
 mod types;
+pub mod user_tools;
 
 pub use types::{ComposedPrompt, Section, StaticPrompt};
 
@@ -31,11 +33,25 @@ pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT);
 
-/// The tool-enabled prompt: [`BASE_PROMPT`] with the tool use instructions,
-/// skill-following rules, document-content linking rules, and email inbox
-/// behavior appended.
+/// The tool-enabled prompt for hosts whose tools all execute directly in the
+/// agent loop (the channel-mention bot, the MCP server): [`BASE_PROMPT`] with
+/// the tool use instructions, skill-following rules, document-content linking
+/// rules, and email inbox behavior appended. Says nothing about
+/// composer-confirmed user tools — those hosts' toolsets execute
+/// `CreateCalendarEvent` directly and have no `SendEmail` at all.
+pub static DIRECT_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
+    .compose(&tool_usage::PROMPT)
+    .compose(&skills::PROMPT)
+    .compose(&document_content_links::PROMPT)
+    .compose(&email::PROMPT);
+
+/// The chat tool-enabled prompt: [`DIRECT_TOOL_USE_PROMPT`] plus the rules
+/// for composer-confirmed user tools (`SendEmail`, deferred execution), which
+/// only apply on surfaces that can render the composer card. Composed as its
+/// own chain so the email section stays last.
 pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
+    .compose(&user_tools::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
@@ -138,6 +154,21 @@ mod tests {
     }
 
     #[test]
+    fn direct_tool_use_prompt_omits_composer_confirmed_user_tool_rules() {
+        // Hosts on the direct prompt (channel bot, MCP) have no composer and
+        // no SendEmail tool; describing deferred user tools there would tell
+        // the model the opposite of what its tools actually do.
+        let direct = DIRECT_TOOL_USE_PROMPT.to_string();
+        assert!(!direct.contains("PendingUserExecution"));
+        assert!(!direct.contains("MUST use the `SendEmail` tool"));
+
+        // The chat prompt keeps both rules.
+        let chat = TOOL_USE_PROMPT.to_string();
+        assert!(chat.contains("PendingUserExecution"));
+        assert!(chat.contains("MUST use the `SendEmail` tool"));
+    }
+
+    #[test]
     fn tool_use_prompt_also_carries_document_content_link_rules() {
         // The in-app prompt should keep the same guidance so behavior doesn't
         // diverge between surfaces.
@@ -160,12 +191,24 @@ mod tests {
     }
 
     #[test]
+    fn agent_session_preamble_tells_the_model_to_emit_mention_tags() {
+        let preamble = agent_session::PROMPT.to_string();
+        assert!(preamble.contains("XML mention tag"));
+        assert!(preamble.contains("clickable chips"));
+    }
+
+    #[test]
     fn markdown_surface_scope_names_every_surface_but_the_reply_tone_exception() {
         // The mention rule must name every Markdown-authoring surface and the
         // non-Markdown-document exception, and the tool-use tone rule must not
         // silently bleed into tool-authored content.
         let in_app = TOOL_USE_PROMPT.to_string();
-        for surface in ["SendChannelMessage", "SendEmail", "CreateDocument"] {
+        for surface in [
+            "SendChannelMessage",
+            "SendEmail",
+            "CreateDocument",
+            "agent session",
+        ] {
             assert!(
                 in_app.contains(surface),
                 "markdown surface scope should name {surface}"

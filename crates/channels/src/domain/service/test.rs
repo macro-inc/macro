@@ -1,16 +1,17 @@
 use super::*;
 use crate::domain::{
+    dm::ensure_dms_for_joining_member,
     events::ChannelEvent,
     models::{
         Activity, ActivityType, BotId, BotSenderProfile, ChannelAttachment, ChannelAttachmentType,
         ChannelContextMessage, ChannelInfo, ChannelMessageFilters, ChannelMetadata,
         ChannelParticipant, ChannelType, CountedReaction, CreateChannelRequest,
         CreateEntityMentionOptions, CreatedChannel, DeleteMessageQuery, EntityMention,
-        MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
-        NewChannelAttachment, ParticipantRole, PatchChannelRequest, PatchMessageRequest,
-        PostMessageRequest, PostReactionRequest, ReactionAction, ReferencedShareItem,
-        ReferencedShareItemType, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
-        ThreadReplyRow, TopLevelMessageRow,
+        GetOrCreateDmRequest, MessageAttachment, MessagePageDirection, MutatedAttachment,
+        MutatedMessage, NewChannelAttachment, ParticipantRole, PatchChannelRequest,
+        PatchMessageRequest, PostMessageRequest, PostReactionRequest, ReactionAction,
+        ReferencedShareItem, ReferencedShareItemType, ResolvedChannelMessage, Sender,
+        SimpleMention, ThreadData, ThreadReplyRow, TopLevelMessageRow,
     },
     ports::{
         ChannelEventDispatcher, ChannelMentionExtractor, ChannelReferenceSharePermissions,
@@ -1050,6 +1051,41 @@ async fn post_message_emits_message_posted_event_and_updates_share_permissions()
         repo.state.lock().unwrap().touched_channel_ids,
         vec![channel_id]
     );
+}
+
+#[tokio::test]
+async fn post_message_treats_email_attachments_as_thread_share_items() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let share = FakeReferenceSharing::default();
+    let svc = mutation_service(repo, FakeEvents::default(), share.clone());
+
+    svc.post_message(
+        sender("macro|sender@test.com"),
+        channel_id,
+        PostMessageRequest {
+            content: "sharing an email".to_string(),
+            mentions: vec![],
+            thread_id: None,
+            attachments: vec![NewChannelAttachment {
+                entity_type: "email".to_string(),
+                entity_id: "thread-1".to_string(),
+                width: None,
+                height: None,
+            }],
+            nonce: None,
+            notification_policy: Default::default(),
+            triggered_by: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let shared = share.items.lock().unwrap();
+    assert!(shared.contains(&ReferencedShareItem::new(
+        "thread-1",
+        ReferencedShareItemType::EmailThread
+    )));
 }
 
 #[tokio::test]
@@ -2234,6 +2270,107 @@ async fn remove_participants_allows_removing_non_owner() {
 }
 
 #[tokio::test]
+async fn create_system_channel_event_uses_system_actor() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|owner@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.create_system_channel(
+        macro_id("macro|owner@test.com"),
+        crate::domain::models::CreateChannelRequest {
+            name: Some("Macro Support x owner".to_string()),
+            channel_type: ChannelType::Private,
+            team_id: None,
+            auto_join_team: false,
+            participants: HashSet::from([macro_id("macro|teo@macro.com")]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelCreated {
+            actor,
+            on_behalf_of: Some(owner),
+            channel_name: Some(name),
+            ..
+        }] if actor == &Sender::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID)
+            && owner.as_ref() == "macro|owner@test.com"
+            && name == "Macro Support x owner"
+    ));
+}
+
+#[tokio::test]
+async fn create_channel_on_behalf_attributes_created_to_the_bot() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|owner@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.create_channel_on_behalf(
+        macro_id("macro|owner@test.com"),
+        bot_id::MACRO_AI_BOT_ID,
+        crate::domain::models::CreateChannelRequest {
+            name: Some("Planning".to_string()),
+            channel_type: ChannelType::Private,
+            team_id: None,
+            auto_join_team: false,
+            participants: HashSet::from([macro_id("macro|teo@macro.com")]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelCreated {
+            actor,
+            on_behalf_of: Some(owner),
+            channel_name: Some(name),
+            ..
+        }] if actor == &Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID)
+            && owner.as_ref() == "macro|owner@test.com"
+            && name == "Planning"
+    ));
+}
+
+/// Signup on main called `create_channel(Sender::new_from_user(owner))`.
+/// That is the path that made "Created # Macro Support x …" render as You.
+#[tokio::test]
+async fn signup_support_channel_via_user_create_channel_attributes_created_to_owner() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|owner@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    svc.create_channel(
+        sender("macro|owner@test.com"),
+        None,
+        crate::domain::models::CreateChannelRequest {
+            name: Some("Macro Support x owner".to_string()),
+            channel_type: ChannelType::Private,
+            team_id: None,
+            auto_join_team: false,
+            participants: HashSet::from([macro_id("macro|teo@macro.com")]),
+        },
+    )
+    .await
+    .unwrap();
+
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelCreated { actor, channel_name: Some(name), .. }]
+            if actor == &sender("macro|owner@test.com")
+                && name == "Macro Support x owner"
+    ));
+}
+
+#[tokio::test]
 async fn create_channel_event_carries_channel_name() {
     let channel_id = Uuid::new_v4();
     let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
@@ -2259,6 +2396,132 @@ async fn create_channel_event_carries_channel_name() {
         events.as_slice(),
         [ChannelEvent::ChannelCreated { channel_name: Some(name), .. }] if name == "general"
     ));
+}
+
+#[tokio::test]
+async fn ensure_dms_dispatches_created_channel_once() {
+    let channel_id = Uuid::new_v4();
+    let joiner = macro_id("macro|joiner@test.com");
+    let teammate = macro_id("macro|teammate@test.com");
+    let repo = FakeMutationRepo::new(channel_id, joiner.as_ref());
+    let events = FakeEvents::default();
+    let service = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
+
+    let summary = service
+        .ensure_dms(ensure_dms_for_joining_member(
+            joiner.clone(),
+            vec![joiner.clone(), teammate.clone()],
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        summary,
+        EnsureDmsSummary {
+            created: 1,
+            existing: 0,
+            failed: 0,
+        }
+    );
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelCreated {
+            channel_id: actual_channel_id,
+            actor,
+            on_behalf_of: None,
+            channel_type: ChannelType::DirectMessage,
+            channel_name: None,
+            participant_user_ids,
+        }] if actual_channel_id == &channel_id
+            && actor.as_user() == Some(&joiner)
+            && participant_user_ids.contains(&joiner)
+            && participant_user_ids.contains(&teammate)
+    ));
+}
+
+#[tokio::test]
+async fn ensure_dms_does_not_dispatch_for_existing_channel() {
+    let channel_id = Uuid::new_v4();
+    let joiner = macro_id("macro|joiner@test.com");
+    let teammate = macro_id("macro|teammate@test.com");
+    let mut repo = MockChannelRepo::new();
+    repo.expect_maybe_get_dm()
+        .once()
+        .returning(move |_, _| Box::pin(async move { Ok(Some(channel_id)) }));
+    let events = FakeEvents::default();
+    let service = ChannelServiceImpl::with_dependencies(
+        repo,
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    let summary = service
+        .ensure_dms(ensure_dms_for_joining_member(joiner, vec![teammate]))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        summary,
+        EnsureDmsSummary {
+            created: 0,
+            existing: 1,
+            failed: 0,
+        }
+    );
+    assert!(events.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn get_or_create_dm_rejects_self_pair() {
+    let user = macro_id("macro|same@test.com");
+    let repo = FakeMutationRepo::new(Uuid::new_v4(), user.as_ref());
+    let service = mutation_service(repo, FakeEvents::default(), FakeReferenceSharing::default());
+
+    let error = service
+        .get_or_create_dm(
+            Sender::new_from_user(user.clone()),
+            GetOrCreateDmRequest { recipient_id: user },
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        ChannelMutationErr::BadRequest(message)
+            if message == "recipient_id cannot be the same as the user_id"
+    ));
+}
+
+#[tokio::test]
+async fn get_or_create_dm_returns_get_for_existing_pair() {
+    let channel_id = Uuid::new_v4();
+    let actor = macro_id("macro|actor@test.com");
+    let recipient = macro_id("macro|recipient@test.com");
+    let mut repo = MockChannelRepo::new();
+    repo.expect_maybe_get_dm()
+        .once()
+        .returning(move |_, _| Box::pin(async move { Ok(Some(channel_id)) }));
+    let events = FakeEvents::default();
+    let service = ChannelServiceImpl::with_dependencies(
+        repo,
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    let response = service
+        .get_or_create_dm(
+            Sender::new_from_user(actor),
+            GetOrCreateDmRequest {
+                recipient_id: recipient,
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.channel_id, channel_id.to_string());
+    assert_eq!(response.action, GetOrCreateAction::Get);
+    assert!(events.events.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

@@ -33,7 +33,7 @@ export const FILE_LIST_SPACER_WIDTH = {
 
 const _FILE_LIST_TEXT_SIZE = {
   [FILE_LIST_SIZE.sm]: 'text-sm',
-  [FILE_LIST_SIZE.md]: 'text-md',
+  [FILE_LIST_SIZE.md]: 'text-base',
   [FILE_LIST_SIZE.lg]: 'text-lg',
 } as const;
 
@@ -66,6 +66,7 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   canvas: 'bg-canvas/20 group/item',
   video: 'bg-video/20 group/item',
   call: defaultFileColor,
+  calendar: defaultFileColor,
   contact: defaultFileColor,
   company: defaultFileColor,
   default: defaultFileColor,
@@ -79,4 +80,5 @@ const _fileTypeColors: Record<BlockName | BlockAlias | 'default', string> = {
   skill: 'bg-chat/20 group/item',
   automation: 'bg-chat/20 group/item',
   pr: defaultFileColor,
+  agent: defaultFileColor,
 };

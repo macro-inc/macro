@@ -143,7 +143,7 @@ where
                         let owner_id = notification.owner_id.clone();
                         self.publish_update(
                             &owner_id,
-                            NotificationSubscriptionUpdate::Updated(Arc::new(notification)),
+                            NotificationSubscriptionUpdate::New(Arc::new(notification)),
                         );
                     }
                 }

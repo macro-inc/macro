@@ -3,13 +3,14 @@ import { TOKENS } from '@core/hotkey/tokens';
 import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { Accessor } from 'solid-js';
 import type { MessageActions, MessageData } from '../Message';
+import { getMessageReplyPreviewTexts } from '../Message/browser-selection';
 import { isBotMessage } from '../Thread/utils/message-actions';
 import type { MessageSelection } from './create-message-selection';
 import type { ThreadListNavigation } from './ThreadList';
 
 type CreateChannelHotkeysOptions = {
   selection: MessageSelection;
-  navigation: Accessor<ThreadListNavigation | undefined>;
+  scrollToMessage: ThreadListNavigation['scrollToMessage'];
   messageById: Accessor<Map<string, ApiChannelMessage>>;
   getMessageActions: (message: MessageData) => MessageActions | undefined;
   userId: Accessor<string | undefined>;
@@ -73,8 +74,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectPrevious();
       if (id) {
-        options.navigation()?.markUserIntent('up');
-        options.navigation()?.scrollToId(id, { align: 'nearest' });
+        options.scrollToMessage(id, { align: 'auto', userIntent: 'up' });
       }
       return true;
     },
@@ -88,8 +88,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectNext();
       if (id) {
-        options.navigation()?.markUserIntent('down');
-        options.navigation()?.scrollToId(id, { align: 'nearest' });
+        options.scrollToMessage(id, { align: 'auto', userIntent: 'down' });
       } else {
         inputEl?.querySelector<HTMLElement>('[contenteditable]')?.focus();
       }
@@ -103,7 +102,6 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     description: 'Go to latest message',
     keyDownHandler: () => {
       options.selection.clear();
-      options.navigation()?.markUserIntent('down');
       options.onGoToBottom();
       return true;
     },
@@ -123,7 +121,10 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
       const msg = getSelectedMessage();
       if (!msg) return false;
       const actions = options.getMessageActions(msg);
-      actions?.onReply?.({ message: msg });
+      actions?.onReply?.({
+        message: msg,
+        ...getMessageReplyPreviewTexts(msg.id),
+      });
       return true;
     },
   });
@@ -197,8 +198,7 @@ export function createChannelHotkeys(options: CreateChannelHotkeysOptions) {
     keyDownHandler: () => {
       const id = options.selection.selectPrevious();
       if (id) {
-        options.navigation()?.markUserIntent('up');
-        options.navigation()?.scrollToId(id, { align: 'nearest' });
+        options.scrollToMessage(id, { align: 'auto', userIntent: 'up' });
         messageListEl?.focus();
       }
       return true;

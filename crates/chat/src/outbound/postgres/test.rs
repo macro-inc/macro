@@ -7,12 +7,20 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::NewChatMessage;
 use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
+use models_permissions::share_permission::{
+    LinkShare, SharePermissionV2, UpdateSharePermissionRequestV2,
+};
 use sqlx::{Pool, Postgres, Row};
 
 use super::PgChatRepo;
 use crate::domain::models::{ChatErr, CopyChatArgs, CreateChatArgs, PatchChatArgs};
 use crate::domain::ports::ChatRepo;
+
+/// The no-team default permission for a chat — the repo persists whatever the
+/// domain layer resolved, so tests pass it explicitly.
+fn default_share_permission() -> SharePermissionV2 {
+    SharePermissionV2::new_chat_share_permission(None)
+}
 
 #[derive(Debug, Eq, PartialEq)]
 struct StoredSharePermission {
@@ -58,6 +66,7 @@ async fn create_test_chat(repo: &PgChatRepo, name: &str) -> String {
             name: name.to_string(),
             project_id: None,
         },
+        default_share_permission(),
     )
     .await
     .unwrap()
@@ -95,6 +104,7 @@ async fn create_chat_with_message(repo: &PgChatRepo) -> (String, String) {
                 name: "Message update test".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -135,6 +145,7 @@ async fn create_chat_returns_id(pool: Pool<Postgres>) {
                 name: "Test Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -169,6 +180,7 @@ async fn create_message_bumps_chat_updated_at(pool: Pool<Postgres>) {
                 name: "Active Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -352,6 +364,7 @@ async fn create_chat_creates_user_item_access(pool: Pool<Postgres>) {
                 name: "Access Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -392,6 +405,7 @@ async fn create_chat_creates_user_history(pool: Pool<Postgres>) {
                 name: "History Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -428,6 +442,7 @@ async fn create_chat_with_project_id(pool: Pool<Postgres>) {
                 name: "Project Chat".to_string(),
                 project_id: Some("project-123".to_string()),
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -461,6 +476,7 @@ async fn get_chat_returns_chat(pool: Pool<Postgres>) {
                 name: "Get Me".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -503,6 +519,7 @@ async fn soft_delete_chat_sets_deleted_at(pool: Pool<Postgres>) {
                 name: "Delete Me".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -536,6 +553,7 @@ async fn soft_delete_chat_removes_history(pool: Pool<Postgres>) {
                 name: "History Delete".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -570,6 +588,7 @@ async fn permanently_delete_chat_removes_row(pool: Pool<Postgres>) {
                 name: "Perm Delete".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -602,6 +621,7 @@ async fn permanently_delete_chat_removes_permissions(pool: Pool<Postgres>) {
                 name: "Perm Delete Perms".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -635,6 +655,7 @@ async fn permanently_delete_chat_removes_user_item_access(pool: Pool<Postgres>) 
                 name: "Perm Delete Access".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -670,6 +691,7 @@ async fn patch_chat_updates_name(pool: Pool<Postgres>) {
                 name: "Original".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -710,6 +732,7 @@ async fn patch_chat_updates_project(pool: Pool<Postgres>) {
                 name: "Project Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -758,6 +781,7 @@ async fn patch_chat_clears_project(pool: Pool<Postgres>) {
                 name: "Clear Project".to_string(),
                 project_id: Some("project-123".to_string()),
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -803,6 +827,7 @@ async fn get_chat_returns_full_response(pool: Pool<Postgres>) {
                 name: "Full Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -844,6 +869,7 @@ async fn copy_chat_creates_new_chat_with_same_messages(pool: Pool<Postgres>) {
                 name: "Source Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -868,6 +894,7 @@ async fn copy_chat_creates_new_chat_with_same_messages(pool: Pool<Postgres>) {
                 name: "Copied Chat".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();
@@ -906,6 +933,7 @@ async fn revert_delete_restores_chat(pool: Pool<Postgres>) {
                 name: "Revert Me".to_string(),
                 project_id: None,
             },
+            default_share_permission(),
         )
         .await
         .unwrap();

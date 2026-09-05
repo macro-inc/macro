@@ -197,7 +197,15 @@ export function createLivekitJsCallController(
     try {
       await room.disconnect();
     } finally {
-      destroyRoom();
+      // Tear down only the session this disconnect captured: a slow
+      // room.disconnect() can settle after the user has rejoined, and
+      // destroying the replacement session would strand a live connection
+      // the UI no longer tracks.
+      if (options.room() === room) {
+        destroyRoom();
+      } else {
+        room.removeAllListeners();
+      }
     }
   }
 

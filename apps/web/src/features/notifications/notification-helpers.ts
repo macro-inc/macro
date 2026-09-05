@@ -1,5 +1,14 @@
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { Entity, EntityType } from '@core/types';
+import { isMutedItem } from '@entity/utils/notification';
 import { queryClient } from '@queries/client';
+import {
+  toNotificationEntityRef,
+  updateNotificationsForEntities,
+} from '@queries/notification/entity-mutations';
 import { notificationKeys } from '@queries/notification/keys';
 import {
   bulkMarkNotificationsAsDone,
@@ -188,11 +197,20 @@ export function markNotificationForEntityIdAsRead(
  * @param entity
  * @returns Promise<void>
  */
-export function markNotificationsForEntityAsRead(
+export async function markNotificationsForEntityAsRead(
   notificationSource: NotificationSource,
   entity: Entity
 ): Promise<void> {
-  return notificationSource.bulkMarkAsRead(
+  const entityRef = toNotificationEntityRef(entity);
+  if (isFeatureEnabled(enableGraphqlSoup) && entityRef) {
+    await updateNotificationsForEntities({
+      entities: [entityRef],
+      operation: 'MARK_SEEN',
+    });
+    return;
+  }
+
+  await notificationSource.bulkMarkAsRead(
     notificationSource.notificationsByEntity()[compositeEntity(entity)] ?? []
   );
 }
@@ -208,9 +226,9 @@ export function useNotificationsMutedForEntity(
   entity: Entity
 ): Accessor<boolean> {
   return createMemo(() =>
-    notificationSource.mutedEntities().includes({
-      item_type: entity.type,
+    isMutedItem(notificationSource.mutedEntities(), {
       item_id: entity.id,
+      item_type: entity.type,
     })
   );
 }

@@ -9,6 +9,7 @@
 // backend adds an endpoint, `just coverage` fails until you wrap it or type
 // it into one of these lists by hand, as a conscious decision.
 
+import type { Sdk as AgentHarnessSdk } from '../../generated/agent-harness/sdk.gen';
 import type { Sdk as AuthSdk } from '../../generated/auth/sdk.gen';
 import type { Sdk as CognitionSdk } from '../../generated/cognition/sdk.gen';
 import type { Sdk as ConnectionSdk } from '../../generated/connection/sdk.gen';
@@ -22,6 +23,12 @@ import type { Sdk as StaticFilesSdk } from '../../generated/static-files/sdk.gen
 import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
+export const agentHarnessExcluded =
+  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
+
+export const agentHarnessBacklog =
+  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
+
 export const authExcluded = [
   'appleLogin',
   'checkGithubLinkStatus',
@@ -32,12 +39,14 @@ export const authExcluded = [
   'createPortalSession',
   'createTeam',
   'createUser',
+  'deleteCursorApiKey',
   'deleteGithubLink',
   'deleteTeam',
   'deleteTeamInviteHandler',
   'deleteUser',
   'enrichGithubPullRequests',
   'generateEmailLink',
+  'getCursorApiKey',
   'getLegacyUserPermissions',
   'getPermissions',
   'getReferralCode',
@@ -55,6 +64,7 @@ export const authExcluded = [
   'initOutlookLink',
   'inviteToTeam',
   'joinTeam',
+  'listCursorModels',
   'logout',
   'oauth2Callback',
   'oauthRedirect',
@@ -67,6 +77,8 @@ export const authExcluded = [
   'patchUserOnboarding',
   'patchUserTutorial',
   'postProfilePictures',
+  'putCursorApiKey',
+  'putCursorDefaultModel',
   'putProfilePicture',
   'putUserName',
   'refresh',
@@ -83,7 +95,7 @@ export const authExcluded = [
   'verifyEmailLink',
   'verifyFusionauthUserEmail',
   'verifyMergeRequest',
-] as const satisfies readonly (keyof AuthSdk)[];
+];
 
 export const authBacklog = [
   'macroApiToken',
@@ -91,7 +103,11 @@ export const authBacklog = [
 
 export const cognitionExcluded = [
   'addMcpServer',
+  'browsePipedreamMcpCatalog',
   'callTool',
+  'completePipedreamMcpConnection',
+  'createPipedreamMcpToken',
+  'deletePipedreamMcpConnection',
   'deleteMcpServer',
   'getBatchPreview',
   'getChatHistoryBatchMessagesHandler',
@@ -101,6 +117,7 @@ export const cognitionExcluded = [
   'getMemoryHandler',
   'healthHandler',
   'listMcpServers',
+  'listPipedreamMcpConnections',
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
   'rejectToolCall',
@@ -113,6 +130,7 @@ export const cognitionExcluded = [
   'setPricingHandler',
   'startMcpAuth',
   'updateMcpServer',
+  'updatePipedreamMcpConnection',
   'updateToolCall',
   'updateToolResponse',
   'upsertAiProjection',
@@ -145,6 +163,7 @@ export const contactsBacklog =
 export const emailExcluded = [
   'cancelBackfillGmail',
   'deleteLink',
+  'disableLinkCalendar',
   'disableSync',
   'getBackfillGmail',
   'getBackfillGmailActive',
@@ -237,8 +256,11 @@ export const storageExcluded = [
   'callWebhook',
   'checkActiveCall',
   'createChannelScopedBot',
+  'createCollabSurfaceToken',
   'createInstructionsHandler',
   'createViewHandler',
+  'deleteCollabSurface',
+  'ensureCollabSurface',
   'deleteHistoryHandler',
   'deleteUserDocumentViewLocation',
   'deleteViewHandler',
@@ -247,7 +269,9 @@ export const storageExcluded = [
   'getBatchCallRecordPreview',
   'getBatchChannelPreview',
   'getBatchPreviewHandler',
+  'getActiveCalls',
   'getBatchProjectPreview',
+  'getCollabSurface',
   'getDocumentListHandler',
   'getDocumentLocationV3',
   'getDocumentProcessingResult',
@@ -267,11 +291,11 @@ export const storageExcluded = [
   'ingestTranscript',
   'initializeUserDocuments',
   'installSync',
-  'joinChannelByCode',
   'jobProcessingResultHandler',
+  'joinChannelByCode',
   'leaveOrEndCall',
+  'mentionPreviews',
   'patchViewHandler',
-  'postChannelBotWebhook',
   'postChannelMessages',
   'postItemsSoup',
   'postItemsSoupAst',
@@ -285,13 +309,21 @@ export const storageExcluded = [
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog = [
+  'approveHarnessPairing',
+  'claimHarnessPairing',
+  'createAgent',
   'createAnchor',
   'createDocument',
   'createEntityMention',
+  'createHarnessPairing',
   'createReminder',
+  'createUserApiKey',
   'deleteAnchor',
   'deleteEntityMention',
+  'deleteHarness',
+  'deleteSelfHarness',
   'deleteReminder',
+  'deleteUserApiKey',
   'editAnchor',
   'editCallTranscript',
   'editThreadV2',
@@ -304,14 +336,23 @@ export const storageBacklog = [
   'getEntityPermission',
   'getProjectPermissionsV2',
   'getProjectUserAccessLevel',
+  'getHarnessPairing',
+  'getSelfHarness',
   'getReminder',
+  'listAgents',
+  'listHarnessAgents',
+  'listHarnessSessions',
+  'listHarnesses',
   'listOccurrences',
   'listReminders',
+  'listTeamOutOfOffice',
+  'listUserApiKeys',
   'postActivity',
   'presaveDocumentHandler',
   'saveDocumentHandler',
   'simpleSave',
   'toggleShareWithTeam',
+  'updateAgent',
   'updateReminder',
   'validateDocumentPermissionsToken',
 ] as const satisfies readonly (keyof StorageSdk)[];

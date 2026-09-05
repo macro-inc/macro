@@ -7,13 +7,15 @@ import {
   type Query,
 } from '@app/features/next-soup/filters/filter-store';
 import {
-  ENABLE_CALENDAR_UI,
-  ENABLE_NEW_INBOX,
-  ENABLE_REMINDERS,
-  ENABLE_SNIPPETS,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+  enableCalendarUi,
+  enableReminders,
+  enableSnippets,
+  enableSupportedSoupForeignEntities,
+  isCalendarSearchUiEnabled,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
+import type { Params } from '@service-storage/generated/schemas/params';
 import { startOfDay, subWeeks } from 'date-fns';
 
 type SoupFiltersPreset = {
@@ -32,6 +34,15 @@ type SoupFiltersPreset = {
    * matching every feed that reads newest-first.
    */
   sortDirection?: 'asc' | 'desc';
+  /**
+   * Server sort this tab's meaning requires (e.g. `touched_by_me`,
+   * `notified_at`), taking precedence over the client sort state. Tabs that
+   * force one usually also pin the client sort (`SoupView`'s
+   * `initialClientSort`) so the server's ordering survives to the rendered
+   * rows. Frecency is excluded: it is a different query flavor with its own
+   * client handling, not a per-tab ordering.
+   */
+  sortMethod?: Exclude<NonNullable<Params['sort_method']>, 'frecency'>;
 };
 
 // Tab preset configuration types
@@ -77,10 +88,10 @@ const OPEN_TASK_STATUS_INCLUDE_PROPS = [
 ];
 
 const getExcludedDocumentSubTypes = (...subTypes: string[]) =>
-  ENABLE_SNIPPETS() ? subTypes : [...subTypes, 'snippet'];
+  isFeatureEnabled(enableSnippets) ? subTypes : [...subTypes, 'snippet'];
 
 const getDisabledSnippetSubtypeExclude = (): Query['exclude'] =>
-  ENABLE_SNIPPETS() ? {} : { subType: ['snippet'] };
+  isFeatureEnabled(enableSnippets) ? {} : { subType: ['snippet'] };
 
 /** Filters for inbox/signal: not done, importance=true for emails, 2-week window */
 const getInboxSignalFilters = () => {
@@ -108,14 +119,17 @@ const getInboxSignalFilters = () => {
       emailShared: 'exclude',
       // Reminders are off by default server-side rather than excluded by
       // `defineQueryFilters` (there is no `remf` entry in ID_FIELD_NAMES), so
-      // this literal is the only thing that surfaces them — and Signal is the
-      // only view that sends it. Behind the flag so an unflagged user never
-      // pays for the reminders lookup on every Signal fetch.
-      ...(ENABLE_REMINDERS() ? { includeReminders: true } : {}),
+      // this literal is the only thing that surfaces them; the inbox Reminders
+      // tab below sends it too, for the not-yet-fired slice. Behind the flag
+      // so an unflagged user never pays for the reminders lookup on every
+      // Signal fetch.
+      ...(isFeatureEnabled(enableReminders) ? { includeReminders: true } : {}),
       // Calendar events with a not-done notification (a fired event alarm).
       // Referencing `calf` opts the calendar arm into the signal query, which
       // `defineQueryFilters` otherwise excludes with a nil id filter.
-      ...(ENABLE_CALENDAR_UI() ? { calendarEventDone: false } : {}),
+      ...(isFeatureEnabled(enableCalendarUi)
+        ? { calendarEventDone: false }
+        : {}),
     },
     exclude: getDisabledSnippetSubtypeExclude(),
     emailView: 'inbox',
@@ -139,20 +153,60 @@ const getInboxNoiseFilters = () =>
     emailView: 'inbox',
   });
 
+/**
+ * Filters for the Recent view: the touched-by-me feed over everything the
+ * all view shows. Documents, chats, folders, channels, and emails stay
+ * unrestricted via `skipTargets` — the touched candidate query includes
+ * every touchable type by default, and it rejects channel/email filter
+ * trees outright (400), so even the usual NIL-id opt-in trees must not be
+ * sent for those two. Calendar/CRM/foreign/channel-thread targets keep
+ * their NIL exclusions; the touched query has no candidates of those types
+ * and ignores their trees.
+ */
+const getRecentFilters = () =>
+  defineQueryFilters(
+    { exclude: getDisabledSnippetSubtypeExclude() },
+    { skipTargets: ['df', 'cf', 'pf', 'chanf', 'ef'] }
+  );
+
 export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
+  recent: {
+    default: 'all',
+    tabs: {
+      // One tab: everything the user has touched, newest own-touch first.
+      // The server ordering is the product; the client sort is cleared by
+      // the view registration so rows render in server order.
+      all: () => ({
+        filters: getRecentFilters(),
+        clientFilters: { and: ['explicit-noise'] },
+        sortMethod: 'touched_by_me',
+      }),
+    },
+  },
   inbox: {
     default: 'signal',
     tabs: {
+      // Signal and Noise order by when the viewer was last notified about
+      // each row, not by the row's own recency: a comment on a week-old
+      // task is today's news. The sort is also a filter (rows without a
+      // notification are absent), which is what these tabs mean anyway.
+      // The inbox's client sort (`notified_at`, see `SoupView`) keeps the
+      // server order and buckets the date headers on the same timestamp.
       signal: () => ({
         filters: getInboxSignalFilters(),
         clientFilters: { and: ['inbox'] },
-        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+        groupBy: 'date',
+        sortMethod: 'notified_at',
       }),
       noise: () => ({
         filters: getInboxNoiseFilters(),
         clientFilters: { and: ['noise'] },
-        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+        groupBy: 'date',
+        sortMethod: 'notified_at',
       }),
+      // All and Reminders keep their recency ordering. Named explicitly
+      // because the inbox's client sort id is not an API sort method, so
+      // without a preset value the API would fall back to created_at.
       all: () => ({
         filters: {
           // Calendar events are not rendered by Soup, and CRM companies are
@@ -160,7 +214,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           include: {
             calendarEventId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
-            ...(ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE
+            ...(isFeatureEnabled(enableSupportedSoupForeignEntities)
               ? { foreignEntitySource: ['github_pull_request'] }
               : {}),
             foreignEntityIncludesMe: true,
@@ -171,14 +225,33 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
             channelId: [NIL_UUID],
             chatId: [NIL_UUID],
             folderId: [NIL_UUID],
-            foreignEntityRecordId:
-              ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE ? [NIL_UUID] : [],
+            foreignEntityRecordId: isFeatureEnabled(
+              enableSupportedSoupForeignEntities
+            )
+              ? [NIL_UUID]
+              : [],
             ...getDisabledSnippetSubtypeExclude(),
           },
           emailView: 'all',
         },
         clientFilters: { and: ['explicit-noise'] },
-        groupBy: ENABLE_NEW_INBOX() ? 'date' : undefined,
+        groupBy: 'date',
+        sortMethod: 'updated_at',
+      }),
+      // Every reminder still on the hook: the ones coming up and the ones that
+      // have fired and are waiting to be dealt with (fired ones also surface in
+      // Signal as their notification). Only marking one done drops it. Ascending
+      // by fire time, so overdue leads and upcoming follows soonest-first.
+      reminders: () => ({
+        filters: defineQueryFilters({
+          include: {
+            includeReminders: true,
+            reminderCompleted: false,
+          },
+        }),
+        clientFilters: { and: ['reminders-not-done'] },
+        sortDirection: 'asc',
+        sortMethod: 'updated_at',
       }),
     },
   },
@@ -229,6 +302,10 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
   mail: {
     default: 'important',
     tabs: {
+      // No 'no-drafts' on any thread-listing tab: a thread whose latest
+      // message is a saved draft must stay in Signal/Noise/Calendar/Sent (it
+      // also shows under Drafts). The server counts drafts toward is_signal
+      // and inbox visibility for the same reason.
       important: () => ({
         filters: defineQueryFilters({
           include: {
@@ -238,7 +315,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           emailView: 'inbox',
         }),
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       noise: () => ({
@@ -250,7 +327,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           },
           emailView: 'inbox',
         }),
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       calendar: () => ({
@@ -262,7 +339,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
           emailView: 'all',
         }),
 
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       drafts: () => ({
@@ -280,7 +357,7 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
         filters: defineQueryFilters({
           emailView: 'sent',
         }),
-        clientFilters: { and: ['email', 'no-drafts'] },
+        clientFilters: { and: ['email'] },
         groupBy: 'date',
       }),
       shared: () => ({
@@ -536,17 +613,22 @@ export const VIEW_TAB_PRESETS: Record<ListView, ViewTabConfig> = {
       all: () => ({
         // Temporary: search has no full-text index over foreign entities yet,
         // so always exclude them (matching no record id) until search supports
-        // them. Calendar, CRM, and non-displayable channel-thread rows are
-        // NIL-excluded the same way. `search-supported` mirrors these
-        // exclusions client-side so entities that enter the soup cache outside
-        // this query (e.g. websocket-driven inserts) don't surface in the
-        // search feed.
+        // them. CRM and non-displayable channel-thread rows are NIL-excluded
+        // the same way. Calendar events are not excluded — they carry a title
+        // index of their own. `search-supported` mirrors these exclusions
+        // client-side so entities that enter the soup cache outside this query
+        // (e.g. websocket-driven inserts) don't surface in the search feed.
         filters: {
           include: {
-            calendarEventId: [NIL_UUID],
             foreignEntityRecordId: [NIL_UUID],
             crmCompanyId: [NIL_UUID],
             channelThreadId: [NIL_UUID],
+            // Events are title-indexed, so search returns them — but opening
+            // one needs the calendar block, which the flag gates. Without it
+            // a hit would render an inert row, so exclude the type instead.
+            ...(isCalendarSearchUiEnabled()
+              ? {}
+              : { calendarEventId: [NIL_UUID] }),
           },
           exclude: getDisabledSnippetSubtypeExclude(),
         },

@@ -16,6 +16,7 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
+import { createOwnedSlots } from '../utils/createOwnedSlots';
 
 false && clickOutside;
 
@@ -58,6 +59,7 @@ function PopoverSplitModal(props: {
     createSignal<() => void>();
   const [titleFileMenuActions, setTitleFileMenuActions] =
     createSignal<SplitFileMenuActionGroups>();
+  const ownedSlots = createOwnedSlots();
 
   const stubHandle: SplitHandle = {
     id: props.popover.id as SplitId,
@@ -66,6 +68,7 @@ function PopoverSplitModal(props: {
     canGoBack: () => false,
     canGoForward: () => false,
     goBack: () => {},
+    goBackTo: () => false,
     goForward: () => {},
     reset: () => {},
     activate: () => {},
@@ -80,6 +83,8 @@ function PopoverSplitModal(props: {
     isViewerSplit: () => false,
     isControllerSplit: () => false,
     replace: () => {},
+    // A popover has no URL and no history to rewrite.
+    adoptContentId: () => {},
     removeFromHistory: () => {},
     registerContentChangeListener: () => {},
     unregisterContentChangeListener: () => {},
@@ -107,9 +112,16 @@ function PopoverSplitModal(props: {
     viewerId: () => undefined,
   };
 
+  const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(
+    `popover-split-${props.popover.id}`
+  );
+
   const stubPanelContext: SplitPanelContextType = {
     handle: stubHandle,
-    splitHotkeyScope: `popover-${props.popover.id}`,
+    // The real registered scope id: blocks register their commands to
+    // `splitHotkeyScope`, so a made-up id would send them to a scope that
+    // doesn't exist and every registration would silently noop.
+    splitHotkeyScope: scopeId,
     isPanelActive: () => true,
     panelRef,
     panelSize: { width: null, height: null },
@@ -124,13 +136,10 @@ function PopoverSplitModal(props: {
     setTitleFileMenuTrigger,
     titleFileMenuActions,
     setTitleFileMenuActions,
+    replaceOwnedSlot: ownedSlots.replace,
     headerCollapser: { register: () => () => {} },
     toolbarCollapser: { register: () => () => {} },
   };
-
-  const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(
-    `popover-split-${props.popover.id}`
-  );
 
   registerHotkey({
     hotkey: 'escape',
@@ -155,7 +164,7 @@ function PopoverSplitModal(props: {
         bindHotKeyDom(r);
       }}
     >
-      <Panel depth={2} class="rounded-xl *:max-h-[75vh]">
+      <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
         <SplitPanelContext.Provider value={stubPanelContext}>
           <SoupContextProvider>
             <Show when={props.popover.mount}>

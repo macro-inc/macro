@@ -1,0 +1,132 @@
+---
+source: crates/agent_fold/src/domain/test/real_recordings.rs
+expression: messages
+input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
+---
+[
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: Some(
+            AgentActionId(
+                826d1392-b8c8-4208-8f79-856aa3c17b0b,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Control {
+                    control: SetModel {
+                        model: "opus[1m]",
+                    },
+                    outcome: Accepted,
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            1,
+        ),
+        author: User {
+            user_id: Some(
+                macro|eric@example.com,
+            ),
+        },
+        request_id: Some(
+            AgentActionId(
+                415b0c72-3eb8-43bd-b58c-ca2a40ad1ec1,
+            ),
+        ),
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "make a todo list with a b and c. then check off a, then b and c",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            1,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                ToolUse {
+                    id: ToolUseId(
+                        "toolu_01VWRTvryJTnQLFGHiTsBXYT",
+                    ),
+                    name: Native {
+                        name: "ToolSearch",
+                    },
+                    status: Completed,
+                    detail: Other {
+                        kind: "other",
+                        output: Some(
+                            "Tool: TaskListTool: CronListTool: ListMcpResourcesToolTool: mcp__macro__ListEntitiesTool: mcp__macro__ListCompanies",
+                        ),
+                        input: Some(
+                            Object {
+                                "query": String("todo list write tasks"),
+                                "max_results": Number(5),
+                            },
+                        ),
+                    },
+                },
+                ToolUse {
+                    id: ToolUseId(
+                        "toolu_01DCbqRyKnRaqmDNHoFB7MNi",
+                    ),
+                    name: Native {
+                        name: "ToolSearch",
+                    },
+                    status: Completed,
+                    detail: Other {
+                        kind: "other",
+                        output: Some(
+                            "Tool: TaskCreateTool: TaskUpdate",
+                        ),
+                        input: Some(
+                            Object {
+                                "query": String("select:TaskCreate,TaskUpdate"),
+                                "max_results": Number(3),
+                            },
+                        ),
+                    },
+                },
+                Plan {
+                    entries: [
+                        PlanEntry {
+                            content: "a",
+                            priority: Medium,
+                            status: Completed,
+                        },
+                        PlanEntry {
+                            content: "b",
+                            priority: Medium,
+                            status: Completed,
+                        },
+                        PlanEntry {
+                            content: "c",
+                            priority: Medium,
+                            status: Completed,
+                        },
+                    ],
+                },
+                Text {
+                    text: "Done — created a, b, c; checked off a, then b and c.",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+]

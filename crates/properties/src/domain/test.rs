@@ -1242,7 +1242,65 @@ async fn entity_property_event_actor_is_only_an_authenticated_user() {
             published.envelope["metadata"]["actor_user_id"],
             serde_json::Value::Null
         );
+        assert!(published.envelope["metadata"]["actor"].is_null());
+        assert!(published.envelope["metadata"]["on_behalf_of"].is_null());
     }
+}
+
+#[tokio::test]
+async fn entity_property_event_delegates_user_scoped_bot_writes() {
+    let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000005759"));
+    let bot_access = EditReceipt::dangerously_assert_bot(
+        bot_id.into_storage_id(),
+        BotReceiptScope::User {
+            acting_user: caller_user_id(),
+        },
+        "doc1",
+        AccessEntityType::Document,
+    );
+    let property_definition_id = Uuid::from_u128(0xE706);
+    let assignment = entity_property_for_event(
+        Uuid::from_u128(0xE707),
+        "doc1",
+        EntityType::Document,
+        property_definition_id,
+        event_timestamp(),
+    );
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(property_definition_id, false))) })
+    });
+    repo.expect_upsert_entity_property()
+        .return_once(move |_, _, _, _| {
+            Box::pin(async move {
+                Ok(EntityPropertyMutationSnapshot {
+                    property: assignment,
+                    value: None,
+                    previous_value: None,
+                })
+            })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    service
+        .set_entity_property(&bot_access, property_definition_id, None)
+        .await
+        .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(
+        published.envelope["metadata"]["actor_user_id"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        published.envelope["metadata"]["actor"],
+        "bot|00000000-0000-0000-0000-000000005759"
+    );
+    assert_eq!(
+        published.envelope["metadata"]["on_behalf_of"],
+        caller_user_id().as_ref()
+    );
 }
 
 #[test]
@@ -1752,6 +1810,48 @@ async fn test_link_parent_task_rejects_bot_and_unauthenticated_callers() {
             crate::domain::error::PropertiesErr::PermissionDenied
         ));
     }
+}
+
+#[tokio::test]
+async fn test_link_parent_task_allows_user_scoped_bot_receipt() {
+    let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
+    let parent_id = Uuid::from_u128(0xabcdef01_2345_6789_abcd_ef0123456789);
+    let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000005759"));
+    let bot_access = EditReceipt::dangerously_assert_bot(
+        bot_id.into_storage_id(),
+        BotReceiptScope::User {
+            acting_user: caller_user_id(),
+        },
+        &task_id.to_string(),
+        AccessEntityType::Document,
+    );
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_link_parent_task()
+        .withf(move |t, p| *t == task_id && *p == Some(parent_id))
+        .returning(|task_id, _| {
+            let property = entity_property(
+                &task_id.to_string(),
+                EntityType::Task,
+                SystemPropertyKey::PARENT_TASK_UUID,
+            );
+            Box::pin(async move { Ok(Some(property)) })
+        });
+
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    service
+        .handle_task_relationship_property(
+            &bot_access,
+            SystemPropertyKey::PARENT_TASK_UUID,
+            Some(parent_task_value(parent_id)),
+        )
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
@@ -2940,6 +3040,97 @@ async fn canonical_document_task_assignee_write_grants_permissions() {
     service
         .set_entity_property(
             &receipt,
+            SystemPropertyKey::ASSIGNEES_UUID,
+            Some(
+                models_properties::api::requests::SetPropertyValue::MultiEntityReference {
+                    references: vec![models_properties::EntityReference::new(
+                        assignee.as_ref(),
+                        EntityType::User,
+                    )],
+                },
+            ),
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn user_scoped_bot_assignee_write_notifies_as_the_acting_user() {
+    let task_id = Uuid::from_u128(0xA5516F);
+    let assignee = MacroUserIdStr::parse_from_str("macro|assignee@test.com").unwrap();
+    let acting_user = caller_user_id();
+    let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000005759"));
+    let bot_access = EditReceipt::dangerously_assert_bot(
+        bot_id.into_storage_id(),
+        BotReceiptScope::User {
+            acting_user: acting_user.clone(),
+        },
+        &task_id.to_string(),
+        AccessEntityType::Document,
+    );
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_document_sub_types()
+        .withf(move |ids| ids == [task_id])
+        .returning(move |_| {
+            Box::pin(async move { Ok(HashMap::from([(task_id, DocumentSubType::Task)])) })
+        });
+    repo.expect_get_property_definition().returning(|_| {
+        Box::pin(async {
+            Ok(Some(PropertyDefinition {
+                id: SystemPropertyKey::ASSIGNEES_UUID,
+                owner: models_properties::PropertyOwner::System,
+                display_name: "Assignees".to_string(),
+                data_type: models_properties::DataType::Entity,
+                is_multi_select: true,
+                specific_entity_type: Some(EntityType::User),
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+                is_system: true,
+                is_metadata: false,
+            }))
+        })
+    });
+    repo.expect_get_entity_property_value()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+    repo.expect_upsert_entity_property().returning(
+        |entity_id, entity_type, property_definition_id, _| {
+            let property = entity_property(entity_id, entity_type, property_definition_id);
+            Box::pin(async move {
+                Ok(EntityPropertyMutationSnapshot {
+                    property,
+                    value: None,
+                    previous_value: None,
+                })
+            })
+        },
+    );
+
+    let mut permission_service = MockPermissionService::new();
+    let expected_assignee = assignee.clone();
+    permission_service
+        .expect_grant_permissions_to_task()
+        .withf(move |user_ids, id| {
+            user_ids == [expected_assignee.clone()] && id == task_id.to_string()
+        })
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+
+    let mut notif_service = MockNotificationService::new();
+    let expected_assigned_by = acting_user.clone();
+    notif_service
+        .expect_send_task_assigned()
+        .times(1)
+        .withf(move |notification| {
+            notification.assigned_by.as_ref() == expected_assigned_by.as_ref()
+                && notification.recipient_ids.len() == 1
+        })
+        .returning(|_| Box::pin(async { Ok(()) }));
+
+    let service = PropertiesServiceImpl::new(repo, Some(permission_service), Some(notif_service));
+
+    service
+        .set_entity_property(
+            &bot_access,
             SystemPropertyKey::ASSIGNEES_UUID,
             Some(
                 models_properties::api::requests::SetPropertyValue::MultiEntityReference {

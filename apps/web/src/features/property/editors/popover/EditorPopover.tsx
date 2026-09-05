@@ -1,3 +1,4 @@
+import { useIsInsideHoverCard } from '@core/component/HoverCard';
 import { cn, Dropdown } from '@ui';
 import { type JSX, onCleanup, onMount } from 'solid-js';
 import { useProperty } from '../../core/context';
@@ -28,6 +29,7 @@ type EditorPopoverProps = {
  */
 export function EditorPopover(props: EditorPopoverProps) {
   const ctx = useProperty();
+  const isInsideHoverCard = useIsInsideHoverCard();
 
   const close = () => {
     if (props.onClose) props.onClose();
@@ -92,6 +94,7 @@ export function EditorPopover(props: EditorPopoverProps) {
     <Dropdown.Content
       class={cn(
         'max-h-96 overflow-hidden flex flex-col w-full max-w-70 p-0 text-sm',
+        isInsideHoverCard && 'z-nested-action-menu!',
         props.class
       )}
       onInteractOutside={handleInteractOutside}

@@ -272,16 +272,6 @@ export function MenuGroup(props: { children: JSX.Element; class?: string }) {
   );
 }
 
-export function GroupLabel(props: { children: JSX.Element }) {
-  return (
-    <ContextMenu.GroupLabel
-      class={cn(MENU_ITEM_CLASS, 'text-xs! text-ink-extra-muted')}
-    >
-      {props.children}
-    </ContextMenu.GroupLabel>
-  );
-}
-
 export function MenuSeparator() {
   return (
     <ContextMenu.Separator class="my-1.5 -mx-1.5 w-[calc(100%+0.75rem)] border-t border-edge" />
@@ -300,20 +290,13 @@ function MobileConditionalOverlay(
   );
 }
 
-type MenuWidth = 'sm' | 'md' | 'lg' | `w-${string}` | 'screen';
-const menuWidths: Record<MenuWidth, string> = {
-  sm: 'w-28',
-  md: 'w-44',
-  lg: 'w-72',
-  screen: 'w-screen',
-};
+const MENU_SURFACE_SCOPE = '[--color-surface:var(--color-menu)]';
 
-export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-surface shadow-menu rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
+export const MENU_CONTENT_CLASS = `flex flex-col justify-start items-start border border-edge bg-menu ${MENU_SURFACE_SCOPE} shadow-menu rounded-xl p-1.5 cursor-default select-none max-w-full max-h-[calc(100dvh-10rem)] overflow-y-auto z-modal menu-open-animation`;
 
 type MenuContentProps = ParentProps<{
   class?: string;
   submenu?: boolean;
-  width?: MenuWidth;
   onOpenAutoFocus?: (event: Event) => void;
   onCloseAutoFocus?: (event: Event) => void;
   overrideStyling?: boolean;
@@ -419,10 +402,10 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
           <Layer depth={2}>
             <ContextMenu.Content
               class={cn(
+                MENU_SURFACE_SCOPE,
                 !props.overrideStyling && MENU_CONTENT_CLASS,
                 'menu-open-animation',
                 props.class,
-                props.width && menuWidths[props.width],
                 props.mobileFullScreen &&
                   isMobile() &&
                   'flex flex-col justify-center px-4 max-h-[80vh] shrink w-[calc(100vw-1rem)]'
@@ -439,11 +422,7 @@ export function ContextMenuContent(props: ParentProps<MenuContentProps>) {
         <ContextMenu.Portal>
           <Layer depth={2}>
             <ContextMenu.SubContent
-              class={cn(
-                MENU_CONTENT_CLASS,
-                props.class,
-                props.width && menuWidths[props.width]
-              )}
+              class={cn(MENU_CONTENT_CLASS, props.class)}
               ref={contentRef}
             >
               {props.children}

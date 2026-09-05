@@ -62,7 +62,7 @@ maybe_env_vars! {
     pub struct LivekitTranscriptionAgentName;
     /// Shared secret for internal call endpoints (e.g. transcript ingestion from the agent).
     pub struct InternalCallSecret;
-    /// Public base URL of this service (e.g. `https://cloud-storage.macro.com`),
+    /// Public base URL of this service (e.g. `https://gateway.macro.com/dss`),
     /// used to build the ring-status URL included in VoIP push payloads.
     /// When unset, payloads omit the URL and native ring-status polling is off.
     pub struct CallRingStatusBaseUrl;
@@ -125,6 +125,13 @@ pub struct Config {
     /// The environment we are in
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+
+    /// Whether calendar events participate in search. Off by default so a
+    /// deployed environment can carry the code before its calendar index has
+    /// been created and backfilled — with this false, calendar events are
+    /// dropped from the searched set no matter what a request asks for.
+    #[macro_config_default(false)]
+    pub calendar_search_enabled: bool,
 
     /// Maximum number of SQS messages to receive per poll for the delete document worker
     #[macro_config_default(10)]

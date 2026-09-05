@@ -63,6 +63,21 @@ fn sort_uses_view_history(sort_method_str: &str) -> bool {
     matches!(sort_method_str, "viewed_at" | "viewed_updated")
 }
 
+/// A viewed_at predicate also requires the caller-specific history row in
+/// the candidate stage, even when ordering uses a non-viewed timestamp.
+fn filter_uses_view_history(ast: &Expr<EmailLiteral>) -> bool {
+    ast.collapse_frames(|frame| match frame {
+        filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
+        filter_ast::ExprFrame::Not(a) => a,
+        filter_ast::ExprFrame::Literal(EmailLiteral::ViewedAt(_)) => true,
+        filter_ast::ExprFrame::Literal(_) => false,
+    })
+}
+
+fn uses_view_history(ast: &Expr<EmailLiteral>, sort_method_str: &str) -> bool {
+    sort_uses_view_history(sort_method_str) || filter_uses_view_history(ast)
+}
+
 /// Pushes the `user_source_ids AS (…), SharedEmailThreads AS (…)` CTE pair
 /// (without the leading `WITH` keyword and without trailing comma) into the
 /// builder. Caller is responsible for emitting the `WITH` keyword and any
@@ -107,7 +122,7 @@ fn push_thread_candidate_select(
     sort_ts_field: &str,
     source: ThreadCandidateSource,
 ) {
-    let defer_uh = !sort_uses_view_history(&params.sort_method_str);
+    let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
 
     // Multi-inbox owned scans fan out one ordered, LIMITed subscan per link:
     // `link_id = ANY(...)` index scans can't return ordered output (pre-PG17),
@@ -137,6 +152,7 @@ fn push_thread_candidate_select(
                     t.link_id,
                     t.inbox_visible,
                     t.is_read,
+                    t.is_signal,
                     t.project_id,
         "#,
     );
@@ -313,7 +329,7 @@ fn push_thread_candidate_select(
     }
 
     if has_thread_literals(email_filter) {
-        build_thread_email_filter(email_filter, sort_ts_field).push_into(builder);
+        build_thread_email_filter(email_filter, sort_ts_field, &params.resolved).push_into(builder);
     }
 
     // Ensure the candidate LIMIT only counts threads that will survive the
@@ -413,10 +429,10 @@ fn build_query(
 ) -> QueryBuilder<'static, Postgres> {
     let sort_ts_field = get_sort_timestamp_field(view);
     let view_message_filter = build_view_message_filter(view);
-    // When viewed-history isn't the sort key, the `email_user_history` join is
-    // pushed past the candidate `LIMIT` so it runs once per returned row
-    // instead of once per candidate thread (see `sort_uses_view_history`).
-    let defer_uh = !sort_uses_view_history(&params.sort_method_str);
+    // When neither ordering nor filtering needs view history, the
+    // `email_user_history` join is pushed past the candidate `LIMIT` so it
+    // runs once per returned row instead of once per candidate thread.
+    let defer_uh = !uses_view_history(email_filter, &params.sort_method_str);
 
     let needs_shared_cte = !matches!(params.shared, SharedEmailFilter::Exclude);
     // When the candidate stage pushes a full per-message EXISTS (view-level
@@ -478,6 +494,7 @@ fn build_query(
             t.provider_id,
             t.inbox_visible,
             t.is_read,
+            t.is_signal,
             t.effective_ts AS sort_ts,
             t.created_at,
             t.updated_at,
@@ -658,7 +675,8 @@ fn build_query(
     }
 
     if has_message_literals(email_filter) {
-        build_message_email_filter(email_filter, &params.resolved).push_into(&mut builder);
+        build_message_email_filter(email_filter, &params.resolved, sort_ts_field)
+            .push_into(&mut builder);
     }
 
     builder.push(
@@ -999,6 +1017,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
                 is_read: row.try_get("is_read")?,
                 is_draft: row.try_get("is_draft")?,
                 is_important: row.try_get("is_important")?,
+                is_signal: row.try_get("is_signal")?,
                 sort_ts: row.try_get("sort_ts")?,
                 name: row.try_get("name")?,
                 snippet: row.try_get("snippet")?,

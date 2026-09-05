@@ -33,8 +33,9 @@ use crate::{
     domain::{
         models::{
             EnrichedSoupItem, FrecencyQueryInner, GroupedSortRequest, IntoSoupReqAst,
-            SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery, SoupRequest,
-            SoupSortDirection, SoupType, grouping::ItemGroupingInfo,
+            NotifiedQueryInner, SimpleQueryInner, SoupErr, SoupPropertiesField, SoupQuery,
+            SoupRequest, SoupSortDirection, SoupType, TouchedQueryInner,
+            grouping::ItemGroupingInfo,
         },
         ports::{SoupOutput, SoupService},
     },
@@ -53,6 +54,10 @@ enum MockCursorKind {
     SimpleCursor,
     FrecencySort,
     FrecencyCursor,
+    TouchedSort,
+    TouchedCursor,
+    NotifiedSort,
+    NotifiedCursor,
 }
 
 #[derive(Debug)]
@@ -159,6 +164,16 @@ impl SoupService for MockSoup {
             SoupQuery::Frecency(FrecencyQueryInner(Query::Cursor(..))) => {
                 MockCursorKind::FrecencyCursor
             }
+            SoupQuery::Touched(TouchedQueryInner(Query::Sort(..))) => MockCursorKind::TouchedSort,
+            SoupQuery::Touched(TouchedQueryInner(Query::Cursor(..))) => {
+                MockCursorKind::TouchedCursor
+            }
+            SoupQuery::Notified(NotifiedQueryInner(Query::Sort(..))) => {
+                MockCursorKind::NotifiedSort
+            }
+            SoupQuery::Notified(NotifiedQueryInner(Query::Cursor(..))) => {
+                MockCursorKind::NotifiedCursor
+            }
         };
         let user_id = req.user.to_string();
         let soup_type = req.soup_type;
@@ -179,7 +194,7 @@ impl SoupService for MockSoup {
         drop(guard);
 
         if self.succeeds {
-            Ok(either::Either::Left(
+            Ok(SoupOutput::Simple(
                 models_pagination::Paginated::from_parts(Vec::new(), None),
             ))
         } else {
@@ -333,6 +348,15 @@ impl EmailService for MockEmail {
         _link: &email::domain::models::Link,
         _input: email::domain::models::UpsertEmailFilterInput,
     ) -> Result<email::domain::models::EmailFilter, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn set_sender_policy(
+        &self,
+        _link: &email::domain::models::Link,
+        _sender_email: &str,
+        _policy: email::domain::models::SenderPolicy,
+    ) -> Result<(), EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -756,6 +780,15 @@ impl EmailService for MockEmailLinkResult {
         _link: &email::domain::models::Link,
         _input: email::domain::models::UpsertEmailFilterInput,
     ) -> Result<email::domain::models::EmailFilter, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn set_sender_policy(
+        &self,
+        _link: &email::domain::models::Link,
+        _sender_email: &str,
+        _policy: email::domain::models::SenderPolicy,
+    ) -> Result<(), EmailErr> {
         Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
     }
 
@@ -1914,4 +1947,205 @@ async fn descending_frecency_is_accepted() {
     // the actual claim: the guard let this combination through.
     assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     assert_eq!(inner_counter.lock().unwrap().len(), 1);
+}
+
+/// touched_by_me selects the touched query mode from the plain sort param.
+#[tokio::test]
+async fn touched_by_me_sort_selects_touched_query() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({ "sort_method": "touched_by_me" })).unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+    let guard = inner_counter.lock().unwrap();
+    let req = guard.first().unwrap();
+    assert!(matches!(req.cursor_kind, MockCursorKind::TouchedSort));
+}
+
+/// A touched page cursor round-trips through the cursor extractor into the
+/// touched query mode, not one of the other two cursor shapes.
+#[tokio::test]
+async fn touched_cursor_round_trips() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+
+    // The shape the service emits: entity id + own-mutation timestamp. The
+    // sort marker serializes as null (like frecency's); the timestamp value
+    // is what keeps this out of the frecency cursor arm.
+    let cursor = models_pagination::Base64Str::encode_json(models_pagination::Cursor {
+        id: Uuid::new_v4().to_string(),
+        limit: 20usize,
+        val: CursorVal {
+            sort_type: models_pagination::TouchedByMe,
+            last_val: chrono::DateTime::<chrono::Utc>::default(),
+        },
+        filter: EntityFilters::default(),
+    })
+    .type_erase();
+
+    // Percent-encode the base64 characters that are unsafe in a query string.
+    let cursor = cursor
+        .replace('+', "%2B")
+        .replace('/', "%2F")
+        .replace('=', "%3D");
+    let request = authenticated_request()
+        .uri(format!("/soup?cursor={cursor}"))
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&serde_json::json!({})).unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+    let guard = inner_counter.lock().unwrap();
+    let req = guard.first().unwrap();
+    assert!(matches!(req.cursor_kind, MockCursorKind::TouchedCursor));
+}
+
+/// Ascending touched order is rejected for the same reason as frecency: the
+/// touched branch orders by the caller's own latest mutation and never
+/// applies the merged sort a direction would flip.
+#[tokio::test]
+async fn ascending_touched_is_rejected() {
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "sort_method": "touched_by_me",
+                "sort_direction": "asc"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let (status, body) = send_json(mock_router(), request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body,
+        json!({
+            "message": "sort_direction=asc is not supported with sort_method=touched_by_me"
+        })
+    );
+}
+
+/// notified_at selects the notified query mode from the plain sort param.
+#[tokio::test]
+async fn notified_at_sort_selects_notified_query() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({ "sort_method": "notified_at" })).unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+    let guard = inner_counter.lock().unwrap();
+    let req = guard.first().unwrap();
+    assert!(matches!(req.cursor_kind, MockCursorKind::NotifiedSort));
+}
+
+/// A notified page cursor round-trips into the notified query mode. Its
+/// value is a timestamp exactly like the touched cursor's, so this also
+/// proves the `"notified_at"` sort marker keeps it out of the touched arm.
+#[tokio::test]
+async fn notified_cursor_round_trips() {
+    let soup = MockSoup::new();
+    let inner_counter = soup.called.clone();
+    let router: Router = mock_router_with(
+        soup,
+        MockEmailLinkResult {
+            get_link_result: Arc::new(|| Ok(None)),
+        },
+    );
+
+    let cursor = models_pagination::Base64Str::encode_json(models_pagination::Cursor {
+        id: Uuid::new_v4().to_string(),
+        limit: 20usize,
+        val: CursorVal {
+            sort_type: models_pagination::NotifiedAt,
+            last_val: chrono::DateTime::<chrono::Utc>::default(),
+        },
+        filter: EntityFilters::default(),
+    })
+    .type_erase();
+
+    let cursor = cursor
+        .replace('+', "%2B")
+        .replace('/', "%2F")
+        .replace('=', "%3D");
+    let request = authenticated_request()
+        .uri(format!("/soup?cursor={cursor}"))
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&serde_json::json!({})).unwrap(),
+        ))
+        .unwrap();
+
+    let _res = router.oneshot(request).await.unwrap();
+    let guard = inner_counter.lock().unwrap();
+    let req = guard.first().unwrap();
+    assert!(matches!(req.cursor_kind, MockCursorKind::NotifiedCursor));
+}
+
+/// Ascending notified order is rejected like frecency and touched: the
+/// branch orders by the caller's latest notification and never applies the
+/// merged sort a direction would flip.
+#[tokio::test]
+async fn ascending_notified_is_rejected() {
+    let request = authenticated_request()
+        .uri("/soup/ast")
+        .method(Method::POST)
+        .header("content-type", "application/json")
+        .body(axum::body::Body::from(
+            serde_json::to_vec(&json!({
+                "sort_method": "notified_at",
+                "sort_direction": "asc"
+            }))
+            .unwrap(),
+        ))
+        .unwrap();
+
+    let (status, body) = send_json(mock_router(), request).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body,
+        json!({
+            "message": "sort_direction=asc is not supported with sort_method=notified_at"
+        })
+    );
 }

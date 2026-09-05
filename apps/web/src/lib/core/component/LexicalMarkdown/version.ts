@@ -14,5 +14,10 @@
  * Version 2.1 - Jun 23, 2026. Added PasteNode
  * Version 2.2 - Jul 13, 2026. Added optional adaptColors display hint to HtmlRenderNode.
  * Version 2.3 - Jul 15, 2026. Added TagMentionNode.
+ * Version 2.4 - Aug 2026. MagicChipNode: block response surface, channelId optional for standalone sessions.
+ * Version 2.5 - Aug 2026. Added expandable AgentContextNode.
+ * Version 2.6 - Aug 2026. PasteNode origin: pasted (default) or referenced.
+ * Version 3.0 - Sep 2026. Added ReplyTargetNode.
+ * Version 3.1 - Sep 2026. Added ConnectAppNode (agent "connect this app" chip).
  */
-export const MARKDOWN_VERSION_COUNTER = 2.3;
+export const MARKDOWN_VERSION_COUNTER = 3.1;

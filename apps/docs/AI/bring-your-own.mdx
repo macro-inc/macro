@@ -1,0 +1,123 @@
+---
+title: "Bring your own agent"
+sidebarTitle: "Bring Your Own"
+icon: "terminal"
+tag: "Coming soon"
+description: "Connect a self-hosted ACP agent harness to Macro with macrod."
+---
+
+<Info>
+  Bring Your Own Agent will be available soon.
+</Info>
+
+You can run any [Agent Client Protocol (ACP)](https://zed.dev/acp)-compatible agent harness directly in Macro.
+
+Macro provides `macrod`, a small daemon that runs on your computer and waits for agent sessions. When you @mention an agent that runs on your harness, `macrod` launches your configured harness, sends it the prompt, and bridges its ACP connection to Macro.
+
+A harness can be **private** (only you can run agents on it) or **team** (any teammate can create agents that run on it).
+
+<Warning>
+  Self-hosted agents can run real commands on your computer. Anyone who can prompt an agent bound to your harness may be able to affect its configured workspace. Use a dedicated workspace, grant channel access carefully, and think twice before sharing a harness with your team.
+</Warning>
+
+## Before you start
+
+You need:
+
+- A machine that can keep an agent harness and `macrod` running
+- An ACP-compatible harness installed and configured on that machine
+- A public HTTPS endpoint that forwards webhooks (in this demo, to port `8790`)
+
+<Tip>
+  [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) can provide the HTTPS endpoint needed to receive webhooks without opening a router port. To use it, [install `cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) and run `cloudflared tunnel --url http://localhost:8790`. Then copy the temporary `https://....trycloudflare.com` URL and append `/macro-events` for the `public_url` below.
+</Tip>
+
+<Steps>
+  <Step title="Prepare an agent harness">
+    Install your preferred ACP-compatible agent and identify the command that starts its ACP server. Verify that command before configuring `macrod`.
+
+    These harnesses provide ACP entrypoints:
+
+    - **Claude Code:** `npx -y @agentclientprotocol/claude-agent-acp`
+    - **Codex:** `npx -y @agentclientprotocol/codex-acp`
+    - **Hermes:** `hermes-acp` (run `hermes-acp --check` first)
+    - **OpenCode:** `opencode acp`
+    - **OpenClaw:** `openclaw acp`
+
+    Claude Code and Codex require their linked adapter packages because the base `claude` and `codex` commands do not expose ACP servers directly.
+  </Step>
+
+  <Step title="Download macrod">
+    Open the [latest Macro release](https://github.com/macro-inc/macro/releases/latest) and download the `macrod` archive for your OS and architecture. Currently, we officially support macOS and Linux.
+  </Step>
+
+  <Step title="Start the HTTPS tunnel">
+    `macrod` listens on port `8790` and receives requests at `POST /macro-events`. Macro must be able to reach that endpoint over public HTTPS.
+
+    For the Cloudflare quick tunnel described above, run:
+
+    ```bash
+    cloudflared tunnel --url http://localhost:8790
+    ```
+
+    Keep this process running and copy the URL it prints.
+
+    <Note>
+      A quick-tunnel URL changes whenever `cloudflared` restarts. Create a [named Cloudflare tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-local-tunnel/) for a stable endpoint.
+    </Note>
+
+    Alternatively, you can port-forward or deploy your harness to a cloud server.
+  </Step>
+
+  <Step title="Configure macrod">
+    Create `macro.toml` beside the `macrod` binary. No tokens or account details go here - identity comes from pairing in the next step.
+
+    ```toml
+    [macro]
+    api_url = "https://gateway.macro.com/agent-harness"
+    storage_url = "https://gateway.macro.com/dss"
+
+    [identity]
+    # Optional: how this machine shows up in Settings. Defaults to its hostname.
+    name = "my-macbook"
+
+    [server]
+    port = 8790
+    public_url = "https://example.trycloudflare.com/macro-events"
+
+    [harness]
+    command = "your-acp-agent"
+    args = []
+
+    [workspace]
+    path = "/absolute/path/to/your/repository"
+    repo_url = "https://github.com/you/your-repository"
+    ```
+
+    Set `command` and `args` to the ACP launch command from the first step.
+  </Step>
+
+  <Step title="Pair the daemon">
+    Start `macrod` from a shell where your harness command is available:
+
+    ```bash
+    ./macrod --config ./macro.toml
+    ```
+
+    On first run it prints a pairing code and a link into Macro's **Settings → Harness** page. Open the link, confirm the code matches, choose **Private** or **Team**, and approve. `macrod` picks the credential up automatically and saves it to `macro.credentials.json` next to the config.
+
+    To pair again later (for example after revoking the harness), run `./macrod login`.
+  </Step>
+
+  <Step title="Create an agent on your harness">
+    Open **Settings → Agents → New agent** and pick your harness under **Harness**. If the harness is shared with your team, teammates can do the same.
+
+    Then @mention the agent in a channel it can reach. `macrod` opens the session and your local harness answers.
+  </Step>
+</Steps>
+
+## Keep it connected
+
+Both `macrod` and your HTTPS tunnel must stay running for you to start self-hosted agent sessions from Macro. The **Settings → Harness** page shows whether your daemon is currently connected.
+
+To stop a harness for good, remove it from **Settings → Harness**; that revokes its credential, and the daemon will tell you to run `macrod login` if you start it again.

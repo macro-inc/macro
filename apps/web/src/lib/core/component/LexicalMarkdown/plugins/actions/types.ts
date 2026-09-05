@@ -11,7 +11,7 @@ export type Action = {
   id: string;
   name: string;
   keywords: string[];
-  icon: Component<{ class: string }>;
+  icon: Component<{ class?: string }>;
   category: string;
   action: (editor: LexicalEditor, context?: ActionContext) => void;
   shortcut?: string;

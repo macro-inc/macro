@@ -132,7 +132,7 @@ export function CommandMenuInner(props: {
   /** Optional class merged onto the Panel wrapper. */
   class?: string;
   /** Optional depth for the Panel wrapper. */
-  depth?: 0 | 1 | 2 | 3 | 4 | 5;
+  depth?: 0 | 1 | 2 | 3 | 4;
 }) {
   const [commandMenuRef, setCommandMenuRef] = createSignal<HTMLDivElement>();
 
@@ -622,7 +622,7 @@ export function CommandMenuInner(props: {
 
       <CommandMenuShell.Body>
         <div
-          class="bg-surface overflow-hidden transition-[height] duration-60 ease-out p-2"
+          class="overflow-hidden transition-[height] duration-60 ease-out p-2"
           style={{ height: `${resultsHeight()}px` }}
         >
           <Show
@@ -727,7 +727,7 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
         }}
       </For>
       <Show when={remainingCount() > 0}>
-        <div class="text-muted-foreground text-xs px-2 py-1">
+        <div class="text-ink-muted text-xs px-2 py-1">
           +{remainingCount()} more
         </div>
       </Show>

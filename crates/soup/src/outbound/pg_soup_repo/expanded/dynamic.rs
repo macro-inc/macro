@@ -29,7 +29,9 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRo
 use system_properties::{StatusOption, SystemPropertyKey};
 use uuid::Uuid;
 
-use crate::domain::models::grouping::ItemGroupingInfo;
+use crate::domain::models::{
+    SoupDocumentServerFacts, SoupProjectionHydration, grouping::ItemGroupingInfo,
+};
 use crate::outbound::pg_soup_repo::grouping::{
     GroupJoinClause, group_join_clause, group_select_expr,
 };
@@ -136,7 +138,7 @@ static GROUPED_CALENDAR_EVENT_TOP_CLAUSE: &str = r#"
                     CASE $2
                         WHEN 'created_at' THEN event.created_at
                         WHEN 'viewed_at' THEN '1970-01-01 00:00:00+00'::timestamptz
-                        ELSE event.updated_at
+                        ELSE GREATEST(event.updated_at, event.last_reminder_fired_at)
                     END::timestamptz as sort_ts,
                     NULL::text as project_id,
                     'CALENDAR_EVENT'::property_entity_type as property_entity_type
@@ -171,6 +173,34 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
             NULL as "is_persistent",
             di.sha as "sha",
             dt.sub_type as "sub_type",
+            EXISTS (
+                SELECT 1
+                FROM document_email de
+                WHERE de.document_id = d.id
+            ) as "is_email_attachment",
+            (
+                dt.sub_type IS DISTINCT FROM 'task'
+                OR EXISTS (
+                    SELECT 1
+                    FROM entity_properties ep_assignees_projection
+                    WHERE ep_assignees_projection.entity_id = d.id
+                        AND ep_assignees_projection.entity_type = 'TASK'
+                        AND ep_assignees_projection.property_definition_id = $8
+                        AND ep_assignees_projection.values->'value' @> jsonb_build_array(
+                            jsonb_build_object('entity_id', $1)
+                        )
+                )
+            ) as "is_important",
+            ARRAY(
+                SELECT status_option_id::uuid
+                FROM jsonb_array_elements_text(
+                    CASE
+                        WHEN jsonb_typeof(ep_status.values->'value') = 'array'
+                        THEN ep_status.values->'value'
+                        ELSE '[]'::jsonb
+                    END
+                ) AS status_option_id
+            ) as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             CASE
@@ -226,6 +256,9 @@ static CHAT_DETAIL_CLAUSE: &str = r#"
             c."isPersistent" as "is_persistent",
             NULL as "sha",
             NULL as "sub_type",
+            false as "is_email_attachment",
+            true as "is_important",
+            ARRAY[]::uuid[] as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
@@ -254,6 +287,9 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL as "is_persistent",
             NULL as "sha",
             NULL as "sub_type",
+            false as "is_email_attachment",
+            true as "is_important",
+            ARRAY[]::uuid[] as "status_option_ids",
             uh."updatedAt"::timestamptz as "viewed_at",
             t.sort_ts as "sort_ts",
             NULL as "is_completed",
@@ -452,6 +488,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
                 'isReadOnly', event.is_read_only,
                 'createdAt', event.created_at,
                 'updatedAt', event.updated_at,
+                'lastReminderFiredAt', event.last_reminder_fired_at,
                 'extra', NULL
             ) as "calendar_event",
             gi.group_key as "group_key",
@@ -490,7 +527,7 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
         WHERE false
 "#;
 
-fn build_notification_exists_clause(
+pub(in crate::outbound::pg_soup_repo) fn build_notification_exists_clause(
     entity_id_sql: &str,
     entity_type: &str,
     predicate_sql: &str,
@@ -542,13 +579,13 @@ pub(in crate::outbound::pg_soup_repo) fn build_notification_seen_clause(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum NotificationPredicate {
+pub(in crate::outbound::pg_soup_repo) enum NotificationPredicate {
     Done(bool),
     Seen(bool),
 }
 
 impl NotificationPredicate {
-    fn sql(self) -> &'static str {
+    pub(in crate::outbound::pg_soup_repo) fn sql(self) -> &'static str {
         match self {
             NotificationPredicate::Done(true) => "un.done = true",
             NotificationPredicate::Done(false) => "un.done = false",
@@ -709,13 +746,18 @@ fn build_notification_join(entity_alias: &str, item_type: &str) -> String {
 }
 
 fn build_task_include_cbm_atm_nc_clause() -> String {
-    r#"(
+    // The completed-status option id is interpolated (not `$6`-bound) so this
+    // clause stays usable from queries with a different parameter layout —
+    // the touched-by-me page reuses these folds with its own bind positions.
+    format!(
+        r#"(
         dt.sub_type = 'task'
         AND d.owner = $1
         AND ep_assignees.values->'value' @> jsonb_build_array(jsonb_build_object('entity_id', $1))
-        AND NOT COALESCE(ep_status.values->'value' ? $6, false)
-    )"#
-    .to_string()
+        AND NOT COALESCE(ep_status.values->'value' ? '{completed}', false)
+    )"#,
+        completed = StatusOption::COMPLETED_UUID
+    )
 }
 
 /// NULL-safe equality for nullable columns: FALSE (not UNKNOWN) on NULL, so
@@ -735,7 +777,9 @@ fn date_predicate(col: &str, lit: &DateLiteral) -> String {
     }
 }
 
-fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_document_filter(
+    ast: Option<&Expr<DocumentLiteral>>,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
@@ -888,7 +932,9 @@ fn build_calendar_event_filter(ast: Option<&Expr<CalendarEventLiteral>>) -> Stri
     }
 }
 
-fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_chat_filter(
+    ast: Option<&Expr<ChatLiteral>>,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
@@ -932,7 +978,9 @@ fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
     }
 }
 
-fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
+pub(in crate::outbound::pg_soup_repo) fn build_project_filter(
+    ast: Option<&Expr<ProjectLiteral>>,
+) -> String {
     let Some(expr) = ast else {
         return String::new();
     };
@@ -1023,7 +1071,9 @@ pub(in crate::outbound::pg_soup_repo) fn build_properties_filter(
     }
 }
 
-fn document_filter_needs_task_property_joins(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn document_filter_needs_task_property_joins(
+    ast: Option<&Expr<DocumentLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) | filter_ast::ExprFrame::Or(a, b) => a || b,
@@ -1035,7 +1085,7 @@ fn document_filter_needs_task_property_joins(ast: Option<&Expr<DocumentLiteral>>
     })
 }
 
-fn properties_filter_can_apply_to(
+pub(in crate::outbound::pg_soup_repo) fn properties_filter_can_apply_to(
     ast: Option<&Expr<PropertiesLiteral>>,
     entity_types: &[PropertyEntityType],
 ) -> bool {
@@ -1052,7 +1102,9 @@ fn properties_filter_can_apply_to(
     })
 }
 
-fn chat_filter_is_impossible(ast: Option<&Expr<ChatLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn chat_filter_is_impossible(
+    ast: Option<&Expr<ChatLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
@@ -1065,7 +1117,9 @@ fn chat_filter_is_impossible(ast: Option<&Expr<ChatLiteral>>) -> bool {
     })
 }
 
-fn document_filter_is_impossible(ast: Option<&Expr<DocumentLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn document_filter_is_impossible(
+    ast: Option<&Expr<DocumentLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
@@ -1077,7 +1131,9 @@ fn document_filter_is_impossible(ast: Option<&Expr<DocumentLiteral>>) -> bool {
     })
 }
 
-fn project_filter_is_impossible(ast: Option<&Expr<ProjectLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn project_filter_is_impossible(
+    ast: Option<&Expr<ProjectLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
@@ -1089,7 +1145,9 @@ fn project_filter_is_impossible(ast: Option<&Expr<ProjectLiteral>>) -> bool {
     })
 }
 
-fn calendar_event_filter_is_impossible(ast: Option<&Expr<CalendarEventLiteral>>) -> bool {
+pub(in crate::outbound::pg_soup_repo) fn calendar_event_filter_is_impossible(
+    ast: Option<&Expr<CalendarEventLiteral>>,
+) -> bool {
     ast.is_some_and(|expr| {
         expr.collapse_frames(|frame| match frame {
             filter_ast::ExprFrame::And(a, b) => a || b,
@@ -1138,7 +1196,10 @@ fn top_needs_user_history(sort_method: SimpleSortMethod) -> bool {
 /// `idx_entity_access_entity_text_type_source`) when the arm's own filters
 /// are selective. The materialized form pinned the worst plan — the whole
 /// corpus was computed and probed against the item table on every page.
-fn access_semi_join(id_sql: &str, entity_type: &str) -> String {
+pub(in crate::outbound::pg_soup_repo) fn access_semi_join(
+    id_sql: &str,
+    entity_type: &str,
+) -> String {
     format!(
         r#"{id_sql} IN (
                     SELECT ea.entity_id::text
@@ -1540,6 +1601,9 @@ fn build_query(
                 NULL::boolean as "is_persistent",
                 NULL::text as "sha",
                 NULL::document_sub_type_value as "sub_type",
+                false as "is_email_attachment",
+                false as "is_important",
+                ARRAY[]::uuid[] as "status_option_ids",
                 NULL::timestamptz as "viewed_at",
                 NULL::timestamptz as "sort_ts",
                 NULL::boolean as "is_completed",
@@ -1568,6 +1632,12 @@ struct DocumentRow {
     updated_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
     sub_type: Option<DocumentSubType>,
+    #[sqlx(default)]
+    is_email_attachment: bool,
+    #[sqlx(default)]
+    is_important: bool,
+    #[sqlx(default)]
+    status_option_ids: Vec<Uuid>,
     is_completed: Option<bool>,
     deleted_at: Option<DateTime<Utc>>,
 }
@@ -1627,6 +1697,26 @@ impl<'a> FromRow<'a, PgRow> for SoupRow {
 }
 
 impl SoupRow {
+    fn document_server_facts(&self) -> Option<SoupDocumentServerFacts> {
+        match self {
+            Self::Document(row) => Some(SoupDocumentServerFacts {
+                is_email_attachment: row.is_email_attachment,
+                is_important: row.is_important,
+                status_option_ids: row.status_option_ids.clone(),
+            }),
+            Self::Chat(_) | Self::Project(_) | Self::CalendarEvent(_) => None,
+        }
+    }
+
+    #[tracing::instrument(err)]
+    fn into_projection_hydration(self) -> Result<SoupProjectionHydration, sqlx::Error> {
+        let document_server_facts = self.document_server_facts();
+        Ok(SoupProjectionHydration {
+            item: self.into_soup_item()?,
+            document_server_facts,
+        })
+    }
+
     #[tracing::instrument(err)]
     fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
@@ -1645,6 +1735,9 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
                 sub_type,
+                is_email_attachment: _,
+                is_important: _,
+                status_option_ids: _,
                 is_completed,
                 deleted_at,
             }) => SoupItem::Document(SoupDocument {
@@ -1750,10 +1843,10 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
 }
 
 #[tracing::instrument(skip(db), err)]
-pub(crate) async fn expanded_dynamic_cursor_soup(
+async fn expanded_dynamic_cursor_soup_hydrated(
     db: &PgPool,
     args: ExpandedDynamicCursorArgs<'_>,
-) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
     let ExpandedDynamicCursorArgs {
         user_id,
         limit,
@@ -1785,11 +1878,34 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         // enough to run 10x slower. Planning with the real bind values every
         // time costs ~1ms and keeps the plan stable.
         .persistent(false)
-        .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
+        .try_map(|row| SoupRow::from_row(&row)?.into_projection_hydration())
         .fetch_all(db)
         .await?;
 
     Ok(items)
+}
+
+/// Execute a flat expanded dynamic query and retain document server facts.
+#[tracing::instrument(skip(db), err)]
+pub(crate) async fn expanded_dynamic_cursor_soup_with_projection(
+    db: &PgPool,
+    args: ExpandedDynamicCursorArgs<'_>,
+) -> Result<Vec<SoupProjectionHydration>, sqlx::Error> {
+    expanded_dynamic_cursor_soup_hydrated(db, args).await
+}
+
+/// Execute a flat expanded dynamic query without exposing projection metadata.
+#[cfg(test)]
+#[tracing::instrument(skip(db), err)]
+pub(crate) async fn expanded_dynamic_cursor_soup(
+    db: &PgPool,
+    args: ExpandedDynamicCursorArgs<'_>,
+) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
+    Ok(expanded_dynamic_cursor_soup_hydrated(db, args)
+        .await?
+        .into_iter()
+        .map(|hydration| hydration.item)
+        .collect())
 }
 
 // ============================================================================

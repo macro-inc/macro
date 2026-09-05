@@ -26,7 +26,9 @@ serde_json = { workspace = true }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_config = { path = "../../crates/macro_config" }
-macro_authorization = { path = "../../crates/macro_authorization" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
 database_env_vars = { path = "../../crates/database_env_vars" }
 doppler-config = { workspace = true }
 sqlx = { workspace = true }
@@ -48,6 +50,8 @@ ai_toolset = { path = "../../crates/ai_toolset" }
 aws-sdk-sqs = { workspace = true }
 chat = { path = "../../crates/chat" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
+models_permissions = { path = "../../crates/models_permissions" }
 macro_db_client = { path = "../../crates/macro_db_client" }
 memory = { path = "../../crates/memory" }
 model = { path = "../../crates/model" }
@@ -56,6 +60,7 @@ model_notifications = { path = "../../crates/model_notifications" }
 notification = { path = "../../crates/notification" }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true }
+tower = { workspace = true }
 
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_cors = { path = "../../crates/macro_cors" }

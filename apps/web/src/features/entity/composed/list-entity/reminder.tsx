@@ -1,11 +1,18 @@
 import {
+  describeReminderSchedule,
+  scheduleFromRow,
+} from '@app/features/reminders/reminder-schedule';
+import {
   EntityIcon,
   reminderReferenceIconType,
 } from '@core/component/EntityIcon';
 import { useItemPreviewData } from '@core/component/ItemPreview';
 import { isAccessiblePreviewItem } from '@queries/preview';
 import { Show } from 'solid-js';
-import { ReminderReferenceBadge } from '../../components/Badges';
+import {
+  ReminderRecurrenceBadge,
+  ReminderReferenceBadge,
+} from '../../components/Badges';
 import { Entity } from '../../entity';
 import type { ReminderEntity } from '../../types/entity';
 
@@ -22,19 +29,31 @@ type Reference = NonNullable<ReminderEntity['referencedEntity']>;
  * the way `CallWideContent` trails a call with its channel.
  */
 export function ReminderWideContent(props: { entity: ReminderEntity }) {
+  // Trails the row, after any reference badge, so the reading order is what the
+  // reminder says, what it is about, then how often it repeats.
+  const recurrence = () =>
+    props.entity.scheduleType === 'recurring'
+      ? describeReminderSchedule(scheduleFromRow(props.entity))
+      : undefined;
+
   return (
-    <Show
-      when={props.entity.referencedEntity}
-      fallback={
-        <span class="truncate">
-          <Entity.Title entity={props.entity} />
-        </span>
-      }
-    >
-      {(reference) => (
-        <ReferencedReminder entity={props.entity} reference={reference()} />
-      )}
-    </Show>
+    <>
+      <Show
+        when={props.entity.referencedEntity}
+        fallback={
+          <span class="truncate">
+            <Entity.Title entity={props.entity} />
+          </span>
+        }
+      >
+        {(reference) => (
+          <ReferencedReminder entity={props.entity} reference={reference()} />
+        )}
+      </Show>
+      <Show when={recurrence()}>
+        {(text) => <ReminderRecurrenceBadge recurrence={text()} />}
+      </Show>
+    </>
   );
 }
 

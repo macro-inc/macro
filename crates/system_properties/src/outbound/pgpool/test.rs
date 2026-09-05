@@ -128,6 +128,49 @@ async fn test_bulk_upsert_properties_multiple_entities(pool: Pool<Postgres>) -> 
     Ok(())
 }
 
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_bulk_insert_properties_if_absent_keeps_first_write(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+    let entity_id = "email-doc-first-write";
+    let subject_id = SystemPropertyKey::Subject.uuid();
+
+    repo.bulk_insert_properties_if_absent(vec![PropertyRow::string_value(
+        entity_id,
+        EntityType::Document,
+        subject_id,
+        "original subject",
+    )])
+    .await?;
+    repo.bulk_insert_properties_if_absent(vec![PropertyRow::string_value(
+        entity_id,
+        EntityType::Document,
+        subject_id,
+        "forwarded subject",
+    )])
+    .await?;
+
+    let stored = sqlx::query_scalar!(
+        r#"
+        SELECT values
+        FROM entity_properties
+        WHERE entity_id = $1 AND property_definition_id = $2
+        "#,
+        entity_id,
+        subject_id,
+    )
+    .fetch_one(&pool)
+    .await?;
+
+    assert_eq!(
+        stored.unwrap(),
+        serde_json::json!({"type": "String", "value": "original subject"})
+    );
+
+    Ok(())
+}
+
 // ============================================================================
 // copy_task_properties tests
 // ============================================================================

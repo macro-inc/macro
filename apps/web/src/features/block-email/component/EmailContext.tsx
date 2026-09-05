@@ -16,13 +16,13 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import { useEmail, useUserId } from '@core/context/user';
 import { createMethodRegistration } from '@core/orchestrator';
+import { blockElementSignal } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import {
   recipientEntityMapper,
   useContacts,
   type WithCustomUserInput,
 } from '@core/user';
-import { whenSettled } from '@core/util/whenSettled';
 import {
   compositeEntity,
   createEffectOnEntityTypeNotification,
@@ -74,6 +74,8 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ReplyType } from '../util/replyType';
+import { hiddenMessagesControl } from '../util/scrollToMessage';
+import type { HoveredThreadStop } from '../util/threadStops';
 
 /**
  * Tracks thread IDs that had a draft saved since the last query fetch.
@@ -116,6 +118,10 @@ type EmailContextValues = {
     setTargetMessageID: (id: string | undefined) => void;
     focusedID: Accessor<string | undefined>;
     setFocused: (messageID: string | undefined) => void;
+    hiddenChipFocused: Accessor<boolean>;
+    setHiddenChipFocused: (focused: boolean) => void;
+    hovered: Accessor<HoveredThreadStop | undefined>;
+    setHovered: (stop: HoveredThreadStop | undefined) => void;
     expandedBodyIds: Record<string, boolean>;
     setExpandedBodyId: (id: string, expanded: boolean) => void;
     isBodyExpanded: (id: string) => boolean;
@@ -246,6 +252,8 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   );
 
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
+  const [hiddenChipFocused, setHiddenChipFocused] = createSignal(false);
+  const [hoveredStop, setHoveredStop] = createSignal<HoveredThreadStop>();
   const [replyingToMessageId, setReplyingToMessageId] = createSignal<string>();
   const [bottomReplyOpen, setBottomReplyOpen] = createSignal(false);
   const [mobileReplyComposerOpen, setMobileReplyComposerOpen] =
@@ -271,6 +279,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   const [targetMessageId, setTargetMessageId] = createSignal<
     string | undefined
   >(searchParamsMessageId());
+  // Deep links (`?messageId=`) scroll to and expand a specific message after load.
 
   const [hasHandledTarget, setHasHandledTarget] = createSignal(false);
 
@@ -287,31 +296,55 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     },
   });
 
-  const [messageDraftMap, setMessageDraftMap] = createStore<
-    Record<string, ApiMessage | undefined>
+  // The newest version of each reply draft seen across query snapshots,
+  // keyed by the replied-to message id. A cached snapshot populates this the
+  // moment it's available (the composer must not wait on the network), and a
+  // later fetch upgrades an entry only when its updated_at is newer — so the
+  // revalidation of a stale cache wins, but an out-of-order response can't
+  // downgrade a draft. Entries missing from a fetch are kept: deletes are
+  // handled locally below, and dropping one would collapse an open composer.
+  const serverDrafts = createMemo<
+    { threadDbId: string; map: Record<string, ApiMessage> } | undefined
+  >((prev) => {
+    const data = threadQuery.data;
+    if (!data) return undefined;
+    const next = data.draftMap;
+    if (!prev || prev.threadDbId !== data.db_id) {
+      return { threadDbId: data.db_id, map: next };
+    }
+    const map: Record<string, ApiMessage> = { ...next };
+    for (const [messageId, prevDraft] of Object.entries(prev.map)) {
+      const nextDraft = map[messageId];
+      if (
+        !nextDraft ||
+        new Date(nextDraft.updated_at).getTime() <
+          new Date(prevDraft.updated_at).getTime()
+      ) {
+        map[messageId] = prevDraft;
+      }
+    }
+    return { threadDbId: data.db_id, map };
+  });
+
+  // Drafts the user discarded this session. Kept apart from the server map so
+  // a fetch that still contains the deleted draft (delete propagation lag)
+  // can't resurrect it.
+  const [deletedDraftIds, setDeletedDraftIds] = createStore<
+    Record<string, true>
   >({});
 
   const deleteDraftForMessage = (messageID: string) => {
-    setMessageDraftMap(messageID, undefined!);
+    setDeletedDraftIds(messageID, true);
   };
 
   const getDraftForMessage = (messageID: string) => {
-    return messageDraftMap[messageID];
+    if (deletedDraftIds[messageID]) return undefined;
+    return serverDrafts()?.map[messageID];
   };
 
-  const [draftsSettled, setDraftsSettled] = createSignal(false);
-
-  whenSettled(
-    threadQuery,
-    (data) => {
-      setMessageDraftMap(data.draftMap);
-      setDraftsSettled(true);
-    },
-    (error) => {
-      console.error('Failed to load thread data:', error);
-      toast.failure('Failed to load email thread. Please try again.');
-    }
-  );
+  // Drafts derive straight from the query, so "settled" is simply "we have a
+  // thread snapshot" — cached or fresh, revalidating or not.
+  const initialDraftsSettled = () => serverDrafts() !== undefined;
 
   const contacts = useContacts();
 
@@ -407,10 +440,12 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   // (the mark-done / mark-not-done action paths toast on their own).
   const archiveMutation = useUndoableArchiveThreadMutation({
     onPushed: (handle, params) => {
+      params.onUndoHandle?.(handle);
       const message = params.archive ? 'Marked as done' : 'Marked as not done';
       let toastId: number | undefined;
 
       const showToast = () => {
+        if (params.silent) return;
         toastId = toast.success(message, {
           actions: [
             {
@@ -645,11 +680,16 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
         )
       );
     } else {
-      // No soup entity to drive mark-done from: archive directly.
+      // No soup entity to drive mark-done from (e.g. the thread was opened
+      // directly, so no soup list or cache exists): archive directly, still
+      // honoring the caller's silent/undo-handle options — undo-send depends
+      // on the handle to reverse this archive.
       archiveMutation.mutate({
         threadId: thread.db_id,
         archive: true,
         linkId: toHeaderLinkId(thread.link_id),
+        silent: markDoneOpts.silent,
+        onUndoHandle: markDoneOpts.onUndoHandle,
       });
     }
 
@@ -763,14 +803,20 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   const markSenderSignal = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    markSenderSignalWithToast(senderEmail);
+    markSenderSignalWithToast(
+      senderEmail,
+      toHeaderLinkId(threadQuery.data?.link_id)
+    );
     return true;
   };
 
   const markSenderNoise = () => {
     const senderEmail = getSenderEmail();
     if (!senderEmail) return false;
-    markSenderNoiseWithToast(senderEmail);
+    markSenderNoiseWithToast(
+      senderEmail,
+      toHeaderLinkId(threadQuery.data?.link_id)
+    );
     return true;
   };
 
@@ -781,40 +827,35 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
     HTMLDivElement | undefined
   >(undefined);
 
-  let containerFilled = false;
+  /** Selecting a message clears the hidden-chip stop explicitly (no createEffect). */
+  const setFocused = (messageID: string | undefined) => {
+    if (messageID) {
+      setHiddenChipFocused(false);
+      const list = messagesListRef();
+      const button = list ? hiddenMessagesControl(list) : undefined;
+      if (button && document.activeElement === button) {
+        button.blur();
+        blockElementSignal.get()?.focus({ preventScroll: true });
+      }
+    }
+    setFocusedMessageId(messageID);
+  };
+
   const isContainerFilled = () => {
     const messageList = messagesListRef();
     const containerRef = messagesContainerRef();
 
-    // Skip if dependencies not ready
     if (
       !messageList ||
       !containerRef ||
-      !untrack(() => threadQuery.data)?.db_id
+      !untrack(() => threadQuery.data)?.db_id ||
+      threadQuery.isFetching
     ) {
-      containerFilled = false;
       return false;
     }
 
-    // Skip if still loading or already filled
-    if (threadQuery.isFetching || containerFilled) {
-      return containerFilled;
-    }
-
-    const messageListHeight = messageList.getBoundingClientRect().height;
-    const containerHeight = containerRef.getBoundingClientRect().height;
-
-    // Load more if container isn't filled
-    if (
-      messageListHeight < containerHeight &&
-      threadQuery.hasNextPage &&
-      !threadQuery.isFetching
-    ) {
-      threadQuery.fetchNextPage();
-      containerFilled = false;
-      return false;
-    }
-    containerFilled = true;
+    // Older-page prefetch when the first batch does not overflow moved to
+    // MessageList (`listNeedsOlderPage` + `fetchOlderMessages`).
     return true;
   };
 
@@ -840,31 +881,7 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
   };
 
   const onExpandMessageBody = (messageID: string, expanded: boolean) => {
-    const listContainer = messagesListRef();
-
-    const lastScrollPosition = listContainer?.scrollTop;
-    const lastScrollHeight = listContainer?.scrollHeight;
-
     setExpandedMessageBodyIds(messageID, expanded);
-
-    if (
-      !listContainer ||
-      lastScrollPosition == null ||
-      lastScrollHeight == null
-    )
-      return;
-
-    // Maintain the scroll position when expansion changes
-    queueMicrotask(() => {
-      const lastPos = lastScrollHeight + lastScrollPosition;
-      const currentPos = listContainer.scrollHeight + listContainer.scrollTop;
-
-      // List is reversed, we need a negative value to maintain scroll
-      // position
-      const diff = lastPos - currentPos;
-
-      messagesListRef()?.scrollBy({ top: diff });
-    });
   };
 
   // When the provider unmounts (user navigates away), clear the thread query
@@ -920,11 +937,15 @@ export function EmailProvider(props: FlowProps<{ threadID: string }>) {
           drafts: {
             deleteDraftForMessage,
             getDraftForMessage,
-            initialDraftsSettled: draftsSettled,
+            initialDraftsSettled,
           },
           messages: {
             focusedID: focusedMessageId,
-            setFocused: setFocusedMessageId,
+            setFocused,
+            hiddenChipFocused,
+            setHiddenChipFocused,
+            hovered: hoveredStop,
+            setHovered: setHoveredStop,
             targetMessageID: targetMessageId,
             setTargetMessageID: setTargetMessageId,
             list: createMemo(() => threadQuery.data?.filtered ?? []),

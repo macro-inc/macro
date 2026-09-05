@@ -15,6 +15,8 @@ import { err, ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {
+  CursorApiKeyStatus,
+  CursorModelsResponse,
   EnrichGithubPullRequestsProxyRequest,
   EnrichGithubPullRequestsResponse,
   GithubLinkStatusResponse,
@@ -131,7 +133,9 @@ async function getAccessToken(): Promise<string | null> {
           return null;
         }
       } catch (error) {
-        Telemetry.error('Error refreshing access token', { error });
+        Telemetry.error('Error refreshing access token', {
+          error: error instanceof Error ? error.message : String(error),
+        });
         return null;
       } finally {
         // Clear the ongoing refresh promise so future calls can start a new refresh
@@ -150,6 +154,35 @@ export type GithubReauthenticationErrorCode = 'REAUTHENTICATION_REQUIRED';
 /** The team owner's email domain is a generic provider (e.g. gmail.com),
  *  so auto-join cannot be enabled for it. */
 export type ToggleAutoJoinDomainErrorCode = 'GENERIC_DOMAIN_NOT_ALLOWED';
+
+/**
+ * Surfaces the Cursor API key endpoints' own error message instead of a generic
+ * one derived from the status code.
+ *
+ * These endpoints answer with a body that already says what went wrong and is
+ * written to be safe to show a user — "value does not look like a Cursor API
+ * key", "Cursor agents are only available to Macro staff". The default handler
+ * throws that away and reports `HTTP error! status: 403`, which tells the user
+ * nothing they can act on.
+ */
+const cursorApiKeyErrorResponseHandler: ErrorResponseHandler<'CURSOR_API_KEY_ERROR'> =
+  async function handleCursorApiKeyErrorResponse(response) {
+    // Falls back to the status when the body is not the shape we expect: a
+    // failure to parse an error must not replace the error.
+    const message = await response
+      .json()
+      .then((body: unknown) =>
+        typeof body === 'object' && body !== null && 'message' in body
+          ? String((body as { message: unknown }).message)
+          : undefined
+      )
+      .catch(() => undefined);
+
+    return {
+      code: 'CURSOR_API_KEY_ERROR',
+      message: message ?? `HTTP error! status: ${response.status}`,
+    };
+  };
 
 const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErrorCode> =
   async function handleGithubErrorResponse(response) {
@@ -514,6 +547,95 @@ export const authServiceClient = {
         }),
       })
     ).map((result) => result.url);
+  },
+
+  /**
+   * Whether the signed-in user has a Cursor API key stored, and whether this
+   * deployment accepts one at all.
+   *
+   * Never returns the key or any part of it — not even masked. There is no
+   * screen that needs it, and a masked key still leaks its length.
+   */
+  async getCursorApiKeyStatus() {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key`,
+        {
+          method: 'GET',
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Stores a Cursor API key for the signed-in user, replacing any existing one.
+   *
+   * The key is validated on shape alone, so a typo that still starts with
+   * `crsr_` is accepted here and only fails when a session tries to use it.
+   */
+  async putCursorApiKey(apiKey: string) {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ apiKey }),
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Forgets the signed-in user's Cursor API key.
+   *
+   * Does not revoke it at Cursor — the key keeps working everywhere else, and
+   * only Cursor can revoke it. The UI has to say so.
+   */
+  async deleteCursorApiKey() {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key`,
+        {
+          method: 'DELETE',
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * The models the signed-in user's Cursor account offers, for the settings
+   * dropdown. Asks Cursor live through the stored key, so it needs a connected
+   * account — a caller with none gets the endpoint's own `409` message.
+   */
+  async listCursorModels() {
+    return (
+      await fetchWithAuth<CursorModelsResponse, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key/models`,
+        {
+          method: 'GET',
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
+  },
+
+  /**
+   * Chooses the model the user's sessions start on.
+   */
+  async putCursorDefaultModel(modelId: string) {
+    return (
+      await fetchWithAuth<CursorApiKeyStatus, 'CURSOR_API_KEY_ERROR'>(
+        `${authHost}/cursor-api-key/default-model`,
+        {
+          method: 'PUT',
+          body: JSON.stringify({ modelId }),
+          errorResponseHandler: cursorApiKeyErrorResponseHandler,
+        }
+      )
+    ).map((result) => result);
   },
 
   async checkGithubLinkStatus() {

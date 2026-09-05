@@ -1,14 +1,16 @@
+import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
+import { scrubActiveContent } from '@core/email';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode } from '@lexical/rich-text';
 import { $dfsIterator } from '@lexical/utils';
+import type { DocumentMentionInfo } from '@macro-inc/lexical-core';
 import {
   $createClassedBlockNode,
   $createDocumentMentionNode,
   $createHtmlRenderNode,
   $isClassedBlockNode,
   type ClassedBlockNode,
-  type DocumentMentionInfo,
 } from '@macro-inc/lexical-core';
 import type { ApiMessage } from '@service-email/generated/schemas';
 import {
@@ -178,13 +180,16 @@ const $appendPreviousEmail = (
   } else {
     const parser = new DOMParser();
     const dom = parser.parseFromString(replyingToBodyHTML, 'text/html');
+    // The quoted body ends up in the live document (adopted nodes, or a shadow
+    // root inside the html-render node), so scrub it while it is still inert.
+    scrubActiveContent(dom);
     // Forwards always embed the original as a non-editable HTML Render Node so
     // the recipient gets the exact original markup. For replies, a table is a
     // good indicator of content we can't convert into editable nodes correctly.
     const hasTable = Boolean(dom.querySelector('table'));
     if (replyType === 'forward' || hasTable) {
       const htmlNode = $createHtmlRenderNode({
-        html: replyingToBodyHTML,
+        html: dom.documentElement.innerHTML,
         // Same branch the message view takes: personal or table-less emails
         // get theme-adapted colors, table-layout emails get a white panel
         adaptColors: Boolean(isPersonal) || !hasTable,
@@ -356,6 +361,9 @@ function getAppendedReplyElement(
       replyingToBodyHTML,
       'text/html'
     );
+    // These nodes are adopted into the live document below, which starts image
+    // loads — scrub before that, not after.
+    scrubActiveContent(innerDom);
     // Extract style tags from head to preserve email styling for weirdo emails with initial style tags.
     const styleTags = innerDom.head?.querySelectorAll('style');
     styleTags?.forEach((style) => {
@@ -366,58 +374,6 @@ function getAppendedReplyElement(
 
   wrapper.appendChild(quote);
   return wrapper;
-}
-
-function convertMentionsToLinks(root: ParentNode) {
-  const mentionElements = root.querySelectorAll<HTMLElement>(
-    '[data-document-mention="true"]'
-  );
-  let mentions: DocumentMentionInfo[] = [];
-  mentionElements.forEach((el) => {
-    const mention: DocumentMentionInfo = {
-      documentId: el.getAttribute('data-document-id') || '',
-      documentName: el.getAttribute('data-document-name') || '',
-      blockName: el.getAttribute('data-block-name') || '',
-      blockParams: el.getAttribute('data-block-params')
-        ? JSON.parse(el.getAttribute('data-block-params') || '{}')
-        : undefined,
-      mentionUuid: el.getAttribute('data-mention-uuid') || undefined,
-      collapsed: el.getAttribute('data-collapsed')
-        ? Boolean(el.getAttribute('data-collapsed'))
-        : undefined,
-      channelType: el.getAttribute('data-channel-type') || undefined,
-    };
-    if (!mention.documentId || !mention.documentName || !mention.blockName)
-      return;
-    const href =
-      window.location.origin +
-      '/app/' +
-      mention.blockName +
-      '/' +
-      mention.documentId;
-    const link = document.createElement('a');
-    link.href = href;
-    link.textContent = mention.documentName;
-    // Preserve mention data attributes so importDOM() can recreate Lexical nodes
-    link.setAttribute('data-document-mention', 'true');
-    link.setAttribute('data-document-id', mention.documentId);
-    link.setAttribute('data-document-name', mention.documentName);
-    link.setAttribute('data-block-name', mention.blockName);
-    if (mention.blockParams)
-      link.setAttribute(
-        'data-block-params',
-        JSON.stringify(mention.blockParams)
-      );
-    if (mention.mentionUuid)
-      link.setAttribute('data-mention-uuid', mention.mentionUuid);
-    if (mention.collapsed)
-      link.setAttribute('data-collapsed', mention.collapsed.toString());
-    if (mention.channelType)
-      link.setAttribute('data-channel-type', mention.channelType);
-    el.replaceWith(link);
-    mentions.push(mention);
-  });
-  return mentions;
 }
 
 function applyMediaScale(container: Element) {
@@ -453,6 +409,25 @@ export function prepareEmailBody(
     return $generateHtmlFromNodes(editor);
   });
 
+  return prepareEmailBodyFromHtml(generatedHtml, appendReply);
+}
+
+/**
+ * Same pipeline as {@link prepareEmailBody}, but starting from
+ * editor-generated HTML instead of a live editor — for callers holding a
+ * snapshot of editor content (e.g. undo-send restoring a draft).
+ */
+export function prepareEmailBodyFromHtml(
+  generatedHtml: string,
+  appendReply?: {
+    replyType: ReplyType | undefined;
+    replyingTo: ApiMessage;
+  }
+): {
+  bodyHtml: string;
+  bodyText: string;
+  mentions: DocumentMentionInfo[];
+} {
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
 
   flattenConsecutiveParagraphs(parsed.body);
@@ -461,7 +436,7 @@ export function prepareEmailBody(
   applyMediaScale(parsed.body);
 
   // Convert Macro document mentions to HTML links in the parsed DOM
-  const mentions = convertMentionsToLinks(parsed.body);
+  const mentions = convertDocumentMentionsToLinks(parsed.body);
 
   // HtmlRenderNode exports as declarative shadow DOM; email clients and the
   // backend sanitizer drop template content, so inline it

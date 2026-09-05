@@ -68,7 +68,6 @@ impl<T: GroupName, M> KafkaConsumerAdapter<T, M> {
     }
 
     /// Commits a message using the caller-selected commit mode.
-    #[tracing::instrument(err, skip(self))]
     pub fn commit_message(
         &self,
         message: &BorrowedMessage<'_>,
