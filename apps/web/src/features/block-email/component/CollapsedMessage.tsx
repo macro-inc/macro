@@ -5,6 +5,7 @@ import { Tooltip } from '@ui';
 import { createMemo, Show } from 'solid-js';
 import { getSenderDisplayName, getSenderMacroId } from '../util/emailUser';
 import { formatFullDate, formatShortDate } from '../util/formatEmailDate';
+import { messageSnippet } from '../util/messageSnippet';
 import { EmailUserTooltip } from './EmailUserTooltip';
 
 interface CollapsedMessageProps {
@@ -26,20 +27,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
     return { email: props.message.from?.email ?? '', photoUrl };
   });
 
-  const snippet = createMemo(() => {
-    if (props.message.body_text) {
-      return props.message.body_text.replace(/\s+/g, ' ').trim();
-    }
-    if (props.message.body_html_sanitized) {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(
-        props.message.body_html_sanitized,
-        'text/html'
-      );
-      return doc.body.textContent?.replace(/\s+/g, ' ').trim() ?? '';
-    }
-    return '';
-  });
+  const snippet = createMemo(() => messageSnippet(props.message));
 
   return (
     <div class="min-w-0 grid grid-cols-[7rem_minmax(0,1fr)_4.5rem] items-center gap-x-2 @max-[480px]/message:grid-cols-[minmax(0,1fr)_auto] @max-[480px]/message:gap-y-2">
