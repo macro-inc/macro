@@ -1,0 +1,44 @@
+[package]
+name = "messages"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+json-schema = ["dep:schemars"]
+schema = ["dep:utoipa", "channel_sender/schema"]
+annotations = ["ports", "dep:model"]
+ports = ["dep:entity_access", "entity_access/ports", "dep:rootcause"]
+outbound = ["ports", "dep:sqlx", "dep:macro_uuid"]
+delivery = ["outbound", "dep:connection_gateway_client", "dep:model-entity", "dep:system_properties", "dep:notification", "dep:model_notifications"]
+inbound = ["ports", "schema", "dep:axum", "dep:macro_authorization", "entity_access/inbound"]
+
+[dependencies]
+model = { path = "../model", optional = true }
+axum = { workspace = true, optional = true }
+channel_sender = { path = "../channel_sender" }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+model-entity = { path = "../model-entity", optional = true }
+system_properties = { path = "../system_properties", default-features = false, optional = true }
+notification = { path = "../notification", optional = true }
+model_notifications = { path = "../model_notifications", optional = true }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid", optional = true }
+rootcause = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

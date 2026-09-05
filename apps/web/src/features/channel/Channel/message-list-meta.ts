@@ -1,20 +1,22 @@
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
 import type { ChannelMessageListMeta } from '../Message/list-meta';
-import { shouldGroupWithPreviousMessage } from './message-grouping-meta';
+import {
+  type GroupableMessage,
+  shouldGroupWithPreviousMessage,
+} from './message-grouping-meta';
 
-export function buildChannelMessageListMeta(
-  messages: ApiChannelMessage[],
-  isNewMessageFn: (message: ApiChannelMessage) => boolean,
+export function buildChannelMessageListMeta<T extends GroupableMessage>(
+  messages: T[],
+  isNewMessageFn: (message: T) => boolean,
   reachedStart: boolean,
   /**
    * A thread is visually open for this message even without replies (e.g. a
    * reply is being composed), so the rail must reach it.
    */
-  isThreadOpen?: (message: ApiChannelMessage) => boolean
+  isThreadOpen?: (message: T) => boolean
 ): Record<string, ChannelMessageListMeta> {
   const metaByMessageId: Record<string, ChannelMessageListMeta> = {};
   let previousTopLevelCreatedAt: string | undefined;
-  let previousMessage: ApiChannelMessage | undefined;
+  let previousMessage: T | undefined;
   let foundFirstNewMessage = false;
 
   for (const [index, message] of messages.entries()) {

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"PdfHighlightAnchor\" SET \"threadId\" = $1\n                        WHERE uuid = $2 AND \"documentId\" = $3 AND \"threadId\" IS NULL AND \"deletedAt\" IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4982618fbd2d4877ca9ff175506fcd2bcdf91b3b0a7da90d12d53f26c97285dc"
+}

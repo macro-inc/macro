@@ -59,14 +59,14 @@ export const documentMentionMetadata = z.object({
     .discriminatedUnion('type', [
       z.object({
         type: z.literal('create-comment'),
-        commentId: z.number(),
-        threadId: z.number(),
+        commentId: z.string(),
+        threadId: z.string(),
         text: z.string(),
       }),
       z.object({
         type: z.literal('edit-comment'),
-        commentId: z.number(),
-        threadId: z.number(),
+        commentId: z.string(),
+        threadId: z.string(),
         text: z.string(),
       }),
     ])

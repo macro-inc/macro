@@ -4,7 +4,6 @@ import {
   PdfSegmentSchema as TSegmentSchema,
 } from '@coparse/document-processing-types';
 import {
-  asRawShape,
   fetchErrorsSvc,
   nonNullShape,
   type ServiceClient,
@@ -39,14 +38,7 @@ const GetWriterPartsResponse = z.object({
 
 const AnnotationsSvc = new Svc('Annotations Service')
   .use('fetchErrors', fetchErrorsSvc)
-  .fn('getComments', {
-    description: schemas.getDocumentCommentsParams.description!,
-    args: {
-      documentId: schemas.getDocumentCommentsParams.shape.document_id,
-    },
-    result: schemas.getDocumentCommentsResponse.shape,
-    throws: withFetchErrors(),
-  })
+
   .fn('getAnchors', {
     description: schemas.getDocumentAnchorsParams.description!,
     args: {
@@ -55,15 +47,7 @@ const AnnotationsSvc = new Svc('Annotations Service')
     result: schemas.getDocumentAnchorsResponse.shape,
     throws: withFetchErrors(),
   })
-  .fn('createComment', {
-    description: schemas.createCommentParams.description!,
-    args: {
-      documentId: schemas.createCommentParams.shape.document_id,
-      body: schemas.createCommentBody,
-    },
-    result: asRawShape(schemas.createCommentResponse),
-    throws: withFetchErrors(),
-  })
+
   .fn('createAnchor', {
     description: schemas.createAnchorParams.description!,
     args: {
@@ -73,16 +57,7 @@ const AnnotationsSvc = new Svc('Annotations Service')
     result: schemas.createAnchorResponse,
     throws: withFetchErrors(),
   })
-  .fn('deleteComment', {
-    description: schemas.deleteCommentParams.description!,
-    args: {
-      commentId: schemas.deleteCommentParams.shape.comment_id,
-      body: schemas.deleteCommentBody,
-    },
-    result: asRawShape(schemas.deleteCommentResponse),
-    throws: withFetchErrors(),
-    modifies: true,
-  })
+
   .fn('deleteAnchor', {
     description: schemas.deleteAnchorBody.description!,
     args: { body: schemas.deleteAnchorBody },
@@ -90,16 +65,7 @@ const AnnotationsSvc = new Svc('Annotations Service')
     throws: withFetchErrors(),
     modifies: true,
   })
-  .fn('editComment', {
-    description: schemas.editCommentParams.description!,
-    args: {
-      commentId: schemas.editCommentParams.shape.comment_id,
-      body: schemas.editCommentBody,
-    },
-    result: asRawShape(schemas.editCommentResponse),
-    throws: withFetchErrors(),
-    modifies: true,
-  })
+
   .fn('editAnchor', {
     description: schemas.editAnchorBody.description!,
     args: { body: schemas.editAnchorBody },

@@ -1,10 +1,12 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { createDocumentDiscussionSource } from '@block-md/comments/documentDiscussionSource';
 import {
   FileDetailsSection,
   FilePropertiesSection,
   SidePanel,
 } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
+import { Discussion, DiscussionProvider } from '@core/comments/discussion';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 
@@ -16,6 +18,14 @@ export function PdfSidePanelSections() {
       </SidePanel.Section>
       <FileDetailsSection order={20} />
       <FilePropertiesSection order={30} />
+      <SidePanel.Section
+        id="discussion"
+        title="Comments"
+        defaultOpen
+        order={40}
+      >
+        <PdfDiscussion />
+      </SidePanel.Section>
     </>
   );
 }
@@ -36,5 +46,14 @@ function ActionsSectionContent() {
         }}
       />
     </div>
+  );
+}
+
+function PdfDiscussion() {
+  const source = createDocumentDiscussionSource();
+  return (
+    <DiscussionProvider source={source}>
+      <Discussion label="Comments" />
+    </DiscussionProvider>
   );
 }

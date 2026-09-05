@@ -6,11 +6,8 @@ import { useBlockId } from '@core/block';
 import { type DeleteCommentInfo, isRoot } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import { blockElementSignal } from '@core/signal/blockElement';
-import type {
-  CreateCommentRequest,
-  EditCommentRequest,
-} from '@service-storage/generated/schemas';
-import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
+import type { EditMessage } from '@service-storage/generated/schemas/editMessage';
+import type { Message, PostMessage } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   useAttachHighlightCommentResource,
@@ -33,73 +30,74 @@ export function useCreateComment() {
   const attachHighlightComment = useAttachHighlightCommentResource();
   const createThreadReply = useCreateThreadReplyResource();
 
-  return createCallback(
-    async (info: CreateCommentRequest & { threadId: number }) => {
-      analytics.track('comment_create', { blockType: 'pdf' });
-      const { threadId, text, mentions } = info;
+  return createCallback(async (info: PostMessage & { thread_id: string }) => {
+    analytics.track('comment_create', { blockType: 'pdf' });
+    const { thread_id: threadId, content: text, mentions, attachments } = info;
 
-      // new thread + anchor
-      if (threadId === -1) {
-        const comment = commentsStore.get.find((c) => c.threadId === threadId);
-        if (!comment) {
-          console.error('Unable to comment');
-          return null;
-        }
-
-        let response: CreateCommentResponse | null = null;
-        switch (comment.type) {
-          case 'highlight':
-            const highlight = highlightsUuidMap()?.[comment.anchorId];
-            if (!highlight) {
-              console.error('Unable to find highlight');
-              return response;
-            }
-
-            if (highlight.existsOnServer) {
-              response = await attachHighlightComment(
-                text,
-                highlight.uuid,
-                mentions
-              );
-            } else {
-              response = await createHighlightComment(
-                text,
-                highlight,
-                mentions
-              );
-            }
-            break;
-          case 'free':
-            const newThreadPlaceable_ = newThreadPlaceable();
-            if (
-              !newThreadPlaceable_ ||
-              newThreadPlaceable_.internalId !== comment.anchorId
-            ) {
-              console.error('Unable to find new thread placeable');
-              return response;
-            }
-
-            response = await createFreeComment(
-              text,
-              newThreadPlaceable_,
-              mentions
-            );
-            break;
-          default:
-            console.error('invalid comment type', comment.type);
-            return response;
-        }
-
-        if (response) {
-          deleteNewComments();
-        }
-
-        return response;
+    // new thread + anchor
+    if (threadId === 'draft') {
+      const comment = commentsStore.get.find((c) => c.threadId === threadId);
+      if (!comment) {
+        console.error('Unable to comment');
+        return null;
       }
 
-      return await createThreadReply(info);
+      let response: Message | null = null;
+      switch (comment.type) {
+        case 'highlight':
+          const highlight = highlightsUuidMap()?.[comment.anchorId];
+          if (!highlight) {
+            console.error('Unable to find highlight');
+            return response;
+          }
+
+          if (highlight.existsOnServer) {
+            response = await attachHighlightComment(
+              text,
+              highlight.uuid,
+              mentions,
+              attachments
+            );
+          } else {
+            response = await createHighlightComment(
+              text,
+              highlight,
+              mentions,
+              attachments
+            );
+          }
+          break;
+        case 'free':
+          const newThreadPlaceable_ = newThreadPlaceable();
+          if (
+            !newThreadPlaceable_ ||
+            newThreadPlaceable_.internalId !== comment.anchorId
+          ) {
+            console.error('Unable to find new thread placeable');
+            return response;
+          }
+
+          response = await createFreeComment(
+            text,
+            newThreadPlaceable_,
+            mentions,
+            attachments
+          );
+          break;
+        default:
+          console.error('invalid comment type', comment.type);
+          return response;
+      }
+
+      if (response) {
+        deleteNewComments();
+      }
+
+      return response;
     }
-  );
+
+    return await createThreadReply(info);
+  });
 }
 
 export function useUpdateComment() {
@@ -107,7 +105,7 @@ export function useUpdateComment() {
 
   const editComment = useEditCommentResource();
 
-  return createCallback((commentId: number, info: EditCommentRequest) => {
+  return createCallback((commentId: string, info: EditMessage) => {
     analytics.track('comment_update', { blockType: 'pdf' });
     return editComment(commentId, info);
   });
@@ -122,14 +120,12 @@ export function useDeleteComment() {
   return createCallback(async (info: DeleteCommentInfo) => {
     const commentId = info.commentId;
 
-    if (commentId === -1) {
+    if (commentId === 'draft') {
       deleteNewComments();
       return false;
     }
 
-    const success = await deleteComment(commentId, {
-      removeAnchorThreadOnly: info.removeAnchorThreadOnly,
-    });
+    const success = await deleteComment(commentId);
 
     if (success) {
       analytics.track('comment_delete', { blockType: 'pdf' });
@@ -162,7 +158,7 @@ export function useScrollToCommentThread() {
     });
   };
 
-  return async (threadId: number) => {
+  return async (threadId: string) => {
     const measureContainerId = threadMeasureContainerId(documentId, threadId);
     let measureContainer = document.getElementById(measureContainerId);
     const blockEl = blockElement();

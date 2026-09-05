@@ -24,11 +24,11 @@ export const FreeCommentPlaceable: Component<{
 };
 
 export const NewFreeCommentPlaceable: Component = () => {
-  return <CommentIndicator threadId={-1} isActive={true} numComments={1} />;
+  return <CommentIndicator threadId="draft" isActive={true} numComments={1} />;
 };
 
 function CommentIndicator(props: {
-  threadId: number;
+  threadId: string;
   numComments: number;
   isActive: boolean;
   setActive?: () => void;

@@ -1,7 +1,12 @@
+import {
+  attachmentEntityType,
+  expandMentions,
+} from '@channel/Input/message-payload';
+import type { InputSnapshot } from '@channel/Input/types';
 import type { MessageData } from '@channel/Message/types';
-import { senderFromStorageId } from '@queries/channel/message-sender';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
-import type { DiscussionComment } from './types';
+import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import type { Message, MessageThread } from '@service-storage/messages';
+import type { DiscussionComment, DiscussionThread } from './types';
 
 /** Maps a normalized discussion comment to the channel `Message` shape. */
 export function discussionCommentToMessageData(
@@ -18,34 +23,70 @@ export function discussionCommentToMessageData(
       comment.updatedAt && comment.updatedAt !== comment.createdAt
         ? comment.updatedAt
         : null,
-    attachments: [],
-    reactions: [],
+    attachments: comment.attachments ?? [],
+    reactions: comment.reactions ?? [],
   };
 }
 
-/** Maps a normalized discussion comment to the channel `Thread.Row` shape. */
-export function discussionCommentToApiChannelMessage(
-  comment: DiscussionComment
-): ApiChannelMessage {
+export function messageToDiscussionComment(
+  message: Message
+): DiscussionComment {
   return {
-    id: comment.id,
-    content: comment.text,
-    sender: senderFromStorageId(comment.authorId),
-    sender_id: comment.authorId,
-    created_at: comment.createdAt,
-    updated_at: comment.updatedAt,
-    deleted_at: comment.deletedAt,
-    edited_at:
-      comment.updatedAt && comment.updatedAt !== comment.createdAt
-        ? comment.updatedAt
-        : null,
-    attachments: [],
-    reactions: [],
-    channel_id: '',
-    thread: {
-      reply_count: 0,
-      latest_reply_at: null,
-      preview: [],
-    },
+    id: message.id,
+    threadId: message.thread_id ?? message.id,
+    authorId: message.sender_id,
+    importedAuthor: message.imported_author?.name,
+    text: message.content,
+    createdAt: message.created_at,
+    updatedAt: message.updated_at,
+    deletedAt: message.deleted_at ?? null,
+    attachments: message.attachments,
+    reactions: message.reactions,
   };
+}
+
+export function messageToDiscussionThread(
+  thread: MessageThread
+): DiscussionThread {
+  return {
+    id: thread.state.root_id,
+    ownerId: thread.state.user_id,
+    resolved: thread.state.resolved,
+    comments: [thread.root, ...thread.replies].map(messageToDiscussionComment),
+  };
+}
+
+export function messageMentions(mentions: ItemMention[]) {
+  return expandMentions(mentions, []);
+}
+
+export function messageAttachments(
+  attachments: InputSnapshot['attachments'] = []
+) {
+  if (attachments.some((attachment) => attachment.pending))
+    throw new Error('Wait for attachments to finish uploading');
+  return attachments.map((attachment) => ({
+    entity_type: attachment.entityType ?? attachmentEntityType(attachment.kind),
+    entity_id: attachment.id,
+    width: attachment.width,
+    height: attachment.height,
+  }));
+}
+
+export function discussionInputAttachments(
+  comment: DiscussionComment
+): InputSnapshot['attachments'] {
+  return (comment.attachments ?? []).map((attachment) => ({
+    id: attachment.entity_id,
+    name: attachment.entity_id,
+    entityType: attachment.entity_type,
+    kind:
+      attachment.entity_type === 'static/image'
+        ? 'image'
+        : attachment.entity_type === 'static/video'
+          ? 'video'
+          : 'document',
+    width: attachment.width ?? undefined,
+    height: attachment.height ?? undefined,
+  }));
 }

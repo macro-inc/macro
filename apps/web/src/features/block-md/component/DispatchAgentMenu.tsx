@@ -16,16 +16,13 @@ import GitBranch from '@phosphor/git-branch.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { storageServiceClient } from '@service-storage/client';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
+import type { MessageThread } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
 import { Button, ButtonGroup, Dropdown } from '@ui';
 import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import {
-  discussionThreads,
-  sortComments,
-} from '../comments/discussionResource';
+import { discussionThreads } from '../comments/discussionResource';
 import { mdStore } from '../signal/markdownBlockData';
 
 const LAST_USED_KEY = 'dispatch-agent-last-used';
@@ -34,7 +31,7 @@ async function generateTaskPrompt(
   documentId: string,
   documentName: string,
   content: string,
-  threads: CommentThread[]
+  threads: MessageThread[]
 ): Promise<string> {
   const result = await storageServiceClient.getDocumentBranchName({
     documentId,
@@ -63,18 +60,18 @@ async function generateTaskPrompt(
   if (threads.length > 0) {
     lines.push('');
     for (const thread of threads) {
-      const sorted = [...thread.comments].sort(sortComments);
-      lines.push(`<comment-thread thread-id="${thread.thread.threadId}">`);
+      const sorted = [thread.root, ...thread.replies];
+      lines.push(`<comment-thread thread-id="${thread.state.root_id}">`);
       for (const comment of sorted) {
-        if (comment.text && !comment.deletedAt) {
-          const userId = comment.sender ?? comment.owner;
+        if (comment.content && !comment.deleted_at) {
+          const userId = comment.imported_author?.name ?? comment.sender_id;
           const macroId = tryMacroId(userId);
           const author = macroId ? macroIdToEmail(macroId) : userId;
-          const createdAt = comment.createdAt
-            ? ` created-at="${comment.createdAt}"`
+          const createdAt = comment.created_at
+            ? ` created-at="${comment.created_at}"`
             : '';
           lines.push(
-            `<comment author="${author}"${createdAt}>${comment.text}</comment>`
+            `<comment author="${author}"${createdAt}>${comment.content}</comment>`
           );
         }
       }

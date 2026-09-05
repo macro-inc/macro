@@ -16,7 +16,9 @@ import {
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
+import { buildSimpleEntityUrl } from '@core/util/url';
 import { autoUpdate, computePosition } from '@floating-ui/dom';
+import { createMessageDiscussionSource } from '@queries/messages-discussion';
 import {
   createEffect,
   createMemo,
@@ -55,7 +57,7 @@ const useCommentsContext = (): CommentsContextType => {
   });
   const ownedCommentSelector = createSelector(
     ownedCommentIds,
-    (id: number, owned) => (owned ?? []).includes(id)
+    (id: string, owned) => (owned ?? []).includes(id)
   );
 
   const createComment = useCreateComment();
@@ -66,9 +68,22 @@ const useCommentsContext = (): CommentsContextType => {
   const isDocumentOwner = useIsDocumentOwner();
   const canComment = useCanComment();
 
-  const getCommentById = (id: number) => comments[id];
+  const getCommentById = (id: string) => comments[id];
 
+  const discussionSource = createMessageDiscussionSource({
+    parent: () => ({ type: 'document', id: documentId }),
+    canEdit: canComment,
+    currentUserId: useUserId(),
+    canManageThreads: isDocumentOwner,
+    targetCommentId: () => highlightedCommentIdSignal(),
+    buildCommentLink: (comment) =>
+      buildSimpleEntityUrl(
+        { type: 'md', id: documentId },
+        { comment_id: comment.id }
+      ),
+  });
   const commentsContext: CommentsContextType = {
+    discussionSource,
     setActiveThread,
     setThreadHeight,
     canComment,
@@ -105,13 +120,13 @@ export const CommentMargin = () => {
     }
 
     // new threads will take priority
-    if (set.has(-1)) {
-      return new Set([-1]);
+    if (set.has('draft')) {
+      return new Set(['draft']);
     }
 
     return set;
   });
-  const isActiveSelector = createSelector(activeThreads, (id: number, ids) => {
+  const isActiveSelector = createSelector(activeThreads, (id: string, ids) => {
     return ids.has(id);
   });
 

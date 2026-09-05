@@ -382,6 +382,13 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 		commentedOnDocumentText: text
 		commentedOnDocumentSenderProfilePictureUrl: senderProfilePictureUrl
 	}
+	... on GraphqlEmailThreadCommentMetadata {
+		emailCommentSubject: subject
+		emailCommentMessageId: messageId
+		emailCommentThreadId: threadId
+		emailCommentText: text
+		emailCommentReason: reason
+	}
 	... on GraphqlChannelInviteMetadata {
 		channelInviteInvitedBy: invitedBy
 		channelInviteChannelName: channelName

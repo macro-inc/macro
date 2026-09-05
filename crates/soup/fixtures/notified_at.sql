@@ -76,9 +76,9 @@ INSERT INTO public.comms_channels ("id", "channel_type", "owner_id", "created_at
 VALUES ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'private', 'macro|user-1@test.com', '2023-01-07 10:00:00', '2023-01-07 10:00:00'),
        ('33333333-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'private', 'macro|user-2@test.com', '2023-01-07 11:00:00', '2023-01-07 11:00:00');
 
-INSERT INTO public.comms_messages ("id", "channel_id", "thread_id", "sender_id", "content", "created_at", "updated_at")
+INSERT INTO public.comms_messages ("id", "parent_entity_type", "parent_entity_id", "thread_id", "sender_id", "content", "created_at", "updated_at")
 -- thread-M is a root message in channel-X that user-1 was mentioned in.
-VALUES ('99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL, 'macro|user-2@test.com', 'hey @user-1', '2024-06-01 10:06:00+00', '2024-06-01 10:06:00+00');
+VALUES ('99999999-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'channel', '33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', NULL, 'macro|user-2@test.com', 'hey @user-1', '2024-06-01 10:06:00+00', '2024-06-01 10:06:00+00');
 
 INSERT INTO public.comms_channel_participants ("channel_id", "role", "user_id", "joined_at", "left_at")
 VALUES ('33333333-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 'member', 'macro|user-1@test.com', '2023-01-07 10:00:00', NULL),

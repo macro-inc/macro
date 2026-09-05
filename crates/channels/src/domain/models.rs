@@ -8,6 +8,9 @@ use item_filters::ast::{
 #[cfg(any(feature = "list", feature = "outbound"))]
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
+pub use messages::domain::models::{
+    CountedReaction, MessageAttachment, NewAttachment as NewChannelAttachment, SimpleMention,
+};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
@@ -238,32 +241,6 @@ pub struct ThreadReply {
     pub reactions: Vec<CountedReaction>,
     /// Attachments on this reply.
     pub attachments: Vec<MessageAttachment>,
-}
-
-/// A reaction emoji with the list of users who reacted.
-#[derive(Debug, Clone, Serialize)]
-pub struct CountedReaction {
-    /// The emoji string.
-    pub emoji: String,
-    /// User ids who added this reaction.
-    pub users: Vec<String>,
-}
-
-/// An attachment on a message.
-#[derive(Debug, Clone)]
-pub struct MessageAttachment {
-    /// Attachment id.
-    pub id: Uuid,
-    /// Type of attached entity (e.g. "document").
-    pub entity_type: String,
-    /// Id of the attached entity.
-    pub entity_id: String,
-    /// Optional width (for images).
-    pub width: Option<i32>,
-    /// Optional height (for images).
-    pub height: Option<i32>,
-    /// When the attachment was created.
-    pub created_at: DateTime<Utc>,
 }
 
 /// An attachment in a channel (for the channel-level attachments listing).
@@ -775,40 +752,6 @@ pub struct PatchChannelRequest {
     pub convert_to_team_channel: Option<bool>,
     /// Whether team members should automatically join the channel.
     pub auto_join_team: Option<bool>,
-}
-
-/// New attachment to add to a channel message.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct NewChannelAttachment {
-    /// Attachment entity type.
-    pub entity_type: String,
-    /// Attachment entity id.
-    pub entity_id: String,
-    /// Optional rendered width.
-    pub width: Option<i32>,
-    /// Optional rendered height.
-    pub height: Option<i32>,
-}
-
-/// Simple entity mention attached to a message.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct SimpleMention {
-    /// Mentioned entity type.
-    pub entity_type: String,
-    /// Mentioned entity id.
-    pub entity_id: String,
-}
-
-impl SimpleMention {
-    /// Construct a tracked mention of a Macro user.
-    pub fn user(user_id: &MacroUserIdStr<'_>) -> Self {
-        Self {
-            entity_type: "user".to_string(),
-            entity_id: user_id.as_ref().to_string(),
-        }
-    }
 }
 
 /// Shareable entity type referenced by a channel message.

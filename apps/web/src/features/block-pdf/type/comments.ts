@@ -1,8 +1,8 @@
 import type { IComment, Reply, Root } from '@core/comments/commentType';
 
 export type ThreadPayload = {
-  threadId: number;
-  rootId: number;
+  threadId: string;
+  rootId: string;
   anchorId: string; // uuid
   page: number;
   comments: IComment[];

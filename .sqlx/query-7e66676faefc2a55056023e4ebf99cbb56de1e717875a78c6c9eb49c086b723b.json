@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT d.name, d.owner, d.\"fileType\" AS file_type,\n                    (SELECT sp.\"linkShareAccessLevel\"::\"AccessLevel\" FROM \"DocumentPermission\" dp\n                        JOIN \"SharePermission\" sp ON sp.id = dp.\"sharePermissionId\"\n                        WHERE dp.\"documentId\" = d.id AND sp.\"linkShare\" IN ('PUBLIC', 'TEAM')) AS \"link_share_access: entity_access::domain::models::AccessLevel\",\n                    EXISTS (SELECT 1 FROM document_sub_type s WHERE s.document_id = d.id AND s.sub_type = 'task') AS \"is_task!\"\n                    FROM \"Document\" d WHERE d.id = $1 AND d.\"deletedAt\" IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "file_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "link_share_access: entity_access::domain::models::AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "is_task!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null,
+      null
+    ]
+  },
+  "hash": "7e66676faefc2a55056023e4ebf99cbb56de1e717875a78c6c9eb49c086b723b"
+}

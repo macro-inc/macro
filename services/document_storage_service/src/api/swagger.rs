@@ -146,19 +146,26 @@ use utoipa::OpenApi;
     ),
     paths(
         health::health_handler,
+        messages::inbound::axum_router::list,
+        messages::inbound::axum_router::create,
+        messages::inbound::axum_router::get_message,
+        messages::inbound::axum_router::get_thread,
+        messages::inbound::axum_router::typing,
+        messages::inbound::axum_router::edit,
+        messages::inbound::axum_router::delete_message,
+        messages::inbound::axum_router::react,
+        messages::inbound::axum_router::resolve,
+        messages::inbound::axum_router::delete_thread,
+        messages::inbound::axum_router::legacy,
         calendar_events::inbound::axum_router::list_occurrences,
         calendar_events::inbound::axum_router::mention_previews,
         calendar_events::inbound::axum_router::list_team_out_of_office,
 
         // annotations
-        annotations::get::get_document_comments_handler,
         annotations::get::get_document_anchors_handler,
         annotations::delete_anchor::delete_anchor_handler,
-        annotations::delete_comment::delete_comment_handler,
-        annotations::edit_comment::edit_comment_handler,
         annotations::edit_anchor::edit_anchor_handler,
         annotations::create_anchor::create_anchor_handler,
-        annotations::create_comment::create_comment_handler,
 
         // documents
         documents::get_user_documents::get_user_documents_handler,

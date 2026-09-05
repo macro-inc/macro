@@ -4,18 +4,14 @@ import { useBlockId } from '@core/block';
 import type { DeleteCommentInfo } from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import {
-  CREATE_COMMENT_COMMAND,
+  COMMIT_COMMENT_MARK_COMMAND,
   DELETE_COMMENT_COMMAND,
   DISCARD_DRAFT_COMMENT_COMMAND,
-  SET_COMMENT_THREAD_ID_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins/comments/commentPlugin';
 import { isMobile } from '@core/mobile/isMobile';
 import { blockElementSignal } from '@core/signal/blockElement';
-import type {
-  CreateCommentRequest,
-  EditCommentRequest,
-} from '@service-storage/generated/schemas';
-import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
+import type { EditMessage } from '@service-storage/generated/schemas/editMessage';
+import type { Message, PostMessage } from '@service-storage/messages';
 import { until } from '@solid-primitives/promise';
 import { createCallback } from '@solid-primitives/rootless';
 import { onCleanup } from 'solid-js';
@@ -39,48 +35,48 @@ export function useCreateComment() {
   const createHighlightComment = useCreateHighlightCommentResource();
   const createThreadReply = useCreateThreadReplyResource();
   const threads = threadStore.get;
-  const updateNodeThreadId = useSetNodeCommentThreadId();
+  const [marks, setMarks] = markStore;
   const setActiveThread = activeCommentThreadSignal.set;
-  const editor = mdStore.get.editor;
 
-  return createCallback(
-    async (info: CreateCommentRequest & { threadId: number }) => {
-      analytics.track('comment_create', { blockType: 'md' });
-      const { threadId, text, mentions } = info;
+  return createCallback(async (info: PostMessage & { thread_id: string }) => {
+    const editor = mdStore.get.editor;
+    analytics.track('comment_create', { blockType: 'md' });
+    const { thread_id: threadId, content: text, mentions, attachments } = info;
 
-      if (threadId === -1) {
-        setActiveThread(threadId);
+    if (threadId === 'draft') {
+      setActiveThread(threadId);
 
-        const comment = threads[threadId];
-        if (!comment) {
-          console.error('Unable to comment');
-          return null;
-        }
-
-        let response: CreateCommentResponse | null = null;
-
-        response = await createHighlightComment(
-          text,
-          comment.anchorId,
-          mentions
-        );
-
-        if (response) {
-          editor?.dispatchCommand(CREATE_COMMENT_COMMAND, {
-            threadId: response.thread.threadId,
-          });
-          updateNodeThreadId({
-            markId: comment.anchorId,
-            threadId: response.thread.threadId,
-          });
-          deleteNewComments();
-        }
-        return response;
+      const comment = threads[threadId];
+      if (!comment) {
+        console.error('Unable to comment');
+        return null;
       }
 
-      return await createThreadReply(info);
+      let response: Message | null = null;
+
+      response = await createHighlightComment(
+        text,
+        comment.anchorId,
+        mentions,
+        attachments
+      );
+
+      if (response) {
+        if (marks[comment.anchorId]) {
+          setMarks(comment.anchorId, 'existsOnServer', true);
+          setMarks(comment.anchorId, 'isDraft', false);
+        }
+        setActiveThread(response.id);
+        editor?.dispatchCommand(COMMIT_COMMENT_MARK_COMMAND, {
+          markId: comment.anchorId,
+        });
+        deleteNewComments();
+      }
+      return response;
     }
-  );
+
+    return await createThreadReply(info);
+  });
 }
 
 export function useUpdateComment() {
@@ -88,7 +84,7 @@ export function useUpdateComment() {
 
   const editComment = useEditCommentResource();
 
-  return createCallback((commentId: number, info: EditCommentRequest) => {
+  return createCallback((commentId: string, info: EditMessage) => {
     analytics.track('comment_update', { blockType: 'md' });
 
     return editComment(commentId, info);
@@ -112,7 +108,7 @@ export function useDeleteComment() {
     editor?.dispatchCommand(DISCARD_DRAFT_COMMENT_COMMAND, undefined);
     const commentId = info.commentId;
 
-    if (commentId === -1) {
+    if (commentId === 'draft') {
       deleteNewComments();
       return true;
     }
@@ -122,15 +118,7 @@ export function useDeleteComment() {
     // comment mark deleted -> comment server delete re-attempted
     if (!comment) return true;
 
-    const deleteInfo = await deleteComment(commentId, {
-      removeAnchorThreadOnly: info.removeAnchorThreadOnly,
-    });
-
-    if (deleteInfo?.threadDeleted) {
-      editor?.dispatchCommand(DELETE_COMMENT_COMMAND, [comment.anchorId, true]);
-    }
-
-    return !!deleteInfo;
+    return await deleteComment(commentId);
   });
 }
 
@@ -151,19 +139,6 @@ export function useDeleteNewComments() {
     }
   });
 }
-
-export const useSetNodeCommentThreadId = () => {
-  const editor = mdStore.get.editor;
-
-  return createCallback(
-    ({ markId, threadId }: { markId: string; threadId: number }) => {
-      editor?.dispatchCommand(SET_COMMENT_THREAD_ID_COMMAND, {
-        markId,
-        threadId,
-      });
-    }
-  );
-};
 
 export function useScrollToCommentThread() {
   const blockElement = blockElementSignal.get;
@@ -188,7 +163,7 @@ export function useScrollToCommentThread() {
     });
   };
 
-  return async (threadId: number) => {
+  return async (threadId: string) => {
     // On phones the margin is display:none (the drawer is the only comment
     // surface), so its measure containers can't be scrolled to. Scroll to
     // the thread's mark in the editor itself. On a cold-load deep link the

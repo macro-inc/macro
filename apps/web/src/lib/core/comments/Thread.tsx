@@ -5,38 +5,26 @@ import { Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import {
   type Accessor,
-  batch,
   createContext,
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
   onCleanup,
   onMount,
   Show,
   type Signal,
   useContext,
 } from 'solid-js';
-import { getAndClearCommentMentions } from '.';
-import { Comment, CommentReply } from './Comment';
 import type { CommentOperations, Layout, Reply, Root } from './commentType';
-import { EditInput, NewReplyInput } from './Inputs';
+import {
+  DiscussionInput,
+  DiscussionProvider,
+  type DiscussionSource,
+  DiscussionThreadView,
+} from './discussion';
+import {
+  messageAttachments,
+  messageMentions,
+  messageToDiscussionComment,
+} from './discussion/messageAdapter';
 import { MeasureContainer } from './MeasureContainer';
-
-type SoftSetEdit = {
-  action: 'soft';
-  editing: boolean;
-};
-
-type HardSetEdit = {
-  action: 'hard';
-  editing: boolean;
-};
-
-type SetText = {
-  action: 'text';
-  val: string;
-};
 
 export const baseCommentTheme = createTheme({
   root: 'text-sm',
@@ -45,11 +33,9 @@ export const baseCommentTheme = createTheme({
   },
 });
 
-type Action = SoftSetEdit | HardSetEdit | SetText;
-
 export const threadMeasureContainerId = (
   documentId: string,
-  threadId: number
+  threadId: string
 ) => `comment-measure-container-${documentId}-${threadId}`;
 
 export const ThreadContext = createContext<{
@@ -59,21 +45,22 @@ export const ThreadContext = createContext<{
 });
 
 export type CommentsContextType = {
-  setActiveThread: (threadId: number | null) => void;
-  setThreadHeight: (threadId: number, height: number) => void;
+  discussionSource?: DiscussionSource;
+  setActiveThread: (threadId: string | null) => void;
+  setThreadHeight: (threadId: string, height: number) => void;
   canComment: Accessor<boolean>;
   isDocumentOwner: Accessor<boolean>;
   commentOperations: CommentOperations;
-  getCommentById: (id: number) => Root | Reply | undefined;
+  getCommentById: (id: string) => Root | Reply | undefined;
   documentId: string;
-  ownedComment: (id: number) => boolean;
+  ownedComment: (id: string) => boolean;
   inComment: boolean;
-  highlightedCommentId: Accessor<number | null>;
+  highlightedCommentId: Accessor<string | null>;
   /**
    * When set (the touch drawer), messages report their inline-edit state so
    * the host can hide its pinned reply composer while an edit is open.
    */
-  setMessageEditing?: (commentId: number, editing: boolean) => void;
+  setMessageEditing?: (commentId: string, editing: boolean) => void;
 };
 
 export const CommentsContext = createContext<CommentsContextType>({
@@ -114,181 +101,50 @@ export function ThreadBody(props: {
    */
   actionsDropdown?: boolean;
 }) {
-  const {
-    canComment,
-    commentOperations,
-    setActiveThread,
-    ownedComment,
-    highlightedCommentId,
-  } = useContext(CommentsContext);
-
-  const [textValue, setTextValue] = createSignal('');
-  const [isEditingNewReply, setIsEditingNewReply] = createSignal(false);
-
-  // Function to handle state updates
-  const dispatch = (action: Action) => {
-    switch (action.action) {
-      case 'soft':
-        setIsEditingNewReply((prev) => (textValue() ? prev : action.editing));
-        break;
-      case 'hard':
-        setIsEditingNewReply(action.editing);
-        break;
-      case 'text':
-        setTextValue(action.val);
-        break;
-    }
-  };
-
-  const showNewReplyInput = createMemo(() => {
-    if (!canComment()) return false;
-    return props.isActive || isEditingNewReply();
+  const context = useContext(CommentsContext);
+  const viewThread = () => ({
+    id: props.comment.threadId,
+    ownerId: props.comment.owner,
+    resolved: props.comment.resolved ?? false,
+    comments: [
+      props.comment,
+      ...props.comment.children.map((id) => context.getCommentById(id)),
+    ].flatMap((comment) =>
+      comment?.message ? [messageToDiscussionComment(comment.message)] : []
+    ),
   });
-
-  // when thread is not active and new reply input is open, close the new reply input if empty
-  createEffect(() => {
-    if (!props.isActive) {
-      dispatch({ action: 'soft', editing: false });
-    }
-  });
-
-  const [allRepliesVisible, setAllRepliesVisible] =
-    createSignal<boolean>(false);
-
-  const replyIds = createMemo(() => props.comment.children);
-  const lastReplyId = createMemo(() => replyIds().at(-1));
-  const collapseRepliesList = createMemo(
-    () => replyIds().length > 0 && !allRepliesVisible()
-  );
-  const collapsedCount = createMemo(() =>
-    collapseRepliesList() ? replyIds().length - 1 : 0
-  );
-
-  // when expanding to show all replies then clicking away from
-  // thread (i.e. making it inactive), collapse the replies list
-  createEffect(() => {
-    if (props.isActive || !allRepliesVisible()) return;
-    setAllRepliesVisible(false);
-  });
-
-  // expand all replies if we're navigating to a specific reply via URL
-  createEffect(() => {
-    const hId = highlightedCommentId();
-    if (hId === null) return;
-    if (replyIds().includes(hId)) {
-      setAllRepliesVisible(true);
-    }
-  });
-
-  const mentionsSignal = createSignal<UserMentionRecord[]>([]);
-
   return (
-    <ThreadContext.Provider value={{ mentionsSignal }}>
-      <StaticMarkdownContext theme={props.theme ?? baseCommentTheme}>
-        <Show
-          when={!props.comment.isNew}
-          fallback={
-            <EditInput
-              textValue={''}
-              handleCancel={() => {}}
-              onSend={(content: string) => {
-                if (content.trim() === '') return;
-                // NOTE: we need the server to return the thread id first
-                return commentOperations.createComment({
-                  threadId: props.comment.threadId,
-                  text: content,
-                  mentions: getAndClearCommentMentions(mentionsSignal),
-                });
-              }}
-              isNewThread
-            />
-          }
-        >
-          <div
-            on:click={() => {
-              dispatch({ action: 'soft', editing: false });
+    <StaticMarkdownContext theme={props.theme ?? baseCommentTheme}>
+      <Show
+        when={!props.comment.isNew}
+        fallback={
+          <DiscussionInput
+            input={{ mode: 'reply', placeholder: 'Leave a comment...' }}
+            onClose={() => context.setActiveThread(null)}
+            onSend={async (snapshot) => {
+              await context.commentOperations.createComment({
+                content: snapshot.value,
+                thread_id: 'draft',
+                mentions: messageMentions(snapshot.mentions),
+                attachments: messageAttachments(snapshot.attachments),
+              });
             }}
-          >
-            <Comment
-              comment={props.comment}
-              isOwned={ownedComment(props.comment.id)}
-              isActive={props.isActive}
-              isThreaded={replyIds().length > 0}
-              actionsDropdown={props.actionsDropdown}
-            >
-              <Show when={replyIds().length > 0 && lastReplyId()}>
-                <Show when={collapsedCount() > 0}>
-                  <button
-                    class="text-xs text-ink-extra-muted hover:bg-hover text-left ml-5 rounded p-1 px-2 mb-2"
-                    on:click={() => {
-                      batch(() => {
-                        setActiveThread(props.comment.threadId);
-                        setAllRepliesVisible(true);
-                      });
-                    }}
-                  >
-                    {`Show ${collapsedCount()} ${collapsedCount() > 1 ? 'replies' : 'reply'}`}
-                  </button>
-                </Show>
-              </Show>
-            </Comment>
-            {
-              <For each={replyIds()}>
-                {(replyId) => {
-                  const hide = () =>
-                    collapseRepliesList() && replyId !== lastReplyId();
-                  return (
-                    <CommentReply
-                      hide={hide()}
-                      replyId={replyId}
-                      isOwned={ownedComment(replyId)}
-                      isActive={props.isActive}
-                      threadId={props.comment.threadId}
-                      isThreaded={replyId !== lastReplyId()}
-                      actionsDropdown={props.actionsDropdown}
-                      deleteReply={() =>
-                        commentOperations.deleteComment({
-                          commentId: replyId,
-                        })
-                      }
-                      updateReply={(content) => {
-                        return Promise.all([
-                          commentOperations.updateComment(replyId, {
-                            text: content,
-                            threadId: props.comment.threadId,
-                            mentions:
-                              getAndClearCommentMentions(mentionsSignal),
-                          }),
-                        ]);
-                      }}
-                    />
-                  );
-                }}
-              </For>
-            }
-          </div>
-          <Show when={showNewReplyInput() && !props.hideReplyInput}>
-            <div class="mt-2">
-              <NewReplyInput
-                textValue={textValue()}
-                setTextValue={(val) => dispatch({ action: 'text', val })}
-                createReply={(content) => {
-                  if (content.trim() === '') return;
-                  dispatch({ action: 'hard', editing: false });
-                  return commentOperations.createComment({
-                    threadId: props.comment.threadId,
-                    text: content,
-                    mentions: getAndClearCommentMentions(mentionsSignal),
-                  });
-                }}
-                isEditing={isEditingNewReply()}
-                setEditing={(editing) => dispatch({ action: 'hard', editing })}
+          />
+        }
+      >
+        <Show when={context.discussionSource}>
+          {(source) => (
+            <DiscussionProvider source={source()}>
+              <DiscussionThreadView
+                thread={viewThread()}
+                hideReplyInput={props.hideReplyInput}
+                onEditingChange={context.setMessageEditing}
               />
-            </div>
-          </Show>
+            </DiscussionProvider>
+          )}
         </Show>
-      </StaticMarkdownContext>
-    </ThreadContext.Provider>
+      </Show>
+    </StaticMarkdownContext>
   );
 }
 
@@ -327,6 +183,7 @@ export function Thread(props: {
     >
       <Layer depth={2}>
         <div
+          data-comment-thread
           // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
           // pointer-events: none vs. all inside the .pdfOverlayInner div.
           class="shrink-0 border border-edge bg-surface p-2 shadow-md rounded-xl shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"

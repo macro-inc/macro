@@ -59,7 +59,6 @@ import type { CreateChannelRequest } from './generated/schemas/createChannelRequ
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
 import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
-import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateCrmCommentRequest } from './generated/schemas/createCrmCommentRequest';
 import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompanyRequest';
 import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
@@ -86,7 +85,6 @@ import type { CrmCommentThread } from './generated/schemas/crmCommentThread';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
 import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
-import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
 import type { DeleteCrmCommentResult } from './generated/schemas/deleteCrmCommentResult';
 import type { DeleteEntityMentionResponse } from './generated/schemas/deleteEntityMentionResponse';
 import type { DeleteUnthreadedAnchorResponse } from './generated/schemas/deleteUnthreadedAnchorResponse';
@@ -95,7 +93,6 @@ import type { DocumentPreview } from './generated/schemas/documentPreview';
 import type { DocumentResponseMetadataWithContent } from './generated/schemas/documentResponseMetadataWithContent';
 import type { DocumentTeamShareResponse } from './generated/schemas/documentTeamShareResponse';
 import type { EditAnchorResponse } from './generated/schemas/editAnchorResponse';
-import type { EditCommentResponse } from './generated/schemas/editCommentResponse';
 import type { EditCrmCommentRequest } from './generated/schemas/editCrmCommentRequest';
 import type { ExportDocumentResponse } from './generated/schemas/exportDocumentResponse';
 import type { Favorite } from './generated/schemas/favorite';
@@ -156,7 +153,6 @@ import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { SoupPage } from './generated/schemas/soupPage';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
-import type { ThreadResponse } from './generated/schemas/threadResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
 import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
@@ -1982,16 +1978,6 @@ export const storageServiceClient = {
   },
 
   annotations: {
-    async getComments({ documentId }) {
-      return (
-        await dssFetch<ThreadResponse>(
-          `/annotations/comments/document/${documentId}`,
-          {
-            method: 'GET',
-          }
-        )
-      ).map((result) => ({ data: result.data }));
-    },
     async getAnchors({ documentId }) {
       return (
         await dssFetch<AnchorResponse>(
@@ -2002,17 +1988,7 @@ export const storageServiceClient = {
         )
       ).map((result) => ({ data: result.data }));
     },
-    async createComment({ documentId, body }) {
-      return (
-        await dssFetch<CreateCommentResponse>(
-          `/annotations/comments/document/${documentId}`,
-          {
-            method: 'POST',
-            body: JSON.stringify(body),
-          }
-        )
-      ).map((result) => result);
-    },
+
     async createAnchor({ documentId, body }) {
       return (
         await dssFetch<CreateUnthreadedAnchorResponse>(
@@ -2024,17 +2000,7 @@ export const storageServiceClient = {
         )
       ).map((result) => result);
     },
-    async deleteComment({ commentId, body }) {
-      return (
-        await dssFetch<DeleteCommentResponse>(
-          `/annotations/comments/comment/${commentId}`,
-          {
-            method: 'DELETE',
-            body: JSON.stringify(body),
-          }
-        )
-      ).map((result) => result);
-    },
+
     async deleteAnchor({ body }) {
       return (
         await dssFetch<DeleteUnthreadedAnchorResponse>(`/annotations/anchors`, {
@@ -2043,15 +2009,7 @@ export const storageServiceClient = {
         })
       ).map((result) => result);
     },
-    async editComment({ commentId, body }) {
-      return await dssFetch<EditCommentResponse>(
-        `/annotations/comments/comment/${commentId}`,
-        {
-          method: 'PATCH',
-          body: JSON.stringify(body),
-        }
-      );
-    },
+
     async editAnchor({ body }) {
       return (
         await dssFetch<EditAnchorResponse>(`/annotations/anchors`, {

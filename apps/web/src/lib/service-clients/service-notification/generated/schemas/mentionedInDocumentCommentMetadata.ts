@@ -13,7 +13,7 @@ import type { MentionedInDocumentCommentMetadataSubType } from './mentionedInDoc
  */
 export interface MentionedInDocumentCommentMetadata {
   /** the comment id */
-  commentId: number;
+  commentId: string;
   /** The name of the document. */
   documentName: string;
   /** The file type of the document. */
@@ -27,5 +27,5 @@ export interface MentionedInDocumentCommentMetadata {
   /** the text of the comment */
   text: string;
   /** the thread id */
-  threadId: number;
+  threadId: string;
 }

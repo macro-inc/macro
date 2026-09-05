@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT id AS \"id!\", message_id AS \"message_id!\", entity_type AS \"entity_type!\", entity_id AS \"entity_id!\",\n                   width AS \"width?\", height AS \"height?\", created_at AS \"created_at!\"\n            FROM comms_channel_attachments\n            WHERE message_id = ANY($1)\n            ORDER BY created_at ASC\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "width?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "height?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "52745bec94aa845418aba2d1bb7efa94983bf6f0d8e9e20ac2d16d3f3de10d52"
+}

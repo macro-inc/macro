@@ -522,3 +522,82 @@ async fn email_direct_document_grant_wins_over_inherited_view(pool: PgPool) -> a
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn discussion_attachment_access_follows_the_current_parent_grant(pool: PgPool) {
+    insert_user(&pool, OWNER_WITHOUT_TEAM).await.unwrap();
+    let viewer: MacroUserIdStr<'_> = "macro|viewer@example.com".try_into().unwrap();
+    let parent =
+        insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, Some("PUBLIC"), Some("comment"))
+            .await
+            .unwrap();
+    let file = insert_link_shared_document(&pool, OWNER_WITHOUT_TEAM, None, None)
+        .await
+        .unwrap();
+    let sources = SourceIds(vec![viewer.to_string()]);
+    assert_eq!(
+        get_document_access(&pool, &file, &sources, Some(&viewer.0))
+            .await
+            .unwrap(),
+        None
+    );
+    let root = Uuid::new_v4();
+    sqlx::query!("INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content) VALUES ($1, 'document', $2, $3, 'Attached file')",
+        root, parent.to_string(), OWNER_WITHOUT_TEAM).execute(&pool).await.unwrap();
+    sqlx::query!("INSERT INTO comms_attachments (id, message_id, entity_type, entity_id) VALUES ($1, $2, 'document', $3)",
+        Uuid::new_v4(), root, file.to_string()).execute(&pool).await.unwrap();
+    assert_eq!(
+        get_document_access(&pool, &file, &sources, Some(&viewer.0))
+            .await
+            .unwrap(),
+        Some(AccessLevel::View)
+    );
+    sqlx::query!(r#"UPDATE "SharePermission" s SET "linkShare" = NULL, "linkShareAccessLevel" = NULL FROM "DocumentPermission" p WHERE p."sharePermissionId" = s.id AND p."documentId" = $1"#,
+        parent.to_string()).execute(&pool).await.unwrap();
+    assert_eq!(
+        get_document_access(&pool, &file, &sources, Some(&viewer.0))
+            .await
+            .unwrap(),
+        None
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn historical_string_document_ids_keep_owner_access_without_uuid_coercion(pool: PgPool) {
+    insert_user(&pool, OWNER_WITHOUT_TEAM).await.unwrap();
+    sqlx::query!(r#"INSERT INTO "Document" (id, name, owner) VALUES ('historical-document', 'Historical', $1)"#, OWNER_WITHOUT_TEAM)
+        .execute(&pool).await.unwrap();
+    let owner: MacroUserIdStr<'_> = OWNER_WITHOUT_TEAM.try_into().unwrap();
+    assert_eq!(
+        get_legacy_document_access(
+            &pool,
+            "historical-document",
+            &SourceIds(vec![owner.to_string()]),
+            Some(&owner.0)
+        )
+        .await
+        .unwrap(),
+        Some(AccessLevel::Owner)
+    );
+    assert_eq!(
+        get_legacy_document_access(&pool, "historical-document", &SourceIds(vec![]), None)
+            .await
+            .unwrap(),
+        None
+    );
+    sqlx::query!(r#"UPDATE "Document" SET "deletedAt" = now() WHERE id = 'historical-document'"#)
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        get_legacy_document_access(
+            &pool,
+            "historical-document",
+            &SourceIds(vec![owner.to_string()]),
+            Some(&owner.0)
+        )
+        .await
+        .unwrap(),
+        None
+    );
+}

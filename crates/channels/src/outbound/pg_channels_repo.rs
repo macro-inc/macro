@@ -385,7 +385,7 @@ where
         UserIdRow,
         r#"
         WITH message_channel AS (
-            SELECT channel_id FROM comms_messages WHERE id = $1
+            SELECT channel_id FROM comms_channel_messages WHERE id = $1
         ),
         mentions_to_insert AS (
             SELECT t.entity_type, t.entity_id
@@ -457,8 +457,8 @@ async fn get_message_owner(
     let row = sqlx::query_as!(
         SenderIdRow,
         r#"
-        SELECT sender_id
-        FROM comms_messages
+        SELECT sender_id AS "sender_id!"
+        FROM comms_channel_messages
         WHERE id = $1 AND channel_id = $2 AND deleted_at IS NULL
         ORDER BY created_at ASC
         "#,
@@ -485,14 +485,14 @@ async fn get_channel_participants_for_thread_id(
         r#"
         SELECT DISTINCT id AS "user_id!" FROM (
             SELECT m.sender_id AS id
-            FROM comms_messages m
+            FROM comms_channel_messages m
             JOIN comms_channel_participants cp
               ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
             FROM comms_entity_mentions em
-            JOIN comms_messages m ON m.id::text = em.source_entity_id
+            JOIN comms_channel_messages m ON m.id::text = em.source_entity_id
             JOIN comms_channel_participants cp
               ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
             WHERE (m.id = $1 OR m.thread_id = $1)
@@ -1091,7 +1091,7 @@ fn push_channel_thread_participant_filter_expr(
               AND pcp.left_at IS NULL
         ) AND EXISTS (
             SELECT 1
-            FROM comms_messages tm
+            FROM comms_channel_messages tm
             WHERE (tm.id = m.id OR tm.thread_id = m.id)
               AND tm.deleted_at IS NULL
               AND (
@@ -1179,11 +1179,11 @@ fn build_channel_thread_rows_query(
             m.updated_at AS updated_at,
             m.edited_at::timestamptz AS edited_at,
             m.deleted_at::timestamptz AS deleted_at
-        FROM comms_messages m
+        FROM comms_channel_messages m
         INNER JOIN user_channels c ON c.id = m.channel_id
         LEFT JOIN LATERAL (
             SELECT MAX(reply.updated_at) AS latest_reply_updated_at
-            FROM comms_messages reply
+            FROM comms_channel_messages reply
             WHERE reply.thread_id = m.id
               AND reply.deleted_at IS NULL
         ) thread_stats ON TRUE
@@ -1355,7 +1355,7 @@ impl ChannelListRepo for PgChannelsRepo {
                     ),
                     '{}'::text[]
                 ) AS mentions
-            FROM comms_messages m
+            FROM comms_channel_messages m
             WHERE m.channel_id = i.channel_id
               AND m.deleted_at IS NULL
             ORDER BY m.created_at DESC
@@ -1379,7 +1379,7 @@ impl ChannelListRepo for PgChannelsRepo {
                     ),
                     '{}'::text[]
                 ) AS mentions
-            FROM comms_messages m
+            FROM comms_channel_messages m
             WHERE m.channel_id = i.channel_id
               AND m.deleted_at IS NULL
               AND m.thread_id IS NULL
@@ -1688,7 +1688,7 @@ impl ChannelAttachmentRepo for PgChannelsRepo {
                 ),
                 '{}'::text[]
             ) AS "mentions!"
-        FROM comms_messages m
+        FROM comms_channel_messages m
         WHERE m.channel_id = $1
           AND m.deleted_at IS NULL
         ORDER BY m.created_at DESC
@@ -1759,20 +1759,20 @@ impl ChannelRepo for PgChannelsRepo {
                     TopLevelRow,
                     r#"
                     SELECT
-                        m.id,
-                        m.channel_id,
-                        m.sender_id,
+                        m.id AS "id!",
+                        m.channel_id AS "channel_id!",
+                        m.sender_id AS "sender_id!",
                         m.triggered_by_user_id,
-                        m.content,
-                        m.created_at,
-                        m.updated_at,
+                        m.content AS "content!",
+                        m.created_at AS "created_at!",
+                        m.updated_at AS "updated_at!",
                         m.edited_at::timestamptz AS "edited_at?",
                         m.deleted_at::timestamptz AS "deleted_at?"
-                    FROM comms_messages m
+                    FROM comms_channel_messages m
                     WHERE m.channel_id = $1
                       AND m.thread_id IS NULL
                       AND (m.deleted_at IS NULL OR EXISTS (
-                          SELECT 1 FROM comms_messages r
+                          SELECT 1 FROM comms_channel_messages r
                           WHERE r.thread_id = m.id AND r.deleted_at IS NULL
                       ))
                       AND ($2::timestamptz IS NULL OR (m.created_at, m.id) < ($2, $3))
@@ -1786,7 +1786,7 @@ impl ChannelRepo for PgChannelsRepo {
                               AND ($9::timestamptz IS NULL OR m.created_at < $9)
                           )
                           OR EXISTS (
-                              SELECT 1 FROM comms_messages r
+                              SELECT 1 FROM comms_channel_messages r
                               WHERE r.thread_id = m.id
                                 AND r.deleted_at IS NULL
                                 AND ($8::timestamptz IS NULL OR r.created_at >= $8)
@@ -1798,7 +1798,7 @@ impl ChannelRepo for PgChannelsRepo {
                               SELECT 1
                               FROM notification n
                               JOIN user_notification un ON un.notification_id = n.id
-                              JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
+                              JOIN comms_channel_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
                               WHERE un.user_id = $13::text
                                 AND un.deleted_at IS NULL
                                 AND un.done = $11
@@ -1813,7 +1813,7 @@ impl ChannelRepo for PgChannelsRepo {
                               SELECT 1
                               FROM notification n
                               JOIN user_notification un ON un.notification_id = n.id
-                              JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
+                              JOIN comms_channel_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
                               WHERE un.user_id = $13::text
                                 AND un.deleted_at IS NULL
                                 AND (un.seen_at IS NOT NULL) = $12
@@ -1852,20 +1852,20 @@ impl ChannelRepo for PgChannelsRepo {
                     TopLevelRow,
                     r#"
                     SELECT
-                        m.id,
-                        m.channel_id,
-                        m.sender_id,
+                        m.id AS "id!",
+                        m.channel_id AS "channel_id!",
+                        m.sender_id AS "sender_id!",
                         m.triggered_by_user_id,
-                        m.content,
-                        m.created_at,
-                        m.updated_at,
+                        m.content AS "content!",
+                        m.created_at AS "created_at!",
+                        m.updated_at AS "updated_at!",
                         m.edited_at::timestamptz AS "edited_at?",
                         m.deleted_at::timestamptz AS "deleted_at?"
-                    FROM comms_messages m
+                    FROM comms_channel_messages m
                     WHERE m.channel_id = $1
                       AND m.thread_id IS NULL
                       AND (m.deleted_at IS NULL OR EXISTS (
-                          SELECT 1 FROM comms_messages r
+                          SELECT 1 FROM comms_channel_messages r
                           WHERE r.thread_id = m.id AND r.deleted_at IS NULL
                       ))
                       AND ($2::timestamptz IS NOT NULL AND (m.created_at, m.id) > ($2, $3))
@@ -1879,7 +1879,7 @@ impl ChannelRepo for PgChannelsRepo {
                               AND ($9::timestamptz IS NULL OR m.created_at < $9)
                           )
                           OR EXISTS (
-                              SELECT 1 FROM comms_messages r
+                              SELECT 1 FROM comms_channel_messages r
                               WHERE r.thread_id = m.id
                                 AND r.deleted_at IS NULL
                                 AND ($8::timestamptz IS NULL OR r.created_at >= $8)
@@ -1891,7 +1891,7 @@ impl ChannelRepo for PgChannelsRepo {
                               SELECT 1
                               FROM notification n
                               JOIN user_notification un ON un.notification_id = n.id
-                              JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
+                              JOIN comms_channel_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
                               WHERE un.user_id = $13::text
                                 AND un.deleted_at IS NULL
                                 AND un.done = $11
@@ -1906,7 +1906,7 @@ impl ChannelRepo for PgChannelsRepo {
                               SELECT 1
                               FROM notification n
                               JOIN user_notification un ON un.notification_id = n.id
-                              JOIN comms_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
+                              JOIN comms_channel_messages msg ON msg.id = (n.metadata->>'messageId')::uuid
                               WHERE un.user_id = $13::text
                                 AND un.deleted_at IS NULL
                                 AND (un.seen_at IS NOT NULL) = $12
@@ -2004,7 +2004,7 @@ impl ChannelRepo for PgChannelsRepo {
                         PARTITION BY r.thread_id
                         ORDER BY r.created_at ASC, r.id ASC
                     ) AS rn
-                FROM comms_messages r
+                FROM comms_channel_messages r
                 WHERE r.thread_id = ANY($1) AND r.deleted_at IS NULL
             ) sub
             WHERE rn <= $2
@@ -2044,15 +2044,15 @@ impl ChannelRepo for PgChannelsRepo {
             ThreadReplyOnlyRow,
             r#"
             SELECT
-                id,
+                id AS "id!",
                 thread_id AS "thread_id!",
-                sender_id,
+                sender_id AS "sender_id!",
                 triggered_by_user_id,
-                content,
-                created_at,
-                updated_at,
+                content AS "content!",
+                created_at AS "created_at!",
+                updated_at AS "updated_at!",
                 edited_at::timestamptz AS "edited_at?"
-            FROM comms_messages
+            FROM comms_channel_messages
             WHERE thread_id = $1
               AND deleted_at IS NULL
             ORDER BY created_at ASC, id ASC
@@ -2135,9 +2135,9 @@ impl ChannelRepo for PgChannelsRepo {
         let rows = sqlx::query_as!(
             AttachmentRow,
             r#"
-            SELECT id, message_id, entity_type, entity_id,
-                   width AS "width?", height AS "height?", created_at
-            FROM comms_attachments
+            SELECT id AS "id!", message_id AS "message_id!", entity_type AS "entity_type!", entity_id AS "entity_id!",
+                   width AS "width?", height AS "height?", created_at AS "created_at!"
+            FROM comms_channel_attachments
             WHERE message_id = ANY($1)
             ORDER BY created_at ASC
             "#,
@@ -2181,11 +2181,11 @@ impl ChannelRepo for PgChannelsRepo {
         let rows = sqlx::query_as!(
             ChannelAttachmentRow,
             r#"
-            SELECT a.id, a.channel_id, a.message_id, m.sender_id,
-                a.entity_type, a.entity_id,
-                a.width AS "width?", a.height AS "height?", a.created_at
-            FROM comms_attachments a
-            JOIN comms_messages m ON m.id = a.message_id
+            SELECT a.id AS "id!", a.channel_id AS "channel_id!", a.message_id AS "message_id!", m.sender_id AS "sender_id!",
+                a.entity_type AS "entity_type!", a.entity_id AS "entity_id!",
+                a.width AS "width?", a.height AS "height?", a.created_at AS "created_at!"
+            FROM comms_channel_attachments a
+            JOIN comms_channel_messages m ON m.id = a.message_id
             WHERE a.channel_id = $1
               AND m.deleted_at IS NULL
               AND ($2::timestamptz IS NULL OR (a.created_at, a.id) < ($2, $3))
@@ -2273,17 +2273,17 @@ impl ChannelRepo for PgChannelsRepo {
             ContextMessageRow,
             r#"
             SELECT
-                id,
-                channel_id,
+                id AS "id!",
+                channel_id AS "channel_id!",
                 thread_id,
-                sender_id,
+                sender_id AS "sender_id!",
                 triggered_by_user_id,
-                content,
-                created_at,
-                updated_at,
+                content AS "content!",
+                created_at AS "created_at!",
+                updated_at AS "updated_at!",
                 edited_at::timestamptz AS "edited_at?",
                 deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages
+            FROM comms_channel_messages
             WHERE id = $1 AND channel_id = $2
             "#,
             message_id,
@@ -2300,17 +2300,17 @@ impl ChannelRepo for PgChannelsRepo {
             ContextMessageRow,
             r#"
             SELECT
-                id,
-                channel_id,
+                id AS "id!",
+                channel_id AS "channel_id!",
                 thread_id,
-                sender_id,
+                sender_id AS "sender_id!",
                 triggered_by_user_id,
-                content,
-                created_at,
-                updated_at,
+                content AS "content!",
+                created_at AS "created_at!",
+                updated_at AS "updated_at!",
                 edited_at::timestamptz AS "edited_at?",
                 deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages
+            FROM comms_channel_messages
             WHERE channel_id = $1
               AND (created_at, id) < ($2, $3)
             ORDER BY created_at DESC, id DESC
@@ -2329,17 +2329,17 @@ impl ChannelRepo for PgChannelsRepo {
             ContextMessageRow,
             r#"
             SELECT
-                id,
-                channel_id,
+                id AS "id!",
+                channel_id AS "channel_id!",
                 thread_id,
-                sender_id,
+                sender_id AS "sender_id!",
                 triggered_by_user_id,
-                content,
-                created_at,
-                updated_at,
+                content AS "content!",
+                created_at AS "created_at!",
+                updated_at AS "updated_at!",
                 edited_at::timestamptz AS "edited_at?",
                 deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages
+            FROM comms_channel_messages
             WHERE channel_id = $1
               AND (created_at, id) > ($2, $3)
             ORDER BY created_at ASC, id ASC
@@ -2377,16 +2377,16 @@ impl ChannelRepo for PgChannelsRepo {
                 AttachmentChannelReference,
                 r#"
                 SELECT
-                    a.channel_id                     AS "channel_id: uuid::Uuid",
+                    a.channel_id                     AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
-                    a.message_id                     AS "message_id: uuid::Uuid",
+                    a.message_id                     AS "message_id!: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
                     m.sender_id                      AS "sender_id!",               -- String
                     m.content                        AS "message_content!",         -- String
                     m.created_at                     AS "message_created_at!: chrono::DateTime<chrono::Utc>",
                     a.created_at                     AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
-                FROM comms_attachments a
-                JOIN comms_messages m ON a.message_id = m.id
+                FROM comms_channel_attachments a
+                JOIN comms_channel_messages m ON a.message_id = m.id
                 JOIN comms_channels c ON a.channel_id = c.id
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
                 WHERE a.entity_type = ANY($1)
@@ -2410,16 +2410,16 @@ impl ChannelRepo for PgChannelsRepo {
                 AttachmentChannelReference,
                 r#"
                 SELECT
-                    m.channel_id                     AS "channel_id: uuid::Uuid",
+                    m.channel_id                     AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
-                    m.id                             AS "message_id: uuid::Uuid",
+                    m.id                             AS "message_id!: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
                     m.sender_id                      AS "sender_id!",               -- String
                     m.content                        AS "message_content!",         -- String
                     m.created_at                     AS "message_created_at!: chrono::DateTime<chrono::Utc>",
                     em.created_at                    AS "attachment_created_at!: chrono::DateTime<chrono::Utc>"
                 FROM comms_entity_mentions em
-                JOIN comms_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
+                JOIN comms_channel_messages m ON (em.source_entity_id = m.id::text AND em.source_entity_type = 'message')
                 JOIN comms_channels c ON m.channel_id = c.id
                 JOIN comms_channel_participants cp ON cp.channel_id = c.id
                 WHERE em.entity_type = ANY($1)
@@ -2520,18 +2520,18 @@ impl ChannelRepo for PgChannelsRepo {
             TopLevelRow,
             r#"
             SELECT
-                m.id,
-                m.channel_id,
-                m.sender_id,
+                m.id AS "id!",
+                m.channel_id AS "channel_id!",
+                m.sender_id AS "sender_id!",
                 m.triggered_by_user_id,
-                m.content,
-                m.created_at,
-                m.updated_at,
+                m.content AS "content!",
+                m.created_at AS "created_at!",
+                m.updated_at AS "updated_at!",
                 m.edited_at::timestamptz AS "edited_at?",
                 m.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages m
+            FROM comms_channel_messages m
             WHERE m.id = COALESCE(
-                (SELECT thread_id FROM comms_messages WHERE id = $1 AND channel_id = $2),
+                (SELECT thread_id FROM comms_channel_messages WHERE id = $1 AND channel_id = $2),
                 $1
             )
             AND m.channel_id = $2
@@ -2565,8 +2565,8 @@ impl ChannelRepo for PgChannelsRepo {
         let row = sqlx::query_as!(
             ResolvedMessageRow,
             r#"
-            SELECT id, channel_id, thread_id, created_at
-            FROM comms_messages
+            SELECT id AS "id!", channel_id AS "channel_id!", thread_id, created_at AS "created_at!"
+            FROM comms_channel_messages
             WHERE id = $1
               AND channel_id = $2
             "#,
@@ -2606,20 +2606,20 @@ impl ChannelRepo for PgChannelsRepo {
             TopLevelRow,
             r#"
             SELECT
-                m.id,
-                m.channel_id,
-                m.sender_id,
+                m.id AS "id!",
+                m.channel_id AS "channel_id!",
+                m.sender_id AS "sender_id!",
                 m.triggered_by_user_id,
-                m.content,
-                m.created_at,
-                m.updated_at,
+                m.content AS "content!",
+                m.created_at AS "created_at!",
+                m.updated_at AS "updated_at!",
                 m.edited_at::timestamptz AS "edited_at?",
                 m.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages m
+            FROM comms_channel_messages m
             WHERE m.channel_id = $1
               AND m.thread_id IS NULL
               AND (m.deleted_at IS NULL OR EXISTS (
-                  SELECT 1 FROM comms_messages r
+                  SELECT 1 FROM comms_channel_messages r
                   WHERE r.thread_id = m.id AND r.deleted_at IS NULL
               ))
               AND (m.created_at, m.id) < ($2, $3)
@@ -2637,20 +2637,20 @@ impl ChannelRepo for PgChannelsRepo {
             TopLevelRow,
             r#"
             SELECT
-                m.id,
-                m.channel_id,
-                m.sender_id,
+                m.id AS "id!",
+                m.channel_id AS "channel_id!",
+                m.sender_id AS "sender_id!",
                 m.triggered_by_user_id,
-                m.content,
-                m.created_at,
-                m.updated_at,
+                m.content AS "content!",
+                m.created_at AS "created_at!",
+                m.updated_at AS "updated_at!",
                 m.edited_at::timestamptz AS "edited_at?",
                 m.deleted_at::timestamptz AS "deleted_at?"
-            FROM comms_messages m
+            FROM comms_channel_messages m
             WHERE m.channel_id = $1
               AND m.thread_id IS NULL
               AND (m.deleted_at IS NULL OR EXISTS (
-                  SELECT 1 FROM comms_messages r
+                  SELECT 1 FROM comms_channel_messages r
                   WHERE r.thread_id = m.id AND r.deleted_at IS NULL
               ))
               AND (m.created_at, m.id) > ($2, $3)
@@ -3294,11 +3294,11 @@ impl ChannelRepo for PgChannelsRepo {
         let row = sqlx::query_as!(
             MutatedMessageRow,
             r#"
-            INSERT INTO comms_messages (id, channel_id, sender_id, triggered_by_user_id, content, thread_id)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO comms_messages (id, parent_entity_id, sender_id, triggered_by_user_id, content, thread_id, parent_entity_type)
+            VALUES ($1, $2::uuid::text, $3, $4, $5, $6, 'channel')
             RETURNING
                 id,
-                channel_id,
+                parent_entity_id::uuid AS "channel_id!",
                 sender_id,
                 triggered_by_user_id,
                 content,
@@ -3381,14 +3381,13 @@ impl ChannelRepo for PgChannelsRepo {
                 INSERT INTO comms_attachments (
                     id,
                     message_id,
-                    channel_id,
                     entity_type,
                     entity_id,
                     width,
                     height
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id, message_id, channel_id, entity_type, entity_id, width, height, created_at
+                SELECT $1, $2, $4, $5, $6, $7 FROM comms_channel_messages WHERE id = $2 AND channel_id = $3
+                RETURNING id AS "id!", message_id AS "message_id!", $3::uuid AS "channel_id!", entity_type AS "entity_type!", entity_id AS "entity_id!", width, height, created_at AS "created_at!"
                 "#,
                 macro_uuid::generate_uuid_v7(),
                 message_id,
@@ -3412,8 +3411,8 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(sqlx::query_as!(
             MutatedAttachmentRow,
             r#"
-                SELECT id, message_id, channel_id, entity_type, entity_id, width, height, created_at
-                FROM comms_attachments
+                SELECT id AS "id!", message_id AS "message_id!", channel_id AS "channel_id!", entity_type AS "entity_type!", entity_id AS "entity_id!", width, height, created_at AS "created_at!"
+                FROM comms_channel_attachments
                 WHERE message_id = $1
                 "#,
             message_id,
@@ -3432,7 +3431,7 @@ impl ChannelRepo for PgChannelsRepo {
         sqlx::query!(
             r#"
             DELETE FROM comms_attachments
-            WHERE id = ANY($1)
+            WHERE id = ANY($1) AND message_id IN (SELECT id FROM comms_channel_messages)
             "#,
             &attachment_ids,
         )
@@ -3532,7 +3531,7 @@ impl ChannelRepo for PgChannelsRepo {
         let row = sqlx::query_as!(
             MutatedMessageRow,
             r#"
-            UPDATE comms_messages
+            UPDATE comms_channel_messages
             SET
                 updated_at = NOW(),
                 edited_at = NOW(),
@@ -3542,13 +3541,13 @@ impl ChannelRepo for PgChannelsRepo {
                 END
             WHERE id = $1
             RETURNING
-                id,
-                channel_id,
-                sender_id,
+                id AS "id!",
+                channel_id AS "channel_id!",
+                sender_id AS "sender_id!",
                 triggered_by_user_id,
-                content,
-                created_at,
-                updated_at,
+                content AS "content!",
+                created_at AS "created_at!",
+                updated_at AS "updated_at!",
                 thread_id,
                 edited_at::timestamptz AS "edited_at?",
                 deleted_at::timestamptz AS "deleted_at?"
@@ -3571,17 +3570,17 @@ impl ChannelRepo for PgChannelsRepo {
         let row = sqlx::query_as!(
             MutatedMessageRow,
             r#"
-            UPDATE comms_messages
+            UPDATE comms_channel_messages
             SET content = $1, updated_at = NOW(), edited_at = NOW()
             WHERE id = $2 AND channel_id = $3
             RETURNING
-                id,
-                channel_id,
-                sender_id,
+                id AS "id!",
+                channel_id AS "channel_id!",
+                sender_id AS "sender_id!",
                 triggered_by_user_id,
-                content,
-                created_at,
-                updated_at,
+                content AS "content!",
+                created_at AS "created_at!",
+                updated_at AS "updated_at!",
                 thread_id,
                 edited_at::timestamptz AS "edited_at?",
                 deleted_at::timestamptz AS "deleted_at?"
@@ -3603,17 +3602,17 @@ impl ChannelRepo for PgChannelsRepo {
         let row = sqlx::query_as!(
             MutatedMessageRow,
             r#"
-            UPDATE comms_messages
+            UPDATE comms_channel_messages
             SET content = '', updated_at = NOW(), deleted_at = NOW()
             WHERE id = $1 AND channel_id = $2
             RETURNING
-                id,
-                channel_id,
-                sender_id,
+                id AS "id!",
+                channel_id AS "channel_id!",
+                sender_id AS "sender_id!",
                 triggered_by_user_id,
-                content,
-                created_at,
-                updated_at,
+                content AS "content!",
+                created_at AS "created_at!",
+                updated_at AS "updated_at!",
                 thread_id,
                 edited_at::timestamptz AS "edited_at?",
                 deleted_at::timestamptz AS "deleted_at?"
@@ -3823,7 +3822,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             WITH message AS (
                 SELECT id
-                FROM comms_messages
+                FROM comms_channel_messages
                 WHERE id = $2 AND channel_id = $1
             ),
             inserted AS (
@@ -3860,7 +3859,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             WITH message AS (
                 SELECT id
-                FROM comms_messages
+                FROM comms_channel_messages
                 WHERE id = $2 AND channel_id = $1
             ),
             deleted AS (
@@ -3896,7 +3895,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             SELECT r.emoji, r.user_id, r.created_at
             FROM comms_reactions r
-            JOIN comms_messages m ON m.id = r.message_id
+            JOIN comms_channel_messages m ON m.id = r.message_id
             WHERE r.message_id = $1 AND m.channel_id = $2
             "#,
             message_id,

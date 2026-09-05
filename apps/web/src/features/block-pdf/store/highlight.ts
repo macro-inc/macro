@@ -11,7 +11,7 @@ import { produce, reconcile } from 'solid-js/store';
 import { Highlight, type IHighlight } from '../model/Highlight';
 import {
   anchorsResource,
-  commentThreadsResource,
+  documentMessageThreads,
   useCreateUnthreadedHighlightResource,
   useDeleteUnthreadedHighlightResource,
 } from './commentsResource';
@@ -36,14 +36,13 @@ createBlockEffect(() => {
   const anchors = anchorsData();
   if (!anchors || anchors.length === 0) return;
 
-  const [commentThreadsData] = commentThreadsResource;
-  const commentThreads = commentThreadsData() ?? [];
+  const commentThreads = documentMessageThreads();
 
   const highlightAnchors = anchors.filter((a) => a.anchorType === 'highlight');
 
   const mappedAnchors = highlightAnchors.flatMap((a) => {
     const commentThread = commentThreads.find(
-      (ct) => ct.thread.threadId === a.threadId
+      (ct) => ct.state.root_id === a.threadId
     );
     // this is an error but probably resolves eventually as the data is fetched asynchronously
     if (!commentThread && a.threadId) {
@@ -72,12 +71,12 @@ createBlockEffect(() => {
       },
       thread: commentThread
         ? {
-            threadId: commentThread.thread.threadId,
-            rootId: commentThread.comments[0].commentId,
+            threadId: commentThread.state.root_id,
+            rootId: commentThread.root.id,
             anchorId: a.uuid,
             page: a.page,
-            comments: commentThread.comments,
-            isResolved: commentThread.thread.resolved,
+            comments: [commentThread.root, ...commentThread.replies],
+            isResolved: commentThread.state.resolved,
           }
         : null,
     };

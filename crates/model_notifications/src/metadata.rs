@@ -1152,9 +1152,9 @@ pub struct MentionedInDocumentCommentMetadata {
     /// The mention ID.
     pub mention_id: String,
     /// the comment id
-    pub comment_id: i64,
+    pub comment_id: Uuid,
     /// the thread id
-    pub thread_id: i64,
+    pub thread_id: Uuid,
     /// the text of the comment
     pub text: String,
     #[serde(default)]
@@ -1200,9 +1200,9 @@ pub struct RepliedToDocumentCommentThreadMetadata {
     #[serde(default)]
     pub sub_type: Option<NotificationDocumentSubType>,
     /// the comment id
-    pub comment_id: i64,
+    pub comment_id: Uuid,
     /// the thread id
-    pub thread_id: i64,
+    pub thread_id: Uuid,
     /// the text of the comment
     pub text: String,
     #[serde(default)]
@@ -1272,9 +1272,9 @@ pub struct CommentedOnDocumentMetadata {
     #[serde(default)]
     pub sub_type: Option<NotificationDocumentSubType>,
     /// the comment id
-    pub comment_id: i64,
+    pub comment_id: Uuid,
     /// the thread id
-    pub thread_id: i64,
+    pub thread_id: Uuid,
     /// the text of the comment
     pub text: String,
     #[serde(default)]
@@ -1325,6 +1325,78 @@ impl NotificationExtIos for CommentedOnDocumentMetadata {
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
         alert_apns(self, sender_id, notification_id, profile_pic).ok()
+    }
+}
+
+/// Reason for an internal email discussion notification.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum EmailCommentReason {
+    /// The recipient was explicitly mentioned.
+    Mention,
+    /// Someone replied to a discussion the recipient participated in.
+    Reply,
+    /// Someone commented on the recipient's email thread.
+    Comment,
+}
+
+/// An internal comment on an email thread, distinct from an incoming email.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailThreadCommentMetadata {
+    /// Subject of the parent email thread.
+    pub subject: String,
+    /// Shared message UUID.
+    pub message_id: Uuid,
+    /// Root message UUID, distinct from the parent email thread ID.
+    pub thread_id: Uuid,
+    /// Body of the internal comment.
+    pub text: String,
+    /// Context used to word the notification.
+    pub reason: EmailCommentReason,
+}
+
+impl Notification for EmailThreadCommentMetadata {
+    const TYPE_NAME: &'static str = "email_thread_comment";
+}
+
+impl NotificationTitle for EmailThreadCommentMetadata {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let sender =
+            sender_id.ok_or_else(|| report!("email comment notification requires sender"))?;
+        let name = sender.0.email_part();
+        let action = match self.reason {
+            EmailCommentReason::Mention => "mentioned you in a comment on",
+            EmailCommentReason::Reply => "replied to a comment on",
+            EmailCommentReason::Comment => "commented on",
+        };
+        Ok(format!("{} {action} {}", name.email_str(), self.subject))
+    }
+
+    fn format_body(&self, _: Option<MacroUserIdStr<'_>>) -> Result<String, rootcause::Report> {
+        parse_message_plain_text(&self.text)
+    }
+}
+
+impl NotificationExtIos for EmailThreadCommentMetadata {
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(Self::TYPE_NAME)
+            .append(&entity.entity_id)
+            .append(&self.thread_id.to_string())
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender_id, notification_id, None).ok()
     }
 }
 

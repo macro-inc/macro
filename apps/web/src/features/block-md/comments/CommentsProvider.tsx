@@ -1,3 +1,4 @@
+import { useBlockId } from '@core/block';
 import { isRoot, type Reply, type Root } from '@core/comments/commentType';
 import {
   isWrapperWithIds,
@@ -12,6 +13,7 @@ import {
 import { useUserId } from '@core/context/user';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { CommentNode } from '@macro-inc/lexical-core';
+import { useMessageLink } from '@queries/messages';
 import { COMMAND_PRIORITY_LOW, SELECTION_CHANGE_COMMAND } from 'lexical';
 import {
   type Accessor,
@@ -22,8 +24,8 @@ import {
   useContext,
   type VoidComponent,
 } from 'solid-js';
-import { reconcile } from 'solid-js/store';
-import { useDeleteComment, useDeleteNewComments } from './commentOperations';
+import { createStore, reconcile } from 'solid-js/store';
+import { useDeleteNewComments } from './commentOperations';
 import {
   activeCommentThreadSignal,
   activeMarkIdsSignal,
@@ -34,10 +36,8 @@ import {
   markStore,
   threadStore,
 } from './commentStore';
-import { commentThreadsResource, sortComments } from './commentsResource';
-import type { Mark, ThreadMetadata, ThreadStore } from './commentType';
-
-const DISCUSSION_MARK_PREFIX = 'DISCUSSION:';
+import { documentMessagesQuery } from './commentsResource';
+import type { Mark, ThreadStore } from './commentType';
 
 function getHighlightThread(
   highlight: Mark
@@ -49,8 +49,8 @@ function getHighlightThread(
   const rootComment = comments[0];
   const commentBase = {
     isNew: false,
-    threadId: rootComment.threadId,
-    rootId: rootComment.commentId,
+    threadId: rootComment.thread_id ?? rootComment.id,
+    rootId: rootComment.id,
     anchorId: highlight.id,
   };
 
@@ -59,22 +59,25 @@ function getHighlightThread(
     const comment = comments[i];
     replies.push({
       ...commentBase,
-      id: comment.commentId,
-      createdAt: comment.createdAt,
-      owner: comment.owner,
-      author: comment.sender || comment.owner,
-      text: comment.text,
+      id: comment.id,
+      createdAt: comment.created_at,
+      owner: comment.sender_id,
+      author: comment.imported_author?.name ?? comment.sender_id,
+      text: comment.content,
+      message: comment,
     });
   }
 
   const root: Root = {
     ...commentBase,
-    id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
-    owner: rootComment.owner,
-    author: rootComment.sender || rootComment.owner,
-    text: rootComment.text,
+    id: rootComment.id,
+    createdAt: rootComment.created_at,
+    owner: rootComment.sender_id,
+    author: rootComment.imported_author?.name ?? rootComment.sender_id,
+    text: rootComment.content,
+    message: rootComment,
     children: replies.map((r) => r.id),
+    resolved: thread.isResolved,
   };
 
   return { root, replies };
@@ -84,6 +87,11 @@ export const CommentsProvider: VoidComponent<{
   activeComment?: Accessor<string | undefined>;
   loroManager: LoroManager;
 }> = (props) => {
+  const documentId = useBlockId();
+  const targetCommentId = useMessageLink(
+    () => ({ type: 'document', id: documentId }),
+    () => props.activeComment?.()
+  );
   const wrapper = useContext(LexicalWrapperContext);
   if (!isWrapperWithIds(wrapper)) {
     console.error('Cannot use comment plugin without node ids.');
@@ -94,7 +102,14 @@ export const CommentsProvider: VoidComponent<{
   const currentPeerId = () => props.loroManager.peerIdStr;
 
   const [marks, setMarks] = markStore;
-  const [commentThreadsData] = commentThreadsResource;
+  // Keep every mounted mark available for server bindings, including a draft
+  // from another peer or an older document version. This changes no document data.
+  const [mountedMarks, setMountedMarks] = createStore<
+    Record<string, Record<string, HTMLElement | undefined> | undefined>
+  >({});
+  const messageQuery = documentMessagesQuery();
+  const commentThreadsData = () =>
+    messageQuery?.isSuccess ? (messageQuery.data ?? []) : [];
   const [, setCommentsInitialized] = commentMarksInitializedSignal;
   const [highlightedId, setHighlightedId] = highlightedCommentIdSignal;
   const setActiveMarkIds = activeMarkIdsSignal.set;
@@ -111,9 +126,12 @@ export const CommentsProvider: VoidComponent<{
     isLocal: boolean
   ) => {
     const markNodeKey = markNode.getKey();
+    if (!mountedMarks[markId]) setMountedMarks(markId, {});
+    setMountedMarks(markId, markNodeKey, markElement);
     const existing = marks[markId];
 
-    if (!isDraft && existing) {
+    if (existing && (!isDraft || existing.existsOnServer)) {
+      if (existing.existsOnServer) markElement.classList.remove('draft');
       setMarks(markId, 'markNodes', markNodeKey, markElement);
       return;
     }
@@ -132,26 +150,21 @@ export const CommentsProvider: VoidComponent<{
     });
   };
 
-  const deleteComment = useDeleteComment();
   const deleteNewComments = useDeleteNewComments();
 
   const removeCommentMark = (markId: string, markNodeKey: string) => {
+    if (mountedMarks[markId]) {
+      setMountedMarks(markId, markNodeKey, undefined);
+    }
     const existing = marks[markId];
 
     if (!existing) return;
-    if (existing) {
-      if (Object.keys(existing.markNodes).length <= 1) {
-        setMarks(markId, undefined);
-        const rootId = existing.thread?.rootId;
-        if (!rootId) {
-          return;
-        }
-        deleteComment({ commentId: rootId });
-        return;
-      }
-      setMarks(markId, 'markNodes', markNodeKey, undefined);
+    if (Object.keys(existing.markNodes).length <= 1) {
+      // Removing marked text leaves its conversation in the document discussion list.
+      setMarks(markId, undefined);
       return;
     }
+    setMarks(markId, 'markNodes', markNodeKey, undefined);
   };
 
   // Remove the temporary draft comment when the active thread is cleared
@@ -186,12 +199,12 @@ export const CommentsProvider: VoidComponent<{
       return;
     }
 
-    const threadIds: number[] = [];
+    const threadIds: string[] = [];
     for (const id of activeMarkIds) {
       const mark = marks[id];
       if (!mark) continue;
       if (mark.thread == null) {
-        activeCommentThreadSignal.set(-1);
+        activeCommentThreadSignal.set('draft');
         return;
       } else {
         threadIds.push(mark.thread.threadId);
@@ -222,15 +235,15 @@ export const CommentsProvider: VoidComponent<{
           continue;
         }
         const rootComment: Root = {
-          id: -1,
-          rootId: -1,
+          id: 'draft',
+          rootId: 'draft',
           text: '',
           owner: currentUserId,
           author: currentUserId,
           createdAt: new Date(),
           isNew: true,
           children: [],
-          threadId: -1,
+          threadId: 'draft',
           anchorId: mark.id,
         };
         out.push(rootComment);
@@ -268,41 +281,34 @@ export const CommentsProvider: VoidComponent<{
   // Map server comment threads to mark metadata once marks are initialized
   createEffect(() => {
     if (!commentMarksInitializedSignal()) return;
-    if (commentThreadsData.loading || commentThreadsData.error) return;
+    if (!messageQuery?.isSuccess) return;
 
     const commentThreads = commentThreadsData() ?? [];
     const validAnchorIds = new Set<string>();
 
     const mappedAnchors = commentThreads.map((commentThread) => {
-      const threadMetadata = commentThread.thread.metadata as ThreadMetadata;
-      if (!threadMetadata) {
-        console.error('Unable to parse thread metadata', commentThread);
-        return undefined;
-      }
-      const anchorId = threadMetadata.markId;
-      if (!anchorId) {
-        console.error('Unable to find anchor id');
-        return undefined;
-      }
+      const anchor = commentThread.state.anchor;
+      if (anchor?.type !== 'markdown') return undefined;
+      const anchorId = anchor.mark_id;
       validAnchorIds.add(anchorId);
 
-      const sortedComments = commentThread.comments.sort(sortComments);
+      const sortedComments = [commentThread.root, ...commentThread.replies];
       const rootComment = sortedComments[0];
-      const markNodes = marks[anchorId]?.markNodes;
+      const markNodes = mountedMarks[anchorId];
       if (!markNodes) return undefined;
 
       const highlight: Mark = {
         id: anchorId,
         markNodes: markNodes ?? {},
-        owner: commentThread.thread.owner,
+        owner: commentThread.state.user_id,
         existsOnServer: true,
         isDraft: false,
         thread: {
-          threadId: commentThread.thread.threadId,
-          rootId: rootComment.commentId,
+          threadId: commentThread.state.root_id,
+          rootId: rootComment.id,
           anchorId: anchorId,
           comments: sortedComments,
-          isResolved: commentThread.thread.resolved,
+          isResolved: commentThread.state.resolved,
         },
       };
 
@@ -311,6 +317,9 @@ export const CommentsProvider: VoidComponent<{
 
     for (const anchor of mappedAnchors) {
       if (!anchor) continue;
+      for (const element of Object.values(anchor.markNodes)) {
+        element?.classList.remove('draft');
+      }
       setMarks(anchor.id, anchor);
     }
 
@@ -324,7 +333,7 @@ export const CommentsProvider: VoidComponent<{
   let pendingTargetCommentId: string | undefined;
 
   createEffect(() => {
-    pendingTargetCommentId = props.activeComment?.();
+    pendingTargetCommentId = targetCommentId() ?? undefined;
     setTargetRequest((request) => request + 1);
   });
 
@@ -337,17 +346,15 @@ export const CommentsProvider: VoidComponent<{
     if (!rawId) return;
 
     if (!commentMarksInitializedSignal()) return;
-    const commentId = Number(rawId);
-    if (isNaN(commentId)) return;
+    const commentId = rawId;
 
     const commentThreads = commentThreadsData() ?? [];
     const targetThread = commentThreads.find((thread) =>
-      thread.comments.some((comment) => comment.commentId === commentId)
+      [thread.root, ...thread.replies].some(
+        (comment) => comment.id === commentId
+      )
     );
-    const targetMetadata = targetThread?.thread.metadata as
-      | ThreadMetadata
-      | undefined;
-    if (targetMetadata?.markId?.startsWith(DISCUSSION_MARK_PREFIX)) {
+    if (targetThread && !targetThread.state.anchor) {
       activeCommentThreadSignal.set(null);
       highlightedCommentIdSignal.set(null);
       pendingTargetCommentId = undefined;

@@ -3,21 +3,7 @@ use serde_json::Value;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-use crate::annotations::Mentions;
-
-use super::{Anchor, CommentThread, HighlightType};
-
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateCommentRequest {
-    // if no thread is provided, a new thread will be created
-    pub thread_id: Option<i64>,
-    pub thread_metadata: Option<Value>,
-    pub anchor: Option<AnchorRequest>,
-    pub text: String,
-    pub metadata: Option<Value>,
-    pub mentions: Option<Mentions>,
-}
+use super::{Anchor, HighlightType};
 
 #[derive(Deserialize, PartialEq, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -98,16 +84,6 @@ pub enum CreateUnthreadedPdfAnchorRequest {
 #[serde(rename_all = "kebab-case")]
 pub enum CreateUnthreadedAnchorRequest {
     Pdf(CreateUnthreadedPdfAnchorRequest),
-}
-
-#[derive(Serialize, ToSchema, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct CreateCommentResponse {
-    pub document_id: String,
-    #[serde(flatten)]
-    pub comment_thread: CommentThread,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub anchor: Option<Anchor>,
 }
 
 #[derive(Serialize, ToSchema, Debug)]

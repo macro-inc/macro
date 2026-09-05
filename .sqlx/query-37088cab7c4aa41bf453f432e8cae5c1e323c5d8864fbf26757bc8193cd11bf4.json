@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT a.uuid AS \"uuid!\", a.\"documentId\" AS \"document_id!\", a.owner AS \"owner!\", a.\"threadId\" AS \"thread_id?\", t.user_id AS thread_owner\n            FROM \"PdfHighlightAnchor\" a LEFT JOIN comms_message_threads t ON t.root_id = a.\"threadId\"\n            WHERE $2 AND a.uuid = $1 AND a.\"deletedAt\" IS NULL\n            UNION ALL\n            SELECT a.uuid, a.\"documentId\", a.owner, a.\"threadId\", t.user_id\n            FROM \"PdfPlaceableCommentAnchor\" a JOIN comms_message_threads t ON t.root_id = a.\"threadId\"\n            WHERE NOT $2 AND a.uuid = $1 AND t.deleted_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "uuid!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "document_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "thread_owner",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "37088cab7c4aa41bf453f432e8cae5c1e323c5d8864fbf26757bc8193cd11bf4"
+}

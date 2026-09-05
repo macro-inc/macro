@@ -19,7 +19,7 @@ import { activeCommentThreadSignal, commentsStore } from './commentStore';
 const CONTAINER_PADDING = 80;
 
 /** Maps thread id to height of its measure container */
-type ThreadHeights = Record<number, number>;
+type ThreadHeights = Record<string, number>;
 export const threadHeightStore = createBlockStore<Partial<ThreadHeights>>({});
 
 /** Maps page index to comment layout on that page */

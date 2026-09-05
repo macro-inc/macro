@@ -9,17 +9,15 @@ import {
   MobileDrawer,
   scrollToFocusedInput,
 } from '@components/app/mobile/MobileDrawer';
-import { getAndClearCommentMentions } from '@core/comments';
 import type { CommentOperations, Root } from '@core/comments/commentType';
-import { NewReplyInput } from '@core/comments/Inputs';
+import { DiscussionInput } from '@core/comments/discussion';
 import {
-  CommentsContext,
-  ThreadBody,
-  ThreadContext,
-} from '@core/comments/Thread';
+  messageAttachments,
+  messageMentions,
+} from '@core/comments/discussion/messageAdapter';
+import { CommentsContext, ThreadBody } from '@core/comments/Thread';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
-import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
@@ -59,36 +57,38 @@ function PinnedReplyComposer(props: {
   root: Root;
   createComment: CommentOperations['createComment'];
 }) {
-  const mentionsSignal = createSignal<UserMentionRecord[]>([]);
-  const [text, setText] = createSignal('');
-  const [editing, setEditing] = createSignal(false);
-
+  let clear: (() => void) | undefined;
+  const context = useContext(CommentsContext);
   return (
-    <ThreadContext.Provider value={{ mentionsSignal }}>
-      <StaticMarkdownContext theme={drawerCommentTheme}>
-        <div
-          class="shrink-0 px-3"
-          classList={{ 'pb-(--safe-bottom)': !virtualKeyboardVisible() }}
-        >
-          <NewReplyInput
-            textValue={text()}
-            setTextValue={setText}
-            isEditing={editing()}
-            setEditing={setEditing}
-            deactivateThreadOnCancel={false}
-            createReply={(content) => {
-              if (content.trim() === '') return;
-              setEditing(false);
-              return props.createComment({
-                threadId: props.root.threadId,
-                text: content,
-                mentions: getAndClearCommentMentions(mentionsSignal),
-              });
-            }}
-          />
-        </div>
-      </StaticMarkdownContext>
-    </ThreadContext.Provider>
+    <StaticMarkdownContext theme={drawerCommentTheme}>
+      <div
+        class="shrink-0 px-3"
+        classList={{ 'pb-(--safe-bottom)': !virtualKeyboardVisible() }}
+      >
+        <DiscussionInput
+          input={{ mode: 'reply', placeholder: 'Reply...' }}
+          autofocus={false}
+          onReady={(handle) => {
+            clear = handle.clear;
+          }}
+          onStartTyping={() =>
+            context.discussionSource?.typing?.(props.root.threadId, true)
+          }
+          onStopTyping={() =>
+            context.discussionSource?.typing?.(props.root.threadId, false)
+          }
+          onSend={async (snapshot) => {
+            await props.createComment({
+              thread_id: props.root.threadId,
+              content: snapshot.value,
+              mentions: messageMentions(snapshot.mentions),
+              attachments: messageAttachments(snapshot.attachments),
+            });
+            clear?.();
+          }}
+        />
+      </div>
+    </StaticMarkdownContext>
   );
 }
 
@@ -116,12 +116,12 @@ export function CommentThreadDrawer() {
   // Messages report their inline-edit state; while any edit input is open,
   // the pinned reply composer hides so two inputs never compete.
   const [editingMessageIds, setEditingMessageIds] = createSignal<
-    ReadonlySet<number>
+    ReadonlySet<string>
   >(new Set());
   const messageEditing = () => editingMessageIds().size > 0;
   const drawerCommentsContext = {
     ...parentCommentsContext,
-    setMessageEditing: (commentId: number, editing: boolean) =>
+    setMessageEditing: (commentId: string, editing: boolean) =>
       setEditingMessageIds((prev) => {
         if (prev.has(commentId) === editing) return prev;
         const next = new Set(prev);
@@ -144,7 +144,7 @@ export function CommentThreadDrawer() {
   // hidden, since marks live in the editor itself).
   const orderedThreadIds = createMemo(() => {
     return Object.values(threads)
-      .filter((root): root is Root => !!root && root.threadId !== -1)
+      .filter((root): root is Root => !!root && root.threadId !== 'draft')
       .map((root) => {
         const rect = firstMarkElement(root)?.getBoundingClientRect();
         return {

@@ -93,7 +93,7 @@ export interface IHighlightObj {
   width: number;
   height: number;
   color: IColor;
-  threadId: number | null;
+  threadId: string | null;
   highlightId: string; // uuid of the highlight that contains this rect
   rectId: string; // unique identifier of this rect
   text?: string;
@@ -136,6 +136,11 @@ export function PageOverlay(props: IPageOverlayProps) {
   const termDataStore = keyedTermDataStore();
 
   const onClick = (e: MouseEvent) => {
+    if (
+      e.target instanceof Element &&
+      e.target.closest('[data-comment-thread]')
+    )
+      return;
     if (disablePageViewClick()) return;
 
     if (mode() !== PayloadMode.NoMode) {
@@ -299,7 +304,12 @@ export function PageOverlay(props: IPageOverlayProps) {
 
   const blockElement = blockElementSignal.get;
   onMount(() => {
-    const resetMode = (_e: MouseEvent) => {
+    const resetMode = (event: MouseEvent) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[data-comment-thread]')
+      )
+        return;
       setActiveThreadId(null);
       setMode(PayloadMode.NoMode);
     };

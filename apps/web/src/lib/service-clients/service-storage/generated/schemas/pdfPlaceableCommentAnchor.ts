@@ -15,7 +15,7 @@ export interface PdfPlaceableCommentAnchor {
   page: number;
   rotation: number;
   shouldLockOnSave: boolean;
-  threadId: number;
+  threadId: string;
   uuid: string;
   wasDeleted: boolean;
   wasEdited: boolean;

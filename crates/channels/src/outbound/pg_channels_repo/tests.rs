@@ -1839,7 +1839,7 @@ async fn thread_replies_returns_all_active_replies_oldest_first(
 async fn thread_replies_returns_non_null_edited_at(pool: Pool<Postgres>) -> anyhow::Result<()> {
     sqlx::query(
         r#"
-        UPDATE comms_messages
+        UPDATE comms_channel_messages
         SET edited_at = '2024-01-01 10:05:00'
         WHERE id = '00000000-0000-0000-0000-00000000b003'
         "#,
@@ -2924,11 +2924,10 @@ async fn attachment_references_treats_email_alias_as_thread(
     // Referencium queries 'thread', so the lookup must accept both.
     sqlx::query(
         r#"
-        INSERT INTO comms_attachments (id, message_id, channel_id, entity_type, entity_id, width, height, created_at)
+        INSERT INTO comms_attachments (id, message_id, entity_type, entity_id, width, height, created_at)
         VALUES (
             '00000000-0000-0000-0000-00000000a0e1',
             '00000000-0000-0000-0000-000000000001',
-            '00000000-0000-0000-0000-000000000c01',
             'email',
             'email-share-1',
             NULL,

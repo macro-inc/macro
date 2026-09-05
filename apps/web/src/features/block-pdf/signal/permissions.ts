@@ -46,7 +46,7 @@ export const useOwnedCommentPlaceableSelector = () => {
 export const useOwnedCommentSelector = () => {
   const ownedCommentSelector = createSelector(
     ownedCommentIds,
-    (id: number, owned) => (owned ?? []).includes(id)
+    (id: string, owned) => (owned ?? []).includes(id)
   );
   return ownedCommentSelector;
 };

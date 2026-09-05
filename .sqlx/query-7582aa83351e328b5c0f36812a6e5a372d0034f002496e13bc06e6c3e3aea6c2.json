@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_messages SET content = $2, updated_at = now(), edited_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7582aa83351e328b5c0f36812a6e5a372d0034f002496e13bc06e6c3e3aea6c2"
+}

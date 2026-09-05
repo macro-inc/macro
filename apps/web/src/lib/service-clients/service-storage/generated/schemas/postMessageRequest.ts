@@ -4,7 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { NewChannelAttachment } from './newChannelAttachment';
+import type { NewAttachment } from './newAttachment';
 import type { PostMessageRequestNonce } from './postMessageRequestNonce';
 import type { PostMessageRequestThreadId } from './postMessageRequestThreadId';
 import type { SimpleMention } from './simpleMention';
@@ -14,7 +14,7 @@ import type { SimpleMention } from './simpleMention';
  */
 export interface PostMessageRequest {
   /** Attachments to add after message creation. */
-  attachments: NewChannelAttachment[];
+  attachments: NewAttachment[];
   /** Message body. */
   content: string;
   /** Message mentions. */

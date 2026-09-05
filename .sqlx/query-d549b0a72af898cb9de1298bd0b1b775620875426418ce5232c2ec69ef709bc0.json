@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"PdfHighlightAnchor\" SET \"threadId\" = NULL WHERE \"threadId\" = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d549b0a72af898cb9de1298bd0b1b775620875426418ce5232c2ec69ef709bc0"
+}

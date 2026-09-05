@@ -4,20 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CallStartedMetadata } from './callStartedMetadata';
+import type { ChannelReplyMetadata } from './channelReplyMetadata';
 import type { NotifEventOneOfOnesevenTag } from './notifEventOneOfOnesevenTag';
 
 /**
- * A call has started in a channel the user is a member of.
-
-The `call-started` alias keeps rows persisted before the type name
-was normalized to snake_case (`call_started`) deserializable.
+ * Someone replied to a thread in a channel that the user is part of.
  */
 export type NotifEventOneOfOneseven = {
-  /** A call has started in a channel the user is a member of.
-
-The `call-started` alias keeps rows persisted before the type name
-was normalized to snake_case (`call_started`) deserializable. */
-  content: CallStartedMetadata;
+  /** Someone replied to a thread in a channel that the user is part of. */
+  content: ChannelReplyMetadata;
   tag: NotifEventOneOfOnesevenTag;
 };

@@ -1,5 +1,7 @@
 import { InputActionButton } from '@channel/Input/ActionButton';
+import { createInputAttachmentTracker } from '@channel/Input/attachment-tracker';
 import { useInputCommands } from '@channel/Input/context';
+import { createTypingTracker } from '@channel/Input/create-typing-tracker';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { Input } from '@channel/Input/Input';
 import type {
@@ -9,6 +11,7 @@ import type {
   InputSnapshot,
 } from '@channel/Input/types';
 import { isReplyInput } from '@channel/Input/types';
+import { uploadInputAttachments } from '@channel/Input/upload-attachments';
 import {
   applyInlineFormat,
   applyNodeFormat,
@@ -16,8 +19,10 @@ import {
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
+import { chatRuleset, uploadFile } from '@core/util/upload';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import { isIOS } from '@solid-primitives/platform';
 import { Surface } from '@ui';
@@ -33,6 +38,7 @@ import { createConfiguredDiscussionMarkdownEditor } from './configured-discussio
 
 export type DiscussionInputProps = InputCallbacks & {
   input: InputData;
+  attachmentMode?: 'files' | 'inline-images';
   markdownNamespace?: string;
   participants?: Accessor<IUser[]>;
   onReady?: (handle: InputHandle) => void;
@@ -41,7 +47,7 @@ export type DiscussionInputProps = InputCallbacks & {
   autofocus?: boolean;
 };
 
-function AttachImagesAction() {
+function AttachFilesAction(props: { inlineImages: boolean }) {
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
 
@@ -63,11 +69,11 @@ function AttachImagesAction() {
         type="file"
         class="hidden"
         multiple
-        accept="image/*"
+        accept={props.inlineImages ? 'image/*' : undefined}
         onChange={onAttachImages}
       />
       <InputActionButton
-        label="Attach images"
+        label={props.inlineImages ? 'Attach images' : 'Attach files'}
         onClick={() => fileInputRef?.click()}
       >
         <PaperclipIcon class="size-5" />
@@ -76,11 +82,15 @@ function AttachImagesAction() {
   );
 }
 
-function DefaultActions(props: { input: InputData; isSending: boolean }) {
+function DefaultActions(props: {
+  input: InputData;
+  isSending: boolean;
+  inlineImages: boolean;
+}) {
   return (
     <Input.Actions>
       <Input.Actions.Left>
-        <AttachImagesAction />
+        <AttachFilesAction inlineImages={props.inlineImages} />
         <Input.ToggleFormatAction />
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
@@ -100,18 +110,26 @@ export function DiscussionInput(props: DiscussionInputProps) {
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isSending, setIsSending] = createSignal(false);
   const [isFocused, setIsFocused] = createSignal(false);
+  const attachments = createInputAttachmentTracker({
+    initialAttachments: props.input.attachments,
+  });
+  const typing = createTypingTracker({
+    onStartTyping: () => props.onStartTyping?.(),
+    onStopTyping: () => props.onStopTyping?.(),
+  });
 
   const inputView = () => ({
     ...props.input,
     value: value(),
-    isEmpty: !value().trim(),
-    attachments: [],
+    isEmpty: !value().trim() && !attachments.attachments().length,
+    hasPendingAttachments: attachments.hasPending(),
+    attachments: attachments.attachments(),
     showFormatRibbon: showFormatRibbon(),
   });
 
   const createSnapshot = (): InputSnapshot => ({
     value: value(),
-    attachments: [],
+    attachments: attachments.attachments(),
     mentions: mentions(),
   });
 
@@ -134,6 +152,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
     },
     onChange: (markdown) => {
       setValue(markdown);
+      typing.keystroke();
       props.onChange?.(createSnapshot());
     },
     onEnter: () => {
@@ -150,11 +169,19 @@ export function DiscussionInput(props: DiscussionInputProps) {
     send: async () => {
       if (isSending()) return false;
       const snapshot = createSnapshot();
-      if (!snapshot.value.trim()) return false;
+      if (
+        attachments.hasPending() ||
+        (!snapshot.value.trim() && !snapshot.attachments.length)
+      )
+        return false;
+      typing.stop();
       setIsSending(true);
       try {
         await props.onSend?.(snapshot);
         return true;
+      } catch {
+        toast.failure('Could not send comment. Your draft is still here.');
+        return false;
       } finally {
         setIsSending(false);
       }
@@ -163,18 +190,25 @@ export function DiscussionInput(props: DiscussionInputProps) {
       props.onClose?.(createSnapshot());
     },
     toggleFormatRibbon: () => {
-      setShowFormatRibbon(!showFormatRibbon());
-      props.onToggleFormatRibbon?.(!showFormatRibbon());
+      const show = !showFormatRibbon();
+      setShowFormatRibbon(show);
+      props.onToggleFormatRibbon?.(show);
     },
     attachFiles: async (files: File[]) => {
-      // Insert images into the editor
-      for (const file of files) {
-        await addMediaFromFile(markdownEditor.lexical, file, 'image');
+      if (props.attachmentMode === 'inline-images') {
+        for (const file of files)
+          await addMediaFromFile(markdownEditor.lexical, file, 'image');
+        return;
       }
+      await uploadInputAttachments({
+        files,
+        tracker: attachments,
+        uploadFile: (file) =>
+          uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
+      });
     },
-    removeAttachment: () => {
-      // No-op for discussion input - no attachments to remove
-    },
+    removeAttachment: (attachment: InputSnapshot['attachments'][number]) =>
+      attachments.removeAttachment(attachment.id),
   };
 
   props.onReady?.({
@@ -189,19 +223,16 @@ export function DiscussionInput(props: DiscussionInputProps) {
       }
       setValue('');
       setMentions([]);
+      attachments.clearAttachments();
     },
     focus: () => markdownEditor.controls.focus(),
     send: () => commands.send(),
-    attachFiles: async (files: File[]) => {
-      // Insert images into the editor
-      for (const file of files) {
-        await addMediaFromFile(markdownEditor.lexical, file, 'image');
-      }
-    },
+    attachFiles: (files: File[]) => commands.attachFiles(files),
     restoreSnapshot: (snapshot) => {
       markdownEditor.controls.setMarkdown(snapshot.value);
       setMentions(snapshot.mentions);
       setValue(snapshot.value);
+      attachments.setAttachments(snapshot.attachments);
       markdownEditor.controls.focus();
     },
   });
@@ -251,11 +282,16 @@ export function DiscussionInput(props: DiscussionInputProps) {
               />
             </Input.Editor>
           </Input.EditorShell>
+          <Input.Attachments />
           <Input.Footer>
             <Switch>
               <Match when={props.children}>{props.children}</Match>
               <Match when>
-                <DefaultActions input={inputView()} isSending={isSending()} />
+                <DefaultActions
+                  input={inputView()}
+                  isSending={isSending()}
+                  inlineImages={props.attachmentMode === 'inline-images'}
+                />
               </Match>
             </Switch>
           </Input.Footer>

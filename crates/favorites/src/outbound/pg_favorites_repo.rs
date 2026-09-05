@@ -155,7 +155,7 @@ impl FavoritesRepo for PgFavoritesRepo {
             LEFT JOIN "Chat" c ON f.entity_type = 'chat' AND c.id = f.entity_id
             LEFT JOIN "Project" p ON f.entity_type = 'project' AND p.id = f.entity_id
             LEFT JOIN comms_channels ch ON f.entity_type = 'channel' AND ch.id = fid.entity_uuid
-            LEFT JOIN comms_messages cm ON f.entity_type = 'channel_message' AND cm.id = fid.entity_uuid
+            LEFT JOIN comms_channel_messages cm ON f.entity_type = 'channel_message' AND cm.id = fid.entity_uuid
             WHERE f.user_id = $1
                 AND (f.entity_type <> 'document' OR (d.id IS NOT NULL AND d."deletedAt" IS NULL))
                 AND (f.entity_type <> 'chat' OR (c.id IS NOT NULL AND c."deletedAt" IS NULL))

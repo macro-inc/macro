@@ -22,8 +22,8 @@ export enum PdfShapeType {
 }
 
 export type PdfThreadPayload = {
-  threadId: number;
-  rootId: number;
+  threadId: string;
+  rootId: string;
   anchorId: string;
   page: number;
   comments: IComment[];

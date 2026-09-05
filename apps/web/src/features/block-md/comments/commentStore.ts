@@ -13,8 +13,8 @@ export const markStore = createBlockStore<MarkStore>({});
 
 export const activeMarkIdsSignal = createBlockSignal<string[]>([]);
 
-export const activeCommentThreadSignal = createBlockSignal<number | null>(null);
-export const highlightedCommentIdSignal = createBlockSignal<number | null>(
+export const activeCommentThreadSignal = createBlockSignal<string | null>(null);
+export const highlightedCommentIdSignal = createBlockSignal<string | null>(
   null
 );
 
@@ -24,7 +24,7 @@ export const threadStore = createBlockStore<ThreadStore>({});
 
 export const commentMarksInitializedSignal = createBlockSignal<boolean>(false);
 
-export const highlightedCommentThreadsSignal = createBlockSignal<number[]>([]);
+export const highlightedCommentThreadsSignal = createBlockSignal<string[]>([]);
 
 export const pendingCommentSignal = createBlockSignal<PendingComment[]>([]);
 

@@ -6,10 +6,10 @@
  */
 
 /**
- * Simple entity mention attached to a message.
+ * A mention tracked in a message body.
  */
 export interface SimpleMention {
-  /** Mentioned entity id. */
+  /** Mentioned entity identifier. */
   entity_id: string;
   /** Mentioned entity type. */
   entity_type: string;

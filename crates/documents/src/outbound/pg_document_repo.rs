@@ -22,9 +22,9 @@ use sqlx::Row;
 
 use crate::domain::content::{DocumentContent, DocumentContentState};
 use crate::domain::models::{
-    BranchNameContext, Comment, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
+    BranchNameContext, CommentThread, CopyDocumentRepoArgs, CreateDocumentRepoArgs,
     DocumentTeamShare, EditDocumentRepoArgs, EmailImportRepoOutcome, ImportEmailAttachmentRepoArgs,
-    TeamTaskMetadata, Thread,
+    TeamTaskMetadata,
 };
 use crate::domain::ports::DocumentRepo;
 
@@ -1121,94 +1121,23 @@ impl DocumentRepo for PgDocumentRepo {
         &self,
         document_id: &str,
     ) -> Result<Vec<CommentThread>, Self::Err> {
-        let threads = sqlx::query!(
-            r#"
-            SELECT
-                t.id as "thread_id!",
-                t.resolved as "resolved!",
-                t."documentId" as "document_id!",
-                t."createdAt"::timestamptz as "created_at",
-                t."updatedAt"::timestamptz as "updated_at",
-                t."deletedAt"::timestamptz as "deleted_at",
-                t.metadata as "metadata",
-                t.owner as "owner!"
-            FROM "Thread" t
-            WHERE t."documentId" = $1 AND t."deletedAt" IS NULL
-            "#,
-            document_id,
-        )
-        .map(|row| Thread {
-            thread_id: row.thread_id,
-            resolved: row.resolved,
-            document_id: row.document_id,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-            metadata: row.metadata,
-            owner: row.owner,
-        })
-        .fetch_all(&self.pool)
-        .await?;
-
-        let comments = sqlx::query!(
-            r#"
-            SELECT
-                c.id as "comment_id!",
-                c."threadId" as "thread_id!",
-                c.owner as "owner!",
-                c.sender,
-                c.text as "text!",
-                c.metadata,
-                c."createdAt"::timestamptz as "created_at",
-                c."updatedAt"::timestamptz as "updated_at",
-                c."deletedAt"::timestamptz as "deleted_at",
-                c.order
-            FROM "Comment" c
-            JOIN "Thread" t ON c."threadId" = t.id
-            WHERE t."documentId" = $1
-                AND t."deletedAt" IS NULL
-                AND c."deletedAt" IS NULL
-            ORDER BY c."createdAt" ASC
-            "#,
-            document_id,
-        )
-        .map(|row| Comment {
-            comment_id: row.comment_id,
-            thread_id: row.thread_id,
-            owner: row.owner,
-            sender: row.sender,
-            text: row.text,
-            metadata: row.metadata,
-            created_at: row.created_at,
-            updated_at: row.updated_at,
-            deleted_at: row.deleted_at,
-            order: row.order,
-        })
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut comments_by_thread: std::collections::HashMap<i64, Vec<Comment>> =
-            std::collections::HashMap::new();
-        for comment in comments {
-            comments_by_thread
-                .entry(comment.thread_id)
-                .or_default()
-                .push(comment);
+        use messages::domain::{models::MessageParent, ports::MessageRepository};
+        let parent = MessageParent::parse("document", document_id)
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+        let repo = messages::outbound::pg_message_repo::PgMessageRepository::new(self.pool.clone());
+        let mut threads = Vec::new();
+        let mut cursor = None;
+        loop {
+            let page = repo
+                .list(&parent, cursor, 100)
+                .await
+                .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            threads.extend(page.threads);
+            cursor = page.next_cursor;
+            if cursor.is_none() {
+                break;
+            }
         }
-
-        let comment_threads = threads
-            .into_iter()
-            .map(|thread| {
-                let thread_comments = comments_by_thread
-                    .remove(&thread.thread_id)
-                    .unwrap_or_default();
-                CommentThread {
-                    thread,
-                    comments: thread_comments,
-                }
-            })
-            .collect();
-
-        Ok(comment_threads)
+        Ok(threads)
     }
 }

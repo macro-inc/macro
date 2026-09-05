@@ -288,7 +288,7 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod.uuid().describe('the comment id'),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -324,7 +324,7 @@ export const listTypedNotificationsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod.uuid().describe('the thread id'),
                         })
                         .describe(
                           'Notification sent when a user is mentioned in a document comment.'
@@ -336,7 +336,7 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod.uuid().describe('the comment id'),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -371,7 +371,7 @@ export const listTypedNotificationsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod.uuid().describe('the thread id'),
                         })
                         .describe(
                           'Notification sent when someone replies to a document comment thread.'
@@ -385,7 +385,7 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod.uuid().describe('the comment id'),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -420,7 +420,7 @@ export const listTypedNotificationsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod.uuid().describe('the thread id'),
                         })
                         .describe(
                           'Notification sent when someone comments on a document the user owns.'
@@ -428,6 +428,36 @@ export const listTypedNotificationsResponse = zod
                       tag: zod.enum(['commented_on_document']),
                     })
                     .describe('Someone commented on a document the user owns.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          messageId: zod
+                            .uuid()
+                            .describe('Shared message UUID.'),
+                          reason: zod
+                            .enum(['mention', 'reply', 'comment'])
+                            .describe(
+                              'Reason for an internal email discussion notification.'
+                            ),
+                          subject: zod
+                            .string()
+                            .describe('Subject of the parent email thread.'),
+                          text: zod
+                            .string()
+                            .describe('Body of the internal comment.'),
+                          threadId: zod
+                            .uuid()
+                            .describe(
+                              'Root message UUID, distinct from the parent email thread ID.'
+                            ),
+                        })
+                        .describe(
+                          'An internal comment on an email thread, distinct from an incoming email.'
+                        ),
+                      tag: zod.enum(['email_thread_comment']),
+                    })
+                    .describe('Internal discussion on an email thread.'),
                   zod
                     .object({
                       content: zod
@@ -1644,7 +1674,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod.uuid().describe('the comment id'),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -1680,7 +1710,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod.uuid().describe('the thread id'),
                         })
                         .describe(
                           'Notification sent when a user is mentioned in a document comment.'
@@ -1692,7 +1722,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod.uuid().describe('the comment id'),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -1727,7 +1757,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod.uuid().describe('the thread id'),
                         })
                         .describe(
                           'Notification sent when someone replies to a document comment thread.'
@@ -1741,7 +1771,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod.uuid().describe('the comment id'),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -1776,7 +1806,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod.uuid().describe('the thread id'),
                         })
                         .describe(
                           'Notification sent when someone comments on a document the user owns.'
@@ -1784,6 +1814,36 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                       tag: zod.enum(['commented_on_document']),
                     })
                     .describe('Someone commented on a document the user owns.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          messageId: zod
+                            .uuid()
+                            .describe('Shared message UUID.'),
+                          reason: zod
+                            .enum(['mention', 'reply', 'comment'])
+                            .describe(
+                              'Reason for an internal email discussion notification.'
+                            ),
+                          subject: zod
+                            .string()
+                            .describe('Subject of the parent email thread.'),
+                          text: zod
+                            .string()
+                            .describe('Body of the internal comment.'),
+                          threadId: zod
+                            .uuid()
+                            .describe(
+                              'Root message UUID, distinct from the parent email thread ID.'
+                            ),
+                        })
+                        .describe(
+                          'An internal comment on an email thread, distinct from an incoming email.'
+                        ),
+                      tag: zod.enum(['email_thread_comment']),
+                    })
+                    .describe('Internal discussion on an email thread.'),
                   zod
                     .object({
                       content: zod
@@ -2994,7 +3054,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod.uuid().describe('the comment id'),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -3030,7 +3090,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod.uuid().describe('the thread id'),
                         })
                         .describe(
                           'Notification sent when a user is mentioned in a document comment.'
@@ -3042,7 +3102,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod.uuid().describe('the comment id'),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -3077,7 +3137,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod.uuid().describe('the thread id'),
                         })
                         .describe(
                           'Notification sent when someone replies to a document comment thread.'
@@ -3091,7 +3151,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod.uuid().describe('the comment id'),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -3126,7 +3186,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod.uuid().describe('the thread id'),
                         })
                         .describe(
                           'Notification sent when someone comments on a document the user owns.'
@@ -3134,6 +3194,36 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                       tag: zod.enum(['commented_on_document']),
                     })
                     .describe('Someone commented on a document the user owns.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          messageId: zod
+                            .uuid()
+                            .describe('Shared message UUID.'),
+                          reason: zod
+                            .enum(['mention', 'reply', 'comment'])
+                            .describe(
+                              'Reason for an internal email discussion notification.'
+                            ),
+                          subject: zod
+                            .string()
+                            .describe('Subject of the parent email thread.'),
+                          text: zod
+                            .string()
+                            .describe('Body of the internal comment.'),
+                          threadId: zod
+                            .uuid()
+                            .describe(
+                              'Root message UUID, distinct from the parent email thread ID.'
+                            ),
+                        })
+                        .describe(
+                          'An internal comment on an email thread, distinct from an incoming email.'
+                        ),
+                      tag: zod.enum(['email_thread_comment']),
+                    })
+                    .describe('Internal discussion on an email thread.'),
                   zod
                     .object({
                       content: zod
@@ -4349,7 +4439,7 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
-                  commentId: zod.number().describe('the comment id'),
+                  commentId: zod.uuid().describe('the comment id'),
                   documentName: zod
                     .string()
                     .describe('The name of the document.'),
@@ -4381,7 +4471,7 @@ export const getTypedNotificationByIdResponse = zod
                     ])
                     .optional(),
                   text: zod.string().describe('the text of the comment'),
-                  threadId: zod.number().describe('the thread id'),
+                  threadId: zod.uuid().describe('the thread id'),
                 })
                 .describe(
                   'Notification sent when a user is mentioned in a document comment.'
@@ -4393,7 +4483,7 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
-                  commentId: zod.number().describe('the comment id'),
+                  commentId: zod.uuid().describe('the comment id'),
                   documentName: zod
                     .string()
                     .describe('The name of the document.'),
@@ -4424,7 +4514,7 @@ export const getTypedNotificationByIdResponse = zod
                     ])
                     .optional(),
                   text: zod.string().describe('the text of the comment'),
-                  threadId: zod.number().describe('the thread id'),
+                  threadId: zod.uuid().describe('the thread id'),
                 })
                 .describe(
                   'Notification sent when someone replies to a document comment thread.'
@@ -4438,7 +4528,7 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
-                  commentId: zod.number().describe('the comment id'),
+                  commentId: zod.uuid().describe('the comment id'),
                   documentName: zod
                     .string()
                     .describe('The name of the document.'),
@@ -4469,7 +4559,7 @@ export const getTypedNotificationByIdResponse = zod
                     ])
                     .optional(),
                   text: zod.string().describe('the text of the comment'),
-                  threadId: zod.number().describe('the thread id'),
+                  threadId: zod.uuid().describe('the thread id'),
                 })
                 .describe(
                   'Notification sent when someone comments on a document the user owns.'
@@ -4477,6 +4567,32 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['commented_on_document']),
             })
             .describe('Someone commented on a document the user owns.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  messageId: zod.uuid().describe('Shared message UUID.'),
+                  reason: zod
+                    .enum(['mention', 'reply', 'comment'])
+                    .describe(
+                      'Reason for an internal email discussion notification.'
+                    ),
+                  subject: zod
+                    .string()
+                    .describe('Subject of the parent email thread.'),
+                  text: zod.string().describe('Body of the internal comment.'),
+                  threadId: zod
+                    .uuid()
+                    .describe(
+                      'Root message UUID, distinct from the parent email thread ID.'
+                    ),
+                })
+                .describe(
+                  'An internal comment on an email thread, distinct from an incoming email.'
+                ),
+              tag: zod.enum(['email_thread_comment']),
+            })
+            .describe('Internal discussion on an email thread.'),
           zod
             .object({
               content: zod

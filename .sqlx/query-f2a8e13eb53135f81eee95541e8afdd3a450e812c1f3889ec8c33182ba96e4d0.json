@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT l.macro_id,\n                    (SELECT subject FROM email_messages WHERE thread_id = t.id ORDER BY created_at DESC, id DESC LIMIT 1) AS subject\n                    FROM email_threads t JOIN email_links l ON l.id = t.link_id WHERE t.id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "macro_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "subject",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "f2a8e13eb53135f81eee95541e8afdd3a450e812c1f3889ec8c33182ba96e4d0"
+}

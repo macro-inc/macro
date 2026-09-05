@@ -7,10 +7,7 @@ export const getAndClearCommentMentions = (
   const [mentions, setMentions] = mentionsSignal;
   const mentions_ = mentions();
   setMentions([]);
-  return typeof mentions_[0] === 'undefined'
-    ? undefined
-    : {
-        users: mentions_.flatMap((m) => m.mentions),
-        mentionId: mentions_[0].metadata.mention_id,
-      };
+  return mentions_
+    .flatMap((record) => record.mentions)
+    .map((id) => ({ entity_type: 'user', entity_id: id }));
 };

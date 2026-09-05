@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE parent_projects AS (\n            SELECT p.id, p.\"parentId\", p.\"userId\" FROM \"Project\" p\n            JOIN \"Document\" d ON d.\"projectId\" = p.id WHERE d.id = $1 AND d.\"deletedAt\" IS NULL AND p.\"deletedAt\" IS NULL\n            UNION\n            SELECT p.id, p.\"parentId\", p.\"userId\" FROM \"Project\" p JOIN parent_projects child ON p.id = child.\"parentId\" WHERE p.\"deletedAt\" IS NULL\n        ), document_permissions AS (\n            SELECT d.owner, sp.id, sp.\"linkShare\", sp.\"linkShareAccessLevel\" FROM \"Document\" d\n            LEFT JOIN \"DocumentPermission\" dp ON dp.\"documentId\" = d.id\n            LEFT JOIN \"SharePermission\" sp ON sp.id = dp.\"sharePermissionId\"\n            WHERE d.id = $1 AND d.\"deletedAt\" IS NULL\n        )\n        SELECT 'owner'::text AS \"level!\" FROM document_permissions WHERE owner = $2\n        UNION ALL\n        SELECT \"linkShareAccessLevel\"::text FROM document_permissions p\n        WHERE \"linkShareAccessLevel\" IS NOT NULL AND (\"linkShare\" = 'PUBLIC'\n            OR (\"linkShare\" = 'TEAM' AND EXISTS (SELECT 1 FROM team_user t WHERE t.user_id = p.owner AND t.team_id::text = ANY($3))))\n        UNION ALL\n        SELECT c.access_level::text FROM document_permissions p\n        JOIN \"ChannelSharePermission\" c ON c.share_permission_id = p.id WHERE c.channel_id = ANY($3)\n        UNION ALL\n        SELECT 'edit'::text FROM parent_projects WHERE \"userId\" = $2\n        UNION ALL\n        SELECT a.access_level::text FROM entity_access a JOIN parent_projects p ON a.entity_id::text = p.id\n        WHERE a.entity_type = 'project' AND a.source_id = ANY($3)\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "level!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8e6696d8bcb683a0fe824d59f4e7a6a41d8c3cfc8f78326bb783e69cc0775e5a"
+}

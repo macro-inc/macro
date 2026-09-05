@@ -11,7 +11,7 @@ export const disablePageViewClickSignal = createBlockSignal<boolean>(false);
 
 export const isSelectingViewerTextSignal = createBlockSignal<boolean>(false);
 
-export const selectingCommentThreadSignal = createBlockSignal<number | null>(
+export const selectingCommentThreadSignal = createBlockSignal<string | null>(
   null
 );
 

@@ -39,7 +39,7 @@ where
     let mentioned_users = sqlx::query_scalar!(
         r#"
         WITH message_channel AS (
-            SELECT channel_id FROM comms_messages WHERE id = $1
+            SELECT channel_id FROM comms_channel_messages WHERE id = $1
         ),
         mentions_to_insert AS (
             SELECT t.entity_type, t.entity_id

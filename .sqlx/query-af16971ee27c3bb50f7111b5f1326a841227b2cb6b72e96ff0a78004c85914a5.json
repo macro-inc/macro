@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT resolved as is_resolved\n                FROM comms_message_threads\n                WHERE root_id = $1 AND deleted_at IS NULL\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_resolved",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "af16971ee27c3bb50f7111b5f1326a841227b2cb6b72e96ff0a78004c85914a5"
+}

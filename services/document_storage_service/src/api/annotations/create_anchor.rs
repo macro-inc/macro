@@ -23,7 +23,7 @@ use model::{
 use models_permissions::share_permission::access_level::CommentAccessLevel;
 use sqlx::PgPool;
 
-use super::comment_error_response;
+use super::annotation_error_response;
 
 #[derive(serde::Deserialize)]
 pub struct Params {
@@ -31,7 +31,7 @@ pub struct Params {
 }
 
 /// Creates an unthreaded anchor for a document
-/// If you need to create a threaded anchor, see the create comment handler
+/// Attach a discussion through the shared message API.
 #[utoipa::path(
         post,
         path = "/annotations/anchors/document/{document_id}",
@@ -82,6 +82,6 @@ pub async fn create_anchor_handler(
             .await;
             Ok((StatusCode::OK, Json(response)).into_response())
         }
-        Err(e) => comment_error_response(e, "Error creating anchor"),
+        Err(e) => Err(annotation_error_response(e, "Error creating anchor")),
     }
 }

@@ -3,9 +3,9 @@ pub mod create;
 pub mod delete;
 pub mod edit;
 
-use create::{CreateCommentResponse, CreateUnthreadedAnchorResponse};
-use delete::{DeleteCommentResponse, DeleteUnthreadedAnchorResponse};
-use edit::{EditAnchorResponse, EditCommentResponse};
+use create::CreateUnthreadedAnchorResponse;
+use delete::DeleteUnthreadedAnchorResponse;
+use edit::EditAnchorResponse;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -13,48 +13,13 @@ use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(FromRow, Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct Comment {
-    pub comment_id: i64,
-    pub thread_id: i64,
-    pub order: Option<i32>,
-    pub owner: String,
-    pub sender: Option<String>,
-    pub text: String,
-    pub metadata: Option<Value>,
-    pub created_at: Option<DateTime<Utc>>,
-    pub updated_at: Option<DateTime<Utc>>,
-    pub deleted_at: Option<DateTime<Utc>>,
-}
-
-#[derive(FromRow, Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct Thread {
-    pub thread_id: i64,
-    pub owner: String,
-    pub resolved: bool,
-    pub document_id: String,
-    pub created_at: Option<DateTime<Utc>>,
-    pub updated_at: Option<DateTime<Utc>>,
-    pub deleted_at: Option<DateTime<Utc>>,
-    pub metadata: Option<Value>,
-}
-
-#[derive(FromRow, Serialize, Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct CommentThread {
-    pub thread: Thread,
-    pub comments: Vec<Comment>,
-}
-
 #[derive(FromRow, Serialize, Deserialize, PartialEq, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PdfPlaceableCommentAnchor {
     pub uuid: Uuid,
     pub document_id: String,
     pub owner: String,
-    pub thread_id: i64,
+    pub thread_id: Uuid,
     pub page: i32,
     pub original_page: i32,
     pub original_index: i32,
@@ -104,7 +69,7 @@ pub struct PdfHighlightAnchor {
     pub uuid: Uuid,
     pub document_id: String,
     pub owner: String,
-    pub thread_id: Option<i64>,
+    pub thread_id: Option<Uuid>,
     pub page: i32,
     pub red: i32,
     pub green: i32,
@@ -164,26 +129,12 @@ impl From<AnchorId> for Uuid {
 #[derive(Serialize, Debug, ToSchema)]
 #[serde(tag = "updateType", content = "payload")]
 pub enum AnnotationIncrementalUpdate<'a> {
-    #[serde(rename = "create-comment")]
-    #[serde(rename_all = "camelCase")]
-    CreateComment {
-        sender: &'a str,
-        document_id: &'a str,
-        response: &'a CreateCommentResponse,
-    },
     #[serde(rename = "create-anchor")]
     #[serde(rename_all = "camelCase")]
     CreateUnthreadedAnchor {
         sender: &'a str,
         document_id: &'a str,
         response: &'a CreateUnthreadedAnchorResponse,
-    },
-    #[serde(rename = "edit-comment")]
-    #[serde(rename_all = "camelCase")]
-    EditComment {
-        sender: &'a str,
-        document_id: &'a str,
-        response: &'a EditCommentResponse,
     },
     #[serde(rename = "edit-anchor")]
     #[serde(rename_all = "camelCase")]
@@ -192,13 +143,6 @@ pub enum AnnotationIncrementalUpdate<'a> {
         document_id: &'a str,
         response: &'a EditAnchorResponse,
     },
-    #[serde(rename = "delete-comment")]
-    #[serde(rename_all = "camelCase")]
-    DeleteComment {
-        sender: &'a str,
-        document_id: &'a str,
-        response: &'a DeleteCommentResponse,
-    },
     #[serde(rename = "delete-anchor")]
     #[serde(rename_all = "camelCase")]
     DeleteUnthreadedAnchor {
@@ -206,11 +150,4 @@ pub enum AnnotationIncrementalUpdate<'a> {
         document_id: &'a str,
         response: &'a DeleteUnthreadedAnchorResponse,
     },
-}
-
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct Mentions {
-    pub users: Vec<String>,
-    pub mention_id: String,
 }

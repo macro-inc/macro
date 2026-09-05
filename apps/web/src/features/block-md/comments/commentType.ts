@@ -10,8 +10,8 @@ import type { NodeKey } from 'lexical';
 export type MarkId = string; // uuid
 
 export type ThreadPayload = {
-  threadId: number;
-  rootId: number;
+  threadId: string;
+  rootId: string;
   anchorId: string; // uuid
   comments: IComment[];
   isResolved: boolean;

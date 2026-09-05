@@ -29,7 +29,6 @@ import {
   selectionStore,
   useAddNewHighlightComments,
 } from '../../store/highlight';
-import { sortComments } from '../commentsResource';
 import { useDeleteNewComments } from './commentOperations';
 import { activeCommentThreadSignal, useGetCommentById } from './commentStore';
 
@@ -59,15 +58,15 @@ const getHighlightThread = (
   const thread = highlight.thread;
   if (!thread) return null;
 
-  const comments = [...thread.comments].sort(sortComments);
+  const comments = thread.comments;
 
   const rootComment = comments[0];
 
   const commentBase = {
     type: commentType,
     isNew: false,
-    threadId: rootComment.threadId,
-    rootId: rootComment.commentId,
+    threadId: rootComment.thread_id ?? rootComment.id,
+    rootId: rootComment.id,
     anchorId: highlight.uuid,
   };
 
@@ -76,22 +75,25 @@ const getHighlightThread = (
     const comment = comments[i];
     replies.push({
       ...commentBase,
-      id: comment.commentId,
-      createdAt: comment.createdAt,
-      owner: comment.owner,
-      author: comment.sender || comment.owner,
-      text: comment.text,
+      id: comment.id,
+      createdAt: comment.created_at,
+      owner: comment.sender_id,
+      author: comment.imported_author?.name ?? comment.sender_id,
+      text: comment.content,
+      message: comment,
     });
   }
 
   const root: PdfRoot = {
     ...commentBase,
-    id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
-    owner: rootComment.owner,
-    author: rootComment.sender || rootComment.owner,
-    text: rootComment.text,
+    id: rootComment.id,
+    createdAt: rootComment.created_at,
+    owner: rootComment.sender_id,
+    author: rootComment.imported_author?.name ?? rootComment.sender_id,
+    text: rootComment.content,
+    message: rootComment,
     children: replies.map((r) => r.id),
+    resolved: thread.isResolved,
   };
 
   return { root, replies };
@@ -128,8 +130,8 @@ export const highlightComments = createBlockMemo(() => {
           continue;
         }
         const rootComment: PdfRoot = {
-          id: -1,
-          rootId: -1,
+          id: 'draft',
+          rootId: 'draft',
           type: 'highlight',
           text: '',
           owner: userId,
@@ -137,7 +139,7 @@ export const highlightComments = createBlockMemo(() => {
           createdAt: new Date(),
           isNew: true,
           children: [],
-          threadId: -1,
+          threadId: 'draft',
           anchorId: highlight.uuid,
         };
         out.push({ ...rootComment, layout });
@@ -157,7 +159,7 @@ export const highlightComments = createBlockMemo(() => {
 
 const useGetHighlightIdFromCommentId = () => {
   const getCommentById = useGetCommentById();
-  return (commentId: number) => {
+  return (commentId: string) => {
     const comment = getCommentById(commentId);
     if (!comment) {
       return;
@@ -175,7 +177,7 @@ export const useDeleteNewHighlightComment = () => {
   const getHighlightIdFromCommentId = useGetHighlightIdFromCommentId();
 
   return () => {
-    const commentId = -1;
+    const commentId = 'draft';
     const highlightUuid = getHighlightIdFromCommentId(commentId);
     if (!highlightUuid) return;
     const highlight = highlightsUuidMap()?.[highlightUuid];
@@ -239,7 +241,7 @@ export function useCreateHighlightCommentAtSelection() {
       if (highlightUnderSelection) {
         batch(() => {
           setConvertedHighlightThreadId(highlightUnderSelection.uuid);
-          setActiveCommentThread(-1);
+          setActiveCommentThread('draft');
 
           // NOTE: the new comment is reactively determined in the highlight comments memo
           setHighlightStore(
@@ -276,7 +278,7 @@ export function useCreateHighlightCommentAtSelection() {
       }
 
       addHighlights(highlights);
-      setActiveCommentThread(-1);
+      setActiveCommentThread('draft');
     } finally {
       setDisablePageViewClick(false);
     }

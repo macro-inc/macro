@@ -13,7 +13,7 @@ import type { RepliedToDocumentCommentThreadMetadataSubType } from './repliedToD
  */
 export interface RepliedToDocumentCommentThreadMetadata {
   /** the comment id */
-  commentId: number;
+  commentId: string;
   /** The name of the document. */
   documentName: string;
   /** The file type of the document. */
@@ -25,5 +25,5 @@ export interface RepliedToDocumentCommentThreadMetadata {
   /** the text of the comment */
   text: string;
   /** the thread id */
-  threadId: number;
+  threadId: string;
 }

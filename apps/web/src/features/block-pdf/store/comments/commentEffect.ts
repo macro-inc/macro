@@ -1,4 +1,8 @@
+import { useBlockId } from '@core/block';
+import { useUrlParams } from '@core/component/ParamsProvider';
+import { useMessageLink } from '@queries/messages';
 import { createEffect, createMemo } from 'solid-js';
+import { URL_PARAMS } from '../../constants';
 import {
   useDeleteNewComments,
   useScrollToCommentThread,
@@ -16,7 +20,7 @@ const useDeleteNewCommentEffect = () => {
 
   createEffect(() => {
     const activeThreadId = activeCommentThread();
-    if (!activeThreadId || activeThreadId !== -1) {
+    if (!activeThreadId || activeThreadId !== 'draft') {
       deleteNewComments();
     }
   });
@@ -49,6 +53,27 @@ const useScrollToActiveThreadEffect = () => {
 };
 
 export const usePdfCommentEffects = () => {
+  const id = useBlockId();
+  const params = useUrlParams(URL_PARAMS);
+  const target = useMessageLink(
+    () => ({ type: 'document', id }),
+    () => params.commentId()
+  );
+  let navigated: string | null = null;
+  createEffect(() => {
+    const requested = target();
+    if (!requested) {
+      navigated = null;
+      return;
+    }
+    if (requested === navigated) return;
+    const comment = commentsStore.get.find(
+      (comment) => comment.id === requested
+    );
+    if (!comment) return;
+    activeCommentThreadSignal.set(comment.threadId);
+    navigated = requested;
+  });
   useDeleteNewCommentEffect();
   useScrollToActiveThreadEffect();
 };

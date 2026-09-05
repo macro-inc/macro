@@ -55,15 +55,15 @@ pub async fn get_channel_message_by_id(
             c.name as "name",
             c.channel_type AS "channel_type: ChannelType",
             c.org_id as "org_id",
-            m.id as "message_id",
+            m.id as "message_id!",
             m.thread_id as "thread_id",
-            m.sender_id as "sender_id",
-            m.content as "content",
-            m.created_at as "created_at",
-            m.updated_at as "updated_at",
+            m.sender_id as "sender_id!",
+            m.content as "content!",
+            m.created_at as "created_at!",
+            m.updated_at as "updated_at!",
             m.deleted_at::timestamptz as "deleted_at"
         FROM
-            comms_messages m
+            comms_channel_messages m
         JOIN
             comms_channels c on c."id" = m."channel_id"
         WHERE

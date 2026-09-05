@@ -14,6 +14,9 @@ pub mod events;
 pub mod list_service;
 /// Kafka event models for the `macro.mentions` topic.
 pub mod mention_events;
+/// Channel policy for mutations made through the shared message API.
+#[cfg(feature = "ports")]
+pub mod message_delivery;
 /// Domain models for channel messages.
 pub mod models;
 #[cfg(feature = "ports")]

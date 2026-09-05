@@ -1,10 +1,10 @@
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
+import type { MessageData } from '../Message/types';
 
 export type GroupableMessage = Pick<
-  ApiChannelMessage,
+  MessageData,
   'id' | 'sender_id' | 'sender' | 'created_at' | 'attachments' | 'deleted_at'
 > & {
-  thread?: Pick<ApiChannelMessage['thread'], 'reply_count'>;
+  thread?: { reply_count: number };
 };
 
 export const MESSAGE_GROUPING_WINDOW_MS = 5 * 60 * 1000;

@@ -65,12 +65,18 @@ impl AccessRepository for PgAccessRepository {
         document_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        let document_uuid = document_id
-            .parse::<Uuid>()
-            .map_err(|_| AccessError::BadRequest("Invalid document ID format"))?;
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
             .map_err(anyhow_access_error)?;
+        let Ok(document_uuid) = document_id.parse::<Uuid>() else {
+            return Ok(queries::document_access::get_legacy_document_access(
+                &self.pool,
+                document_id,
+                &source_ids,
+                user_id,
+            )
+            .await?);
+        };
         Ok(queries::document_access::get_document_access(
             &self.pool,
             &document_uuid,

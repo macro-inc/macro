@@ -195,8 +195,8 @@ async fn get_message_owner(pool: &PgPool, message_id: Uuid) -> anyhow::Result<St
     let row = sqlx::query_as!(
         SenderIdRow,
         r#"
-        SELECT sender_id
-        FROM comms_messages
+        SELECT sender_id AS "sender_id!"
+        FROM comms_channel_messages
         WHERE id = $1
         ORDER BY created_at ASC
         "#,
@@ -212,7 +212,7 @@ async fn get_channel_message_count(pool: &PgPool, channel_id: Uuid) -> anyhow::R
     let count = sqlx::query_scalar!(
         r#"
         SELECT COUNT(id) AS "count!"
-        FROM comms_messages
+        FROM comms_channel_messages
         WHERE channel_id = $1
         "#,
         channel_id,
@@ -231,14 +231,14 @@ async fn get_channel_participants_for_thread_id(
         r#"
         SELECT DISTINCT id AS "user_id!" FROM (
             SELECT m.sender_id AS id
-            FROM comms_messages m
+            FROM comms_channel_messages m
             JOIN comms_channel_participants cp
               ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
             UNION
             SELECT em.entity_id AS id
             FROM comms_entity_mentions em
-            JOIN comms_messages m ON m.id::text = em.source_entity_id
+            JOIN comms_channel_messages m ON m.id::text = em.source_entity_id
             JOIN comms_channel_participants cp
               ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
             WHERE (m.id = $1 OR m.thread_id = $1)

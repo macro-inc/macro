@@ -340,6 +340,48 @@ pub(crate) type DssChannelListState =
     ChannelListRouterState<DssChannelListService, AuthorizationService>;
 
 /// Type alias for the channels service wired into DSS.
+pub(crate) type DssChannelEffects = ChannelSideEffectService<
+    PgChannelSideEffectContext,
+    ConnectionGatewayChannelRealtimePublisher,
+    NotificationChannelSender<NotificationIngressType>,
+    ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
+    DssEventBroker,
+>;
+
+/// Parent-specific delivery for the shared message API.
+pub(crate) type DssMessageDelivery = messages::domain::delivery::ParentMessagePublisher<
+    channels::domain::message_delivery::ChannelMessageDelivery<
+        PgChannelsRepo,
+        SpawnedChannelEventDispatcher<DssChannelEffects>,
+        PgChannelReferenceSharePermissions<EntityAccessService>,
+        messages::outbound::connection_gateway::ConnectionGatewayMessages,
+    >,
+    messages::domain::delivery::DiscussionDelivery<
+        messages::outbound::pg_discussion_context::PgDiscussionContext,
+        messages::outbound::entity_access_audience::EntityAccessMessageAudience<
+            EntityAccessService,
+        >,
+        messages::outbound::connection_gateway::ConnectionGatewayMessages,
+        messages::outbound::notification_sender::MessageNotificationSender<NotificationIngressType>,
+        messages::outbound::pg_discussion_context::PgDiscussionContext,
+    >,
+>;
+
+/// PDF geometry mutations use the shared annotation authorization policy.
+pub(crate) type DssAnnotationService = messages::domain::annotations::AnnotationService<
+    macro_db_client::annotations::repository::PgAnnotationRepository,
+    EntityAccessService,
+>;
+
+/// Shared messages use the same parent access and authentication services as DSS.
+pub(crate) type DssMessagesState = messages::inbound::axum_router::MessagesRouterState<
+    messages::outbound::pg_message_repo::PgMessageRepository,
+    DssMessageDelivery,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
+/// Type alias for the channels service wired into DSS.
 pub(crate) type DssChannelService = ChannelServiceImpl<
     PgChannelsRepo,
     SpawnedChannelEventDispatcher<
@@ -557,6 +599,8 @@ pub(crate) struct ApiContext {
     pub documents_state: DocumentsState,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,
+    pub messages_state: DssMessagesState,
+    pub annotation_service: Arc<DssAnnotationService>,
     /// Shared channel service, for calling channel domain operations outside
     /// the channels router (starter-doc seeding records mention backlinks).
     pub channel_service: Arc<DssChannelService>,

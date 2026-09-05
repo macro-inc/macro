@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_message_threads SET anchor = $2 WHERE root_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b658511e8ac4766cc3dcc070cccafb76ecca222315a69cbca289bc30dcf82eb1"
+}

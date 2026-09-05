@@ -14,7 +14,7 @@ type MeasureContainerProps = {
   top: number;
   ref?: Ref<HTMLDivElement>;
   maxHeight?: number;
-  threadId: number;
+  threadId: string;
   isActive: boolean;
   forceWidth?: number;
   transition?: boolean;
@@ -26,7 +26,7 @@ export const MeasureContainer = (props: ParentProps<MeasureContainerProps>) => {
   const { documentId, setActiveThread, setThreadHeight } =
     useContext(CommentsContext);
 
-  const setDomRect = (threadId: number, rect: DOMRect) => {
+  const setDomRect = (threadId: string, rect: DOMRect) => {
     if (rect.height === 0) return;
     setThreadHeight(threadId, rect.height);
   };

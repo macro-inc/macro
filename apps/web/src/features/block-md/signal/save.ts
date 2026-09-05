@@ -15,7 +15,9 @@ import { createMemo } from 'solid-js';
 import { mdStore } from './markdownBlockData';
 
 export const useBlockSave = () => {
-  const pendingComment = createMemo(() => activeCommentThreadSignal() === -1);
+  const pendingComment = createMemo(
+    () => activeCommentThreadSignal() === 'draft'
+  );
 
   return pendingComment;
 };

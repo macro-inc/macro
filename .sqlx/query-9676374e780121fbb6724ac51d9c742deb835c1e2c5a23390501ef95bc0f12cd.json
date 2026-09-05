@@ -21,7 +21,7 @@
       {
         "ordinal": 3,
         "name": "thread_id",
-        "type_info": "Int8"
+        "type_info": "Uuid"
       },
       {
         "ordinal": 4,

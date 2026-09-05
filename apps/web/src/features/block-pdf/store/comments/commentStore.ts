@@ -30,7 +30,7 @@ export const useIsActiveThreadSelector = () => {
 
 export const commentsStore = createBlockStore<CommentStore>([]);
 
-type CommentMap = Map<number, PdfComment>;
+type CommentMap = Map<string, PdfComment>;
 export const commentMap = createBlockMemo(() => {
   const commentMap: CommentMap = new Map();
   for (const comment of commentsStore.get ?? []) {
@@ -40,7 +40,7 @@ export const commentMap = createBlockMemo(() => {
 });
 
 export const useGetCommentById = () => {
-  return (id: number) => commentMap()?.get(id);
+  return (id: string) => commentMap()?.get(id);
 };
 
 const combinedComments = createBlockMemo(() => {

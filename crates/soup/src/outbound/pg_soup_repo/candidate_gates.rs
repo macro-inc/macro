@@ -220,7 +220,7 @@ pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>
         id_sql,
         format!(
             r#"EXISTS (
-                SELECT 1 FROM comms_messages m
+                SELECT 1 FROM comms_channel_messages m
                 JOIN comms_channel_participants cp
                     ON cp.channel_id = m.channel_id
                     AND cp.user_id = $1

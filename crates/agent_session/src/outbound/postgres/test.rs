@@ -140,7 +140,7 @@ async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) 
     .await
     .expect("create originating channel");
     sqlx::query!(
-        "INSERT INTO comms_messages (id, channel_id, sender_id, content) VALUES ($1, $2, $3, '')",
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content) VALUES ($1, 'channel', $2::uuid::text, $3, '')",
         thread_id,
         channel_id,
         owner_id,
@@ -149,7 +149,7 @@ async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) 
     .await
     .expect("create originating thread");
     sqlx::query!(
-        "INSERT INTO comms_messages (id, channel_id, thread_id, sender_id, content) VALUES ($1, $2, $3, $4, '')",
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, thread_id, sender_id, content) VALUES ($1, 'channel', $2::uuid::text, $3, $4, '')",
         originating_message_id,
         channel_id,
         thread_id,

@@ -4,10 +4,10 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { EditCommentResponse } from './editCommentResponse';
+import type { DeleteUnthreadedAnchorResponse } from './deleteUnthreadedAnchorResponse';
 
 export type AnnotationIncrementalUpdateOneOfSevenPayload = {
   documentId: string;
-  response: EditCommentResponse;
+  response: DeleteUnthreadedAnchorResponse;
   sender: string;
 };

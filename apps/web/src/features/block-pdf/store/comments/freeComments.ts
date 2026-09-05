@@ -18,11 +18,7 @@ import {
 } from '@block-pdf/type/placeables';
 import { createBlockMemo } from '@core/block';
 import { useUserId } from '@core/context/user';
-import {
-  anchorsResource,
-  commentThreadsResource,
-  sortComments,
-} from '../commentsResource';
+import { anchorsResource, documentMessageThreads } from '../commentsResource';
 
 export { isThreadPlaceable };
 
@@ -39,15 +35,15 @@ const getFreeCommentThread = (
   const thread = commentPlaceable.payload;
   if (!thread) return null;
 
-  const comments = [...thread.comments].sort(sortComments);
+  const comments = thread.comments;
 
   const rootComment = comments[0];
 
   const commentBase = {
     type: commentType,
     isNew: false,
-    threadId: rootComment.threadId,
-    rootId: rootComment.commentId,
+    threadId: rootComment.thread_id ?? rootComment.id,
+    rootId: rootComment.id,
     anchorId: commentPlaceable.internalId,
   };
 
@@ -56,22 +52,25 @@ const getFreeCommentThread = (
     const comment = comments[i];
     replies.push({
       ...commentBase,
-      id: comment.commentId,
-      createdAt: comment.createdAt,
-      owner: comment.owner,
-      author: comment.sender || comment.owner,
-      text: comment.text,
+      id: comment.id,
+      createdAt: comment.created_at,
+      owner: comment.sender_id,
+      author: comment.imported_author?.name ?? comment.sender_id,
+      text: comment.content,
+      message: comment,
     });
   }
 
   const root: PdfRoot = {
     ...commentBase,
-    id: rootComment.commentId,
-    createdAt: rootComment.createdAt,
-    owner: rootComment.owner,
-    author: rootComment.sender || rootComment.owner,
-    text: rootComment.text,
+    id: rootComment.id,
+    createdAt: rootComment.created_at,
+    owner: rootComment.sender_id,
+    author: rootComment.imported_author?.name ?? rootComment.sender_id,
+    text: rootComment.content,
+    message: rootComment,
     children: replies.map((r) => r.id),
+    resolved: thread.isResolved,
   };
 
   return { root, replies };
@@ -82,8 +81,7 @@ const serverCommentPlaceables = createBlockMemo<IThreadPlaceable[]>(() => {
   const anchors = anchorsData();
   if (!anchors || anchors.length === 0) return [];
 
-  const [commentThreadsData] = commentThreadsResource;
-  const commentThreads = commentThreadsData();
+  const commentThreads = documentMessageThreads();
   if (!commentThreads || commentThreads.length === 0) return [];
 
   const freeCommentAnchors = anchors.filter(
@@ -92,7 +90,7 @@ const serverCommentPlaceables = createBlockMemo<IThreadPlaceable[]>(() => {
 
   const mappedAnchors = freeCommentAnchors.flatMap((a) => {
     const commentThread = commentThreads.find(
-      (ct) => ct.thread.threadId === a.threadId
+      (ct) => ct.state.root_id === a.threadId
     );
     if (!commentThread) {
       console.error('Comment thread not found for free comment anchor', a);
@@ -113,12 +111,12 @@ const serverCommentPlaceables = createBlockMemo<IThreadPlaceable[]>(() => {
         rotation: 0,
       },
       payload: {
-        threadId: commentThread.thread.threadId,
-        rootId: commentThread.comments[0].commentId,
+        threadId: commentThread.state.root_id,
+        rootId: commentThread.root.id,
         anchorId: a.uuid,
         page: a.page,
-        comments: commentThread.comments,
-        isResolved: commentThread.thread.resolved,
+        comments: [commentThread.root, ...commentThread.replies],
+        isResolved: commentThread.state.resolved,
       },
       allowableEdits: a.allowableEdits as any,
       wasEdited: a.wasEdited,
@@ -175,8 +173,8 @@ export const freeComments = createBlockMemo(() => {
         continue;
       }
       const rootComment: PdfRoot = {
-        id: -1,
-        rootId: -1,
+        id: 'draft',
+        rootId: 'draft',
         type: 'free',
         text: '',
         owner: userId,
@@ -184,7 +182,7 @@ export const freeComments = createBlockMemo(() => {
         createdAt: new Date(),
         isNew: true,
         children: [],
-        threadId: -1,
+        threadId: 'draft',
         anchorId: commentPlaceable.internalId,
       };
       out.push({ ...rootComment, layout });

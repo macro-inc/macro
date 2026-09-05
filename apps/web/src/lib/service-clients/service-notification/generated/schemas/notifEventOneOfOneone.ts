@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelInviteMetadata } from './channelInviteMetadata';
+import type { EmailThreadCommentMetadata } from './emailThreadCommentMetadata';
 import type { NotifEventOneOfOneoneTag } from './notifEventOneOfOneoneTag';
 
 /**
- * The user was invited to a channel.
+ * Internal discussion on an email thread.
  */
 export type NotifEventOneOfOneone = {
-  /** The user was invited to a channel. */
-  content: ChannelInviteMetadata;
+  /** Internal discussion on an email thread. */
+  content: EmailThreadCommentMetadata;
   tag: NotifEventOneOfOneoneTag;
 };

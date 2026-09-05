@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_entity_mentions\n                    (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id)\n                    VALUES ($1, 'message', $2, $3, $4, $5) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7a66c9c36f03f0be7330785049ffaec37ec41aab6632ccbbadbaebeee6db641a"
+}

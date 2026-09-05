@@ -15,18 +15,18 @@ pub async fn get_messages(
     let messages = sqlx::query!(
         r#"
         SELECT
-            id,
-            channel_id,
-            sender_id,
-            content,
-            created_at,
-            updated_at,
+            id AS "id!",
+            channel_id AS "channel_id!",
+            sender_id AS "sender_id!",
+            content AS "content!",
+            created_at AS "created_at!",
+            updated_at AS "updated_at!",
             thread_id,
             edited_at as "edited_at: chrono::DateTime<chrono::Utc>",
             deleted_at as "deleted_at: chrono::DateTime<chrono::Utc>"
         FROM (
             SELECT *
-            FROM comms_messages
+            FROM comms_channel_messages
             WHERE channel_id = $1
             AND ($2::timestamptz IS NULL OR created_at >= $2)
             ORDER BY created_at DESC
@@ -72,9 +72,9 @@ pub async fn get_channel_messages(
     let messages = sqlx::query!(
         r#"
         SELECT
-            channel_id,
-            id
-        FROM comms_messages
+            channel_id AS "channel_id!",
+            id AS "id!"
+        FROM comms_channel_messages
         WHERE
             $3::bool IS NULL
             OR ($3 AND deleted_at IS NOT NULL)

@@ -30,11 +30,29 @@ Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote)
 
 ## Comments (Discussion)
 
-Below the editor: `Discussion` section with a `Leave a comment...` contenteditable, buttons
-`Attach images`, `Format`, and `Send comment` (disabled until text exists). Click the
-composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
-above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
-user.
+Below the editor, expand `Discussion`. Its `Leave a comment...` composer supports
+`Attach files`, formatting, mentions, and `Send comment` (Enter also submits).
+Attachment-only comments are allowed after uploads finish. Confirm completion by
+the new message appearing above the composer; a failed send retains the draft.
+Live updates preserve unsent replies and edits while updating the surrounding thread.
+
+Select text and choose the comment action to create an anchored discussion. Existing
+highlights locate threads by their stable mark IDs. Replies, attachments, reactions,
+and editing use the same message controls as channels. On phones, the active Markdown
+thread opens in a drawer with a pinned reply composer.
+
+`Resolve` / `Reopen` changes the discussion state. Deleting the root message leaves a
+tombstone and retains its replies. `Delete discussion` explicitly removes the whole
+thread and requests confirmation. `Copy link` targets the specific comment. Previously
+copied numeric links still resolve under current document permissions.
+
+PDFs expose a `Comments` section in the side panel as well as anchored margin threads.
+Deleting a comment placeable removes its discussion; deleting a discussion attached
+to a regular highlight leaves the independent highlight in place.
+
+Email views expose `Internal comments` separately from the email reply composer.
+These comments stay inside Macro and require the thread's sharing permissions.
+Mentioning someone does not share the email with them or send an external email.
 
 ## Side panel
 

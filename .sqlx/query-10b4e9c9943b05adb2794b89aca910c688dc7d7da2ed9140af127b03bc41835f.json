@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(t) AS \"state!: Json<ThreadState>\", m.created_at FROM comms_messages m\n               JOIN comms_message_threads t ON t.root_id = m.id\n               WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2 AND t.deleted_at IS NULL\n                   AND ($3::timestamptz IS NULL OR (m.created_at, m.id) > ($3, $4::uuid))\n               ORDER BY m.created_at, m.id LIMIT $5",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state!: Json<ThreadState>",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null,
+      false
+    ]
+  },
+  "hash": "10b4e9c9943b05adb2794b89aca910c688dc7d7da2ed9140af127b03bc41835f"
+}

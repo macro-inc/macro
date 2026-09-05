@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_message_threads t SET resolved = COALESCE($2, resolved), updated_at = now(),\n                   deleted_at = CASE WHEN $3 THEN now() ELSE deleted_at END,\n                   anchor = CASE WHEN $3 THEN NULL ELSE anchor END\n               WHERE root_id = $1 RETURNING to_jsonb(t) AS \"state!: Json<ThreadState>\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state!: Json<ThreadState>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "9c4a5d0944f5ea9ea50cded619ec389f9fd8f3c121909b1162168df79e29f9db"
+}

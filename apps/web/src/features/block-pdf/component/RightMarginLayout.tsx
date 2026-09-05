@@ -26,7 +26,10 @@ import {
   type CommentsContextType,
   Thread,
 } from '@core/comments/Thread';
+import { useUserId } from '@core/context/user';
 import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
+import { buildSimpleEntityUrl } from '@core/util/url';
+import { createMessageDiscussionSource } from '@queries/messages-discussion';
 import { createMemo, createSelector, For } from 'solid-js';
 
 export function RightMarginLayout(props: { pageNumber: number }) {
@@ -78,7 +81,20 @@ const useCommentsContext = (): CommentsContextType => {
 
   const getCommentById = useGetCommentById();
 
+  const discussionSource = createMessageDiscussionSource({
+    parent: () => ({ type: 'document', id: documentId }),
+    canEdit: canComment,
+    currentUserId: useUserId(),
+    canManageThreads: isDocumentOwner,
+    targetCommentId: () => null,
+    buildCommentLink: (comment) =>
+      buildSimpleEntityUrl(
+        { type: 'pdf', id: documentId },
+        { comment_id: comment.id }
+      ),
+  });
   const commentsContext: CommentsContextType = {
+    discussionSource,
     setActiveThread,
     setThreadHeight,
     canComment,
@@ -109,7 +125,7 @@ function CommentsAndSuggestions(props: { pageNumber: number }) {
   const [selectedThreadId, setSelectedThreadId] = selectingCommentThreadSignal;
   const isSelectingThreadSelector = createSelector(selectedThreadId);
 
-  const commentTheme = (threadId: number | null) => {
+  const commentTheme = (threadId: string | null) => {
     const isSelecting = isSelectingThreadSelector(threadId);
     let theme = {
       ...baseCommentTheme,
@@ -121,7 +137,7 @@ function CommentsAndSuggestions(props: { pageNumber: number }) {
     return theme;
   };
 
-  const handleThreadMouseDown = (threadId: number) => (e: MouseEvent) => {
+  const handleThreadMouseDown = (threadId: string) => (e: MouseEvent) => {
     e.stopPropagation();
     setSelectedThreadId(threadId);
 

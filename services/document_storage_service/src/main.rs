@@ -971,6 +971,48 @@ async fn run() -> anyhow::Result<()> {
         )),
     );
 
+    let message_realtime = messages::outbound::connection_gateway::ConnectionGatewayMessages(
+        conn_gateway_client.clone(),
+    );
+    let message_delivery = messages::domain::delivery::ParentMessagePublisher::new(
+        channels::domain::message_delivery::ChannelMessageDelivery::new(
+            PgChannelsRepo::new(db.clone()),
+            SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
+            PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
+            message_realtime.clone(),
+        ),
+        messages::domain::delivery::DiscussionDelivery::new(
+            messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()),
+            messages::outbound::entity_access_audience::EntityAccessMessageAudience(
+                (*entity_access_service).clone(),
+            ),
+            message_realtime,
+            messages::outbound::notification_sender::MessageNotificationSender(
+                notification_ingress_service.clone(),
+            ),
+        )
+        .with_sharing(messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone())),
+    );
+    let annotation_service = Arc::new(messages::domain::annotations::AnnotationService::new(
+        macro_db_client::annotations::repository::PgAnnotationRepository(db.clone()),
+        (*entity_access_service).clone(),
+    ));
+    let messages_state = messages::inbound::axum_router::MessagesRouterState {
+        service: Arc::new(
+            messages::domain::service::MessageService::new(
+                messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+                message_delivery,
+            )
+            .with_references(
+                messages::outbound::entity_access_audience::EntityAccessMessageReferences(
+                    (*entity_access_service).clone(),
+                ),
+            ),
+        ),
+        access: entity_access_service.clone(),
+        authorization: authorization_state.clone(),
+    };
+
     let teammate_dms_brokers = config.kafka_brokers.as_ref().to_string();
     consumer_tracker.spawn({
         let cancellation_token = consumer_cancellation_token.clone();
@@ -1405,6 +1447,8 @@ async fn run() -> anyhow::Result<()> {
         },
         config: Arc::new(config),
         channel_service: channels_service.clone(),
+        messages_state,
+        annotation_service,
         channels_state: ChannelsRouterState::from_arc(
             channels_service,
             (*entity_access_service).clone(),

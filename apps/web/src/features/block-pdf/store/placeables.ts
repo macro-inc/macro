@@ -45,7 +45,10 @@ import { batch } from 'solid-js';
 import { v7 as uuid7 } from 'uuid';
 import { activeCommentThreadSignal } from './comments/commentStore';
 import { commentPlaceables, isThreadPlaceable } from './comments/freeComments';
-import { useEditPdfFreeCommentAnchor } from './commentsResource';
+import {
+  useDeleteThreadResource,
+  useEditPdfFreeCommentAnchor,
+} from './commentsResource';
 
 interface AppearancePayload {
   bold: boolean;
@@ -723,7 +726,7 @@ export function useCreatePlaceable() {
       if (!isThreadPlaceable(placeable)) {
         setPdfModificationData('placeables', (prev) => [...prev, placeable]);
       } else {
-        setActiveCommentThread(-1);
+        setActiveCommentThread('draft');
       }
       setActivePlaceableId(placeable.internalId);
       setNewPlaceable(placeable);
@@ -797,6 +800,7 @@ export function useDeletePlaceable() {
   const setActivePlaceable = activePlaceableIdSignal.set;
   const doEdit = useDoEdit();
   const deleteComment = useDeleteComment();
+  const deleteThread = useDeleteThreadResource();
 
   const arrayDelete = (index: number) => {
     if (index < 0 || index >= pdfModificationDataValue.placeables.length)
@@ -822,10 +826,10 @@ export function useDeletePlaceable() {
     if (isThreadPlaceable(placeable)) {
       let rootId = placeable.payload?.rootId;
       if (!rootId) {
-        deleteComment({ commentId: -1 });
+        deleteComment({ commentId: 'draft' });
         return;
       }
-      deleteComment({ commentId: rootId });
+      void deleteThread(rootId);
       return;
     }
 

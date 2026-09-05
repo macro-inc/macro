@@ -83,10 +83,6 @@ export const DISCARD_DRAFT_COMMENT_COMMAND = createCommand<void>(
   'DISCARD_DRAFT_COMMENT_COMMAND'
 );
 
-export const CREATE_COMMENT_COMMAND = createCommand<{
-  threadId: number;
-}>('CREATE_COMMENT_COMMAND');
-
 export const DELETE_COMMENT_COMMAND = createCommand<[string, boolean]>(
   'DELETE_COMMENT_COMMAND'
 );
@@ -99,10 +95,9 @@ export const REMOVE_ORPHANED_COMMENT_MARKS_COMMAND = createCommand<
   ReadonlySet<string>
 >('REMOVE_ORPHANED_COMMENT_MARKS_COMMAND');
 
-export const SET_COMMENT_THREAD_ID_COMMAND = createCommand<{
+export const COMMIT_COMMENT_MARK_COMMAND = createCommand<{
   markId: string;
-  threadId: number;
-}>('SET_COMMENT_THREAD_ID_COMMAND');
+}>('COMMIT_COMMENT_MARK_COMMAND');
 
 const CLEANUP_COMMENTS_COMMAND = createCommand<string[]>(
   'CLEANUP_COMMENTS_COMMAND'
@@ -175,7 +170,6 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
       (from: CommentNode) => {
         const newNode = $createCommentNode({
           ids: from.getIDs(),
-          threadId: from.getThreadId(),
           isDraft: from.getIsDraft(),
         });
         for (const id of newNode.getIDs()) {
@@ -241,9 +235,8 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
                 if (!markElement || !node) {
                   console.error('unable to find html element for mark node');
                 } else {
-                  const threadId = node?.getThreadId();
-                  const hasServerThread = threadId != null && threadId >= 0;
                   const isDraft = node.getIsDraft();
+                  const hasServerThread = !isDraft;
                   const nodePeerId = $getPeerId(node);
                   const isLocal = Boolean(
                     nodePeerId && nodePeerId === peerId()
@@ -299,28 +292,6 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     }),
 
     editor.registerCommand(
-      CREATE_COMMENT_COMMAND,
-      (payload) => {
-        if (!draftMarkId) {
-          return false;
-        }
-        const nodeKeys = markNodeMap.get(draftMarkId);
-        if (!nodeKeys) return false;
-        for (const key of nodeKeys) {
-          let node = $getNodeByKey(key);
-          if (!node) continue;
-          if ($isCommentNode(node)) {
-            node.setThreadId(payload.threadId);
-            node.setIsDraft(false);
-            return true;
-          }
-        }
-        return true;
-      },
-      COMMAND_PRIORITY_EDITOR
-    ),
-
-    editor.registerCommand(
       CREATE_DRAFT_COMMENT_COMMAND,
       () => {
         const selection = $getSelection();
@@ -335,7 +306,7 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
             selection.isBackward(),
             markId,
             (ids) => {
-              const comment = new CommentNode(ids, undefined, -1, true);
+              const comment = new CommentNode(ids, undefined, true);
               for (const id of ids) {
                 setMarkNodeMapEntry(id, comment.getKey());
               }
@@ -400,16 +371,16 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
     ),
 
     editor.registerCommand(
-      SET_COMMENT_THREAD_ID_COMMAND,
-      ({ markId, threadId }) => {
+      COMMIT_COMMENT_MARK_COMMAND,
+      ({ markId }) => {
         const markNodeKeys = markNodeMap.get(markId);
         if (!markNodeKeys) return false;
         for (const key of markNodeKeys) {
           const node: null | CommentNode = $getNodeByKey(key);
           if (!node) continue;
-          node.setThreadId(threadId);
           node.setIsDraft(false);
         }
+        draftMarkId = null;
         return true;
       },
       COMMAND_PRIORITY_EDITOR

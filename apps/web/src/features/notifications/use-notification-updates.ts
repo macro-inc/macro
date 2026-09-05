@@ -1,6 +1,7 @@
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
 import { invalidateEmailLinks } from '@queries/email/link';
+import { invalidateMessageThreads } from '@queries/messages';
 import { invalidateEntityNotifications } from '@queries/notification/user-notifications';
 import {
   invalidateSoupEntity,
@@ -79,6 +80,13 @@ export function handleNotificationUpdate(notification: UnifiedNotification) {
     })
     .with({ tag: 'call_started' }, () => {
       refreshChannel(notification);
+    })
+    .with({ tag: 'email_thread_comment' }, () => {
+      refreshSoupEntity(notification, 'emailThread');
+      void invalidateMessageThreads({
+        type: 'email_thread',
+        id: notification.entity_id,
+      });
     })
     .with({ tag: 'new_email' }, () => {
       refreshEmailThread(notification);

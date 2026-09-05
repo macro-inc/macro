@@ -196,11 +196,11 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
             RETURNING
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id AS "id!", name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status,
                 status_event_name, created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                (SELECT channel_id FROM comms_channel_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
                 -- A row being created cannot have an external identity yet.
                 NULL::TEXT AS "external_provider?", NULL::TEXT AS "external_id?",
@@ -252,7 +252,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         // message - directly, rather than from a channel - is its owner's alone.
         let origin_channel_id = match originating_message_id {
             Some(message_id) => sqlx::query_scalar!(
-                "SELECT channel_id FROM comms_messages WHERE id = $1",
+                r#"SELECT channel_id AS "channel_id!" FROM comms_channel_messages WHERE id = $1"#,
                 message_id,
             )
             .fetch_optional(&mut *transaction)
@@ -287,11 +287,11 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id AS "id!", name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                (SELECT channel_id FROM comms_channel_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?"
@@ -320,11 +320,11 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id AS "id!", name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                (SELECT channel_id FROM comms_channel_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?"
@@ -359,11 +359,11 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id AS "id!", name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                (SELECT channel_id FROM comms_channel_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?"
@@ -391,11 +391,11 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             AgentSessionRow,
             r#"
             SELECT
-                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                id AS "id!", name, owner_id, thread_id, originating_message_id, bot_id,
                 model, harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                (SELECT channel_id FROM comms_channel_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?"

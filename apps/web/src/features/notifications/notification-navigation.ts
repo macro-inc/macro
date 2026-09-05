@@ -319,6 +319,16 @@ function getSupportedHandler(
           sourceHandle,
         });
     })
+    .with('email_thread_comment', () => {
+      const meta = notification.notification_metadata;
+      if (meta.tag !== 'email_thread_comment') return null;
+      return async (lm: SplitManager, newSplit: boolean = false) =>
+        openSplitIfNotOpen(lm, 'email', notification.entity_id, {
+          newSplit,
+          params: { comment_id: meta.content.messageId },
+          sourceHandle,
+        });
+    })
     .with('commented_on_document', () => {
       const meta = notification.notification_metadata;
       if (meta.tag !== 'commented_on_document') return null;

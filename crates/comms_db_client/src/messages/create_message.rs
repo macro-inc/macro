@@ -21,11 +21,11 @@ where
 
     let message = sqlx::query!(
         r#"
-        INSERT INTO comms_messages (id, channel_id, sender_id, content, thread_id)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING
+        INSERT INTO comms_messages (id, parent_entity_id, sender_id, content, thread_id, parent_entity_type)
+            VALUES ($1, $2::uuid::text, $3, $4, $5, 'channel')
+            RETURNING
             id,
-            channel_id,
+            parent_entity_id::uuid AS "channel_id!",
             sender_id,
             content,
             created_at,

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT to_jsonb(t) AS \"state!: Json<ThreadState>\" FROM comms_message_threads t\n               JOIN comms_messages m ON m.id = t.root_id\n               WHERE t.root_id = $1 AND m.parent_entity_type = $2 AND m.parent_entity_id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state!: Json<ThreadState>",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bb1b6ac74886b67406b2ae3d403d64a4fc3d74238fdec8d09c8b5fe9220fe294"
+}

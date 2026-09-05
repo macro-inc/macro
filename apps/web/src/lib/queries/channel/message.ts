@@ -20,7 +20,7 @@ import type { ApiChannelContextMessage as Message } from '@service-storage/gener
 import type { ApiCountedReaction as CountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
 import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
 import type { ChannelMessage } from '@service-storage/generated/schemas/channelMessage';
-import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
+import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { PostMessageRequest } from '@service-storage/generated/schemas/postMessageRequest';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
 import { useMutation } from '@tanstack/solid-query';

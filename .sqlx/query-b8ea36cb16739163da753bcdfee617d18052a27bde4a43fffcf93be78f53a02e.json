@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM \"PdfPlaceableCommentAnchor\" WHERE \"threadId\" = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b8ea36cb16739163da753bcdfee617d18052a27bde4a43fffcf93be78f53a02e"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"PdfPlaceableCommentAnchor\"\n                        (uuid, \"documentId\", owner, \"threadId\", page, \"originalPage\", \"originalIndex\",\n                         \"xPct\", \"yPct\", \"widthPct\", \"heightPct\", rotation, \"wasEdited\", \"wasDeleted\", \"shouldLockOnSave\")\n                        VALUES ($1, $2, $3, $4, $5, $5, -1, $6, $7, $8, $9, 0, false, false, false)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Int4",
+        "Float8",
+        "Float8",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "654ab137bc94bb615442aa6474bb69eda9af30414076f20eb2717275c2bf36e0"
+}

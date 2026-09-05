@@ -6,62 +6,129 @@ import {
   useBlockId,
   useBlockName,
 } from '@core/block';
-import { useUserId } from '@core/context/user';
-import { compareDateAsc } from '@core/util/date';
-
+import {
+  invalidateMessageThreads,
+  messageActions,
+  useMessageThreadsQuery,
+} from '@queries/messages';
 import { createConnectionBlockWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type { AnnotationIncrementalUpdate } from '@service-storage/generated/schemas/annotationIncrementalUpdate';
-import type { Comment } from '@service-storage/generated/schemas/comment';
-import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
-import type { CreateCommentRequest } from '@service-storage/generated/schemas/createCommentRequest';
-import type { CreateCommentRequestAnchor } from '@service-storage/generated/schemas/createCommentRequestAnchor';
-import type { CreateCommentRequestMentions } from '@service-storage/generated/schemas/createCommentRequestMentions';
-import type { CreateCommentResponse } from '@service-storage/generated/schemas/createCommentResponse';
 import type { CreateUnthreadedAnchorRequest } from '@service-storage/generated/schemas/createUnthreadedAnchorRequest';
 import type { CreateUnthreadedAnchorResponse } from '@service-storage/generated/schemas/createUnthreadedAnchorResponse';
-import type { DeleteCommentRequest } from '@service-storage/generated/schemas/deleteCommentRequest';
-import type { DeleteCommentResponse } from '@service-storage/generated/schemas/deleteCommentResponse';
 import type { DeleteUnthreadedAnchorRequest } from '@service-storage/generated/schemas/deleteUnthreadedAnchorRequest';
 import type { DeleteUnthreadedAnchorResponse } from '@service-storage/generated/schemas/deleteUnthreadedAnchorResponse';
 import type { EditAnchorRequest } from '@service-storage/generated/schemas/editAnchorRequest';
 import type { EditAnchorResponse } from '@service-storage/generated/schemas/editAnchorResponse';
-import type { EditCommentRequest } from '@service-storage/generated/schemas/editCommentRequest';
-import type { EditCommentResponse } from '@service-storage/generated/schemas/editCommentResponse';
-import { batch } from 'solid-js';
+import type { EditMessage } from '@service-storage/generated/schemas/editMessage';
+import type { PostMessage } from '@service-storage/messages';
 
-const isPdfBlock = createBlockMemo(() => useBlockName() === 'pdf');
-export const commentThreadsResource = createBlockResource(
-  isPdfBlock,
-  fetchComments
-);
-export const anchorsResource = createBlockResource(isPdfBlock, fetchAnchors);
-
-export const sortComments = (a: Comment, b: Comment) => {
-  if (a.order != null && b.order != null) {
-    return a.order - b.order;
-  } else if (a.order != null) {
-    return -1;
-  } else if (b.order != null) {
-    return 1;
-  }
-  return compareDateAsc(a.createdAt, b.createdAt);
+export const documentMessagesQuery = createBlockMemo(() => {
+  const id = useBlockId();
+  return useMessageThreadsQuery(() => ({ type: 'document', id }));
+});
+export const documentMessageThreads = () => {
+  const query = documentMessagesQuery();
+  return query?.isSuccess ? (query.data ?? []) : [];
 };
-
-async function fetchComments() {
-  const documentId = useBlockId();
-  const commentThreads = await storageServiceClient.annotations.getComments({
-    documentId,
+const isPdfBlock = createBlockMemo(() => useBlockName() === 'pdf');
+export const anchorsResource = createBlockResource(isPdfBlock, async () => {
+  const result = await storageServiceClient.annotations.getAnchors({
+    documentId: useBlockId(),
   });
-  return commentThreads.isOk() ? commentThreads.value.data : [];
+  if (result.isErr()) throw new Error('Unable to load document anchors');
+  return result.value.data;
+});
+
+function actions() {
+  const id = useBlockId();
+  return messageActions(() => ({ type: 'document', id }));
+}
+function useCreateMessage() {
+  const messages = actions();
+  const [, { refetch }] = anchorsResource;
+  return async (input: PostMessage) => {
+    const message = await messages.post(input);
+    void refetch();
+    return message;
+  };
+}
+export function useEditCommentResource() {
+  const messages = actions();
+  return async (id: string, input: EditMessage) => {
+    await messages.edit(id, input);
+    return true;
+  };
+}
+export function useDeleteCommentResource() {
+  const messages = actions();
+  return async (id: string) => {
+    await messages.delete(id);
+    return true;
+  };
+}
+export function useCreateThreadReplyResource() {
+  return useCreateMessage();
 }
 
-async function fetchAnchors() {
-  const documentId = useBlockId();
-  const anchors = await storageServiceClient.annotations.getAnchors({
-    documentId,
-  });
-  return anchors.isOk() ? anchors.value.data : [];
+export function useCreateFreeCommentResource() {
+  const create = useCreateMessage();
+  return (
+    content: string,
+    placeable: IThreadPlaceable,
+    mentions?: PostMessage['mentions'],
+    attachments?: PostMessage['attachments']
+  ) => {
+    const [page] = placeable.pageRange;
+    if (page === undefined) throw new Error('A PDF comment requires a page');
+    return create({
+      content,
+      mentions,
+      attachments,
+      anchor: {
+        type: 'pdf_placeable',
+        anchor_id: placeable.internalId,
+        page,
+        x_pct: placeable.position.xPct,
+        y_pct: placeable.position.yPct,
+        width_pct: placeable.position.widthPct,
+        height_pct: placeable.position.heightPct,
+      },
+    });
+  };
+}
+export function useAttachHighlightCommentResource() {
+  const create = useCreateMessage();
+  return (
+    content: string,
+    anchorId: string,
+    mentions?: PostMessage['mentions'],
+    attachments?: PostMessage['attachments']
+  ) =>
+    create({
+      content,
+      mentions,
+      attachments,
+      anchor: { type: 'pdf_highlight', anchor_id: anchorId },
+    });
+}
+export function useCreateHighlightCommentResource() {
+  const createAnchor = useCreateUnthreadedHighlightResource();
+  const attach = useAttachHighlightCommentResource();
+  const [anchors] = anchorsResource;
+  return async (
+    content: string,
+    highlight: IHighlight,
+    mentions?: PostMessage['mentions'],
+    attachments?: PostMessage['attachments']
+  ) => {
+    if (
+      !anchors()?.some((anchor) => anchor.uuid === highlight.uuid) &&
+      !(await createAnchor(highlight))
+    )
+      return null;
+    return attach(content, highlight.uuid, mentions, attachments);
+  };
 }
 
 function useHandleCreateUnthreadedAnchor() {
@@ -97,15 +164,12 @@ function useCreateUnthreadedAnchor() {
 
 function useHandleDeleteUnthreadedAnchor() {
   const [, { mutate: mutateAnchors }] = anchorsResource;
-  const [, { mutate: mutateCommentThreads }] = commentThreadsResource;
+  const documentId = useBlockId();
 
   return async (response: DeleteUnthreadedAnchorResponse) => {
     mutateAnchors((prev) => prev.filter((a) => a.uuid !== response.uuid));
-    if (response.threadId != null) {
-      mutateCommentThreads((prev) =>
-        prev.filter((t) => t.thread.threadId !== response.threadId)
-      );
-    }
+    if (response.threadId != null)
+      void invalidateMessageThreads({ type: 'document', id: documentId });
   };
 }
 
@@ -162,292 +226,6 @@ function useEditAnchor() {
   };
 }
 
-function useHandleCreateComment() {
-  const [, { mutate: mutateCommentThreads }] = commentThreadsResource;
-  const [, { mutate: mutateAnchors }] = anchorsResource;
-
-  return async (response: CreateCommentResponse) => {
-    const commentThread: CommentThread = {
-      thread: response.thread,
-      comments: response.comments,
-    };
-    const retAnchor = response.anchor;
-    batch(() => {
-      if (retAnchor) {
-        mutateAnchors((prev) => [...prev, retAnchor]);
-      }
-
-      let mutatedExistingThread = false;
-      mutateCommentThreads((prev) => {
-        let out: CommentThread[] = [];
-        for (const thread of prev) {
-          if (thread.thread.threadId === commentThread.thread.threadId) {
-            mutatedExistingThread = true;
-            out.push(commentThread);
-          } else {
-            out.push(thread);
-          }
-        }
-        if (!mutatedExistingThread) {
-          out.push(commentThread);
-        }
-        return out;
-      });
-    });
-  };
-}
-
-function useCreateComment() {
-  const documentId = useBlockId();
-  const handleCreateComment = useHandleCreateComment();
-
-  return async (body: CreateCommentRequest) => {
-    if (body.threadId == null && body.anchor == null) {
-      console.error('Provide either a thread or anchor for creating a comment');
-      return null;
-    }
-
-    const result = await storageServiceClient.annotations.createComment({
-      documentId,
-      body,
-    });
-
-    if (result.isErr()) {
-      console.error('Unable to create comment');
-      return null;
-    }
-
-    const response = result.value;
-
-    handleCreateComment(response);
-
-    return response;
-  };
-}
-
-function useHandleEditComment() {
-  const [, { mutate: mutateCommentThreads }] = commentThreadsResource;
-
-  return async (response: EditCommentResponse) => {
-    mutateCommentThreads((prev) => {
-      let out: CommentThread[] = [];
-      for (const thread of prev) {
-        if (thread.thread.threadId === response.threadId) {
-          const commentThread = {
-            thread: thread.thread,
-            comments: thread.comments.map((comment) => {
-              if (comment.commentId === response.commentId) {
-                const editedComment: Comment = response;
-                return editedComment;
-              }
-              return comment;
-            }),
-          };
-          out.push(commentThread);
-        } else {
-          out.push(thread);
-        }
-      }
-      return out;
-    });
-  };
-}
-
-export function useEditCommentResource() {
-  const handleEditComment = useHandleEditComment();
-
-  return async (commentId: number, body: EditCommentRequest) => {
-    const result = await storageServiceClient.annotations.editComment({
-      commentId,
-      body,
-    });
-
-    if (result.isErr()) {
-      console.error('Unable to edit comment');
-      return false;
-    }
-
-    const response = result.value;
-
-    handleEditComment(response);
-
-    return true;
-  };
-}
-
-function useHandleDeleteComment() {
-  const [, { mutate: mutateCommentThreads }] = commentThreadsResource;
-  const [, { mutate: mutateAnchors }] = anchorsResource;
-
-  return async (response: DeleteCommentResponse) => {
-    batch(() => {
-      // either delete single comment or entire thread
-      if (response.thread.deleted) {
-        mutateCommentThreads((prev) =>
-          prev.filter((t) => t.thread.threadId !== response.thread.threadId)
-        );
-      } else {
-        mutateCommentThreads((prev) => {
-          let out: CommentThread[] = [];
-          for (const commentThread of prev) {
-            if (commentThread.thread.threadId === response.thread.threadId) {
-              const comments = commentThread.comments.filter(
-                (c) => c.commentId !== response.commentId
-              );
-              out.push({ thread: commentThread.thread, comments });
-            } else {
-              out.push(commentThread);
-            }
-          }
-          return out;
-        });
-      }
-
-      const deletedAnchor = response.anchor;
-      if (!deletedAnchor) return;
-
-      if (deletedAnchor.deleted) {
-        mutateAnchors((prev) =>
-          prev.filter((a) => a.uuid !== deletedAnchor.uuid)
-        );
-      }
-    });
-  };
-}
-
-export function useDeleteCommentResource() {
-  const handleDeleteComment = useHandleDeleteComment();
-
-  return async (commentId: number, body: DeleteCommentRequest) => {
-    const result = await storageServiceClient.annotations.deleteComment({
-      commentId,
-      body,
-    });
-
-    if (result.isErr()) {
-      console.error('Unable to delete comment');
-      return false;
-    }
-
-    const response = result.value;
-
-    handleDeleteComment(response);
-
-    return true;
-  };
-}
-
-export function useCreateFreeCommentResource() {
-  const createComment = useCreateComment();
-
-  return async (
-    text: string,
-    placeable: IThreadPlaceable,
-    mentions?: CreateCommentRequestMentions
-  ) => {
-    let anchor: CreateCommentRequestAnchor | undefined;
-    if (placeable) {
-      const [page] = placeable.pageRange;
-      if (page === undefined) {
-        throw new Error('Cannot create a PDF comment without a page');
-      }
-      anchor = {
-        uuid: placeable.internalId,
-        page,
-        fileType: 'pdf',
-        anchorType: 'free-comment',
-        // position info
-        xPct: placeable.position.xPct,
-        yPct: placeable.position.yPct,
-        widthPct: placeable.position.widthPct,
-        heightPct: placeable.position.heightPct,
-        rotation: placeable.position.rotation,
-        // TODO: deprecate
-        originalIndex: placeable.originalIndex,
-        originalPage: placeable.originalPage,
-        wasDeleted: placeable.wasDeleted,
-        wasEdited: placeable.wasEdited,
-        allowableEdits: placeable.allowableEdits,
-        shouldLockOnSave: placeable.shouldLockOnSave,
-      };
-    }
-    const body: CreateCommentRequest = {
-      text: text,
-      threadId: undefined,
-      anchor,
-      mentions,
-    };
-
-    return createComment(body);
-  };
-}
-
-export function useCreateHighlightCommentResource() {
-  const createComment = useCreateComment();
-
-  return async (
-    text: string,
-    highlight: IHighlight,
-    mentions?: CreateCommentRequestMentions
-  ) => {
-    let anchor: CreateCommentRequestAnchor | undefined;
-    if (highlight) {
-      if (highlight.pageViewport == null) {
-        console.error('Highlight page viewport is null');
-        return null;
-      }
-
-      anchor = {
-        uuid: highlight.uuid,
-        page: highlight.pageNum,
-        fileType: 'pdf',
-        anchorType: 'highlight',
-        text: highlight.text,
-        alpha: highlight.color.alpha ?? 1,
-        blue: highlight.color.blue,
-        red: highlight.color.red,
-        green: highlight.color.green,
-        highlightRects: highlight.rects,
-        highlightType: 1,
-        pageViewportHeight: highlight.pageViewport?.height ?? 0,
-        pageViewportWidth: highlight.pageViewport?.width ?? 0,
-      };
-    }
-    const body: CreateCommentRequest = {
-      text: text,
-      threadId: undefined,
-      anchor,
-      mentions,
-    };
-
-    return createComment(body);
-  };
-}
-
-export function useAttachHighlightCommentResource() {
-  const createComment = useCreateComment();
-
-  return async (
-    text: string,
-    uuid: string,
-    mentions?: CreateCommentRequestMentions
-  ) => {
-    const body: CreateCommentRequest = {
-      text: text,
-      threadId: undefined,
-      anchor: {
-        fileType: 'pdf',
-        anchorType: 'attachment',
-        attachmentType: 'highlight',
-        uuid,
-      },
-      mentions,
-    };
-
-    return createComment(body);
-  };
-}
-
 export function useCreateUnthreadedHighlightResource() {
   const createAnchor = useCreateUnthreadedAnchor();
 
@@ -490,19 +268,6 @@ export function useDeleteUnthreadedHighlightResource() {
   };
 }
 
-export function useCreateThreadReplyResource() {
-  const createComment = useCreateComment();
-
-  return async (body: CreateCommentRequest & { threadId: number }) => {
-    if (body.threadId < 0) {
-      console.error('Provide a valid thread id');
-      return null;
-    }
-
-    return createComment(body);
-  };
-}
-
 export function useEditPdfFreeCommentAnchor() {
   const editAnchor = useEditAnchor();
 
@@ -531,57 +296,45 @@ export function useEditPdfFreeCommentAnchor() {
   };
 }
 
-createConnectionBlockWebsocketEffect((msg) => {
-  const currentUserId = useUserId();
-  const currentDocumentId = useBlockId();
-  const blockName = useBlockName();
-
-  const handleCommentUpdate = useHandleCreateComment();
-  const handleCreateUnthreadedAnchor = useHandleCreateUnthreadedAnchor();
-  const handleEditComment = useHandleEditComment();
-  const handleEditAnchor = useHandleEditAnchor();
-  const handleDeleteComment = useHandleDeleteComment();
-  const handleDeleteUnthreadedAnchor = useHandleDeleteUnthreadedAnchor();
-
-  if (blockName !== 'pdf') return;
-
-  if (msg.type === 'comment') {
-    let incrementalUpdate: AnnotationIncrementalUpdate;
-    try {
-      incrementalUpdate = JSON.parse(msg.data) as AnnotationIncrementalUpdate;
-      if (
-        incrementalUpdate.payload.documentId !== currentDocumentId ||
-        incrementalUpdate.payload.sender === currentUserId()
-      ) {
-        return;
-      }
-    } catch (e) {
-      console.warn('unable to parse annotation incremental update', e);
-      return;
-    }
-
-    switch (incrementalUpdate.updateType) {
-      case 'create-comment':
-        handleCommentUpdate(incrementalUpdate.payload.response);
-        break;
-      case 'create-anchor':
-        handleCreateUnthreadedAnchor(incrementalUpdate.payload.response);
-        break;
-      case 'edit-comment':
-        handleEditComment(incrementalUpdate.payload.response);
-        break;
-      case 'edit-anchor':
-        handleEditAnchor(incrementalUpdate.payload.response);
-        break;
-      case 'delete-comment':
-        handleDeleteComment(incrementalUpdate.payload.response);
-        break;
-      case 'delete-anchor':
-        handleDeleteUnthreadedAnchor(incrementalUpdate.payload.response);
-        break;
-      default:
-        console.error('unknown comment update type', msg);
-        break;
-    }
+createConnectionBlockWebsocketEffect((event) => {
+  if (useBlockName() !== 'pdf') return;
+  const id = useBlockId();
+  let data;
+  try {
+    data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+  } catch {
+    return;
+  }
+  if (
+    event.type === 'message_update' &&
+    data?.parent?.type === 'document' &&
+    data.parent.id === id
+  ) {
+    const [, { refetch }] = anchorsResource;
+    if (data.change?.type !== 'typing') void refetch();
+  }
+  if (event.type !== 'comment') return;
+  const update = data as AnnotationIncrementalUpdate;
+  if (update.payload.documentId !== id) return;
+  switch (update.updateType) {
+    case 'create-anchor':
+      void useHandleCreateUnthreadedAnchor()(update.payload.response);
+      break;
+    case 'edit-anchor':
+      void useHandleEditAnchor()(update.payload.response);
+      break;
+    case 'delete-anchor':
+      void useHandleDeleteUnthreadedAnchor()(update.payload.response);
+      break;
   }
 });
+
+export function useDeleteThreadResource() {
+  const id = useBlockId();
+  const actions = messageActions(() => ({ type: 'document', id }));
+  const [, { refetch }] = anchorsResource;
+  return async (rootId: string) => {
+    await actions.deleteThread(rootId);
+    void refetch();
+  };
+}

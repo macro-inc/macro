@@ -18,20 +18,23 @@ VALUES ('11111111-1111-1111-1111-111111111111', 'owner', 'user1'),
        ('55555555-5555-5555-5555-555555555555', 'owner', 'owner5');
 
 -- Messages
-INSERT INTO comms_messages (id, channel_id, sender_id, content, thread_id, deleted_at)
-VALUES
-    -- Message with mention in channel 1
-    ('11111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'user1', 'Test message 1', NULL,
-     NULL),
-    -- Regular message in channel 2 (no mentions)
-    ('22222222-2222-2222-2222-222222222222', '22222222-2222-2222-2222-222222222222', 'user3', 'Regular message', NULL,
-     NULL),
-    -- Deleted message in channel 4
-    ('44444444-4444-4444-4444-444444444444', '44444444-4444-4444-4444-444444444444', 'user1', 'Deleted message', NULL,
-     NOW()),
-    -- Multiple messages in channel 5
-    ('55555555-5555-5555-5555-555555555551', '55555555-5555-5555-5555-555555555555', 'user1', 'Message 1', NULL, NULL),
-    ('55555555-5555-5555-5555-555555555552', '55555555-5555-5555-5555-555555555555', 'user2', 'Message 2', NULL, NULL);
+INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, thread_id, deleted_at) VALUES
+-- Message with mention in channel 1
+('11111111-1111-1111-1111-111111111111', 'channel', '11111111-1111-1111-1111-111111111111', 'user1', 'Test message 1', NULL,
+     NULL);
+INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, thread_id, deleted_at) VALUES
+-- Regular message in channel 2 (no mentions)
+('22222222-2222-2222-2222-222222222222', 'channel', '22222222-2222-2222-2222-222222222222', 'user3', 'Regular message', NULL,
+     NULL);
+INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, thread_id, deleted_at) VALUES
+-- Deleted message in channel 4
+('44444444-4444-4444-4444-444444444444', 'channel', '44444444-4444-4444-4444-444444444444', 'user1', 'Deleted message', NULL,
+     NOW());
+INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, thread_id, deleted_at) VALUES
+-- Multiple messages in channel 5
+('55555555-5555-5555-5555-555555555551', 'channel', '55555555-5555-5555-5555-555555555555', 'user1', 'Message 1', NULL, NULL);
+INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content, thread_id, deleted_at) VALUES
+('55555555-5555-5555-5555-555555555552', 'channel', '55555555-5555-5555-5555-555555555555', 'user2', 'Message 2', NULL, NULL);
 
 -- Entity mentions
 INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, created_at)

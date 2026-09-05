@@ -50,6 +50,7 @@ export function getThreadId(group: NotificationStack): string {
   for (const notification of group.notifications) {
     const threadId = match(notification.notification_metadata)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId ?? '')
+      .with({ tag: 'email_thread_comment' }, (m) => m.content.threadId)
       .with({ tag: 'channel_mention' }, (m) => m.content.threadId ?? '')
       .with({ tag: 'replied_to_document_comment_thread' }, (m) =>
         m.content.threadId.toString()
@@ -77,18 +78,9 @@ export function getThreadId(group: NotificationStack): string {
  * - Any send/reply whose messageId matches a mention's messageId is shadowed
  *   (the mention is more informative).
  *
- * Document comment rules (`commented_on_document` cannot be statically
- * distinguished as root vs. reply — the metadata only carries `commentId` and
- * `threadId`, which come from independent id namespaces — so grouping is
- * inferred from peers within the same threadId):
- * - A threadId is a "thread" when it has any reply notification or 2+
- *   notifications of any kind. All notifications for that threadId fold into
- *   a single thread stack.
- * - Otherwise the lone notification is treated as standalone:
- *   - `commented_on_document` standalones bundle into a "new comments" stack.
- *   - `mentioned_in_document_comment` standalones each form their own stack.
- *   - A lone `replied_to_document_comment_thread` is still a thread stack.
- * - Mention shadowing applies the same way as for channels.
+ * Document comments use the root message UUID as their thread ID. Replies
+ * group with their root, and mentions take precedence for the same message.
+ * Internal email comments group by their discussion root.
  */
 export function stackNotifications(
   notifications: UnifiedNotification[]
@@ -110,6 +102,17 @@ export function stackNotifications(
   });
 
   const docCommentStacks = stackDocCommentViews(docCommentViews);
+  const emailComments = notifications.filter(
+    (n) => n.notification_metadata.tag === 'email_thread_comment'
+  );
+  const emailGroups = groupBy(emailComments, (n) =>
+    n.notification_metadata.tag === 'email_thread_comment'
+      ? n.notification_metadata.content.threadId
+      : ''
+  );
+  const emailCommentStacks = [...emailGroups.values()].flatMap((group) =>
+    makeStack('email_thread_comment', group)
+  );
 
   const docMentions = notifications.filter(
     (n) => n.notification_metadata.tag === 'document_mention'
@@ -118,12 +121,14 @@ export function stackNotifications(
     (n) =>
       !isChannelNotification(n) &&
       !isDocumentCommentNotification(n) &&
-      n.notification_metadata.tag !== 'document_mention'
+      n.notification_metadata.tag !== 'document_mention' &&
+      n.notification_metadata.tag !== 'email_thread_comment'
   );
 
   const groups: NotificationStack[] = [
     ...channelStacks,
     ...docCommentStacks,
+    ...emailCommentStacks,
     ...makeStack('document_mention', docMentions),
     ...others.flatMap((n) => makeStack(n.notification_metadata.tag, [n])),
   ];
@@ -175,13 +180,15 @@ function toChannelView(n: UnifiedNotification): NormalizedView | null {
 }
 
 function toDocCommentView(n: UnifiedNotification): NormalizedView | null {
-  // commentId and threadId come from separate DB tables (Comment.id and
-  // Thread.id), so equality between them carries no meaning. Roots vs.
-  // replies are inferred at the stacking layer from peers sharing a threadId.
+  // A root now has the same UUID as its thread; owner notifications for
+  // replies are identified even when they use the generic comment event.
   return match(n.notification_metadata)
     .with({ tag: 'commented_on_document' }, (m) => ({
       notification: n,
-      role: 'send' as const,
+      role:
+        m.content.commentId === m.content.threadId
+          ? ('send' as const)
+          : ('reply' as const),
       messageId: m.content.commentId.toString(),
       threadId: m.content.threadId.toString(),
     }))
