@@ -21,6 +21,10 @@ import { cn, Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
 
+/** Compact ghost pill — same size as the short-list trigger and chat's selector. */
+const PILL_TRIGGER_CLASS =
+  'h-6 w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-xs text-ink-muted hover:bg-ink/10';
+
 /** Height of one model row — `h-7` on the item, so the cap is exact. */
 const ROW_HEIGHT_PX = 28;
 /** Rows shown in full before the list starts scrolling. */
@@ -78,7 +82,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
             <Dropdown.Trigger
               variant="ghost"
               size="sm"
-              class="h-6 gap-1 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10 touch:h-8"
+              class={PILL_TRIGGER_CLASS}
               disabled={props.disabled || props.changingTo !== undefined}
             >
               <TextShimmer
@@ -124,21 +128,19 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
           </Dropdown>
         }
       >
-        <div class="min-w-44">
-          <ModelCatalogPicker
-            value={shown()}
-            options={catalogOptions()}
-            onSelect={(id) => {
-              if (id !== props.model) props.onSelect(id);
-            }}
-            disabled={props.disabled || props.changingTo !== undefined}
-            ariaLabel="Agent model"
-            searchPlaceholder="Search models"
-            triggerClass="h-6 rounded-full bg-ink/5 px-2 text-xs text-ink-muted hover:bg-ink/10 touch:h-8"
-            contentClass="overflow-hidden"
-            placement="top-start"
-          />
-        </div>
+        <ModelCatalogPicker
+          value={shown()}
+          options={catalogOptions()}
+          onSelect={(id) => {
+            if (id !== props.model) props.onSelect(id);
+          }}
+          disabled={props.disabled || props.changingTo !== undefined}
+          ariaLabel="Agent model"
+          searchPlaceholder="Search models"
+          triggerClass={PILL_TRIGGER_CLASS}
+          contentClass="overflow-hidden"
+          placement="top-start"
+        />
       </Show>
     </Show>
   );

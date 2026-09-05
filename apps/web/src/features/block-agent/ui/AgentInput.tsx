@@ -39,7 +39,7 @@ export interface AgentInputProps {
   /** Receives the composed markdown, including any `<m-document-mention>` tags. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
-  /** Sits as a pill above the input box, e.g. the session's model selector. */
+  /** Model pill in the composer footer, opposite send. */
   modelControl?: JSX.Element;
   /**
    * Ref-style: receives the quote-insert function once the editor mounts
@@ -59,7 +59,7 @@ export interface AgentInputProps {
   registerFocus?: (focus: (() => void) | undefined) => void;
 }
 
-/** Past this height the controls drop below the text instead of overlaying it. */
+/** Past this height a phone draft is scroll-capped so it cannot eat the dock. */
 const SINGLE_LINE_HEIGHT = 40;
 
 export function AgentInput(props: AgentInputProps) {
@@ -72,8 +72,8 @@ export function AgentInput(props: AgentInputProps) {
   // running turn.
   const canSend = () => markdown().trim().length > 0 && !props.disabled;
 
-  // Same content-driven switch as ChatInput: once the editor body wraps past
-  // one line, the send button stops overlaying the text and sits below it.
+  // Caps tall drafts on a phone so the editor cannot eat the viewport
+  // above the dock. Controls live in a footer row, not over the text.
   const isMultiline = () => {
     if (markdown().trim().length === 0) return false;
     if (!bodyRef) return false;
@@ -156,7 +156,7 @@ export function AgentInput(props: AgentInputProps) {
   return (
     <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
       <Surface class="rounded-xl touch:rounded-3xl" depth={2} solid>
-        <div class="relative px-2 py-1.5" onPointerDown={focusEditor}>
+        <div class="flex flex-col px-2 py-1.5" onPointerDown={focusEditor}>
           {/* No vertical padding of its own: the shell is min-h-8 and editor
             paragraphs carry my-1.5, so the row's py-1.5 is the whole frame —
             the same 44px single-line height as ChatInput. */}
@@ -164,10 +164,6 @@ export function AgentInput(props: AgentInputProps) {
             ref={bodyRef}
             class="pl-1 text-sm text-ink"
             classList={{
-              // Room for model + send on one line (chat's right-controls inset).
-              'pr-28': !isMultiline() && !!props.modelControl,
-              'pr-10': !isMultiline() && !props.modelControl,
-              'pb-10': isMultiline(),
               // While empty only the placeholder renders; keep it to one clipped
               // line so it doesn't wrap into the single-line height.
               'overflow-hidden whitespace-nowrap':
@@ -186,42 +182,48 @@ export function AgentInput(props: AgentInputProps) {
             />
           </div>
 
-          <div class="absolute right-1.5 bottom-1.5 flex items-center gap-1">
-            <Show when={props.modelControl}>{props.modelControl}</Show>
-            <Show
-              when={props.busy && props.onStop}
-              fallback={
-                <SendButton
-                  tooltip="Send"
-                  disabled={!canSend()}
-                  onClick={send}
-                />
-              }
-            >
+          {/* Channel / chat-tall: model and send live in the bar, not
+              absolutely over the editor or the mobile dock. */}
+          <div class="flex items-center justify-between gap-1 pt-0.5">
+            <div class="min-w-0">
+              <Show when={props.modelControl}>{props.modelControl}</Show>
+            </div>
+            <div class="shrink-0">
               <Show
-                when={canSendNext()}
+                when={props.busy && props.onStop}
                 fallback={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    label="Stop"
-                    onClick={() => props.onStop?.()}
-                    class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
-                  >
-                    <div class="size-3.5 rounded-sm bg-current" />
-                  </Button>
+                  <SendButton
+                    tooltip="Send"
+                    disabled={!canSend()}
+                    onClick={send}
+                  />
                 }
               >
-                <SendButton
-                  aria-label="Send next queued message"
-                  tooltip="Send next queued message"
-                  shortcut="Enter"
-                  onClick={sendNext}
+                <Show
+                  when={canSendNext()}
+                  fallback={
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      label="Stop"
+                      onClick={() => props.onStop?.()}
+                      class="rounded-[11px] size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10"
+                    >
+                      <div class="size-3.5 rounded-sm bg-current" />
+                    </Button>
+                  }
                 >
-                  <EnterIcon />
-                </SendButton>
+                  <SendButton
+                    aria-label="Send next queued message"
+                    tooltip="Send next queued message"
+                    shortcut="Enter"
+                    onClick={sendNext}
+                  >
+                    <EnterIcon />
+                  </SendButton>
+                </Show>
               </Show>
-            </Show>
+            </div>
           </div>
         </div>
       </Surface>
