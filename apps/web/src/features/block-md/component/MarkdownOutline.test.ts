@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { getActiveHeadingIndex, shouldShowOutline } from './MarkdownOutline';
+import {
+  getActiveHeadingIndex,
+  isScrolledToBottom,
+  shouldShowOutline,
+} from './MarkdownOutline';
 
 describe('getActiveHeadingIndex', () => {
   it('selects the first heading before the document reaches it', () => {
@@ -10,8 +14,24 @@ describe('getActiveHeadingIndex', () => {
     expect(getActiveHeadingIndex([20, 100, 300], 150)).toBe(1);
   });
 
+  it('selects the last heading when scrolled to the bottom', () => {
+    expect(getActiveHeadingIndex([20, 100, 400], 80, true)).toBe(2);
+  });
+
   it('returns no selection when the document has no headings', () => {
     expect(getActiveHeadingIndex([], 150)).toBe(-1);
+    expect(getActiveHeadingIndex([], 150, true)).toBe(-1);
+  });
+});
+
+describe('isScrolledToBottom', () => {
+  it('is true at and just past the last pixel', () => {
+    expect(isScrolledToBottom(920, 800, 1720)).toBe(true);
+    expect(isScrolledToBottom(918.5, 800, 1720)).toBe(true);
+  });
+
+  it('is false when more than the threshold remains', () => {
+    expect(isScrolledToBottom(900, 800, 1720)).toBe(false);
   });
 });
 
