@@ -131,6 +131,9 @@ Clients:
 - MUST NOT prefetch the URL or its metadata
 - MUST show the full URL and obtain consent before navigating
 - MUST highlight the host; SHOULD warn on Punycode / suspicious URIs
+  (Macro shows the full URL and highlights the host - the MUST. It does not
+  warn on Punycode: a `xn--` test is a poor proxy for a hostile host, and it
+  read as a security guarantee the client cannot make. Deliberately unmet.)
 - MUST open in a context the Client and the model cannot inspect
   (new browser tab, not an embedded webview we control)
 - MUST identify the requesting Agent and offer decline + cancel
@@ -335,6 +338,21 @@ elicitation (see [User tools reviewed in the turn](#user-tools-reviewed-in-the-t
   and settles into the finished user tool; the owner gate lives in the
   controller; the MagicChip gets an `asking` state with a compact card.
 
+Third pass, same branch - the answer surface typed end to end (see [Answers
+are shapes, not values](#answers-are-shapes-not-values)):
+
+- `agent_fold`: `ElicitationOutcome::Accepted { answers: Vec<AnsweredField> }`
+  and `reported: Option<Vec<AnsweredField>>` replace two raw-JSON fields. The
+  schema correlation, option titles, and the "Other" idiom resolve in the
+  fold, pinned by the Claude Code fixture that carries both keys.
+- `agent_runtime_protocol`: `ElicitationContentValue` closes the outbound
+  content type, `to_acp_response` becomes total, and the OpenAPI stops saying
+  `additionalProperties: {}`.
+- Web: `describeContent` and `optionTitle` deleted - the part renders the
+  fold's answers. `FieldValue` collapses from six kinds to four (one per
+  schema-type group), every decision is an `.exhaustive()` `match`, and
+  `pattern` / `format` / `looksSuspicious` are gone.
+
 Still to do: request scope, more than one outstanding question per session
 (Claude Code's parallel subagents), the MCP server reviewing user tools for
 sandboxed harnesses.
@@ -398,6 +416,56 @@ composer prompt; `AgentSession` keeps the same tools with the review prompt;
 `ChannelBot` and `Mcp` are unchanged — direct `CreateCalendarEvent`, no
 `SendEmail` — until the MCP server reviews through `rmcp`'s elicitation.
 
+## Answers are shapes, not values
+
+The first pass carried an accepted answer as raw JSON - ACP's content map,
+verbatim, `unknown` in TypeScript. That pushed one job onto every client:
+re-correlating the content with the schema that asked for it.
+
+The pinned Claude Code recording shows why that is the fold's job. Its
+accepted content is:
+
+```json
+{ "question_0": "Red", "question_0_custom": "blue" }
+```
+
+Both the choice *and* the free-text escape, because the harness sends both.
+The answer is "blue" - Claude Code says so itself in the tool result it
+reports afterwards. Resolving that took the same rule written three times: in
+the harness reader that produced `reported`, in the browser's `describeContent`
+(`custom ?? record[name]`), and inverted in `toContent`'s "never send both".
+Two languages, one rule, no shared test.
+
+It now folds once, against the schema:
+
+```rust
+Accepted { answers: vec![AnsweredField {
+    name: "question_0", label: "Best colour",
+    value: AnsweredValue::Custom { text: "blue" },
+}] }
+```
+
+Properties in declaration order, `label` resolved from the property's title,
+options resolved to the titles they were offered under, unanswered properties
+absent, and any key no property claimed kept as its own field. `reported`
+folds to the same type, labelled by the question prose a harness keys it with,
+so a surface renders one vocabulary either way. The fixture pins all of it.
+
+Two `#[specta(type = Unknown)]` escapes go away with it. `AnsweredValue::Number`
+carries the number as text: a JSON integer can outrun `f64`'s exact range, and
+`f64` has a `number | null` TypeScript face because a non-finite float
+serializes as null.
+
+The outbound direction is the mirror image and stays flat, because the
+session machine holds only a request id - it never sees the schema, so the
+`customField` key mapping has to stay client-side. What it gained instead is
+a closed type: `ElicitationContentValue` (string, boolean, integer, number,
+string array) replaces `serde_json::Value` on `ElicitationAnswer::Accept`, so
+`to_acp_response` is total. An object or a mixed array is now refused when the
+control request is *read*, where the caller learns of it, rather than at send
+time - after the machine has already released the elicitation slot, which
+would leave the agent blocked on a request nothing could answer.
+
 ## Product decisions
 
 1. **Client first.** The product path is Macro receiving elicitation from
@@ -431,6 +499,17 @@ composer prompt; `AgentSession` keeps the same tools with the review prompt;
 13. **Only the owner answers, everywhere it shows.** The controller knows
     the owner and the viewer; the session block and the chip render the
     question locked for anyone else and name who is being waited on.
+14. **The fold shapes answers, it does not forward values.** An accepted
+    answer folds to `Vec<AnsweredField>` - correlated with the schema that
+    asked, option titles resolved, the harness "Other" idiom collapsed - and
+    the harness's own reported reading folds to the same shape. The
+    correlation happens where the schema and the content are both in hand, so
+    no client repeats it. See [Answers are shapes, not
+    values](#answers-are-shapes-not-values).
+15. **A client validates only what it can check totally.** Required, lengths,
+    bounds, membership, item counts. Not `pattern`, not `format`: the agent
+    enforces both on every answer, and an agent-supplied regex has no place
+    on the browser's main thread.
 
 ## What changes
 

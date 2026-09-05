@@ -6,136 +6,122 @@
  * fold's generated types): one field per question, declaration order kept,
  * harness idioms collapsed. This file only knows that vocabulary. Decisions
  * are functions over present values so the component stays a thin shell.
+ *
+ * Draft values are deliberately *not* the answer's shape: a number is held as
+ * the text being typed, and a select holds both what was picked and what was
+ * typed instead, so a half-finished field is representable. There are four
+ * value kinds to the schema's six types, one per group, so every decision
+ * here matches on the schema and reads the value without re-narrowing - and
+ * every match is `.exhaustive()`, so a property type the fold learns later is
+ * a build error here rather than a silent fall-through.
+ *
+ * What this does not validate: `pattern` and `format`. Both are the agent's
+ * to enforce and it does, on every answer, before acting. Re-implementing
+ * them here bought an early hint and cost an unbounded, agent-supplied regex
+ * on the browser's main thread. The client checks what it can check cheaply
+ * and totally - required, lengths, bounds, membership, item counts - and
+ * nothing else.
  */
 
 import type {
-  ElicitationProperty,
+  ElicitationPropertySchema,
   ElicitationSchema,
 } from '@service-agent-fold/generated/types';
+import { match, P } from 'ts-pattern';
 
 /** One field's draft value, keyed by property name. */
 export type FieldValue =
-  /** A free-text or single-select answer. */
+  /** Free text, and the raw text of a number while it is being typed. */
   | { kind: 'text'; text: string }
-  /** A single select with a custom-text escape: exactly one of the two. */
-  | { kind: 'choice'; value: string | undefined; custom: string }
-  | { kind: 'number'; text: string }
+  /**
+   * One or many choices. `custom` is `undefined` until the free-text escape
+   * is picked, then the text typed into it - so "picked Other but typed
+   * nothing yet" is a state of its own, not a blank.
+   */
+  | { kind: 'select'; values: string[]; custom: string | undefined }
   | { kind: 'boolean'; checked: boolean }
-  /** A multi select; `custom` is the free-text escape when the field has one. */
-  | { kind: 'multi'; values: string[]; custom: string }
+  /** A property type this client cannot render. */
   | { kind: 'unsupported' };
 
 export type FormValues = Record<string, FieldValue>;
 
-/**
- * Patterns beyond this length, or with a quantified group that is itself
- * quantified, are not evaluated: JavaScript's regex engine cannot be
- * interrupted, and the agent supplied the pattern. The agent validates again
- * on its side, so skipping here loses nothing but an early hint.
- */
-const PATTERN_MAX_LENGTH = 200;
-const NESTED_QUANTIFIER = /\([^)]*[+*][^)]*\)\s*[+*{]/;
+/** A select, single or multi, and its options. */
+type SelectSchema = Extract<
+  ElicitationPropertySchema,
+  { type: 'string' | 'multi_select' }
+>;
+type SelectValue = Extract<FieldValue, { kind: 'select' }>;
 
 /** Draft values pre-filled from the schema's defaults. */
 export function initialValues(schema: ElicitationSchema): FormValues {
   const values: FormValues = {};
   for (const property of schema.properties) {
-    const field = property.schema;
-    switch (field.type) {
-      case 'string':
-        values[property.name] =
-          field.options.length > 0
-            ? { kind: 'choice', value: field.default ?? undefined, custom: '' }
-            : { kind: 'text', text: field.default ?? '' };
-        break;
-      case 'number':
-      case 'integer':
-        values[property.name] = {
-          kind: 'number',
-          text: field.default == null ? '' : String(field.default),
-        };
-        break;
-      case 'boolean':
-        values[property.name] = {
-          kind: 'boolean',
-          checked: field.default ?? false,
-        };
-        break;
-      case 'multi_select':
-        values[property.name] = {
-          kind: 'multi',
-          values: [...field.default],
-          custom: '',
-        };
-        break;
-      case 'unrecognized':
-        values[property.name] = { kind: 'unsupported' };
-        break;
-    }
+    values[property.name] = initialValue(property.schema);
   }
   return values;
 }
 
-function isBlank(value: FieldValue | undefined): boolean {
-  if (!value) return true;
-  switch (value.kind) {
-    case 'text':
-      return value.text.trim().length === 0;
-    case 'choice':
-      return value.value === undefined && value.custom.trim().length === 0;
-    case 'number':
-      return value.text.trim().length === 0;
-    case 'boolean':
-      return false;
-    case 'multi':
-      return value.values.length === 0 && value.custom.trim().length === 0;
-    case 'unsupported':
-      return true;
-  }
+function initialValue(field: ElicitationPropertySchema): FieldValue {
+  return match(field)
+    .with(
+      { type: 'string', options: P.when((options) => options.length > 0) },
+      (select): FieldValue => ({
+        kind: 'select',
+        values: select.default == null ? [] : [select.default],
+        custom: undefined,
+      })
+    )
+    .with(
+      { type: 'string' },
+      (text): FieldValue => ({
+        kind: 'text',
+        text: text.default ?? '',
+      })
+    )
+    .with(
+      { type: 'number' },
+      { type: 'integer' },
+      (number): FieldValue => ({
+        kind: 'text',
+        text: number.default == null ? '' : String(number.default),
+      })
+    )
+    .with(
+      { type: 'boolean' },
+      (flag): FieldValue => ({
+        kind: 'boolean',
+        checked: flag.default ?? false,
+      })
+    )
+    .with(
+      { type: 'multi_select' },
+      (multi): FieldValue => ({
+        kind: 'select',
+        values: [...multi.default],
+        custom: undefined,
+      })
+    )
+    .with({ type: 'unrecognized' }, (): FieldValue => ({ kind: 'unsupported' }))
+    .exhaustive();
 }
 
-const FORMAT_CHECKS: Record<string, (text: string) => boolean> = {
-  email: (text) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text),
-  uri: (text) => {
-    try {
-      new URL(text);
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  date: (text) =>
-    /^\d{4}-\d{2}-\d{2}$/.test(text) && !Number.isNaN(Date.parse(text)),
-  'date-time': (text) => !Number.isNaN(Date.parse(text)),
-};
+/**
+ * How many answers a select holds: its checked values, plus the custom text
+ * when one was typed. Custom text is an answer, which is what `minItems` and
+ * `maxItems` are counting.
+ */
+function selected(value: SelectValue): number {
+  return value.values.length + (value.custom?.trim() ? 1 : 0);
+}
 
-function validateText(
-  property: Extract<ElicitationProperty['schema'], { type: 'string' }>,
-  text: string
-): string | undefined {
-  if (property.minLength != null && text.length < property.minLength) {
-    return `At least ${property.minLength} characters`;
-  }
-  if (property.maxLength != null && text.length > property.maxLength) {
-    return `At most ${property.maxLength} characters`;
-  }
-  if (property.format && FORMAT_CHECKS[property.format]?.(text) === false) {
-    return `Not a valid ${property.format}`;
-  }
-  if (
-    property.pattern &&
-    property.pattern.length <= PATTERN_MAX_LENGTH &&
-    !NESTED_QUANTIFIER.test(property.pattern)
-  ) {
-    try {
-      if (!new RegExp(property.pattern).test(text)) {
-        return 'Does not match the required format';
-      }
-    } catch {
-      // An invalid pattern is the agent's problem; do not block the user.
-    }
-  }
-  return undefined;
+function isBlank(value: FieldValue | undefined): boolean {
+  if (!value) return true;
+  return match(value)
+    .with({ kind: 'text' }, (text) => text.text.trim().length === 0)
+    .with({ kind: 'select' }, (select) => selected(select) === 0)
+    .with({ kind: 'boolean' }, () => false)
+    .with({ kind: 'unsupported' }, () => true)
+    .exhaustive();
 }
 
 /**
@@ -148,176 +134,150 @@ export function validate(
 ): Record<string, string> {
   const errors: Record<string, string> = {};
   for (const property of schema.properties) {
-    const value = values[property.name];
-    const required = schema.required.includes(property.name);
-    if (isBlank(value)) {
-      if (required && property.schema.type !== 'unrecognized') {
-        errors[property.name] = 'Required';
-      }
-      continue;
-    }
-    if (!value) continue;
-    const field = property.schema;
-    switch (field.type) {
-      case 'string': {
-        if (value.kind === 'text') {
-          const problem = validateText(field, value.text);
-          if (problem) errors[property.name] = problem;
-        } else if (value.kind === 'choice') {
-          if (value.value !== undefined && value.custom.trim().length > 0) {
-            errors[property.name] =
-              'Choose an option or type your own, not both';
-          } else if (
-            value.value !== undefined &&
-            !field.options.some((option) => option.value === value.value)
-          ) {
-            errors[property.name] = 'Not one of the offered choices';
-          } else if (value.custom.trim().length > 0 && !field.customField) {
-            errors[property.name] = 'Choose one of the offered choices';
-          }
-        }
-        break;
-      }
-      case 'number':
-      case 'integer': {
-        if (value.kind !== 'number') break;
-        const parsed = Number(value.text);
-        if (!Number.isFinite(parsed)) {
-          errors[property.name] = 'Not a number';
-        } else if (field.type === 'integer' && !Number.isInteger(parsed)) {
-          errors[property.name] = 'Must be a whole number';
-        } else if (field.minimum != null && parsed < field.minimum) {
-          errors[property.name] = `At least ${field.minimum}`;
-        } else if (field.maximum != null && parsed > field.maximum) {
-          errors[property.name] = `At most ${field.maximum}`;
-        }
-        break;
-      }
-      case 'multi_select': {
-        if (value.kind !== 'multi') break;
-        if (field.minItems != null && value.values.length < field.minItems) {
-          errors[property.name] = `Choose at least ${field.minItems}`;
-        } else if (
-          field.maxItems != null &&
-          value.values.length > field.maxItems
-        ) {
-          errors[property.name] = `Choose at most ${field.maxItems}`;
-        }
-        break;
-      }
-      case 'boolean':
-      case 'unrecognized':
-        break;
-    }
+    const problem = validateField(
+      property.schema,
+      values[property.name],
+      schema.required.includes(property.name)
+    );
+    if (problem) errors[property.name] = problem;
   }
   return errors;
+}
+
+function validateField(
+  field: ElicitationPropertySchema,
+  value: FieldValue | undefined,
+  required: boolean
+): string | undefined {
+  // A field this client cannot render can never be filled in, so a required
+  // one has no valid answer: the user's move is decline, not submit.
+  if (field.type === 'unrecognized') {
+    return required
+      ? `This client cannot answer a ${field.typeName} field`
+      : undefined;
+  }
+  if (isBlank(value)) return required ? 'Required' : undefined;
+  if (!value) return undefined;
+
+  return match(field)
+    .with({ type: 'string' }, (text) =>
+      value.kind === 'select'
+        ? membership(text, value)
+        : value.kind === 'text'
+          ? length(text, value.text)
+          : undefined
+    )
+    .with({ type: 'number' }, { type: 'integer' }, (number) =>
+      value.kind === 'text'
+        ? bounds(number, value.text, field.type === 'integer')
+        : undefined
+    )
+    .with({ type: 'multi_select' }, (multi) =>
+      value.kind === 'select' ? count(multi, value) : undefined
+    )
+    .with({ type: 'boolean' }, () => undefined)
+    .exhaustive();
+}
+
+function length(
+  field: Extract<ElicitationPropertySchema, { type: 'string' }>,
+  text: string
+): string | undefined {
+  if (field.minLength != null && text.length < field.minLength) {
+    return `At least ${field.minLength} characters`;
+  }
+  if (field.maxLength != null && text.length > field.maxLength) {
+    return `At most ${field.maxLength} characters`;
+  }
+  return undefined;
+}
+
+function bounds(
+  field: Extract<ElicitationPropertySchema, { type: 'number' | 'integer' }>,
+  text: string,
+  whole: boolean
+): string | undefined {
+  const parsed = Number(text);
+  if (!Number.isFinite(parsed)) return 'Not a number';
+  if (whole && !Number.isInteger(parsed)) return 'Must be a whole number';
+  if (field.minimum != null && parsed < field.minimum) {
+    return `At least ${field.minimum}`;
+  }
+  if (field.maximum != null && parsed > field.maximum) {
+    return `At most ${field.maximum}`;
+  }
+  return undefined;
+}
+
+function count(
+  field: Extract<ElicitationPropertySchema, { type: 'multi_select' }>,
+  value: SelectValue
+): string | undefined {
+  const chosen = selected(value);
+  if (field.minItems != null && chosen < field.minItems) {
+    return `Choose at least ${field.minItems}`;
+  }
+  if (field.maxItems != null && chosen > field.maxItems) {
+    return `Choose at most ${field.maxItems}`;
+  }
+  return membership(field, value);
+}
+
+/** A select's values must be offered, and its custom text must be allowed. */
+function membership(
+  field: SelectSchema,
+  value: SelectValue
+): string | undefined {
+  if (value.custom?.trim() && !field.customField) {
+    return 'Choose one of the offered choices';
+  }
+  const stray = value.values.some(
+    (chosen) => !field.options.some((option) => option.value === chosen)
+  );
+  return stray ? 'Not one of the offered choices' : undefined;
 }
 
 /**
  * The `content` for an `accept`: one key per answered field. A select with a
  * custom escape sends the choice under the property's name *or* the typed
- * text under `customField` — never both, which is the one thing the Claude
+ * text under `customField` - never both, which is the one thing the Claude
  * Code recording showed a naive client getting wrong. Blank optional fields
  * are omitted rather than sent empty.
  */
 export function toContent(
   schema: ElicitationSchema,
   values: FormValues
-): Record<string, unknown> {
-  const content: Record<string, unknown> = {};
+): Record<string, string | number | boolean | string[]> {
+  const content: Record<string, string | number | boolean | string[]> = {};
   for (const property of schema.properties) {
     const value = values[property.name];
-    if (!value || isBlank(value)) continue;
-    switch (value.kind) {
-      case 'text':
-        content[property.name] = value.text;
-        break;
-      case 'choice': {
-        const field = property.schema;
-        const custom = value.custom.trim();
-        if (custom.length > 0 && field.type === 'string' && field.customField) {
-          content[field.customField] = custom;
-        } else if (value.value !== undefined) {
-          content[property.name] = value.value;
+    const field = property.schema;
+    if (!value || isBlank(value) || field.type === 'unrecognized') continue;
+    match(value)
+      .with({ kind: 'text' }, (text) => {
+        content[property.name] =
+          field.type === 'number' || field.type === 'integer'
+            ? Number(text.text)
+            : text.text;
+      })
+      .with({ kind: 'boolean' }, (flag) => {
+        content[property.name] = flag.checked;
+      })
+      .with({ kind: 'select' }, (select) => {
+        const custom = select.custom?.trim();
+        const customField =
+          field.type === 'string' || field.type === 'multi_select'
+            ? field.customField
+            : null;
+        if (custom && customField) {
+          content[customField] = custom;
+        } else if (select.values.length > 0) {
+          content[property.name] =
+            field.type === 'multi_select' ? select.values : select.values[0];
         }
-        break;
-      }
-      case 'number':
-        content[property.name] = Number(value.text);
-        break;
-      case 'boolean':
-        content[property.name] = value.checked;
-        break;
-      case 'multi': {
-        const field = property.schema;
-        const custom = value.custom.trim();
-        if (
-          custom.length > 0 &&
-          field.type === 'multi_select' &&
-          field.customField
-        ) {
-          content[field.customField] = custom;
-        } else if (value.values.length > 0) {
-          content[property.name] = value.values;
-        }
-        break;
-      }
-      case 'unsupported':
-        break;
-    }
+      })
+      .with({ kind: 'unsupported' }, () => {})
+      .exhaustive();
   }
   return content;
-}
-
-/** A read-only rendering of submitted content, one line per field. */
-export function describeContent(
-  schema: ElicitationSchema,
-  content: unknown
-): { label: string; value: string }[] {
-  if (typeof content !== 'object' || content === null) return [];
-  const record = content as Record<string, unknown>;
-  const lines: { label: string; value: string }[] = [];
-  for (const property of schema.properties) {
-    const label = property.title ?? property.name;
-    const field = property.schema;
-    const custom =
-      (field.type === 'string' || field.type === 'multi_select') &&
-      field.customField
-        ? record[field.customField]
-        : undefined;
-    const raw = custom ?? record[property.name];
-    if (raw === undefined || raw === null) continue;
-    let value: string;
-    if (Array.isArray(raw)) {
-      value = raw.map((item) => optionTitle(property, String(item))).join(', ');
-    } else if (typeof raw === 'string') {
-      value = custom === undefined ? optionTitle(property, raw) : raw;
-    } else {
-      value = String(raw);
-    }
-    lines.push({ label, value });
-  }
-  return lines;
-}
-
-function optionTitle(property: ElicitationProperty, value: string): string {
-  const field = property.schema;
-  if (field.type !== 'string' && field.type !== 'multi_select') return value;
-  return field.options.find((option) => option.value === value)?.title ?? value;
-}
-
-/** The host of a URL-mode request, for the consent card, or the raw text. */
-export function urlHost(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
-}
-
-/** Punycode (`xn--`) anywhere in the host: warn before the user opens it. */
-export function looksSuspicious(url: string): boolean {
-  return urlHost(url)
-    .split('.')
-    .some((label) => label.startsWith('xn--'));
 }

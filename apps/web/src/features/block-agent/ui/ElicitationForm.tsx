@@ -20,6 +20,11 @@ export interface ElicitationFormProps {
   onChange: (name: string, value: FieldValue) => void;
 }
 
+/** The text a free-text or number field is showing. */
+function textOf(value: FieldValue | undefined): string {
+  return value?.kind === 'text' ? value.text : '';
+}
+
 const INPUT_CLASS =
   'w-full rounded-md border border-edge-muted bg-surface px-2 py-1 text-sm text-ink placeholder:text-ink-placeholder focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50';
 
@@ -77,10 +82,13 @@ export function ElicitationForm(props: ElicitationFormProps) {
                 <div class="flex flex-col gap-1" role="radiogroup">
                   <For each={field.options}>
                     {(option) => {
-                      const current = value();
-                      const checked = () =>
-                        current?.kind === 'choice' &&
-                        current.value === option.value;
+                      const checked = () => {
+                        const current = value();
+                        return (
+                          current?.kind === 'select' &&
+                          current.values.includes(option.value)
+                        );
+                      };
                       return (
                         <label class="flex items-start gap-2 text-sm text-ink">
                           <input
@@ -92,9 +100,9 @@ export function ElicitationForm(props: ElicitationFormProps) {
                             disabled={props.disabled}
                             onChange={() =>
                               set({
-                                kind: 'choice',
-                                value: option.value,
-                                custom: '',
+                                kind: 'select',
+                                values: [option.value],
+                                custom: undefined,
                               })
                             }
                           />
@@ -122,14 +130,13 @@ export function ElicitationForm(props: ElicitationFormProps) {
                         checked={(() => {
                           const current = value();
                           return (
-                            current?.kind === 'choice' &&
-                            current.value === undefined &&
-                            current.custom.length > 0
+                            current?.kind === 'select' &&
+                            current.custom !== undefined
                           );
                         })()}
                         disabled={props.disabled}
                         onChange={() =>
-                          set({ kind: 'choice', value: undefined, custom: ' ' })
+                          set({ kind: 'select', values: [], custom: '' })
                         }
                       />
                       <span class="flex min-w-0 flex-1 flex-col gap-1">
@@ -141,14 +148,14 @@ export function ElicitationForm(props: ElicitationFormProps) {
                           disabled={props.disabled}
                           value={(() => {
                             const current = value();
-                            return current?.kind === 'choice'
-                              ? current.custom.trimStart()
+                            return current?.kind === 'select'
+                              ? (current.custom ?? '')
                               : '';
                           })()}
                           onInput={(event) =>
                             set({
-                              kind: 'choice',
-                              value: undefined,
+                              kind: 'select',
+                              values: [],
                               custom: event.currentTarget.value,
                             })
                           }
@@ -168,11 +175,7 @@ export function ElicitationForm(props: ElicitationFormProps) {
                   }
                   class={INPUT_CLASS}
                   disabled={props.disabled}
-                  value={
-                    value()?.kind === 'text'
-                      ? (value() as { text: string }).text
-                      : ''
-                  }
+                  value={textOf(value())}
                   onInput={(event) =>
                     set({ kind: 'text', text: event.currentTarget.value })
                   }
@@ -185,21 +188,17 @@ export function ElicitationForm(props: ElicitationFormProps) {
                   step={field.type === 'integer' ? 1 : 'any'}
                   min={field.minimum ?? undefined}
                   max={field.maximum ?? undefined}
-                  value={
-                    value()?.kind === 'number'
-                      ? (value() as { text: string }).text
-                      : ''
-                  }
+                  value={textOf(value())}
                   onInput={(event) =>
-                    set({ kind: 'number', text: event.currentTarget.value })
+                    set({ kind: 'text', text: event.currentTarget.value })
                   }
                 />
               ) : field.type === 'boolean' ? (
                 <Checkbox
-                  checked={
-                    value()?.kind === 'boolean' &&
-                    (value() as { checked: boolean }).checked
-                  }
+                  checked={(() => {
+                    const current = value();
+                    return current?.kind === 'boolean' && current.checked;
+                  })()}
                   disabled={props.disabled}
                   onChange={(checked) => set({ kind: 'boolean', checked })}
                 >
@@ -212,7 +211,7 @@ export function ElicitationForm(props: ElicitationFormProps) {
                     {(option) => {
                       const selected = () => {
                         const current = value();
-                        return current?.kind === 'multi' ? current.values : [];
+                        return current?.kind === 'select' ? current.values : [];
                       };
                       return (
                         <Checkbox
@@ -220,13 +219,13 @@ export function ElicitationForm(props: ElicitationFormProps) {
                           disabled={props.disabled}
                           onChange={(checked) =>
                             set({
-                              kind: 'multi',
+                              kind: 'select',
                               values: checked
                                 ? [...selected(), option.value]
                                 : selected().filter(
                                     (item) => item !== option.value
                                   ),
-                              custom: '',
+                              custom: undefined,
                             })
                           }
                         >
@@ -253,11 +252,13 @@ export function ElicitationForm(props: ElicitationFormProps) {
                       disabled={props.disabled}
                       value={(() => {
                         const current = value();
-                        return current?.kind === 'multi' ? current.custom : '';
+                        return current?.kind === 'select'
+                          ? (current.custom ?? '')
+                          : '';
                       })()}
                       onInput={(event) =>
                         set({
-                          kind: 'multi',
+                          kind: 'select',
                           values: [],
                           custom: event.currentTarget.value,
                         })

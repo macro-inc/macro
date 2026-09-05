@@ -1,12 +1,6 @@
 import type { ElicitationSchema } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
-import {
-  describeContent,
-  initialValues,
-  looksSuspicious,
-  toContent,
-  validate,
-} from './elicitation-form';
+import { initialValues, toContent, validate } from './elicitation-form';
 
 /** The Claude Code single-select question after the fold collapsed its pair. */
 const colour: ElicitationSchema = {
@@ -103,14 +97,14 @@ describe('initialValues', () => {
   it('pre-fills from defaults and picks the right draft shape per field', () => {
     expect(initialValues(config)).toEqual({
       name: { kind: 'text', text: 'svc' },
-      port: { kind: 'number', text: '3000' },
-      ratio: { kind: 'number', text: '' },
+      port: { kind: 'text', text: '3000' },
+      ratio: { kind: 'text', text: '' },
       logging: { kind: 'boolean', checked: true },
-      colours: { kind: 'multi', values: ['r'], custom: '' },
+      colours: { kind: 'select', values: ['r'], custom: undefined },
       weird: { kind: 'unsupported' },
     });
     expect(initialValues(colour)).toEqual({
-      question_0: { kind: 'choice', value: undefined, custom: '' },
+      question_0: { kind: 'select', values: [], custom: undefined },
     });
   });
 });
@@ -126,108 +120,93 @@ describe('validate', () => {
     expect(validate(config, values)).toEqual({ name: 'Required' });
   });
 
-  it('checks string length, pattern, and format', () => {
+  it('checks string length, and leaves pattern and format to the agent', () => {
     const values = initialValues(config);
     values.name = { kind: 'text', text: 'a' };
     expect(validate(config, values).name).toBe('At least 2 characters');
     values.name = { kind: 'text', text: 'toolong' };
     expect(validate(config, values).name).toBe('At most 5 characters');
+    // `AB` fails the schema's `^[a-z]+$`, and `nope` is not an email. Neither
+    // is this client's business: the agent enforces both, and an unbounded
+    // agent-supplied regex has no place on the main thread.
     values.name = { kind: 'text', text: 'AB' };
-    expect(validate(config, values).name).toBe(
-      'Does not match the required format'
-    );
-    const email: ElicitationSchema = {
-      ...config,
-      required: [],
-      properties: [
-        {
-          ...config.properties[0]!,
-          schema: {
-            ...(config.properties[0]!.schema as Extract<
-              ElicitationSchema['properties'][number]['schema'],
-              { type: 'string' }
-            >),
-            minLength: null,
-            maxLength: null,
-            pattern: null,
-            format: 'email',
-          },
-        },
-      ],
-    };
-    expect(validate(email, { name: { kind: 'text', text: 'nope' } }).name).toBe(
-      'Not a valid email'
-    );
-  });
-
-  it('skips a pattern that could run away, leaving it to the agent', () => {
-    const risky: ElicitationSchema = {
-      ...config,
-      required: [],
-      properties: [
-        {
-          ...config.properties[0]!,
-          schema: {
-            type: 'string',
-            minLength: null,
-            maxLength: null,
-            pattern: '^(a+)+$',
-            format: null,
-            default: null,
-            options: [],
-            customField: null,
-          },
-        },
-      ],
-    };
-    expect(validate(risky, { name: { kind: 'text', text: 'aaaaab' } })).toEqual(
-      {}
-    );
+    expect(validate(config, values)).toEqual({});
   });
 
   it('checks numbers, integers, and multi-select counts', () => {
     const values = initialValues(config);
-    values.port = { kind: 'number', text: '80' };
+    values.port = { kind: 'text', text: '80' };
     expect(validate(config, values).port).toBe('At least 1024');
-    values.port = { kind: 'number', text: '3000.5' };
+    values.port = { kind: 'text', text: '3000.5' };
     expect(validate(config, values).port).toBe('Must be a whole number');
-    values.port = { kind: 'number', text: 'x' };
+    values.port = { kind: 'text', text: 'x' };
     expect(validate(config, values).port).toBe('Not a number');
-    values.port = { kind: 'number', text: '3000' };
-    values.ratio = { kind: 'number', text: '2' };
+    values.port = { kind: 'text', text: '3000' };
+    values.ratio = { kind: 'text', text: '2' };
     expect(validate(config, values).ratio).toBe('At most 1');
-    values.ratio = { kind: 'number', text: '' };
-    values.colours = { kind: 'multi', values: ['r', 'g', 'b'], custom: '' };
+    values.ratio = { kind: 'text', text: '' };
+    values.colours = {
+      kind: 'select',
+      values: ['r', 'g', 'b'],
+      custom: undefined,
+    };
     expect(validate(config, values).colours).toBe('Choose at most 2');
     // Empty is "not answered": fine for an optional field, required otherwise.
-    values.colours = { kind: 'multi', values: [], custom: '' };
+    values.colours = { kind: 'select', values: [], custom: undefined };
     expect(validate(config, values).colours).toBeUndefined();
     expect(validate({ ...config, required: ['colours'] }, values).colours).toBe(
       'Required'
     );
   });
 
-  it('a select with a custom escape takes a choice or custom text, never both', () => {
+  it('a select with a custom escape counts its custom text as an answer', () => {
     expect(
       validate(colour, {
-        question_0: { kind: 'choice', value: undefined, custom: '' },
+        question_0: { kind: 'select', values: [], custom: undefined },
       })
     ).toEqual({ question_0: 'Required' });
+    // Typing an answer instead of picking one satisfies the question, and -
+    // for a multi-select - counts towards `minItems`.
     expect(
       validate(colour, {
-        question_0: { kind: 'choice', value: 'Red', custom: 'blue' },
-      })
-    ).toEqual({ question_0: 'Choose an option or type your own, not both' });
-    expect(
-      validate(colour, {
-        question_0: { kind: 'choice', value: undefined, custom: 'blue' },
+        question_0: { kind: 'select', values: [], custom: 'blue' },
       })
     ).toEqual({});
     expect(
       validate(colour, {
-        question_0: { kind: 'choice', value: 'Red', custom: '' },
+        question_0: { kind: 'select', values: ['Red'], custom: undefined },
       })
     ).toEqual({});
+    const oneColour: ElicitationSchema = {
+      ...config,
+      required: [],
+      properties: [
+        {
+          ...config.properties[4]!,
+          schema: {
+            ...(config.properties[4]!.schema as Extract<
+              ElicitationSchema['properties'][number]['schema'],
+              { type: 'multi_select' }
+            >),
+            minItems: 1,
+            customField: 'colours_custom',
+          },
+        },
+      ],
+    };
+    expect(
+      validate(oneColour, {
+        colours: { kind: 'select', values: [], custom: 'teal' },
+      })
+    ).toEqual({});
+  });
+
+  it('refuses a value no option offered', () => {
+    expect(
+      validate(colour, {
+        question_0: { kind: 'select', values: ['Mauve'], custom: undefined },
+      })
+    ).toEqual({ question_0: 'Not one of the offered choices' });
   });
 });
 
@@ -235,12 +214,12 @@ describe('toContent', () => {
   it('sends the choice under the property or the custom text under its key', () => {
     expect(
       toContent(colour, {
-        question_0: { kind: 'choice', value: 'Red', custom: '' },
+        question_0: { kind: 'select', values: ['Red'], custom: undefined },
       })
     ).toEqual({ question_0: 'Red' });
     expect(
       toContent(colour, {
-        question_0: { kind: 'choice', value: undefined, custom: 'blue' },
+        question_0: { kind: 'select', values: [], custom: 'blue' },
       })
     ).toEqual({ question_0_custom: 'blue' });
   });
@@ -253,34 +232,5 @@ describe('toContent', () => {
       logging: true,
       colours: ['r'],
     });
-  });
-});
-
-describe('describeContent', () => {
-  it('renders titles for choices and the custom text when it was used', () => {
-    expect(describeContent(colour, { question_0: 'Red' })).toEqual([
-      { label: 'Best colour', value: 'Red' },
-    ]);
-    expect(describeContent(colour, { question_0_custom: 'blue' })).toEqual([
-      { label: 'Best colour', value: 'blue' },
-    ]);
-    expect(
-      describeContent(config, {
-        port: 8080,
-        colours: ['r', 'b'],
-        logging: false,
-      })
-    ).toEqual([
-      { label: 'Port', value: '8080' },
-      { label: 'Logging', value: 'false' },
-      { label: 'Colours', value: 'Red, b' },
-    ]);
-  });
-});
-
-describe('looksSuspicious', () => {
-  it('flags punycode hosts', () => {
-    expect(looksSuspicious('https://xn--pple-43d.com/connect')).toBe(true);
-    expect(looksSuspicious('https://agent.example.com/connect')).toBe(false);
   });
 });
