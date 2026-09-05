@@ -116,7 +116,6 @@ const copy = (calendarId: string, title: string) => ({
   reminders: { useDefault: true, overrides: [] },
 });
 
-/** One event synced from the primary and a shared calendar. */
 const sharedItem = (): CalendarOccurrenceItem =>
   ({
     event: {
@@ -541,11 +540,28 @@ describe('useDeleteCalendarEventMutation', () => {
       'shared',
     ]);
     expect(items[0].event.calendarId).toBe('shared');
+    expect(items[0].event.title).toBe('[me] OOO');
 
-    // The last copy takes the whole event with it.
     await remove.mutateAsync({ eventId: 'event-3', calendarId: 'shared' });
     items = viewportData(viewportA)?.items ?? [];
     expect(items).toHaveLength(0);
+  });
+
+  it('drops the canonical copy when no calendar is named', async () => {
+    deleteCalendarEventMock.mockResolvedValue(ok({}));
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: [sharedItem()], syncStatus: 'ready' }
+    );
+    const remove = renderHook(() => useDeleteCalendarEventMutation());
+
+    await remove.mutateAsync({ eventId: 'event-3' });
+    const items = viewportData(viewportA)?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect(items[0].event.sources?.map((source) => source.calendarId)).toEqual([
+      'shared',
+    ]);
+    expect(items[0].event.calendarId).toBe('shared');
   });
 });
 

@@ -1,7 +1,7 @@
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { isMobile } from '@core/mobile/isMobile';
 import { makePersisted } from '@solid-primitives/storage';
-import { batch, createSignal } from 'solid-js';
+import { batch, createMemo, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useCalendarSources } from '../hooks/use-calendar-sources';
 import {
@@ -78,8 +78,11 @@ export const [CalendarViewContextProvider, useCalendarView] =
     // Sources default to visible, so calendars discovered after a
     // preference was saved (or events whose calendar is still loading)
     // never silently disappear.
+    const hiddenSourceIds = createMemo(
+      () => new Set(preferences.hiddenSourceIds)
+    );
     const isSourceVisible = (sourceId: string) =>
-      !preferences.hiddenSourceIds.includes(sourceId);
+      !hiddenSourceIds().has(sourceId);
 
     const selection = createCalendarEventSelection();
     const displaySettings: CalendarDisplaySettings = {

@@ -84,7 +84,7 @@ export interface EventEditorInitialValues {
    * settings — the provider readback does not expose the stored ones.
    */
   outOfOffice?: EventEditorOutOfOffice;
-  /** Event type of the copy `reminders` belong to; absent for new events. */
+  /** Event type of the copy `reminders` belong to. Absent for new events. */
   reminderEventType?: EventType;
 }
 

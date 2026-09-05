@@ -14,8 +14,11 @@ import {
 } from '@app/features/calendar/hooks/use-calendar-occurrence-data';
 import { useCalendarTimeGridHoverIndicator } from '@app/features/calendar/hooks/use-calendar-time-grid-hover-indicator';
 import { useTeamOooEvents } from '@app/features/calendar/hooks/use-team-ooo';
-import type { CalendarEvent } from '@app/features/calendar/types';
-import { DEFAULT_CALENDAR_SOURCE } from '@app/features/calendar/types';
+import {
+  type CalendarEvent,
+  DEFAULT_CALENDAR_SOURCE,
+  isCalendarEventVisible,
+} from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import {
   type CalendarEventTimeChange,
@@ -439,14 +442,17 @@ function CalendarPageHost(props: {
         if (!active || !selectedEventId) return;
 
         // Placeholder data is the previous range, so an absent event proves
-        // nothing yet. A present one still refreshes, so a copy switch made
-        // while a fetch is in flight reaches the open details.
+        // nothing yet.
         const selectedEvent = eventsById.get(selectedEventId);
         if (selectedEvent) {
-          calendarView.refreshSelectedEvent(selectedEvent);
-          return;
-        }
-        if (
+          if (
+            isCalendarEventVisible(selectedEvent, calendarView.isSourceVisible)
+          ) {
+            calendarView.refreshSelectedEvent(selectedEvent);
+          } else {
+            calendarView.closeEventDetails();
+          }
+        } else if (
           props.data.occurrencesQuery.isSuccess &&
           !props.data.occurrencesQuery.isPlaceholderData
         ) {

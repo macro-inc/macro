@@ -59,8 +59,10 @@ and their details card shows an `Out of office` line under the schedule.
 An event that Google carries on several of an account's calendars (a shared calendar's
 re-import of a member's own event, for example) renders as one chip. The chip takes the
 copy belonging to the first calendar that is on, preferring the account's primary: its
-title, color, and editability. Reminders always show and follow the primary copy, since
-that is the copy Macro's alerts fire from, and the editor only lets them be changed there.
+title, color, and editability. Reminders, guests, and conferencing always show and follow
+the primary copy, since that is the copy Macro's alerts fire from and whose guest list and
+join link Macro records, and the editor only lets them be changed there. Answering an
+invitation likewise addresses the primary copy.
 Hiding a calendar switches the chip to the other copy rather than removing it, and the
 event disappears only once every calendar it is on is hidden. The details popover and the
 editor act on the displayed copy, so editing or deleting it targets that calendar's event

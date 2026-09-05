@@ -92,9 +92,9 @@ export interface CalendarEvent {
    */
   calendarId?: string;
   /**
-   * Every visible calendar this event is synced from. A shared calendar can
-   * re-import an event a member also owns, so one event belongs to several
-   * calendars at once and stays visible while any of them is shown.
+   * Every calendar this event is synced from, shown or hidden. A shared
+   * calendar can re-import an event a member also owns, so one event belongs
+   * to several calendars at once and stays visible while any of them is shown.
    */
   sourceCalendarIds: string[];
   /** Raw recurrence rules attached to the canonical event. */
@@ -129,7 +129,7 @@ function optionalText(value: string | null | undefined) {
 }
 
 /** How an occurrence is attributed to the calendars the viewer is showing. */
-export interface CalendarOccurrenceMappingOptions {
+interface CalendarOccurrenceMappingOptions {
   sourceById?: ReadonlyMap<string, CalendarSource>;
   isSourceVisible?: (sourceId: string) => boolean;
 }
@@ -139,7 +139,7 @@ export interface CalendarOccurrenceMappingOptions {
  * in the server's canonical-first order (primary calendar, then freshest),
  * falling back to the canonical copy when none of them is shown.
  */
-export function selectEventSource(
+function selectEventSource(
   event: Pick<CalendarEventEntity, 'sources'>,
   isSourceVisible?: (sourceId: string) => boolean
 ): CalendarEventSourceContent | undefined {
@@ -157,13 +157,21 @@ export function selectEventSource(
  */
 export function isCalendarEventVisible(
   event: Pick<CalendarEvent, 'calendar' | 'sourceCalendarIds'>,
-  isSourceVisible: (sourceId: string) => boolean
+  isSourceVisible?: (sourceId: string) => boolean
 ): boolean {
+  if (!isSourceVisible) return true;
   const sourceIds =
     event.sourceCalendarIds.length > 0
       ? event.sourceCalendarIds
       : [event.calendar.id];
-  return sourceIds.some((id) => isSourceVisible(id));
+  return sourceIds.some(isSourceVisible);
+}
+
+/** Calendar whose defaults the event's reminders resolve against. */
+export function reminderCalendarIdOf(
+  event: Pick<CalendarEvent, 'reminderCalendarId' | 'calendarId'>
+) {
+  return event.reminderCalendarId ?? event.calendarId;
 }
 
 /**
@@ -210,7 +218,7 @@ export function mapCalendarOccurrence(
     attendees: event.attendees ?? [],
     reminders: canonical.reminders ?? undefined,
     reminderCalendarId: canonical.calendarId ?? undefined,
-    reminderEventType: canonical.eventType ?? 'default',
+    reminderEventType: canonical.eventType ?? undefined,
     eventType: content.eventType ?? undefined,
     calendarId,
     sourceCalendarIds: (event.sources ?? []).map((copy) => copy.calendarId),
@@ -237,10 +245,7 @@ export function mapCalendarEventToFullCalendar(
   const interactionEditable = timeEditable && allDayRange === undefined;
 
   return {
-    // FullCalendar re-applies the calendar color only when an event remounts,
-    // so a chip that switches to another copy keys a fresh event. The stable
-    // occurrence id lives in extendedProps.
-    id: JSON.stringify([event.id, event.calendar.id, event.calendar.color]),
+    id: event.id,
     title: event.title,
     start: allDayRange?.start ?? event.start,
     end: allDayRange?.end ?? event.end,

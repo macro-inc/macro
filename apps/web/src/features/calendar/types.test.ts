@@ -161,6 +161,7 @@ describe('mapCalendarOccurrence', () => {
 
     expect(event.title).toBe('OOO');
     expect(event.calendarId).toBeUndefined();
+    expect(event.reminderEventType).toBe('out_of_office');
     expect(event.sourceCalendarIds).toEqual([]);
   });
 });
@@ -190,7 +191,7 @@ describe('isCalendarEventVisible', () => {
 });
 
 describe('mapCalendarEventToFullCalendar', () => {
-  it('keys the rendered event by the displayed calendar and keeps the occurrence id', () => {
+  it('keeps the occurrence identity whichever copy is displayed', () => {
     const merged = item([copy('primary'), sharedCopy]);
     const onPrimary = mapCalendarEventToFullCalendar(
       mapCalendarOccurrence(merged, { sourceById, isSourceVisible: hidden() })
@@ -202,12 +203,9 @@ describe('mapCalendarEventToFullCalendar', () => {
       })
     );
 
-    expect(onPrimary.id).not.toBe(onShared.id);
-    expect(onPrimary.extendedProps?.calendarEventId).toBe(
-      '["event","2026-09-10T13:00:00+00:00"]'
-    );
-    expect(onShared.extendedProps?.calendarEventId).toBe(
-      onPrimary.extendedProps?.calendarEventId
-    );
+    expect(onPrimary.id).toBe('["event","2026-09-10T13:00:00+00:00"]');
+    expect(onShared.id).toBe(onPrimary.id);
+    expect(onShared.title).toBe('[teo] OOO');
+    expect(onShared.extendedProps?.calendarEventId).toBe(onPrimary.id);
   });
 });

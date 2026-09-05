@@ -59,8 +59,7 @@ export function buildCalendarToolPreviewEvent(
 
   return {
     ...range,
-    // FullCalendar only reapplies the event color when an event remounts.
-    id: JSON.stringify([input.id, calendar.id, calendar.color]),
+    id: input.id,
     eventId: input.id,
     occurrenceKey: input.id,
     isCancelled: false,

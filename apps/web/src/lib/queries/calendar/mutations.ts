@@ -10,6 +10,7 @@ import type { CalendarEvent as CalendarEventEntity } from '@service-email/genera
 import type { CreateCalendarEventRequest } from '@service-email/generated/schemas/createCalendarEventRequest';
 import type { UpdateCalendarEventRequest } from '@service-email/generated/schemas/updateCalendarEventRequest';
 import type { AttendeeResponseStatus } from '@service-storage/generated/schemas/attendeeResponseStatus';
+import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventTime } from '@service-storage/generated/schemas/eventTime';
 import { useMutation } from '@tanstack/solid-query';
@@ -41,10 +42,7 @@ async function patchOccurrenceCaches(
   const previous = queryClient.getQueriesData<CalendarOccurrencesData>({
     queryKey: calendarKeys.occurrences._def,
   });
-  queryClient.setQueriesData<CalendarOccurrencesData>(
-    { queryKey: calendarKeys.occurrences._def },
-    (old) => old && { ...old, items: update(old.items) }
-  );
+  patchOccurrenceQueries(update);
   return {
     rollback: () => {
       for (const [queryKey, data] of previous) {
@@ -59,13 +57,13 @@ function patchEventItems(
   patch: (item: CalendarOccurrenceItem) => CalendarOccurrenceItem
 ) {
   return (items: CalendarOccurrenceItem[]) =>
-    items.map((item) => (item.event.id === eventId ? patch(item) : item));
+    items.some((item) => item.event.id === eventId)
+      ? items.map((item) => (item.event.id === eventId ? patch(item) : item))
+      : items;
 }
 
 export interface RsvpCalendarEventArgs {
   eventId: string;
-  /** Calendar whose copy of the event is answered. Omit for the canonical copy. */
-  calendarId?: string;
   response: Exclude<AttendeeResponseStatus, 'needs_action'>;
   /** How much of a recurring series to answer for; defaults to all of it. */
   scope?: CalendarRsvpScope;
@@ -147,7 +145,11 @@ function patchOccurrenceQueries(
 ) {
   queryClient.setQueriesData<CalendarOccurrencesData>(
     { queryKey: calendarKeys.occurrences._def },
-    (old) => old && { ...old, items: update(old.items) }
+    (old) => {
+      if (!old) return old;
+      const items = update(old.items);
+      return items === old.items ? old : { ...old, items };
+    }
   );
 }
 
@@ -188,7 +190,6 @@ export function useRsvpCalendarEventMutation(callbacks?: RsvpCallbacks) {
     mutationFn: async (args: RsvpCalendarEventArgs) =>
       await throwOnErr(() =>
         emailClient.rsvpCalendarEvent(args.eventId, {
-          calendarId: args.calendarId,
           response: args.response,
           scope: args.scope,
           recurrenceId: args.recurrenceId,
@@ -293,40 +294,60 @@ function survivesDeletion(
   return false;
 }
 
+/** The entity fields the server re-projects from the copy that becomes canonical. */
+function canonicalContentOf(
+  copy: CalendarEventSourceContent
+): Partial<CalendarOccurrenceItem['event']> {
+  return {
+    calendarId: copy.calendarId,
+    title: copy.title,
+    description: copy.description,
+    location: copy.location,
+    eventType: copy.eventType,
+    reminders: copy.reminders,
+    isReadOnly: copy.isReadOnly,
+    transparency: copy.transparency,
+    visibility: copy.visibility,
+    creatorName: copy.creatorName,
+    creatorEmail: copy.creatorEmail,
+  };
+}
+
 /**
  * Cached items after an optimistic deletion. Deleting a whole event that is
  * one copy among several retires only that copy at the provider, so the
- * event stays under its remaining calendars with that copy dropped;
- * everything else removes the covered occurrences.
+ * event stays under its remaining calendars with that copy dropped and, when
+ * the copy was canonical, the entity re-projected from the next one.
+ * Everything else removes the covered occurrences.
  */
 function applyDeletion(
   items: CalendarOccurrenceItem[],
   args: DeleteCalendarEventArgs
 ): CalendarOccurrenceItem[] {
+  if (!items.some((item) => item.event.id === args.eventId)) return items;
   return items.flatMap((item) => {
     if (item.event.id !== args.eventId) return [item];
     const sources = item.event.sources ?? [];
-    const removesOneCopy =
-      (args.scope ?? 'all') === 'all' &&
-      args.calendarId !== undefined &&
-      sources.length > 1 &&
-      sources.some((copy) => copy.calendarId === args.calendarId);
-    if (!removesOneCopy) {
+    const targetCalendarId = args.calendarId ?? sources[0]?.calendarId;
+    const remaining = sources.filter(
+      (copy) => copy.calendarId !== targetCalendarId
+    );
+    const [nextCanonical] = remaining;
+    if (
+      (args.scope ?? 'all') !== 'all' ||
+      !nextCanonical ||
+      remaining.length === sources.length
+    ) {
       return survivesDeletion(item, args) ? [item] : [];
     }
-    const remaining = sources.filter(
-      (copy) => copy.calendarId !== args.calendarId
-    );
+    const removesCanonical = targetCalendarId === sources[0]?.calendarId;
     return [
       {
         ...item,
         event: {
           ...item.event,
+          ...(removesCanonical ? canonicalContentOf(nextCanonical) : {}),
           sources: remaining,
-          calendarId:
-            item.event.calendarId === args.calendarId
-              ? remaining[0]?.calendarId
-              : item.event.calendarId,
         },
       },
     ];

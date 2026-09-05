@@ -60,13 +60,11 @@ export function useCalendarOccurrenceData(
       })
     );
   });
-  const visibleEvents = createMemo(() => {
-    const isSourceVisible = options.isSourceVisible;
-    if (!isSourceVisible) return events();
-    return events().filter((event) =>
-      isCalendarEventVisible(event, isSourceVisible)
-    );
-  });
+  const visibleEvents = createMemo(() =>
+    events().filter((event) =>
+      isCalendarEventVisible(event, options.isSourceVisible)
+    )
+  );
   const eventsById = createMemo(
     () => new Map(events().map((event) => [event.id, event]))
   );

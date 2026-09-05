@@ -11,8 +11,11 @@ import {
   type EventEditorDisabledFields,
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
-import type { CalendarEvent } from '../types';
-import { DEFAULT_CALENDAR_SOURCE } from '../types';
+import {
+  type CalendarEvent,
+  DEFAULT_CALENDAR_SOURCE,
+  reminderCalendarIdOf,
+} from '../types';
 import {
   calendarDisplayLabel,
   spansMultipleInboxes,
@@ -28,13 +31,12 @@ const EDIT_DISABLED_FIELDS = {
 
 /**
  * Whether the editor addresses the copy whose reminders Macro's alerts
- * follow. Another copy's reminders are Google's own and never fire here.
+ * follow and whose guests and conferencing Macro records. Another copy's
+ * reminders are Google's own and never fire here, and guests or a Meet link
+ * written onto another copy never reach the event Macro shows.
  */
 function editsPrimaryCopy(event: CalendarEvent) {
-  return (
-    event.reminderCalendarId === undefined ||
-    event.reminderCalendarId === (event.calendarId ?? event.calendar.id)
-  );
+  return reminderCalendarIdOf(event) === event.calendarId;
 }
 
 interface UseEventEditorProps {
@@ -69,16 +71,19 @@ export function useEventEditor(props: UseEventEditorProps) {
     const event = props.event();
     if (event) {
       const calendarId = event.calendarId ?? event.calendar.id;
-      const reminderCalendarId = event.reminderCalendarId ?? calendarId;
-      const calendar = calendarsQuery.data?.find(
-        (candidate) => candidate.id === reminderCalendarId
+      const calendars = calendarsQuery.data ?? [];
+      const calendar = calendars.find(
+        (candidate) => candidate.id === calendarId
+      );
+      const reminderCalendar = calendars.find(
+        (candidate) => candidate.id === reminderCalendarIdOf(event)
       );
       return [
         {
           id: calendarId,
           label: event.calendar.name || 'Calendar',
           color: event.calendar.color,
-          defaultReminders: calendar?.defaultReminders,
+          defaultReminders: reminderCalendar?.defaultReminders,
           isPrimary: calendar?.isPrimary ?? event.calendar.isPrimary,
         },
       ];
@@ -163,10 +168,12 @@ export function useEventEditor(props: UseEventEditorProps) {
     () => {
       const event = props.event();
       if (!event) return undefined;
+      const editsOtherCopy = !editsPrimaryCopy(event);
       return {
         ...EDIT_DISABLED_FIELDS,
-        guests: !viewerCanEditGuests(event),
-        reminders: !editsPrimaryCopy(event),
+        guests: editsOtherCopy || !viewerCanEditGuests(event),
+        conference: editsOtherCopy,
+        reminders: editsOtherCopy,
       };
     }
   );

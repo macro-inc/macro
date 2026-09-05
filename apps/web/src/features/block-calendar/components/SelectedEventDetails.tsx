@@ -3,9 +3,10 @@ import {
   EventAttendeesSection,
   EventDetails,
 } from '@app/features/calendar/components/EventDetails';
-import type {
-  CalendarEvent,
-  CalendarTimeFormat,
+import {
+  type CalendarEvent,
+  type CalendarTimeFormat,
+  reminderCalendarIdOf,
 } from '@app/features/calendar/types';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { toast } from '@core/component/Toast/Toast';
@@ -52,8 +53,7 @@ export function SelectedEventDetails(props: SelectedEventDetailsProps) {
   const calendarsQuery = useVisibleCalendarsQuery();
   const defaultReminders = (event: CalendarEvent) =>
     calendarsQuery.data?.find(
-      (calendar) =>
-        calendar.id === (event.reminderCalendarId ?? event.calendarId)
+      (calendar) => calendar.id === reminderCalendarIdOf(event)
     )?.defaultReminders;
   const popoverSelection = createMemo(
     () => {
