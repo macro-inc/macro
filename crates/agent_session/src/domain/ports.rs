@@ -1,4 +1,4 @@
-use super::error::Result;
+use super::error::{AgentSessionError, Result};
 use super::model::*;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};

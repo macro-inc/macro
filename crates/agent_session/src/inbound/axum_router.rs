@@ -1536,6 +1536,7 @@ pub async fn create_agent_session_handler<
         is_managed,
         owner_user_id,
         harness_id,
+        ..
     } = state
         .bots
         .bot_facts(bot_id)
