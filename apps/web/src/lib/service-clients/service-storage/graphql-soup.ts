@@ -1245,6 +1245,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             isRead: entity.isRead,
             isDraft: entity.isDraft,
             isImportant: entity.isImportant,
+            isSignal: entity.isSignal,
             projectId: entity.projectId ?? undefined,
             sortTs: entity.sortTs,
             createdAt: entity.createdAt,

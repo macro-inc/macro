@@ -152,6 +152,7 @@ fn push_thread_candidate_select(
                     t.link_id,
                     t.inbox_visible,
                     t.is_read,
+                    t.is_signal,
                     t.project_id,
         "#,
     );
@@ -493,6 +494,7 @@ fn build_query(
             t.provider_id,
             t.inbox_visible,
             t.is_read,
+            t.is_signal,
             t.effective_ts AS sort_ts,
             t.created_at,
             t.updated_at,
@@ -1015,6 +1017,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
                 is_read: row.try_get("is_read")?,
                 is_draft: row.try_get("is_draft")?,
                 is_important: row.try_get("is_important")?,
+                is_signal: row.try_get("is_signal")?,
                 sort_ts: row.try_get("sort_ts")?,
                 name: row.try_get("name")?,
                 snippet: row.try_get("snippet")?,

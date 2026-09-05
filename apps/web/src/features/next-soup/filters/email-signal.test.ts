@@ -6,11 +6,16 @@ import {
 } from './email-signal';
 
 function emailData(
-  overrides: { isDraft?: boolean; labelNames?: string[] } = {}
+  overrides: {
+    isDraft?: boolean;
+    isSignal?: boolean;
+    labelNames?: string[];
+  } = {}
 ) {
   return {
     id: 'thread-1',
     isDraft: overrides.isDraft ?? false,
+    isSignal: overrides.isSignal,
     labels: (overrides.labelNames ?? []).map((name) => ({
       name,
       providerLabelId: name,
@@ -39,6 +44,21 @@ const githubNoiseData = emailData({ labelNames: githubNoiseLabels });
 const githubNoiseEmail = emailItem({ labelNames: githubNoiseLabels });
 
 describe('emailItemLooksSignal', () => {
+  it('prefers the server-computed isSignal flag over the label fallback', () => {
+    // A sender the user marked important: labels say noise, the server flag
+    // says signal.
+    expect(
+      emailItemLooksSignal(
+        emailData({ isSignal: true, labelNames: githubNoiseLabels })
+      )
+    ).toBe(true);
+    expect(
+      emailItemLooksSignal(
+        emailData({ isSignal: false, labelNames: ['CATEGORY_PERSONAL'] })
+      )
+    ).toBe(false);
+  });
+
   it('rejects category-labeled noise emails, IMPORTANT notwithstanding', () => {
     expect(emailItemLooksSignal(githubNoiseData)).toBe(false);
   });

@@ -4813,6 +4813,12 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	isImportant: Boolean!
 	"""
+	The denormalized `email_threads.is_signal` importance classification —
+	the same flag the soup Importance filter evaluates, distinct from
+	`is_important` (Gmail's IMPORTANT label).
+	"""
+	isSignal: Boolean!
+	"""
 	The identifier of the project.
 	"""
 	projectId: ID

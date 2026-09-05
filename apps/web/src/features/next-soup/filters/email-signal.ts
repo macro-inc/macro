@@ -1,18 +1,20 @@
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 
-// Mirrors the label arm of the server's `email_threads.is_signal` heuristic
-// (`sync_thread_signal_flag` in email_db_client): a message counts as signal
-// when it is a draft, carries a personal/sent/draft label, or carries no
-// deprioritizing category label. Label names are compared exactly, the same
-// way the server query matches them. The mirror stays an approximation in two
-// ways it cannot close: sender importance policies (`email_filters`) also
-// feed the server flag but are not visible on the soup item, and the soup
-// labels are a thread-wide union while the server checks each non-trash
-// message on its own. It is therefore only used to gate optimistic cache
-// inserts, where a miss delays a row until the next server fetch — never to
-// filter fetched rows. Gmail's IMPORTANT label deliberately does not count:
-// the server ignores it, and GitHub notification mail often carries IMPORTANT
-// next to CATEGORY_UPDATES.
+// The REST soup payload carries the denormalized `email_threads.is_signal`
+// flag — the exact value the server's Importance filter evaluates. Items that
+// predate the field (GraphQL-mapped items, rows cached before a deploy) fall
+// back to a label mirror of the flag's heuristic (`sync_thread_signal_flag`
+// in email_db_client): a message counts as signal when it is a draft, carries
+// a personal/sent/draft label, or carries no deprioritizing category label.
+// Label names are compared exactly, the same way the server query matches
+// them. The fallback stays an approximation in two ways it cannot close:
+// sender importance policies (`email_filters`) also feed the server flag but
+// are not visible on the soup item, and the soup labels are a thread-wide
+// union while the server checks each non-trash message on its own. This is
+// therefore only used to gate optimistic cache inserts, where a miss delays a
+// row until the next server fetch — never to filter fetched rows. Gmail's
+// IMPORTANT label deliberately does not count: the server ignores it, and
+// GitHub notification mail often carries IMPORTANT next to CATEGORY_UPDATES.
 const PRIORITY_LABELS = ['CATEGORY_PERSONAL', 'SENT', 'DRAFT'];
 
 const DEPRIORITY_LABELS = [
@@ -24,10 +26,13 @@ const DEPRIORITY_LABELS = [
 
 type EmailSignalSource = {
   isDraft: boolean;
+  isSignal?: boolean;
   labels?: Array<{ name?: string }>;
 };
 
 export function emailItemLooksSignal(email: EmailSignalSource): boolean {
+  if (typeof email.isSignal === 'boolean') return email.isSignal;
+
   if (email.isDraft) return true;
 
   const names = (email.labels ?? []).map((label) => label.name);
