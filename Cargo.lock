@@ -281,6 +281,7 @@ dependencies = [
  "tracing",
  "tracing-opentelemetry",
  "url",
+ "utoipa",
  "workspace-hack",
 ]
 
@@ -288,6 +289,7 @@ dependencies = [
 name = "agent_harness_service"
 version = "0.1.0"
 dependencies = [
+ "agent-client-protocol",
  "agent_egress",
  "agent_fold",
  "agent_harness",
@@ -315,6 +317,7 @@ dependencies = [
  "futures",
  "github",
  "harness_id",
+ "harnesses",
  "kafka_util",
  "lexical_client",
  "macro_auth",
@@ -369,6 +372,7 @@ dependencies = [
  "axum",
  "bot_id",
  "bytes",
+ "chat",
  "dashmap",
  "futures",
  "http 1.4.0",
