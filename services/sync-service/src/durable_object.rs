@@ -45,7 +45,7 @@ pub mod status_codes {
 }
 
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
-const SAVE_INTERVAL_MS: u64 = 100;
+const SAVE_INTERVAL_MS: i64 = 100;
 
 mod path {
     pub const CONNECT: &str = "connect";
