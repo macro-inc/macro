@@ -11,11 +11,14 @@
 //! "Other" companion, the answer it reports afterwards - comes through the
 //! [`HarnessReader`] like every other harness convention.
 
+use std::collections::{BTreeMap, HashSet};
+
 use agent_client_protocol::RawJsonRpcParams;
 use agent_client_protocol::schema::v1::{
     CompleteElicitationNotification, CreateElicitationRequest, CreateElicitationResponse,
-    ElicitationAction, ElicitationMode, ElicitationPropertySchema as AcpPropertySchema,
-    ElicitationSchema as AcpSchema, ElicitationScope, EnumOption, MultiSelectItems, RequestId,
+    ElicitationAction, ElicitationContentValue, ElicitationMode,
+    ElicitationPropertySchema as AcpPropertySchema, ElicitationSchema as AcpSchema,
+    ElicitationScope, EnumOption, MultiSelectItems, RequestId,
 };
 use serde_json::Value;
 
@@ -24,9 +27,9 @@ use super::state::{Changed, FoldState, ToolPath};
 use crate::domain::error::FoldError;
 use crate::domain::harness::{HarnessReader, ToolFrame};
 use crate::domain::model::{
-    ElicitationOption, ElicitationOutcome, ElicitationProperty, ElicitationPropertySchema,
-    ElicitationRequest, ElicitationRequestId, ElicitationSchema, MessagePart, PendingElicitation,
-    ToolUseId,
+    AnsweredChoice, AnsweredField, AnsweredValue, ElicitationOption, ElicitationOutcome,
+    ElicitationProperty, ElicitationPropertySchema, ElicitationRequest, ElicitationRequestId,
+    ElicitationSchema, MessagePart, PendingElicitation, ToolUseId,
 };
 
 impl FoldState {
@@ -144,6 +147,13 @@ impl FoldState {
     ) -> Option<(Changed, bool)> {
         let at = self.pending_elicitations.remove(response_id)?;
 
+        // The schema the question was asked with: what the submitted content
+        // is shaped against, so a reader never re-correlates the two.
+        let schema = match self.part_at(&at) {
+            Some(MessagePart::Elicitation { request, .. }) => schema_of(request).cloned(),
+            _ => None,
+        };
+
         let outcome = match (value, error) {
             (_, Some(message)) => ElicitationOutcome::Errored {
                 message: message.to_owned(),
@@ -155,9 +165,10 @@ impl FoldState {
                 match serde_json::from_value::<CreateElicitationResponse>(value.clone()) {
                     Ok(response) => match response.action {
                         ElicitationAction::Accept(accept) => ElicitationOutcome::Accepted {
-                            content: accept
+                            answers: accept
                                 .content
-                                .map(|content| serde_json::to_value(content).unwrap_or_default()),
+                                .map(|content| shape_answers(schema.as_ref(), &content))
+                                .unwrap_or_default(),
                         },
                         ElicitationAction::Decline => ElicitationOutcome::Declined,
                         ElicitationAction::Cancel => ElicitationOutcome::Cancelled,
@@ -238,7 +249,7 @@ impl FoldState {
             return None;
         };
         let mut changed = false;
-        if let Some(answer) = answer {
+        if let Some(answer) = answer.as_ref().and_then(shape_reported) {
             *reported = Some(answer);
             changed = true;
         }
@@ -622,5 +633,183 @@ fn untitled_option(value: &str) -> ElicitationOption {
         value: value.to_owned(),
         title: None,
         description: None,
+    }
+}
+
+/// The form schema a request was asked with, when it has one.
+fn schema_of(request: &ElicitationRequest) -> Option<&ElicitationSchema> {
+    match request {
+        ElicitationRequest::Form { schema } => Some(schema),
+        ElicitationRequest::UserTool { schema, .. } => Some(schema),
+        ElicitationRequest::Url { .. } | ElicitationRequest::Unrecognized { .. } => None,
+    }
+}
+
+/// Shape submitted content against the schema that asked for it.
+///
+/// The schema's properties come first, in the order the agent declared them,
+/// so a transcript reads in the order the form was filled; then any key no
+/// property claimed, labelled by the key it arrived under. Properties the
+/// content did not answer are skipped rather than rendered empty.
+///
+/// The "Other" idiom is resolved here: a non-blank value under a property's
+/// `custom_field` wins over a choice under the property's own name, and
+/// claims both keys. Real harnesses send both (see the
+/// `elicitation_claude_single_select` fixture, where `question_0` is `"Red"`
+/// and `question_0_custom` is `"blue"`, and Claude Code itself reports the
+/// answer as `"blue"`).
+fn shape_answers(
+    schema: Option<&ElicitationSchema>,
+    content: &BTreeMap<String, ElicitationContentValue>,
+) -> Vec<AnsweredField> {
+    let mut answers = Vec::new();
+    let mut claimed: HashSet<&str> = HashSet::new();
+
+    for property in schema
+        .map(|schema| schema.properties.as_slice())
+        .unwrap_or_default()
+    {
+        let label = property
+            .title
+            .clone()
+            .unwrap_or_else(|| property.name.clone());
+        claimed.insert(property.name.as_str());
+
+        if let Some(key) = custom_field_of(&property.schema) {
+            claimed.insert(key);
+            if let Some(ElicitationContentValue::String(text)) = content.get(key)
+                && !text.trim().is_empty()
+            {
+                answers.push(AnsweredField {
+                    name: property.name.clone(),
+                    label,
+                    value: AnsweredValue::Custom { text: text.clone() },
+                });
+                continue;
+            }
+        }
+
+        let Some(value) = content.get(&property.name) else {
+            continue;
+        };
+        answers.push(AnsweredField {
+            name: property.name.clone(),
+            label,
+            value: answered_value(Some(&property.schema), value),
+        });
+    }
+
+    for (key, value) in content {
+        if claimed.contains(key.as_str()) {
+            continue;
+        }
+        answers.push(AnsweredField {
+            name: key.clone(),
+            label: key.clone(),
+            value: answered_value(None, value),
+        });
+    }
+
+    answers
+}
+
+/// The key a property's free-text escape arrives under, when it has one.
+fn custom_field_of(schema: &ElicitationPropertySchema) -> Option<&str> {
+    match schema {
+        ElicitationPropertySchema::String { custom_field, .. }
+        | ElicitationPropertySchema::MultiSelect { custom_field, .. } => custom_field.as_deref(),
+        _ => None,
+    }
+}
+
+/// One value, read through the property that asked for it when there is one:
+/// that is what resolves a string to the option it names, and its title.
+fn answered_value(
+    schema: Option<&ElicitationPropertySchema>,
+    value: &ElicitationContentValue,
+) -> AnsweredValue {
+    let options = match schema {
+        Some(
+            ElicitationPropertySchema::String { options, .. }
+            | ElicitationPropertySchema::MultiSelect { options, .. },
+        ) => options.as_slice(),
+        _ => &[],
+    };
+    match value {
+        ElicitationContentValue::String(text) if !options.is_empty() => AnsweredValue::Choice {
+            choice: choice_for(options, text),
+        },
+        ElicitationContentValue::String(text) => AnsweredValue::Text { text: text.clone() },
+        ElicitationContentValue::Integer(number) => AnsweredValue::Number {
+            text: number.to_string(),
+        },
+        ElicitationContentValue::Number(number) => AnsweredValue::Number {
+            text: number.to_string(),
+        },
+        ElicitationContentValue::Boolean(checked) => AnsweredValue::Boolean { checked: *checked },
+        ElicitationContentValue::StringArray(values) => AnsweredValue::Choices {
+            choices: values
+                .iter()
+                .map(|value| choice_for(options, value))
+                .collect(),
+        },
+        // `#[non_exhaustive]`: a value kind ACP adds later.
+        _ => AnsweredValue::Unrecognized {
+            raw: serde_json::to_value(value).unwrap_or_default(),
+        },
+    }
+}
+
+/// A chosen value with the title it was offered under, or untitled when no
+/// option declared it.
+fn choice_for(options: &[ElicitationOption], value: &str) -> AnsweredChoice {
+    AnsweredChoice {
+        value: value.to_owned(),
+        title: options
+            .iter()
+            .find(|option| option.value == value)
+            .and_then(|option| option.title.clone()),
+    }
+}
+
+/// Shape a harness's reported answer, which is keyed by question prose rather
+/// than by schema property - so every entry is its own label, and the values
+/// are read as plain JSON rather than through ACP's typed content.
+fn shape_reported(reported: &Value) -> Option<Vec<AnsweredField>> {
+    let object = reported.as_object()?;
+    Some(
+        object
+            .iter()
+            .map(|(key, value)| AnsweredField {
+                name: key.clone(),
+                label: key.clone(),
+                value: reported_value(value),
+            })
+            .collect(),
+    )
+}
+
+/// A reported value, narrowed to the shared vocabulary where it fits.
+fn reported_value(value: &Value) -> AnsweredValue {
+    match value {
+        Value::String(text) => AnsweredValue::Text { text: text.clone() },
+        Value::Bool(checked) => AnsweredValue::Boolean { checked: *checked },
+        Value::Number(number) => AnsweredValue::Number {
+            text: number.to_string(),
+        },
+        Value::Array(items) => items
+            .iter()
+            .map(|item| item.as_str().map(str::to_owned))
+            .collect::<Option<Vec<_>>>()
+            .map_or_else(
+                || AnsweredValue::Unrecognized { raw: value.clone() },
+                |values| AnsweredValue::Choices {
+                    choices: values
+                        .into_iter()
+                        .map(|value| AnsweredChoice { value, title: None })
+                        .collect(),
+                },
+            ),
+        Value::Null | Value::Object(_) => AnsweredValue::Unrecognized { raw: value.clone() },
     }
 }

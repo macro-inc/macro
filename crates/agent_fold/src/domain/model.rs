@@ -38,8 +38,9 @@ mod tool;
 mod user_tool;
 
 pub use elicitation::{
-    ElicitationOption, ElicitationOutcome, ElicitationProperty, ElicitationPropertySchema,
-    ElicitationRequest, ElicitationRequestId, ElicitationSchema, PendingElicitation,
+    AnsweredChoice, AnsweredField, AnsweredValue, ElicitationOption, ElicitationOutcome,
+    ElicitationProperty, ElicitationPropertySchema, ElicitationRequest, ElicitationRequestId,
+    ElicitationSchema, PendingElicitation,
 };
 pub use event::{FoldEvent, OwnedFoldEvent};
 pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata};

@@ -106,17 +106,26 @@ input_file: crates/agent_fold/fixtures/real/elicitation_claude_single_select.jso
                         },
                     },
                     outcome: Accepted {
-                        content: Some(
-                            Object {
-                                "question_0": String("Red"),
-                                "question_0_custom": String("blue"),
+                        answers: [
+                            AnsweredField {
+                                name: "question_0",
+                                label: "Best colour",
+                                value: Custom {
+                                    text: "blue",
+                                },
                             },
-                        ),
+                        ],
                     },
                     reported: Some(
-                        Object {
-                            "What is the best colour?": String("blue"),
-                        },
+                        [
+                            AnsweredField {
+                                name: "What is the best colour?",
+                                label: "What is the best colour?",
+                                value: Text {
+                                    text: "blue",
+                                },
+                            },
+                        ],
                     ),
                     tool_outcome: None,
                 },

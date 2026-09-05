@@ -8,6 +8,97 @@
  */
 export type AnsiText = string;
 
+/**
+ *  A chosen option, with the title it was offered under when the schema gave
+ *  one. `title` is `None` for a value no option declared.
+ */
+export type AnsweredChoice = {
+  /**  The value submitted. */
+  value: string;
+  /**  The label it was offered under. */
+  title: string | null;
+};
+
+/**
+ *  One property's answer, resolved against the schema that asked for it.
+ *
+ *  The correlation happens here so that no client repeats it: an option's
+ *  title is looked up where the options live, and the harness "Other" idiom -
+ *  a free-text answer arriving under a *different* key than the property it
+ *  replaces, sometimes alongside the choice it replaces (see the
+ *  `elicitation_claude_single_select` fixture, which carries both) - collapses
+ *  to a single [`AnsweredValue::Custom`].
+ */
+export type AnsweredField = {
+  /**
+   *  The property this answers, or the key it arrived under when no
+   *  property claimed it.
+   */
+  name: string;
+  /**  What to show as the label: the property's title, else its name. */
+  label: string;
+  /**  The answer. */
+  value: AnsweredValue;
+};
+
+/**  An answer's value, in the vocabulary the property declared. */
+export type AnsweredValue =
+  /**  Free text. */
+  | {
+      kind: 'text';
+      /**  The text as submitted. */
+      text: string;
+    }
+  /**
+   *  A number, whole or not, exactly as it was submitted.
+   *
+   *  Text rather than `f64`: a JSON integer can outrun `f64`'s exact range,
+   *  and `f64` has a `number | null` TypeScript face because a non-finite
+   *  float serializes as null. Nothing computes with an answer - it is
+   *  rendered - so the digits are what matter.
+   */
+  | {
+      kind: 'number';
+      /**  The number as written. */
+      text: string;
+    }
+  /**  A yes/no. */
+  | {
+      kind: 'boolean';
+      /**  Whether it was checked. */
+      checked: boolean;
+    }
+  /**  One of the offered options. */
+  | {
+      kind: 'choice';
+      /**  The option chosen, with the title it was offered under. */
+      choice: AnsweredChoice;
+    }
+  /**  Several of the offered options. */
+  | {
+      kind: 'choices';
+      /**  The options chosen, in the order they were submitted. */
+      choices: AnsweredChoice[];
+    }
+  /**
+   *  The free-text escape: the user typed their own answer instead of
+   *  picking, and it arrived under the property's `customField`.
+   */
+  | {
+      kind: 'custom';
+      /**  What they typed. */
+      text: string;
+    }
+  /**
+   *  A value this fold could not read as any of the above - a nested
+   *  object, or an array of something other than strings.
+   */
+  | {
+      kind: 'unrecognized';
+      /**  The value, verbatim. */
+      raw: unknown;
+    };
+
 /**  Who produced a [`FoldedMessage`]. */
 export type Author =
   /**
@@ -98,8 +189,13 @@ export type ElicitationOutcome =
   /**  The user submitted the form, or consented to open the URL. */
   | {
       kind: 'accepted';
-      /**  The submitted values, absent for a URL consent. */
-      content: unknown;
+      /**
+       *  What they answered: one entry per property the schema declared and
+       *  the content answered, in declaration order, then any key no
+       *  property claimed. Empty for a URL consent, which carries no
+       *  content.
+       */
+      answers: AnsweredField[];
     }
   /**  The user explicitly said no. */
   | { kind: 'declined' }
@@ -469,8 +565,13 @@ export type MessagePart =
        *  The harness's own reading of the answer, when it reported one
        *  after the response went back (Claude Code echoes the chosen
        *  option through its tool result). Absent otherwise.
+       *
+       *  Shaped like [`ElicitationOutcome::Accepted`]'s answers so a reader
+       *  renders one vocabulary either way, though a harness keys these by
+       *  question prose rather than by property, so each `name` is that
+       *  prose rather than a schema property.
        */
-      reported: unknown;
+      reported: AnsweredField[] | null;
       /**
        *  For a user tool's review ([`ElicitationRequest::UserTool`]): how
        *  the tool itself ended once the user answered - run with the
