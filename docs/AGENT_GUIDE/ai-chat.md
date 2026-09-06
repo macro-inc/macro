@@ -19,9 +19,9 @@ prompt...`) is focused on open, so you can `type_text` immediately. Below the pr
 (the default), **Cursor** `@cursor` (disabled with a `Connect Cursor in
 Settings → Harness` hint until a Cursor API key is stored), then the user's
 own agents, each card showing avatar, name and `@handle · Macro|Cursor` for
-the runtime. At most four cards show; with more, a `+N more` button expands
-the full list (`Show fewer` collapses it), and the selected card is never
-hidden. Click a card or use arrow keys to change agent. The **Model
+the runtime (a disabled card reads `@cursor · Not connected`). Every agent is
+shown; the cards form an even grid that fills the popover width. Click a card
+or use arrow keys to change agent. The **Model
 override** pill (`aria-label` `Model override`) at the bottom left opens a
 menu whose first row is `Agent default · <model>`, followed by at most five
 featured models; longer catalogs put the rest under a `More models` submenu.

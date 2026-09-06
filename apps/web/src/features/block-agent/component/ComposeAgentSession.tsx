@@ -34,7 +34,6 @@ import {
   type PersonaOption,
   personaDefaultLabel,
   shortlistModelOptions,
-  visiblePersonas,
 } from './compose-agent-session-options';
 
 /**
@@ -75,7 +74,6 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
   const cursorModels = useCursorModelsQuery(cursorConnected);
   const [prompt, setPrompt] = createSignal('');
   const [personaId, setPersonaId] = createSignal(MACRO_PERSONA_ID);
-  const [personasExpanded, setPersonasExpanded] = createSignal(false);
   const [modelOverride, setModelOverride] = createSignal('');
   const [submitting, setSubmitting] = createSignal(false);
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
@@ -99,6 +97,7 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
       unavailableReason: cursorConnected()
         ? undefined
         : 'Connect Cursor in Settings → Harness',
+      unavailableLabel: cursorConnected() ? undefined : 'Not connected',
     },
     ...(agentsQuery.isSuccess ? agentsQuery.data : [])
       // Only runtimes Macro provisions can be started from here; a persona on
@@ -116,8 +115,6 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
   ];
   const selectedPersona = () =>
     personas().find((persona) => persona.id === personaId()) ?? personas()[0];
-  const personaList = () =>
-    visiblePersonas(personas(), selectedPersona()?.id, personasExpanded());
   const availableModels = (): ModelOption[] => {
     if (selectedPersona()?.harness === 'cursor') {
       return cursorModels.isSuccess
@@ -222,14 +219,12 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
         />
       </div>
 
-      <PersonaList
-        list={personaList()}
+      <PersonaGrid
+        personas={personas()}
         selected={selectedPersona()}
-        expanded={personasExpanded()}
         loading={agentsQuery.isPending}
         error={agentsQuery.isError}
         onSelect={setPersona}
-        onToggleExpanded={() => setPersonasExpanded((value) => !value)}
       />
 
       <div class="flex shrink-0 flex-wrap items-end justify-between gap-2">
@@ -263,22 +258,21 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
 }
 
 /**
- * Personas as a visible radio list rather than a menu: the user sees what
- * they are choosing between without opening anything. Arrow keys move the
- * selection; Tab lands on the current choice and moves on.
+ * Personas as a visible radio grid rather than a menu: the user sees every
+ * choice without opening anything. Cards auto-fit the row and stretch to
+ * fill it, so the grid is even at any count. Arrow keys move the selection;
+ * Tab lands on the current choice and moves on.
  */
-function PersonaList(props: {
-  list: { visible: PersonaOption[]; hiddenCount: number };
+function PersonaGrid(props: {
+  personas: PersonaOption[];
   selected: PersonaOption | undefined;
-  expanded: boolean;
   loading: boolean;
   error: boolean;
   onSelect: (id: string) => void;
-  onToggleExpanded: () => void;
 }) {
   let groupRef: HTMLDivElement | undefined;
   const selectable = () =>
-    props.list.visible.filter((persona) => !persona.unavailableReason);
+    props.personas.filter((persona) => !persona.unavailableReason);
 
   const moveSelection = (event: KeyboardEvent, step: 1 | -1) => {
     const options = selectable();
@@ -308,7 +302,7 @@ function PersonaList(props: {
         ref={groupRef}
         role="radiogroup"
         aria-label="Agent"
-        class="flex flex-wrap gap-2"
+        class="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] gap-2"
         onKeyDown={(event) => {
           if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
             moveSelection(event, 1);
@@ -317,7 +311,7 @@ function PersonaList(props: {
           }
         }}
       >
-        <For each={props.list.visible}>
+        <For each={props.personas}>
           {(persona) => {
             const selected = () => persona.id === props.selected?.id;
             const disabled = () => persona.unavailableReason !== undefined;
@@ -331,7 +325,7 @@ function PersonaList(props: {
                 tabIndex={selected() ? 0 : -1}
                 title={persona.unavailableReason}
                 class={cn(
-                  'flex h-11 min-w-0 max-w-56 items-center gap-2 rounded-lg border px-2 text-left outline-none transition-colors',
+                  'flex h-12 min-w-0 items-center gap-2.5 rounded-lg border px-2.5 text-left outline-none transition-colors',
                   'focus-visible:ring-2 focus-visible:ring-accent/30',
                   selected()
                     ? 'border-accent bg-accent-bg text-ink'
@@ -344,26 +338,22 @@ function PersonaList(props: {
                 }}
               >
                 <PersonaAvatar persona={persona} />
-                <span class="flex min-w-0 flex-col leading-tight">
+                <span class="flex min-w-0 flex-1 flex-col leading-tight">
                   <span class="truncate text-sm font-medium">
                     {persona.name}
                   </span>
                   <span class="truncate text-xs text-ink-extra-muted">
                     @{persona.handle}
-                    <Show when={!disabled()}>
-                      {' · '}
-                      {harnessDisplayName(persona.harness)}
-                    </Show>
-                    <Show when={disabled()}>
-                      {' · '}
-                      {persona.unavailableReason}
-                    </Show>
+                    {' · '}
+                    {disabled()
+                      ? (persona.unavailableLabel ?? 'Unavailable')
+                      : harnessDisplayName(persona.harness)}
                   </span>
                 </span>
                 {/* Always laid out so selecting a card never changes its width. */}
                 <CheckIcon
                   class={cn(
-                    'ml-auto size-3.5 shrink-0 text-accent',
+                    'size-3.5 shrink-0 text-accent',
                     !selected() && 'invisible'
                   )}
                 />
@@ -371,17 +361,6 @@ function PersonaList(props: {
             );
           }}
         </For>
-        <Show when={props.list.hiddenCount > 0 || props.expanded}>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            class="h-11 rounded-lg px-3 text-ink-muted"
-            onClick={props.onToggleExpanded}
-          >
-            {props.expanded ? 'Show fewer' : `+${props.list.hiddenCount} more`}
-          </Button>
-        </Show>
       </div>
       <Show when={props.error}>
         <p class="text-xs text-negative">
