@@ -5,12 +5,13 @@
  */
 
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { focusDebugLog } from '@core/debug/focusDebugLog';
 import type {
   FoldedMessage,
   ModelOption,
   ToolStatus,
 } from '@service-agent-fold/generated/types';
-import { createSignal, type JSX, onCleanup } from 'solid-js';
+import { createSignal, type JSX, onCleanup, onMount } from 'solid-js';
 import { Message } from '../component/AgentMessage';
 import { ReplyToSelection } from '../component/ReplyToSelection';
 import {
@@ -96,13 +97,57 @@ const FIXTURE_MODELS: ModelOption[] = [
 /** The composer as the block mounts it, with the model control wired. */
 function ModelSelectorDemo() {
   const [model, setModel] = createSignal<string | null>('grok-4.6-high-fast');
+  let focusInput: (() => void) | undefined;
+  onMount(() => {
+    const traceEvent = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      const relatedTarget =
+        event instanceof FocusEvent
+          ? (event.relatedTarget as HTMLElement | null)
+          : null;
+      // #region agent log
+      focusDebugLog({
+        hypothesisId: 'H2,H3,H5',
+        location: 'Gallery.tsx:ModelSelectorDemo:window-event',
+        message: `window ${event.type}`,
+        data: {
+          key: event instanceof KeyboardEvent ? event.key : null,
+          targetTag: target?.tagName ?? null,
+          targetAriaLabel: target?.getAttribute('aria-label') ?? null,
+          targetContentEditable:
+            target?.getAttribute('contenteditable') ?? null,
+          relatedTag: relatedTarget?.tagName ?? null,
+          relatedAriaLabel: relatedTarget?.getAttribute('aria-label') ?? null,
+          activeTag: document.activeElement?.tagName ?? null,
+          activeAriaLabel:
+            document.activeElement?.getAttribute('aria-label') ?? null,
+          activeContentEditable:
+            document.activeElement?.getAttribute('contenteditable') ?? null,
+          defaultPrevented: event.defaultPrevented,
+        },
+      });
+      // #endregion
+    };
+    window.addEventListener('keydown', traceEvent);
+    window.addEventListener('focusin', traceEvent);
+    window.addEventListener('focusout', traceEvent);
+    onCleanup(() => {
+      window.removeEventListener('keydown', traceEvent);
+      window.removeEventListener('focusin', traceEvent);
+      window.removeEventListener('focusout', traceEvent);
+    });
+  });
   return (
     <AgentInput
       onSend={(content) => console.info('[gallery] send', content)}
+      registerFocus={(focus) => {
+        focusInput = focus;
+      }}
       modelControl={
         <AgentModelSelector
           model={model()}
           options={FIXTURE_MODELS}
+          onEscape={() => focusInput?.()}
           onSelect={(id) => {
             console.info('[gallery] model', id);
             setModel(id);

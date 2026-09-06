@@ -1,3 +1,4 @@
+import { focusDebugLog } from '@core/debug/focusDebugLog';
 import CaretDown from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
@@ -108,6 +109,21 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           setTimeout(() => searchRef?.focus(), 0);
         }}
         onCloseAutoFocus={(event) => {
+          // #region agent log
+          focusDebugLog({
+            hypothesisId: 'H1,H2,H3',
+            location: 'ModelCatalogPicker.tsx:onCloseAutoFocus',
+            message: 'picker close autofocus entered',
+            data: {
+              dismissedWithEscape,
+              hasOnEscape: props.onEscape !== undefined,
+              activeTag: document.activeElement?.tagName ?? null,
+              activeAriaLabel:
+                document.activeElement?.getAttribute('aria-label') ?? null,
+              defaultPrevented: event.defaultPrevented,
+            },
+          });
+          // #endregion
           if (!dismissedWithEscape) return;
           dismissedWithEscape = false;
           if (!props.onEscape) return;
@@ -115,7 +131,38 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           // DropdownMenu.Content manually focuses its trigger after invoking
           // this callback, regardless of preventDefault. Restore the composer
           // after that internal step has completed.
-          queueMicrotask(props.onEscape);
+          queueMicrotask(() => {
+            // #region agent log
+            focusDebugLog({
+              hypothesisId: 'H3,H4',
+              location:
+                'ModelCatalogPicker.tsx:onCloseAutoFocus:microtask-before',
+              message: 'escape restoration callback starting',
+              data: {
+                activeTag: document.activeElement?.tagName ?? null,
+                activeAriaLabel:
+                  document.activeElement?.getAttribute('aria-label') ?? null,
+              },
+            });
+            // #endregion
+            props.onEscape?.();
+            // #region agent log
+            focusDebugLog({
+              hypothesisId: 'H3,H4',
+              location:
+                'ModelCatalogPicker.tsx:onCloseAutoFocus:microtask-after',
+              message: 'escape restoration callback completed',
+              data: {
+                activeTag: document.activeElement?.tagName ?? null,
+                activeAriaLabel:
+                  document.activeElement?.getAttribute('aria-label') ?? null,
+                activeContentEditable:
+                  document.activeElement?.getAttribute('contenteditable') ??
+                  null,
+              },
+            });
+            // #endregion
+          });
         }}
       >
         <div class="border-b border-edge-muted bg-menu p-1.5">
@@ -130,6 +177,18 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
             onKeyDown={(event) => {
               if (event.key === 'Escape') {
                 dismissedWithEscape = true;
+                // #region agent log
+                focusDebugLog({
+                  hypothesisId: 'H2,H5',
+                  location: 'ModelCatalogPicker.tsx:search:onKeyDown',
+                  message: 'search received Escape',
+                  data: {
+                    eventPhase: event.eventPhase,
+                    defaultPrevented: event.defaultPrevented,
+                    activeIsSearch: document.activeElement === searchRef,
+                  },
+                });
+                // #endregion
               } else {
                 event.stopPropagation();
               }

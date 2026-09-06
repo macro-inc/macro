@@ -10,6 +10,7 @@
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import { focusDebugLog } from '@core/debug/focusDebugLog';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
@@ -131,7 +132,33 @@ export function AgentInput(props: AgentInputProps) {
     .onChange(setMarkdown);
 
   onMount(() => {
-    props.registerFocus?.(() => editor.controls.focus());
+    // #region agent log
+    focusDebugLog({
+      hypothesisId: 'H1,H4',
+      location: 'AgentInput.tsx:onMount',
+      message: 'agent input focus plumbing mounted',
+      data: {
+        hasRegisterFocus: props.registerFocus !== undefined,
+        hasModelControl: props.modelControl !== undefined,
+      },
+    });
+    // #endregion
+    props.registerFocus?.(() => {
+      // #region agent log
+      focusDebugLog({
+        hypothesisId: 'H4',
+        location: 'AgentInput.tsx:registeredFocus',
+        message: 'editor focus command invoked',
+        data: {
+          activeTagBefore: document.activeElement?.tagName ?? null,
+          connectedContentEditableCount: document.querySelectorAll(
+            '[contenteditable="true"]'
+          ).length,
+        },
+      });
+      // #endregion
+      editor.controls.focus();
+    });
     onCleanup(() => props.registerFocus?.(undefined));
     props.registerQuoteInsert?.((text) => {
       // Discrete so the chip is committed to the DOM before focus moves in.
