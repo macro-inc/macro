@@ -10,6 +10,7 @@ import {
   useActivityContext,
 } from '../context/activity-context';
 import type { ActivityEvent, ActivityTopEntity } from '../core/event';
+import { placeholderOverview } from '../core/placeholder-overview';
 import { createActorName } from '../primitives/actor-name';
 import { createEntityOpener } from '../primitives/entity-opener';
 import { createMyActivityState } from '../primitives/my-activity';
@@ -61,11 +62,19 @@ export function MyActivityView(props: {
               when={overview()}
               fallback={
                 <OverviewInset>
-                  <p class="px-2 py-1 text-ink-extra-muted text-xs">
-                    {state.overview().t === 'error'
-                      ? 'Activity overview is unavailable right now.'
-                      : 'Loading activity overview…'}
-                  </p>
+                  <Show
+                    when={state.overview().t === 'error'}
+                    fallback={
+                      <ActionGraph
+                        overview={placeholderOverview(new Date())}
+                        skeleton
+                      />
+                    }
+                  >
+                    <p class="px-2 py-1 text-ink-extra-muted text-xs">
+                      Activity overview is unavailable right now.
+                    </p>
+                  </Show>
                 </OverviewInset>
               }
             >

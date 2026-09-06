@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivityContextProvider } from '../context/activity-context';
+import { placeholderOverview } from '../core/placeholder-overview';
 import { createdEvent, messagedEvent } from '../queries/fixtures';
 import { createMockActivityContext } from '../tests/mock-context';
 import { feedPage, overviewPage } from '../tests/wire';
@@ -49,10 +50,39 @@ function renderView() {
 const rows = () => document.querySelectorAll('[data-activity-row]');
 
 describe('MyActivityView', () => {
-  it('shows loading copy for both the overview and the feed', () => {
-    const { container } = renderView();
-    expect(container.textContent).toContain('Loading activity overview…');
+  it('shows a same-shape graph skeleton and loading copy for the feed', () => {
+    const { container, graphql } = renderView();
+    const skeleton = container.querySelector('[data-activity-graph-skeleton]');
+    if (!skeleton) throw new Error('graph skeleton not rendered');
+    const skeletonDays = skeleton.querySelectorAll(
+      '[data-activity-day]'
+    ).length;
+    expect(skeletonDays).toBeGreaterThan(300);
+    expect(container.textContent).not.toContain('Loading activity overview');
     expect(container.textContent).toContain('Loading…');
+
+    const placeholder = placeholderOverview(new Date());
+    graphql
+      .latest('MyActivityOverview')
+      .resolve(overviewPage({ from: placeholder.from, to: placeholder.to }));
+
+    expect(
+      container.querySelector('[data-activity-graph-skeleton]')
+    ).toBeNull();
+    expect(container.querySelectorAll('[data-activity-day]').length).toBe(
+      skeletonDays
+    );
+  });
+
+  it('shows unavailable copy when the overview fails', () => {
+    const { container, graphql } = renderView();
+    graphql.latest('MyActivityOverview').fail('boom');
+    expect(
+      container.querySelector('[data-activity-graph-skeleton]')
+    ).toBeNull();
+    expect(container.textContent).toContain(
+      'Activity overview is unavailable right now.'
+    );
   });
 
   it('renders grouped rows with actor names and pages on Show more', async () => {
