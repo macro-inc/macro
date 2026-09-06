@@ -145,10 +145,22 @@ struct BlockingPromptLogs {
     entered: Arc<Notify>,
     release: Arc<Notify>,
     hang_disconnect: bool,
+    fail_restore_log: Option<RestoreLogFailure>,
+}
+
+#[derive(Clone, Copy)]
+enum RestoreLogFailure {
+    InitializeRequest,
+    InitializeResponse,
+    LoadResponse,
 }
 
 impl AgentSessionLogWriter for BlockingPromptLogs {
-    async fn append(&mut self, log: AgentSessionLog) -> Result<()> {
+    async fn append_with_boundary(
+        &mut self,
+        log: AgentSessionLog,
+        _boundary: Option<crate::domain::model::HistoryBoundary>,
+    ) -> Result<macro_uuid::Uuid> {
         let is_prompt = matches!(
             &log.content,
             Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(
@@ -159,8 +171,7 @@ impl AgentSessionLogWriter for BlockingPromptLogs {
             self.entered.notify_one();
             self.release.notified().await;
         }
-        AgentSessionLogRepo::create(&self.repo, log).await?;
-        Ok(())
+        Ok(AgentSessionLogRepo::create(&self.repo, log).await?.id)
     }
 }
 
@@ -438,6 +449,38 @@ impl SessionOwnership for BlockingPromptLogs {
 }
 
 impl AgentSessionLogRepo for BlockingPromptLogs {
+    async fn create_fenced_with_boundary(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+    ) -> Result<StoredAgentSessionLog> {
+        let fail = match self.fail_restore_log {
+            Some(RestoreLogFailure::InitializeRequest) => matches!(&log.content,
+                Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(agent_client_protocol::RawJsonRpcMessage::Request(request))))
+                if request.method.as_ref() == "initialize"),
+            Some(RestoreLogFailure::InitializeResponse) => {
+                boundary.is_none()
+                    && matches!(
+                        &log.content,
+                        Message::ToServer(ToServerMessage::Acp(AcpMessage(
+                            agent_client_protocol::RawJsonRpcMessage::Response(_)
+                        )))
+                    )
+            }
+            Some(RestoreLogFailure::LoadResponse) => boundary.is_some(),
+            None => false,
+        };
+        if fail {
+            return Err(AgentSessionError::Handshake(
+                "injected restore log failure".into(),
+            ));
+        }
+        self.repo
+            .create_fenced_with_boundary(log, claim, boundary)
+            .await
+    }
+
     async fn create_fenced(
         &self,
         log: AgentSessionLog,
@@ -492,7 +535,7 @@ impl TransportReceiver<ToServerMessage> for PendingReceiver {
 async fn open_test_session(
     inbound: &mpsc::Sender<ToServerMessage>,
     outbound: &mut mpsc::Receiver<ToRuntimeMessage>,
-    session: AgentSessionId,
+    _session: AgentSessionId,
 ) {
     inbound
         .send(ToServerMessage::Event {
@@ -500,13 +543,16 @@ async fn open_test_session(
         })
         .await
         .unwrap();
-    let _initialize = outbound.recv().await.expect("initialize request");
+    let ToRuntimeMessage::Acp(AcpMessage(agent_client_protocol::RawJsonRpcMessage::Request(
+        initialize,
+    ))) = outbound.recv().await.expect("initialize request")
+    else {
+        panic!("expected initialize")
+    };
     inbound
         .send(ToServerMessage::Acp(AcpMessage(
             agent_client_protocol::RawJsonRpcMessage::response(
-                agent_client_protocol::schema::v1::RequestId::Str(format!(
-                    "agent_session:{session}:0"
-                )),
+                initialize.id,
                 Ok(serde_json::to_value(
                     agent_client_protocol::schema::v1::InitializeResponse::new(PROTOCOL_VERSION),
                 )
@@ -515,13 +561,15 @@ async fn open_test_session(
         )))
         .await
         .unwrap();
-    let _open = outbound.recv().await.expect("session/new request");
+    let ToRuntimeMessage::Acp(AcpMessage(agent_client_protocol::RawJsonRpcMessage::Request(open))) =
+        outbound.recv().await.expect("session/new request")
+    else {
+        panic!("expected session/new")
+    };
     inbound
         .send(ToServerMessage::Acp(AcpMessage(
             agent_client_protocol::RawJsonRpcMessage::response(
-                agent_client_protocol::schema::v1::RequestId::Str(format!(
-                    "agent_session:{session}:1"
-                )),
+                open.id,
                 Ok(serde_json::to_value(
                     agent_client_protocol::schema::v1::NewSessionResponse::new("acp-1"),
                 )
@@ -704,6 +752,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         entered: entered.clone(),
         release: release.clone(),
         hang_disconnect: false,
+        fail_restore_log: None,
     };
     let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
     let (inbound_tx, inbound_rx) = mpsc::channel(8);
@@ -783,6 +832,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
         entered: entered.clone(),
         release: release.clone(),
         hang_disconnect: false,
+        fail_restore_log: None,
     };
     let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
     let (inbound_tx, inbound_rx) = mpsc::channel(8);
@@ -974,6 +1024,7 @@ async fn marking_disconnected_is_bounded_when_persistence_hangs() {
         entered: Arc::new(Notify::new()),
         release: Arc::new(Notify::new()),
         hang_disconnect: true,
+        fail_restore_log: None,
     };
     let service =
         AgentSessionServiceImpl::new(hanging, FoldedMessageService::new(repo), NoOpRealtime);
@@ -1213,3 +1264,298 @@ async fn appending_a_config_response_projects_the_model() {
         .expect("get session");
     assert_eq!(session.model, "sonnet", "the rejected change moved nothing");
 }
+
+#[tokio::test]
+async fn shared_transport_copies_durable_initialization_before_load() {
+    use crate::domain::session::Input;
+    use agent_client_protocol::RawJsonRpcMessage;
+    use agent_client_protocol::schema::v1::{AgentCapabilities, InitializeResponse};
+    let repo = InMemoryAgentSessionRepo::new();
+    let first = AgentSessionId::new();
+    let second = AgentSessionId::new();
+    for id in [first, second] {
+        repo.insert_session(test_agent_session(id));
+    }
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let (send, mut received) = mpsc::channel(8);
+    let (_inbound, inbound) = mpsc::channel(8);
+    let (_commands, commands) = mpsc::channel(8);
+    let claim = claim_for_test(&repo, first).await;
+    let mut actor = SessionActor::new(
+        first,
+        Some("first-acp".into()),
+        "/workspace".into(),
+        vec![],
+        RecordingTransport {
+            outbound: send,
+            inbound,
+        },
+        LiveSessionLogWriter::fenced(repo.clone(), NoOpRealtime, claim),
+        commands,
+        handshake.clone(),
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+    );
+    actor
+        .dispatch(Input::Inbound(ToServerMessage::Event {
+            event: SystemEvent::AcpReady,
+        }))
+        .await;
+    let init_request = received.recv().await.unwrap();
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(init))) = &init_request else {
+        panic!("initialize request")
+    };
+    let init_response = ToServerMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
+        init.id.clone(),
+        Ok(serde_json::to_value(
+            InitializeResponse::new(PROTOCOL_VERSION)
+                .agent_capabilities(AgentCapabilities::new().load_session(true)),
+        )
+        .unwrap()),
+    )));
+    actor.dispatch(Input::Inbound(init_response.clone())).await;
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(load))) =
+        received.recv().await.unwrap()
+    else {
+        panic!("load request")
+    };
+    actor
+        .dispatch(Input::Inbound(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::response(load.id, Ok(serde_json::json!({}))),
+        ))))
+        .await;
+    let first_history = AgentSessionLogRepo::list_by_session(&repo, first)
+        .await
+        .unwrap();
+    assert_eq!(first_history.len(), 4);
+
+    // A late-bound second session uses the retained actual handshake, with local row IDs.
+    let (send, mut received) = mpsc::channel(8);
+    let (_inbound, inbound) = mpsc::channel(8);
+    let (_commands, commands) = mpsc::channel(8);
+    let claim = claim_for_test(&repo, second).await;
+    let mut actor = SessionActor::new(
+        second,
+        Some("second-acp".into()),
+        "/workspace".into(),
+        vec![],
+        RecordingTransport {
+            outbound: send,
+            inbound,
+        },
+        LiveSessionLogWriter::fenced(repo.clone(), NoOpRealtime, claim),
+        commands,
+        handshake,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+    );
+    let ready = actor.next_input().await;
+    assert!(matches!(ready, Input::SharedReady { .. }));
+    actor.dispatch(ready).await;
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(load))) =
+        received.recv().await.unwrap()
+    else {
+        panic!("load request")
+    };
+    assert_eq!(load.method.as_ref(), "session/load");
+    actor
+        .dispatch(Input::Inbound(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::response(load.id, Ok(serde_json::json!({}))),
+        ))))
+        .await;
+    let history = AgentSessionLogRepo::list_by_session(&repo, second)
+        .await
+        .unwrap();
+    assert_eq!(history.len(), 4);
+    assert_ne!(history[0].id, first_history[0].id);
+    assert!(
+        history
+            .iter()
+            .all(|row| row.entry.agent_session_id == second)
+    );
+    assert_eq!(
+        serde_json::to_value(&history[0].entry.content).unwrap(),
+        serde_json::to_value(Message::ToRuntime(init_request)).unwrap()
+    );
+    assert_eq!(
+        serde_json::to_value(&history[1].entry.content).unwrap(),
+        serde_json::to_value(Message::ToServer(init_response)).unwrap()
+    );
+}
+
+#[tokio::test]
+async fn shared_initialization_append_failure_stops_before_sending_queued_prompt() {
+    for failure in [
+        RestoreLogFailure::InitializeRequest,
+        RestoreLogFailure::InitializeResponse,
+    ] {
+        assert_restore_persistence_failure_does_not_send_prompt(failure).await;
+    }
+}
+
+#[tokio::test]
+async fn successful_load_response_append_failure_stops_before_sending_queued_prompt() {
+    assert_restore_persistence_failure_does_not_send_prompt(RestoreLogFailure::LoadResponse).await;
+}
+
+async fn assert_restore_persistence_failure_does_not_send_prompt(failure: RestoreLogFailure) {
+    use crate::domain::model::HistoryBoundary;
+    use crate::domain::session::actors::Stepped;
+    use crate::domain::session::{InitializationContext, Input, SessionRestoreSupport};
+    use agent_client_protocol::{
+        RawJsonRpcMessage,
+        schema::v1::{AgentCapabilities, InitializeResponse, RequestId},
+    };
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = AgentSessionId::new();
+    repo.insert_session(test_agent_session(session));
+    let claim = claim_for_test(&repo, session).await;
+    // A prior committed boundary must survive both failure paths.
+    repo.create_fenced(any_event(session), &claim)
+        .await
+        .unwrap();
+    let previous = repo
+        .create_fenced(any_event(session), &claim)
+        .await
+        .unwrap();
+    repo.create_fenced_with_boundary(
+        any_event(session),
+        &claim,
+        Some(HistoryBoundary {
+            initialization_log_id: previous.id,
+        }),
+    )
+    .await
+    .unwrap();
+    let logs = BlockingPromptLogs {
+        repo: repo.clone(),
+        entered: Arc::new(Notify::new()),
+        release: Arc::new(Notify::new()),
+        hang_disconnect: false,
+        fail_restore_log: Some(failure),
+    };
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let (send, mut received) = mpsc::channel(8);
+    let (_inbound, inbound) = mpsc::channel(8);
+    let (commands, command_rx) = mpsc::channel(8);
+    let mut actor = SessionActor::new(
+        session,
+        Some("restored-acp".into()),
+        "/workspace".into(),
+        vec![],
+        RecordingTransport {
+            outbound: send,
+            inbound,
+        },
+        LiveSessionLogWriter::fenced(logs, NoOpRealtime, claim),
+        command_rx,
+        handshake.clone(),
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+    );
+    let (completed, completion) = oneshot::channel();
+    commands
+        .send(SessionCommand {
+            user_id: None,
+            action: AgentAction::prompt("must remain unsent"),
+            action_id: AgentActionId::mint(),
+            completed,
+            span: tracing::Span::none(),
+            enqueued_at: tokio::time::Instant::now(),
+        })
+        .await
+        .unwrap();
+    let queued = actor.next_input().await;
+    assert!(matches!(queued, Input::Command { .. }));
+    assert_eq!(actor.dispatch(queued).await, Stepped::Continue);
+    assert!(received.try_recv().is_err());
+
+    let init_id = RequestId::Str("shared-transport-initialization".into());
+    handshake
+        .send(HandshakeStatus::ReadyWithContext {
+            restore: SessionRestoreSupport {
+                resume: false,
+                load: true,
+            },
+            context: Arc::new(InitializationContext {
+                request: ToRuntimeMessage::Acp(AcpMessage(
+                    RawJsonRpcMessage::request(
+                        "initialize".to_owned(),
+                        serde_json::json!({"protocolVersion": 1}),
+                        init_id.clone(),
+                    )
+                    .unwrap(),
+                )),
+                response: ToServerMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
+                    init_id,
+                    Ok(serde_json::to_value(
+                        InitializeResponse::new(PROTOCOL_VERSION)
+                            .agent_capabilities(AgentCapabilities::new().load_session(true)),
+                    )
+                    .unwrap()),
+                ))),
+            }),
+        })
+        .unwrap();
+    let ready = actor.next_input().await;
+    assert!(matches!(ready, Input::SharedReady { .. }));
+    let step = actor.dispatch(ready).await;
+    let mut failed_response_id = None;
+    if matches!(failure, RestoreLogFailure::LoadResponse) {
+        assert_eq!(step, Stepped::Continue);
+        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(load))) =
+            received.try_recv().unwrap()
+        else {
+            panic!("load request")
+        };
+        assert_eq!(load.method.as_ref(), "session/load");
+        failed_response_id = Some(load.id.clone());
+        assert_eq!(
+            actor
+                .dispatch(Input::Inbound(ToServerMessage::Acp(AcpMessage(
+                    RawJsonRpcMessage::response(load.id, Ok(serde_json::json!({}))),
+                ))))
+                .await,
+            Stepped::Stopped
+        );
+    } else {
+        assert_eq!(
+            step,
+            Stepped::Stopped,
+            "initialization failure stops before load"
+        );
+    }
+    assert!(
+        received.try_recv().is_err(),
+        "no queued prompt reached the transport"
+    );
+    let result = tokio::time::timeout(std::time::Duration::from_secs(1), completion)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(result.is_err(), "queued prompt must not report delivery");
+    let history = AgentSessionLogRepo::list_by_session(&repo, session)
+        .await
+        .unwrap();
+    assert_eq!(
+        history[0].id, previous.id,
+        "prior boundary remains selected"
+    );
+    assert!(
+        history.iter().all(|row| !matches!(&row.entry.content,
+        Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))))
+        if request.method.as_ref() == "session/prompt")),
+        "queued prompt was not appended"
+    );
+    if let Some(failed_id) = failed_response_id {
+        assert!(history.iter().all(|row| !matches!(&row.entry.content,
+            Message::ToServer(ToServerMessage::Acp(AcpMessage(frame))) if frame.response_id() == Some(&failed_id))),
+            "failed load response append must not be durable");
+    }
+    assert!(matches!(
+        history.last().unwrap().entry.content,
+        Message::ToServer(ToServerMessage::Event {
+            event: SystemEvent::Disconnected
+        })
+    ));
+}
+
+mod owner_binding;

@@ -6,6 +6,7 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::error::Result;
+use crate::domain::model::HistoryBoundary;
 
 /// An action accepted before there was a live ACP session to send it through.
 #[derive(Debug)]
@@ -48,8 +49,8 @@ pub(super) enum SessionOpening {
 /// from the `initialize` response.
 ///
 /// Only these two facts decide how a session opens, and one connection's
-/// answer serves every session on it - so this is what gets shared, rather
-/// than the protocol's whole capability set.
+/// answer serves every session on it. The handshake also retains its frames
+/// so each session can establish its own durable initialization context.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SessionRestoreSupport {
     /// The agent offers `session/resume`.
@@ -68,14 +69,19 @@ pub struct SessionRestoreSupport {
 /// The states are a claim as much as a status: exactly one session may run
 /// the handshake, so moving `Pending` to `InFlight` is how a session takes
 /// that job and how every other session knows not to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum HandshakeStatus {
     /// Nobody has started initializing this connection.
     Pending,
     /// A session is initializing it; the rest wait rather than initialize too.
     InFlight,
-    /// The connection is initialized and sessions may open.
-    Ready(SessionRestoreSupport),
+    /// Durable handshake frames copied into each later session on this transport.
+    ReadyWithContext {
+        /// Negotiated restore support.
+        restore: SessionRestoreSupport,
+        /// Original initialize request and response, retained for this connection.
+        context: std::sync::Arc<InitializationContext>,
+    },
 }
 
 /// Observable phase of a session connection.
@@ -167,6 +173,13 @@ pub enum Input<Token> {
         /// What that handshake learned about restoring sessions.
         restore: SessionRestoreSupport,
     },
+    /// A shared transport supplies the actual initialization frames to persist locally.
+    SharedReady {
+        /// Negotiated capabilities.
+        restore: SessionRestoreSupport,
+        /// Handshake from this transport.
+        context: std::sync::Arc<InitializationContext>,
+    },
     /// The connection is over. Idempotent: a dead machine ignores it.
     Closed(CloseReason),
 }
@@ -182,8 +195,15 @@ pub enum Effect<Token> {
     },
     /// Persist an inbound message to the session's log stream.
     Log {
+        /// Successful load history selection, committed with this frame.
+        boundary: Option<HistoryBoundary>,
         /// The envelope to persist.
         message: ToServerMessage,
+    },
+    /// Record a shared handshake in this session before opening it.
+    EstablishInitialization {
+        /// The connection's actual handshake frames.
+        context: std::sync::Arc<InitializationContext>,
     },
     /// Persist the ACP session id before allowing prompts onto the wire.
     PersistAcpSession {
@@ -230,6 +250,8 @@ pub enum StopReason {
     /// The handshake could not even be serialized; the detail is the
     /// serializer's.
     HandshakeNotBuildable(String),
+    /// A load cannot become live without a durable initialization boundary.
+    InitializationNotPersisted,
     /// The agent refused `initialize`.
     InitializationRefused,
     /// The agent answered `initialize` with an invalid response.
@@ -250,6 +272,9 @@ impl std::fmt::Display for StopReason {
             Self::HandshakeNotBuildable(detail) => {
                 write!(formatter, "could not build the acp handshake: {detail}")
             }
+            Self::InitializationNotPersisted => {
+                formatter.write_str("load has no durable initialization context")
+            }
             Self::InitializationRefused => formatter.write_str("the agent refused initialize"),
             Self::InitializationUnintelligible(detail) => {
                 write!(
@@ -269,4 +294,13 @@ impl std::fmt::Display for StopReason {
             }
         }
     }
+}
+
+/// Connection-level handshake that each session records before opening.
+#[derive(Debug, Clone)]
+pub struct InitializationContext {
+    /// Initialize request sent on this transport.
+    pub request: ToRuntimeMessage,
+    /// Its successful response.
+    pub response: ToServerMessage,
 }

@@ -15,7 +15,6 @@
  * a `push` concurrently would fold frames out of order.
  */
 
-import type { FoldedStreamEvent } from '@service-agent-fold/generated/types';
 import { match } from 'ts-pattern';
 import type { FoldRequest, FoldResponse } from './protocol';
 import { type FoldStream, loadAgentFoldWasm } from './wasm-module';
@@ -51,16 +50,17 @@ async function serve(request: FoldRequest): Promise<FoldResponse> {
       // snapshot from the top of the log, so replaying them into a machine
       // that has already seen them would duplicate every message.
       streams.get(sessionId)?.free();
+      streams.delete(sessionId);
       const stream = new wasm.FoldStream(sessionId);
-      streams.set(sessionId, stream);
-      const messages = stream.extend(entries);
-      return {
-        id,
-        kind,
-        ok: true as const,
-        messages,
-        metadata: stream.metadata(),
-      };
+      try {
+        const messages = stream.snapshot(entries);
+        const metadata = stream.metadata();
+        streams.set(sessionId, stream);
+        return { id, kind, ok: true as const, messages, metadata };
+      } catch (error) {
+        stream.free();
+        throw error;
+      }
     })
     .with({ kind: 'push' }, ({ id, kind, sessionId, entries }) => {
       const stream = streams.get(sessionId);
@@ -68,10 +68,7 @@ async function serve(request: FoldRequest): Promise<FoldResponse> {
       // a log folds a session that never happened, and a caller that has lost
       // its machine needs to refetch, not to keep pushing.
       if (!stream) throw new Error(`no open fold for session ${sessionId}`);
-      const changes: FoldedStreamEvent[] = [];
-      for (const entry of entries) {
-        changes.push(...stream.push(entry));
-      }
+      const changes = stream.push_rows(entries);
       return { id, kind, ok: true as const, changes };
     })
     .with({ kind: 'messages' }, ({ id, kind, sessionId }) => {

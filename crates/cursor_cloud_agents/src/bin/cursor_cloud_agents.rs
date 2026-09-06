@@ -146,8 +146,13 @@ async fn main() -> ExitCode {
     // variant for that model, since Cursor rejects an id whose params are not a
     // variant it knows. A client may change it per session from here.
     let service = Arc::new(
-        CursorSessionService::new(client, notifier.clone(), repos)
-            .with_default_model(configured_model),
+        CursorSessionService::new(
+            client,
+            notifier.clone(),
+            repos,
+            Arc::new(cursor_cloud_agents::outbound::memory_journal::MemoryJournal::default()),
+        )
+        .with_default_model(configured_model),
     );
     match serve(service, notifier, tokio::io::stdin(), tokio::io::stdout()).await {
         Ok(()) => ExitCode::SUCCESS,

@@ -4,20 +4,28 @@
 //! client ([`crate::api`]); [`SessionNotifier`] by whatever transport the
 //! session's updates travel over (the ACP stdio connection today, anything
 //! that can carry a `session/update` tomorrow); [`RepoResolver`] by the git
-//! adapter in [`crate::outbound`]. The service never sees HTTP, SSE framing,
-//! JSON-RPC, or a subprocess — only these contracts.
+//! adapter in [`crate::outbound`]. Native records and polling bodies cross these
+//! contracts for capture before decoding; HTTP I/O, SSE framing, JSON-RPC, and
+//! subprocesses remain outside the service.
 
-use crate::domain::event::CursorEvent;
 use crate::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
-    RunOutcome,
 };
 use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
 use std::path::Path;
 
 /// Create and control Cursor cloud agents.
-pub trait CursorAgents {
+pub trait CursorAgents: Sync {
+    /// Raw successful polling body, captured before interpretation, including
+    /// provider fields unknown to the domain. A turn whose stream is unavailable
+    /// falls back to polling this until the run is terminal.
+    fn raw_result(
+        &self,
+        agent: &CursorAgentId,
+        run: &CursorRunId,
+    ) -> impl Future<Output = Result<String, rootcause::Report>> + Send;
+
     /// Create an agent with its first run. Cursor has no bare "create agent":
     /// an agent only exists once there is a prompt to run, which is why this
     /// returns both ids at once.
@@ -64,21 +72,6 @@ pub trait CursorAgents {
         run: &CursorRunId,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 
-    /// The run's current status and, once terminal, its final answer text.
-    ///
-    /// The non-streaming read of what [`RunStream`] delivers live. It exists
-    /// because the stream is the unreliable half of the API — observed
-    /// answering `stream_unavailable` both in-stream and as a 409 in the
-    /// seconds after a run's creation — while the run itself finishes fine
-    /// server-side. A turn that cannot hold a stream falls back to polling
-    /// this until the run is terminal, so flaky streaming degrades to a
-    /// non-streamed answer instead of a lost one.
-    fn run_result(
-        &self,
-        agent: &CursorAgentId,
-        run: &CursorRunId,
-    ) -> impl Future<Output = Result<RunOutcome, rootcause::Report>> + Send;
-
     /// The agent's runs, newest first.
     ///
     /// How a session finds out what happened to its agent while it was not
@@ -90,24 +83,25 @@ pub trait CursorAgents {
     fn list_runs(
         &self,
         agent: &CursorAgentId,
+        through: Option<&CursorRunId>,
     ) -> impl Future<Output = Result<Vec<RunListing>, rootcause::Report>> + Send;
 }
 
-/// Observe a run as a stream of decoded events.
+/// Observe a run as a stream of native SSE records.
 ///
 /// The stream ends when the server closes it — normally just after a
-/// [`CursorEvent::Done`]. A consumer that never sees a terminal
-/// [`CursorEvent::Result`] must treat the run's outcome as unknown rather
+/// [`CursorEvent::Done`](super::event::CursorEvent::Done). A consumer that never sees a terminal
+/// [`CursorEvent::Result`](super::event::CursorEvent::Result) must treat the run's outcome as unknown rather
 /// than successful.
-pub trait RunStream {
-    /// The run's events, in arrival order.
-    fn stream(
+pub trait RunStream: Sync {
+    /// Complete native records, captured before decoding or translation.
+    fn raw_stream(
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
     ) -> impl Future<
         Output = Result<
-            impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send,
+            impl Stream<Item = Result<super::journal::NativeRecord, rootcause::Report>> + Send,
             rootcause::Report,
         >,
     > + Send;
@@ -120,6 +114,25 @@ pub trait SessionNotifier {
         &self,
         session: &SessionId,
         update: SessionUpdate,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+    /// Ask the host to load recovered history after the current prompt completes.
+    /// This must only enqueue a signal: the caller holds the session writer gate.
+    fn require_reload(
+        &self,
+        session: &SessionId,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+    /// Emit a terminal lifecycle fact after the reconstructed turn's updates.
+    fn turn_complete(
+        &self,
+        session: &SessionId,
+        outcome: agent_runtime_protocol::domain::turn::TurnOutcome,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+    /// Emit a non-rendering marker after every update for `run` was delivered.
+    /// Durable hosts use it to atomically checkpoint the run with their log.
+    fn checkpoint(
+        &self,
+        session: &SessionId,
+        run: &CursorRunId,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 

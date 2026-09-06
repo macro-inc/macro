@@ -142,6 +142,15 @@ export function createAgentSessionFeed(
       const fold = await acquireAgentSessionFold({
         agentSessionId: id,
         onChange: upsert,
+        onReplace: (messages) =>
+          setList(
+            produce((current: FoldedMessage[]) => {
+              // Replay can reuse turn/author and tool IDs for different part
+              // kinds. Replace row identities atomically so mounted parts
+              // cannot keep reading a union variant that reconcile removed.
+              current.splice(0, current.length, ...messages);
+            })
+          ),
         onMetadata: setMetadata,
       });
       if (superseded()) {

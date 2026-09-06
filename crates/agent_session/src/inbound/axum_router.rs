@@ -981,6 +981,8 @@ pub async fn put_agent_sandbox_size_handler<
 /// decodes its own response type.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AgentSessionLogEntryDto {
+    /// Durable transport row identity; together with `createdAt`, its order cursor.
+    pub id: Uuid,
     /// When the log recorded the frame.
     ///
     /// The frame itself carries no time, so this comes from the log row. It is
@@ -1035,6 +1037,7 @@ pub enum LogDirectionDto {
 impl From<StoredAgentSessionLog> for AgentSessionLogEntryDto {
     fn from(stored: StoredAgentSessionLog) -> Self {
         Self {
+            id: stored.id,
             created_at: stored.created_at,
             user_id: stored.entry.user_id.map(|user| user.to_string()),
             message: stored.entry.content,
@@ -1056,7 +1059,10 @@ pub struct AgentSessionLogResponse {
     /// out who sent them: the sender of an agent message is this session's
     /// bot, and nothing else names it.
     pub bot: SessionBot,
-    /// Every logged frame, oldest first. Folding depends on this order.
+    /// Effective history in ascending `(createdAt, id)` order.
+    /// The first row is the inclusive history boundary cursor: buffered rows
+    /// before it are obsolete. Reconcile snapshot overlap by row ID, never content.
+    /// An empty history has no boundary or overlapping rows.
     pub entries: Vec<AgentSessionLogEntryDto>,
 }
 
@@ -1075,9 +1081,9 @@ pub struct AgentSessionLogResponse {
 )]
 /// The raw protocol log of one agent session.
 ///
-/// Served unfolded, and whole: the fold is a left fold over the frames from
-/// the beginning, so a reader that skipped any of them would derive different
-/// turn numbering.
+/// Served unfolded from the latest successful load initialization, or the
+/// beginning when no load succeeded. Consumers stage load attempts so failed
+/// or interrupted replay does not become visible conversation content.
 ///
 /// An unknown session is an error: the response has to name the session's
 /// agent, and a session that never existed has none to name.

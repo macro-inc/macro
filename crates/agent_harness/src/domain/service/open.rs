@@ -172,10 +172,7 @@ where
         };
         self.inner
             .sessions
-            .attach_session(
-                session.id,
-                RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
-            )
+            .attach_session(session.id, container.mcp_servers(mcp_servers))
             .await?;
 
         // Raw, through the session's own command worker: dispatch is where a
@@ -323,10 +320,7 @@ where
             }
         };
         self.sessions
-            .attach_session(
-                session_id,
-                RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
-            )
+            .attach_session(session_id, container.mcp_servers(mcp_servers))
             .await?;
         // The first prompt goes through the same door as every later one:
         // queued raw, then dispatched - which is where it is composed with

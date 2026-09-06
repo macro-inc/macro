@@ -4,7 +4,9 @@ use crate::domain::model::AgentKind;
 use crate::testing::helpers::egress::test_egress;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::ports::{Transport as _, TransportSender as _};
-use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
+use agent_runtime_protocol::domain::schema::v0::{
+    AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
+};
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
     AgentSession, ChannelSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
@@ -14,6 +16,7 @@ use bot_id::BotId;
 use cursor_api_key::cipher::CursorApiKey;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Mutex};
 
 /// In-memory sessions double: a real map for the external rows, a canned row
@@ -212,6 +215,38 @@ async fn fake_cursor_api() -> (
                 }))
             }),
         )
+        .route("/v1/agents/{id}/runs", {
+            // `bc-idle` grows a foreign run after the listing `session/load`
+            // hydrates from; `bc-busy` grows one only once a follow-up run is
+            // created, so its discovery is the prompt's own backfill and not a
+            // mirror tick racing it.
+            let listings = Arc::new(AtomicUsize::new(0));
+            let follow_ups = Arc::new(AtomicUsize::new(0));
+            axum::routing::get({
+                let (listings, follow_ups) = (listings.clone(), follow_ups.clone());
+                move |axum::extract::Path(id): axum::extract::Path<String>| {
+                    let first_listing = listings.fetch_add(1, SeqCst) == 0;
+                    let prompted = follow_ups.load(SeqCst) > 0;
+                    let runs = match id.as_str() {
+                        "bc-restored" => vec!["run-delivered"],
+                        "bc-idle" if first_listing => vec!["run-delivered"],
+                        "bc-idle" => vec!["run-foreign", "run-delivered"],
+                        "bc-busy" if prompted => vec!["run-test-2", "run-foreign", "run-delivered"],
+                        "bc-busy" => vec!["run-delivered"],
+                        _ => Vec::new(),
+                    };
+                    let items: Vec<_> = runs
+                        .into_iter()
+                        .map(|run| serde_json::json!({"id": run, "status": "FINISHED"}))
+                        .collect();
+                    async move { axum::Json(serde_json::json!({"items": items})) }
+                }
+            })
+            .post(move || {
+                follow_ups.fetch_add(1, SeqCst);
+                async { axum::Json(serde_json::json!({"id":"run-test-2"})) }
+            })
+        })
         .route(
             "/v1/agents/{id}/archive",
             axum::routing::post(move |axum::extract::Path(id): axum::extract::Path<String>| {
@@ -257,6 +292,8 @@ async fn fake_cursor_api() -> (
                                 "event: status\n",
                                 "data: {\"runId\":\"run-test-1\",\"status\":\"RUNNING\"}\n",
                                 "\n",
+                                "event: interaction_update\n",
+                                "data: {\"type\":\"user-message-appended\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"original\"}]}}\n\n",
                                 "event: assistant\n",
                                 "data: {\"text\":\"done\"}\n",
                                 "\n",
@@ -384,7 +421,9 @@ async fn spawning_and_prompting_records_the_minted_agent() {
         })
         .await
         .expect("spawn");
-    let (sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (sender, mut receiver) = halves.unwrap();
 
     send_acp(
         &sender,
@@ -462,7 +501,9 @@ async fn spawn_uses_the_owners_default_model() {
         })
         .await
         .expect("spawn");
-    let (sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (sender, mut receiver) = halves.unwrap();
 
     send_acp(
         &sender,
@@ -522,7 +563,9 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
         })
         .await
         .expect("spawn");
-    let (sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (sender, mut receiver) = halves.unwrap();
 
     send_acp(
         &sender,
@@ -595,41 +638,8 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
 #[tokio::test]
 async fn resume_restores_the_persisted_identity() {
     let (base_url, _, _) = fake_cursor_api().await;
-    let sessions = StubSessions::default();
-    let session_id = AgentSessionId::new();
-    ExternalSessionRepo::upsert(
-        &sessions,
-        session_id,
-        ExternalSession {
-            provider: CURSOR_PROVIDER.to_owned(),
-            external_id: "bc-restored".to_owned(),
-            external_name: None,
-            external_url: None,
-        },
-    )
-    .await
-    .expect("seed row");
-    *sessions.acp_session_id.lock().expect("stub poisoned") = Some("cursor-acp-1".to_owned());
-    let manager = manager(base_url, sessions.clone());
-
-    let transport = manager.resume(session_id).await.expect("resume");
-    let (sender, mut receiver) = transport.split();
-
-    send_acp(
-        &sender,
-        serde_json::json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}),
-    )
-    .await;
-    next_acp(&mut receiver).await;
-    send_acp(
-        &sender,
-        serde_json::json!({"jsonrpc":"2.0","id":2,"method":"session/load","params":{
-            "sessionId":"cursor-acp-1","cwd":"/workspace","mcpServers":[]}}),
-    )
-    .await;
-    let loaded = next_acp(&mut receiver).await;
-    assert_eq!(loaded["id"], 2);
-    assert!(loaded.get("error").is_none(), "got {loaded}");
+    let (_, _, history) = resume_delivered_session(base_url, "bc-restored").await;
+    assert_eq!(count(&history, "/method", "_session/turn_complete"), 1);
 }
 
 /// A session that died between `session/new` and its first prompt has an
@@ -644,7 +654,9 @@ async fn resume_answers_session_load_even_before_an_agent_was_minted() {
     let manager = manager(base_url, sessions.clone());
 
     let transport = manager.resume(session_id).await.expect("resume");
-    let (sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (sender, mut receiver) = halves.unwrap();
 
     send_acp(
         &sender,
@@ -705,7 +717,9 @@ async fn an_idle_pipe_is_shut_down() {
         })
         .await
         .expect("spawn");
-    let (_sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (_sender, mut receiver) = halves.unwrap();
 
     // The ready marker arrives; then nothing ever does, and after the idle
     // timeout (paused clock, so instantly) the stream ends instead of
@@ -715,6 +729,12 @@ async fn an_idle_pipe_is_shut_down() {
         receiver.recv().await.is_none(),
         "an idle pipe must close, not hang"
     );
+}
+
+#[test]
+fn a_pipe_is_not_idle_while_cursor_is_running_a_turn() {
+    assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, true));
+    assert!(should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false));
 }
 
 /// Teardown archives the agent on cursor.com and forgets the mapping; a
@@ -738,6 +758,7 @@ async fn teardown_archives_and_forgets() {
             external_id: "bc-doomed".to_owned(),
             external_name: None,
             external_url: None,
+            last_run_id: None,
         },
     )
     .await
@@ -801,6 +822,7 @@ async fn teardown_forgets_the_session_even_when_the_key_is_gone() {
             external_id: "bc-orphaned".to_owned(),
             external_name: None,
             external_url: None,
+            last_run_id: None,
         },
     )
     .await
@@ -818,5 +840,255 @@ async fn teardown_forgets_the_session_even_when_the_key_is_gone() {
             .expect("get"),
         None,
         "the row is ours to forget even when the agent is not ours to archive"
+    );
+}
+
+/// Every message up to and including the first one `stop` accepts, in arrival
+/// order: ACP frames as JSON, `ReloadRequired` as `"reload_required"`, other
+/// runtime events dropped. Recovery has no history replacement protocol, so a
+/// `_session/history*` frame anywhere fails the test.
+async fn collect_until(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
+    stop: impl Fn(&serde_json::Value) -> bool,
+) -> Vec<serde_json::Value> {
+    let mut seen = Vec::new();
+    loop {
+        let message = tokio::time::timeout(std::time::Duration::from_secs(30), receiver.recv())
+            .await
+            .expect("a message before the timeout")
+            .expect("the pipe stays open");
+        let value = match message {
+            ToServerMessage::Acp(AcpMessage(frame)) => {
+                serde_json::to_value(frame).expect("serializable")
+            }
+            ToServerMessage::Event {
+                event: SystemEvent::ReloadRequired,
+            } => serde_json::json!("reload_required"),
+            ToServerMessage::Event { .. } => continue,
+            other => panic!("unexpected runtime message {other:?}"),
+        };
+        assert!(
+            !value["method"]
+                .as_str()
+                .unwrap_or_default()
+                .starts_with("_session/history"),
+            "recovery must not push a history replacement, got {value}"
+        );
+        let done = stop(&value);
+        seen.push(value);
+        if done {
+            return seen;
+        }
+    }
+}
+
+/// Frames whose JSON `pointer` holds the string `value`.
+fn count(frames: &[serde_json::Value], pointer: &str, value: &str) -> usize {
+    frames
+        .iter()
+        .filter(|frame| frame.pointer(pointer).and_then(|found| found.as_str()) == Some(value))
+        .count()
+}
+
+/// The recovery handshake as the session actor performs it: `initialize`,
+/// then `session/load`. Returns the history replayed before the load's
+/// response after asserting the load succeeded and only history preceded it.
+async fn reload(
+    sender: &super::super::pipe::PipeSender,
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
+    first_id: u64,
+) -> Vec<serde_json::Value> {
+    send_acp(
+        sender,
+        serde_json::json!({"jsonrpc":"2.0","id":first_id,"method":"initialize","params":{"protocolVersion":1}}),
+    )
+    .await;
+    let initialized = collect_until(receiver, |message| message["id"] == first_id).await;
+    assert_eq!(
+        initialized.len(),
+        1,
+        "nothing precedes initialize's answer: {initialized:?}"
+    );
+    let load_id = first_id + 1;
+    send_acp(
+        sender,
+        serde_json::json!({"jsonrpc":"2.0","id":load_id,"method":"session/load","params":{
+            "sessionId":"cursor-acp-1","cwd":"/workspace","mcpServers":[]}}),
+    )
+    .await;
+    let mut replayed = collect_until(receiver, |message| message["id"] == load_id).await;
+    let loaded = replayed.pop().expect("the load response");
+    assert!(
+        loaded.get("error").is_none(),
+        "load must succeed, got {loaded}"
+    );
+    for frame in &replayed {
+        assert!(
+            matches!(
+                frame["method"].as_str(),
+                Some("session/update" | "_session/turn_complete")
+            ),
+            "only history travels before a load's response, got {frame}"
+        );
+    }
+    replayed
+}
+
+/// Resume a session whose Cursor agent is `agent` with `run-delivered` already
+/// in Macro's log, then `initialize` + `session/load` it; the third element is
+/// what that first load replayed.
+async fn resume_delivered_session(
+    base_url: String,
+    agent: &str,
+) -> (
+    super::super::pipe::PipeSender,
+    tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
+    Vec<serde_json::Value>,
+) {
+    let sessions = StubSessions::default();
+    let session_id = AgentSessionId::new();
+    ExternalSessionRepo::upsert(
+        &sessions,
+        session_id,
+        ExternalSession {
+            provider: CURSOR_PROVIDER.to_owned(),
+            external_id: agent.to_owned(),
+            external_name: None,
+            external_url: None,
+            last_run_id: Some("run-delivered".to_owned()),
+        },
+    )
+    .await
+    .expect("seed row");
+    *sessions.acp_session_id.lock().expect("stub poisoned") = Some("cursor-acp-1".to_owned());
+    let transport = manager(base_url, sessions)
+        .resume(session_id)
+        .await
+        .expect("resume");
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (sender, mut receiver) = halves.unwrap();
+    let history = reload(&sender, &mut receiver, 1).await;
+    (sender, receiver, history)
+}
+
+/// A run driven from cursor.com while the Macro session sits idle: the mirror
+/// captures it silently and asks the host to reload. The host's standard
+/// `initialize` + `session/load` then shows both runs, a repeated load shows
+/// exactly the same, and the mirror asks for nothing more.
+#[tokio::test]
+async fn an_idle_foreign_run_is_recovered_through_a_client_load() {
+    let (base_url, _, _) = fake_cursor_api().await;
+    let (sender, mut receiver, before) = resume_delivered_session(base_url, "bc-idle").await;
+    assert_eq!(count(&before, "/method", "_session/turn_complete"), 1);
+
+    let idle = collect_until(&mut receiver, |message| message == "reload_required").await;
+    assert_eq!(
+        idle.len(),
+        1,
+        "an idle mirror asks for a reload and publishes no frames: {idle:?}"
+    );
+
+    let recovered = reload(&sender, &mut receiver, 3).await;
+    assert_eq!(
+        count(&recovered, "/method", "_session/turn_complete"),
+        2,
+        "both runs are history: {recovered:?}"
+    );
+    assert_eq!(
+        count(
+            &recovered,
+            "/params/update/sessionUpdate",
+            "user_message_chunk"
+        ),
+        2
+    );
+    assert!(
+        recovered.len() > before.len(),
+        "history grows, it is not replaced"
+    );
+
+    let again = reload(&sender, &mut receiver, 5).await;
+    assert_eq!(
+        again, recovered,
+        "a repeated load replays the same history once"
+    );
+
+    // Two further mirror ticks pass without another reload: what was loaded
+    // is checkpointed, not rediscovered.
+    let quiet = tokio::time::timeout(std::time::Duration::from_millis(2500), receiver.recv()).await;
+    assert!(
+        quiet.is_err(),
+        "nothing more may arrive after recovery, got {quiet:?}"
+    );
+}
+
+/// A run driven from cursor.com discovered by a prompt's own backfill: the
+/// reload requirement reaches the host before the prompt's response, the live
+/// turn streams only its own frames, and the load that follows shows the
+/// delivered run, the foreign run and the prompt just answered.
+#[tokio::test]
+async fn a_foreign_run_found_by_a_prompt_is_recovered_after_its_response() {
+    let (base_url, _, _) = fake_cursor_api().await;
+    let (sender, mut receiver, before) = resume_delivered_session(base_url, "bc-busy").await;
+    assert_eq!(count(&before, "/method", "_session/turn_complete"), 1);
+
+    send_acp(
+        &sender,
+        serde_json::json!({"jsonrpc":"2.0","id":3,"method":"session/prompt","params":{
+            "sessionId": "cursor-acp-1",
+            "prompt": [{"type":"text","text":"follow up"}],
+        }}),
+    )
+    .await;
+    let turn = collect_until(&mut receiver, |message| message["id"] == 3).await;
+    let response = turn.last().expect("the prompt response");
+    assert_eq!(
+        response["result"]["stopReason"], "end_turn",
+        "got {response}"
+    );
+    let reload_at = turn
+        .iter()
+        .position(|message| message == "reload_required")
+        .expect("the prompt's backfill requires a reload");
+    assert!(
+        reload_at < turn.len() - 1,
+        "the requirement precedes the response"
+    );
+    assert_eq!(
+        count(&turn, "/params/update/sessionUpdate", "user_message_chunk"),
+        0,
+        "neither the foreign run's prompt nor our own is echoed live: {turn:?}"
+    );
+    assert_eq!(
+        count(&turn, "/params/update/content/text", "done"),
+        1,
+        "only the live run's text streams; the foreign run waits for load: {turn:?}"
+    );
+
+    let recovered = reload(&sender, &mut receiver, 4).await;
+    assert_eq!(
+        count(&recovered, "/method", "_session/turn_complete"),
+        3,
+        "delivered, foreign, and ours: {recovered:?}"
+    );
+    assert_eq!(
+        count(
+            &recovered,
+            "/params/update/sessionUpdate",
+            "user_message_chunk"
+        ),
+        3
+    );
+    assert_eq!(
+        count(&recovered, "/params/update/content/text", "follow up"),
+        1,
+        "the prompt just answered is part of the loaded history: {recovered:?}"
+    );
+
+    let again = reload(&sender, &mut receiver, 6).await;
+    assert_eq!(
+        again, recovered,
+        "a repeated load replays the same history once"
     );
 }

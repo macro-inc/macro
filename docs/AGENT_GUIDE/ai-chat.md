@@ -53,6 +53,22 @@ used in chat and channels; they serialize as `<m-document-mention>` tags in the 
 the agent sees. Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread).
 
+When a session reconnects using ACP load, the last committed conversation stays
+visible while history is reconstructed. A successful load replaces the transcript
+once, including prompts, thoughts, and tool results; it does not append another
+copy. Replayed rows can change content type under existing message or tool IDs;
+the live transcript must show the new content without an error or a reload.
+A failed or interrupted load leaves the previous conversation visible, and
+late replay notifications remain hidden across initialization/reconnect markers
+until a valid session open or dispatched prompt establishes live traffic. Reopening
+the session shows the same committed history. Initialization, creating a session, and ACP resume do
+not by themselves clear existing messages. Channel agent-reference previews follow
+the same replacement behavior. Every successful load can replace history with an
+empty transcript, including historical lookup-only Cursor load acknowledgments.
+If a load finishes while the browser
+is fetching history, buffered content from before the selected history boundary
+must stay hidden; subsequent live messages must still appear.
+
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it
 stays tappable and clear of the home indicator. The box is full width; the text

@@ -67,6 +67,8 @@ mod convert;
 mod permission;
 /// The agent's plan (todo list).
 mod plan;
+/// Transactional generic ACP history replacement.
+mod replay;
 /// The fold's state and the per-frame dispatch.
 mod state;
 /// Delegated agents and the calls nested under them.
@@ -114,6 +116,7 @@ fn fold_machine(log: impl IntoIterator<Item = AgentSessionLog>) -> FoldMachineIm
 #[derive(Debug, Default)]
 pub struct FoldMachineImpl {
     state: FoldState,
+    replay: replay::Replay,
 }
 
 impl FoldMachineImpl {
@@ -123,7 +126,9 @@ impl FoldMachineImpl {
         Self::default()
     }
 
-    /// Every message derived so far, oldest first.
+    /// Every committed message, oldest first. A pending load is invisible here.
+    /// The candidate remains in the machine so snapshot catch-up can continue
+    /// through its eventual success or failure on the live stream.
     ///
     /// Includes the open turn's agent message, still being appended to. There
     /// is nothing to finalize: a message is complete the moment no further
@@ -155,7 +160,16 @@ impl FoldMachineImpl {
 
 impl FoldMachine for FoldMachineImpl {
     fn push(&mut self, log: AgentSessionLog) -> Vec<FoldEvent<'_>> {
-        let changes = self.state.step(log);
+        let changes = match self.replay.step(&mut self.state, log) {
+            replay::Outcome::Changes(changes) => changes,
+            replay::Outcome::Staged => return Vec::new(),
+            replay::Outcome::Replaced => {
+                return vec![
+                    FoldEvent::MessagesReplaced(Cow::Borrowed(&self.state.messages)),
+                    FoldEvent::MetadataUpdated(Cow::Borrowed(&self.state.metadata)),
+                ];
+            }
+        };
         changes
             .into_iter()
             .filter_map(|change| match change {

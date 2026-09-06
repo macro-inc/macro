@@ -194,7 +194,7 @@ pub trait AgentSessionService: Send + Sync + 'static {
         id: AgentSessionId,
     ) -> impl Future<Output = Result<MessageId>> + Send;
 
-    /// The raw protocol log of one session, oldest first, with the agent
+    /// The effective ACP history of one session, oldest first, with the agent
     /// whose messages it derives.
     ///
     /// Served unfolded because nothing here folds for a reader any more: the
@@ -380,7 +380,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
     async fn activate_reserved<Connector>(
         &self,
         session: AgentSession,
-        attachment: RuntimeAttachment<Connector>,
+        mut attachment: RuntimeAttachment<Connector>,
         reservation: AttachReservation,
         claim: SessionClaim,
     ) -> Result<()>
@@ -400,6 +400,9 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         };
         if !Arc::ptr_eq(&active.marker, &reservation.marker) || active.stopping {
             return Err(AgentSessionError::Disconnected(id));
+        }
+        if let Some(activate) = attachment.activation.take() {
+            activate(claim)?;
         }
         active.commands = Some(commands.clone());
         drop(active);
@@ -636,6 +639,7 @@ where
         )
         .await
         .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
+        .map(|_| ())
     }
 
     async fn attach_session<Connector>(
@@ -892,7 +896,11 @@ where
     R: AgentSessionRepo + AgentSessionLogRepo + Clone,
     Rt: AgentSessionRealtime + Send + Sync + 'static,
 {
-    async fn append(&mut self, log: AgentSessionLog) -> Result<()> {
+    async fn append_with_boundary(
+        &mut self,
+        log: AgentSessionLog,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+    ) -> Result<macro_uuid::Uuid> {
         let session = log.agent_session_id;
 
         // The wire tap: every frame of every session, both directions,
@@ -913,7 +921,12 @@ where
         // Durable first: projections are rebuildable, but a frame omitted from
         // session history is not.
         let stored = match &self.claim {
-            Some(claim) => self.repo.create_fenced(log.clone(), claim).await?,
+            Some(claim) => {
+                self.repo
+                    .create_fenced_with_boundary(log.clone(), claim, boundary)
+                    .await?
+            }
+            None if boundary.is_some() => return Err(AgentSessionError::FencedOut(session)),
             None => AgentSessionLogRepo::create(&self.repo, log.clone()).await?,
         };
 
@@ -951,6 +964,7 @@ where
         // Best-effort once the durable append has succeeded: the port drops
         // frames by contract, and the log this was derived from is already
         // durable, so the worst a failure costs is a viewer who has to reload.
+        let id = stored.id;
         if let Err(error) = self.stream(session, stored).await {
             tracing::error!(
                 error = ?error,
@@ -958,7 +972,7 @@ where
                 "failed to stream agent session frame"
             );
         }
-        Ok(())
+        Ok(id)
     }
 }
 

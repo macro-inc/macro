@@ -184,7 +184,7 @@ and each `*InTargetCaches` helper applies the change to all three cache families
   `lookup` closure so only changed rows re-render. Resource resolves once; the store keeps updating.
 - `agent-session-stream.ts`: the buffering seam. `beginAgentSessionStream(channelId)`
   **before** the fetch, buffer frames, `followAgentSession` aligns buffer against snapshot
-  (`dropOverlap`, :328 — longest buffered-prefix that is a suffix of the fetched log), one
+   (Rust `LogIngestion` reconciles durable snapshot/live row overlap), one
   machine per session shared across split views, refcounted release.
   Also `subscribeAgentSessionLog(sessionId, sink)` (:90) for raw-frame consumers.
 - `agent-session-placeholders.ts`: synthesizes a placeholder comms row when the fold derives

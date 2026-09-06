@@ -123,6 +123,12 @@ export type FoldedStreamEvent =
       /**  The message as it now stands. */
       message: FoldedMessage;
     }
+  /**  Replace all messages for this session, including removal of old rows. */
+  | {
+      kind: 'replace';
+      /**  The complete committed conversation. */
+      messages: FoldedMessage[];
+    }
   /**  The session's metadata changed; here it is in full. */
   | {
       kind: 'metadata';

@@ -14,11 +14,11 @@
 mod test;
 
 use crate::domain::model::{CursorRunId, RunStatus};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 /// One decoded event from a run's stream.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CursorEvent {
     /// The run's lifecycle status changed (also sent once on connect).
     Status {
@@ -77,7 +77,7 @@ pub enum CursorEvent {
 /// A `tool_call` event: Cursor sends the same event name for the opening
 /// announcement and every later progress report, distinguished only by
 /// whether the `callId` has been seen before.
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolCallEvent {
     /// Cursor's id for the call. May contain a literal newline — see
@@ -114,7 +114,7 @@ pub struct ToolCallEvent {
 /// `args` is included because it is the only other half there is to truncate;
 /// no recording has shown it yet, so it defaults to false like any absent
 /// field.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Truncation {
     /// Cursor truncated the tool's input.
@@ -145,7 +145,7 @@ where
 /// event does. `text-delta` and `thinking-delta` duplicate the `assistant`
 /// and `thinking` events one-for-one — consuming both would double every
 /// chunk — so they land in [`InteractionUpdate::Other`] and are ignored.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum InteractionUpdate {
     /// The user's prompt echoed back into the stream. The one place the
     /// stream states which prompt opened the turn.

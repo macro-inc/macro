@@ -4,7 +4,7 @@
  * The driver owns a recording split in two: entries before `splitIndex` are
  * served as the persisted log (`getLog`), the rest stream one at a time
  * through the real realtime entry point, `handleAgentSessionLog` — so
- * buffering, `dropOverlap`, the worker fold, and the status projection all
+ * buffering, Rust row ingestion, the worker fold, and the status projection all
  * run exactly as they do against the gateway.
  *
  * Two knobs exist purely to provoke the catch-up paths: `fetchDelayMs` holds
@@ -89,6 +89,7 @@ function sessionFixture(id: string): AgentSessionResponse {
 /** The frame the harness would append for a prompt accepted over `control`. */
 function promptEcho(prompt: string): AgentSessionLogEntryDto {
   return {
+    id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     userId: REPLAY_OWNER,
     direction: 'to_runtime',

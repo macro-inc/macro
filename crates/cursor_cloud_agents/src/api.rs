@@ -3,8 +3,8 @@
 //! A plain reqwest wrapper over `api.cursor.com`'s Cloud Agents API — create
 //! an agent, follow up with runs, cancel, and stream a run's SSE events. It
 //! knows nothing about ACP; it implements the domain's
-//! [`CursorAgents`]/[`RunStream`] ports and speaks the domain's
-//! [`CursorEvent`] vocabulary at its boundary.
+//! [`CursorAgents`]/[`RunStream`] ports, retaining native SSE records for
+//! capture before the domain decodes them.
 //!
 //! Authentication is HTTP Basic with the API key as username and an empty
 //! password, per Cursor's docs. The key is validated for shape at
@@ -24,12 +24,11 @@ use crate::api::record::SseRecording;
 use crate::api::wire::{
     AgentSummary, ArchiveAgentResponse, CreateAgentRequest, CreateAgentResponse, CreateRunRequest,
     CreateRunResponse, ListAgentsResponse, ListModelsResponse, ListRunsResponse,
-    McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection, RunDetail,
+    McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection,
 };
-use crate::domain::event::CursorEvent;
 use crate::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, ModelParam, ModelVariant,
-    RepoUrl, RunListing, RunOutcome,
+    RepoUrl, RunListing,
 };
 use crate::domain::ports::{CursorAgents, RunStream};
 use futures::{Stream, StreamExt as _};
@@ -208,6 +207,14 @@ impl CursorClient {
             .await
             .map_err(|error| rootcause::report!(error))?;
         if !status.is_success() {
+            if status.is_client_error() && status != reqwest::StatusCode::REQUEST_TIMEOUT {
+                return Err(
+                    rootcause::report!(crate::domain::error::PromptRejected(format!(
+                        "cursor POST {path} -> {status}: {text}"
+                    )))
+                    .into_dynamic(),
+                );
+            }
             return Err(rootcause::report!("cursor POST {path} -> {status}: {text}"));
         }
         serde_json::from_str(&text)
@@ -289,6 +296,28 @@ impl CursorClient {
 }
 
 impl CursorAgents for CursorClient {
+    async fn raw_result(
+        &self,
+        agent: &CursorAgentId,
+        run: &CursorRunId,
+    ) -> Result<String, rootcause::Report> {
+        let response = self
+            .http
+            .get(self.url(&format!("/v1/agents/{agent}/runs/{run}")))
+            .basic_auth(self.config.api_key.expose(), Some(""))
+            .send()
+            .await
+            .map_err(|e| rootcause::report!(e))?;
+        let status = response.status();
+        let text = response.text().await.map_err(|e| rootcause::report!(e))?;
+        if !status.is_success() {
+            return Err(rootcause::report!(
+                "Cursor run poll failed: {status}: {text}"
+            ));
+        }
+        Ok(text)
+    }
+
     #[tracing::instrument(skip_all, err, fields(mcp_servers = mcp_servers.len()))]
     async fn create_agent(
         &self,
@@ -383,35 +412,60 @@ impl CursorAgents for CursorClient {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn run_result(
+    async fn list_runs(
         &self,
         agent: &CursorAgentId,
-        run: &CursorRunId,
-    ) -> Result<RunOutcome, rootcause::Report> {
-        let detail: RunDetail = self
-            .get_json(&format!("/v1/agents/{agent}/runs/{run}"))
-            .await?;
-        Ok(RunOutcome {
-            status: detail.status,
-            text: detail.result,
-        })
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn list_runs(&self, agent: &CursorAgentId) -> Result<Vec<RunListing>, rootcause::Report> {
-        // One page is plenty: the caller walks back only to the last run it
-        // drove itself, which is at most one cursor.com visit ago.
-        let page: ListRunsResponse = self
-            .get_json(&format!("/v1/agents/{agent}/runs?limit=20"))
-            .await?;
-        Ok(page
-            .items
-            .into_iter()
-            .map(|item| RunListing {
+        through: Option<&CursorRunId>,
+    ) -> Result<Vec<RunListing>, rootcause::Report> {
+        let mut listings = Vec::new();
+        let mut cursor = None;
+        let mut seen_cursors = std::collections::HashSet::new();
+        loop {
+            let mut request = self
+                .http
+                .get(self.url(&format!("/v1/agents/{agent}/runs")))
+                .basic_auth(self.config.api_key.expose(), Some(""))
+                .query(&[("limit", "100")]);
+            if let Some(cursor) = cursor.as_deref() {
+                request = request.query(&[("cursor", cursor)]);
+            }
+            let response = request
+                .send()
+                .await
+                .map_err(|error| rootcause::report!(error))?;
+            let status = response.status();
+            let text = response
+                .text()
+                .await
+                .map_err(|error| rootcause::report!(error))?;
+            if !status.is_success() {
+                return Err(rootcause::report!(
+                    "cursor GET /v1/agents/{agent}/runs -> {status}: {text}"
+                ));
+            }
+            let page: ListRunsResponse = serde_json::from_str(&text).map_err(|error| {
+                rootcause::report!("cursor run list: bad response body: {error}")
+            })?;
+            let reached = through
+                .is_some_and(|through| page.items.iter().any(|item| item.id == through.as_str()));
+            listings.extend(page.items.into_iter().map(|item| RunListing {
                 id: CursorRunId::new(item.id),
                 status: item.status,
-            })
-            .collect())
+            }));
+            if reached {
+                break;
+            }
+            let Some(next) = page.next_cursor else {
+                break;
+            };
+            if !seen_cursors.insert(next.clone()) {
+                return Err(rootcause::report!(
+                    "cursor run list repeated pagination cursor"
+                ));
+            }
+            cursor = Some(next);
+        }
+        Ok(listings)
     }
 }
 
@@ -424,69 +478,29 @@ const STREAM_CONNECT_ATTEMPTS: usize = 5;
 const STREAM_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
 
 impl RunStream for CursorClient {
-    async fn stream(
+    async fn raw_stream(
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
-    ) -> Result<impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send, rootcause::Report>
-    {
-        // A stream opened right after `POST …/runs` can answer
-        // `stream_unavailable` before the run's stream is provisioned —
-        // observed on follow-up runs, whose create-to-stream gap is much
-        // shorter than a first run's, and in both shapes the endpoint uses:
-        // a 200 whose first event is an `error`, and an outright 409. The
-        // run itself is fine (it finishes server-side), so an unavailable
-        // stream at the head is a reason to reconnect, not to fail the turn.
-        // Only the head: the same error after real events means the stream
-        // genuinely went away.
-        let mut attempt = 1;
-        loop {
-            let mut stream = match self.connect_stream(agent, run).await {
-                Ok(stream) => Box::pin(stream),
-                Err(StreamConnectError::Unavailable(message))
-                    if attempt < STREAM_CONNECT_ATTEMPTS =>
-                {
-                    tracing::info!(%agent, %run, attempt, %message, "run stream not up yet; reconnecting");
-                    attempt += 1;
-                    tokio::time::sleep(STREAM_RETRY_DELAY).await;
-                    continue;
+    ) -> Result<
+        impl Stream<Item = Result<crate::domain::journal::NativeRecord, rootcause::Report>> + Send,
+        rootcause::Report,
+    > {
+        // Only retry failed HTTP connects. Successful SSE records, including
+        // stream_unavailable, must reach the domain journal before inspection.
+        for attempt in 1..=STREAM_CONNECT_ATTEMPTS {
+            match self.connect_stream(agent, run).await {
+                Ok(stream) => return Ok(stream),
+                Err(StreamConnectError::Unavailable(_)) if attempt < STREAM_CONNECT_ATTEMPTS => {
+                    tokio::time::sleep(STREAM_RETRY_DELAY).await
                 }
                 Err(StreamConnectError::Unavailable(message)) => {
-                    return Err(rootcause::report!(
-                        "cursor stream unavailable after {STREAM_CONNECT_ATTEMPTS} connects: {message}"
-                    ));
+                    return Err(rootcause::report!("Cursor stream unavailable: {message}"));
                 }
-                Err(StreamConnectError::Other(report)) => return Err(report),
-            };
-            let mut leading = Vec::new();
-            let retry = loop {
-                match stream.next().await {
-                    Some(Ok(event @ (CursorEvent::Status { .. } | CursorEvent::Heartbeat))) => {
-                        leading.push(Ok(event));
-                    }
-                    Some(Ok(CursorEvent::Error { code, message }))
-                        if code.as_deref() == Some("stream_unavailable")
-                            && attempt < STREAM_CONNECT_ATTEMPTS =>
-                    {
-                        tracing::info!(%agent, %run, attempt, %message, "run stream not up yet; reconnecting");
-                        break true;
-                    }
-                    Some(event) => {
-                        leading.push(event);
-                        break false;
-                    }
-                    None => break false,
-                }
-            };
-            if retry {
-                attempt += 1;
-                tokio::time::sleep(STREAM_RETRY_DELAY).await;
-                continue;
+                Err(StreamConnectError::Other(error)) => return Err(error),
             }
-            // The buffered head replays before the live remainder, so the
-            // caller sees one uninterrupted stream.
-            return Ok(futures::stream::iter(leading).chain(stream));
         }
+        unreachable!("connect attempts are nonzero")
     }
 }
 
@@ -506,7 +520,9 @@ impl CursorClient {
         agent: &CursorAgentId,
         run: &CursorRunId,
     ) -> Result<
-        impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send + use<>,
+        impl Stream<Item = Result<crate::domain::journal::NativeRecord, rootcause::Report>>
+        + Send
+        + use<>,
         StreamConnectError,
     > {
         let response = self
@@ -550,7 +566,7 @@ impl CursorClient {
             |(mut bytes, mut decoder, mut pending, mut recording)| async move {
                 loop {
                     if let Some(event) = pending.pop_front() {
-                        return Ok(Some((event, (bytes, decoder, pending, recording))));
+                        return Ok(Some((event?, (bytes, decoder, pending, recording))));
                     }
                     match bytes.next().await {
                         Some(Ok(chunk)) => {
@@ -560,18 +576,27 @@ impl CursorClient {
                                 // A payload past the limit is the run's
                                 // problem, not this stream's shape: report it
                                 // and stop rather than resync mid-record.
-                                let record = record.map_err(|error| {
-                                    rootcause::report!(
-                                        "cursor sse payload over {} bytes: {error}",
-                                        MAX_SSE_PAYLOAD
-                                    )
-                                })?;
+                                let record = match record {
+                                    Ok(record) => record,
+                                    Err(error) => {
+                                        // Deliver every earlier complete record
+                                        // in this chunk before the decoder error.
+                                        pending.push_back(Err(rootcause::report!(
+                                            "cursor sse payload over {} bytes: {error}",
+                                            MAX_SSE_PAYLOAD
+                                        )
+                                        .into_dynamic()));
+                                        break;
+                                    }
+                                };
                                 let SseEvent::Message(message) = record else {
                                     continue; // `retry:`; nothing reconnects yet
                                 };
-                                let data = serde_json::from_str(&message.data)
-                                    .unwrap_or(serde_json::Value::Null);
-                                pending.push_back(CursorEvent::from_wire(&message.event, data));
+                                pending.push_back(Ok(crate::domain::journal::NativeRecord {
+                                    event: message.event.into_owned(),
+                                    data: message.data,
+                                    id: message.last_event_id.map(|id| id.to_string()),
+                                }));
                             }
                         }
                         Some(Err(error)) => {

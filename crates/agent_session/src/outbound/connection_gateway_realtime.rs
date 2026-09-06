@@ -68,6 +68,8 @@ pub const AGENT_SESSION_QUEUE: &str = "agent_session_queue";
 /// contract.
 #[derive(Debug, Serialize)]
 pub struct AgentSessionLogEvent {
+    /// Durable row identity, matching the GET log entry and breaking timestamp ties.
+    pub id: Uuid,
     /// The session the frame belongs to, and half of the composite id its
     /// folded messages are keyed by.
     #[serde(rename = "agentSessionId")]
@@ -133,6 +135,7 @@ impl AgentSessionLogEvent {
     #[must_use]
     pub fn new(event: LogAppended) -> Self {
         let StoredAgentSessionLog {
+            id,
             created_at,
             entry: AgentSessionLog {
                 user_id, content, ..
@@ -140,6 +143,7 @@ impl AgentSessionLogEvent {
         } = event.entry;
 
         Self {
+            id,
             agent_session_id: event.agent_session_id.as_uuid(),
             created_at,
             user_id: user_id.map(|user| user.to_string()),

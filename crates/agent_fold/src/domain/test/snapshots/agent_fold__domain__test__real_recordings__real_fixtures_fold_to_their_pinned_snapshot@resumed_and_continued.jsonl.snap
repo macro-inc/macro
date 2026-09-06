@@ -8,6 +8,23 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
         id: TurnId(
             0,
         ),
+        author: User {
+            user_id: None,
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "the example at [@agent_session_recorder.rs](file:///Users/eric/Code/macro/crates/agent_session/examples/agent_session_recorder.rs) has a path in the .target dir to configure against zed. update the command to install this bin and update the zed to use the installed version. this will work better\n<context ref=\"file:///Users/eric/Code/macro/crates/agent_session/examples/agent_session_recorder.rs\">\n//! Record a live agent session as [`Message`]-per-line JSONL fixtures.\n//!\n//! An ACP client (e.g. Zed) spawns this example as its agent server and\n//! speaks ACP over stdio. Internally the process is both sides of an\n//! Agent Runtime Protocol connection over a loopback WebSocket:\n//!\n//! - the service side accepts the runtime connection, records every logical\n//!   protocol message crossing the wire, and bridges the connection's ACP\n//!   channel to stdio;\n//! - a Tokio task stands in for a container, connects its runtime to the\n//!   service, announces `acp_ready`, and starts the official Claude Code ACP\n//!   adapter (`@agentclientprotocol/claude-agent-acp`) with `npx`.\n//!\n//! Each run records its one connection to\n//! `~/.agent_runtime_sessions/<utc-timestamp>.jsonl`, one JSON object per\n//! line: a timestamp flattened together with this crate's own\n//! [`Message`] serialization, so each line parses straight back into\n//! [`Message`]:\n//!\n//! ```text\n//! {\"ts\": \"2026-08-03T14:22:07.123Z\", \"direction\": \"to_server\" | \"to_runtime\", \"content\": <envelope>}\n//! ```\n//!\n//! Prerequisites:\n//!\n//! - Node.js and `npx` must be installed;\n//! - Claude Code credentials: either a subscription login (`claude /login`)\n//!   or `ANTHROPIC_API_KEY` in the environment. The API key takes precedence\n//!   over the subscription login when both are present.\n//!\n//! Build the recorder, then point an ACP client at the binary:\n//!\n//! ```text\n//! cargo build -p agent_session --example agent_session_recorder\n//! ```\n//!\n//! Zed `settings.json` (use an absolute path - Zed does not expand `~`; the\n//! `env -u` strips a stray API key from the environment so the session uses\n//! the subscription login):\n//!\n//! ```text\n//! \"agent_servers\": {\n//!   \"Recorded Claude\": {\n//!     \"type\": \"custom\",\n//!     \"command\": \"/bin/bash\",\n//!     \"args\": [\n//!       \"-c\",\n//!       \"exec env -u ANTHROPIC_API_KEY <repo>/target/debug/examples/agent_session_recorder\"\n//!     ]\n//!   }\n//! }\n//! ```\n//!\n//! All diagnostics go to stderr: stdout carries the ACP stream.\n\nuse std::error::Error;\nuse std::path::{Path, PathBuf};\nuse std::sync::Arc;\n\nuse agent_client_protocol::{AcpAgent, Agent, Client, ConnectTo, Stdio};\nuse agent_runtime_protocol::domain::channel::Channel;\nuse agent_runtime_protocol::domain::connection::{\n    RuntimeConnection, ServerChannel, ServerConnection,\n};\nuse agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};\nuse agent_runtime_protocol::outbound::websocket::{ServerTransport, connect_runtime};\nuse agent_session::domain::model::Message;\nuse chrono::{DateTime, SecondsFormat, Utc};\nuse serde::Serialize;\nuse tokio::io::AsyncWriteExt;\nuse tokio::sync::mpsc;\n\n#[cfg(test)]\n#[path = \"agent_session_recorder/test.rs\"]\nmod test;\n\ntype AnyError = Box<dyn Error + Send + Sync>;\n\nconst CLAUDE_AGENT_ACP: &str = \"@agentclientprotocol/claude-agent-acp@0.64.2\";\n\n#[tokio::main]\nasync fn main() -> Result<(), AnyError> {\n    let path = recording_path(\n        &std::env::home_dir().ok_or(\"cannot determine home directory\")?,\n        Utc::now(),\n    );\n    let (sink, lines) = mpsc::unbounded_channel();\n    let writer = tokio::spawn(run_writer(path.clone(), lines));\n\n    let carrier: Arc<ServerTransport<ToRuntimeMessage, ToServerMessage>> =\n        Arc::new(ServerTransport::new());\n    let listener = tokio::net::TcpListener::bind(\"127.0.0.1:0\").await?;\n    let address = listener.local_addr()?;\n    let app = Arc::clone(&carrier).into_router();\n    let websocket_handle = tokio::spawn(async move { axum::serve(listener, app).await });\n    eprintln!(\"recorder: service listening on ws://{address}\");\n\n    let mut container = tokio::spawn(run_container(format!(\"ws://{address}\")));\n    let incoming = accept_runtime(&carrier, &mut container).await?;\n    eprintln!(\n        \"recorder: runtime connected, recording to {}\",\n        path.display()\n    );\n\n    let (service, acp) = ServerConnection::connect(record_channel(incoming, sink), ());\n\n    // Bridge the ACP client on stdio to this connection's agent. The client\n    // drives the whole session; this future completes when it closes stdio.\n    let bridge = ConnectTo::<Agent>::connect_to(Stdio::new(), acp);\n    tokio::pin!(bridge);\n    let result: Result<(), AnyError> = tokio::select! {\n        result = &mut bridge => {\n            container.abort();\n            let _ = container.await;\n            result.map_err(Into::into)\n        }\n        container_result = &mut container => Err(container_error(container_result)),\n    };\n\n    // Tear the connection down, then let the writer drain what was recorded.\n    drop(service);\n    websocket_handle.abort();\n    match writer.await {\n        Ok(Ok(())) => eprintln!(\"recorder: session saved to {}\", path.display()),\n        Ok(Err(error)) => eprintln!(\"recorder: writing the recording failed: {error}\"),\n        Err(error) => eprintln!(\"recorder: recording writer panicked: {error}\"),\n    }\n    result\n}\n\n/// Where a session started at `now` is recorded for the user whose home\n/// directory is `home`.\nfn recording_path(home: &Path, now: DateTime<Utc>) -> PathBuf {\n    home.join(\".agent_runtime_sessions\")\n        .join(format!(\"{}.jsonl\", now.format(\"%Y-%m-%dT%H-%M-%SZ\")))\n}\n\n/// Append recorded lines to the session file until every sink handle drops.\n///\n/// Flushes after every line so a session killed mid-run keeps its data.\nasync fn run_writer(\n    path: PathBuf,\n    mut lines: mpsc::UnboundedReceiver<String>,\n) -> std::io::Result<()> {\n    if let Some(parent) = path.parent() {\n        tokio::fs::create_dir_all(parent).await?;\n    }\n    let mut file = tokio::fs::File::create(&path).await?;\n    while let Some(line) = lines.recv().await {\n        file.write_all(line.as_bytes()).await?;\n        file.write_all(b\"\\n\").await?;\n        file.flush().await?;\n    }\n    file.flush().await\n}\n\n/// Interpose a recording tap on the service side of a logical connection.\n///\n/// Every message crossing the channel is appended to `sink` as one JSONL\n/// line before being forwarded unchanged. Recording is best-effort: a\n/// message that fails to serialize is reported on stderr and forwarded\n/// anyway, and a closed sink never tears down the session.\nfn record_channel(inner: ServerChannel, sink: mpsc::UnboundedSender<String>) -> ServerChannel {\n    let (outer, bridge) = Channel::duplex();\n    let Channel {\n        tx: inner_tx,\n        rx: mut inner_rx,\n    } = inner;\n    let Channel {\n        tx: bridge_tx,\n        rx: mut bridge_rx,\n    }: Channel<ToServerMessage, ToRuntimeMessage> = bridge;\n\n    let to_runtime_sink = sink.clone();\n    tokio::spawn(async move {\n        while let Some(message) = bridge_rx.recv().await {\n            record(&to_runtime_sink, &Message::ToRuntime(message.clone()));\n            if inner_tx.send(message).is_err() {\n                break;\n            }\n        }\n    });\n    tokio::spawn(async move {\n        while let Some(message) = inner_rx.recv().await {\n            record(&sink, &Message::ToServer(message.clone()));\n            if bridge_tx.send(message).is_err() {\n                break;\n            }\n        }\n    });\n\n    outer\n}\n\n/// One recorded JSONL line: a timestamp flattened alongside [`Message`]'s\n/// own `direction`/`content` serialization.\n#[derive(Serialize)]\nstruct RecordedLine<'a> {\n    ts: String,\n    #[serde(flatten)]\n    message: &'a Message,\n}\n\nfn record(sink: &mpsc::UnboundedSender<String>, message: &Message) {\n    match record_line(message) {\n        Ok(line) => {\n            let _ = sink.send(line);\n        }\n        Err(error) => eprintln!(\"recorder: dropping unserializable message: {error}\"),\n    }\n}\n\nfn record_line(message: &Message) -> serde_json::Result<String> {\n    serde_json::to_string(&RecordedLine {\n        ts: Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true),\n        message,\n    })\n}\n\nasync fn accept_runtime(\n    carrier: &ServerTransport<ToRuntimeMessage, ToServerMessage>,\n    container: &mut tokio::task::JoinHandle<Result<(), AnyError>>,\n) -> Result<ServerChannel, AnyError> {\n    tokio::select! {\n        incoming = carrier.accept() => incoming\n            .ok_or_else(|| \"container disconnected before connecting\".into()),\n        result = &mut *container => Err(container_error(result)),\n    }\n}\n\nfn container_error(result: Result<Result<(), AnyError>, tokio::task::JoinError>) -> AnyError {\n    match result {\n        Ok(Ok(())) => \"container exited unexpectedly\".into(),\n        Ok(Err(error)) => error,\n        Err(error) => Box::new(error),\n    }\n}\n\nasync fn run_container(websocket_url: String) -> Result<(), AnyError> {\n    let (stream, _response) = tokio_tungstenite::connect_async(websocket_url).await?;\n    let channel = connect_runtime::<ToServerMessage, ToRuntimeMessage, _>(stream);\n    let (runtime, acp) = RuntimeConnection::connect(channel);\n    // Announce readiness over the wire like a real Agent Runtime would, so\n    // the recording contains the acp_ready event that production logs carry.\n    runtime.system_event(SystemEvent::AcpReady)?;\n\n    let claude_code = AcpAgent::from_args([\"npx\", \"-y\", CLAUDE_AGENT_ACP])?;\n    ConnectTo::<Client>::connect_to(claude_code, acp)\n        .await\n        .map_err(Into::into)\n}\n\n</context>",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
         author: Agent,
         request_id: None,
         parts: NonEmpty {
@@ -242,7 +259,26 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
                     },
                 },
                 Text {
-                    text: "Done. The recorder is now installed at `~/.cargo/bin/agent_session_recorder` and Zed points at it instead of the debug build in `target/`.\n\nThree changes:\n\n1. **Doc comment** in `crates/agent_session/examples/agent_session_recorder.rs` — the build command is now `cargo install --locked --path crates/agent_session --example agent_session_recorder`, and the sample Zed config uses `\"$HOME/.cargo/bin/agent_session_recorder\"` (bash expands `$HOME`, so no hardcoded repo path).\n2. **`~/.config/zed/settings.json`** — the \"Recorded Claude\" agent server now execs the installed binary via `$HOME/.cargo/bin` instead of `/Users/eric/Code/macro/target/debug/examples/...`.\n3. **Ran the install** — it succeeded and the binary is in place. One wrinkle worth knowing: plain `cargo install` failed because it ignores `Cargo.lock` and resolved an `aws-types` that needs rustc 1.94.1 (the repo pins 1.94.0). `--locked` fixes that, which is why it's in the documented command.\n\nAfter future changes to the recorder, re-run the install command to refresh the binary — Zed no longer picks up `cargo build` output automatically.Yes — in your user-level Zed settings at `~/.config/zed/settings.json` (the `agent_servers` block wasn't in the project's `.zed/settings.json`). The \"Recorded Claude\" entry's command changed from:\n\n```\nexec env -u ANTHROPIC_API_KEY /Users/eric/Code/macro/target/debug/examples/agent_session_recorder\n```\n\nto:\n\n```\nexec env -u ANTHROPIC_API_KEY \"$HOME/.cargo/bin/agent_session_recorder\"\n```\n\nEverything else in the file is untouched. You may need to restart the agent server in Zed (or reopen the panel) for it to pick up the new command.",
+                    text: "Done. The recorder is now installed at `~/.cargo/bin/agent_session_recorder` and Zed points at it instead of the debug build in `target/`.\n\nThree changes:\n\n1. **Doc comment** in `crates/agent_session/examples/agent_session_recorder.rs` — the build command is now `cargo install --locked --path crates/agent_session --example agent_session_recorder`, and the sample Zed config uses `\"$HOME/.cargo/bin/agent_session_recorder\"` (bash expands `$HOME`, so no hardcoded repo path).\n2. **`~/.config/zed/settings.json`** — the \"Recorded Claude\" agent server now execs the installed binary via `$HOME/.cargo/bin` instead of `/Users/eric/Code/macro/target/debug/examples/...`.\n3. **Ran the install** — it succeeded and the binary is in place. One wrinkle worth knowing: plain `cargo install` failed because it ignores `Cargo.lock` and resolved an `aws-types` that needs rustc 1.94.1 (the repo pins 1.94.0). `--locked` fixes that, which is why it's in the documented command.\n\nAfter future changes to the recorder, re-run the install command to refresh the binary — Zed no longer picks up `cargo build` output automatically.",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+    FoldedMessage {
+        id: TurnId(
+            1,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "did u update my zed settings?",
                 },
             ],
         },
@@ -251,6 +287,21 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
     FoldedMessage {
         id: TurnId(
             1,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "Yes — in your user-level Zed settings at `~/.config/zed/settings.json` (the `agent_servers` block wasn't in the project's `.zed/settings.json`). The \"Recorded Claude\" entry's command changed from:\n\n```\nexec env -u ANTHROPIC_API_KEY /Users/eric/Code/macro/target/debug/examples/agent_session_recorder\n```\n\nto:\n\n```\nexec env -u ANTHROPIC_API_KEY \"$HOME/.cargo/bin/agent_session_recorder\"\n```\n\nEverything else in the file is untouched. You may need to restart the agent server in Zed (or reopen the panel) for it to pick up the new command.",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            2,
         ),
         author: User {
             user_id: Some(
@@ -273,7 +324,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            1,
+            2,
         ),
         author: Agent,
         request_id: None,
@@ -290,7 +341,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            2,
+            3,
         ),
         author: User {
             user_id: Some(
@@ -313,7 +364,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            2,
+            3,
         ),
         author: Agent,
         request_id: None,
@@ -380,7 +431,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            3,
+            4,
         ),
         author: User {
             user_id: Some(
@@ -403,7 +454,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_and_continued.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            3,
+            4,
         ),
         author: Agent,
         request_id: None,

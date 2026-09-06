@@ -14,6 +14,9 @@ pub enum SessionError {
     /// previous `session/prompt` to respond.
     #[error("session {0} already has an active turn")]
     TurnAlreadyActive(SessionId),
+    /// Native capture or replay processing failed; never masked by cancellation.
+    #[error("Cursor native journal failed: {0}")]
+    Journal(rootcause::Report),
     /// The Cursor API or its stream failed.
     #[error("{0}")]
     Cursor(rootcause::Report),
@@ -24,3 +27,8 @@ impl From<rootcause::Report> for SessionError {
         Self::Cursor(report)
     }
 }
+
+/// A provider response proving a prompt was rejected before execution.
+#[derive(Debug, Error)]
+#[error("{0}")]
+pub struct PromptRejected(pub String);

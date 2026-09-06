@@ -23,7 +23,8 @@
 //! serialize 6500 whole messages to produce one. `extend` folds them all and
 //! serializes the answer once.
 
-use crate::domain::fold::{FoldMachineImpl, fold};
+use crate::domain::fold::fold;
+use crate::domain::ingestion::{LogCursor, LogIngestion};
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 use crate::domain::model::{FoldedMessage as ModelFoldedMessage, SessionMetadata};
 use crate::domain::ports::FoldMachine;
@@ -55,12 +56,13 @@ pub fn fold_session(session_id: &str, entries: JsValue) -> Result<JsValue, JsVal
 /// One live session's fold, held open between frames.
 ///
 /// The streaming counterpart to [`fold_session`], wrapping the same
-/// [`FoldMachineImpl`] the server folds with. A caller following a session
+/// [`crate::domain::fold::FoldMachineImpl`] the server folds with. A caller following a session
 /// keeps one of these per session for as long as the session lasts: frames
-/// must arrive in log order, and the machine only ever grows.
+/// must arrive in log order. Successful loads replace its committed history.
 ///
-/// A client that opens a channel mid-session catches up with [`Self::extend`]
-/// and then follows with [`Self::push`] on the *same* machine. Refolding the
+/// A durable-log client catches up with [`Self::snapshot`] and follows with
+/// [`Self::push_rows`]. Raw recording consumers use [`Self::extend`] and
+/// [`Self::push`] without requiring row metadata. Refolding the
 /// fetched log into a throwaway and then pushing live frames into a second
 /// machine would derive the same messages twice from different halves of the
 /// log; there is one machine per session precisely so that cannot happen.
@@ -69,11 +71,47 @@ pub struct FoldStream {
     /// Half of the composite id every message this machine derives is keyed
     /// by, and the reason the session id is taken once rather than per frame.
     session: AgentSessionId,
-    machine: FoldMachineImpl,
+    ingestion: LogIngestion,
 }
 
 #[wasm_bindgen]
 impl FoldStream {
+    /// Replace this fold with a durable effective-history snapshot.
+    ///
+    /// # Errors
+    /// Returns a JS string if any durable row cannot be read.
+    pub fn snapshot(&mut self, entries: JsValue) -> Result<JsValue, JsValue> {
+        let entries: Vec<DurableEntry> = serde_wasm_bindgen::from_value(entries)
+            .map_err(|error| JsValue::from_str(&format!("log rows are not readable: {error}")))?;
+        self.ingestion.replace_snapshot(
+            entries
+                .into_iter()
+                .map(|entry| (entry.cursor, entry.frame.into_log(self.session)))
+                .collect(),
+        );
+        self.messages()
+    }
+
+    /// Ingest durable live rows in delivery order, including snapshot overlap.
+    ///
+    /// # Errors
+    /// Returns a JS string if any row cannot be read or events cannot be encoded.
+    pub fn push_rows(&mut self, entries: JsValue) -> Result<JsValue, JsValue> {
+        let entries: Vec<DurableEntry> = serde_wasm_bindgen::from_value(entries)
+            .map_err(|error| JsValue::from_str(&format!("log rows are not readable: {error}")))?;
+        let mut events = Vec::new();
+        for entry in entries {
+            events.extend(
+                self.ingestion
+                    .push(entry.cursor, entry.frame.into_log(self.session))
+                    .into_iter()
+                    .map(|event| FoldedStreamEvent::new(self.session, event)),
+            );
+        }
+        encode(&events)
+            .map_err(|error| JsValue::from_str(&format!("fold events are not encodable: {error}")))
+    }
+
     /// A machine for `session_id` that has folded nothing.
     ///
     /// # Errors
@@ -83,7 +121,7 @@ impl FoldStream {
     pub fn new(session_id: &str) -> Result<FoldStream, JsValue> {
         Ok(Self {
             session: parse_session(session_id)?,
-            machine: FoldMachineImpl::new(),
+            ingestion: LogIngestion::default(),
         })
     }
 
@@ -96,13 +134,14 @@ impl FoldStream {
     /// Returns a JS string when the entries are not log frames.
     pub fn extend(&mut self, entries: JsValue) -> Result<JsValue, JsValue> {
         for entry in parse_log(self.session, entries)? {
-            let _ = self.machine.push(entry);
+            let _ = self.ingestion.machine.push(entry);
         }
         self.messages()
     }
 
     /// Fold one more frame, reporting the changes it implied as an array of
-    /// `{kind: "new" | "update", message}` and `{kind: "metadata", metadata}`
+    /// `{kind: "new" | "update", message}`, `{kind: "replace", messages}`,
+    /// and `{kind: "metadata", metadata}`
     /// events - empty for a frame that changes nothing, which is most of
     /// them.
     ///
@@ -114,6 +153,7 @@ impl FoldStream {
             .map_err(|error| JsValue::from_str(&format!("log entry is not readable: {error}")))?;
 
         let events: Vec<FoldedStreamEvent> = self
+            .ingestion
             .machine
             .push(entry.into_log(self.session))
             .into_iter()
@@ -132,7 +172,7 @@ impl FoldStream {
     ///
     /// Returns a JS string describing what could not be encoded.
     pub fn metadata(&self) -> Result<JsValue, JsValue> {
-        let metadata: SessionMetadata = self.machine.metadata().clone().into();
+        let metadata: SessionMetadata = self.ingestion.machine.metadata().clone().into();
         encode(&metadata).map_err(|error| {
             JsValue::from_str(&format!("session metadata is not encodable: {error}"))
         })
@@ -149,6 +189,7 @@ impl FoldStream {
     /// Returns a JS string describing what could not be encoded.
     pub fn messages(&self) -> Result<JsValue, JsValue> {
         let messages: Vec<FoldedMessage> = self
+            .ingestion
             .machine
             .messages()
             .iter()
@@ -215,6 +256,14 @@ struct LogEntry {
     /// `direction` and `content`, flattened in - the frame's own two fields.
     #[serde(flatten)]
     message: Message,
+}
+
+#[derive(Deserialize)]
+struct DurableEntry {
+    #[serde(flatten)]
+    cursor: LogCursor,
+    #[serde(flatten)]
+    frame: LogEntry,
 }
 
 impl LogEntry {

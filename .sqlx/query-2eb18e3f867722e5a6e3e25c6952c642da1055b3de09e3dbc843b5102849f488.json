@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT provider, external_id, external_name, external_url\n            FROM external_agent_session\n            WHERE agent_session_id = $1\n            ",
+  "query": "\n            SELECT provider, external_id, external_name, external_url, last_run_id\n            FROM external_agent_session\n            WHERE agent_session_id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,11 @@
         "ordinal": 3,
         "name": "external_url",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "last_run_id",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -33,8 +38,9 @@
       false,
       false,
       true,
+      true,
       true
     ]
   },
-  "hash": "9c33b5ff424ef9992848b2bffb76ef196f081d13463019d3705b2aad59ba6a30"
+  "hash": "2eb18e3f867722e5a6e3e25c6952c642da1055b3de09e3dbc843b5102849f488"
 }
