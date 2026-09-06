@@ -29,6 +29,23 @@ export type ModelOption = {
 export const MAX_FEATURED_MODELS = 5;
 
 /**
+ * How many personas show before the list collapses behind "+N more". The two
+ * built-in coders always fit, leaving room for a couple of the user's own.
+ */
+export const MAX_VISIBLE_PERSONAS = 4;
+
+/**
+ * Harness slugs whose runtimes this deployment provisions itself — the only
+ * personas the create composer can start. Anything else (a registered macrod
+ * daemon, say) opens its own sessions and is refused by the create route.
+ */
+export function isManagedHarness(harness: string): boolean {
+  return (
+    harness === 'in-memory' || harness === 'macro-inmem' || harness === 'cursor'
+  );
+}
+
+/**
  * User-facing name for the runtime a persona runs on. Harness ids are
  * plumbing ("in-memory", "sandbox"); the product names are the coders.
  */
@@ -37,12 +54,40 @@ export function harnessDisplayName(harness: string): string {
     case 'in-memory':
     case 'macro-inmem':
     case 'sandbox':
-      return 'Macro Agent';
+      return 'Macro';
     case 'cursor':
-      return 'Cursor Coder';
+      return 'Cursor';
     default:
       return harness;
   }
+}
+
+/** The persona rows to render, and how many the collapsed list hides. */
+export type PersonaList = {
+  visible: PersonaOption[];
+  hiddenCount: number;
+};
+
+/**
+ * The personas shown up front. Collapsed, the list keeps the first `max` in
+ * order, but never hides the selected one: if it sits past the cut it takes
+ * the last visible slot so the choice the user made stays on screen.
+ */
+export function visiblePersonas(
+  personas: readonly PersonaOption[],
+  selectedId: string | undefined,
+  expanded: boolean,
+  max = MAX_VISIBLE_PERSONAS
+): PersonaList {
+  if (expanded || personas.length <= max) {
+    return { visible: [...personas], hiddenCount: 0 };
+  }
+  const visible = personas.slice(0, max);
+  const selected = personas.find((persona) => persona.id === selectedId);
+  if (selected && !visible.some((persona) => persona.id === selected.id)) {
+    visible[max - 1] = selected;
+  }
+  return { visible, hiddenCount: personas.length - max };
 }
 
 /**

@@ -13,19 +13,22 @@ composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text`
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
 `Create` → `Agent A`, or keyboard `c` then `a`, opens the **New agent
 session** composer popover. The prompt textarea (`What should the agent work
-on?`) is focused on open, so you can `type_text` immediately. Two outline pills
-sit at the bottom left: the **Persona** pill (avatar + name; `aria-label`
-`Persona`) opens a menu listing **Macro Agent** (the default), **Cursor Coder**
-(disabled with a `Connect Cursor in Settings → Harness` hint until a Cursor API
-key is stored), then the user's own personas, each with an
-`@handle · Macro Agent|Cursor Coder` subtitle naming the runtime. The
-**Model override** pill (`aria-label` `Model override`) opens a menu whose first
-row is `Persona default · <model>`, followed by at most five featured models;
-longer catalogs put the rest under a `More models` submenu. Changing persona
-resets the override. Tab order is prompt →
-Persona → Model → **Create Session**; the close `X` is skipped. Menus open on
-Enter/Space and select with arrow keys + Enter. Escape in the prompt first
-blurs to the dialog, a second Escape closes it. Press **Create Session** or
+on?`) is focused on open, so you can `type_text` immediately. Below the prompt a
+**Persona** section lists the choices in the open, as a `radiogroup` of cards
+(`role="radio"`, `aria-checked`): **Macro** `@macro` (the default), **Cursor**
+`@cursor` (disabled with a `Connect Cursor in Settings → Harness` hint until a
+Cursor API key is stored), then the user's own personas, each card showing
+avatar, name and `@handle · Macro|Cursor` for the runtime. At most four cards
+show; with more, a `+N more` button expands the full list (`Show fewer`
+collapses it), and the selected card is never hidden. Click a card or use
+arrow keys to change persona. The **Model override** pill (`aria-label`
+`Model override`) at the bottom left opens a menu whose first row is
+`Persona default · <model>`, followed by at most five featured models; longer
+catalogs put the rest under a `More models` submenu. Changing persona resets
+the override. Tab order is prompt → selected persona card → Model →
+**Create Session**; the close `X` is skipped. The menu opens on Enter/Space
+and selects with arrow keys + Enter. Escape in the prompt first blurs to the
+dialog, a second Escape closes it. Press **Create Session** or
 `Cmd/Ctrl+Enter`; the composer closes and the new `/app/agent/<uuid>` session
 opens while its runtime starts.
 

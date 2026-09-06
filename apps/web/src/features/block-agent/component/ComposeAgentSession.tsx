@@ -1,8 +1,15 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
-import { CURSOR_BOT_HANDLE, CURSOR_BOT_ID } from '@core/constant/cursorAgent';
-import { MACRO_CODER_HANDLE } from '@core/constant/macroCoder';
+import {
+  CURSOR_BOT_HANDLE,
+  CURSOR_BOT_ID,
+  CURSOR_BOT_NAME,
+} from '@core/constant/cursorAgent';
+import {
+  MACRO_AGENT_HANDLE,
+  MACRO_AGENT_NAME,
+} from '@core/constant/macroAgent';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
@@ -15,33 +22,33 @@ import {
   useCursorApiKeyStatusQuery,
   useCursorModelsQuery,
 } from '@queries/auth/cursor-api-key';
-import { Avatar, badgeTriggerClasses, Button, cn, Dropdown, Hotkey } from '@ui';
+import { Avatar, Button, badgeTriggerClasses, cn, Dropdown, Hotkey } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { startPendingSession } from '../context/pending-session';
 import {
   harnessDisplayName,
+  isManagedHarness,
   type ModelOption,
   type ModelShortlist,
   modelPillLabel,
   type PersonaOption,
   personaDefaultLabel,
   shortlistModelOptions,
+  visiblePersonas,
 } from './compose-agent-session-options';
 
 /**
- * The deployment's default coder. Sent without a `botId`, so the server picks
- * its managed default persona.
+ * Macro's own agent: the deployment's managed default. Sent without a
+ * `botId`, so the server picks the runtime it is configured to run it on.
  */
-const MACRO_AGENT_PERSONA_ID = 'macro-agent';
-const MACRO_AGENT_NAME = 'Macro Agent';
-const CURSOR_CODER_NAME = 'Cursor Coder';
+const MACRO_PERSONA_ID = 'macro';
 
 const IN_MEMORY_MODELS: ModelOption[] = Object.values(Model).map((id) => ({
   id,
   name: MODEL_PRETTYNAME[id],
 }));
 
-/** Bottom-of-dialog pickers share the task composer's outline pill look. */
+/** The model picker shares the task composer's outline pill look. */
 const PILL_CLASS = badgeTriggerClasses({
   variant: 'outline',
   size: 'sm',
@@ -52,8 +59,13 @@ const PILL_CLASS = badgeTriggerClasses({
 /** Long harness catalogs scroll instead of growing the menu without bound. */
 const MENU_LIST_CLASS = 'max-h-72 overflow-y-auto overscroll-contain';
 
+export interface ComposeAgentSessionProps {
+  /** Open the new session in a fresh split instead of the current one. */
+  preferNewSplit?: boolean;
+}
+
 /** Task-style preflight composer for a new managed agent session. */
-export function ComposeAgentSession() {
+export function ComposeAgentSession(props: ComposeAgentSessionProps) {
   const splitPanel = useSplitPanelOrThrow();
   const { openWithSplit } = useSplitLayout();
   const agentsQuery = useAgentsQuery();
@@ -62,24 +74,25 @@ export function ComposeAgentSession() {
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const cursorModels = useCursorModelsQuery(cursorConnected);
   const [prompt, setPrompt] = createSignal('');
-  const [personaId, setPersonaId] = createSignal(MACRO_AGENT_PERSONA_ID);
+  const [personaId, setPersonaId] = createSignal(MACRO_PERSONA_ID);
+  const [personasExpanded, setPersonasExpanded] = createSignal(false);
   const [modelOverride, setModelOverride] = createSignal('');
   const [submitting, setSubmitting] = createSignal(false);
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   let promptRef: HTMLTextAreaElement | undefined;
 
-  // Built-in coders lead, then the user's own personas.
+  // The two first-party coders lead, then the user's own personas.
   const personas = (): PersonaOption[] => [
     {
-      id: MACRO_AGENT_PERSONA_ID,
+      id: MACRO_PERSONA_ID,
       name: MACRO_AGENT_NAME,
-      handle: MACRO_CODER_HANDLE,
-      harness: 'sandbox',
+      handle: MACRO_AGENT_HANDLE,
+      harness: 'in-memory',
     },
     {
       id: CURSOR_BOT_ID,
       botId: CURSOR_BOT_ID,
-      name: CURSOR_CODER_NAME,
+      name: CURSOR_BOT_NAME,
       handle: CURSOR_BOT_HANDLE,
       harness: 'cursor',
       defaultModel: cursorStatus.data?.defaultModelId ?? undefined,
@@ -88,9 +101,9 @@ export function ComposeAgentSession() {
         : 'Connect Cursor in Settings → Harness',
     },
     ...(agentsQuery.isSuccess ? agentsQuery.data : [])
-      // A connected macrod owns its workspace and starts sessions itself.
-      // The create composer can only provision runtimes managed by Macro.
-      .filter((agent) => agent.harness !== 'macrod')
+      // Only runtimes Macro provisions can be started from here; a persona on
+      // a registered macrod daemon opens its own sessions.
+      .filter((agent) => isManagedHarness(agent.harness))
       .map((agent) => ({
         id: agent.bot.id,
         botId: agent.bot.id,
@@ -103,6 +116,8 @@ export function ComposeAgentSession() {
   ];
   const selectedPersona = () =>
     personas().find((persona) => persona.id === personaId()) ?? personas()[0];
+  const personaList = () =>
+    visiblePersonas(personas(), selectedPersona()?.id, personasExpanded());
   const availableModels = (): ModelOption[] => {
     if (selectedPersona()?.harness === 'cursor') {
       return cursorModels.isSuccess
@@ -135,7 +150,7 @@ export function ComposeAgentSession() {
     close();
     openWithSplit(
       { type: 'agent', id: placeholder },
-      { referredFrom: 'launcher' }
+      { referredFrom: 'launcher', preferNewSplit: props.preferNewSplit }
     );
   };
 
@@ -189,9 +204,9 @@ export function ComposeAgentSession() {
       <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
         <textarea
           ref={promptRef}
-          rows={5}
+          rows={4}
           aria-label="Task for the agent"
-          class="ph-no-capture min-h-28 w-full grow resize-none bg-transparent px-2 text-xl/7 font-medium text-ink outline-none placeholder:text-ink-placeholder"
+          class="ph-no-capture min-h-24 w-full grow resize-none bg-transparent px-2 text-xl/7 font-medium text-ink outline-none placeholder:text-ink-placeholder"
           placeholder="What should the agent work on?"
           value={prompt()}
           onInput={(event) => setPrompt(event.currentTarget.value)}
@@ -207,21 +222,18 @@ export function ComposeAgentSession() {
         />
       </div>
 
-      <Show when={agentsQuery.isError}>
-        <p class="px-2 text-xs text-negative">
-          Your saved personas could not be loaded. You can still start with{' '}
-          {MACRO_AGENT_NAME}.
-        </p>
-      </Show>
+      <PersonaList
+        list={personaList()}
+        selected={selectedPersona()}
+        expanded={personasExpanded()}
+        loading={agentsQuery.isPending}
+        error={agentsQuery.isError}
+        onSelect={setPersona}
+        onToggleExpanded={() => setPersonasExpanded((value) => !value)}
+      />
 
       <div class="flex shrink-0 flex-wrap items-end justify-between gap-2">
         <div class="m-px flex min-h-7 flex-wrap items-center gap-2 text-sm">
-          <PersonaPicker
-            personas={personas()}
-            selected={selectedPersona()}
-            loading={agentsQuery.isPending}
-            onSelect={setPersona}
-          />
           <ModelPicker
             persona={selectedPersona()}
             available={availableModels()}
@@ -250,69 +262,135 @@ export function ComposeAgentSession() {
   );
 }
 
-function PersonaPicker(props: {
-  personas: PersonaOption[];
+/**
+ * Personas as a visible radio list rather than a menu: the user sees what
+ * they are choosing between without opening anything. Arrow keys move the
+ * selection; Tab lands on the current choice and moves on.
+ */
+function PersonaList(props: {
+  list: { visible: PersonaOption[]; hiddenCount: number };
   selected: PersonaOption | undefined;
+  expanded: boolean;
   loading: boolean;
+  error: boolean;
   onSelect: (id: string) => void;
+  onToggleExpanded: () => void;
 }) {
+  let groupRef: HTMLDivElement | undefined;
+  const selectable = () =>
+    props.list.visible.filter((persona) => !persona.unavailableReason);
+
+  const moveSelection = (event: KeyboardEvent, step: 1 | -1) => {
+    const options = selectable();
+    const index = options.findIndex(
+      (persona) => persona.id === props.selected?.id
+    );
+    const next = options[(index + step + options.length) % options.length];
+    if (!next) return;
+    event.preventDefault();
+    props.onSelect(next.id);
+    queueMicrotask(() => {
+      groupRef
+        ?.querySelector<HTMLElement>(`[data-persona-id="${next.id}"]`)
+        ?.focus();
+    });
+  };
+
   return (
-    <Dropdown placement="top-start">
-      <Dropdown.Trigger
-        variant="outline"
-        size="sm"
-        class={PILL_CLASS}
+    <section class="flex shrink-0 flex-col gap-2 px-2" aria-label="Persona">
+      <div class="flex items-center justify-between text-xxs font-medium uppercase text-ink-extra-muted">
+        <span>Persona</span>
+        <Show when={props.loading}>
+          <span class="normal-case">Loading yours…</span>
+        </Show>
+      </div>
+      <div
+        ref={groupRef}
+        role="radiogroup"
         aria-label="Persona"
-        tooltip="Persona"
+        class="flex flex-wrap gap-2"
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+            moveSelection(event, 1);
+          } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+            moveSelection(event, -1);
+          }
+        }}
       >
-        <PersonaAvatar persona={props.selected} size="xs" />
-        <span class="min-w-0 truncate text-ink">{props.selected?.name}</span>
-        <CaretDownIcon class="size-3 shrink-0 text-current/70" />
-      </Dropdown.Trigger>
-      <Dropdown.Content class="w-72 max-w-[min(24rem,calc(100vw-1rem))]">
-        <Dropdown.Group class={MENU_LIST_CLASS}>
-          <Dropdown.GroupLabel>Persona</Dropdown.GroupLabel>
-          <For each={props.personas}>
-            {(persona) => (
-              <Dropdown.Item
-                class={cn(
-                  'h-10 gap-2.5',
-                  persona.id === props.selected?.id && 'bg-ink/5 text-ink'
-                )}
-                disabled={persona.unavailableReason !== undefined}
+        <For each={props.list.visible}>
+          {(persona) => {
+            const selected = () => persona.id === props.selected?.id;
+            const disabled = () => persona.unavailableReason !== undefined;
+            return (
+              <button
+                type="button"
+                role="radio"
+                aria-checked={selected()}
+                aria-disabled={disabled()}
+                data-persona-id={persona.id}
+                tabIndex={selected() ? 0 : -1}
                 title={persona.unavailableReason}
-                onSelect={() => props.onSelect(persona.id)}
+                class={cn(
+                  'flex h-11 min-w-0 max-w-56 items-center gap-2 rounded-lg border px-2 text-left outline-none transition-colors',
+                  'focus-visible:ring-2 focus-visible:ring-accent/30',
+                  selected()
+                    ? 'border-accent bg-accent-bg text-ink'
+                    : 'border-edge-muted bg-surface-2 text-ink-muted hover:bg-hover hover:text-ink',
+                  disabled() &&
+                    'cursor-not-allowed opacity-50 hover:bg-surface-2'
+                )}
+                onClick={() => {
+                  if (!disabled()) props.onSelect(persona.id);
+                }}
               >
-                <PersonaAvatar persona={persona} size="sm" />
-                <span class="flex min-w-0 flex-1 flex-col leading-tight">
+                <PersonaAvatar persona={persona} />
+                <span class="flex min-w-0 flex-col leading-tight">
                   <span
                     class={cn(
                       'truncate text-sm',
-                      persona.id === props.selected?.id && 'font-medium'
+                      selected() ? 'font-medium' : 'font-normal'
                     )}
                   >
                     {persona.name}
                   </span>
                   <span class="truncate text-xs text-ink-extra-muted">
-                    @{persona.handle} ·{' '}
-                    {persona.unavailableReason ??
-                      harnessDisplayName(persona.harness)}
+                    @{persona.handle}
+                    <Show when={!disabled()}>
+                      {' · '}
+                      {harnessDisplayName(persona.harness)}
+                    </Show>
+                    <Show when={disabled()}>
+                      {' · '}
+                      {persona.unavailableReason}
+                    </Show>
                   </span>
                 </span>
-                <Show when={persona.id === props.selected?.id}>
-                  <CheckIcon class="size-3.5 shrink-0 text-accent" />
+                <Show when={selected()}>
+                  <CheckIcon class="ml-auto size-3.5 shrink-0 text-accent" />
                 </Show>
-              </Dropdown.Item>
-            )}
-          </For>
-          <Show when={props.loading}>
-            <div class="px-2 py-2 text-xs text-ink-extra-muted">
-              Loading your personas…
-            </div>
-          </Show>
-        </Dropdown.Group>
-      </Dropdown.Content>
-    </Dropdown>
+              </button>
+            );
+          }}
+        </For>
+        <Show when={props.list.hiddenCount > 0 || props.expanded}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            class="h-11 rounded-lg px-3 text-ink-muted"
+            onClick={props.onToggleExpanded}
+          >
+            {props.expanded ? 'Show fewer' : `+${props.list.hiddenCount} more`}
+          </Button>
+        </Show>
+      </div>
+      <Show when={props.error}>
+        <p class="text-xs text-negative">
+          Your saved personas could not be loaded. You can still start with{' '}
+          {MACRO_AGENT_NAME} or {CURSOR_BOT_NAME}.
+        </p>
+      </Show>
+    </section>
   );
 }
 
@@ -422,27 +500,21 @@ function ModelRow(props: {
   );
 }
 
-function PersonaAvatar(props: { persona?: PersonaOption; size: 'xs' | 'sm' }) {
+function PersonaAvatar(props: { persona: PersonaOption }) {
   return (
-    <Avatar
-      size={props.size === 'xs' ? 'sm' : 'md'}
-      class={cn(
-        'shrink-0 bg-surface text-accent',
-        props.size === 'xs' && 'size-4 text-[10px]'
-      )}
-    >
+    <Avatar size="md" class="shrink-0 bg-surface text-accent">
       <Show
-        when={props.persona?.avatarUrl}
+        when={props.persona.avatarUrl}
         fallback={
           <Avatar.Fallback>
-            <RobotIcon class={props.size === 'xs' ? 'size-3' : 'size-4'} />
+            <RobotIcon class="size-4" />
           </Avatar.Fallback>
         }
       >
         {(avatarUrl) => (
           <Avatar.Image
             src={avatarUrl()}
-            alt={`${props.persona?.name ?? 'Agent'} avatar`}
+            alt={`${props.persona.name} avatar`}
           />
         )}
       </Show>

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   harnessDisplayName,
+  isManagedHarness,
   modelPillLabel,
   overrideModelOptions,
   type PersonaOption,
   personaDefaultLabel,
   shortlistModelOptions,
+  visiblePersonas,
 } from './compose-agent-session-options';
 
 const MODELS = [
@@ -40,17 +42,73 @@ describe('overrideModelOptions', () => {
 });
 
 describe('harnessDisplayName', () => {
-  it('names Macro runtimes as the Macro Agent', () => {
-    expect(harnessDisplayName('in-memory')).toBe('Macro Agent');
-    expect(harnessDisplayName('sandbox')).toBe('Macro Agent');
+  it('names Macro runtimes after the product', () => {
+    expect(harnessDisplayName('in-memory')).toBe('Macro');
+    expect(harnessDisplayName('sandbox')).toBe('Macro');
   });
 
-  it('names the Cursor runtime as the Cursor Coder', () => {
-    expect(harnessDisplayName('cursor')).toBe('Cursor Coder');
+  it('names the Cursor runtime', () => {
+    expect(harnessDisplayName('cursor')).toBe('Cursor');
   });
 
   it('leaves registered harness names alone', () => {
     expect(harnessDisplayName('my-laptop')).toBe('my-laptop');
+  });
+});
+
+describe('isManagedHarness', () => {
+  it('accepts the runtimes the deployment provisions', () => {
+    expect(isManagedHarness('in-memory')).toBe(true);
+    expect(isManagedHarness('macro-inmem')).toBe(true);
+    expect(isManagedHarness('cursor')).toBe(true);
+  });
+
+  it('refuses external daemons', () => {
+    expect(isManagedHarness('macrod')).toBe(false);
+    expect(isManagedHarness('harness-123')).toBe(false);
+  });
+});
+
+describe('visiblePersonas', () => {
+  const many: PersonaOption[] = Array.from({ length: 7 }, (_, index) => ({
+    ...CODER,
+    id: `p${index}`,
+    name: `Persona ${index}`,
+  }));
+
+  it('shows a short list whole', () => {
+    expect(visiblePersonas(many.slice(0, 3), 'p0', false, 4)).toEqual({
+      visible: many.slice(0, 3),
+      hiddenCount: 0,
+    });
+  });
+
+  it('collapses past the cap and counts the rest', () => {
+    const list = visiblePersonas(many, 'p1', false, 4);
+    expect(list.visible.map((persona) => persona.id)).toEqual([
+      'p0',
+      'p1',
+      'p2',
+      'p3',
+    ]);
+    expect(list.hiddenCount).toBe(3);
+  });
+
+  it('keeps a hidden selection on screen', () => {
+    const list = visiblePersonas(many, 'p6', false, 4);
+    expect(list.visible.map((persona) => persona.id)).toEqual([
+      'p0',
+      'p1',
+      'p2',
+      'p6',
+    ]);
+    expect(list.hiddenCount).toBe(3);
+  });
+
+  it('shows everything once expanded', () => {
+    const list = visiblePersonas(many, 'p6', true, 4);
+    expect(list.visible).toHaveLength(7);
+    expect(list.hiddenCount).toBe(0);
   });
 });
 

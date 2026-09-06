@@ -235,13 +235,18 @@ const createComponent = async (spec: {
   componentId: string;
   shouldInsert?: boolean;
   asPopover?: boolean;
+  params?: Record<string, unknown>;
 }) => {
   const { openWithSplit, popoverSplit } = useSplitLayout();
 
   // For popovers, create the popover BEFORE closing launcher
   // so the popover can acquire the focus lock while launcher still owns rootFocusElement
   if (spec.asPopover) {
-    popoverSplit({ type: 'component', id: spec.componentId });
+    popoverSplit({
+      type: 'component',
+      id: spec.componentId,
+      params: spec.params,
+    });
     setCreateMenuOpen(false, false);
     return;
   }
@@ -414,6 +419,9 @@ export function runCreateAction(
       createComponent({
         componentId: 'agent-session-compose',
         asPopover: true,
+        // The popover itself is not split-placed; the session it creates is,
+        // so the new-split intent rides along for the composer to honor.
+        params: { preferNewSplit: shouldInsert },
       });
       return;
   }

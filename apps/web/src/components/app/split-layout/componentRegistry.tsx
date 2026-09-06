@@ -679,9 +679,11 @@ registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;
 });
-registerComponent('agent-session-compose', () => {
+registerComponent('agent-session-compose', (params) => {
   usePageViewTracking('agent-session-compose');
-  return <ComposeAgentSession />;
+  return (
+    <ComposeAgentSession preferNewSplit={params?.preferNewSplit === true} />
+  );
 });
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');
