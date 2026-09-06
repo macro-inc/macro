@@ -4,7 +4,7 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { Button } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { ActionGraph } from '../components/action-graph';
-import { TopEntitiesSection, TopEntityRow } from '../components/top-entities';
+import { TopEntitiesSection, TopEntityChip } from '../components/top-entities';
 import {
   type OpenEntityTarget,
   useActivityContext,
@@ -79,23 +79,21 @@ export function MyActivityView(props: {
               }
             >
               {(overview) => (
-                <>
-                  <OverviewInset>
-                    <ActionGraph overview={overview()} />
-                  </OverviewInset>
-                  <TopEntitiesSection
-                    empty={overview().topEntities.length === 0}
-                  >
-                    <For each={overview().topEntities}>
-                      {(entity) => (
-                        <OpenableTopEntityRow
-                          entity={entity}
-                          onOpen={props.onOpen}
-                        />
-                      )}
-                    </For>
-                  </TopEntitiesSection>
-                </>
+                <OverviewInset>
+                  <ActionGraph overview={overview()} />
+                  <Show when={overview().topEntities.length > 0}>
+                    <TopEntitiesSection>
+                      <For each={overview().topEntities}>
+                        {(entity) => (
+                          <OpenableTopEntityChip
+                            entity={entity}
+                            onOpen={props.onOpen}
+                          />
+                        )}
+                      </For>
+                    </TopEntitiesSection>
+                  </Show>
+                </OverviewInset>
               )}
             </Show>
             <Switch>
@@ -165,7 +163,7 @@ function NamedActivityRow(props: {
   );
 }
 
-function OpenableTopEntityRow(props: {
+function OpenableTopEntityChip(props: {
   entity: ActivityTopEntity;
   onOpen: (target: OpenEntityTarget) => void;
 }) {
@@ -177,7 +175,7 @@ function OpenableTopEntityRow(props: {
     props.onOpen
   );
   return (
-    <TopEntityRow
+    <TopEntityChip
       entity={props.entity}
       display={opener()?.display}
       rowProps={opener()?.handlers}
