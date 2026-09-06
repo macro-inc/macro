@@ -7,6 +7,7 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type {
   FoldedMessage,
+  ModelOption,
   ToolStatus,
 } from '@service-agent-fold/generated/types';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
@@ -15,6 +16,7 @@ import { ReplyToSelection } from '../component/ReplyToSelection';
 import {
   ActionLine,
   AgentInput,
+  AgentModelSelector,
   AnimatedNumber,
   ComposerNotice,
   CountSummary,
@@ -29,6 +31,87 @@ import {
   ToolErrorCard,
   ToolStatusTitle,
 } from '../ui';
+
+/** A Cursor-shaped catalog: long enough to scroll, with one grouped tail. */
+const FIXTURE_MODELS: ModelOption[] = [
+  { id: 'auto', name: 'Auto', description: null, group: null },
+  {
+    id: 'grok-4.6-high-fast',
+    name: 'Cursor Grok 4.6 High Fast',
+    description: null,
+    group: null,
+  },
+  { id: 'composer-2.5', name: 'Composer 2.5', description: null, group: null },
+  {
+    id: 'opus-5-high',
+    name: 'Claude Opus 5 High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'opus-5-high-fast',
+    name: 'Claude Opus 5 High Fast',
+    description: null,
+    group: null,
+  },
+  { id: 'sol-high', name: 'GPT-5.6 Sol High', description: null, group: null },
+  {
+    id: 'sol-high-fast',
+    name: 'GPT-5.6 Sol High Fast',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'sol-xhigh',
+    name: 'GPT-5.6 Sol Extra High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'fable-5-high',
+    name: 'Claude Fable 5 High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'gemini-3.7-flash-high',
+    name: 'Gemini 3.7 Flash High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'sonnet-5-high',
+    name: 'Claude Sonnet 5 High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'luna-high',
+    name: 'GPT-5.6 Luna High',
+    description: null,
+    group: 'Legacy',
+  },
+];
+
+/** The composer as the block mounts it, with the model control wired. */
+function ModelSelectorDemo() {
+  const [model, setModel] = createSignal<string | null>('grok-4.6-high-fast');
+  return (
+    <AgentInput
+      onSend={(content) => console.info('[gallery] send', content)}
+      modelControl={
+        <AgentModelSelector
+          model={model()}
+          options={FIXTURE_MODELS}
+          onSelect={(id) => {
+            console.info('[gallery] model', id);
+            setModel(id);
+          }}
+        />
+      }
+    />
+  );
+}
 
 function Item(props: { label: string; children: JSX.Element }) {
   return (
@@ -421,6 +504,10 @@ export default function AgentUiGallery() {
               onSend={() => {}}
               onStop={() => console.info('[gallery] stop')}
             />
+          </Item>
+
+          <Item label="AgentInput with model selector">
+            <ModelSelectorDemo />
           </Item>
 
           <Item label="AgentMessage (end-to-end)">
