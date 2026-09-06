@@ -43,9 +43,10 @@ own time zone (their primary calendar's), so it resolves relative times ("tomorr
 bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
-While the agent works, the reply shows a Magic Chip: a fixed-height scrollable
-preview of the answer, pinned to the latest text. Click the preview (or the
-activity / Open session line under it) to open the agent session.
+While the agent works, the reply shows a Magic Chip: a rounded card with the
+opening of the answer clipped to a fixed height and faded out, and a footer row
+that reads the current activity (or `Open session` once done). Click the card
+body or its footer to open the agent session and read the rest.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention.
 The Magic Chip that streams the agent's reply stays inside the message column: long

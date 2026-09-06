@@ -3,7 +3,6 @@
  */
 
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MagicChipView } from './MagicChipView';
 
@@ -39,7 +38,7 @@ describe('MagicChipView', () => {
     expect(container.textContent).toContain('Booting agent');
   });
 
-  it('caps the answering preview and opens the session on click', () => {
+  it('clips the answering card and shows the activity in its footer', () => {
     const onOpen = vi.fn();
     const { container } = render(() => (
       <MagicChipView
@@ -53,59 +52,54 @@ describe('MagicChipView', () => {
       />
     ));
 
-    const preview = container.querySelector('[data-magic-chip-preview]');
-    expect(preview).toBeTruthy();
-    expect(preview?.className).toContain('h-36');
-    expect(preview?.className).toContain('overflow-auto');
-    expect(container.textContent).toContain('Hello from the agent');
-    expect(container.textContent).toContain('Writing response');
+    const card = container.querySelector('[data-magic-chip-preview]');
+    expect(card?.className).toContain('rounded-lg');
+    expect(card?.className).not.toContain('border-accent');
 
-    fireEvent.click(preview!);
-    expect(onOpen).toHaveBeenCalledTimes(1);
+    const body = card?.querySelector('[data-message-reply-preview]');
+    expect(body?.className).toContain('max-h-32');
+    expect(body?.className).toContain('overflow-hidden');
+    expect(body?.textContent).toContain('Hello from the agent');
+
+    const footer = card?.querySelector('button');
+    expect(footer?.textContent).toContain('Writing response');
+    expect(footer?.textContent).not.toContain('Open session');
+
+    fireEvent.click(body!);
+    fireEvent.click(footer!);
+    expect(onOpen).toHaveBeenCalledTimes(2);
   });
 
-  it('keeps the settled preview the same height and clickable', () => {
+  it('labels the settled footer Open session', () => {
     const onOpen = vi.fn();
     const { container } = render(() => (
       <MagicChipView
         agentSessionId="session"
-        presentation={{
-          kind: 'settled',
-          markdown: 'All done',
-        }}
+        presentation={{ kind: 'settled', markdown: 'All done' }}
         onOpen={onOpen}
       />
     ));
 
-    const preview = container.querySelector('[data-magic-chip-preview]');
-    expect(preview?.className).toContain('h-36');
-    fireEvent.click(preview!);
+    const card = container.querySelector('[data-magic-chip-preview]');
+    const footer = card?.querySelector('button');
+    expect(footer?.textContent).toContain('Open session');
+    fireEvent.click(footer!);
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it('pins the preview to the bottom as the answer grows', () => {
-    const [markdown, setMarkdown] = createSignal('first');
+  it('uses the rendered answer as the reply preview, not the footer', () => {
     const { container } = render(() => (
       <MagicChipView
         agentSessionId="session"
         presentation={{
           kind: 'answering',
-          markdown: markdown(),
+          markdown: 'Answer text',
           activity: { label: 'Writing response', busy: true },
         }}
       />
     ));
 
-    const preview = container.querySelector(
-      '[data-magic-chip-preview]'
-    ) as HTMLDivElement;
-    Object.defineProperty(preview, 'scrollHeight', {
-      configurable: true,
-      get: () => 400,
-    });
-    preview.scrollTop = 0;
-
-    setMarkdown('first\n\nsecond paragraph of the answer');
-    expect(preview.scrollTop).toBe(400);
+    const preview = container.querySelector('[data-message-reply-preview]');
+    expect(preview?.textContent).toBe('Answer text');
   });
 });
