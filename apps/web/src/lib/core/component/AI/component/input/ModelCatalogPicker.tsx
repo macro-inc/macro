@@ -113,7 +113,10 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           dismissedWithEscape = false;
           if (!props.onEscape) return;
           event.preventDefault();
-          props.onEscape();
+          // DropdownMenu.Content manually focuses its trigger after invoking
+          // this callback, regardless of preventDefault. Restore the composer
+          // after that internal step has completed.
+          queueMicrotask(props.onEscape);
         }}
       >
         <div class="border-b border-edge-muted bg-menu p-1.5">

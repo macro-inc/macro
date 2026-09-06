@@ -199,7 +199,8 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
           shortListDismissedWithEscape = false;
           if (!props.onEscape) return;
           event.preventDefault();
-          props.onEscape();
+          // Kobalte's dropdown wrapper focuses its trigger after this callback.
+          queueMicrotask(props.onEscape);
         }}
       >
         {/* The gradients anchor here, outside the scrolling box, and read
