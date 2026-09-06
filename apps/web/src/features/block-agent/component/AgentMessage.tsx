@@ -61,7 +61,8 @@ function AgentMessagePart(props: {
 function UserMessage(props: { message: FoldedMessage }) {
   return (
     <div class="flex w-full">
-      <div class="relative w-full overflow-hidden rounded-lg border border-edge-muted bg-hover px-3 py-2 text-ink">
+      {/* Phone: a full-width card. Desktop: hugs the text, right-aligned. */}
+      <div class="relative w-full overflow-hidden rounded-lg border border-edge-muted bg-hover px-3 py-2 text-ink md:ml-auto md:w-auto md:max-w-[calc(100%-8rem)]">
         <For each={props.message.parts}>
           {(part, index) => (
             <AgentMessagePart

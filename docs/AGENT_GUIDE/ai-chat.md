@@ -60,8 +60,8 @@ sits on top and a footer row holds the model name (left, e.g. `Auto ⌄`) and
 **Send** (right). Tapping the model name opens a bottom sheet listing every
 model with a check on the current one — pick a row to switch. On desktop the
 transcript and composer are half the pane wide so expanding **Context** only
-grows vertically; the model control is a small pill next to Send. Tap the
-session title
+grows vertically; your messages are right-aligned bubbles and the model pill
+sits above the box. Tap the session title
 to open the title menu (caret), then **Rename** — that opens the same style of
 rename dialog automations use. Do not expect a tap on the name itself to start
 an inline edit.

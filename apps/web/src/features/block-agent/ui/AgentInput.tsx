@@ -11,6 +11,7 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
@@ -39,7 +40,7 @@ export interface AgentInputProps {
   /** Receives the composed markdown, including any `<m-document-mention>` tags. */
   onSend: (markdown: string) => void;
   onStop?: () => void;
-  /** Model control: right of the text on desktop, footer-left on touch. */
+  /** Model control: a pill above the box on desktop, footer-left on touch. */
   modelControl?: JSX.Element;
   /**
    * Ref-style: receives the quote-insert function once the editor mounts
@@ -155,12 +156,16 @@ export function AgentInput(props: AgentInputProps) {
 
   return (
     <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
+      {/* Desktop: the model pill sits above the box, as it always has. */}
+      <Show when={!isTouchDevice() && props.modelControl}>
+        <div class="flex items-center px-0.5">{props.modelControl}</div>
+      </Show>
       {/* h-auto beats Surface's size-full so the in-flow controls are not
           clipped over the editor (that was Auto sitting on the placeholder). */}
       <Surface class="rounded-xl touch:rounded-2xl h-auto" depth={2} solid>
-        {/* Desktop: one row, controls right of the text. Touch: the text
-            gets the whole width and the controls drop to a footer row
-            (model left, send right) — the chat-tall / channel footer shape. */}
+        {/* Desktop: one row, send right of the text. Touch: the text gets
+            the whole width and the controls drop to a footer row (model
+            left, send right) — the chat-tall / channel footer shape. */}
         <div
           class="flex items-end gap-1 px-2 py-1.5 touch:flex-col touch:items-stretch touch:gap-1.5 touch:px-3 touch:pt-2.5 touch:pb-2"
           onPointerDown={focusEditor}
@@ -192,9 +197,9 @@ export function AgentInput(props: AgentInputProps) {
 
           {/* In-flow — never absolute over the text. */}
           <div class="flex shrink-0 items-center gap-1 pb-0.5 touch:pb-0">
-            <div class="min-w-0">
-              <Show when={props.modelControl}>{props.modelControl}</Show>
-            </div>
+            <Show when={isTouchDevice() && props.modelControl}>
+              <div class="min-w-0">{props.modelControl}</div>
+            </Show>
             <div class="ml-auto shrink-0">
               <Show
                 when={props.busy && props.onStop}
