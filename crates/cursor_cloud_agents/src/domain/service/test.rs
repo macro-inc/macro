@@ -22,6 +22,72 @@ fn service(repo: Option<RepoUrl>) -> (Arc<Service>, FakeCursor, RecordingNotifie
     (service, cursor, notifier)
 }
 
+/// Agent text chunks, in delivery order.
+fn agent_texts(updates: &[(SessionId, SessionUpdate)]) -> Vec<String> {
+    updates
+        .iter()
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
+                ContentBlock::Text(text) => Some(text.text.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+/// User text chunks, in delivery order.
+fn user_texts(updates: &[(SessionId, SessionUpdate)]) -> Vec<String> {
+    updates
+        .iter()
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::UserMessageChunk(chunk) => match &chunk.content {
+                ContentBlock::Text(text) => Some(text.text.clone()),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+fn ready_for_sync(service: &Service, id: &SessionId) -> bool {
+    service
+        .session(id)
+        .expect("session exists")
+        .state
+        .lock()
+        .expect("state poisoned")
+        .ready_for_sync
+}
+
+/// The session's run-delivery watermark.
+fn last_run(service: &Service, id: &SessionId) -> Option<CursorRunId> {
+    service
+        .session(id)
+        .expect("session exists")
+        .state
+        .lock()
+        .expect("state poisoned")
+        .last_run
+        .clone()
+}
+
+/// The client's standard load that a reload requirement asks for: the only
+/// path recovered history reaches the client through. Returns what it showed.
+async fn load(
+    service: &Service,
+    id: &SessionId,
+    notifier: &RecordingNotifier,
+) -> Vec<(SessionId, SessionUpdate)> {
+    let before = notifier.updates().len();
+    service.replay_session(id).await.expect("load").complete();
+    assert!(
+        ready_for_sync(service, id),
+        "a successful load re-enables sync"
+    );
+    notifier.updates()[before..].to_vec()
+}
+
 fn finished(run: &str) -> CursorEvent {
     CursorEvent::Result {
         run_id: CursorRunId::new(run),
@@ -979,22 +1045,24 @@ async fn a_prompt_waits_out_a_busy_agent() {
 }
 
 /// Runs driven from cursor.com since the session's own last turn are
-/// mirrored before the next prompt's output — full fidelity, oldest first:
-/// the stream replay carries the cursor.com user's prompt (quoted) and the
-/// agent's answer, so the client's view keeps up with the conversation its
-/// prompt is about to continue.
+/// captured into the journal before the next prompt executes, in full
+/// fidelity, oldest first. They never stream live: the prompt's own turn is
+/// all the client sees until the reload the recovery requires, after which
+/// the standard load shows the cursor.com user's prompt and the agent's
+/// answer ahead of the turn that was about to continue the conversation.
 #[tokio::test]
-async fn foreign_runs_are_mirrored_before_the_next_prompt() {
+async fn foreign_runs_are_captured_before_the_next_prompt_and_shown_by_its_reload() {
     let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
     let events = cursor.script_stream();
     events.send(finished("run-fake-1")).expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
     service.prompt(&session, "first").await.expect("first turn");
+    assert!(notifier.reloads().is_empty());
 
     // One cursor.com run happened since run-fake-1. The page also contains
     // the run this prompt itself is about to create — which must not be
-    // mirrored, its own turn delivers it.
+    // recovered, its own turn delivers it.
     cursor.script_run_listings(vec![
         RunListing {
             id: CursorRunId::new("run-foreign-1"),
@@ -1005,7 +1073,7 @@ async fn foreign_runs_are_mirrored_before_the_next_prompt() {
             status: RunStatus::Finished,
         },
     ]);
-    // The streams `prompt("second")` consumes, in order: the mirror of the
+    // The streams `prompt("second")` consumes, in order: the capture of the
     // foreign run, then the turn's own.
     let foreign = cursor.script_stream();
     foreign
@@ -1034,27 +1102,82 @@ async fn foreign_runs_are_mirrored_before_the_next_prompt() {
         .prompt(&session, "second")
         .await
         .expect("second turn");
-    let texts: Vec<String> = notifier
-        .updates()
-        .iter()
-        .filter_map(|(_, update)| match update {
-            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
-                agent_client_protocol::schema::v1::ContentBlock::Text(text) => {
-                    Some(text.text.clone())
-                }
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect();
-    assert_eq!(texts, vec!["a team workspace", "own answer"]);
-    assert!(notifier.updates().iter().any(|(_, u)| matches!(u, SessionUpdate::UserMessageChunk(c) if matches!(&c.content, ContentBlock::Text(t) if t.text == "but like what is macro"))));
+    assert_eq!(
+        agent_texts(&notifier.updates()),
+        vec!["own answer"],
+        "recovered history never streams live"
+    );
+    assert!(user_texts(&notifier.updates()).is_empty());
+    // The prompt path reconciles before and after acceptance; the requirement
+    // coalesces into one signal until the client loads.
+    assert_eq!(notifier.reloads(), vec![session.clone()]);
+    assert!(
+        ready_for_sync(&service, &session),
+        "the host owns the dispatch barrier; recovery does not close the session"
+    );
+
+    let loaded = load(&service, &session, &notifier).await;
+    assert_eq!(
+        user_texts(&loaded),
+        vec!["first", "but like what is macro", "second"]
+    );
+    assert_eq!(agent_texts(&loaded), vec!["a team workspace", "own answer"]);
+
+    // The load checkpointed the prompt's own run, which now heads Cursor's
+    // listing: the next tick recovers nothing and requires no reload.
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-fake-2"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    let shown = notifier.updates().len();
+    service.sync_foreign_runs().await;
+    assert_eq!(notifier.updates().len(), shown);
+    assert_eq!(notifier.reloads().len(), 1);
+    assert!(ready_for_sync(&service, &session));
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("later"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: last_run(&service, &session).unwrap(),
+            status: RunStatus::Finished,
+        },
+    ]);
+    let later = cursor.script_stream();
+    later
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "later question".into(),
+        }))
+        .unwrap();
+    later.send(finished("later")).unwrap();
+    later.send(CursorEvent::Done).unwrap();
+    service.sync_foreign_runs().await;
+    assert_eq!(
+        notifier.reloads().len(),
+        2,
+        "successful load re-arms recovery"
+    );
+    assert_eq!(notifier.updates().len(), shown);
+    let reloaded = load(&service, &session, &notifier).await;
+    assert_eq!(user_texts(&reloaded).last().unwrap(), "later question");
 }
 
-/// The host's poll: cursor.com activity mirrors into a session within a
-/// tick, without any Macro prompt — and mirrors exactly once.
+/// The host's poll: cursor.com activity is captured into a session within a
+/// tick, without any Macro prompt — exactly once, and only ever shown through
+/// the standard load the capture requires.
 #[tokio::test]
-async fn sync_mirrors_foreign_runs_once() {
+async fn sync_captures_foreign_runs_once_and_requires_one_load_to_show_them() {
     let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
     let events = cursor.script_stream();
@@ -1075,6 +1198,11 @@ async fn sync_mirrors_foreign_runs_once() {
     ]);
     let foreign = cursor.script_stream();
     foreign
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "asked over there".to_owned(),
+        }))
+        .expect("stream open");
+    foreign
         .send(CursorEvent::Assistant {
             text: "from over there".to_owned(),
         })
@@ -1085,17 +1213,47 @@ async fn sync_mirrors_foreign_runs_once() {
     foreign.send(CursorEvent::Done).expect("stream open");
 
     service.sync_foreign_runs().await;
-    let after_first = notifier.updates().len();
-    assert!(after_first > before, "the foreign run must be delivered");
-
-    // The watermark moved: the same listing mirrors nothing more.
+    assert_eq!(
+        notifier.updates().len(),
+        before,
+        "recovered history never streams live"
+    );
+    assert_eq!(notifier.reloads(), vec![session.clone()]);
+    assert!(
+        ready_for_sync(&service, &session),
+        "the host owns the dispatch barrier; recovery does not close the session"
+    );
+    // While the requirement is pending, background ticks skip the session
+    // rather than signalling again.
     service.sync_foreign_runs().await;
-    assert_eq!(notifier.updates().len(), after_first);
+    assert_eq!(notifier.reloads().len(), 1);
+    assert_eq!(notifier.updates().len(), before);
+
+    let loaded = load(&service, &session, &notifier).await;
+    assert_eq!(user_texts(&loaded), vec!["first", "asked over there"]);
+    assert_eq!(agent_texts(&loaded), vec!["from over there"]);
+
+    // The load moved the watermark: the same listing recovers nothing more
+    // and requires no further reload.
+    let shown = notifier.updates().len();
+    service.sync_foreign_runs().await;
+    assert_eq!(notifier.updates().len(), shown);
+    assert_eq!(notifier.reloads().len(), 1);
+    assert!(ready_for_sync(&service, &session));
 }
 
-/// Restore seeds the durable watermark, so only runs Cursor finished after
-/// the last delivered one are recovered. The checkpoint advances after each
-/// successful delivery, making later sync ticks idempotent.
+#[tokio::test]
+async fn standalone_recovery_does_not_require_a_host_channel() {
+    crate::inbound::acp::AcpNotifier::new()
+        .require_reload(&SessionId::new("standalone"))
+        .await
+        .unwrap();
+}
+
+/// Restore seeds the durable watermark. The client's initial load hydrates the
+/// legacy run the watermark covers; only a run Cursor finished after it is
+/// recovered by sync — captured once, never streamed, then shown in provider
+/// order by the load the recovery requires, after which the tick is idempotent.
 #[tokio::test]
 async fn restore_recovers_runs_after_the_durable_watermark_once() {
     let cursor = FakeCursor::new();
@@ -1114,7 +1272,36 @@ async fn restore_recovers_runs_after_the_durable_watermark_once() {
         None,
         Some(CursorRunId::new("run-delivered")),
     );
-    service.loaded(&session).expect("session exists");
+    // The initial load hydrates the run this session delivered before the
+    // restart, from the provider's complete stream.
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("run-delivered"),
+        status: RunStatus::Finished,
+    }]);
+    let delivered = cursor.script_stream();
+    delivered
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "earlier question".to_owned(),
+        }))
+        .expect("stream open");
+    delivered
+        .send(CursorEvent::Assistant {
+            text: "earlier answer".to_owned(),
+        })
+        .expect("stream open");
+    delivered
+        .send(finished("run-delivered"))
+        .expect("stream open");
+    delivered.send(CursorEvent::Done).expect("stream open");
+    let initial = load(&service, &session, &notifier).await;
+    assert_eq!(user_texts(&initial), ["earlier question"]);
+    assert_eq!(agent_texts(&initial), ["earlier answer"]);
+    assert_eq!(
+        last_run(&service, &session),
+        Some(CursorRunId::new("run-delivered"))
+    );
+
+    // Then a run happens on cursor.com.
     cursor.script_run_listings(vec![
         RunListing {
             id: CursorRunId::new("run-missed"),
@@ -1127,35 +1314,64 @@ async fn restore_recovers_runs_after_the_durable_watermark_once() {
     ]);
     let missed = cursor.script_stream();
     missed
+        .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "missed question".to_owned(),
+        }))
+        .expect("stream open");
+    missed
         .send(CursorEvent::Assistant {
             text: "recovered answer".to_owned(),
         })
         .expect("stream open");
     missed.send(finished("run-missed")).expect("stream open");
     missed.send(CursorEvent::Done).expect("stream open");
-
     service.sync_foreign_runs().await;
-    service.sync_foreign_runs().await;
+    assert_eq!(
+        notifier.updates().len(),
+        initial.len(),
+        "recovered history never streams live"
+    );
+    assert_eq!(notifier.reloads(), vec![session.clone()]);
+    let captured = |run: &str| {
+        service
+            .session(&session)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .journal_entries
+            .iter()
+            .filter(|e| e.run.as_ref() == Some(&CursorRunId::new(run)))
+            .filter(|e| e.input == JournalInput::Reconciled)
+            .count()
+    };
+    assert_eq!(captured("run-missed"), 1);
+    assert_eq!(
+        captured("run-delivered"),
+        1,
+        "the delivered run was hydrated by the load and is not recovered again"
+    );
 
-    let recovered: Vec<_> = notifier
-        .updates()
-        .into_iter()
-        .filter_map(|(_, update)| match update {
-            SessionUpdate::AgentMessageChunk(chunk) => match chunk.content {
-                ContentBlock::Text(text) => Some(text.text),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect();
-    assert_eq!(recovered, ["recovered answer"]);
+    let loaded = load(&service, &session, &notifier).await;
+    assert_eq!(user_texts(&loaded), ["earlier question", "missed question"]);
+    assert_eq!(agent_texts(&loaded), ["earlier answer", "recovered answer"]);
+    assert_eq!(
+        last_run(&service, &session),
+        Some(CursorRunId::new("run-missed")),
+        "the load checkpoints the newest reconciled run"
+    );
+    let shown = notifier.updates().len();
+    service.sync_foreign_runs().await;
+    assert_eq!(notifier.updates().len(), shown);
+    assert_eq!(notifier.reloads().len(), 1);
 }
 
 /// Sessions created before run checkpoints existed have no durable watermark.
-/// Recover every run: a one-time duplicate is safer than discarding genuinely
-/// missed output from a longer outage.
+/// Their initial load hydrates every run Cursor lists, oldest first, and
+/// checkpoints the newest — so nothing is missed and the first sync tick
+/// afterwards recovers nothing.
 #[tokio::test]
-async fn restore_without_a_watermark_recovers_every_run() {
+async fn restore_without_a_watermark_hydrates_every_run_on_load() {
     let cursor = FakeCursor::new();
     let notifier = RecordingNotifier::new();
     let service = CursorSessionService::new(
@@ -1172,7 +1388,6 @@ async fn restore_without_a_watermark_recovers_every_run() {
         None,
         None,
     );
-    service.loaded(&session).expect("session exists");
     cursor.script_run_listings(vec![
         RunListing {
             id: CursorRunId::new("run-latest"),
@@ -1183,47 +1398,36 @@ async fn restore_without_a_watermark_recovers_every_run() {
             status: RunStatus::Finished,
         },
     ]);
-    let old = cursor.script_stream();
-    old.send(CursorEvent::Assistant {
-        text: "old answer".to_owned(),
-    })
-    .expect("stream open");
-    old.send(finished("run-old")).expect("stream open");
-    old.send(CursorEvent::Done).expect("stream open");
-    let latest = cursor.script_stream();
-    latest
-        .send(CursorEvent::Assistant {
-            text: "latest answer".to_owned(),
-        })
-        .expect("stream open");
-    latest.send(finished("run-latest")).expect("stream open");
-    latest.send(CursorEvent::Done).expect("stream open");
+    for (run, question, answer) in [
+        ("run-old", "old question", "old answer"),
+        ("run-latest", "latest question", "latest answer"),
+    ] {
+        let stream = cursor.script_stream();
+        stream
+            .send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+                text: question.to_owned(),
+            }))
+            .expect("stream open");
+        stream
+            .send(CursorEvent::Assistant {
+                text: answer.to_owned(),
+            })
+            .expect("stream open");
+        stream.send(finished(run)).expect("stream open");
+        stream.send(CursorEvent::Done).expect("stream open");
+    }
 
-    service.sync_foreign_runs().await;
-
-    let recovered: Vec<_> = notifier
-        .updates()
-        .into_iter()
-        .filter_map(|(_, update)| match update {
-            SessionUpdate::AgentMessageChunk(chunk) => match chunk.content {
-                ContentBlock::Text(text) => Some(text.text),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect();
-    assert_eq!(recovered, ["old answer", "latest answer"]);
-
+    let loaded = load(&service, &session, &notifier).await;
+    assert_eq!(user_texts(&loaded), ["old question", "latest question"]);
+    assert_eq!(agent_texts(&loaded), ["old answer", "latest answer"]);
     assert_eq!(
-        service
-            .session(&session)
-            .expect("session exists")
-            .state
-            .lock()
-            .expect("state poisoned")
-            .last_run,
-        Some(CursorRunId::new("run-latest"))
+        last_run(&service, &session),
+        Some(CursorRunId::new("run-latest")),
+        "the load's checkpoint makes the next tick idempotent"
     );
+    service.sync_foreign_runs().await;
+    assert_eq!(notifier.updates().len(), loaded.len());
+    assert!(notifier.reloads().is_empty());
 }
 
 /// The host cannot route session updates until `session/load` has rebound the
@@ -1255,10 +1459,24 @@ async fn restore_waits_for_session_load_before_recovering_runs() {
     service.sync_foreign_runs().await;
 
     assert!(notifier.updates().is_empty());
+    assert!(notifier.reloads().is_empty());
+    assert!(
+        service
+            .session(&session)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .journal_entries
+            .is_empty()
+    );
 }
 
-/// A foreign run whose stream is gone (retention expired) still delivers its
-/// recorded final text rather than vanishing.
+/// A foreign run whose stream is gone (retention expired) is captured from
+/// its run record, so the recorded answer is durable. But the record carries
+/// no original prompt: recovery must not ask the client to reload a history
+/// it cannot project, and an explicit load must fail rather than invent one —
+/// the client's prior view stays in place until a load succeeds.
 #[tokio::test(start_paused = true)]
 async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
     let (service, cursor, notifier) = service(None);
@@ -1285,31 +1503,66 @@ async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
         text: Some("the old answer".to_owned()),
     });
 
+    let before = notifier.updates().len();
     service.sync_foreign_runs().await;
-    let texts: Vec<String> = notifier
-        .updates()
-        .iter()
-        .filter_map(|(_, update)| match update {
-            SessionUpdate::AgentMessageChunk(chunk) => match &chunk.content {
-                agent_client_protocol::schema::v1::ContentBlock::Text(text) => {
-                    Some(text.text.clone())
-                }
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect();
+    assert_eq!(notifier.updates().len(), before);
     assert!(
-        texts.iter().any(|text| text == "the old answer"),
-        "got {texts:?}"
+        notifier.reloads().is_empty(),
+        "an unprojectable recovery requires no reload"
+    );
+    assert!(ready_for_sync(&service, &session));
+    let foreign = CursorRunId::new("run-foreign-1");
+    let continuation = cursor.script_stream();
+    continuation.send(finished("run-fake-2")).unwrap();
+    continuation.send(CursorEvent::Done).unwrap();
+    service
+        .prompt(&session, "continue without replacing history")
+        .await
+        .unwrap();
+    assert!(notifier.reloads().is_empty());
+    let entries = service.journal.read(&session).await.expect("journal");
+    assert!(
+        entries.iter().any(|e| e.run.as_ref() == Some(&foreign)
+            && matches!(&e.input, JournalInput::Poll(raw) if raw.contains("the old answer"))),
+        "the recorded answer is durable"
+    );
+    assert!(
+        entries
+            .iter()
+            .any(|e| e.run.as_ref() == Some(&foreign) && e.input == JournalInput::Reconciled)
+    );
+
+    let error = service
+        .replay_session(&session)
+        .await
+        .err()
+        .expect("a run without its original prompt cannot replace history");
+    assert!(
+        error.to_string().contains("original prompt unavailable"),
+        "{error}"
+    );
+    assert_eq!(
+        notifier.updates().len(),
+        before,
+        "a failed load publishes nothing: the prior view is retained"
+    );
+    assert!(
+        !ready_for_sync(&service, &session),
+        "nothing syncs or prompts until a load succeeds"
+    );
+    assert_eq!(
+        service.journal.read(&session).await.expect("journal"),
+        entries,
+        "the failed load discards nothing captured"
     );
 }
 
 /// A run that is still executing cannot become the watermark when its stream
-/// is unavailable: the next sync must retry it after Cursor finishes.
+/// is unavailable, and requires no reload yet: the next sync must retry it
+/// after Cursor finishes.
 #[tokio::test]
 async fn a_running_foreign_run_is_not_checkpointed_after_stream_fallback() {
-    let (service, cursor, _notifier) = service(None);
+    let (service, cursor, notifier) = service(None);
     let session = service.new_session(Path::new(""), Vec::new());
     let initial = cursor.script_stream();
     initial.send(finished("run-fake-1")).expect("stream open");
@@ -1335,14 +1588,13 @@ async fn a_running_foreign_run_is_not_checkpointed_after_stream_fallback() {
     service.sync_foreign_runs().await;
 
     assert_eq!(
-        service
-            .session(&session)
-            .expect("session exists")
-            .state
-            .lock()
-            .expect("state poisoned")
-            .last_run,
+        last_run(&service, &session),
         Some(CursorRunId::new("run-fake-1"))
+    );
+    assert!(notifier.reloads().is_empty());
+    assert!(
+        ready_for_sync(&service, &session),
+        "an unreconciled run leaves the session open to the next tick"
     );
 }
 
@@ -1641,15 +1893,7 @@ async fn incomplete_legacy_hydration_emits_nothing_and_cannot_enable_sync() {
     drop(tx);
     assert!(service.replay_session(&id).await.is_err());
     assert!(notifier.updates().is_empty());
-    assert!(
-        !service
-            .session(&id)
-            .unwrap()
-            .state
-            .lock()
-            .unwrap()
-            .ready_for_sync
-    );
+    assert!(!ready_for_sync(&service, &id));
     assert!(
         !service
             .journal
@@ -1896,9 +2140,12 @@ async fn capture_backlog_includes_the_run_at_the_delivered_watermark_after_resta
     tx.send(finished("cancelled-run")).unwrap();
     tx.send(CursorEvent::Done).unwrap();
     service.sync_foreign_runs().await;
-    assert!(
-        matches!(&output.updates()[before..], [(_,SessionUpdate::AgentMessageChunk(c))] if matches!(&c.content,ContentBlock::Text(t) if t.text=="lo"))
+    assert_eq!(
+        output.updates().len(),
+        before,
+        "the backlog is captured, not streamed"
     );
+    assert_eq!(output.reloads(), vec![id.clone()]);
     assert!(
         service
             .journal
@@ -1907,6 +2154,13 @@ async fn capture_backlog_includes_the_run_at_the_delivered_watermark_after_resta
             .unwrap()
             .iter()
             .any(|e| e.input == JournalInput::Reconciled)
+    );
+    let loaded = load(&service, &id, &output).await;
+    assert_eq!(user_texts(&loaded), ["go"]);
+    assert_eq!(
+        agent_texts(&loaded),
+        ["hel", "lo"],
+        "the captured prefix is not repeated"
     );
 }
 
@@ -2014,18 +2268,11 @@ async fn a_newly_accepted_run_waits_behind_a_failed_older_backfill() {
         tx.send(CursorEvent::Done).unwrap();
     }
     service.sync_foreign_runs().await;
-    let texts: Vec<_> = output
-        .updates()
-        .into_iter()
-        .filter_map(|(_, u)| match u {
-            SessionUpdate::AgentMessageChunk(c) => match c.content {
-                ContentBlock::Text(t) => Some(t.text),
-                _ => None,
-            },
-            _ => None,
-        })
-        .collect();
-    assert_eq!(texts, vec!["older", "newer"]);
+    assert!(
+        agent_texts(&output.updates()).is_empty(),
+        "recovered runs are captured, never streamed"
+    );
+    assert_eq!(output.reloads(), vec![id.clone()]);
     let messages = fold::replay(service.journal.clone(), id.clone()).await;
     let text: Vec<_> = messages
         .iter()
@@ -2098,7 +2345,7 @@ mod fold;
 
 #[tokio::test]
 async fn cancellation_during_pre_prompt_recovery_never_executes_the_pending_prompt() {
-    let (service, cursor, _output) = service(None);
+    let (service, cursor, output) = service(None);
     let id = service.new_session(Path::new(""), vec![]);
     service.session(&id).unwrap().state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));
     cursor.script_run_listings(vec![RunListing {
@@ -2142,11 +2389,37 @@ async fn cancellation_during_pre_prompt_recovery_never_executes_the_pending_prom
         call,
         CursorCall::CreateAgent(..) | CursorCall::CreateRun(..)
     )));
+    assert_eq!(output.reloads(), vec![id.clone()]);
+    assert!(output.updates().is_empty());
+    // The load shows the recovered older turn, then the aborted prompt as a
+    // cancelled turn that never reached the provider.
     let messages = fold::replay(service.journal.clone(), id).await;
-    assert_eq!(messages.len(), 2);
+    let texts: Vec<String> = messages
+        .iter()
+        .map(|message| {
+            message
+                .parts
+                .iter()
+                .filter_map(|part| match part {
+                    agent_fold::domain::model::MessagePart::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect()
+        })
+        .collect();
+    assert_eq!(
+        texts,
+        ["old question", "old answer", "must not execute", ""]
+    );
+    assert_eq!(messages[0].id, messages[1].id);
+    assert_eq!(messages[2].id, messages[3].id);
     assert_eq!(
         messages[1].stop,
         Some(agent_fold::domain::model::StopReason::EndTurn)
+    );
+    assert_eq!(
+        messages[3].stop,
+        Some(agent_fold::domain::model::StopReason::Cancelled)
     );
 }
 

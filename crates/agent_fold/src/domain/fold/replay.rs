@@ -7,7 +7,6 @@ use agent_client_protocol::schema::v1::{
 };
 use agent_client_protocol::{JsonRpcMessage, JsonRpcResponse, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
-use agent_runtime_protocol::domain::turn::{HistorySnapshotNotification, HistorySnapshotPhase};
 
 use super::convert::param;
 use super::state::{FoldState, StepChange};
@@ -24,11 +23,6 @@ pub(super) struct Replay {
     quarantined: bool,
     replay_session: Option<String>,
     pending_open: Option<(RequestId, Opening)>,
-    // A snapshot already being published may finish after load is requested.
-    // Its contents belong to that transaction, never to the load candidate.
-    discarded_snapshot: Option<(String, String)>,
-    pending_prompt: Option<RequestId>,
-    pending_local: Vec<AgentSessionLog>,
 }
 
 #[derive(Debug)]
@@ -57,17 +51,11 @@ impl Opening {
 
 #[derive(Debug)]
 struct Transaction {
-    kind: TransactionKind,
+    request: RequestId,
     session: String,
     metadata: crate::domain::model::SessionMetadata,
     pending_initialize: Option<RequestId>,
     entries: Vec<AgentSessionLog>,
-}
-
-#[derive(Debug)]
-enum TransactionKind {
-    Load(RequestId),
-    Snapshot(String),
 }
 
 pub(super) enum Outcome {
@@ -78,28 +66,12 @@ pub(super) enum Outcome {
 
 impl Replay {
     fn loading(&self) -> bool {
-        matches!(
-            self.transaction.as_ref().map(|t| &t.kind),
-            Some(TransactionKind::Load(_))
-        )
+        self.transaction.is_some()
     }
 
-    fn snapshotting(&self) -> bool {
-        matches!(
-            self.transaction.as_ref().map(|t| &t.kind),
-            Some(TransactionKind::Snapshot(_))
-        )
-    }
-
-    fn commit(
-        &mut self,
-        committed: &mut FoldState,
-        completion: Option<AgentSessionLog>,
-    ) -> Outcome {
+    fn commit(&mut self, committed: &mut FoldState, completion: AgentSessionLog) -> Outcome {
         let mut transaction = self.transaction.take().expect("matched transaction");
-        if let Some(completion) = completion {
-            transaction.entries.push(completion);
-        }
+        transaction.entries.push(completion);
         let mut state = FoldState {
             metadata: transaction.metadata,
             pending_initialize: transaction.pending_initialize,
@@ -110,11 +82,6 @@ impl Replay {
             state.step(entry);
         }
         state.replaying = false;
-        if matches!(transaction.kind, TransactionKind::Snapshot(_)) {
-            for local in &self.pending_local {
-                state.step(local.clone());
-            }
-        }
         *committed = state;
         Outcome::Replaced
     }
@@ -129,127 +96,11 @@ impl Replay {
             return Outcome::Staged;
         }
         self.session = Some(entry.agent_session_id);
-        if let Message::ToRuntime(ToRuntimeMessage::Acp(acp)) = &entry.content {
-            match &acp.0 {
-                RawJsonRpcMessage::Request(request)
-                    if PromptRequest::matches_method(&request.method) =>
-                {
-                    self.pending_prompt = Some(request.id.clone());
-                    self.pending_local = vec![entry.clone()];
-                }
-                RawJsonRpcMessage::Request(request)
-                    if InitializeRequest::matches_method(&request.method)
-                        || LoadSessionRequest::matches_method(&request.method)
-                        || NewSessionRequest::matches_method(&request.method)
-                        || ResumeSessionRequest::matches_method(&request.method) =>
-                {
-                    if LoadSessionRequest::matches_method(&request.method) {
-                        if self.snapshotting() {
-                            let snapshot = self.transaction.take().expect("snapshot transaction");
-                            if let TransactionKind::Snapshot(id) = snapshot.kind {
-                                self.discarded_snapshot = Some((id, snapshot.session));
-                            }
-                        }
-                    } else {
-                        if self.snapshotting() {
-                            self.transaction = None;
-                        }
-                        self.discarded_snapshot = None;
-                    }
-                    self.pending_prompt = None;
-                    self.pending_local.clear();
-                }
-                _ if self.pending_prompt.is_some() => self.pending_local.push(entry.clone()),
-                _ => {}
-            }
-        }
-        if let Message::ToServer(ToServerMessage::Acp(acp)) = &entry.content {
-            if let RawJsonRpcMessage::Response(response) = &acp.0 {
-                let id = match response {
-                    Response::Result { id, .. } | Response::Error { id, .. } => id,
-                };
-                if self.pending_prompt.as_ref() == Some(id) {
-                    self.pending_prompt = None;
-                    self.pending_local.clear();
-                    if self.snapshotting() {
-                        self.transaction = None;
-                        self.quarantined = true;
-                        return Outcome::Changes(committed.step(entry));
-                    }
-                }
-            }
-            if let RawJsonRpcMessage::Notification(notification) = &acp.0
-                && HistorySnapshotNotification::matches_method(&notification.method)
-            {
-                let Some(RawJsonRpcParams::Object(params)) = notification.params.as_ref() else {
-                    return Outcome::Staged;
-                };
-                let Ok(fact) =
-                    HistorySnapshotNotification::parse_message(&notification.method, params)
-                else {
-                    return Outcome::Staged;
-                };
-                if self.loading() || self.discarded_snapshot.is_some() {
-                    let scope = (fact.snapshot_id, fact.session_id.to_string());
-                    match fact.phase {
-                        HistorySnapshotPhase::Begin => self.discarded_snapshot = Some(scope),
-                        HistorySnapshotPhase::Commit => {
-                            if self.discarded_snapshot.as_ref() == Some(&scope) {
-                                self.discarded_snapshot = None;
-                            }
-                        }
-                    }
-                    return Outcome::Staged;
-                }
-                if self.disconnected || self.quarantined {
-                    return Outcome::Staged;
-                }
-                match fact.phase {
-                    HistorySnapshotPhase::Begin => {
-                        self.transaction = Some(Transaction {
-                            kind: TransactionKind::Snapshot(fact.snapshot_id),
-                            session: fact.session_id.to_string(),
-                            metadata: committed.metadata.clone(),
-                            pending_initialize: self.initialization.pending_initialize.clone(),
-                            entries: Vec::new(),
-                        });
-                    }
-                    HistorySnapshotPhase::Commit => {
-                        if self.transaction.as_ref().is_some_and(|snapshot| {
-                            matches!(&snapshot.kind, TransactionKind::Snapshot(id) if id == &fact.snapshot_id)
-                                && snapshot.session == fact.session_id.to_string()
-                        }) {
-                            return self.commit(committed, None);
-                        }
-                    }
-                }
-                return Outcome::Staged;
-            }
-        }
-        if let Some((_, session)) = &self.discarded_snapshot
-            && let Message::ToServer(ToServerMessage::Acp(acp)) = &entry.content
-        {
-            let params = match &acp.0 {
-                RawJsonRpcMessage::Notification(n) => Some(n.params.as_ref()),
-                RawJsonRpcMessage::Request(r) => Some(r.params.as_ref()),
-                RawJsonRpcMessage::Response(_) => None,
-            };
-            if let Some(params) = params
-                && param(params, "sessionId")
-                    .and_then(|v| v.as_str())
-                    .is_none_or(|id| id == session)
-            {
-                return Outcome::Staged;
-            }
-        }
         if let Message::ToServer(ToServerMessage::Event { event }) = &entry.content {
             if matches!(event, SystemEvent::AcpReady | SystemEvent::Disconnected) {
                 self.quarantined |=
                     self.transaction.is_some() || matches!(event, SystemEvent::Disconnected);
                 self.transaction = None;
-                self.discarded_snapshot = None;
-                self.pending_prompt = None;
-                self.pending_local.clear();
                 self.pending_open = None;
                 self.initialization = FoldState::default();
                 self.disconnected = matches!(event, SystemEvent::Disconnected);
@@ -284,7 +135,7 @@ impl Replay {
                 self.pending_open = None;
                 self.replay_session = Some(session.to_owned());
                 self.transaction = Some(Transaction {
-                    kind: TransactionKind::Load(request.id.clone()),
+                    request: request.id.clone(),
                     session: session.to_owned(),
                     metadata: self.initialization.metadata.clone(),
                     pending_initialize: self.initialization.pending_initialize.clone(),
@@ -345,7 +196,7 @@ impl Replay {
             if self
                 .transaction
                 .as_ref()
-                .is_some_and(|candidate| matches!(&candidate.kind, TransactionKind::Load(request) if request == id))
+                .is_some_and(|candidate| &candidate.request == id)
             {
                 // Match SessionMachine::on_session_opened exactly: JSON-RPC
                 // success alone is insufficient; the ACP result must decode.
@@ -359,7 +210,7 @@ impl Replay {
                 self.quarantined = false;
                 // Load completion is not turn completion. Keep the last replayed
                 // turn open so live chunks after the high-water mark append to it.
-                return self.commit(committed, Some(entry));
+                return self.commit(committed, entry);
             }
             if self
                 .pending_open
@@ -376,11 +227,6 @@ impl Replay {
             }
         }
         if let Some(candidate) = &mut self.transaction {
-            if matches!(candidate.kind, TransactionKind::Snapshot(_))
-                && matches!(entry.content, Message::ToRuntime(_))
-            {
-                return Outcome::Staged;
-            }
             let params = match &entry.content {
                 Message::ToServer(ToServerMessage::Acp(acp))
                 | Message::ToRuntime(ToRuntimeMessage::Acp(acp)) => match &acp.0 {

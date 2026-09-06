@@ -218,13 +218,17 @@ where
     /// back in - so a `Complete` never fires for an action that was not sent,
     /// and the machine (not this loop) decides what failure means.
     pub(crate) async fn dispatch(&mut self, input: Input<SessionCompletion>) -> Stepped {
-        let handshake_deadline = self.handshake_deadline;
+        let was_live = matches!(self.machine.status(), RuntimeStatus::Live { .. });
         let mut handshake_span = self.handshake_span.clone();
         let produced = match &handshake_span {
             Some(span) => span.in_scope(|| self.machine.handle(input)),
             None => self.machine.handle(input),
         };
         let mut effects = VecDeque::from(produced);
+        if was_live && matches!(self.machine.status(), RuntimeStatus::Handshaking) {
+            self.handshake_deadline = Instant::now() + HANDSHAKE_TIMEOUT;
+        }
+        let handshake_deadline = self.handshake_deadline;
         self.finish_handshake_if_complete();
         if self.handshake_span.is_none() {
             handshake_span = None;

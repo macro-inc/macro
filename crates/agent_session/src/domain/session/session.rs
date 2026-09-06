@@ -45,6 +45,7 @@ pub struct SessionMachine<Token> {
     /// [`Effect::TurnEnded`].
     in_flight_turn: Option<(RequestId, AgentActionId)>,
     resume_session_id: Option<SessionId>,
+    reload_required: bool,
     /// Directory the agent works in, snapshotted on the session row at
     /// creation; `session/new`, `session/resume`, and `session/load` all
     /// carry it, so a reconnect re-enters the directory the session
@@ -68,6 +69,7 @@ impl<Token> SessionMachine<Token> {
             pending: VecDeque::new(),
             in_flight_turn: None,
             resume_session_id: None,
+            reload_required: false,
             workspace,
             mcp_servers,
         }
@@ -89,6 +91,7 @@ impl<Token> SessionMachine<Token> {
             pending: VecDeque::new(),
             in_flight_turn: None,
             resume_session_id: Some(session_id),
+            reload_required: false,
             workspace,
             mcp_servers,
         }
@@ -212,6 +215,23 @@ impl<Token> SessionMachine<Token> {
     }
 
     fn on_inbound(&mut self, message: ToServerMessage) -> Vec<Effect<Token>> {
+        // Host-local recovery is a command to this machine, not a user-facing
+        // runtime status or a history replacement frame.
+        if matches!(
+            message,
+            ToServerMessage::Event {
+                event: SystemEvent::ReloadRequired
+            }
+        ) {
+            let mut effects = Vec::new();
+            if !matches!(self.phase, SessionPhase::Dead) {
+                self.reload_required = true;
+                if self.in_flight_turn.is_none() {
+                    self.begin_reload(&mut effects);
+                }
+            }
+            return effects;
+        }
         // Every inbound message is logged, before anything reacts to it: the
         // log stream is the session's history, not a digest of it.
         let mut effects = vec![Effect::Log {
@@ -237,6 +257,16 @@ impl<Token> SessionMachine<Token> {
         let mut effects = Vec::new();
         self.die(StopReason::Closed(reason), &mut effects);
         effects
+    }
+
+    fn begin_reload(&mut self, effects: &mut Vec<Effect<Token>>) {
+        let SessionPhase::Live { session_id } = &self.phase else {
+            return;
+        };
+        self.resume_session_id = Some(session_id.clone());
+        self.initialization = None;
+        self.phase = SessionPhase::Booting;
+        self.begin_handshake(effects);
     }
 
     /// Ready starts initialization; actions remain queued until `session/new` completes.
@@ -273,6 +303,9 @@ impl<Token> SessionMachine<Token> {
                     .take()
                     .expect("checked just above; nothing between the check and the take");
                 effects.push(Effect::TurnEnded { action_id });
+                if self.reload_required {
+                    self.begin_reload(effects);
+                }
                 return;
             }
             self.respond_to_permission_request(&frame, effects);
@@ -320,12 +353,17 @@ impl<Token> SessionMachine<Token> {
         // connection needs the same answer, and only this machine was told it.
         effects.push(Effect::Initialized { restore });
         self.begin_opening(restore, effects);
+        // The load about to start covers every recovery observed so far. A
+        // later signal while its reply is queued requires another load.
+        self.reload_required = false;
     }
 
     /// Ask the agent for this session, however it has to be established.
     fn begin_opening(&mut self, restore: SessionRestoreSupport, effects: &mut Vec<Effect<Token>>) {
         let opening = match self.resume_session_id.clone() {
-            Some(session_id) if restore.resume => self.build_resume_session_request(session_id),
+            Some(session_id) if restore.resume && !self.reload_required => {
+                self.build_resume_session_request(session_id)
+            }
             Some(session_id) if restore.load => self.build_load_session_request(session_id),
             Some(_) => {
                 self.resume_unsupported(effects);
@@ -412,6 +450,10 @@ impl<Token> SessionMachine<Token> {
             effects.push(Effect::PersistAcpSession {
                 session_id: session_id.clone(),
             });
+        }
+        if self.reload_required {
+            self.begin_reload(effects);
+            return;
         }
         self.flush(&session_id, effects);
     }

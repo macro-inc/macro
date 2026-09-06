@@ -250,7 +250,8 @@ where
             session_id,
             sessions: self.sessions.clone(),
         };
-        let notifier = AcpNotifier::new();
+        let (reload_tx, reload_rx) = tokio::sync::mpsc::unbounded_channel();
+        let notifier = AcpNotifier::new().with_reload(reload_tx);
         // The user's chosen model seeds the session as its default: a fresh
         // session starts on it, and a resumed one still prefers whatever it
         // was actually last using (carried in `restore.model_id`) over this.
@@ -320,7 +321,7 @@ where
                 }
             }
         });
-        let transport = PipeTransport::connect_observed(
+        let transport = PipeTransport::connect_recoverable(
             ours,
             move || {
                 *observed
@@ -329,6 +330,7 @@ where
                     tokio::time::Instant::now();
             },
             shutdown,
+            Some(reload_rx),
         );
         let mut attachment = agent_session::domain::connection::RuntimeAttachment::solo(transport);
         if let Some(binding) = owner_binding {
