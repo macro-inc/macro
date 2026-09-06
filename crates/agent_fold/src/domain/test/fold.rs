@@ -473,6 +473,15 @@ fn folds_nothing() {
     assert_eq!(warnings, vec![]);
 }
 
+#[test]
+fn an_empty_agent_chunk_does_not_create_a_message() {
+    let log = parse_log(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":""}}}}}"#,
+    );
+
+    assert_eq!(fold(log), vec![]);
+}
+
 /// How many `session/update` notifications a log carries - the frames that
 /// stream the agent's own content, and so the sign that a recording has
 /// something for the fold to find.

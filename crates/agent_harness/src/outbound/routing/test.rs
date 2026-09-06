@@ -253,7 +253,11 @@ async fn a_database_backed_cursor_agent_routes_by_its_stored_harness() {
 
     let session = AgentSessionId::new();
     router.resume(session).await.expect("resume");
+    router.session_token(session).await.expect("session token");
     router.teardown(session).await.expect("teardown");
-    assert_eq!(cursor.calls(), ["cursor:resume", "cursor:teardown"]);
+    assert_eq!(
+        cursor.calls(),
+        ["cursor:resume", "cursor:session_token", "cursor:teardown"]
+    );
     assert!(sandbox.calls().is_empty());
 }
