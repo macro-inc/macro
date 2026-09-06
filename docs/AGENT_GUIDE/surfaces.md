@@ -42,11 +42,7 @@ The side panel's `Calendars` section folds each connected account into a collaps
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
-carry a small RSS icon. Hovering a calendar row reveals a `Show duplicates side by side`
-button: it splits that calendar out, so its copies of events that also live on other
-calendars render as their own chips beside the merged one, the way Google Calendar shows
-them. The button then reads `Merge duplicates into one event` and folds them back; the
-choice is remembered per calendar.
+carry a small RSS icon.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
@@ -61,8 +57,7 @@ provider does not report the stored ones. Out-of-office events render on the gri
 chips filled with their calendar color (like Google), unlike regular events' outlined chips,
 and their details card shows an `Out of office` line under the schedule.
 An event that Google carries on several of an account's calendars (a shared calendar's
-re-import of a member's own event, for example) renders as one chip unless a calendar is
-split out as above. The chip takes the
+re-import of a member's own event, for example) renders as one chip. The chip takes the
 copy belonging to the first calendar that is on, preferring the account's primary: its
 title, color, and editability. Reminders, guests, and conferencing always show and follow
 the primary copy, since that is the copy Macro's alerts fire from and whose guest list and

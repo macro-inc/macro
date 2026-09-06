@@ -95,8 +95,6 @@ function CalendarSourcesSidePanelSection() {
           sources={calendarView.sources()}
           isVisible={calendarView.isSourceVisible}
           onVisibilityChange={calendarView.setSourceVisibility}
-          isMerged={calendarView.isSourceMerged}
-          onMergedChange={calendarView.setSourceMerged}
         />
       </SidePanel.Section>
     </Show>

@@ -10,7 +10,7 @@ import {
   type CalendarEvent,
   type CalendarSource,
   isCalendarEventVisible,
-  mapCalendarOccurrenceChips,
+  mapCalendarOccurrence,
 } from '../types';
 import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
 
@@ -28,7 +28,6 @@ export interface CalendarOccurrenceDataOptions {
   range: Accessor<CalendarOccurrenceQueryRange | undefined>;
   sourceById?: Accessor<ReadonlyMap<string, CalendarSource>>;
   isSourceVisible?: (sourceId: string) => boolean;
-  isSourceMerged?: (sourceId: string) => boolean;
   queryOptions?: Accessor<CalendarOccurrencesQueryOptions>;
 }
 
@@ -54,11 +53,10 @@ export function useCalendarOccurrenceData(
   const events = createMemo(() => {
     if (!isRangeSupported()) return [];
     const sourceById = options.sourceById?.();
-    return (occurrencesQuery.data?.items ?? []).flatMap((item) =>
-      mapCalendarOccurrenceChips(item, {
+    return (occurrencesQuery.data?.items ?? []).map((item) =>
+      mapCalendarOccurrence(item, {
         sourceById,
         isSourceVisible: options.isSourceVisible,
-        isSourceMerged: options.isSourceMerged,
       })
     );
   });

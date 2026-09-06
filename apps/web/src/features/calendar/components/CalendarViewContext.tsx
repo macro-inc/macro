@@ -23,8 +23,6 @@ interface CalendarDisplaySettings {
 interface CalendarPreferences {
   periodView: CalendarPeriodView;
   hiddenSourceIds: string[];
-  /** Calendars whose copies of shared events render as their own chips. */
-  splitSourceIds: string[];
   showWeekends: boolean;
   weekStartsOn: CalendarWeekStart;
   timeFormat: CalendarTimeFormat;
@@ -62,7 +60,6 @@ export const [CalendarViewContextProvider, useCalendarView] =
     const defaultPreferences: CalendarPreferences = {
       periodView: isMobile() ? 'timeGridDay' : 'timeGridWeek',
       hiddenSourceIds: [],
-      splitSourceIds: [],
       showWeekends: true,
       weekStartsOn: 0,
       timeFormat: getDefaultCalendarTimeFormat(),
@@ -86,11 +83,6 @@ export const [CalendarViewContextProvider, useCalendarView] =
     );
     const isSourceVisible = (sourceId: string) =>
       !hiddenSourceIds().has(sourceId);
-    const splitSourceIds = createMemo(
-      () => new Set(preferences.splitSourceIds)
-    );
-    const isSourceMerged = (sourceId: string) =>
-      !splitSourceIds().has(sourceId);
 
     const selection = createCalendarEventSelection();
     const displaySettings: CalendarDisplaySettings = {
@@ -129,23 +121,12 @@ export const [CalendarViewContextProvider, useCalendarView] =
       }
     };
 
-    const setSourceMerged = (sourceId: string, merged: boolean) =>
-      setPreferences('splitSourceIds', (current) =>
-        merged
-          ? current.filter((id) => id !== sourceId)
-          : current.includes(sourceId)
-            ? current
-            : [...current, sourceId]
-      );
-
     return {
       displaySettings,
       sources,
       sourceById,
       isSourceVisible,
       setSourceVisibility,
-      isSourceMerged,
-      setSourceMerged,
       selectedEvent: selection.event,
       selectedEventAnchor: selection.anchor,
       setPeriodView: (periodView: CalendarPeriodView) =>

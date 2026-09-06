@@ -37,9 +37,7 @@ const SOURCES: CalendarSource[] = [
 
 function renderControls() {
   const onVisibilityChange = vi.fn<(id: string, visible: boolean) => void>();
-  const onMergedChange = vi.fn<(id: string, merged: boolean) => void>();
   const [hidden, setHidden] = createSignal<ReadonlySet<string>>(new Set());
-  const [split, setSplit] = createSignal<ReadonlySet<string>>(new Set());
   const result = render(() => (
     <SourceControls
       sources={SOURCES}
@@ -49,16 +47,6 @@ function renderControls() {
         setHidden((current) => {
           const next = new Set(current);
           if (visible) next.delete(id);
-          else next.add(id);
-          return next;
-        });
-      }}
-      isMerged={(id) => !split().has(id)}
-      onMergedChange={(id, merged) => {
-        onMergedChange(id, merged);
-        setSplit((current) => {
-          const next = new Set(current);
-          if (merged) next.delete(id);
           else next.add(id);
           return next;
         });
@@ -76,13 +64,7 @@ function renderControls() {
     if (!header) throw new Error(`missing header for ${email}`);
     return header;
   };
-  return {
-    ...result,
-    onVisibilityChange,
-    onMergedChange,
-    headerFor,
-    expandAccount,
-  };
+  return { ...result, onVisibilityChange, headerFor, expandAccount };
 }
 
 describe('SourceControls', () => {
@@ -126,36 +108,6 @@ describe('SourceControls', () => {
       '[title="Subscription calendar"]'
     );
     expect(indicators).toHaveLength(1);
-  });
-
-  it('splits a calendar out of merged events without touching its visibility', () => {
-    const { expandAccount, getAllByRole, onMergedChange, onVisibilityChange } =
-      renderControls();
-    expandAccount('gab@macro.com');
-    const [primaryToggle] = getAllByRole('button', {
-      name: 'Show duplicates side by side',
-    });
-    fireEvent.click(primaryToggle);
-
-    expect(onMergedChange).toHaveBeenCalledWith('gab-primary', false);
-    expect(onVisibilityChange).not.toHaveBeenCalled();
-    expect(
-      getAllByRole('button', { name: 'Merge duplicates into one event' })
-    ).toHaveLength(1);
-  });
-
-  it('merges a split calendar back from the same button', () => {
-    const { expandAccount, getAllByRole, getByRole, onMergedChange } =
-      renderControls();
-    expandAccount('gab@macro.com');
-    fireEvent.click(
-      getAllByRole('button', { name: 'Show duplicates side by side' })[0]
-    );
-    fireEvent.click(
-      getByRole('button', { name: 'Merge duplicates into one event' })
-    );
-
-    expect(onMergedChange).toHaveBeenLastCalledWith('gab-primary', true);
   });
 
   it('collapses an account again to hide its calendars', () => {

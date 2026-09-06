@@ -7,7 +7,6 @@ import {
   isCalendarEventVisible,
   mapCalendarEventToFullCalendar,
   mapCalendarOccurrence,
-  mapCalendarOccurrenceChips,
 } from './types';
 
 const PRIMARY: CalendarSource = {
@@ -164,82 +163,6 @@ describe('mapCalendarOccurrence', () => {
     expect(event.calendarId).toBeUndefined();
     expect(event.reminderEventType).toBe('out_of_office');
     expect(event.sourceCalendarIds).toEqual([]);
-  });
-});
-
-describe('mapCalendarOccurrenceChips', () => {
-  const split = (...ids: string[]) => {
-    const set = new Set(ids);
-    return (id: string) => !set.has(id);
-  };
-  const twoCopies = () => item([copy('primary'), sharedCopy]);
-
-  it('folds every copy into one chip while its calendars are merged', () => {
-    const chips = mapCalendarOccurrenceChips(twoCopies(), {
-      sourceById,
-      isSourceMerged: split(),
-    });
-
-    expect(chips).toHaveLength(1);
-    expect(chips[0]).toEqual(
-      mapCalendarOccurrence(twoCopies(), { sourceById })
-    );
-  });
-
-  it('shows a split calendar copy beside the merged chip', () => {
-    const chips = mapCalendarOccurrenceChips(twoCopies(), {
-      sourceById,
-      isSourceMerged: split('shared'),
-    });
-
-    expect(chips).toHaveLength(2);
-    const [merged, own] = chips;
-    expect(merged.title).toBe('OOO');
-    expect(merged.calendarId).toBe('primary');
-    expect(merged.sourceCalendarIds).toEqual(['primary']);
-    expect(JSON.parse(merged.id)).toHaveLength(2);
-    expect(own.title).toBe('[teo] OOO');
-    expect(own.calendar).toBe(SHARED);
-    expect(own.calendarId).toBe('shared');
-    expect(own.isReadOnly).toBe(true);
-    expect(own.sourceCalendarIds).toEqual(['shared']);
-    expect(JSON.parse(own.id)).toEqual(['event', expect.any(String), 'shared']);
-    expect(own.reminderCalendarId).toBe('primary');
-    expect(own.reminders?.overrides).toEqual([
-      { method: 'popup', minutes: 30 },
-    ]);
-  });
-
-  it('renders only the split copies when every calendar is split', () => {
-    const chips = mapCalendarOccurrenceChips(twoCopies(), {
-      sourceById,
-      isSourceMerged: split('primary', 'shared'),
-    });
-
-    expect(chips.map((chip) => chip.calendarId)).toEqual(['primary', 'shared']);
-    expect(chips.every((chip) => JSON.parse(chip.id).length === 3)).toBe(true);
-  });
-
-  it('hides a split copy with its calendar and keeps the merged chip', () => {
-    const chips = mapCalendarOccurrenceChips(twoCopies(), {
-      sourceById,
-      isSourceVisible: hidden('shared'),
-      isSourceMerged: split('shared'),
-    });
-
-    expect(
-      chips.filter((chip) => isCalendarEventVisible(chip, hidden('shared')))
-    ).toHaveLength(1);
-  });
-
-  it('keeps a single-copy event as one chip whichever mode its calendar is in', () => {
-    const chips = mapCalendarOccurrenceChips(item([copy('primary')]), {
-      sourceById,
-      isSourceMerged: split('primary'),
-    });
-
-    expect(chips).toHaveLength(1);
-    expect(JSON.parse(chips[0].id)).toHaveLength(2);
   });
 });
 
