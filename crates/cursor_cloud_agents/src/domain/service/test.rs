@@ -457,6 +457,10 @@ async fn unknown_session_is_an_error() {
         service.prompt(&missing, "hi").await,
         Err(SessionError::UnknownSession(_))
     ));
+    assert!(matches!(
+        service.loaded(&missing),
+        Err(SessionError::UnknownSession(_))
+    ));
 }
 
 #[tokio::test]
@@ -1091,7 +1095,7 @@ async fn restore_recovers_runs_after_the_durable_watermark_once() {
         None,
         Some(CursorRunId::new("run-delivered")),
     );
-    service.loaded(&session);
+    service.loaded(&session).expect("session exists");
     cursor.script_run_listings(vec![
         RunListing {
             id: CursorRunId::new("run-missed"),
@@ -1144,7 +1148,7 @@ async fn restore_without_a_watermark_recovers_every_run() {
         None,
         None,
     );
-    service.loaded(&session);
+    service.loaded(&session).expect("session exists");
     cursor.script_run_listings(vec![
         RunListing {
             id: CursorRunId::new("run-latest"),

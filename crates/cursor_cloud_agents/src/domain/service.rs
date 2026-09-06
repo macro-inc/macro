@@ -400,14 +400,14 @@ where
     }
 
     /// Mark a restored session safe for background updates after load replies.
-    pub fn loaded(&self, session_id: &SessionId) {
-        if let Ok(session) = self.session(session_id) {
-            session
-                .state
-                .lock()
-                .expect("session state poisoned")
-                .ready_for_sync = true;
-        }
+    pub fn loaded(&self, session_id: &SessionId) -> Result<(), SessionError> {
+        let session = self.session(session_id)?;
+        session
+            .state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .ready_for_sync = true;
+        Ok(())
     }
 
     /// Run one prompt to completion, delivering updates as they stream.

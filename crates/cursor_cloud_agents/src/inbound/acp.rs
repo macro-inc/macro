@@ -392,7 +392,9 @@ where
                         let response =
                             responder.respond(LoadSessionResponse::new().config_options(options));
                         if response.is_ok() {
-                            service.loaded(&session);
+                            drop(service.loaded(&session).inspect_err(|error| {
+                                tracing::error!(error = ?error, "could not mark cursor session loaded");
+                            }));
                         }
                         response
                     } else {
