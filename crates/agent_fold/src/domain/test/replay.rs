@@ -581,6 +581,89 @@ fn snapshot(id: &str, phase: &str) -> AgentSessionLog {
 }
 
 #[test]
+fn initialization_during_replay_is_staged_until_commit() {
+    use crate::domain::model::Harness;
+
+    for load in [false, true] {
+        let mut machine = FoldMachineImpl::new();
+        machine.push(request("initialize", json!(0)));
+        machine.push(if load {
+            request("session/load", json!(1))
+        } else {
+            snapshot("a", "begin")
+        });
+        assert!(machine.push(frame(
+            "to_server",
+            json!({"id":0,"result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"cursor","version":"1"}}}),
+        )).is_empty());
+        assert_eq!(machine.metadata().harness, Harness::Unknown);
+        let events = machine.push(if load {
+            result(json!(1))
+        } else {
+            snapshot("a", "commit")
+        });
+        assert!(matches!(&events[0], FoldEvent::MessagesReplaced(_)));
+        assert!(
+            matches!(&events[1], FoldEvent::MetadataUpdated(metadata) if metadata.harness == Harness::Cursor)
+        );
+        assert_eq!(machine.metadata().harness, Harness::Cursor);
+    }
+}
+
+#[test]
+fn snapshot_preserves_harness_when_initialization_does_not_announce_one() {
+    use crate::domain::model::Harness;
+
+    for response in [
+        json!({"id":1,"result":{"protocolVersion":1,"agentCapabilities":{}}}),
+        json!({"id":1,"result":false}),
+        json!({"id":1,"error":{"code":-32603,"message":"failed"}}),
+    ] {
+        let mut machine = FoldMachineImpl::new();
+        machine.push(request("initialize", json!(0)));
+        machine.push(frame("to_server", json!({"id":0,"result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"cursor","version":"1"}}})));
+        assert_eq!(machine.metadata().harness, Harness::Cursor);
+        machine.push(request("initialize", json!(1)));
+        machine.push(snapshot("a", "begin"));
+        assert!(machine.push(frame("to_server", response)).is_empty());
+        machine.push(snapshot("a", "commit"));
+        assert_eq!(machine.metadata().harness, Harness::Cursor);
+    }
+}
+
+#[test]
+fn snapshot_keeps_live_status_and_ready_aborts_replacement() {
+    for status in ["custom_status", "acp_ready"] {
+        let mut machine = FoldMachineImpl::new();
+        for entry in parse_log(TURN) {
+            machine.push(entry);
+        }
+        let old = machine.messages().to_vec();
+        machine.push(event("before_snapshot"));
+        machine.push(snapshot("a", "begin"));
+        machine.push(update("agent_message_chunk", "replacement"));
+        assert!(
+            matches!(&machine.push(event(status))[0], FoldEvent::MetadataUpdated(metadata) if metadata.status.as_deref() == Some(status))
+        );
+        assert_eq!(machine.messages(), old);
+        let events = machine.push(snapshot("a", "commit"));
+        if status == "acp_ready" {
+            assert!(events.is_empty());
+            assert!(
+                machine
+                    .push(update("agent_message_chunk", "late"))
+                    .is_empty()
+            );
+            assert_eq!(machine.messages(), old);
+        } else {
+            assert!(matches!(&events[0], FoldEvent::MessagesReplaced(_)));
+            assert_ne!(machine.messages(), old);
+        }
+        assert_eq!(machine.metadata().status.as_deref(), Some(status));
+    }
+}
+
+#[test]
 fn history_snapshot_stages_older_history_and_restores_pending_request_after_it() {
     let mut log = vec![frame(
         "to_runtime",
