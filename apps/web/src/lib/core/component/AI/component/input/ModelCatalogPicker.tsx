@@ -103,7 +103,9 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
         )}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          searchRef?.focus();
+          // Kobalte finishes mounting its focus guards after this callback.
+          // Move focus once that work is complete so the guard cannot win.
+          queueMicrotask(() => searchRef?.focus());
         }}
         onEscapeKeyDown={() => {
           dismissedWithEscape = true;
