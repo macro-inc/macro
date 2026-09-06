@@ -81,7 +81,7 @@ The assertions inspect UI, real persisted data or requests as appropriate.
 | Upload recovery and send ordering | 29 | Injected first upload failure, metadata rollback, real retry bytes, send waits for unfinished upload; final delivery deliberately fails |
 | Pasted image | 30 | Editor paste, real static-file upload and persisted uploaded image identity |
 | Secondary and delegated completion | 32 | Fresh direct entry archives the correct inbox thread and Undo restores it |
-| Notification completion and Undo | 31 inbox/direct | Real notification done state and archive request; Undo restores both and survives reload from inbox navigation and fresh direct entry |
+| Notification completion and Undo | 31 inbox/direct | Real notification done state and archive request; Undo/redo restore both and survive reload from inbox navigation and fresh direct entry |
 
 Download evidence transparently captures the application's actual Blob because
 Chrome runs in a container and its download path is not host-local. The test
@@ -103,6 +103,7 @@ as sufficient evidence of correctness.
 | Leave standalone compose before debounce | Latest edit was cancelled with the owner | Capture pending form/editor content on disposal and serialize saves; do not resurrect sent/discarded drafts |
 | Send/discard overlaps another action | Sender, schedule or repeated discard could race the pending operation | Guard the operation through completion, preserve retry on failure and keep captured inbox identity for queued uploads |
 | Edit only AI email body | Snapshot compared recipients/subject but omitted body | Compare the prepared body too; initialize the snapshot from imported editor HTML |
+| Enter after ArrowDown from a details button | Logical selection moved but DOM focus stayed on the old control | Hand browser focus back to the thread when arrow navigation takes over, while preserving native button Enter |
 | Click forwarded attachment X | Focusing the message card scrolled the control between pointerdown and click | Use a named button and preserve editor focus for pointer and compatibility mouse events |
 | Mark done after fresh direct navigation | Archive-only fallback left the notification active | Build the missing action entity from the loaded thread and use the existing combined completion/Undo action |
 
@@ -127,6 +128,10 @@ of bugs.
   are exercised; LLM generation and external AI-triggered delivery are not.
 - Touch mode and reduced viewport do not reproduce a physical keyboard, iOS
   WKWebView, Tauri's native image path or device-specific focus behavior.
+- The local stack returns 404 for optional instructions/GitHub-connection queries
+  and 500 for trace ingestion. Failed HTTP paths are recorded separately from
+  uncaught browser errors and the deliberately injected email failures; this
+  audit does not claim the entire local stack is free of HTTP errors.
 - The local first-login landing initially showed an inbox error. Login setup
   navigates to the email surface after authentication; first-login onboarding
   and the global Inbox surface are not certified by this email audit.

@@ -354,6 +354,14 @@ export function createThreadNavigation(
     const list = context.messagesListRef();
     if (!messages?.length || !list) return false;
 
+    // Arrow navigation owns focus, including when it only scrolls the current
+    // card. Enter should act on that selection rather than the previous button.
+    const activeElement = document.activeElement;
+    if (activeElement instanceof HTMLButtonElement) {
+      activeElement.blur();
+      host.focusContainer?.();
+    }
+
     const stops = shownStops({
       length: messages.length,
       showMiddle: showMiddleMessages(),

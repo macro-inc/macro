@@ -270,6 +270,30 @@ module.exports = async (scene) => {
               .toEqual([true, false]);
           }
         );
+        await page.waitForTimeout(500);
+        await page.keyboard.press('ControlOrMeta+Shift+z');
+        await check('Redo completes both states again', async () => {
+          await expect.poll(async () => (await read()).done).toBe(true);
+          await expect
+            .poll(() =>
+              writes
+                .filter((r) => r.path.endsWith('/archived') && r.status < 300)
+                .map((r) => r.body.value)
+            )
+            .toEqual([true, false, true]);
+        });
+        await page.waitForTimeout(500);
+        await page.keyboard.press('ControlOrMeta+z');
+        await check('A second Undo restores the original state', async () => {
+          await expect.poll(async () => (await read()).done).toBe(false);
+          await expect
+            .poll(() =>
+              writes
+                .filter((r) => r.path.endsWith('/archived') && r.status < 300)
+                .map((r) => r.body.value)
+            )
+            .toEqual([true, false, true, false]);
+        });
         await page.reload();
         await check('Notification restoration survives reload', async () => {
           assert.equal((await read()).done, false);

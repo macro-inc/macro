@@ -76,6 +76,7 @@ async function run(chapters) {
         '; seeded account health held healthy; local storage URLs translated',
       steps: [],
       errors: [],
+      httpErrors: [],
       responses: [],
       started: new Date().toISOString(),
     };
@@ -92,13 +93,21 @@ async function run(chapters) {
       console.log(
         'NETWORK',
         name,
-        new URL(request.url()).origin + new URL(request.url()).pathname,
+        new URL(request.url()).origin === 'null'
+          ? new URL(request.url()).protocol + new URL(request.url()).pathname
+          : new URL(request.url()).origin + new URL(request.url()).pathname,
         request.failure()?.errorText
       )
     );
     page.on('response', async (response) => {
       const req = response.request(),
         url = new URL(req.url());
+      if (response.status() >= 400)
+        result.httpErrors.push({
+          path: url.origin + url.pathname,
+          method: req.method(),
+          status: response.status(),
+        });
       if (
         !url.pathname.startsWith('/email/email/') ||
         url.pathname.endsWith('health-check')
