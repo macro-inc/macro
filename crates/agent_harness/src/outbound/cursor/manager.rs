@@ -250,9 +250,11 @@ where
                     _ = reaper.tick() => {
                         let observed_at = *last_activity
                             .lock()
-                            .expect("activity clock poisoned");
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
                         let active_turn = sync_service.has_active_turn();
-                        let activity = last_activity.lock().expect("activity clock poisoned");
+                        let activity = last_activity
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner);
                         // Recheck under the activity lock after inspecting the
                         // turn gate. A prompt frame arriving in that window
                         // changes the instant and prevents a stale idle reap.
@@ -271,7 +273,10 @@ where
         PipeTransport::connect_observed(
             ours,
             move || {
-                *observed.lock().expect("activity clock poisoned") = tokio::time::Instant::now();
+                *observed
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) =
+                    tokio::time::Instant::now();
             },
             shutdown,
         )
