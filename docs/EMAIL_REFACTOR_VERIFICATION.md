@@ -291,3 +291,13 @@ Local artifacts for this pass are under `/tmp/email-simplicity-reply-envelope`,
 `/tmp/email-simplicity-thread-action-done-compare.json`. As in the previous audit,
 they record local seed data and intercepted operations; they do not establish
 provider delivery or native-device parity.
+
+## Expanded local Chrome audit
+
+The subsequent [local verification report](EMAIL_LOCAL_VERIFICATION.md) maps the
+feature inventory to a reproducible seeded Chrome recording. It expands the
+earlier intercepted checks with real local attachment bytes, schedules and Undo,
+delegated inboxes, pasted uploads, AI tool edits and notification completion. Its
+evidence categories and provider/device limits are explicit; use its run metadata
+for the exact source and outcomes rather than treating this historical report's
+counts as current.

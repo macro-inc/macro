@@ -46,6 +46,7 @@ type ComposeToolProps = {
 };
 
 type SendEmailSnapshot = {
+  body: string;
   bcc: Array<{ email: string; name: string | null }>;
   cc: Array<{ email: string; name: string | null }>;
   includeSignature: boolean | null;
@@ -73,6 +74,7 @@ function fromEmailRecipients(
 
 function createSendEmailSnapshot(data: SendEmail): SendEmailSnapshot {
   return {
+    body: data.body ?? '',
     to: (data.to ?? []).map((item) => ({
       email: item.email,
       name: item.name ?? null,
@@ -391,6 +393,11 @@ export function ComposeTool(props: ComposeToolProps) {
     onAddAttachments: (_: DraftFormAttachment[]) => {},
     onRemoveAttachment: (_: DraftFormAttachment) => {},
     captureEditor: setEditor,
+    onEditorInitialized: (editor) => {
+      // Compare edits with the imported document, not its original Markdown
+      // encoding. Opening a generated draft must not mark it as user-edited.
+      lastPersistedSnapshot.body = prepareEmailBody(editor)?.bodyHtml ?? '';
+    },
     onSend: handleSend,
     disabled: () =>
       isSending() ||

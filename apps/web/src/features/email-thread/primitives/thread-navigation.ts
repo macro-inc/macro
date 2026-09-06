@@ -514,6 +514,10 @@ export function createThreadNavigation(
       return true;
     }
 
+    // The host captures Enter before a focused button receives it. Let the
+    // button activate itself instead of opening a reply on the thread.
+    if (document.activeElement instanceof HTMLButtonElement) return false;
+
     const focusedId = context.messages.focusedID();
     const target = getHotkeyTarget();
 
@@ -594,6 +598,7 @@ export function createThreadNavigation(
   onMount(() =>
     host.registerKeyboard?.({
       replyToFocusedMessage: () => openHotkeyTarget('reply-all'),
+      replyAllToFocusedMessage: () => openHotkeyTarget('reply-all'),
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
       blockSender: context.blockSender,
       markDone: context.archiveThread,

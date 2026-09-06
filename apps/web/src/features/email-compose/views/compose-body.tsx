@@ -114,6 +114,7 @@ export function ComposeBody(props: {
               floatingFormatMenu
               domRef={props.inputRef}
               captureEditor={captureEditor}
+              onInitialized={ctx.onEditorInitialized}
               scrollRef={props.mobileScrollRef}
               initialHtml={ctx.initialHtml()}
               initialValue={ctx.initialMarkdown?.()}

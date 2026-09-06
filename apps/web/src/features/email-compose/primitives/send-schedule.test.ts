@@ -139,15 +139,16 @@ describe.each(['standalone', 'reply'] as const)(
       const state = composer(kind, services);
       try {
         state.send();
+        await vi.advanceTimersByTimeAsync(0);
         expect(services.saveDraft).toHaveBeenCalledOnce();
         const scheduling = state.schedule(new Date('2026-10-01T12:00:00Z'));
         await vi.advanceTimersByTimeAsync(0);
-        expect(services.schedule).toHaveBeenCalledOnce();
         finishSaving({
           draft: { db_id: 'draft', thread_db_id: 'thread', link_id: 'inbox' },
         });
         await vi.advanceTimersByTimeAsync(0);
         expect(services.sendMessage).not.toHaveBeenCalled();
+        expect(services.schedule).toHaveBeenCalledOnce();
         finishScheduling();
         await scheduling;
       } finally {

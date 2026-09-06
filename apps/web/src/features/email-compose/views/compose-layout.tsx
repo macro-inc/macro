@@ -211,6 +211,7 @@ export function ComposeLayout(props: {
                     <span class="w-14 shrink-0">from</span>
                     <div class="min-w-0">
                       <FromInboxSelector
+                        disabled={ctx.disabled()}
                         links={ctx.fromInboxes?.() ?? []}
                         activeLinkId={ctx.selectedFromLinkId?.()}
                         onSelect={(id) => ctx.onSelectFromLink?.(id)}

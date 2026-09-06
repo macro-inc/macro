@@ -24,7 +24,15 @@ conversation. A link with `?email_message_id=<message-id>` reveals that message.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments.
 Replies appear inline on desktop and in a composer drawer on touch devices.
-An edited reply remains a draft when navigating away and returning.
+`R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
+or the latest message when none is selected. `F` opens a forward and focuses To.
+An edited reply remains a draft when navigating away and returning. Standalone
+compose also flushes pending edits when leaving through app navigation. During
+send or discard, its sender and scheduling controls cannot change the operation.
+Attachment remove buttons are named `Remove <filename>` and support keyboard
+activation. Removing a forwarded file keeps the received original.
+AI email tool drafts persist body-only edits; changing recipients or the subject
+is not required to save the body.
 The three-dot button beneath a body reveals quoted content and a trimmed
 signature. Plaintext and Macro Markdown use the existing Markdown renderer;
 Macro Markdown messages retain document mentions. Ordinary HTML bodies use an

@@ -116,7 +116,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
                     // Navigate only once the deletion landed; the mutation
                     // toasts on failure and the composer stays put.
                     try {
-                      await deleteDraftAndReset();
+                      if (!(await deleteDraftAndReset())) return;
                     } catch {
                       setDraftBackMenuOpen(false);
                       return;

@@ -68,6 +68,7 @@ export function FromInboxSelector(props: {
   links: FromInbox[];
   activeLinkId: string | undefined;
   onSelect: (linkId: string) => void;
+  disabled?: boolean;
   compact?: boolean;
   pill?: boolean;
   class?: string;
@@ -90,6 +91,7 @@ export function FromInboxSelector(props: {
           >
             <Dropdown>
               <Dropdown.Trigger
+                disabled={props.disabled}
                 class={`inline-flex min-w-0 max-w-full items-center gap-1 ${props.class ?? ''}`}
               >
                 <span class="min-w-0 truncate">{active().email_address}</span>
@@ -130,6 +132,7 @@ export function FromInboxSelector(props: {
           >
             <Dropdown>
               <Dropdown.Trigger
+                disabled={props.disabled}
                 class={cn(
                   'inline-flex h-auto min-w-0 max-w-full rounded-full border-none bg-transparent p-0 not-disabled:hover:bg-transparent active:bg-transparent',
                   props.class
@@ -172,7 +175,10 @@ export function FromInboxSelector(props: {
           }
         >
           <Dropdown>
-            <Dropdown.Trigger class="flex items-center min-w-0 max-w-full gap-2 text-sm text-ink-muted">
+            <Dropdown.Trigger
+              disabled={props.disabled}
+              class="flex items-center min-w-0 max-w-full gap-2 text-sm text-ink-muted"
+            >
               <Show when={active()} keyed>
                 {(inbox) => <FromInboxOption inbox={inbox} />}
               </Show>

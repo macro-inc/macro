@@ -351,6 +351,7 @@ export function ComposeRecipients(props: {
             <div class="text-sm shrink-0 text-ink-placeholder">From:</div>
             <div class="flex-1 min-w-0 min-h-9 flex items-center">
               <FromInboxSelector
+                disabled={ctx.disabled()}
                 links={ctx.fromInboxes?.() ?? []}
                 activeLinkId={ctx.selectedFromLinkId?.()}
                 onSelect={(id) => ctx.onSelectFromLink?.(id)}

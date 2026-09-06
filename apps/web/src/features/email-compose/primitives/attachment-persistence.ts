@@ -35,7 +35,7 @@ export function createAttachmentPersistence(options: {
 
   return {
     uploading: upload.pending,
-    async upload(draftId: string) {
+    async upload(draftId: string, inbox = { linkId: options.linkId() }) {
       const attachments = options
         .attachments()
         .list()
@@ -50,7 +50,7 @@ export function createAttachmentPersistence(options: {
         run = upload.run({
           draftID: draftId,
           attachments: attachments.map((attachment) => attachment.file),
-          linkId: options.linkId(),
+          linkId: inbox.linkId,
           onAttachmentAdded: (file, id) =>
             options.attachments().assignAttachmentID(file, id),
           onAttachmentUploadFailed: (file) =>

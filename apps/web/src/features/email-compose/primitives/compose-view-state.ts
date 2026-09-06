@@ -43,6 +43,7 @@ export interface ComposeContextValue {
 
   // Editor
   captureEditor: (editor: LexicalEditor) => void;
+  onEditorInitialized?: (editor: LexicalEditor) => void;
 
   // Actions
   onSend: () => void;

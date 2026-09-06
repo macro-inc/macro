@@ -40,8 +40,19 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
       </Show>
       <div class="ph-no-capture truncate ml-1">{props.attachment.fileName}</div>
       <Show when={props.removable}>
-        <div
+        <button
+          type="button"
+          aria-label={`Remove ${props.attachment.fileName}`}
           class="ml-auto p-2 hover:text-failure"
+          onPointerDown={(e) => {
+            // Keep the editor's focus. Focusing its message card can scroll
+            // this control away between pointerdown and click.
+            e.preventDefault();
+          }}
+          onMouseDown={(e) => e.preventDefault()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+          }}
           onclick={(e) => {
             e.preventDefault();
             e.stopImmediatePropagation();
@@ -56,7 +67,7 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
           }}
         >
           <X width="14" />
-        </div>
+        </button>
       </Show>
     </div>
   );

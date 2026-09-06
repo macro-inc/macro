@@ -1,4 +1,5 @@
 import type { EmailThread } from '@app/features/email-thread/core/email-thread';
+import { buildEntityData } from '@app/features/entity/utils/buildEntityData';
 import {
   makeMarkDoneAction,
   makeMarkNotDoneAction,
@@ -62,7 +63,7 @@ export function createThreadCompletionAdapter(
   // undo/redo hooks below can re-mark them when the archive flip is replayed.
   const restoredNotificationIds = new Map<string, string[]>();
 
-  // Only the direct archive/unarchive fallbacks go through this mutation
+  // Only the direct unarchive fallback goes through this mutation
   // (the mark-done / mark-not-done action paths toast on their own).
   const archiveMutation = useUndoableArchiveThreadMutation({
     onPushed: (handle, params) => {
@@ -304,17 +305,21 @@ export function createThreadCompletionAdapter(
         )
       );
     } else {
-      // No soup entity to drive mark-done from (e.g. the thread was opened
-      // directly, so no soup list or cache exists): archive directly, still
-      // honoring the caller's silent/undo-handle options — undo-send depends
-      // on the handle to reverse this archive.
-      archiveMutation.mutate({
-        threadId: thread.db_id,
-        archive: true,
-        linkId: toHeaderLinkId(thread.link_id),
-        silent: markDoneOpts.silent,
-        onUndoHandle: markDoneOpts.onUndoHandle,
+      // Direct navigation may have no soup entity. Use the loaded thread so
+      // notifications and archive state share the same completion and undo.
+      const entity = buildEntityData({
+        blockName: 'email',
+        id: thread.db_id,
+        name: thread.messages.at(-1)?.subject || 'Email Thread',
+        isRead: thread.is_read,
+        done: !thread.inbox_visible,
       });
+      if (!entity) return false;
+
+      void trackExternalThreadArchive(
+        thread.db_id,
+        markAsDoneAction.execute([entity], undefined, markDoneOpts)
+      );
     }
 
     return true;

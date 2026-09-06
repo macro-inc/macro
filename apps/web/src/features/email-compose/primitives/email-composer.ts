@@ -7,7 +7,7 @@ import {
 import { debounce } from '@solid-primitives/scheduled';
 import * as EmailValidator from 'email-validator';
 import type { LexicalEditor } from 'lexical';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, onCleanup } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { EmailContact } from '../../email-message/core/email-message';
 import type {
@@ -214,18 +214,17 @@ export function createEmailComposer(props: EmailComposeInput) {
     };
   }
 
-  async function executeSaveDraft() {
-    if (sendMutation.pending()) {
-      return;
-    }
-    const draftToSave = collectDraft();
+  async function persistDraft(
+    draftToSave: ReturnType<typeof collectDraft>,
+    saveLinkId: string | undefined
+  ) {
     if (!draftToSave) {
       const draftID = currentDraftID();
       if (draftID) {
         await deleteDraftMutation.run({
           draftId: draftID,
           threadId: currentThreadID(),
-          linkId: headerLinkId(),
+          linkId: saveLinkId,
         });
       }
       setCurrentDraftID(undefined);
@@ -238,7 +237,7 @@ export function createEmailComposer(props: EmailComposeInput) {
         ...draftToSave,
         db_id: currentDraftID(),
       },
-      linkId: headerLinkId(),
+      linkId: saveLinkId,
     });
 
     const newThreadID = draftResponse.draft.thread_db_id ?? undefined;
@@ -250,9 +249,8 @@ export function createEmailComposer(props: EmailComposeInput) {
 
     const draftId = draftResponse.draft.db_id;
     if (draftId) {
-      await attachmentPersistence.upload(draftId);
-
       setCurrentDraftID(draftId);
+      await attachmentPersistence.upload(draftId, { linkId: saveLinkId });
       return draftId;
     }
   }
@@ -261,11 +259,41 @@ export function createEmailComposer(props: EmailComposeInput) {
   // left without the keep-or-delete prompt.
   const [draftDirty, setDraftDirty] = createSignal(false);
 
+  let pendingAutosave = false;
+  let saveQueue: Promise<string | undefined> = Promise.resolve(undefined);
+  const [submitting, setSubmitting] = createSignal(false);
+  const [discarding, setDiscarding] = createSignal(false);
+  let completed = false;
+  const persistencePaused = () => submitting() || discarding() || completed;
+
+  function executeSaveDraft() {
+    scheduleDraftSave.clear();
+    pendingAutosave = false;
+    // Capture before disposal can remove the editor. Serialize writes so a
+    // first save supplies the ID used by any newer edits queued behind it.
+    const draft = collectDraft();
+    const linkId = headerLinkId();
+    const save = () => persistDraft(draft, linkId);
+    saveQueue = saveQueue.then(save, save);
+    return saveQueue;
+  }
+
   const scheduleDraftSave = debounce(() => {
-    void executeSaveDraft();
+    void executeSaveDraft().catch(() => {});
   }, DRAFT_DEBOUNCE_MS);
 
+  onCleanup(() => {
+    scheduleDraftSave.clear();
+    if (pendingAutosave && !persistencePaused()) {
+      // Production save capabilities report the failure; consume the rejection
+      // because the disposed view cannot await this final write.
+      void executeSaveDraft().catch(() => {});
+    }
+  });
+
   const markDirtyAndScheduleSave = () => {
+    if (persistencePaused()) return;
+    pendingAutosave = true;
     setDraftDirty(true);
     scheduleDraftSave();
   };
@@ -384,7 +412,7 @@ export function createEmailComposer(props: EmailComposeInput) {
   });
 
   const onSubmit = async () => {
-    if (scheduling()) return;
+    if (scheduling() || persistencePaused()) return;
     setValidationError(null);
 
     const currentEditor = editor();
@@ -428,75 +456,86 @@ export function createEmailComposer(props: EmailComposeInput) {
       return;
     }
 
-    // Ensure the draft is saved before sending so undo-send always has a
-    // draft id to snapshot and restore (the send reuses the draft's db_id).
-    scheduleDraftSave.clear();
+    setSubmitting(true);
     try {
-      await executeSaveDraft();
-    } catch {
-      // Draft save is best-effort; the send still works without one.
-    }
-
-    // Scheduling may have started while the draft save was pending.
-    if (scheduling() || form.sendTime()) return;
-
-    // Snapshot editor state before watermark so undo-send can restore it
-    if (currentEditor) {
-      const snapshotHtml = currentEditor.read(() =>
-        $generateHtmlFromNodes(currentEditor)
-      );
-      const draftId = currentDraftID();
-      if (draftId) {
-        composeUndo.remember({
-          draftId,
-          recipients: structuredClone(unwrap(form.recipients())),
-          subject: form.subject(),
-          bodyHtml: snapshotHtml,
-          attachments: [...form.attachments.list()],
-          includeSignature: includeSignature(),
-        });
+      // Ensure the draft is saved before sending so undo-send always has a
+      // draft id to snapshot and restore (the send reuses the draft's db_id).
+      scheduleDraftSave.clear();
+      try {
+        await executeSaveDraft();
+      } catch {
+        // Draft save is best-effort; the send still works without one.
       }
+
+      // Scheduling may have started while the draft save was pending.
+      if (scheduling() || form.sendTime()) return;
+
+      // Snapshot editor state before watermark so undo-send can restore it
+      if (currentEditor) {
+        const snapshotHtml = currentEditor.read(() =>
+          $generateHtmlFromNodes(currentEditor)
+        );
+        const draftId = currentDraftID();
+        if (draftId) {
+          composeUndo.remember({
+            draftId,
+            recipients: structuredClone(unwrap(form.recipients())),
+            subject: form.subject(),
+            bodyHtml: snapshotHtml,
+            attachments: [...form.attachments.list()],
+            includeSignature: includeSignature(),
+          });
+        }
+      }
+
+      // Append watermark after all validation passes so failed sends don't
+      // leave orphaned watermark nodes in the editor tree.
+      const cleanupWatermark = $appendWatermarkNodeToLast(
+        currentEditor,
+        !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
+      );
+
+      const prepared = prepareEmailBody(currentEditor);
+      if (!prepared) {
+        cleanupWatermark();
+        return;
+      }
+
+      const bodyMacro = content();
+
+      try {
+        await sendMutation.run({
+          message: {
+            to: convertToContactInfoArray(recipients.to),
+            cc:
+              recipients.cc.length > 0
+                ? convertToContactInfoArray(recipients.cc)
+                : [],
+            bcc:
+              recipients.bcc.length > 0
+                ? convertToContactInfoArray(recipients.bcc)
+                : [],
+            subject: form.subject(),
+            body_text: prepared.bodyText,
+            body_html: prepared.bodyHtml,
+            body_macro: bodyMacro,
+            db_id: currentDraftID(),
+            // Backend includes the signature by default for new emails; only signal
+            // an explicit dismiss. Omitting it falls through to the backend default.
+            include_signature: includeSignature() ? undefined : false,
+          },
+          linkId: headerLinkId(),
+        });
+
+        completed = true;
+      } finally {
+        cleanupWatermark();
+      }
+    } catch {
+      // Send failures are reported by the operation; keep the draft editable.
+    } finally {
+      setSubmitting(false);
     }
-
-    // Append watermark after all validation passes so failed sends don't
-    // leave orphaned watermark nodes in the editor tree.
-    const cleanupWatermark = $appendWatermarkNodeToLast(
-      currentEditor,
-      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
-    );
-
-    const prepared = prepareEmailBody(currentEditor);
-    if (!prepared) {
-      cleanupWatermark();
-      return;
-    }
-
-    const bodyMacro = content();
-
-    sendMutation.start({
-      message: {
-        to: convertToContactInfoArray(recipients.to),
-        cc:
-          recipients.cc.length > 0
-            ? convertToContactInfoArray(recipients.cc)
-            : [],
-        bcc:
-          recipients.bcc.length > 0
-            ? convertToContactInfoArray(recipients.bcc)
-            : [],
-        subject: form.subject(),
-        body_text: prepared.bodyText,
-        body_html: prepared.bodyHtml,
-        body_macro: bodyMacro,
-        db_id: currentDraftID(),
-        // Backend includes the signature by default for new emails; only signal
-        // an explicit dismiss. Omitting it falls through to the backend default.
-        include_signature: includeSignature() ? undefined : false,
-      },
-      linkId: headerLinkId(),
-    });
-
-    cleanupWatermark();
   };
 
   // --- Schedule ---
@@ -520,7 +559,12 @@ export function createEmailComposer(props: EmailComposeInput) {
     onUnscheduled: services.invalidatePreview,
   });
   const scheduling = schedule.pending;
-  const handleSendTimeChange = schedule.change;
+  const scheduleBlocked = () =>
+    sendMutation.pending() || discarding() || completed;
+  const handleSendTimeChange = (date: Date | null) => {
+    if (scheduleBlocked()) return Promise.resolve();
+    return schedule.change(date);
+  };
 
   // --- Reset / delete ---
 
@@ -532,15 +576,27 @@ export function createEmailComposer(props: EmailComposeInput) {
   };
 
   const deleteDraftAndReset = async () => {
-    const draftId = currentDraftID();
-    if (draftId) {
-      await deleteDraftMutation.run({
-        draftId,
-        threadId: currentThreadID(),
-        linkId: headerLinkId(),
-      });
+    if (persistencePaused() || scheduling()) return false;
+    setDiscarding(true);
+    scheduleDraftSave.clear();
+    pendingAutosave = false;
+    try {
+      // A first save may still be creating the draft. Delete its returned ID
+      // after it settles so discard cannot leave an orphan behind.
+      await saveQueue.catch(() => {});
+      const draftId = currentDraftID();
+      if (draftId) {
+        await deleteDraftMutation.run({
+          draftId,
+          threadId: currentThreadID(),
+          linkId: headerLinkId(),
+        });
+      }
+      resetState();
+      return true;
+    } finally {
+      setDiscarding(false);
     }
-    resetState();
   };
 
   // --- Derived state ---
@@ -647,12 +703,12 @@ export function createEmailComposer(props: EmailComposeInput) {
 
     // Actions
     onSend: () => void onSubmit(),
-    onDelete: () => void deleteDraftAndReset(),
+    onDelete: () => void deleteDraftAndReset().catch(() => {}),
     onSendTimeChange: handleSendTimeChange,
 
     // Status
-    disabled: () => hasLinkError() || sendMutation.pending() || scheduling(),
-    isSending: () => sendMutation.pending(),
+    disabled: () => hasLinkError() || persistencePaused() || scheduling(),
+    isSending: submitting,
     hasDraft: () => currentDraftID() != null,
 
     // Validation
@@ -667,7 +723,8 @@ export function createEmailComposer(props: EmailComposeInput) {
     focusRecipientsOnMount: !hasLinkError(),
 
     // Schedule send
-    scheduleSendDisabled: () => totalRecipientCount() === 0 || scheduling(),
+    scheduleSendDisabled: () =>
+      totalRecipientCount() === 0 || scheduling() || persistencePaused(),
 
     // Display
     fromAddress: () => link()?.email_address,
@@ -676,10 +733,11 @@ export function createEmailComposer(props: EmailComposeInput) {
     // Persist immediately on a sender switch so the draft moves to the new
     // inbox even without a text edit.
     onSelectFromLink: (linkId) => {
+      if (persistencePaused() || scheduling()) return;
       form.setSelectedFromLink(linkId);
       setDraftDirty(true);
       scheduleDraftSave.clear();
-      void executeSaveDraft();
+      void executeSaveDraft().catch(() => {});
     },
     hasPaidAccess,
   };
