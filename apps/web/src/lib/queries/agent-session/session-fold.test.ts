@@ -79,11 +79,6 @@ describe('buffer overlap', () => {
     ).toEqual([]);
     expect(dropOverlap([frame(1)], [frame(1), frame(1)])).toEqual([]);
   });
-  it('identifies snapshot overlap by row ID even when interpretation context differs', () => {
-    expect(
-      dropOverlap([frame(2)], [{ ...frame(2), legacyLoad: true }])
-    ).toEqual([]);
-  });
 
   it('uses UUID order at equal timestamps and preserves distinct identical content', () => {
     const boundary = frame(2);

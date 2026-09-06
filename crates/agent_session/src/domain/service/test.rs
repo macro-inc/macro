@@ -929,7 +929,6 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
 /// the fold's answer.
 fn any_event(session: AgentSessionId) -> AgentSessionLog {
     AgentSessionLog {
-        legacy_load: false,
         agent_session_id: session,
         user_id: None,
         content: Message::ToServer(ToServerMessage::Event {

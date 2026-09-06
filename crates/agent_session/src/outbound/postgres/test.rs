@@ -118,7 +118,6 @@ async fn append_system_event(
     let _ = AgentSessionLogRepo::create(
         repo,
         AgentSessionLog {
-            legacy_load: false,
             agent_session_id,
             user_id: None,
             content: Message::ToServer(ToServerMessage::Event { event }),
@@ -510,7 +509,6 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
     let _ = AgentSessionLogRepo::create(
         &repo,
         AgentSessionLog {
-            legacy_load: false,
             agent_session_id: session_id,
             user_id: Some(user.clone()),
             content: Message::ToServer(ToServerMessage::Event {
@@ -532,7 +530,6 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
     let _ = AgentSessionLogRepo::create(
         &repo,
         AgentSessionLog {
-            legacy_load: false,
             agent_session_id: session_id,
             user_id: None,
             content: Message::ToRuntime(ToRuntimeMessage::Acp(acp_notification())),
@@ -969,7 +966,6 @@ fn claimed(outcome: ClaimOutcome) -> SessionClaim {
 
 fn fenced_log(id: AgentSessionId) -> AgentSessionLog {
     AgentSessionLog {
-        legacy_load: false,
         agent_session_id: id,
         user_id: None,
         content: Message::ToRuntime(ToRuntimeMessage::Acp(acp_notification())),
@@ -978,7 +974,6 @@ fn fenced_log(id: AgentSessionId) -> AgentSessionLog {
 
 fn cursor_checkpoint_log(id: AgentSessionId, run: &str) -> AgentSessionLog {
     AgentSessionLog {
-        legacy_load: false,
         agent_session_id: id,
         user_id: None,
         content: Message::ToServer(ToServerMessage::Acp(AcpMessage(
@@ -1538,64 +1533,4 @@ async fn history_boundary_range_uses_order_index_and_uuid_tie_break(pool: PgPool
             .len(),
         10000
     );
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn legacy_load_migration_preserves_raw_frames_and_only_marks_existing_cursor_attempts(
-    pool: PgPool,
-) {
-    let repo = PgAgentSessionRepo::new(pool.clone());
-    let bot = create_test_bot(&pool).await;
-    let session = create_session(&repo, new_session(bot, None, None)).await;
-    ExternalSessionRepo::upsert(&repo, session.id, cursor_external("legacy-session"))
-        .await
-        .unwrap();
-    let mut load = fenced_log(session.id);
-    load.content = parse_message(
-        "to_runtime",
-        serde_json::json!({
-            "type":"acp", "jsonrpc":"2.0", "id":1, "method":"session/load",
-            "params":{"sessionId":"s","cwd":"/","mcpServers":[]}
-        }),
-    )
-    .unwrap();
-    AgentSessionLogRepo::create(&repo, load.clone())
-        .await
-        .unwrap();
-    AgentSessionLogRepo::create(&repo, fenced_log(session.id))
-        .await
-        .unwrap();
-    let generic = create_session(&repo, new_session(bot, None, None)).await;
-    let mut generic_load = load.clone();
-    generic_load.agent_session_id = generic.id;
-    AgentSessionLogRepo::create(&repo, generic_load)
-        .await
-        .unwrap();
-    // Re-run the generated migration against rows representing pre-rollout data.
-    sqlx::raw_sql(include_str!("../../../../macro_db_client/migrations/20260906042344_agent_session_legacy_load_context.down.sql"))
-        .execute(&pool).await.unwrap();
-    sqlx::raw_sql(include_str!("../../../../macro_db_client/migrations/20260906042344_agent_session_legacy_load_context.up.sql"))
-        .execute(&pool).await.unwrap();
-    AgentSessionLogRepo::create(&repo, load.clone())
-        .await
-        .unwrap();
-    let entries = AgentSessionLogRepo::list_by_session(&repo, session.id)
-        .await
-        .unwrap();
-    assert_eq!(entries.len(), 3);
-    assert!(entries[0].entry.legacy_load);
-    assert!(!entries[1].entry.legacy_load);
-    assert!(!entries[2].entry.legacy_load);
-    assert_eq!(
-        serde_json::to_value(&entries[0].entry.content).unwrap(),
-        serde_json::to_value(&load.content).unwrap()
-    );
-    let dto = crate::inbound::axum_router::AgentSessionLogEntryDto::from(entries[0].clone());
-    let wire = serde_json::to_value(dto).unwrap();
-    assert_eq!(wire["legacyLoad"], true);
-    assert_eq!(wire["content"]["method"], "session/load");
-    let generic_entries = AgentSessionLogRepo::list_by_session(&repo, generic.id)
-        .await
-        .unwrap();
-    assert!(!generic_entries[0].entry.legacy_load);
 }

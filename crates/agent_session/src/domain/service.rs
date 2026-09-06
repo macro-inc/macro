@@ -632,7 +632,6 @@ where
         tokio::time::timeout(
             SESSION_PERSIST_TIMEOUT,
             logs.append(AgentSessionLog {
-                legacy_load: false,
                 agent_session_id: id,
                 user_id: None,
                 content: Message::ToServer(ToServerMessage::Event {

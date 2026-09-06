@@ -983,13 +983,6 @@ pub async fn put_agent_sandbox_size_handler<
 pub struct AgentSessionLogEntryDto {
     /// Durable transport row identity; together with `createdAt`, its order cursor.
     pub id: Uuid,
-    /// Interpretation context for pre-rollout loads; raw content is unchanged.
-    #[serde(
-        rename = "legacyLoad",
-        default,
-        skip_serializing_if = "std::ops::Not::not"
-    )]
-    pub legacy_load: bool,
     /// When the log recorded the frame.
     ///
     /// The frame itself carries no time, so this comes from the log row. It is
@@ -1045,7 +1038,6 @@ impl From<StoredAgentSessionLog> for AgentSessionLogEntryDto {
     fn from(stored: StoredAgentSessionLog) -> Self {
         Self {
             id: stored.id,
-            legacy_load: stored.entry.legacy_load,
             created_at: stored.created_at,
             user_id: stored.entry.user_id.map(|user| user.to_string()),
             message: stored.entry.content,

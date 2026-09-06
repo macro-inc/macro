@@ -412,18 +412,13 @@ fn load_optional_field_fallback_matches_generic_session_machine() {
 }
 
 #[test]
-fn legacy_success_then_failed_hydration_preserves_full_history_until_standard_empty_load() {
+fn failed_hydration_preserves_full_history_until_empty_load() {
     let mut log = parse_log(TURN);
     let expected = fold(log.clone());
     assert!(!expected.is_empty());
     log.push(event("disconnected"));
     log.push(request("initialize", json!(0)));
     log.push(result(json!(0)));
-    let mut legacy = request("session/load", json!(1));
-    legacy.legacy_load = true;
-    log.push(legacy);
-    log.push(result(json!(1)));
-    assert_eq!(fold(log.clone()), expected);
     log.extend([
         request("initialize", json!(0)),
         result(json!(0)),
@@ -455,17 +450,6 @@ fn legacy_success_then_failed_hydration_preserves_full_history_until_standard_em
     }
     assert_eq!(replacements, 1);
     assert!(visible.is_empty());
-}
-
-#[test]
-fn persisted_legacy_context_fixture_matches_browser_history() {
-    let log = parse_log(include_str!("../../../fixtures/legacy_load_context.jsonl"));
-    let expected = fold(log[..6].iter().cloned());
-    assert_eq!(expected.len(), 4);
-    for end in 6..log.len() {
-        assert_eq!(fold(log[..end].iter().cloned()), expected, "prefix {end}");
-    }
-    assert!(fold(log).is_empty());
 }
 
 #[test]

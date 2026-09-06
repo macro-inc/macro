@@ -54,7 +54,7 @@ Primary targets: `crates/cursor_cloud_agents/src/domain/service.rs`, `domain/tra
 
 Raw SSE replay helpers already exist, but `TranslateMachine::push` alone is insufficient: it ignores user messages and lifecycle events that the session service handles separately. Extract/share only the processing necessary for equivalent live and replay output.
 
-Existing sessions without a journal need an explicit compatibility path: attempt provider-history hydration and record the available inputs before replay. If full reconstruction is unavailable, preserve the existing Macro history and return an explicit load failure rather than successfully selecting an incomplete replacement. Document any backfill limitations before rollout.
+When journal history is incomplete, attempt provider-history hydration and record the available inputs before replay. If full reconstruction is unavailable, preserve the committed projection and return an explicit load failure rather than successfully selecting an incomplete replacement. This recovery path does not special-case historical load acknowledgements.
 
 ## 4. Track successful replay history boundaries
 
@@ -161,25 +161,17 @@ End-to-end: create a multi-turn Cursor session with tools, restart the harness, 
 - No unrelated harness refactor or new public raw-provider-history API.
 
 
-## Persisted legacy load rollout
+## Load semantics and migration safety
 
-`agent_session_log.legacy_load` is read interpretation context outside the raw
-ACP envelope. Migration `20260906042344_agent_session_legacy_load_context` marks
-only already-persisted `session/load` requests belonging to external Cursor
-sessions, whose old adapter acknowledged loads without replay. Their matched
-success retains the committed conversation. The fold checks only this generic
-per-attempt context, never a provider identity or proprietary response marker.
-All new rows default to `false`: a valid standard ACP load success replaces the
-conversation, even with zero replay messages. Failed new hydration retains old
-history and quarantines partial replay as usual. GET exposes the optional
-`legacyLoad` context to the same WASM fold used by browser streaming; raw
-`content` remains unchanged and every audit row remains stored.
+Every valid, correlated ACP load success replaces the conversation, including
+an empty replay. Historical lookup-only Cursor load successes receive the same
+interpretation and may therefore clear the visible projection. Failed loads
+still preserve the committed projection and quarantine partial replay. Raw
+audit frames remain stored unchanged; no provider-specific interpretation
+context is carried through the log query, DTO, SDK, or fold.
 
-Stop/drain old Cursor writers before applying this migration, then start the
-journal/replay-capable adapter and updated session/fold/browser consumers. An old
-writer left running after the migration could still acknowledge a no-replay load
-that is correctly interpreted as standard by new consumers. This is a coordinated
-cutover, not a mixed-version rolling deployment. Historical Cursor sessions must
-have their existing `external_agent_session` mapping intact for the migration to
-identify their pre-rollout requests. New hydration failures remain explicit load
-failures; they do not grant legacy eligibility to new attempts.
+The already-applied `20260906042344_agent_session_legacy_load_context` migration
+and its checksums remain unchanged. Its `agent_session_log.legacy_load` column
+is retained as an unused database artifact to avoid an unnecessary migration;
+runtime readers neither select nor interpret it. Deploy the journal/replay-capable
+Cursor writer: old lookup-only writers no longer have compatibility support.

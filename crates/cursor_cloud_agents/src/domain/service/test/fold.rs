@@ -129,7 +129,6 @@ pub(super) async fn replay_with_runs(
 
 fn entry(content: Message) -> AgentSessionLog {
     AgentSessionLog {
-        legacy_load: false,
         agent_session_id: AgentSessionId::TEST_A,
         user_id: None,
         content,

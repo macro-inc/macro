@@ -209,8 +209,6 @@ fn encode<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen:
 /// One entry of a session's protocol log, as the endpoint serves it.
 #[derive(Deserialize)]
 struct LogEntry {
-    #[serde(rename = "legacyLoad", default)]
-    legacy_load: bool,
     /// The user whose action produced the frame, when one did. Absent on
     /// everything the runtime originated.
     #[serde(rename = "userId", default)]
@@ -223,7 +221,6 @@ struct LogEntry {
 impl LogEntry {
     fn into_log(self, session: AgentSessionId) -> AgentSessionLog {
         AgentSessionLog {
-            legacy_load: self.legacy_load,
             agent_session_id: session,
             // A user id that will not parse is dropped rather than rejected:
             // it costs the prompt its attribution, and the placeholder row it
