@@ -64,6 +64,8 @@ export interface AgentModelSelectorProps {
   disabled?: boolean;
   /** Receives the id of the model to switch to. */
   onSelect: (model: string) => void;
+  /** Returns focus to the session composer after Escape dismisses the menu. */
+  onEscape?: () => void;
 }
 
 /** Consecutive options under one harness heading (`null` = no heading). */
@@ -83,6 +85,7 @@ function groupOptions(options: ModelOption[]): ModelGroup[] {
 export function AgentModelSelector(props: AgentModelSelectorProps) {
   const [listRef, setListRef] = createSignal<HTMLElement>();
   const [sheetOpen, setSheetOpen] = createSignal(false);
+  let shortListDismissedWithEscape = false;
   const shown = () => props.changingTo ?? props.model;
   const label = () =>
     props.options.find((option) => option.id === shown())?.name ??
@@ -186,7 +189,19 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         <TextShimmer text={label()} active={props.changingTo !== undefined} />
         <CaretDown />
       </Dropdown.Trigger>
-      <Dropdown.Content class="overflow-hidden">
+      <Dropdown.Content
+        class="overflow-hidden"
+        onEscapeKeyDown={() => {
+          shortListDismissedWithEscape = true;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!shortListDismissedWithEscape) return;
+          shortListDismissedWithEscape = false;
+          if (!props.onEscape) return;
+          event.preventDefault();
+          props.onEscape();
+        }}
+      >
         {/* The gradients anchor here, outside the scrolling box, and read
             the menu background through `--color-surface`. */}
         <div class="relative [--color-surface:var(--color-menu)]">
@@ -226,6 +241,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
             value={shown()}
             options={catalogOptions()}
             onSelect={pick}
+            onEscape={props.onEscape}
             disabled={disabled()}
             ariaLabel="Agent model"
             searchPlaceholder="Search models"

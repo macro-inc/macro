@@ -21,6 +21,8 @@ type ModelCatalogPickerProps = {
   value: string | null;
   options: CatalogModelOption[];
   onSelect: (id: string) => void;
+  /** Called after Escape dismisses the picker and its focus trap. */
+  onEscape?: () => void;
   disabled?: boolean;
   triggerClass?: string;
   contentClass?: string;
@@ -57,6 +59,7 @@ function ModelRow(props: {
 export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
   const [query, setQuery] = createSignal('');
   let searchRef: HTMLInputElement | undefined;
+  let dismissedWithEscape = false;
 
   const selected = () =>
     props.options.find((option) => option.id === props.value) ?? null;
@@ -100,7 +103,17 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
         )}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          queueMicrotask(() => searchRef?.focus());
+          searchRef?.focus();
+        }}
+        onEscapeKeyDown={() => {
+          dismissedWithEscape = true;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (!dismissedWithEscape) return;
+          dismissedWithEscape = false;
+          if (!props.onEscape) return;
+          event.preventDefault();
+          props.onEscape();
         }}
       >
         <div class="border-b border-edge-muted bg-menu p-1.5">

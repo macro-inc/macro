@@ -84,7 +84,9 @@ an inline edit.
   and a prompt is queued, its action becomes `Send next queued message` (an Enter
   symbol); pressing Enter or clicking that button cancels the current turn so the next
   queued prompt starts immediately. Typed composer text still takes priority and Enter
-  queues that new prompt normally.
+  queues that new prompt normally. Opening a searchable desktop model picker focuses
+  its **Search models** field; Escape closes the picker and returns focus to the
+  composer.
 - The stop button cancels only the **current** turn. The queue keeps draining: the next
   queued prompt starts a new turn. To fully quiesce a session, remove the queued
   entries, then stop.

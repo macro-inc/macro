@@ -102,6 +102,7 @@ export function AgentComposer() {
             options={metadata()?.supportedModels ?? []}
             disabled={loadFailed()}
             onSelect={composer.setModel}
+            onEscape={() => focusInput?.()}
           />
         }
       />
