@@ -97,6 +97,31 @@ fn parse_message(direction: &str, content: serde_json::Value) -> anyhow::Result<
     }
 }
 
+fn cursor_run_checkpoint(message: &Message) -> Option<String> {
+    let Message::ToServer(ToServerMessage::Acp(
+        agent_runtime_protocol::domain::schema::v0::AcpMessage(frame),
+    )) = message
+    else {
+        return None;
+    };
+    let value = serde_json::to_value(frame).ok()?;
+    if value.get("method")?.as_str()? != "session/update" {
+        return None;
+    }
+    let params = value.get("params")?;
+    let update = params.get("update")?;
+    if update.get("sessionUpdate")?.as_str()? != "agent_message_chunk"
+        || update.get("content")?.get("text")?.as_str()? != ""
+    {
+        return None;
+    }
+    params
+        .get("_meta")?
+        .get("macroCursorRunCheckpoint")?
+        .as_str()
+        .map(str::to_owned)
+}
+
 struct AgentSessionRow {
     id: Uuid,
     name: String,
@@ -118,6 +143,7 @@ struct AgentSessionRow {
     external_id: Option<String>,
     external_name: Option<String>,
     external_url: Option<String>,
+    external_last_run_id: Option<String>,
     status: String,
     status_event_name: Option<String>,
     created_at: DateTime<Utc>,
@@ -158,6 +184,7 @@ impl TryFrom<AgentSessionRow> for AgentSession {
                     external_id,
                     external_name: row.external_name,
                     external_url: row.external_url,
+                    last_run_id: row.external_last_run_id,
                 }),
             status,
             created_at: row.created_at,
@@ -215,7 +242,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                     AS "thread_channel_id?",
                 -- A row being created cannot have an external identity yet.
                 NULL::TEXT AS "external_provider?", NULL::TEXT AS "external_id?",
-                NULL::TEXT AS "external_name?", NULL::TEXT AS "external_url?"
+                NULL::TEXT AS "external_name?", NULL::TEXT AS "external_url?",
+                NULL::TEXT AS "external_last_run_id?"
             "#,
             id.as_uuid(),
             owner_id.as_ref(),
@@ -307,7 +335,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
-                ext.external_name AS "external_name?", ext.external_url AS "external_url?"
+                ext.external_name AS "external_name?", ext.external_url AS "external_url?",
+                ext.last_run_id AS "external_last_run_id?"
             FROM agent_session
             LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
             WHERE id = $1
@@ -340,7 +369,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
-                ext.external_name AS "external_name?", ext.external_url AS "external_url?"
+                ext.external_name AS "external_name?", ext.external_url AS "external_url?",
+                ext.last_run_id AS "external_last_run_id?"
             FROM agent_session
             LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
             WHERE egress_token_hash = $1
@@ -379,7 +409,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
-                ext.external_name AS "external_name?", ext.external_url AS "external_url?"
+                ext.external_name AS "external_name?", ext.external_url AS "external_url?",
+                ext.last_run_id AS "external_last_run_id?"
             FROM agent_session
             LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
             WHERE thread_id = $1 AND bot_id = $2
@@ -411,7 +442,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
                     AS "thread_channel_id?",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
-                ext.external_name AS "external_name?", ext.external_url AS "external_url?"
+                ext.external_name AS "external_name?", ext.external_url AS "external_url?",
+                ext.last_run_id AS "external_last_run_id?"
             FROM agent_session
             LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
             WHERE thread_id = $1
@@ -694,7 +726,7 @@ impl ExternalSessionRepo for PgAgentSessionRepo {
     async fn get(&self, id: AgentSessionId) -> Result<Option<ExternalSession>> {
         let row = sqlx::query!(
             r#"
-            SELECT provider, external_id, external_name, external_url
+            SELECT provider, external_id, external_name, external_url, last_run_id
             FROM external_agent_session
             WHERE agent_session_id = $1
             "#,
@@ -708,6 +740,7 @@ impl ExternalSessionRepo for PgAgentSessionRepo {
             external_id: row.external_id,
             external_name: row.external_name,
             external_url: row.external_url,
+            last_run_id: row.last_run_id,
         }))
     }
 
@@ -795,23 +828,38 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             }
             _ => None,
         };
+        let checkpoint = cursor_run_checkpoint(&log.content);
         let (direction, content) = message_columns(&log.content)?;
         let mut transaction = self
             .pool
             .begin()
             .await
             .context("begin fenced agent session log create")?;
-        // The fencing contract: the guard and the append are one statement,
-        // so there is no instant between "checked we still hold the lease"
-        // and "wrote" for a takeover to slip into.
+
+        // Hold the session row through commit. A takeover updates this same
+        // row, so it cannot supersede the claim between our check and append.
+        let locked_session = sqlx::query_scalar!(
+            r#"
+            SELECT id
+            FROM agent_session
+            WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3
+            FOR UPDATE
+            "#,
+            log.agent_session_id.as_uuid(),
+            claim.replica.as_uuid(),
+            claim.fence.0,
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("lock fenced agent session")?;
+        if locked_session.is_none() {
+            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+        }
+
         let created_at = sqlx::query_scalar!(
             r#"
             INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
-            SELECT $1, $2, $3, $4, $5
-            WHERE EXISTS (
-                SELECT 1 FROM agent_session
-                WHERE id = $2 AND manager_replica_id = $6 AND manager_fence = $7
-            )
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING created_at
             "#,
             macro_uuid::generate_uuid_v7(),
@@ -819,15 +867,36 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             log.user_id.as_ref().map(|user_id| user_id.as_ref()),
             direction,
             content,
-            claim.replica.as_uuid(),
-            claim.fence.0,
         )
-        .fetch_optional(&mut *transaction)
+        .fetch_one(&mut *transaction)
         .await
         .context("failed to create fenced agent session log entry")?;
-        let Some(created_at) = created_at else {
-            return Err(AgentSessionError::FencedOut(log.agent_session_id));
-        };
+
+        if let Some(run_id) = checkpoint {
+            let updated = sqlx::query!(
+                r#"
+                UPDATE external_agent_session AS external
+                SET last_run_id = $2,
+                    updated_at = now()
+                FROM agent_session AS session
+                WHERE external.agent_session_id = $1
+                  AND session.id = external.agent_session_id
+                  AND session.manager_replica_id = $3
+                  AND session.manager_fence = $4
+                  AND external.provider = 'cursor'
+                "#,
+                log.agent_session_id.as_uuid(),
+                run_id,
+                claim.replica.as_uuid(),
+                claim.fence.0,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("checkpoint cursor run with fenced log entry")?;
+            if updated.rows_affected() == 0 {
+                return Err(AgentSessionError::FencedOut(log.agent_session_id));
+            }
+        }
 
         if let Some(status) = event_status {
             let (status, status_event_name) = status_columns(&status);

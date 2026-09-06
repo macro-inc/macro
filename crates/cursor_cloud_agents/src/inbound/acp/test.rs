@@ -423,6 +423,13 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
         "the streamed assistant text must reach the client, in {update}"
     );
 
+    let checkpoint = next_client_frame(&mut client_frames).await;
+    assert_eq!(checkpoint["method"], "session/update");
+    assert_eq!(
+        checkpoint["params"]["_meta"]["macroCursorRunCheckpoint"],
+        "run-fake-1"
+    );
+
     let answered = next_client_frame(&mut client_frames).await;
     assert_eq!(answered["id"], 3, "the response follows its own updates");
     assert_eq!(answered["result"]["stopReason"], "end_turn");

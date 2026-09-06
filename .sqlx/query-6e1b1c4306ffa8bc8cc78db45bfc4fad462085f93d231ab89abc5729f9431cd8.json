@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, sandbox_size, instructions,\n                acp_session_id, status, status_event_name, egress_token_hash,\n                mcp_scope, mcp_servers\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)\n            RETURNING\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                -- A row being created cannot have an external identity yet.\n                NULL::TEXT AS \"external_provider?\", NULL::TEXT AS \"external_id?\",\n                NULL::TEXT AS \"external_name?\", NULL::TEXT AS \"external_url?\"\n            ",
+  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\",\n                ext.last_run_id AS \"external_last_run_id?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE thread_id = $1 AND bot_id = $2\n            ORDER BY agent_session.created_at DESC\n            LIMIT 1\n            ",
   "describe": {
     "columns": [
       {
@@ -122,27 +122,17 @@
         "ordinal": 23,
         "name": "external_url?",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "external_last_run_id?",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Text",
-        "Jsonb"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -166,11 +156,12 @@
       false,
       false,
       null,
-      null,
-      null,
-      null,
-      null
+      false,
+      false,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "25d453dc3dd34061e52118bbede9af5a4805fee76915e1692d78b6354e5be07a"
+  "hash": "6e1b1c4306ffa8bc8cc78db45bfc4fad462085f93d231ab89abc5729f9431cd8"
 }

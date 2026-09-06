@@ -85,6 +85,10 @@ const CURSOR_IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(
 /// for reclaiming two idle tasks is nothing.
 const CURSOR_IDLE_CHECK_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 
+fn should_reap_cursor_pipe(idle: std::time::Duration, active_turn: bool) -> bool {
+    idle >= CURSOR_IDLE_TIMEOUT && !active_turn
+}
+
 /// The ref new agents start their work from.
 const DEFAULT_STARTING_REF: &str = "main";
 
@@ -136,6 +140,8 @@ struct RestoredCursorSession {
     agent: Option<CursorAgentId>,
     /// The model id the session last reported, from the projected column.
     model_id: Option<String>,
+    /// The last Cursor run whose output reached Macro's session log.
+    last_run: Option<CursorRunId>,
 }
 
 impl<Sessions, Keys> CursorContainerManager<Sessions, Keys>
@@ -208,11 +214,12 @@ where
                 .with_default_model(default_model_id),
         );
         if let Some(restored) = restore {
-            service.restore_session(
+            service.restore_session_with_watermark(
                 restored.acp_session,
                 restored.agent,
                 Some(self.repo.clone()),
                 restored.model_id,
+                restored.last_run,
             );
         }
         let pipe_closed = tokio_util::sync::CancellationToken::new();
@@ -241,11 +248,17 @@ where
                 tokio::select! {
                     () = pipe_closed.cancelled() => break,
                     _ = reaper.tick() => {
-                        let idle = last_activity
+                        let observed_at = *last_activity
                             .lock()
-                            .expect("activity clock poisoned")
-                            .elapsed();
-                        if idle >= CURSOR_IDLE_TIMEOUT {
+                            .expect("activity clock poisoned");
+                        let active_turn = sync_service.has_active_turn();
+                        let activity = last_activity.lock().expect("activity clock poisoned");
+                        // Recheck under the activity lock after inspecting the
+                        // turn gate. A prompt frame arriving in that window
+                        // changes the instant and prevents a stale idle reap.
+                        if *activity == observed_at
+                            && should_reap_cursor_pipe(activity.elapsed(), active_turn)
+                        {
                             tracing::info!(%session_id, "idle cursor session; closing its pipe");
                             reaper_shutdown.cancel();
                             break;
@@ -299,9 +312,10 @@ where
         let (client, default_model_id) = self.client_for(&stored).await?;
         let restore = match &stored.acp_session_id {
             Some(acp) => {
-                let agent = ExternalSessionRepo::get(&self.sessions, session)
-                    .await?
-                    .map(|external| CursorAgentId::new(external.external_id));
+                let external = ExternalSessionRepo::get(&self.sessions, session).await?;
+                let agent = external
+                    .as_ref()
+                    .map(|external| CursorAgentId::new(external.external_id.clone()));
                 Some(RestoredCursorSession {
                     acp_session: acp.clone(),
                     agent,
@@ -311,6 +325,9 @@ where
                     // harness seeded it with, which the wrapper resolves to
                     // "no opinion" rather than trusting.
                     model_id: Some(stored.model.clone()),
+                    last_run: external
+                        .and_then(|external| external.last_run_id)
+                        .map(CursorRunId::new),
                 })
             }
             None => None,
@@ -428,6 +445,7 @@ where
                     external_id: agent.to_string(),
                     external_name: summary.as_ref().map(|summary| summary.name.clone()),
                     external_url: summary.map(|summary| summary.url),
+                    last_run_id: None,
                 },
             )
             .await
@@ -468,9 +486,10 @@ where
     async fn list_runs(
         &self,
         agent: &CursorAgentId,
+        through: Option<&CursorRunId>,
     ) -> std::result::Result<Vec<cursor_cloud_agents::domain::model::RunListing>, rootcause::Report>
     {
-        self.client.list_runs(agent).await
+        self.client.list_runs(agent, through).await
     }
 }
 

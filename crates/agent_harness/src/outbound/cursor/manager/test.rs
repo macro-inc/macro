@@ -605,6 +605,7 @@ async fn resume_restores_the_persisted_identity() {
             external_id: "bc-restored".to_owned(),
             external_name: None,
             external_url: None,
+            last_run_id: Some("run-delivered".to_owned()),
         },
     )
     .await
@@ -717,6 +718,12 @@ async fn an_idle_pipe_is_shut_down() {
     );
 }
 
+#[test]
+fn a_pipe_is_not_idle_while_cursor_is_running_a_turn() {
+    assert!(!should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, true));
+    assert!(should_reap_cursor_pipe(CURSOR_IDLE_TIMEOUT, false));
+}
+
 /// Teardown archives the agent on cursor.com and forgets the mapping; a
 /// session that never minted an agent tears down without any API call.
 #[tokio::test]
@@ -738,6 +745,7 @@ async fn teardown_archives_and_forgets() {
             external_id: "bc-doomed".to_owned(),
             external_name: None,
             external_url: None,
+            last_run_id: None,
         },
     )
     .await
@@ -801,6 +809,7 @@ async fn teardown_forgets_the_session_even_when_the_key_is_gone() {
             external_id: "bc-orphaned".to_owned(),
             external_name: None,
             external_url: None,
+            last_run_id: None,
         },
     )
     .await

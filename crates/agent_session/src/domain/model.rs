@@ -274,6 +274,8 @@ pub struct ExternalSession {
     pub external_name: Option<String>,
     /// The agent's page on the provider's site, for opening it there.
     pub external_url: Option<String>,
+    /// The last provider run whose output was delivered to this session.
+    pub last_run_id: Option<String>,
 }
 
 /// The agent behind a session, as much of it as rendering a message needs.

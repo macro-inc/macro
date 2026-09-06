@@ -212,6 +212,9 @@ pub struct RunDetail {
 pub struct ListRunsResponse {
     /// The agent's runs, newest first.
     pub items: Vec<RunListItem>,
+    /// Cursor for the next page, absent on the last page.
+    #[serde(default, rename = "nextCursor")]
+    pub next_cursor: Option<String>,
 }
 
 /// One run in a `GET /v1/agents/{id}/runs` page.
