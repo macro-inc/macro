@@ -111,7 +111,7 @@ fn cursor_run_checkpoint(message: &Message) -> Option<String> {
     let params = value.get("params")?;
     let update = params.get("update")?;
     if update.get("sessionUpdate")?.as_str()? != "agent_message_chunk"
-        || update.get("content")?.get("text")?.as_str()? != ""
+        || !update.get("content")?.get("text")?.as_str()?.is_empty()
     {
         return None;
     }
