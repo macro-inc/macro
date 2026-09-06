@@ -205,8 +205,8 @@ where
         default_model_id: Option<String>,
         session_id: AgentSessionId,
         restore: Option<RestoredCursorSession>,
-    ) -> Result<PipeTransport> {
-        let owner_binding: Option<super::pipe::OwnerBinding>;
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
+        let owner_binding: Option<agent_session::domain::connection::AttachmentActivation>;
         let journal: Arc<dyn cursor_cloud_agents::domain::journal::CursorJournal> = match &self
             .journal_pool
         {
@@ -219,17 +219,14 @@ where
                     ),
                 );
                 let activated = journal.clone();
-                owner_binding = Some(Arc::new(move |session, replica, fence| {
+                owner_binding = Some(Box::new(move |claim| {
                     activated
-                        .activate(
-                            AgentSessionId::new_from_uuid(session),
-                            agent_session::domain::model::ReplicaId::from_uuid(replica),
-                            agent_session::domain::model::ManagerFence(fence),
-                        )
+                        .activate(claim.session, claim.replica, claim.fence)
                         .map_err(|e| {
                             agent_runtime_protocol::domain::ports::TransportError::Client(
                                 e.to_string(),
                             )
+                            .into()
                         })
                 }));
                 journal
@@ -323,7 +320,7 @@ where
                 }
             }
         });
-        let mut transport = PipeTransport::connect_observed(
+        let transport = PipeTransport::connect_observed(
             ours,
             move || {
                 *observed
@@ -333,10 +330,11 @@ where
             },
             shutdown,
         );
+        let mut attachment = agent_session::domain::connection::RuntimeAttachment::solo(transport);
         if let Some(binding) = owner_binding {
-            transport = transport.with_owner_binding(binding);
+            attachment = attachment.on_activate(binding);
         }
-        Ok(transport)
+        Ok(attachment)
     }
 }
 
@@ -347,7 +345,10 @@ where
 {
     type Transport = PipeTransport;
 
-    async fn spawn(&self, command: SpawnContainer) -> Result<PipeTransport> {
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
         // The session row is read for its owner alone: spawning is the first
         // moment we can tell whether the person who mentioned @cursor has
         // connected an account, and refusing here is what turns "the bot
@@ -362,7 +363,10 @@ where
             .await
     }
 
-    async fn resume(&self, session: AgentSessionId) -> Result<PipeTransport> {
+    async fn resume(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
         // The identity lives in Postgres in two halves that appear at
         // different moments: the ACP session id lands when `session/new`
         // answers, the Cursor agent only when the first prompt mints it. A

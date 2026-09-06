@@ -435,8 +435,20 @@ progress, and local journal sequence numbers are not remote SSE resume tokens.
 
 The journal's atomic owner fence is not a second ownership authority. The
 session service acquires the claim and binds that exact generation once through
-`activate_reserved` and `PipeTransport::bind_session_owner`. The journal never
+`activate_reserved` and `RuntimeAttachment::on_activate`, which receives the typed
+`SessionClaim` before actor startup. Container providers return attachments;
+transport mapping preserves the callback and shared handshake. Physical
+transports carry frames only. The journal never
 claims ownership or refreshes its fence from a database read.
+
+The browser forwards the effective-history snapshot and buffered/live durable
+rows to Rust `LogIngestion` through WASM `snapshot` and `push_rows`. Ingestion
+retains the snapshot IDs and inclusive `(created_at, id)` boundary, preserving
+Postgres timestamp precision without a JavaScript timestamp comparator. It drops
+only snapshot duplicates and excluded older rows, never distinct ACP replay
+rows, and preserves live delivery order without a moving high-water mark.
+The ID set stays bounded by snapshot size. `FoldMachine` remains append-only;
+raw recording consumers retain the existing `extend` and `push` API.
 
 Routing new commands away from a stale replica does not stop its existing work.
 `PgAgentSessionRepo::claim` can take over when the old replica's heartbeat is

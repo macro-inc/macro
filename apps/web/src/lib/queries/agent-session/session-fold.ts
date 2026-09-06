@@ -137,12 +137,10 @@ async function open(state: SessionState): Promise<void> {
 
     // Frames can continue arriving while each worker request is in flight.
     // Drain until an empty check and `ready` assignment can happen together.
-    const fetched = result.value.entries;
     while (state.buffered.length > 0) {
       const buffered = state.buffered;
       state.buffered = [];
-      const replay = dropOverlap(fetched, buffered);
-      if (replay.length > 0) await push(state, replay);
+      await push(state, buffered);
     }
     state.ready = true;
   } catch (error) {
@@ -201,48 +199,4 @@ async function push(
   if (metadata) {
     for (const sink of state.metadataSinks) sink(metadata.metadata);
   }
-}
-
-/**
- * Reconcile transport rows against an authoritative effective-history snapshot.
- * Its first row is the inclusive boundary in the repository's (createdAt, id)
- * order. Older rows were excluded by history selection, not missed by GET.
- * Distinct rows with identical ACP content remain distinct.
- */
-export function dropOverlap(
-  fetched: AgentSessionLogEntryDto[],
-  buffered: AgentSessionLogEntryDto[]
-): AgentSessionLogEntryDto[] {
-  const boundary = fetched[0];
-  if (!boundary) return buffered;
-  const snapshotIds = new Set(fetched.map((entry) => entry.id));
-  return buffered.filter(
-    (entry) =>
-      compareLogCursor(entry, boundary) >= 0 && !snapshotIds.has(entry.id)
-  );
-}
-
-/** Compare UTC timestamps without losing Postgres submillisecond precision. */
-function compareLogCursor(
-  left: AgentSessionLogEntryDto,
-  right: AgentSessionLogEntryDto
-): number {
-  // Chrono emits UTC with variable fractional precision. Pad before comparing;
-  // Date.parse would collapse distinct microseconds into the same millisecond.
-  const timestamp = (entry: AgentSessionLogEntryDto) =>
-    entry.createdAt.replace(
-      /(?:\.(\d+))?Z$/,
-      (_match, fraction: string = '') => `.${fraction.padEnd(9, '0')}Z`
-    );
-  const a = timestamp(left);
-  const b = timestamp(right);
-  return a < b
-    ? -1
-    : a > b
-      ? 1
-      : left.id < right.id
-        ? -1
-        : left.id > right.id
-          ? 1
-          : 0;
 }

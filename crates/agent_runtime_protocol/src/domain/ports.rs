@@ -42,17 +42,6 @@ pub trait Transport<Tx, Rx> {
     /// This carrier's receiving half.
     type Receiver: TransportReceiver<Rx>;
 
-    /// Activate session-scoped durable resources with the attachment's acquired
-    /// ownership generation before any protocol traffic is processed.
-    fn bind_session_owner(
-        &mut self,
-        _session_id: macro_uuid::Uuid,
-        _replica: macro_uuid::Uuid,
-        _fence: i64,
-    ) -> Result<(), TransportError> {
-        Ok(())
-    }
-
     /// Take the carrier apart into the half that is shared and the half that
     /// is owned.
     fn split(self) -> (Self::Sender, Self::Receiver);

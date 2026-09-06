@@ -4,7 +4,7 @@
  * The driver owns a recording split in two: entries before `splitIndex` are
  * served as the persisted log (`getLog`), the rest stream one at a time
  * through the real realtime entry point, `handleAgentSessionLog` — so
- * buffering, `dropOverlap`, the worker fold, and the status projection all
+ * buffering, Rust row ingestion, the worker fold, and the status projection all
  * run exactly as they do against the gateway.
  *
  * Two knobs exist purely to provoke the catch-up paths: `fetchDelayMs` holds

@@ -354,7 +354,10 @@ impl ContainerManager for DaytonaContainerManager {
         skip(self),
         fields(agent.container.provider = "daytona")
     )]
-    async fn spawn(&self, command: SpawnContainer) -> Result<DaytonaContainer> {
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<DaytonaContainer>> {
         let SpawnContainer {
             session_id,
             size,
@@ -395,7 +398,9 @@ impl ContainerManager for DaytonaContainerManager {
         }
 
         match self.align_size_then_bring_up(&id, size).await {
-            Ok(container) => Ok(container),
+            Ok(container) => Ok(agent_session::domain::connection::RuntimeAttachment::solo(
+                container,
+            )),
             Err(error) => {
                 self.managed.containers.remove(&id);
                 if !self.discard(&id).await {
@@ -455,7 +460,10 @@ impl ContainerManager for DaytonaContainerManager {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn resume(&self, session: AgentSessionId) -> Result<DaytonaContainer> {
+    async fn resume(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<DaytonaContainer>> {
         let id = DaytonaSandboxId::new(
             self.client
                 .find_by_label(SESSION_LABEL, &session.to_string())
@@ -480,7 +488,9 @@ impl ContainerManager for DaytonaContainerManager {
             return Err(unavailable(error));
         }
         match self.bring_up(&id).await {
-            Ok(container) => Ok(container),
+            Ok(container) => Ok(agent_session::domain::connection::RuntimeAttachment::solo(
+                container,
+            )),
             Err(error) => {
                 self.managed.containers.remove(&id);
                 if !stop_sandbox(&self.client, &id, "failed sandbox resume").await {

@@ -54,23 +54,41 @@ where
 {
     type Transport = RoutedTransport<Sandbox::Transport, Cursor::Transport>;
 
-    async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         match command.kind {
-            AgentKind::Cursor => Ok(RoutedTransport::Cursor(self.cursor.spawn(command).await?)),
-            AgentKind::SandboxedCoder | AgentKind::InMemory => {
-                Ok(RoutedTransport::Sandbox(self.sandbox.spawn(command).await?))
-            }
+            AgentKind::Cursor => Ok(self
+                .cursor
+                .spawn(command)
+                .await?
+                .map_transport(RoutedTransport::Cursor)),
+            AgentKind::SandboxedCoder | AgentKind::InMemory => Ok(self
+                .sandbox
+                .spawn(command)
+                .await?
+                .map_transport(RoutedTransport::Sandbox)),
             AgentKind::External => Err(external_is_unroutable()),
         }
     }
 
-    async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
+    async fn resume(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         let row = self.sessions.get(session).await?;
         match AgentKind::for_session(row.bot_id, &row.harness) {
-            AgentKind::Cursor => Ok(RoutedTransport::Cursor(self.cursor.resume(session).await?)),
-            AgentKind::SandboxedCoder | AgentKind::InMemory => Ok(RoutedTransport::Sandbox(
-                self.sandbox.resume(session).await?,
-            )),
+            AgentKind::Cursor => Ok(self
+                .cursor
+                .resume(session)
+                .await?
+                .map_transport(RoutedTransport::Cursor)),
+            AgentKind::SandboxedCoder | AgentKind::InMemory => Ok(self
+                .sandbox
+                .resume(session)
+                .await?
+                .map_transport(RoutedTransport::Sandbox)),
             AgentKind::External => Err(external_is_unroutable()),
         }
     }
@@ -157,18 +175,6 @@ where
 {
     type Sender = RoutedSender<Sandbox::Sender, Cursor::Sender>;
     type Receiver = RoutedReceiver<Sandbox::Receiver, Cursor::Receiver>;
-
-    fn bind_session_owner(
-        &mut self,
-        session_id: macro_uuid::Uuid,
-        replica: macro_uuid::Uuid,
-        fence: i64,
-    ) -> std::result::Result<(), TransportError> {
-        match self {
-            Self::Sandbox(transport) => transport.bind_session_owner(session_id, replica, fence),
-            Self::Cursor(transport) => transport.bind_session_owner(session_id, replica, fence),
-        }
-    }
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         match self {

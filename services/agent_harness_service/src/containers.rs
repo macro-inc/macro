@@ -149,19 +149,24 @@ where
 {
     type Transport = RoutedTransport;
 
-    async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         match self.route(command.session_id).await? {
-            Route::InMem(facts) => Ok(RoutedTransport::InMem(
-                self.inmem()
-                    .manager
-                    .attach(facts, Some(command.egress.session_token))
-                    .await,
+            Route::InMem(facts) => Ok(agent_session::domain::connection::RuntimeAttachment::solo(
+                RoutedTransport::InMem(
+                    self.inmem()
+                        .manager
+                        .attach(facts, Some(command.egress.session_token))
+                        .await,
+                ),
             )),
             Route::Sandbox => self
                 .sandbox
                 .spawn(command)
                 .await
-                .map(RoutedTransport::Sandbox),
+                .map(|attachment| attachment.map_transport(RoutedTransport::Sandbox)),
         }
     }
 
@@ -182,16 +187,19 @@ where
         }
     }
 
-    async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
+    async fn resume(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         match self.route(session).await? {
-            Route::InMem(facts) => Ok(RoutedTransport::InMem(
-                self.inmem().manager.attach(facts, None).await,
+            Route::InMem(facts) => Ok(agent_session::domain::connection::RuntimeAttachment::solo(
+                RoutedTransport::InMem(self.inmem().manager.attach(facts, None).await),
             )),
             Route::Sandbox => self
                 .sandbox
                 .resume(session)
                 .await
-                .map(RoutedTransport::Sandbox),
+                .map(|attachment| attachment.map_transport(RoutedTransport::Sandbox)),
         }
     }
 

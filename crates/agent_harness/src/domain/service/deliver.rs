@@ -58,10 +58,7 @@ where
                         .resumed_mcp_servers(session_id, &session.owner_id, &session.mcp_servers)
                         .await?;
                     self.sessions
-                        .attach_session(
-                            session_id,
-                            RuntimeAttachment::solo(container).mcp_servers(mcp_servers),
-                        )
+                        .attach_session(session_id, container.mcp_servers(mcp_servers))
                         .await?;
                 } else {
                     // An external runtime is not ours to start - only its
