@@ -653,6 +653,16 @@ export const enableChatV3Agents = defineFlag({
   default: onInDev,
 });
 
+// The agent session composer behind `Create → Agent`: pick an agent and a
+// model override before the session opens. Off, the entry opens a managed
+// session straight away as it always has. Override with
+// VITE_ENABLE_AGENT_SESSION_COMPOSER.
+export const enableAgentSessionComposer = defineFlag({
+  key: 'enable-agent-session-composer',
+  env: 'ENABLE_AGENT_SESSION_COMPOSER',
+  default: onInDev,
+});
+
 // The `@cursor` mention entry: agent sessions served by Cursor cloud agents
 // on Macro's Cursor account. PostHog-gated per user; the backend additionally
 // restricts these sessions to @macro.com senders. Override with

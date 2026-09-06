@@ -159,13 +159,13 @@ where
     /// Built per session and dropped with it, rather than held on the manager:
     /// the key belongs to one user, and the sessions of two users must not be
     /// able to reach each other's Cursor accounts through a shared client.
-    async fn client_for(&self, session: &AgentSession) -> Result<(CursorClient, Option<String>)> {
+    async fn client_for(&self, session: &AgentSession) -> Result<CursorClient> {
         let config = self.keys.resolve(&session.owner_id).await?;
         let client = CursorClient::new(CursorConfig {
             api_key: ApiKey::new(config.key.expose()),
             base_url: self.base_url.clone(),
             // The client-level model stays absent: the *session* carries the
-            // model now (the user's default, seeded below via
+            // model (the agent's configured default, seeded via
             // `with_default_model`, or a per-session pick), applied per run.
             model: None,
             starting_ref: DEFAULT_STARTING_REF.to_owned(),
@@ -178,7 +178,7 @@ where
             tracing::error!(error = %error, session_id = %session.id, "a stored cursor api key is unusable");
             HarnessError::Container("the stored cursor api key is unusable".to_owned())
         })?;
-        Ok((client, config.default_model_id))
+        Ok(client)
     }
 
     /// Wire up one session's in-process agent and return our end of its pipe.
@@ -200,9 +200,10 @@ where
             sessions: self.sessions.clone(),
         };
         let notifier = AcpNotifier::new();
-        // The user's chosen model seeds the session as its default: a fresh
-        // session starts on it, and a resumed one still prefers whatever it
-        // was actually last using (carried in `restore.model_id`) over this.
+        // The agent's configured model seeds the session as its default: a
+        // fresh session starts on it, and a resumed one still prefers whatever
+        // it was actually last using (carried in `restore.model_id`) over this.
+        // An id Cursor does not know degrades to Cursor's own default.
         let service = Arc::new(
             CursorSessionService::new(cursor, notifier.clone(), FixedRepo(self.repo.clone()))
                 .with_default_model(default_model_id),
@@ -278,12 +279,12 @@ where
         // connected an account, and refusing here is what turns "the bot
         // ignored me" into a sentence they can act on.
         let session = AgentSessionRepo::get(&self.sessions, command.session_id).await?;
-        let (client, default_model_id) = self.client_for(&session).await?;
+        let client = self.client_for(&session).await?;
         // No MCP servers pass through here: they ride the ACP protocol
         // itself. The harness's session actor names them in `session/new`,
         // and the in-process adapter forwards them to Cursor's API - the same
         // rail every other transport uses.
-        Ok(self.serve_session(client, default_model_id, command.session_id, None))
+        Ok(self.serve_session(client, Some(session.model), command.session_id, None))
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<PipeTransport> {
@@ -296,7 +297,7 @@ where
         // agent yet (the next prompt mints one). No acp id at all means the
         // session never opened; serve it fresh, exactly like `spawn`.
         let stored = AgentSessionRepo::get(&self.sessions, session).await?;
-        let (client, default_model_id) = self.client_for(&stored).await?;
+        let client = self.client_for(&stored).await?;
         let restore = match &stored.acp_session_id {
             Some(acp) => {
                 let agent = ExternalSessionRepo::get(&self.sessions, session)
@@ -322,7 +323,7 @@ where
         // died with the process (only its hash is persisted). The one session
         // this loses servers for is one restored before its first prompt ever
         // landed, which then creates its agent bare rather than not at all.
-        Ok(self.serve_session(client, default_model_id, session, restore))
+        Ok(self.serve_session(client, Some(stored.model), session, restore))
     }
 
     /// A Cursor session has no container of ours to hold a token: the raw
@@ -349,7 +350,7 @@ where
         let stored = AgentSessionRepo::get(&self.sessions, session).await?;
         let agent = CursorAgentId::new(external.external_id);
         match self.client_for(&stored).await {
-            Ok((client, _default_model_id)) => client
+            Ok(client) => client
                 .archive_agent(&agent)
                 .await
                 .map_err(|error| HarnessError::Container(error.to_string()))?,

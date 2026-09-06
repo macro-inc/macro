@@ -5,6 +5,41 @@ export type ClientOptions = {
 };
 
 /**
+ * A persisted user- or team-owned AI agent.
+ */
+export type Agent = {
+    /**
+     * The bot identity used for mentions and channel participation.
+     */
+    bot: Bot;
+    /**
+     * Selected channel ids. Empty for a global agent.
+     */
+    channel_ids: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+    /**
+     * Model selected specifically for this agent.
+     */
+    default_model: string;
+    /**
+     * Harness used to run the agent.
+     */
+    harness: string;
+    harness_id?: null | HarnessId;
+    /**
+     * Instructions supplied to the agent at the start of a conversation.
+     */
+    instructions: string;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp: AgentMcpServers;
+};
+
+/**
  * One thing a caller wants an agent to do.
  */
 export type AgentAction = (AgentPromptAction & {
@@ -30,6 +65,45 @@ export type AgentAction = (AgentPromptAction & {
  * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
  */
 export type AgentActionId = string;
+
+/**
+ * Whether an agent is available everywhere or only in selected channels.
+ */
+export type AgentChannelScope = 'all' | 'selected';
+
+/**
+ * One Pipedream app an agent lists under [`AgentMcpServers::Selected`].
+ *
+ * Only the catalog identity is stored. Whether a given person has connected
+ * the app is theirs, resolved at call time by the egress proxy, never here.
+ */
+export type AgentMcpServer = {
+    /**
+     * Pipedream app slug, e.g. `linear`.
+     */
+    app_slug: string;
+    /**
+     * Display name, e.g. `Linear`.
+     */
+    server_name: string;
+};
+
+/**
+ * Which Pipedream MCP servers an agent's sessions are handed.
+ *
+ * One value for the whole choice, so a selection can never travel without
+ * its scope or a scope without its selection. Serialized with a `scope` tag,
+ * which the generated TypeScript sees as a discriminated union.
+ */
+export type AgentMcpServers = {
+    scope: 'owner_connections';
+} | {
+    scope: 'selected';
+    /**
+     * The apps, in the order the agent's author picked them.
+     */
+    servers: Array<AgentMcpServer>;
+};
 
 /**
  * Ask the agent to work on something.
@@ -200,7 +274,122 @@ export type AgentSetModelAction = {
     model: string;
 };
 
+/**
+ * Request to approve a pairing and register the harness.
+ */
+export type ApprovePairingRequest = {
+    /**
+     * Display name override. Defaults to the daemon's requested name.
+     */
+    name?: string | null;
+    /**
+     * Owning team. Omit for a private, user-owned harness.
+     */
+    team_id?: string | null;
+};
+
+/**
+ * Bot row.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type Bot = {
+    /**
+     * Optional avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Creation timestamp.
+     */
+    created_at: string;
+    /**
+     * User that created this bot.
+     */
+    created_by?: string | null;
+    /**
+     * Soft-delete timestamp.
+     */
+    deleted_at?: string | null;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable handle.
+     */
+    handle: string;
+    /**
+     * Whether mentioning this bot opens a sandboxed coding-agent session.
+     */
+    has_agent: boolean;
+    /**
+     * Bot id.
+     */
+    id: BotId;
+    /**
+     * Bot kind.
+     */
+    kind: BotKind;
+    /**
+     * Display name.
+     */
+    name: string;
+    owner?: null | BotOwner;
+    /**
+     * Update timestamp.
+     */
+    updated_at: string;
+};
+
 export type BotId = string;
+
+/**
+ * Bot kind.
+ */
+export type BotKind = 'owned' | 'system';
+
+/**
+ * Bot owner.
+ */
+export type BotOwner = {
+    type: 'user';
+    /**
+     * Owner user id.
+     */
+    user_id: string;
+} | {
+    /**
+     * Owner team id.
+     */
+    team_id: string;
+    type: 'team';
+};
+
+/**
+ * Request to claim an approved pairing's credential.
+ *
+ * The daemon serializes this, so both derives are used.
+ */
+export type ClaimPairingRequest = {
+    /**
+     * The claim credential returned when the pairing was created.
+     */
+    device_secret: string;
+};
+
+/**
+ * The credential released to the daemon when a pairing is claimed.
+ */
+export type ClaimedPairing = {
+    /**
+     * The registered harness.
+     */
+    harness: Harness;
+    /**
+     * The raw harness bearer token. Shown only here; only its hash is stored.
+     */
+    token: string;
+};
 
 /**
  * The operation to perform.
@@ -230,25 +419,77 @@ export type ControlResponse = {
 export type ControlStatusDto = 'sent' | 'queued';
 
 /**
+ * Request to create a persisted AI agent.
+ */
+export type CreateAgentRequest = {
+    /**
+     * Optional avatar URL or data URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Selected channels. Must be non-empty only for `selected` scope.
+     */
+    channel_ids?: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+    /**
+     * Model selected specifically for this agent.
+     */
+    default_model: string;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable `@` handle.
+     */
+    handle: string;
+    /**
+     * Harness used to run the agent.
+     */
+    harness: string;
+    harness_id?: null | HarnessId;
+    /**
+     * Instructions supplied to the agent at the start of a conversation.
+     */
+    instructions: string;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp?: AgentMcpServers;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team owner. Omit for a private, user-owned agent.
+     */
+    team_id?: string | null;
+};
+
+/**
  * Request body for `POST /agent-sessions`.
  *
  * Carries two shapes, told apart by `workspace`. Naming one asks for an
  * external session: the runtime is the bot operator's, so the caller has to
  * say which bot and which directory, and must own that bot. Omitting it asks
- * for a managed session, whose sandbox this deployment provisions from its
- * own configuration - which is why the fields describing someone else's
- * runtime must be omitted along with it rather than quietly ignored. Mixing
- * the two is refused rather than guessed at, so that no request can reach the
- * managed path carrying a bot the caller was never entitled to name.
+ * for a managed session, whose runtime this deployment provisions. A managed
+ * request may select an authorized persisted persona with `botId`; omitting
+ * it uses the deployment's default coding persona. Fields describing someone
+ * else's runtime must still be omitted rather than quietly ignored. Mixing
+ * the two shapes is refused rather than guessed at.
  *
  * Clients serialize this, so both derives are used.
  */
 export type CreateAgentSessionRequest = {
     /**
-     * Bot the session runs for. Bot callers may omit it (their own identity
-     * is used) and must not name another bot; user callers must supply a
-     * bot they own. External sessions only: a managed session runs as the
-     * bot its deployment is configured for.
+     * Bot the session runs for. On a managed request this optionally selects
+     * a persisted persona the user owns or may use through team membership;
+     * omitting it uses the deployment's default coding persona. On an
+     * external request, bot callers may omit it (their own identity is used)
+     * and must not name another bot; user callers must supply a bot they own.
      */
     botId?: string | null;
     /**
@@ -303,6 +544,23 @@ export type CreateAgentSessionResponse = {
 };
 
 /**
+ * Request to open a pairing: the daemon asks for a code the user approves.
+ *
+ * The daemon serializes this, so both derives are used.
+ */
+export type CreatePairingRequest = {
+    /**
+     * Display-only description of the machine, e.g. `eric@macbook / darwin`.
+     */
+    host?: string | null;
+    /**
+     * Requested harness display name (typically the machine's hostname).
+     */
+    name: string;
+    scope?: null | RequestedHarnessScope;
+};
+
+/**
  * The triggering mention on a create request.
  *
  * Clients serialize this, so both derives are used.
@@ -328,6 +586,97 @@ export type CreateSessionThread = {
 };
 
 /**
+ * A pairing the daemon created, including its claim credential.
+ *
+ * `device_secret` is returned exactly once and never stored raw; the daemon
+ * keeps it to claim the harness credential after approval.
+ */
+export type CreatedPairing = {
+    /**
+     * Human-readable code the user confirms in the web app, `XXXX-XXXX`.
+     */
+    code: string;
+    /**
+     * Claim credential the daemon must present. Shown only here.
+     */
+    device_secret: string;
+    /**
+     * When the pairing expires.
+     */
+    expires_at: string;
+    /**
+     * Pairing id used to poll for the claim.
+     */
+    pairing_id: string;
+    /**
+     * Suggested delay between claim polls.
+     */
+    poll_interval_seconds: number;
+};
+
+/**
+ * What settings needs to render the Cursor connection.
+ *
+ * Deliberately thin. `registered` drives the whole UI; `updatedAt` lets it say
+ * when the key was last replaced, which is the only thing a user can check
+ * against their own memory when a session starts failing.
+ *
+ * Deliberately *not* reporting anything about the deployment itself. That is
+ * operator information: a user who sees it cannot act on it, and a service
+ * that cannot reach KMS does not start.
+ */
+export type CursorApiKeyStatus = {
+    /**
+     * The Cursor model id this user's sessions start on, when they have
+     * chosen one. `None` means the deployment default is in effect — the
+     * settings dropdown shows that as its resting value.
+     */
+    defaultModelId?: string | null;
+    /**
+     * Whether this user has a key stored.
+     */
+    registered: boolean;
+    /**
+     * When the stored key was last replaced, if there is one.
+     */
+    updatedAt?: string | null;
+};
+
+/**
+ * One model the settings dropdown can offer.
+ *
+ * Id, name and family: the dropdown lists models, not the hundreds of
+ * parameter variants each carries. The chosen id's parameters are resolved to
+ * Cursor's default variant at session start. The family is the same heading
+ * the Cursor ACP agent groups its session model select under, so the settings
+ * picker and the in-session picker read the same way.
+ */
+export type CursorModelOption = {
+    /**
+     * The human-readable name, e.g. `Cursor Grok 4.6`.
+     */
+    displayName: string;
+    /**
+     * The family heading to list this model under, e.g. `Cursor Grok`.
+     */
+    group: string;
+    /**
+     * The id to store and send, e.g. `grok-4.6`.
+     */
+    id: string;
+};
+
+/**
+ * The models this account may choose from.
+ */
+export type CursorModelsResponse = {
+    /**
+     * The offered models, in the order Cursor returned them.
+     */
+    models: Array<CursorModelOption>;
+};
+
+/**
  * Request body for editing a queued prompt.
  */
 export type EditQueuedActionRequest = {
@@ -337,6 +686,17 @@ export type EditQueuedActionRequest = {
      * that.
      */
     prompt: string;
+};
+
+/**
+ * A plain old json error response for use with axum.
+ * yup, thats it.
+ */
+export type ErrorResponse = {
+    /**
+     * Message to explain failure
+     */
+    message: string;
 };
 
 /**
@@ -355,6 +715,136 @@ export type ExternalSessionResponse = {
      * The agent's page on the provider's site, for a client to link out to.
      */
     url?: string | null;
+};
+
+/**
+ * A registered user-run harness.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type Harness = {
+    /**
+     * Whether the daemon currently holds a runtime connection.
+     */
+    connected: boolean;
+    /**
+     * Creation timestamp.
+     */
+    created_at: string;
+    /**
+     * User that registered this harness.
+     */
+    created_by: string;
+    /**
+     * Harness id.
+     */
+    id: HarnessId;
+    /**
+     * Runtime kind. Currently always `macrod`.
+     */
+    kind: string;
+    /**
+     * When the daemon last attached a runtime connection.
+     */
+    last_connected_at?: string | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Owner.
+     */
+    owner: HarnessOwner;
+    /**
+     * Update timestamp.
+     */
+    updated_at: string;
+};
+
+/**
+ * An agent bound to a harness, as listed for the daemon.
+ */
+export type HarnessAgent = {
+    /**
+     * The agent's bot id.
+     */
+    bot_id: BotId;
+    /**
+     * Stable `@` handle.
+     */
+    handle: string;
+    /**
+     * Display name.
+     */
+    name: string;
+};
+
+export type HarnessId = string;
+
+/**
+ * Harness owner.
+ *
+ * Exactly one of a user or a team, mirroring the bots owner pattern. There
+ * are no system harnesses.
+ */
+export type HarnessOwner = {
+    type: 'user';
+    /**
+     * Owner user id.
+     */
+    user_id: string;
+} | {
+    /**
+     * Owner team id.
+     */
+    team_id: string;
+    type: 'team';
+};
+
+/**
+ * An agent session running on a harness, as listed for the daemon's UI.
+ */
+export type HarnessSession = {
+    /**
+     * The agent's `@` handle.
+     */
+    bot_handle: string;
+    /**
+     * The agent the session runs for.
+     */
+    bot_id: BotId;
+    /**
+     * The agent's display name.
+     */
+    bot_name: string;
+    /**
+     * Creation timestamp.
+     */
+    created_at: string;
+    /**
+     * Model the session was opened with.
+     */
+    model: string;
+    /**
+     * Last-activity timestamp.
+     */
+    modified_at: string;
+    /**
+     * The session's display name.
+     */
+    name: string;
+    /**
+     * The user the session belongs to.
+     */
+    owner_id: string;
+    /**
+     * The session id.
+     */
+    session_id: string;
+    /**
+     * Session lifecycle status, e.g. `no_messages`, `active`.
+     */
+    status: string;
 };
 
 /**
@@ -383,6 +873,64 @@ export type LogFrameDto = {
      * Which way the frame travelled.
      */
     direction: LogDirectionDto;
+};
+
+/**
+ * A pending pairing, as shown to the approving user.
+ */
+export type PairingDetails = {
+    /**
+     * The pairing code, normalized to `XXXX-XXXX`.
+     */
+    code: string;
+    /**
+     * When the pairing was created.
+     */
+    created_at: string;
+    /**
+     * When the pairing expires.
+     */
+    expires_at: string;
+    /**
+     * Display-only description of the machine.
+     */
+    host?: string | null;
+    /**
+     * Harness display name the daemon asked for.
+     */
+    requested_name: string;
+    requested_scope?: null | RequestedHarnessScope;
+};
+
+/**
+ * Body returned while a claim is still waiting for approval.
+ */
+export type PendingClaimResponse = {
+    /**
+     * Always `pending`.
+     */
+    status: string;
+};
+
+/**
+ * The key the user pasted.
+ */
+export type PutCursorApiKeyRequest = {
+    /**
+     * A `crsr_…` Cursor API key.
+     */
+    apiKey: string;
+};
+
+/**
+ * The model the user chose for their sessions.
+ */
+export type PutCursorDefaultModelRequest = {
+    /**
+     * A Cursor model id (e.g. `grok-4.6`), or `null` to clear the choice and
+     * fall back to the deployment default.
+     */
+    modelId?: string | null;
 };
 
 /**
@@ -424,6 +972,14 @@ export type RenameAgentSessionRequest = {
      */
     name: string;
 };
+
+/**
+ * The ownership scope a daemon's config asks for.
+ *
+ * Advisory, not binding: the approving user confirms it in the dialog, which
+ * arrives preselected to this. Approval is what actually sets ownership.
+ */
+export type RequestedHarnessScope = 'private' | 'team';
 
 /**
  * Named compute tier for a managed sandbox.
@@ -475,6 +1031,57 @@ export type SessionStatusDto = {
     kind: 'event';
 } | {
     kind: 'disconnected';
+};
+
+/**
+ * Request to replace the editable configuration of a persisted AI agent.
+ */
+export type UpdateAgentRequest = {
+    /**
+     * Optional avatar URL or data URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Selected channels. Must be non-empty only for `selected` scope.
+     */
+    channel_ids?: Array<string>;
+    /**
+     * Whether the agent is global or channel-specific.
+     */
+    channel_scope: AgentChannelScope;
+    /**
+     * Model selected specifically for this agent.
+     */
+    default_model: string;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Stable `@` handle.
+     */
+    handle: string;
+    /**
+     * Harness used to run the agent.
+     */
+    harness: string;
+    harness_id?: null | HarnessId;
+    /**
+     * Instructions supplied to the agent at the start of a conversation.
+     */
+    instructions: string;
+    /**
+     * Which MCP servers sessions of this agent are handed.
+     */
+    mcp?: AgentMcpServers;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Team owner. Omit to make the agent private to the caller.
+     */
+    team_id?: string | null;
 };
 
 export type GetAgentSandboxSizeData = {
@@ -796,3 +1403,409 @@ export type PutAgentSessionSandboxSizeResponses = {
 };
 
 export type PutAgentSessionSandboxSizeResponse = PutAgentSessionSandboxSizeResponses[keyof PutAgentSessionSandboxSizeResponses];
+
+export type ListAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agents';
+};
+
+export type ListAgentsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListAgentsError = ListAgentsErrors[keyof ListAgentsErrors];
+
+export type ListAgentsResponses = {
+    200: Array<Agent>;
+};
+
+export type ListAgentsResponse = ListAgentsResponses[keyof ListAgentsResponses];
+
+export type CreateAgentData = {
+    body: CreateAgentRequest;
+    path?: never;
+    query?: never;
+    url: '/agents';
+};
+
+export type CreateAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateAgentError = CreateAgentErrors[keyof CreateAgentErrors];
+
+export type CreateAgentResponses = {
+    201: Agent;
+};
+
+export type CreateAgentResponse = CreateAgentResponses[keyof CreateAgentResponses];
+
+export type UpdateAgentData = {
+    body: UpdateAgentRequest;
+    path: {
+        /**
+         * Agent bot ID
+         */
+        agent_id: BotId;
+    };
+    query?: never;
+    url: '/agents/{agent_id}';
+};
+
+export type UpdateAgentErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateAgentError = UpdateAgentErrors[keyof UpdateAgentErrors];
+
+export type UpdateAgentResponses = {
+    200: Agent;
+};
+
+export type UpdateAgentResponse = UpdateAgentResponses[keyof UpdateAgentResponses];
+
+export type DeleteCursorApiKeyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key';
+};
+
+export type DeleteCursorApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+};
+
+export type DeleteCursorApiKeyError = DeleteCursorApiKeyErrors[keyof DeleteCursorApiKeyErrors];
+
+export type DeleteCursorApiKeyResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type DeleteCursorApiKeyResponse = DeleteCursorApiKeyResponses[keyof DeleteCursorApiKeyResponses];
+
+export type GetCursorApiKeyData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key';
+};
+
+export type GetCursorApiKeyErrors = {
+    401: string;
+    403: ErrorResponse;
+};
+
+export type GetCursorApiKeyError = GetCursorApiKeyErrors[keyof GetCursorApiKeyErrors];
+
+export type GetCursorApiKeyResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type GetCursorApiKeyResponse = GetCursorApiKeyResponses[keyof GetCursorApiKeyResponses];
+
+export type PutCursorApiKeyData = {
+    body: PutCursorApiKeyRequest;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key';
+};
+
+export type PutCursorApiKeyErrors = {
+    400: ErrorResponse;
+    401: string;
+    403: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type PutCursorApiKeyError = PutCursorApiKeyErrors[keyof PutCursorApiKeyErrors];
+
+export type PutCursorApiKeyResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type PutCursorApiKeyResponse = PutCursorApiKeyResponses[keyof PutCursorApiKeyResponses];
+
+export type PutCursorDefaultModelData = {
+    body: PutCursorDefaultModelRequest;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key/default-model';
+};
+
+export type PutCursorDefaultModelErrors = {
+    401: string;
+    403: ErrorResponse;
+    409: ErrorResponse;
+};
+
+export type PutCursorDefaultModelError = PutCursorDefaultModelErrors[keyof PutCursorDefaultModelErrors];
+
+export type PutCursorDefaultModelResponses = {
+    200: CursorApiKeyStatus;
+};
+
+export type PutCursorDefaultModelResponse = PutCursorDefaultModelResponses[keyof PutCursorDefaultModelResponses];
+
+export type ListCursorModelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/cursor-api-key/models';
+};
+
+export type ListCursorModelsErrors = {
+    401: string;
+    403: ErrorResponse;
+    409: ErrorResponse;
+    502: ErrorResponse;
+};
+
+export type ListCursorModelsError = ListCursorModelsErrors[keyof ListCursorModelsErrors];
+
+export type ListCursorModelsResponses = {
+    200: CursorModelsResponse;
+};
+
+export type ListCursorModelsResponse = ListCursorModelsResponses[keyof ListCursorModelsResponses];
+
+export type CreateHarnessPairingData = {
+    body: CreatePairingRequest;
+    path?: never;
+    query?: never;
+    url: '/harness-pairings';
+};
+
+export type CreateHarnessPairingErrors = {
+    400: ErrorResponse;
+    429: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateHarnessPairingError = CreateHarnessPairingErrors[keyof CreateHarnessPairingErrors];
+
+export type CreateHarnessPairingResponses = {
+    201: CreatedPairing;
+};
+
+export type CreateHarnessPairingResponse = CreateHarnessPairingResponses[keyof CreateHarnessPairingResponses];
+
+export type GetHarnessPairingData = {
+    body?: never;
+    path: {
+        /**
+         * Pairing code
+         */
+        code: string;
+    };
+    query?: never;
+    url: '/harness-pairings/{code}';
+};
+
+export type GetHarnessPairingErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    410: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetHarnessPairingError = GetHarnessPairingErrors[keyof GetHarnessPairingErrors];
+
+export type GetHarnessPairingResponses = {
+    200: PairingDetails;
+};
+
+export type GetHarnessPairingResponse = GetHarnessPairingResponses[keyof GetHarnessPairingResponses];
+
+export type ApproveHarnessPairingData = {
+    body: ApprovePairingRequest;
+    path: {
+        /**
+         * Pairing code
+         */
+        code: string;
+    };
+    query?: never;
+    url: '/harness-pairings/{code}/approve';
+};
+
+export type ApproveHarnessPairingErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    410: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ApproveHarnessPairingError = ApproveHarnessPairingErrors[keyof ApproveHarnessPairingErrors];
+
+export type ApproveHarnessPairingResponses = {
+    200: Harness;
+};
+
+export type ApproveHarnessPairingResponse = ApproveHarnessPairingResponses[keyof ApproveHarnessPairingResponses];
+
+export type ClaimHarnessPairingData = {
+    body: ClaimPairingRequest;
+    path: {
+        /**
+         * Pairing ID
+         */
+        pairing_id: string;
+    };
+    query?: never;
+    url: '/harness-pairings/{pairing_id}/claim';
+};
+
+export type ClaimHarnessPairingErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    410: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ClaimHarnessPairingError = ClaimHarnessPairingErrors[keyof ClaimHarnessPairingErrors];
+
+export type ClaimHarnessPairingResponses = {
+    200: ClaimedPairing;
+    202: PendingClaimResponse;
+};
+
+export type ClaimHarnessPairingResponse = ClaimHarnessPairingResponses[keyof ClaimHarnessPairingResponses];
+
+export type ListHarnessesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses';
+};
+
+export type ListHarnessesErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessesError = ListHarnessesErrors[keyof ListHarnessesErrors];
+
+export type ListHarnessesResponses = {
+    200: Array<Harness>;
+};
+
+export type ListHarnessesResponse = ListHarnessesResponses[keyof ListHarnessesResponses];
+
+export type DeleteSelfHarnessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me';
+};
+
+export type DeleteSelfHarnessErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteSelfHarnessError = DeleteSelfHarnessErrors[keyof DeleteSelfHarnessErrors];
+
+export type DeleteSelfHarnessResponses = {
+    204: void;
+};
+
+export type DeleteSelfHarnessResponse = DeleteSelfHarnessResponses[keyof DeleteSelfHarnessResponses];
+
+export type GetSelfHarnessData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me';
+};
+
+export type GetSelfHarnessErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetSelfHarnessError = GetSelfHarnessErrors[keyof GetSelfHarnessErrors];
+
+export type GetSelfHarnessResponses = {
+    200: Harness;
+};
+
+export type GetSelfHarnessResponse = GetSelfHarnessResponses[keyof GetSelfHarnessResponses];
+
+export type ListHarnessAgentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me/agents';
+};
+
+export type ListHarnessAgentsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessAgentsError = ListHarnessAgentsErrors[keyof ListHarnessAgentsErrors];
+
+export type ListHarnessAgentsResponses = {
+    200: Array<HarnessAgent>;
+};
+
+export type ListHarnessAgentsResponse = ListHarnessAgentsResponses[keyof ListHarnessAgentsResponses];
+
+export type ListHarnessSessionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/harnesses/me/sessions';
+};
+
+export type ListHarnessSessionsErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListHarnessSessionsError = ListHarnessSessionsErrors[keyof ListHarnessSessionsErrors];
+
+export type ListHarnessSessionsResponses = {
+    200: Array<HarnessSession>;
+};
+
+export type ListHarnessSessionsResponse = ListHarnessSessionsResponses[keyof ListHarnessSessionsResponses];
+
+export type DeleteHarnessData = {
+    body?: never;
+    path: {
+        /**
+         * Harness ID
+         */
+        harness_id: HarnessId;
+    };
+    query?: never;
+    url: '/harnesses/{harness_id}';
+};
+
+export type DeleteHarnessErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteHarnessError = DeleteHarnessErrors[keyof DeleteHarnessErrors];
+
+export type DeleteHarnessResponses = {
+    204: void;
+};
+
+export type DeleteHarnessResponse = DeleteHarnessResponses[keyof DeleteHarnessResponses];

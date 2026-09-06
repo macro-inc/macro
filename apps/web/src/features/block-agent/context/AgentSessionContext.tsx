@@ -9,7 +9,6 @@
  * so each stateful concern stays a composable unit as wiring grows.
  */
 
-import { isCursorBotId } from '@core/constant/cursorAgent';
 import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
 import type {
   FoldedMessage,
@@ -215,7 +214,7 @@ function CursorExternalUrlPoll(props: {
     const id = props.sessionId();
     const session = props.session();
     if (!id || !session || session.external?.url) return undefined;
-    return isCursorBotId(session.botId) ? id : undefined;
+    return session.harness === 'cursor' ? id : undefined;
   });
   createEffect(() => {
     // `query.data` suspends while pending and throws once it errors

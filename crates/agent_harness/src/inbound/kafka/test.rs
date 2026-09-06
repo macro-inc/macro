@@ -230,7 +230,7 @@ fn any_user_can_follow_up_to_their_cursor_session() {
     let user = MacroUserIdStr::try_from_email("asker@example.com").expect("a valid user id");
     assert!(matches!(
         route_agent_trigger(
-            channel_message_from(bot_id::CURSOR_BOT_ID, ChannelSender::new_from_user(user)),
+            channel_message_from(BotId::TEST_A, ChannelSender::new_from_user(user)),
             runtime(AgentKind::Cursor),
         ),
         Ok(RoutedTrigger::Command(_, HarnessCommand::Deliver(_)))

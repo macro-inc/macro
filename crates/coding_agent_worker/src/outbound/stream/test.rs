@@ -3,11 +3,11 @@ use crate::config::{HarnessCredentials, HarnessScope, MacroApi};
 use harness_id::HarnessId;
 use webhook::domain::models::WebhookFilter;
 
-fn test_client(storage_url: &str) -> EventStreamClient {
+fn test_client(base_url: &str) -> EventStreamClient {
     EventStreamClient::new(
         &MacroApi {
-            api_url: "http://unused".to_owned(),
-            storage_url: storage_url.to_owned(),
+            api_url: base_url.to_owned(),
+            storage_url: base_url.to_owned(),
             web_url: "https://macro.com/app".to_owned(),
         },
         &HarnessCredentials {

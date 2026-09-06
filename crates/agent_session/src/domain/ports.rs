@@ -1,4 +1,4 @@
-use super::error::Result;
+use super::error::{AgentSessionError, Result};
 use super::model::*;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
@@ -30,14 +30,101 @@ pub struct BotFacts {
     pub is_managed: bool,
     /// The user who owns the bot, when it is user-owned.
     pub owner_user_id: Option<MacroUserIdStr<'static>>,
+    /// Team that owns the bot, when it is team-owned.
+    pub owner_team_id: Option<Uuid>,
     /// The registered harness this bot's agent is bound to, when it is one.
     pub harness_id: Option<harness_id::HarnessId>,
+    /// Runtime profile for a persisted agent. Fixed system bots have no
+    /// persisted profile, and so cannot be selected as a persona.
+    pub managed_profile: Option<ManagedAgentProfile>,
+}
+
+/// Runtime settings snapshotted when a managed persona opens a session.
+#[derive(Debug, Clone)]
+pub struct ManagedAgentProfile {
+    /// Model configured as this persona's default.
+    pub model: String,
+    /// Harness serving this persona.
+    pub harness: String,
+    /// Instructions configured for this persona.
+    pub instructions: String,
+    /// MCP servers this persona may use.
+    pub mcp_servers: AgentMcpServers,
+}
+
+/// A managed persona selected for one managed session.
+#[derive(Debug, Clone)]
+pub struct SelectedManagedPersona {
+    /// Bot identity used by the session.
+    pub bot_id: BotId,
+    /// Runtime settings resolved from the persisted persona.
+    pub profile: ManagedAgentProfile,
 }
 
 /// Read-only lookup of the bots sessions may be opened for.
 pub trait BotDirectory: Send + Sync + 'static {
     /// Fetch a bot's facts; `None` when no such bot exists.
     fn bot_facts(&self, bot: BotId) -> impl Future<Output = Result<Option<BotFacts>>> + Send;
+
+    /// Whether a user belongs to a team that owns a persona.
+    fn user_has_team(
+        &self,
+        user: MacroUserIdStr<'static>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool>> + Send;
+}
+
+/// Why a user cannot select a bot as a managed session persona.
+#[derive(Debug)]
+pub enum ManagedPersonaError {
+    /// No active bot has this id.
+    Unknown,
+    /// The bot has no agent runtime.
+    NotAgent,
+    /// The bot is served by an external runtime.
+    External,
+    /// The user does not own or belong to the persona's owner.
+    Forbidden,
+    /// Looking up the persona or its owner failed.
+    Lookup(AgentSessionError),
+}
+
+/// Resolve and authorize a managed persona for a user.
+///
+/// Ownership policy lives in the domain: private personas belong to their
+/// owner and team personas are available to team members. The deployment's
+/// default persona is selected by naming no bot at all, so a fixed system bot
+/// - which has no owner and no persisted profile - is never selectable here.
+pub async fn managed_persona_for_user<Bots: BotDirectory>(
+    bots: &Bots,
+    bot_id: BotId,
+    user: &MacroUserIdStr<'static>,
+) -> std::result::Result<SelectedManagedPersona, ManagedPersonaError> {
+    let facts = bots
+        .bot_facts(bot_id)
+        .await
+        .map_err(ManagedPersonaError::Lookup)?
+        .ok_or(ManagedPersonaError::Unknown)?;
+    if !facts.has_agent {
+        return Err(ManagedPersonaError::NotAgent);
+    }
+    if !facts.is_managed {
+        return Err(ManagedPersonaError::External);
+    }
+    let authorized = if let Some(owner) = facts.owner_user_id {
+        owner.as_ref() == user.as_ref()
+    } else if let Some(team_id) = facts.owner_team_id {
+        bots.user_has_team(user.clone(), team_id)
+            .await
+            .map_err(ManagedPersonaError::Lookup)?
+    } else {
+        false
+    };
+    if !authorized {
+        return Err(ManagedPersonaError::Forbidden);
+    }
+    let profile = facts.managed_profile.ok_or(ManagedPersonaError::NotAgent)?;
+    Ok(SelectedManagedPersona { bot_id, profile })
 }
 
 /// The mention that triggered a session, when one did.
@@ -92,8 +179,11 @@ pub struct OpenManagedSession {
     /// First prompt to deliver once the sandbox is attached. `None` opens an
     /// idle session its owner prompts from the session's own surface.
     pub prompt: Option<String>,
-    /// Instructions the session's runtime works under, for its whole life.
-    /// `None` runs the runtime's own default.
+    /// A selected persona's authoritative runtime profile. `None` uses the
+    /// deployment's default managed coding persona.
+    pub profile: Option<SelectedManagedPersona>,
+    /// Ad-hoc instructions for the default managed persona. Ignored when a
+    /// persisted persona profile is selected.
     pub instructions: Option<String>,
 }
 

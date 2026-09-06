@@ -197,10 +197,10 @@ impl InfraEnv {
         // The alias LocalStack provisions for the Cursor API key CMK. Named by
         // alias rather than key id because `CreateKey` mints a random id every
         // run, and KMS accepts an alias anywhere a key id goes. Required by
-        // both the authentication service (which encrypts users' keys) and the
-        // harness (which decrypts them per session), so neither starts without
-        // it — local matches deployed behaviour instead of being a special
-        // case.
+        // the agent harness service, which encrypts users' keys when they
+        // connect Cursor and decrypts them per session, so it does not start
+        // without it — local matches deployed behaviour instead of being a
+        // special case.
         env.insert(
             "CURSOR_API_KEY_KMS_KEY_ID".into(),
             resources::CURSOR_API_KEY_KMS_ALIAS.into(),

@@ -38,9 +38,10 @@ const MICROSOFT_TOKEN_KMS_DELETION_WINDOW_IN_DAYS = config.requireNumber(
 const CURSOR_API_KEY_KMS_DELETION_WINDOW_IN_DAYS = config.requireNumber(
   'cursor_api_key_kms_deletion_window_days'
 );
-// Role ARNs allowed to decrypt Cursor API keys. The agent harness is the one
-// reader there is: it decrypts a session owner's key on every spawn and
-// resume, so without this grant every `@cursor` session fails at KMS. Taken
+// Role ARNs allowed to use the Cursor API key CMK. The agent harness is the
+// one user there is: it encrypts a key when someone connects Cursor and
+// decrypts it on every spawn and resume, so without this grant no Cursor
+// agent works at all. Taken
 // from the harness stack's own export rather than a hand-copied ARN, so a
 // re-created role cannot silently leave the policy pointing at a dead one.
 const agentHarnessStack = new pulumi.StackReference('agent-harness-stack', {

@@ -1,7 +1,10 @@
 //! The HTTP surface of the agent harness service.
 //!
 //! This process owns the complete agent-session HTTP API: durable metadata and
-//! log reads as well as operations against the live in-memory transport.
+//! log reads as well as operations against the live in-memory transport. It
+//! also owns the agents (personas) sessions run as, the registered harnesses
+//! that serve them, and users' Cursor connections - everything that decides
+//! how an agent runs lives behind one service.
 
 use std::time::Duration;
 
@@ -22,13 +25,20 @@ use axum::Router;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::routing::get;
+use bots::domain::ports::BotService;
+use bots::inbound::agents_router::{AgentsRouterState, agents_router};
 use entity_access::domain::ports::EntityAccessService;
+use harnesses::domain::ports::HarnessService;
+use harnesses::inbound::axum_router::{HarnessesRouterState, harnesses_router};
 use macro_authorization::MacroAuthorizationService;
 use macro_tower_layers::MacroRequestIdAndTracingLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 
+pub mod cursor_api_key;
 pub mod swagger;
+
+pub use cursor_api_key::{CursorApiKeyState, cursor_api_key_router};
 
 #[cfg(test)]
 mod test;
@@ -73,12 +83,27 @@ where
         .context("agent harness egress http failed")
 }
 
+/// Every router state the control API is built from.
+pub struct ApiStates<T, R, Opener, Bots, Agents, Harnesses, Access, Auth> {
+    /// Durable session metadata and log reads.
+    pub read: AgentSessionRouterState<T, Access, Auth>,
+    /// Operations against live sessions.
+    pub control: AgentSessionControlState<R, Access, Auth>,
+    /// Opening sessions over HTTP.
+    pub create: CreateSessionState<Opener, Bots, Auth>,
+    /// The runtime gateway external runtimes dial.
+    pub gateway: RuntimeGatewayState<Auth>,
+    /// Agents (personas) sessions run as.
+    pub agents: AgentsRouterState<Agents, Auth>,
+    /// Registered harnesses and pairing.
+    pub harnesses: HarnessesRouterState<Harnesses, Auth>,
+    /// Users' Cursor connections.
+    pub cursor: CursorApiKeyState<Agents, Auth>,
+}
+
 /// Build the router and serve it until the process is asked to stop.
-pub async fn setup_and_serve<T, R, Opener, Bots, Access, Auth>(
-    read_state: AgentSessionRouterState<T, Access, Auth>,
-    control_state: AgentSessionControlState<R, Access, Auth>,
-    create_state: CreateSessionState<Opener, Bots, Auth>,
-    gateway_state: RuntimeGatewayState<Auth>,
+pub async fn setup_and_serve<T, R, Opener, Bots, Agents, Harnesses, Access, Auth>(
+    states: ApiStates<T, R, Opener, Bots, Agents, Harnesses, Access, Auth>,
     runtime_commands_ready: tokio::sync::watch::Receiver<bool>,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
@@ -88,10 +113,15 @@ where
     R: AgentSessionNotificationRecipient,
     Opener: SessionOpener,
     Bots: BotDirectory,
+    Agents: BotService,
+    Harnesses: HarnessService,
     Access: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let inner = api_router(read_state, control_state, create_state, gateway_state)
+    let inner = api_router(states.read, states.control, states.create, states.gateway)
+        .merge(agents_router(states.agents))
+        .merge(harnesses_router(states.harnesses))
+        .merge(cursor_api_key_router(states.cursor))
         .layer(MacroRequestIdAndTracingLayer::new(Duration::from_millis(200)).into_inner())
         .merge(health_router(runtime_commands_ready))
         .layer(macro_cors::cors_layer());

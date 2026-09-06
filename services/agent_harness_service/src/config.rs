@@ -35,6 +35,18 @@ macro_env_var::env_vars!(
     pub struct PipedreamProjectId;
 );
 
+macro_env_var::maybe_env_var! {
+    /// KMS key that encrypts users' Cursor API keys. This service both writes
+    /// them (Settings → Harness) and reads them (every Cursor session spawn).
+    ///
+    /// Optional *here* only because Pulumi injects it into the task
+    /// definition rather than Doppler, and the Doppler config validator
+    /// deserializes this struct from Doppler alone — a required field it
+    /// cannot see fails CI. The service still refuses to start without it;
+    /// see [`Config::cursor_api_key_kms_key_id`].
+    pub struct CursorApiKeyKmsKeyId;
+}
+
 /// The Pipedream project environment matching this deployment: production in
 /// prd, development everywhere else.
 fn default_pipedream_environment() -> String {
@@ -120,7 +132,15 @@ pub struct Config {
     /// Repository sessions run against, until it becomes per-request data.
     #[macro_config_default(String::from("https://github.com/macro-inc/macro"))]
     pub harness_repo_url: String,
-    /// Repository `@cursor` sessions work on. Temporary hardcoding, same as
+    /// KMS key used to encrypt users' Cursor API keys. Required in practice —
+    /// read through [`Config::cursor_api_key_kms_key_id`], which refuses an
+    /// absent or blank value at startup.
+    pub cursor_api_key_kms_key_id: CursorApiKeyKmsKeyId,
+    /// Base URL of Cursor's cloud agents API. Overridable so a local stack can
+    /// point at a stand-in; deployments leave it at Cursor's.
+    #[macro_config_default(String::from(cursor_cloud_agents::api::CURSOR_API_BASE_URL))]
+    pub cursor_api_base_url: String,
+    /// Repository Cursor sessions work on. Temporary hardcoding, same as
     /// `harness_repo_url` — and one repository for everyone is a real limit
     /// here, since each session runs on its own owner's Cursor account and
     /// only works if *their* GitHub App installation can see this repo.
@@ -187,5 +207,32 @@ impl Config {
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>()
             .context("failed to load agent harness service config")
+    }
+}
+
+impl Config {
+    /// The KMS key id (or alias) that encrypts users' Cursor API keys.
+    ///
+    /// Fails if it is unset or blank. There is no "this deployment does not
+    /// accept Cursor keys" mode: registering a key is a plain feature of the
+    /// settings surface, and a service that cannot encrypt one should fail at
+    /// startup rather than at the first user who tries.
+    pub(crate) fn cursor_api_key_kms_key_id(&self) -> anyhow::Result<String> {
+        // `MacroConfig` will not see a Pulumi-injected process env var once
+        // Doppler's `APP_SECRETS_JSON` is present. Re-read through the env-var
+        // type, which does fall back to process env.
+        let from_process_env = CursorApiKeyKmsKeyId::new();
+        [
+            self.cursor_api_key_kms_key_id.value(),
+            from_process_env
+                .as_ref()
+                .and_then(CursorApiKeyKmsKeyId::value),
+        ]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|value: &&str| !value.is_empty())
+        .map(str::to_owned)
+        .context("CURSOR_API_KEY_KMS_KEY_ID is required")
     }
 }

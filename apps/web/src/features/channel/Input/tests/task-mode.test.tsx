@@ -29,10 +29,6 @@ vi.mock('@core/util/upload', () => ({
   uploadFile: vi.fn(),
 }));
 
-vi.mock('@core/cursor/flag', () => ({
-  useCursorAgentsAccess: () => () => true,
-}));
-
 // Several service clients in StaticMarkdown's import graph build websocket
 // connections at module scope, which jsdom cannot do. Stub the builder so
 // every module-scope socket is inert.
@@ -248,10 +244,9 @@ const baseInput: InputData = {
 };
 
 /**
- * `ChannelInput` reads the stored Cursor API key status to decide whether to
- * offer `@cursor` in the mention typeahead, so it needs a query client even
- * though none of these tests care about that entry. Shadowing `render` keeps
- * every call site below unchanged.
+ * Rendered inside a query client, as in the app; none of these tests care
+ * about server state. Shadowing `render` keeps every call site below
+ * unchanged.
  */
 const testQueryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },

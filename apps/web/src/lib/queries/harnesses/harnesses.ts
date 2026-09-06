@@ -2,10 +2,10 @@ import { throwOnErr } from '@core/util/result';
 import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
 import {
+  agentHarnessServiceClient,
   type Harness,
-  type HarnessPairing,
-  storageServiceClient,
-} from '@service-storage/client';
+  type PairingDetails,
+} from '@service-agent-harness/client';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { harnessKeys } from './keys';
 
@@ -28,7 +28,7 @@ export function useHarnessesQuery() {
   return useQuery(() => ({
     queryKey: harnessKeys.list.queryKey,
     queryFn: async (): Promise<Harness[]> =>
-      await throwOnErr(() => storageServiceClient.getHarnesses()),
+      await throwOnErr(() => agentHarnessServiceClient.getHarnesses()),
     refetchInterval: 15_000,
   }));
 }
@@ -47,9 +47,9 @@ export function invalidateHarnesses() {
 export function useHarnessPairingQuery(code: () => string | undefined) {
   return useQuery(() => ({
     queryKey: harnessKeys.pairing(code() ?? '').queryKey,
-    queryFn: async (): Promise<HarnessPairing> =>
+    queryFn: async (): Promise<PairingDetails> =>
       await throwOnErr(() =>
-        storageServiceClient.getHarnessPairing({ code: code() ?? '' })
+        agentHarnessServiceClient.getHarnessPairing(code() ?? '')
       ),
     enabled: (code() ?? '').length > 0,
     retry: false,
@@ -61,8 +61,7 @@ export function useApproveHarnessPairingMutation() {
     gcTime: 0,
     mutationFn: async (vars: ApproveHarnessPairingParams) =>
       await throwOnErr(() =>
-        storageServiceClient.approveHarnessPairing({
-          code: vars.code,
+        agentHarnessServiceClient.approveHarnessPairing(vars.code, {
           name: vars.name,
           team_id: vars.teamId,
         })
@@ -83,7 +82,7 @@ export function useDeleteHarnessMutation() {
     gcTime: 0,
     mutationFn: async (vars: DeleteHarnessParams) =>
       await throwOnErr(() =>
-        storageServiceClient.deleteHarness({ harness_id: vars.harnessId })
+        agentHarnessServiceClient.deleteHarness(vars.harnessId)
       ),
     onSuccess: async (_data, vars) => {
       queryClient.setQueryData<Harness[]>(

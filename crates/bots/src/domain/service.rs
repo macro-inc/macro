@@ -69,6 +69,12 @@ fn validate_mcp_servers(mcp: &AgentMcpServers) -> Result<(), BotError> {
     Ok(())
 }
 
+/// Display name of the agent a Cursor connection creates.
+pub const CURSOR_AGENT_NAME: &str = "Cursor";
+
+/// `@` handle of the agent a Cursor connection creates.
+pub const CURSOR_AGENT_HANDLE: &str = "cursor";
+
 fn validate_handle(handle: &str) -> Result<(), BotError> {
     if handle.is_empty()
         || handle.len() > 64
@@ -516,6 +522,39 @@ where
         }));
 
         Ok(agent)
+    }
+
+    async fn ensure_cursor_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        default_model: String,
+    ) -> Result<Agent, BotError> {
+        if let Some(agent) = self
+            .repo
+            .find_user_agent_by_harness(caller.clone(), harness_id::CURSOR_HARNESS_SLUG)
+            .await
+            .map_err(|err| BotError::Repo(err.into()))?
+        {
+            return Ok(agent);
+        }
+        self.create_agent(
+            caller,
+            CreateAgentRequest {
+                team_id: None,
+                harness_id: None,
+                name: CURSOR_AGENT_NAME.to_owned(),
+                handle: CURSOR_AGENT_HANDLE.to_owned(),
+                description: None,
+                avatar_url: None,
+                instructions: String::new(),
+                harness: harness_id::CURSOR_HARNESS_SLUG.to_owned(),
+                default_model,
+                channel_scope: AgentChannelScope::All,
+                channel_ids: Vec::new(),
+                mcp: AgentMcpServers::default(),
+            },
+        )
+        .await
     }
 
     async fn list_agents(&self, caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {

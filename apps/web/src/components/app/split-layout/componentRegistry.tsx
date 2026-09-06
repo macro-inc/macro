@@ -1,5 +1,6 @@
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { ComposeAgentSession } from '@app/features/block-agent/component/ComposeAgentSession';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
@@ -677,6 +678,12 @@ registerComponent('email-compose', (params) => {
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;
+});
+registerComponent('agent-session-compose', (params) => {
+  usePageViewTracking('agent-session-compose');
+  return (
+    <ComposeAgentSession preferNewSplit={params?.preferNewSplit === true} />
+  );
 });
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');

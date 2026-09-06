@@ -5,8 +5,8 @@ import {
 } from '@core/pipedream/catalog';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import XIcon from '@phosphor/x.svg';
+import type { AgentMcpServer } from '@service-agent-harness/generated/schemas/agentMcpServer';
 import type { PipedreamCatalogEntryResponse } from '@service-cognition/client';
-import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
 import { Button } from '@ui';
 import { type Accessor, createMemo, For, Show } from 'solid-js';
 import {

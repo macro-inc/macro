@@ -11,7 +11,30 @@
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
-`Create` → `Coding Agent A`, or keyboard `c` then `a`.
+`Create` → `Agent A`, or keyboard `c` then `a`, opens a managed agent session
+directly at `/app/agent/<uuid>` (the runtime starts while the block mounts).
+When the `enable-agent-session-composer` flag is on (default in dev;
+`VITE_ENABLE_AGENT_SESSION_COMPOSER` overrides), the same entry instead opens
+the **New agent session** composer popover. The prompt textarea (`Give your agent a
+prompt...`) is focused on open, so you can `type_text` immediately. Below the prompt a
+**Agent** section (`aria-label` `Agent`) lists the choices in the open, as a
+`radiogroup` of cards (`role="radio"`, `aria-checked`): **Macro** `@macro`
+(the default), then the user's own agents, each card showing avatar, name and
+`@handle · Macro|Cursor` for the runtime. Connecting Cursor under
+Settings → Harness creates a private **Cursor** `@cursor` agent; an agent on
+the Cursor harness is disabled with a `Connect Cursor in Settings → Harness`
+hint (card reads `@cursor · Not connected`) while no key is stored. Every agent is
+shown; the cards form an even grid that fills the popover width. Click a card
+or use arrow keys to change agent. The **Model
+override** pill (`aria-label` `Model override`) at the bottom left opens a
+menu whose first row is `Agent default · <model>`, followed by at most five
+featured models; longer catalogs put the rest under a `More models` submenu.
+Changing agent resets the override. Tab order is prompt → selected agent card → Model →
+**Create Session**; the close `X` is skipped. The menu opens on Enter/Space
+and selects with arrow keys + Enter. Escape in the prompt first blurs to the
+dialog, a second Escape closes it. Press **Create Session** or
+`Cmd/Ctrl+Enter`; the composer closes and the new `/app/agent/<uuid>` session
+opens while its runtime starts.
 
 ## Start a doc-scoped chat
 
@@ -42,8 +65,9 @@ stream over the app's websocket, not the HTTP response.
 ## In channels
 
 Mention `@Macro` in any channel message for the classic in-channel reply. Mention
-`@macro-new` (or `@coder` / `@cursor`) to open an **agent session** — a dedicated
-transcript at `/app/agent/<uuid>` whose replies also stream back into the thread.
+`@macro-new` (or `@coder`, or your own agent such as the `@cursor` agent connecting
+Cursor creates) to open an **agent session** — a dedicated transcript at
+`/app/agent/<uuid>` whose replies also stream back into the thread.
 
 ## Agent sessions
 

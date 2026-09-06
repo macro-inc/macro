@@ -1,7 +1,8 @@
 import { throwOnErr } from '@core/util/result';
+import { invalidateAgents } from '@queries/agents/agents';
 import { queryClient } from '@queries/client';
-import { authServiceClient } from '@service-auth/client';
-import type { CursorApiKeyStatus } from '@service-auth/generated/schemas';
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import type { CursorApiKeyStatus } from '@service-agent-harness/generated/schemas';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 
 import { authKeys } from './keys';
@@ -30,7 +31,9 @@ export function useCursorApiKeyStatusQuery() {
   return useQuery(() => ({
     queryKey: authKeys.cursorApiKeyStatus.queryKey,
     queryFn: async () =>
-      throwOnErr(async () => await authServiceClient.getCursorApiKeyStatus()),
+      throwOnErr(
+        async () => await agentHarnessServiceClient.getCursorApiKeyStatus()
+      ),
     placeholderData: NOT_CONNECTED,
   }));
 }
@@ -40,16 +43,22 @@ export function useCursorApiKeyStatusQuery() {
  *
  * Invalidates rather than writing the response into the cache: the mutation
  * returns the same shape the query does, but a user who pastes a key in two
- * tabs should see one truth, and the round trip is cheap.
+ * tabs should see one truth, and the round trip is cheap. Storing a key also
+ * creates the user's `@cursor` agent, so the agents list is refreshed too.
  */
 export function useSaveCursorApiKey() {
   return useMutation(() => ({
     mutationFn: async (apiKey: string) =>
-      throwOnErr(async () => await authServiceClient.putCursorApiKey(apiKey)),
+      throwOnErr(
+        async () => await agentHarnessServiceClient.putCursorApiKey(apiKey)
+      ),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: authKeys.cursorApiKeyStatus.queryKey,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: authKeys.cursorApiKeyStatus.queryKey,
+        }),
+        invalidateAgents(),
+      ]);
     },
   }));
 }
@@ -63,7 +72,9 @@ export function useSaveCursorApiKey() {
 export function useDisconnectCursorApiKey() {
   return useMutation(() => ({
     mutationFn: async () =>
-      throwOnErr(async () => await authServiceClient.deleteCursorApiKey()),
+      throwOnErr(
+        async () => await agentHarnessServiceClient.deleteCursorApiKey()
+      ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: authKeys.cursorApiKeyStatus.queryKey,
@@ -84,7 +95,9 @@ export function useCursorModelsQuery(enabled: () => boolean) {
   return useQuery(() => ({
     queryKey: authKeys.cursorModels.queryKey,
     queryFn: async () =>
-      throwOnErr(async () => await authServiceClient.listCursorModels()),
+      throwOnErr(
+        async () => await agentHarnessServiceClient.listCursorModels()
+      ),
     enabled: enabled(),
     staleTime: 5 * 60 * 1000,
   }));
@@ -100,7 +113,8 @@ export function useSetCursorDefaultModel() {
   return useMutation(() => ({
     mutationFn: async (modelId: string) =>
       throwOnErr(
-        async () => await authServiceClient.putCursorDefaultModel(modelId)
+        async () =>
+          await agentHarnessServiceClient.putCursorDefaultModel(modelId)
       ),
     onSuccess: async () => {
       await queryClient.invalidateQueries({

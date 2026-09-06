@@ -32,11 +32,7 @@ impl HarnessSelfApi {
     pub fn new(config: &Config, credentials: &HarnessCredentials) -> Self {
         Self {
             http: reqwest::Client::new(),
-            base: config
-                .macro_api
-                .storage_url
-                .trim_end_matches('/')
-                .to_owned(),
+            base: config.macro_api.api_url.trim_end_matches('/').to_owned(),
             token: credentials.token.clone(),
         }
     }

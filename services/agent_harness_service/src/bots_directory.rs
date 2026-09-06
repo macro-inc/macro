@@ -6,7 +6,7 @@
 
 use agent_harness::domain::model::AgentKind;
 use agent_session::domain::error::{AgentSessionError, Result};
-use agent_session::domain::ports::{BotDirectory, BotFacts};
+use agent_session::domain::ports::{BotDirectory, BotFacts, ManagedAgentProfile};
 use bot_id::BotId;
 use bots::domain::models::BotOwner;
 use bots::domain::ports::BotRepo;
@@ -36,17 +36,19 @@ impl BotDirectory for PgBotDirectory {
         else {
             return Ok(None);
         };
-        let owner_user_id = match row.owner {
+        let (owner_user_id, owner_team_id) = match row.owner {
             Some(BotOwner::User { user_id }) => {
-                Some(MacroUserIdStr::try_from(user_id).map_err(|error| {
+                let owner = MacroUserIdStr::try_from(user_id).map_err(|error| {
                     AgentSessionError::Unknown(anyhow::anyhow!(
                         "bot has an unparseable owner: {error}"
                     ))
-                })?)
+                })?;
+                (Some(owner), None)
             }
-            Some(BotOwner::Team { .. }) | None => None,
+            Some(BotOwner::Team { team_id }) => (None, Some(team_id)),
+            None => (None, None),
         };
-        let (is_managed, harness_id) = if row.has_agent {
+        let (is_managed, harness_id, managed_profile) = if row.has_agent {
             let agent = self
                 .repo
                 .get_agent(bot)
@@ -54,20 +56,42 @@ impl BotDirectory for PgBotDirectory {
                 .map_err(AgentSessionError::Unknown)?;
             let harness_id = agent.as_ref().and_then(|agent| agent.harness_id);
             let is_managed = agent
+                .as_ref()
                 .map_or_else(
                     || AgentKind::of(bot),
                     |agent| AgentKind::from_harness(&agent.harness),
                 )
                 .is_managed();
-            (is_managed, harness_id)
+            let managed_profile = agent
+                .filter(|_| is_managed)
+                .map(|agent| ManagedAgentProfile {
+                    model: agent.default_model,
+                    harness: agent.harness,
+                    instructions: agent.instructions,
+                    mcp_servers: agent.mcp,
+                });
+            (is_managed, harness_id, managed_profile)
         } else {
-            (false, None)
+            (false, None, None)
         };
         Ok(Some(BotFacts {
             has_agent: row.has_agent,
             is_managed,
             owner_user_id,
+            owner_team_id,
             harness_id,
+            managed_profile,
         }))
+    }
+
+    async fn user_has_team(
+        &self,
+        user: MacroUserIdStr<'static>,
+        team_id: macro_uuid::Uuid,
+    ) -> Result<bool> {
+        self.repo
+            .user_has_team(user, team_id)
+            .await
+            .map_err(AgentSessionError::Unknown)
     }
 }

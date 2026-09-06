@@ -6,7 +6,7 @@ use crate::domain::{
         PatchBotRequest, UpdateAgentRequest,
     },
     ports::{BotError, BotService},
-    service::BotServiceImpl,
+    service::{BotServiceImpl, CURSOR_AGENT_HANDLE, CURSOR_AGENT_NAME},
 };
 use entity_access::domain::models::{
     Entity, EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
@@ -444,6 +444,80 @@ async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Re
     assert_eq!(fetched.default_model, created.default_model);
 
     assert!(service.list_agents(user_id(USER_OTHER)).await?.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn ensure_cursor_agent_creates_a_private_all_channels_agent_once(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+
+    let created = service
+        .ensure_cursor_agent(user_id(USER_OWNER), "grok-4.6".to_owned())
+        .await?;
+    assert_eq!(created.bot.name, CURSOR_AGENT_NAME);
+    assert_eq!(created.bot.handle, CURSOR_AGENT_HANDLE);
+    assert!(created.bot.has_agent);
+    assert_eq!(
+        created.bot.owner,
+        Some(BotOwner::User {
+            user_id: USER_OWNER.to_string(),
+        })
+    );
+    assert_eq!(created.harness, harness_id::CURSOR_HARNESS_SLUG);
+    assert_eq!(created.harness_id, None);
+    assert_eq!(created.default_model, "grok-4.6");
+    assert_eq!(created.channel_scope, AgentChannelScope::All);
+    assert!(created.channel_ids.is_empty());
+
+    // Registering a key again (rotated, or with another default model) finds
+    // the same agent rather than minting a second `@cursor`.
+    let again = service
+        .ensure_cursor_agent(user_id(USER_OWNER), "other-model".to_owned())
+        .await?;
+    assert_eq!(again.bot.id, created.bot.id);
+    assert_eq!(again.default_model, "grok-4.6");
+    assert_eq!(service.list_agents(user_id(USER_OWNER)).await?.len(), 1);
+
+    // Another user's connection is their own agent.
+    let other = service
+        .ensure_cursor_agent(user_id(USER_OTHER), "grok-4.6".to_owned())
+        .await?;
+    assert_ne!(other.bot.id, created.bot.id);
+    assert!(
+        service
+            .list_agents(user_id(USER_OTHER))
+            .await?
+            .iter()
+            .all(|agent| agent.bot.id != created.bot.id)
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn ensure_cursor_agent_keeps_the_users_edits(pool: PgPool) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let created = service
+        .ensure_cursor_agent(user_id(USER_OWNER), "grok-4.6".to_owned())
+        .await?;
+
+    let mut request = update_agent_req("cursor", AgentChannelScope::All);
+    request.name = "My Cursor".to_owned();
+    request.harness = harness_id::CURSOR_HARNESS_SLUG.to_owned();
+    request.harness_id = None;
+    request.default_model = "gpt-5.5".to_owned();
+    let edited = service
+        .update_agent(user_id(USER_OWNER), created.bot.id, request)
+        .await?;
+    assert_eq!(edited.bot.name, "My Cursor");
+
+    let again = service
+        .ensure_cursor_agent(user_id(USER_OWNER), "grok-4.6".to_owned())
+        .await?;
+    assert_eq!(again.bot.id, created.bot.id);
+    assert_eq!(again.bot.name, "My Cursor");
+    assert_eq!(again.default_model, "gpt-5.5");
     Ok(())
 }
 

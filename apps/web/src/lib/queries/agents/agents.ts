@@ -2,18 +2,13 @@ import { throwOnErr } from '@core/util/result';
 import { botKeys } from '@queries/bots/keys';
 import { channelKeys } from '@queries/channel/keys';
 import { queryClient } from '@queries/client';
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import type { Agent } from '@service-agent-harness/generated/schemas/agent';
+import type { AgentChannelScope } from '@service-agent-harness/generated/schemas/agentChannelScope';
+import type { AgentMcpServers } from '@service-agent-harness/generated/schemas/agentMcpServers';
 import { storageServiceClient } from '@service-storage/client';
-import type { Agent } from '@service-storage/generated/schemas/agent';
-import type { AgentChannelScope } from '@service-storage/generated/schemas/agentChannelScope';
-import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { agentKeys } from './keys';
-
-/**
- * `Agent` plus the macrod harness binding the backend now returns; the field
- * is not yet in the generated schema.
- */
-export type AgentWithHarnessId = Agent & { harness_id?: string | null };
 
 export type CreateAgentParams = {
   avatarUrl?: string;
@@ -44,8 +39,8 @@ export type DeleteAgentParams = {
 export function useAgentsQuery() {
   return useQuery(() => ({
     queryKey: agentKeys.list.queryKey,
-    queryFn: async (): Promise<AgentWithHarnessId[]> =>
-      await throwOnErr(() => storageServiceClient.getAgents()),
+    queryFn: async (): Promise<Agent[]> =>
+      await throwOnErr(() => agentHarnessServiceClient.getAgents()),
   }));
 }
 
@@ -68,7 +63,7 @@ export function useCreateAgentMutation() {
     gcTime: 0,
     mutationFn: async (vars: CreateAgentParams) =>
       await throwOnErr(() =>
-        storageServiceClient.createAgent({
+        agentHarnessServiceClient.createAgent({
           avatar_url: vars.avatarUrl,
           channel_ids: vars.channelIds,
           channel_scope: vars.channelScope,
@@ -99,8 +94,7 @@ export function useUpdateAgentMutation() {
     gcTime: 0,
     mutationFn: async (vars: UpdateAgentParams) =>
       await throwOnErr(() =>
-        storageServiceClient.updateAgent({
-          agent_id: vars.agentId,
+        agentHarnessServiceClient.updateAgent(vars.agentId, {
           avatar_url: vars.avatarUrl,
           channel_ids: vars.channelIds,
           channel_scope: vars.channelScope,

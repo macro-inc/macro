@@ -19,7 +19,7 @@
 | `/app/calendar/view` | Calendar |
 | `/app/md/<uuid>` | A document |
 | `/app/chat/<uuid>` | A standalone AI chat |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / a user's own agent such as `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
@@ -39,7 +39,7 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 
 ## Create menu
 
-`Create` button (top-left) opens a menu of: Email E, Automation U, Coding Agent A, Skill K,
+`Create` button (top-left) opens a menu of: Email E, Automation U, Agent A, Skill K,
 Document D, Task T, Reminder R, Snippet S, Message M, Channel G, Canvas N, Folder F, Code O.
 Document navigates straight into a new doc; Task and Channel open dialogs.
 

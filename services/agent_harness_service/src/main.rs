@@ -66,6 +66,8 @@ use agent_session::outbound::postgres::PgAgentSessionRepo;
 use agent_trigger::domain::broker_events::AgentSessionMacroEvent;
 use anyhow::Context as _;
 use bot_id::BotId;
+use bots::domain::service::BotServiceImpl;
+use bots::inbound::agents_router::AgentsRouterState;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use bots_directory::PgBotDirectory;
 use channels::domain::service::ChannelServiceImpl;
@@ -78,13 +80,15 @@ use channels::outbound::pg_side_effect_context::PgChannelSideEffectContext;
 use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
-use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
-use cursor_cloud_agents::api::CURSOR_API_BASE_URL;
+use cursor_api_key::cipher::{AwsKmsCiphertexts, CursorApiKeyCipher, KmsCursorApiKeyCipher};
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use github::domain::service::{InstallationTokenConfig, InstallationTokenService};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use harness_bindings::{PgHarnessBindings, PgHarnessPresence};
+use harnesses::domain::service::HarnessServiceImpl;
+use harnesses::inbound::axum_router::HarnessesRouterState;
+use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -218,8 +222,8 @@ async fn run() -> anyhow::Result<()> {
     )));
 
     // Containers: the sandbox provider (local Docker when a developer has
-    // opted in, Daytona otherwise) plus Cursor cloud agents for the `@cursor`
-    // bot, routed per session.
+    // opted in, Daytona otherwise) plus Cursor cloud agents for agents on the
+    // `cursor` harness, routed per session.
     // The Anthropic key rides into every sandbox's environment; without it the
     // runtime has no model provider at all (`container/opencode.json` enables
     // only `anthropic`), so managed sessions would advertise no models and
@@ -360,17 +364,16 @@ async fn run() -> anyhow::Result<()> {
 
     // Cursor sessions run on their owner's own Cursor account, so there is no
     // deployment-wide key to arm this with: the manager reads each session
-    // owner's key at spawn. Decrypt-only — registering keys belongs to the
-    // authentication service, and a harness that could encrypt would be a
-    // harness whose IAM role grants more than it uses.
+    // owner's key at spawn. The same cipher writes keys when a user connects
+    // Cursor in settings (`api::cursor_api_key`), which is what makes this
+    // process the one place a Cursor key is ever handled in the clear.
+    let cursor_api_key_cipher = KmsCursorApiKeyCipher::new(AwsKmsCiphertexts::new(
+        aws_sdk_kms::Client::new(&aws_config),
+        config.cursor_api_key_kms_key_id()?,
+    ));
     let cursor_manager = CursorContainerManager::new(
-        PgCursorApiKeys::new(
-            pool.clone(),
-            KmsCursorApiKeyCipher::new(AwsKmsCiphertexts::decrypting(aws_sdk_kms::Client::new(
-                &aws_config,
-            ))),
-        ),
-        CURSOR_API_BASE_URL.to_owned(),
+        PgCursorApiKeys::new(pool.clone(), cursor_api_key_cipher.clone()),
+        config.cursor_api_base_url.clone(),
         CursorRepoUrl::parse(&config.cursor_repo_url)
             .context("CURSOR_REPO_URL is not a valid repository url")?,
         session_repo.clone(),
@@ -400,16 +403,6 @@ async fn run() -> anyhow::Result<()> {
             },
         ));
     }
-    fixed_runtimes.push((
-        bot_id::CURSOR_BOT_ID,
-        AgentRuntimeConfig {
-            kind: AgentKind::Cursor,
-            model: config.harness_model.clone(),
-            harness: "cursor".to_owned(),
-            instructions: String::new(),
-            mcp_servers: AgentMcpServers::OwnerConnections,
-        },
-    ));
     let runtime_directory =
         PgAgentRuntimeDirectory::new(PgBotsRepo::new(pool.clone()), fixed_runtimes.clone());
     // Logged because the failure mode this replaced was silent: a harness that
@@ -442,6 +435,13 @@ async fn run() -> anyhow::Result<()> {
             .context("failed to create kafka event publisher")?,
         macro_event_broker::GlobalSpawner,
     );
+    // Agents (personas) are managed here as well as run here: creating one
+    // publishes the same bot lifecycle event the storage service publishes for
+    // plain bots, on the same broker.
+    let bots_service = Arc::new(BotServiceImpl::new(
+        PgBotsRepo::new(pool.clone()),
+        broker.clone(),
+    ));
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway.clone()),
@@ -593,14 +593,34 @@ async fn run() -> anyhow::Result<()> {
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let agents_state = AgentsRouterState::new(
+        Arc::clone(&bots_service),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
+    let harnesses_state = HarnessesRouterState::new(
+        HarnessServiceImpl::new(PgHarnessRepo::new(pool.clone())),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
+    let cursor_state = api::CursorApiKeyState::new(
+        pool.clone(),
+        Arc::new(cursor_api_key_cipher) as Arc<dyn CursorApiKeyCipher>,
+        config.cursor_api_base_url.clone(),
+        bots_service,
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let http_runtime_commands_readiness = runtime_commands_readiness.clone();
     let http_port = config.port;
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
-            read_state,
-            control_state,
-            create_state,
-            gateway_state,
+            api::ApiStates {
+                read: read_state,
+                control: control_state,
+                create: create_state,
+                gateway: gateway_state,
+                agents: agents_state,
+                harnesses: harnesses_state,
+                cursor: cursor_state,
+            },
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),

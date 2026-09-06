@@ -32,7 +32,6 @@ import type { AccessLevel } from './generated/schemas/accessLevel';
 import type { AddFavoriteRequest } from './generated/schemas/addFavoriteRequest';
 import type { AddParticipantsRequest } from './generated/schemas/addParticipantsRequest';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
-import type { Agent } from './generated/schemas/agent';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
 import type { ApiActivity } from './generated/schemas/apiActivity';
 import type { ApiChannelAttachmentsPage } from './generated/schemas/apiChannelAttachmentsPage';
@@ -54,7 +53,6 @@ import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
-import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
 import type { CreateChannelScopedBotRequest } from './generated/schemas/createChannelScopedBotRequest';
@@ -158,7 +156,6 @@ import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersio
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { ThreadResponse } from './generated/schemas/threadResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
-import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
 import type { UpdateReminderRequest } from './generated/schemas/updateReminderRequest';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
@@ -286,48 +283,7 @@ export type TaskSimilaritySearchResponse = {
 };
 
 type WithBotId = { bot_id: string };
-type WithAgentId = { agent_id: string };
 type WithChannelId = { channel_id: string };
-
-/** Who owns a registered harness: the registering user or their team. */
-export type HarnessOwner =
-  | { type: 'user'; user_id: string }
-  | { type: 'team'; team_id: string };
-
-/** A macrod harness registered with the workspace. */
-export type Harness = {
-  id: string;
-  kind: 'macrod';
-  name: string;
-  owner: HarnessOwner;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-  connected: boolean;
-  last_connected_at: string | null;
-};
-
-/** A pending macrod pairing request, looked up by its printed code. */
-export type HarnessPairing = {
-  code: string;
-  requested_name: string;
-  host: string | null;
-  /** The scope the daemon's config asked for; preselects the dialog. */
-  requested_scope: 'private' | 'team' | null;
-  created_at: string;
-  expires_at: string;
-};
-
-type ApproveHarnessPairingRequest = {
-  name?: string;
-  team_id?: string;
-};
-
-/**
- * The optional macrod harness binding on agent requests/responses. The backend
- * field is not yet in the generated schemas, so it is layered on here.
- */
-type WithHarnessId = { harness_id?: string | null };
 
 type CreateBotRequest = {
   team_id?: string;
@@ -593,73 +549,6 @@ export const storageServiceClient = {
         method: 'GET',
       })
     ).map((result) => result);
-  },
-
-  async getAgents() {
-    return (
-      await dssFetch<(Agent & WithHarnessId)[]>(`/agents`, {
-        method: 'GET',
-      })
-    ).map((result) => result);
-  },
-
-  async createAgent(args: CreateAgentRequest & WithHarnessId) {
-    return (
-      await dssFetch<Agent & WithHarnessId>(`/agents`, {
-        method: 'POST',
-        body: JSON.stringify(args),
-      })
-    ).map((result) => result);
-  },
-
-  async updateAgent(args: WithAgentId & UpdateAgentRequest & WithHarnessId) {
-    const { agent_id, ...request } = args;
-    return (
-      await dssFetch<Agent & WithHarnessId>(`/agents/${agent_id}`, {
-        method: 'PUT',
-        body: JSON.stringify(request),
-      })
-    ).map((result) => result);
-  },
-
-  async getHarnesses() {
-    return (
-      await dssFetch<Harness[]>(`/harnesses`, {
-        method: 'GET',
-      })
-    ).map((result) => result);
-  },
-
-  async getHarnessPairing(args: { code: string }) {
-    return (
-      await dssFetch<HarnessPairing>(
-        `/harness-pairings/${encodeURIComponent(args.code)}`,
-        {
-          method: 'GET',
-        }
-      )
-    ).map((result) => result);
-  },
-
-  async approveHarnessPairing(
-    args: { code: string } & ApproveHarnessPairingRequest
-  ) {
-    const { code, ...request } = args;
-    return (
-      await dssFetch<Harness>(
-        `/harness-pairings/${encodeURIComponent(code)}/approve`,
-        {
-          method: 'POST',
-          body: JSON.stringify(request),
-        }
-      )
-    ).map((result) => result);
-  },
-
-  async deleteHarness(args: { harness_id: string }) {
-    return await dssFetch(`/harnesses/${args.harness_id}`, {
-      method: 'DELETE',
-    });
   },
 
   async createBot(args: CreateBotRequest) {
