@@ -1,6 +1,7 @@
 import { type Accessor, createMemo } from 'solid-js';
 import type { ActivityContext } from '../context/activity-context';
 import type { ActivityOverview } from '../core/event';
+import { type FeedRow, flattenFeed, reuseRows } from '../core/feed-rows';
 import { type FeedGroup, groupEventsByDay } from '../core/group-events';
 import { createMyActivityQuery } from '../queries/feed-query';
 import { createMyActivityOverviewQuery } from '../queries/overview-query';
@@ -19,6 +20,9 @@ export type OverviewView =
 export type MyActivityState = {
   overview: Accessor<OverviewView>;
   feed: Accessor<FeedView>;
+  /** Every virtualized row of the screen: the overview first, then the feed. */
+  rows: Accessor<FeedRow[]>;
+  /** Fetch the next feed page. No-op while one is in flight or none remain. */
   loadMore: () => void;
 };
 
@@ -57,9 +61,22 @@ export function createMyActivityState(
     return { t: 'empty' };
   });
 
+  const rows = createMemo<FeedRow[]>((previous) => {
+    const current = feed();
+    const feedRows: FeedRow[] =
+      current.t === 'ready'
+        ? flattenFeed(current.groups, { hasMore: current.hasMore })
+        : [{ kind: 'status', status: current.t }];
+    return reuseRows(previous, [{ kind: 'overview' }, ...feedRows]);
+  }, []);
+
   return {
     overview,
     feed,
-    loadMore: () => void feedQuery.fetchNextPage(),
+    rows,
+    loadMore: () => {
+      if (!feedQuery.hasNextPage || feedQuery.isFetchingNextPage) return;
+      void feedQuery.fetchNextPage();
+    },
   };
 }
