@@ -1,9 +1,11 @@
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
-import { MACRO_CODER_NAME } from '@core/constant/macroCoder';
+import { CURSOR_BOT_HANDLE, CURSOR_BOT_ID } from '@core/constant/cursorAgent';
+import { MACRO_CODER_HANDLE } from '@core/constant/macroCoder';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import RobotIcon from '@phosphor/robot.svg';
@@ -17,14 +19,22 @@ import { Avatar, badgeTriggerClasses, Button, cn, Dropdown, Hotkey } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { startPendingSession } from '../context/pending-session';
 import {
+  harnessDisplayName,
   type ModelOption,
+  type ModelShortlist,
   modelPillLabel,
-  overrideModelOptions,
   type PersonaOption,
   personaDefaultLabel,
+  shortlistModelOptions,
 } from './compose-agent-session-options';
 
-const DEFAULT_PERSONA_ID = 'macro-coder';
+/**
+ * The deployment's default coder. Sent without a `botId`, so the server picks
+ * its managed default persona.
+ */
+const MACRO_AGENT_PERSONA_ID = 'macro-agent';
+const MACRO_AGENT_NAME = 'Macro Agent';
+const CURSOR_CODER_NAME = 'Cursor Coder';
 
 const IN_MEMORY_MODELS: ModelOption[] = Object.values(Model).map((id) => ({
   id,
@@ -52,18 +62,30 @@ export function ComposeAgentSession() {
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const cursorModels = useCursorModelsQuery(cursorConnected);
   const [prompt, setPrompt] = createSignal('');
-  const [personaId, setPersonaId] = createSignal(DEFAULT_PERSONA_ID);
+  const [personaId, setPersonaId] = createSignal(MACRO_AGENT_PERSONA_ID);
   const [modelOverride, setModelOverride] = createSignal('');
   const [submitting, setSubmitting] = createSignal(false);
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   let promptRef: HTMLTextAreaElement | undefined;
 
+  // Built-in coders lead, then the user's own personas.
   const personas = (): PersonaOption[] => [
     {
-      id: DEFAULT_PERSONA_ID,
-      name: MACRO_CODER_NAME,
-      handle: 'coder',
+      id: MACRO_AGENT_PERSONA_ID,
+      name: MACRO_AGENT_NAME,
+      handle: MACRO_CODER_HANDLE,
       harness: 'sandbox',
+    },
+    {
+      id: CURSOR_BOT_ID,
+      botId: CURSOR_BOT_ID,
+      name: CURSOR_CODER_NAME,
+      handle: CURSOR_BOT_HANDLE,
+      harness: 'cursor',
+      defaultModel: cursorStatus.data?.defaultModelId ?? undefined,
+      unavailableReason: cursorConnected()
+        ? undefined
+        : 'Connect Cursor in Settings → Harness',
     },
     ...(agentsQuery.isSuccess ? agentsQuery.data : [])
       // A connected macrod owns its workspace and starts sessions itself.
@@ -87,13 +109,14 @@ export function ComposeAgentSession() {
         ? cursorModels.data.models.map((model) => ({
             id: model.id,
             name: model.displayName,
+            group: model.group ?? undefined,
           }))
         : [];
     }
     return IN_MEMORY_MODELS;
   };
-  const overrideModels = () =>
-    overrideModelOptions(selectedPersona(), availableModels());
+  const modelShortlist = () =>
+    shortlistModelOptions(selectedPersona(), availableModels());
 
   const close = () => splitPanel.handle.close();
   const setPersona = (id: string) => {
@@ -187,7 +210,7 @@ export function ComposeAgentSession() {
       <Show when={agentsQuery.isError}>
         <p class="px-2 text-xs text-negative">
           Your saved personas could not be loaded. You can still start with{' '}
-          {MACRO_CODER_NAME}.
+          {MACRO_AGENT_NAME}.
         </p>
       </Show>
 
@@ -202,7 +225,7 @@ export function ComposeAgentSession() {
           <ModelPicker
             persona={selectedPersona()}
             available={availableModels()}
-            overrides={overrideModels()}
+            shortlist={modelShortlist()}
             value={modelOverride()}
             loading={
               selectedPersona()?.harness === 'cursor' && cursorModels.isPending
@@ -256,6 +279,8 @@ function PersonaPicker(props: {
                   'h-10 gap-2.5',
                   persona.id === props.selected?.id && 'bg-ink/5 text-ink'
                 )}
+                disabled={persona.unavailableReason !== undefined}
+                title={persona.unavailableReason}
                 onSelect={() => props.onSelect(persona.id)}
               >
                 <PersonaAvatar persona={persona} size="sm" />
@@ -269,7 +294,9 @@ function PersonaPicker(props: {
                     {persona.name}
                   </span>
                   <span class="truncate text-xs text-ink-extra-muted">
-                    @{persona.handle} · {persona.harness}
+                    @{persona.handle} ·{' '}
+                    {persona.unavailableReason ??
+                      harnessDisplayName(persona.harness)}
                   </span>
                 </span>
                 <Show when={persona.id === props.selected?.id}>
@@ -292,7 +319,7 @@ function PersonaPicker(props: {
 function ModelPicker(props: {
   persona: PersonaOption | undefined;
   available: ModelOption[];
-  overrides: ModelOption[];
+  shortlist: ModelShortlist;
   value: string;
   loading: boolean;
   onSelect: (id: string) => void;
@@ -322,7 +349,7 @@ function ModelPicker(props: {
             selected={props.value === ''}
             onSelect={() => props.onSelect('')}
           />
-          <For each={props.overrides}>
+          <For each={props.shortlist.featured}>
             {(model) => (
               <ModelRow
                 label={model.name}
@@ -331,6 +358,31 @@ function ModelPicker(props: {
               />
             )}
           </For>
+          <Show when={props.shortlist.more.length > 0}>
+            <Dropdown.Sub>
+              <Dropdown.SubTrigger class="h-8">
+                <span class="truncate">More models</span>
+                <span class="flex shrink-0 items-center gap-1 text-xs text-ink-extra-muted">
+                  {props.shortlist.more.length}
+                  <CaretRightIcon class="size-3" />
+                </span>
+              </Dropdown.SubTrigger>
+              <Dropdown.SubContent class="w-72 max-w-[min(24rem,calc(100vw-1rem))]">
+                <Dropdown.Group class={MENU_LIST_CLASS}>
+                  <For each={props.shortlist.more}>
+                    {(model) => (
+                      <ModelRow
+                        label={model.name}
+                        hint={model.group}
+                        selected={props.value === model.id}
+                        onSelect={() => props.onSelect(model.id)}
+                      />
+                    )}
+                  </For>
+                </Dropdown.Group>
+              </Dropdown.SubContent>
+            </Dropdown.Sub>
+          </Show>
           <Show when={props.loading}>
             <div class="px-2 py-2 text-xs text-ink-extra-muted">
               Loading models…
@@ -349,6 +401,8 @@ function ModelPicker(props: {
 
 function ModelRow(props: {
   label: string;
+  /** Trailing muted text, e.g. the family a model belongs to. */
+  hint?: string;
   selected: boolean;
   onSelect: () => void;
 }) {
@@ -358,6 +412,9 @@ function ModelRow(props: {
       onSelect={props.onSelect}
     >
       <span class="min-w-0 flex-1 truncate text-sm">{props.label}</span>
+      <Show when={props.hint}>
+        <span class="shrink-0 text-xs text-ink-extra-muted">{props.hint}</span>
+      </Show>
       <Show when={props.selected}>
         <CheckIcon class="size-3.5 shrink-0 text-accent" />
       </Show>
