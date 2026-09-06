@@ -107,9 +107,6 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           // Register after it so the list cannot take focus back from search.
           setTimeout(() => searchRef?.focus(), 0);
         }}
-        onEscapeKeyDown={() => {
-          dismissedWithEscape = true;
-        }}
         onCloseAutoFocus={(event) => {
           if (!dismissedWithEscape) return;
           dismissedWithEscape = false;
@@ -131,7 +128,11 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
             onMouseDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
-              if (event.key !== 'Escape') event.stopPropagation();
+              if (event.key === 'Escape') {
+                dismissedWithEscape = true;
+              } else {
+                event.stopPropagation();
+              }
             }}
             onKeyUp={(event) => {
               if (event.key !== 'Escape') event.stopPropagation();
