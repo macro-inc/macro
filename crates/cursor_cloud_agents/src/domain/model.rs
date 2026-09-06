@@ -129,7 +129,7 @@ pub enum RunStatus {
 }
 
 /// A run's state as `GET /v1/agents/{id}/runs/{run}` reports it.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunOutcome {
     /// Where the run is in its lifecycle.
     pub status: RunStatus,

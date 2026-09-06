@@ -410,6 +410,31 @@ discipline above is the cost of admission.
 
 ## Lifecycle mapping
 
+### Durable Load History
+
+Cursor restores through ACP `session/load`, not `session/resume`. The native
+journal and effective-history contract are specified in
+[`CURSOR_ACP_REPLAY_PLAN.md`](CURSOR_ACP_REPLAY_PLAN.md). The implementation
+captures original prompts, complete SSE records, polling bodies, and local
+lifecycle decisions before translating them. Loading uses the same processing
+machine as live delivery and never executes a provider prompt or tool again.
+
+Every replayed ACP frame is appended to `agent_session_log`, including repeated
+conversation content. Only a matching, valid, successfully persisted load
+response selects a new effective-history window, starting at that connection's
+initialization. The selection is atomic with the response under the session's
+ownership fence. The raw audit history is retained; the product log endpoint
+reads the selected indexed range. Generic server and browser folds stage load
+updates separately and replace visible history only on success. Failed or
+incomplete loads preserve the committed conversation; resume does not replace it.
+
+Existing sessions without a complete native journal require provider-history
+hydration. If Cursor no longer exposes enough history to reconstruct the
+conversation, load must fail explicitly rather than select an incomplete
+replacement. Operators should account for this retention limitation before
+rollout. The delivered-run watermark remains separate from journal capture
+progress, and local journal sequence numbers are not remote SSE resume tokens.
+
 Most of the sandbox lifecycle is meaningless for Cursor. Stating what each port
 method degenerates to, so the small implementation does not read as an
 oversight:

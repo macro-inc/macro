@@ -14,6 +14,10 @@ what a reader has to order these against anything else it is showing
 beside them - the fold derives an order among the messages of one
 session and nothing more. */
   createdAt: string;
+  /** Durable transport row identity; together with `createdAt`, its order cursor. */
+  id: string;
+  /** Interpretation context for pre-rollout loads; raw content is unchanged. */
+  legacyLoad?: boolean;
   /** The user whose action produced the frame, absent when no user did.
 
 Only prompts carry one, and only when the frame was attributed at the

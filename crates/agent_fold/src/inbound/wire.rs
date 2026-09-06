@@ -73,6 +73,11 @@ pub enum FoldedStreamEvent {
         /// The message as it now stands.
         message: FoldedMessage,
     },
+    /// Replace all messages for this session, including removal of old rows.
+    Replace {
+        /// The complete committed conversation.
+        messages: Vec<FoldedMessage>,
+    },
     /// The session's metadata changed; here it is in full.
     Metadata {
         /// The metadata as it now stands.
@@ -90,6 +95,13 @@ impl FoldedStreamEvent {
             },
             FoldEvent::MessageUpdate(message) => Self::Update {
                 message: FoldedMessage::new(session, message.into_owned()),
+            },
+            FoldEvent::MessagesReplaced(messages) => Self::Replace {
+                messages: messages
+                    .into_owned()
+                    .into_iter()
+                    .map(|message| FoldedMessage::new(session, message))
+                    .collect(),
             },
             FoldEvent::MetadataUpdated(metadata) => Self::Metadata {
                 metadata: metadata.into_owned(),

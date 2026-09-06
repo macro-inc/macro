@@ -118,6 +118,7 @@ async fn append_system_event(
     let _ = AgentSessionLogRepo::create(
         repo,
         AgentSessionLog {
+            legacy_load: false,
             agent_session_id,
             user_id: None,
             content: Message::ToServer(ToServerMessage::Event { event }),
@@ -509,6 +510,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
     let _ = AgentSessionLogRepo::create(
         &repo,
         AgentSessionLog {
+            legacy_load: false,
             agent_session_id: session_id,
             user_id: Some(user.clone()),
             content: Message::ToServer(ToServerMessage::Event {
@@ -530,6 +532,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
     let _ = AgentSessionLogRepo::create(
         &repo,
         AgentSessionLog {
+            legacy_load: false,
             agent_session_id: session_id,
             user_id: None,
             content: Message::ToRuntime(ToRuntimeMessage::Acp(acp_notification())),
@@ -966,6 +969,7 @@ fn claimed(outcome: ClaimOutcome) -> SessionClaim {
 
 fn fenced_log(id: AgentSessionId) -> AgentSessionLog {
     AgentSessionLog {
+        legacy_load: false,
         agent_session_id: id,
         user_id: None,
         content: Message::ToRuntime(ToRuntimeMessage::Acp(acp_notification())),
@@ -974,6 +978,7 @@ fn fenced_log(id: AgentSessionId) -> AgentSessionLog {
 
 fn cursor_checkpoint_log(id: AgentSessionId, run: &str) -> AgentSessionLog {
     AgentSessionLog {
+        legacy_load: false,
         agent_session_id: id,
         user_id: None,
         content: Message::ToServer(ToServerMessage::Acp(AcpMessage(
@@ -1139,4 +1144,458 @@ async fn cursor_checkpoint_advances_atomically_under_the_session_fence(pool: PgP
             .and_then(|external| external.last_run_id),
         Some("run-2".to_owned())
     );
+}
+
+/// Exercise the generic boundary contract without asking persistence to inspect ACP JSON.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn history_boundary_selects_initialization_and_keeps_raw_audit(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
+    repo.create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    assert_eq!(
+        AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    for expected_raw in [4_i64, 7] {
+        let init = repo
+            .create_fenced(fenced_log(session.id), &claim)
+            .await
+            .unwrap();
+        repo.create_fenced(fenced_log(session.id), &claim)
+            .await
+            .unwrap();
+        let response = repo
+            .create_fenced_with_boundary(
+                fenced_log(session.id),
+                &claim,
+                Some(crate::domain::model::HistoryBoundary {
+                    initialization_log_id: init.id,
+                }),
+            )
+            .await
+            .unwrap();
+        let history = AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap();
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0].id, init.id);
+        assert_eq!(history[2].id, response.id);
+        let raw = sqlx::query_scalar!(
+            "SELECT count(*) FROM agent_session_log WHERE agent_session_id = $1",
+            session.id.as_uuid()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(raw, Some(expected_raw));
+    }
+    // An ordinary append (including resume/error/disconnect) never changes the boundary.
+    repo.create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    assert_eq!(
+        AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap()
+            .len(),
+        4
+    );
+    AgentSessionRepo::delete(&repo, session.id).await.unwrap();
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT count(*) FROM agent_session_log WHERE agent_session_id = $1",
+            session.id.as_uuid()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn history_boundary_rejects_foreign_rows_and_stale_claims_atomically(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let other = create_session(&repo, new_session(bot, None, None)).await;
+    let replica = ReplicaId::mint();
+    let claim = claimed(repo.claim(session.id, replica).await.unwrap());
+    let foreign = AgentSessionLogRepo::create(&repo, fenced_log(other.id))
+        .await
+        .unwrap();
+    let boundary = crate::domain::model::HistoryBoundary {
+        initialization_log_id: foreign.id,
+    };
+    assert!(
+        repo.create_fenced_with_boundary(fenced_log(session.id), &claim, Some(boundary))
+            .await
+            .is_err()
+    );
+    assert!(
+        AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let init = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    let current = claimed(repo.claim(session.id, replica).await.unwrap());
+    let boundary = crate::domain::model::HistoryBoundary {
+        initialization_log_id: init.id,
+    };
+    assert!(matches!(
+        repo.create_fenced_with_boundary(fenced_log(session.id), &claim, Some(boundary))
+            .await,
+        Err(AgentSessionError::FencedOut(_))
+    ));
+    assert!(
+        repo.create_fenced_with_boundary(fenced_log(other.id), &current, Some(boundary))
+            .await
+            .is_err()
+    );
+    assert_eq!(
+        AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT history_start_log_id FROM agent_session WHERE id = $1",
+            session.id.as_uuid()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        None
+    );
+    // The FK also rejects a direct cross-session update.
+    assert!(
+        sqlx::query!(
+            "UPDATE agent_session SET history_start_log_id = $2 WHERE id = $1",
+            session.id.as_uuid(),
+            foreign.id
+        )
+        .execute(&pool)
+        .await
+        .is_err()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn history_boundary_update_failure_rolls_back_response(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
+    let init = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE FUNCTION reject_history_boundary() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected boundary failure'; END $$; CREATE TRIGGER reject_history_boundary BEFORE UPDATE OF history_start_log_id ON agent_session FOR EACH ROW EXECUTE FUNCTION reject_history_boundary();").execute(&pool).await.unwrap();
+    assert!(
+        repo.create_fenced_with_boundary(
+            fenced_log(session.id),
+            &claim,
+            Some(crate::domain::model::HistoryBoundary {
+                initialization_log_id: init.id
+            })
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT history_start_log_id FROM agent_session WHERE id = $1",
+            session.id.as_uuid()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        None
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn history_boundary_insert_failure_keeps_previous_selection(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
+    let init = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    let boundary = crate::domain::model::HistoryBoundary {
+        initialization_log_id: init.id,
+    };
+    repo.create_fenced_with_boundary(fenced_log(session.id), &claim, Some(boundary))
+        .await
+        .unwrap();
+    let next = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE FUNCTION reject_history_append() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'injected append failure'; END $$; CREATE TRIGGER reject_history_append BEFORE INSERT ON agent_session_log FOR EACH ROW EXECUTE FUNCTION reject_history_append();").execute(&pool).await.unwrap();
+    assert!(
+        repo.create_fenced_with_boundary(
+            fenced_log(session.id),
+            &claim,
+            Some(crate::domain::model::HistoryBoundary {
+                initialization_log_id: next.id
+            })
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT history_start_log_id FROM agent_session WHERE id = $1",
+            session.id.as_uuid()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(init.id)
+    );
+    assert_eq!(
+        AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap()
+            .len(),
+        3
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn history_boundary_readers_see_response_and_selection_together(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
+    repo.create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    let init = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    // Pause the update after the response INSERT, while its transaction is uncommitted.
+    let mut blocker = pool.begin().await.unwrap();
+    sqlx::query!("SELECT 1 AS ignored FROM pg_advisory_xact_lock(1987213841)")
+        .fetch_one(&mut *blocker)
+        .await
+        .unwrap();
+    sqlx::raw_sql("CREATE FUNCTION pause_history_boundary() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN PERFORM pg_advisory_xact_lock(1987213841); RETURN NEW; END $$; CREATE TRIGGER pause_history_boundary BEFORE UPDATE OF history_start_log_id ON agent_session FOR EACH ROW EXECUTE FUNCTION pause_history_boundary();").execute(&pool).await.unwrap();
+    let writer = repo.clone();
+    let task = tokio::spawn(async move {
+        writer
+            .create_fenced_with_boundary(
+                fenced_log(session.id),
+                &claim,
+                Some(crate::domain::model::HistoryBoundary {
+                    initialization_log_id: init.id,
+                }),
+            )
+            .await
+    });
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let blocked = sqlx::query_scalar!("SELECT EXISTS(SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND objid = 1987213841 AND NOT granted)").fetch_one(&pool).await.unwrap();
+            if blocked == Some(true) { break; }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+    }).await.expect("writer reached boundary update");
+    let before = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .unwrap();
+    assert_eq!(before.len(), 2);
+    assert_eq!(before[1].id, init.id);
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT history_start_log_id FROM agent_session WHERE id = $1",
+            session.id.as_uuid()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        None
+    );
+    blocker.commit().await.unwrap();
+    let response = task.await.unwrap().unwrap();
+    let after = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .unwrap();
+    assert_eq!(after.len(), 2);
+    assert_eq!(after[0].id, init.id);
+    assert_eq!(after[1].id, response.id);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn history_boundary_range_uses_order_index_and_uuid_tie_break(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    // Equal timestamps force ordering and selection to use the UUID tie-break.
+    sqlx::query!(
+        "INSERT INTO agent_session_log (id, agent_session_id, direction, content, created_at) SELECT lpad(to_hex(n), 32, '0')::uuid, $1, 'to_server', $2, '2026-01-01'::timestamptz FROM generate_series(1, 10000) n",
+        session.id.as_uuid(),
+        serde_json::to_value(ToServerMessage::Event { event: SystemEvent::AcpReady }).unwrap(),
+    ).execute(&pool).await.unwrap();
+    let boundary = Uuid::from_u128(9900);
+    sqlx::query!(
+        "UPDATE agent_session SET history_start_log_id = $2 WHERE id = $1",
+        session.id.as_uuid(),
+        boundary
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql("ANALYZE agent_session_log; ANALYZE agent_session;")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let history = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .unwrap();
+    assert_eq!(history.len(), 101);
+    assert_eq!(history[0].id, boundary);
+    assert_eq!(history[100].id, Uuid::from_u128(10000));
+    // GET and realtime must carry the same authoritative row cursor, including
+    // the UUID tie-break when all timestamps are equal.
+    for stored in &history {
+        let dto = crate::inbound::axum_router::AgentSessionLogEntryDto::from(stored.clone());
+        let event = crate::outbound::connection_gateway_realtime::AgentSessionLogEvent::new(
+            crate::domain::model::LogAppended {
+                agent_session_id: session.id,
+                entry: stored.clone(),
+            },
+        );
+        let dto = serde_json::to_value(dto).unwrap();
+        let event = serde_json::to_value(event).unwrap();
+        assert_eq!(dto["id"], stored.id.to_string());
+        assert_eq!(dto["id"], event["id"]);
+        assert_eq!(dto["createdAt"], event["createdAt"]);
+    }
+
+    // Explain the production query itself so this check cannot drift from the reader.
+    let source = include_str!("../postgres.rs");
+    let query_start = source
+        .find("            SELECT\n                log.id,")
+        .unwrap();
+    let query = source[query_start..].split("\"#,").next().unwrap();
+    let explain = format!("EXPLAIN (ANALYZE, FORMAT TEXT) {query}");
+    #[expect(
+        clippy::disallowed_methods,
+        reason = "EXPLAIN is built from the production query source to verify its actual plan"
+    )]
+    let plan: Vec<(String,)> = sqlx::query_as(&explain)
+        .bind(session.id.as_uuid())
+        .fetch_all(&pool)
+        .await
+        .unwrap();
+    let plan = plan
+        .into_iter()
+        .map(|(line,)| line)
+        .collect::<Vec<_>>()
+        .join("\n");
+    println!("{plan}");
+    assert!(plan.contains("agent_session_log_session_order"), "{plan}");
+    assert!(
+        plan.contains("Index Cond:") && plan.contains("ROW(created_at, id) >= ROW("),
+        "{plan}"
+    );
+    // NULL boundaries use the same indexed range, from the beginning.
+    sqlx::query!(
+        "UPDATE agent_session SET history_start_log_id = NULL WHERE id = $1",
+        session.id.as_uuid()
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap()
+            .len(),
+        10000
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn legacy_load_migration_preserves_raw_frames_and_only_marks_existing_cursor_attempts(
+    pool: PgPool,
+) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    ExternalSessionRepo::upsert(&repo, session.id, cursor_external("legacy-session"))
+        .await
+        .unwrap();
+    let mut load = fenced_log(session.id);
+    load.content = parse_message(
+        "to_runtime",
+        serde_json::json!({
+            "type":"acp", "jsonrpc":"2.0", "id":1, "method":"session/load",
+            "params":{"sessionId":"s","cwd":"/","mcpServers":[]}
+        }),
+    )
+    .unwrap();
+    AgentSessionLogRepo::create(&repo, load.clone())
+        .await
+        .unwrap();
+    AgentSessionLogRepo::create(&repo, fenced_log(session.id))
+        .await
+        .unwrap();
+    let generic = create_session(&repo, new_session(bot, None, None)).await;
+    let mut generic_load = load.clone();
+    generic_load.agent_session_id = generic.id;
+    AgentSessionLogRepo::create(&repo, generic_load)
+        .await
+        .unwrap();
+    // Re-run the generated migration against rows representing pre-rollout data.
+    sqlx::raw_sql(include_str!("../../../../macro_db_client/migrations/20260906042344_agent_session_legacy_load_context.down.sql"))
+        .execute(&pool).await.unwrap();
+    sqlx::raw_sql(include_str!("../../../../macro_db_client/migrations/20260906042344_agent_session_legacy_load_context.up.sql"))
+        .execute(&pool).await.unwrap();
+    AgentSessionLogRepo::create(&repo, load.clone())
+        .await
+        .unwrap();
+    let entries = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .unwrap();
+    assert_eq!(entries.len(), 3);
+    assert!(entries[0].entry.legacy_load);
+    assert!(!entries[1].entry.legacy_load);
+    assert!(!entries[2].entry.legacy_load);
+    assert_eq!(
+        serde_json::to_value(&entries[0].entry.content).unwrap(),
+        serde_json::to_value(&load.content).unwrap()
+    );
+    let dto = crate::inbound::axum_router::AgentSessionLogEntryDto::from(entries[0].clone());
+    let wire = serde_json::to_value(dto).unwrap();
+    assert_eq!(wire["legacyLoad"], true);
+    assert_eq!(wire["content"]["method"], "session/load");
+    let generic_entries = AgentSessionLogRepo::list_by_session(&repo, generic.id)
+        .await
+        .unwrap();
+    assert!(!generic_entries[0].entry.legacy_load);
 }

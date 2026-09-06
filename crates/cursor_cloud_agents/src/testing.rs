@@ -76,6 +76,8 @@ struct FakeCursorState {
     create_gate: Option<tokio::sync::oneshot::Receiver<()>>,
     /// The answer every `list_models` call gets.
     models: Vec<CursorModel>,
+    model_gate: Option<tokio::sync::oneshot::Receiver<()>>,
+    reject_create: bool,
 }
 
 impl FakeCursor {
@@ -129,6 +131,17 @@ impl FakeCursor {
         let (sender, receiver) = tokio::sync::oneshot::channel();
         self.inner.lock().expect("fake cursor poisoned").create_gate = Some(receiver);
         sender
+    }
+
+    /// Hold model resolution to inspect pre-execution ordering.
+    pub fn script_model_gate(&self) -> tokio::sync::oneshot::Sender<()> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.inner.lock().unwrap().model_gate = Some(rx);
+        tx
+    }
+    /// Reject the next create with a definite provider rejection.
+    pub fn script_rejection(&self) {
+        self.inner.lock().unwrap().reject_create = true;
     }
 
     /// Set the models `list_models` answers with.
@@ -213,6 +226,12 @@ impl CursorAgents for FakeCursor {
         ));
         self.await_create_gate().await;
         let mut state = self.inner.lock().expect("fake cursor poisoned");
+        if std::mem::take(&mut state.reject_create) {
+            return Err(rootcause::report!(crate::domain::error::PromptRejected(
+                "rejected".into()
+            ))
+            .into_dynamic());
+        }
         state.next_run += 1;
         Ok((
             CursorAgentId::new("bc-fake"),
@@ -231,16 +250,27 @@ impl CursorAgents for FakeCursor {
             prompt.to_owned(),
             model.cloned(),
         ));
+        self.await_create_gate().await;
         let mut state = self.inner.lock().expect("fake cursor poisoned");
         if !state.create_run_errors.is_empty() {
             let message = state.create_run_errors.remove(0);
             return Err(rootcause::report!("{message}"));
+        }
+        if std::mem::take(&mut state.reject_create) {
+            return Err(rootcause::report!(crate::domain::error::PromptRejected(
+                "rejected".into()
+            ))
+            .into_dynamic());
         }
         state.next_run += 1;
         Ok(CursorRunId::new(format!("run-fake-{}", state.next_run)))
     }
 
     async fn list_models(&self) -> Result<Vec<CursorModel>, rootcause::Report> {
+        let gate = self.inner.lock().unwrap().model_gate.take();
+        if let Some(gate) = gate {
+            let _ = gate.await;
+        }
         Ok(self
             .inner
             .lock()
@@ -305,10 +335,14 @@ impl RunStream for FakeCursor {
     }
 }
 
-/// Records every update it is asked to deliver.
+type RecordedUpdates = Vec<(SessionId, SessionUpdate)>;
+
+/// Records selected updates, committing history replacements atomically.
+/// Tests of raw frame ordering use the served ACP transport instead.
 #[derive(Debug, Clone, Default)]
 pub struct RecordingNotifier {
-    updates: Arc<Mutex<Vec<(SessionId, SessionUpdate)>>>,
+    updates: Arc<Mutex<RecordedUpdates>>,
+    candidate: Arc<Mutex<Option<RecordedUpdates>>>,
     delivered: Arc<tokio::sync::Notify>,
 }
 
@@ -319,7 +353,7 @@ impl RecordingNotifier {
         Self::default()
     }
 
-    /// Everything delivered so far, in order.
+    /// The selected history and live updates, in order.
     #[must_use]
     pub fn updates(&self) -> Vec<(SessionId, SessionUpdate)> {
         self.updates.lock().expect("notifier poisoned").clone()
@@ -350,11 +384,43 @@ impl SessionNotifier for RecordingNotifier {
         session: &SessionId,
         update: SessionUpdate,
     ) -> Result<(), rootcause::Report> {
-        self.updates
-            .lock()
-            .expect("notifier poisoned")
-            .push((session.clone(), update));
+        let mut candidate = self.candidate.lock().expect("notifier poisoned");
+        if let Some(updates) = candidate.as_mut() {
+            updates.push((session.clone(), update));
+        } else {
+            self.updates
+                .lock()
+                .expect("notifier poisoned")
+                .push((session.clone(), update));
+        }
         self.delivered.notify_waiters();
+        Ok(())
+    }
+
+    async fn history_snapshot(
+        &self,
+        _session: &SessionId,
+        _snapshot_id: &str,
+        phase: agent_runtime_protocol::domain::turn::HistorySnapshotPhase,
+    ) -> Result<(), rootcause::Report> {
+        use agent_runtime_protocol::domain::turn::HistorySnapshotPhase;
+        let mut candidate = self.candidate.lock().expect("notifier poisoned");
+        match phase {
+            HistorySnapshotPhase::Begin => *candidate = Some(Vec::new()),
+            HistorySnapshotPhase::Commit => {
+                *self.updates.lock().expect("notifier poisoned") =
+                    candidate.take().expect("snapshot began");
+                self.delivered.notify_waiters();
+            }
+        }
+        Ok(())
+    }
+
+    async fn turn_complete(
+        &self,
+        _session: &SessionId,
+        _outcome: agent_runtime_protocol::domain::turn::TurnOutcome,
+    ) -> Result<(), rootcause::Report> {
         Ok(())
     }
 
@@ -375,4 +441,27 @@ impl RepoResolver for FixedRepos {
     fn resolve(&self, _cwd: &Path) -> Option<RepoUrl> {
         self.0.clone()
     }
+}
+
+/// Provide complete native history for a legacy restored-session test.
+pub fn script_legacy_history(cursor: &FakeCursor) {
+    use crate::domain::event::InteractionUpdate;
+    use crate::domain::model::RunStatus;
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("run-old"),
+        status: RunStatus::Finished,
+    }]);
+    let tx = cursor.script_stream();
+    tx.send(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+        text: "original prompt".into(),
+    }))
+    .unwrap();
+    tx.send(CursorEvent::Result {
+        run_id: CursorRunId::new("run-old"),
+        status: RunStatus::Finished,
+        text: None,
+        duration_ms: None,
+    })
+    .unwrap();
+    tx.send(CursorEvent::Done).unwrap();
 }

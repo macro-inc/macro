@@ -126,6 +126,7 @@ pub struct CursorContainerManager<Sessions, Keys> {
     base_url: String,
     repo: CursorRepoUrl,
     sessions: Sessions,
+    journal_pool: Option<(sqlx::PgPool, macro_uuid::Uuid)>,
 }
 
 /// What a resumed session gets back at restore time.
@@ -157,7 +158,14 @@ where
             base_url,
             repo,
             sessions,
+            journal_pool: None,
         }
+    }
+
+    /// Supply durable native journal storage for every hosted Cursor session.
+    pub fn with_journal_pool(mut self, pool: sqlx::PgPool, replica: macro_uuid::Uuid) -> Self {
+        self.journal_pool = Some((pool, replica));
+        self
     }
 
     /// A client authenticated as `session`'s owner.
@@ -191,13 +199,45 @@ where
     ///
     /// `restore` carries what a resumed session gets back; a fresh spawn
     /// passes `None`.
-    fn serve_session(
+    async fn serve_session(
         &self,
         client: CursorClient,
         default_model_id: Option<String>,
         session_id: AgentSessionId,
         restore: Option<RestoredCursorSession>,
-    ) -> PipeTransport {
+    ) -> Result<PipeTransport> {
+        let owner_binding: Option<super::pipe::OwnerBinding>;
+        let journal: Arc<dyn cursor_cloud_agents::domain::journal::CursorJournal> = match &self
+            .journal_pool
+        {
+            Some((pool, replica)) => {
+                let journal = Arc::new(
+                    cursor_cloud_agents::outbound::postgres_journal::PgCursorJournal::new(
+                        pool.clone(),
+                        session_id.as_uuid(),
+                        *replica,
+                    ),
+                );
+                let activated = journal.clone();
+                owner_binding = Some(Arc::new(move |session, replica, fence| {
+                    activated.activate(session, replica, fence).map_err(|e| {
+                        agent_runtime_protocol::domain::ports::TransportError::Client(e.to_string())
+                    })
+                }));
+                journal
+            }
+            #[cfg(test)]
+            None => {
+                owner_binding = None;
+                Arc::new(cursor_cloud_agents::outbound::memory_journal::MemoryJournal::default())
+            }
+            #[cfg(not(test))]
+            None => {
+                return Err(HarnessError::Container(
+                    "Cursor requires durable native journal storage".into(),
+                ));
+            }
+        };
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);
         let (agent_reader, agent_writer) = tokio::io::split(theirs);
         let cursor = RecordingCursor {
@@ -210,8 +250,13 @@ where
         // session starts on it, and a resumed one still prefers whatever it
         // was actually last using (carried in `restore.model_id`) over this.
         let service = Arc::new(
-            CursorSessionService::new(cursor, notifier.clone(), FixedRepo(self.repo.clone()))
-                .with_default_model(default_model_id),
+            CursorSessionService::new(
+                cursor,
+                notifier.clone(),
+                FixedRepo(self.repo.clone()),
+                journal,
+            )
+            .with_default_model(default_model_id),
         );
         if let Some(restored) = restore {
             service.restore_session_with_watermark(
@@ -270,7 +315,7 @@ where
                 }
             }
         });
-        PipeTransport::connect_observed(
+        let mut transport = PipeTransport::connect_observed(
             ours,
             move || {
                 *observed
@@ -279,7 +324,11 @@ where
                     tokio::time::Instant::now();
             },
             shutdown,
-        )
+        );
+        if let Some(binding) = owner_binding {
+            transport = transport.with_owner_binding(binding);
+        }
+        Ok(transport)
     }
 }
 
@@ -301,7 +350,8 @@ where
         // itself. The harness's session actor names them in `session/new`,
         // and the in-process adapter forwards them to Cursor's API - the same
         // rail every other transport uses.
-        Ok(self.serve_session(client, default_model_id, command.session_id, None))
+        self.serve_session(client, default_model_id, command.session_id, None)
+            .await
     }
 
     async fn resume(&self, session: AgentSessionId) -> Result<PipeTransport> {
@@ -344,7 +394,8 @@ where
         // died with the process (only its hash is persisted). The one session
         // this loses servers for is one restored before its first prompt ever
         // landed, which then creates its agent bare rather than not at all.
-        Ok(self.serve_session(client, default_model_id, session, restore))
+        self.serve_session(client, default_model_id, session, restore)
+            .await
     }
 
     /// A Cursor session has no container of ours to hold a token: the raw
@@ -419,6 +470,14 @@ impl<Sessions> CursorAgents for RecordingCursor<Sessions>
 where
     Sessions: ExternalSessionRepo + Clone,
 {
+    async fn raw_result(
+        &self,
+        agent: &CursorAgentId,
+        run: &CursorRunId,
+    ) -> std::result::Result<String, rootcause::Report> {
+        self.client.raw_result(agent, run).await
+    }
+
     #[tracing::instrument(skip_all, err, fields(
         session = %self.session_id,
         mcp_servers = mcp_servers.len(),
@@ -502,6 +561,22 @@ impl<Sessions> RunStream for RecordingCursor<Sessions>
 where
     Sessions: ExternalSessionRepo + Clone,
 {
+    async fn raw_stream(
+        &self,
+        agent: &CursorAgentId,
+        run: &CursorRunId,
+    ) -> std::result::Result<
+        impl Stream<
+            Item = std::result::Result<
+                cursor_cloud_agents::domain::journal::NativeRecord,
+                rootcause::Report,
+            >,
+        > + Send,
+        rootcause::Report,
+    > {
+        self.client.raw_stream(agent, run).await
+    }
+
     async fn stream(
         &self,
         agent: &CursorAgentId,

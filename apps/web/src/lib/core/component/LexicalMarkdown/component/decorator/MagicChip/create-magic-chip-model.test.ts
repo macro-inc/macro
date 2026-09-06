@@ -67,8 +67,33 @@ describe('createMagicChipModel', () => {
     expect(sessionFold.acquireAgentSessionFold).toHaveBeenCalledWith({
       agentSessionId: 'session',
       onChange: expect.any(Function),
+      onReplace: expect.any(Function),
     });
 
+    dispose();
+  });
+
+  it('replaces the referenced answer after a successful load', async () => {
+    let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
+    const dispose = createRoot((rootDispose) => {
+      presentation = createMagicChipModel(props).presentation;
+      return rootDispose;
+    });
+    await Promise.resolve();
+    const callbacks = sessionFold.acquireAgentSessionFold.mock.calls[0]![0];
+    callbacks.onReplace([
+      prompt,
+      { ...response, parts: [{ kind: 'text', text: 'Reconstructed answer' }] },
+    ]);
+    expect(presentation()).toEqual({
+      kind: 'settled',
+      markdown: 'Reconstructed answer',
+    });
+    callbacks.onReplace([]);
+    expect(presentation()).not.toEqual({
+      kind: 'settled',
+      markdown: 'Reconstructed answer',
+    });
     dispose();
   });
 

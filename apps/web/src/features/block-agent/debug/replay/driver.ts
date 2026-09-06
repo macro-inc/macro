@@ -89,6 +89,7 @@ function sessionFixture(id: string): AgentSessionResponse {
 /** The frame the harness would append for a prompt accepted over `control`. */
 function promptEcho(prompt: string): AgentSessionLogEntryDto {
   return {
+    id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
     userId: REPLAY_OWNER,
     direction: 'to_runtime',

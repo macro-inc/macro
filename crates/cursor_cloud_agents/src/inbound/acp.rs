@@ -81,6 +81,7 @@ pub struct AcpNotifier {
     /// Empty until the connection is up. Write-once: one notifier serves one
     /// connection, exactly as one service does.
     connection: Arc<OnceLock<ConnectionTo<Client>>>,
+    bound: Arc<tokio::sync::Notify>,
 }
 
 impl AcpNotifier {
@@ -95,6 +96,7 @@ impl AcpNotifier {
         // A second bind can only be a bug in `serve`; the first connection
         // stays authoritative and the duplicate is dropped.
         let _ = self.connection.set(connection);
+        self.bound.notify_waiters();
     }
 }
 
@@ -104,15 +106,57 @@ impl SessionNotifier for AcpNotifier {
         session: &SessionId,
         update: SessionUpdate,
     ) -> Result<(), rootcause::Report> {
-        // Unreachable in practice: the binding runner starts with the
-        // connection's event loop, before any handler can run a turn. Failing
-        // loudly beats buffering updates nobody may ever collect.
+        let connection = loop {
+            let bound = self.bound.notified();
+            tokio::pin!(bound);
+            bound.as_mut().enable();
+            if let Some(connection) = self.connection.get() {
+                break connection;
+            }
+            bound.await;
+        };
+        connection
+            .send_notification(SessionNotification::new(session.clone(), update))
+            .map_err(|error| rootcause::report!("{error}"))
+    }
+
+    async fn history_snapshot(
+        &self,
+        session: &SessionId,
+        snapshot_id: &str,
+        phase: agent_runtime_protocol::domain::turn::HistorySnapshotPhase,
+    ) -> Result<(), rootcause::Report> {
         let connection = self
             .connection
             .get()
-            .ok_or_else(|| rootcause::report!("session update before the acp connection was up"))?;
+            .ok_or_else(|| rootcause::report!("ACP connection is not bound"))?;
         connection
-            .send_notification(SessionNotification::new(session.clone(), update))
+            .send_notification(
+                agent_runtime_protocol::domain::turn::HistorySnapshotNotification {
+                    session_id: session.clone(),
+                    snapshot_id: snapshot_id.to_owned(),
+                    phase,
+                },
+            )
+            .map_err(|error| rootcause::report!("{error}"))
+    }
+
+    async fn turn_complete(
+        &self,
+        session: &SessionId,
+        outcome: agent_runtime_protocol::domain::turn::TurnOutcome,
+    ) -> Result<(), rootcause::Report> {
+        let connection = self
+            .connection
+            .get()
+            .ok_or_else(|| rootcause::report!("ACP connection is not bound"))?;
+        connection
+            .send_notification(
+                agent_runtime_protocol::domain::turn::TurnCompleteNotification {
+                    session_id: session.clone(),
+                    outcome,
+                },
+            )
             .map_err(|error| rootcause::report!("{error}"))
     }
 
@@ -295,13 +339,14 @@ where
     Notifier: SessionNotifier + Send + Sync + 'static,
     Repos: RepoResolver + Send + Sync + 'static,
 {
+    let startup_notifier = notifier.clone();
     Agent
         .builder()
         .name("cursor-cloud-agents")
         // Runs with the connection's event loop, so the notifier is bound
         // before any handler can start a turn that would notify.
         .with_spawned(move |connection| async move {
-            notifier.bind(connection);
+            startup_notifier.bind(connection);
             Ok(())
         })
         .on_receive_request(
@@ -329,7 +374,9 @@ where
         .on_receive_request(
             {
                 let service = Arc::clone(&service);
-                async move |request: NewSessionRequest, responder, _connection| {
+                let notifier = notifier.clone();
+                async move |request: NewSessionRequest, responder, connection| {
+                    notifier.bind(connection.clone());
                     let mcp_servers = forwardable_mcp_servers(request.mcp_servers);
                     let session = service.new_session(&request.cwd, mcp_servers);
                     let options = session_config_options(&service, &session).await;
@@ -341,7 +388,9 @@ where
         .on_receive_request(
             {
                 let service = Arc::clone(&service);
+                let notifier = notifier.clone();
                 async move |request: PromptRequest, responder, connection| {
+                    notifier.bind(connection.clone());
                     // On its own task so the event loop keeps servicing
                     // cancels while the turn streams.
                     let service = Arc::clone(&service);
@@ -351,7 +400,10 @@ where
                         // A failed respond means the client is gone; failing
                         // the spawned task would tear down the (already
                         // closing) connection, so it is dropped instead.
-                        match service.prompt(&session, &text).await {
+                        match service
+                            .prompt_content(&session, &text, request.prompt)
+                            .await
+                        {
                             Ok(stop_reason) => {
                                 let _ = responder.respond(PromptResponse::new(stop_reason));
                             }
@@ -370,36 +422,25 @@ where
         .on_receive_request(
             {
                 let service = Arc::clone(&service);
-                async move |request: LoadSessionRequest, responder, _connection| {
-                    // Loading is a lookup, not a fetch: a host that restarts
-                    // restores its persisted (session -> agent) pairs with
-                    // `restore_session` before serving, so by the time a
-                    // `session/load` arrives the session either exists or
-                    // never will. No history is replayed — the hosts this
-                    // agent serves keep their own durable log of every frame,
-                    // and Cursor accumulates the conversation server-side, so
-                    // a replay would tell the client what it already knows.
+                let notifier = notifier.clone();
+                async move |request: LoadSessionRequest, responder, connection| {
+                    notifier.bind(connection.clone());
                     let session = request.session_id;
-                    if service.has_session(&session) {
-                        // The MCP list is the client's, and a load restates
-                        // it — the one way a restored process, whose host
-                        // never persisted the list, learns it again.
-                        service.set_mcp_servers(
-                            &session,
-                            forwardable_mcp_servers(request.mcp_servers),
-                        );
-                        let options = session_config_options(&service, &session).await;
-                        let response =
-                            responder.respond(LoadSessionResponse::new().config_options(options));
-                        if response.is_ok() {
-                            drop(service.loaded(&session).inspect_err(|error| {
-                                tracing::error!(error = ?error, "could not mark cursor session loaded");
-                            }));
+                    let guard = match service.replay_session(&session).await {
+                        Ok(guard) => guard,
+                        Err(error) => {
+                            return responder
+                                .respond_with_error(AcpError::new(-32603, error.to_string()));
                         }
-                        response
-                    } else {
-                        responder.respond_with_error(AcpError::invalid_params())
+                    };
+                    service.set_mcp_servers(&session, forwardable_mcp_servers(request.mcp_servers));
+                    let options = session_config_options(&service, &session).await;
+                    let response =
+                        responder.respond(LoadSessionResponse::new().config_options(options));
+                    if response.is_ok() {
+                        guard.complete();
                     }
+                    response
                 }
             },
             on_receive_request!(),

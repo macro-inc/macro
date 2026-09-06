@@ -71,6 +71,10 @@ pub enum Message {
 /// One entry of a session's protocol log.
 #[derive(Debug, Clone)]
 pub struct AgentSessionLog {
+    /// Persisted pre-rollout load request whose success did not promise replay.
+    /// Read interpretation context only; never part of the raw ACP envelope.
+    /// New frames use standard ACP semantics (`false`).
+    pub legacy_load: bool,
     /// The session the entry belongs to.
     pub agent_session_id: AgentSessionId,
     /// if this is ACP sent by a user this will be Some

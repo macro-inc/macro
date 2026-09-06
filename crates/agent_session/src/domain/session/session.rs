@@ -31,8 +31,10 @@ const INITIAL_REQUEST_NUM: u64 = 0;
 /// See the [module docs](super) for scope and the sans-IO contract.
 pub struct SessionMachine<Token> {
     id: AgentSessionId,
+    initialization: Option<crate::domain::model::HistoryBoundary>,
     phase: SessionPhase,
     next_request: u64,
+    connection_context: Option<macro_uuid::Uuid>,
     /// Held outside the phase so a partial flush strands nothing.
     pending: VecDeque<PendingAction<Token>>,
     /// The newest turn-occupying request the runtime has not answered yet.
@@ -59,8 +61,10 @@ impl<Token> SessionMachine<Token> {
     pub fn new(id: AgentSessionId, workspace: String, mcp_servers: Vec<McpServer>) -> Self {
         Self {
             id,
+            initialization: None,
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
+            connection_context: None,
             pending: VecDeque::new(),
             in_flight_turn: None,
             resume_session_id: None,
@@ -78,8 +82,10 @@ impl<Token> SessionMachine<Token> {
     ) -> Self {
         Self {
             id,
+            initialization: None,
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
+            connection_context: None,
             pending: VecDeque::new(),
             in_flight_turn: None,
             resume_session_id: Some(session_id),
@@ -91,6 +97,19 @@ impl<Token> SessionMachine<Token> {
     /// The session this connection belongs to.
     pub fn id(&self) -> AgentSessionId {
         self.id
+    }
+
+    /// Namespace request IDs for a fresh actor on a potentially shared transport.
+    pub(crate) fn with_connection_context(mut self, context: macro_uuid::Uuid) -> Self {
+        self.connection_context = Some(context);
+        self
+    }
+
+    /// Retain the durable initialization identity for this actor's connection.
+    pub fn initialization_persisted(&mut self, id: macro_uuid::Uuid) {
+        self.initialization = Some(crate::domain::model::HistoryBoundary {
+            initialization_log_id: id,
+        });
     }
 
     /// Current phase.
@@ -123,6 +142,14 @@ impl<Token> SessionMachine<Token> {
             } => self.on_command(from, action, action_id, token),
             Input::Inbound(message) => self.on_inbound(message),
             Input::Ready { restore } => self.on_connection_ready(restore),
+            Input::SharedReady { restore, context } => {
+                if !matches!(self.phase, SessionPhase::Booting) {
+                    return vec![];
+                }
+                let mut effects = vec![Effect::EstablishInitialization { context }];
+                self.begin_opening(restore, &mut effects);
+                effects
+            }
             Input::Closed(reason) => self.on_closed(reason),
         }
     }
@@ -188,6 +215,7 @@ impl<Token> SessionMachine<Token> {
         // Every inbound message is logged, before anything reacts to it: the
         // log stream is the session's history, not a digest of it.
         let mut effects = vec![Effect::Log {
+            boundary: None,
             message: message.clone(),
         }];
 
@@ -363,6 +391,15 @@ impl<Token> SessionMachine<Token> {
                         effects,
                     );
                     return;
+                }
+                let Some(initialization) = self.initialization else {
+                    self.die(StopReason::InitializationNotPersisted, effects);
+                    return;
+                };
+                // Only a matching, well-formed successful load selects history.
+                // The actor executes this log effect before any readiness side effect.
+                if let Some(Effect::Log { boundary, .. }) = effects.first_mut() {
+                    *boundary = Some(initialization);
                 }
                 (session_id, false)
             }
@@ -572,7 +609,10 @@ impl<Token> SessionMachine<Token> {
     /// carries the session, so sessions sharing one connection cannot collide
     /// with each other either.
     fn next_id(&mut self) -> RequestId {
-        let id = RequestId::Str(format!("agent_session:{}:{}", self.id, self.next_request));
+        let id = RequestId::Str(match self.connection_context {
+            Some(context) => format!("agent_session:{}:{context}:{}", self.id, self.next_request),
+            None => format!("agent_session:{}:{}", self.id, self.next_request),
+        });
         self.next_request += 1;
         id
     }

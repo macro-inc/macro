@@ -63,3 +63,22 @@ async fn a_closed_pipe_ends_the_inbound_stream() {
     drop(theirs);
     assert!(receiver.recv().await.is_none());
 }
+
+#[tokio::test]
+async fn routed_cursor_activates_exact_claim_and_propagates_rejection() {
+    use crate::outbound::routing::RoutedTransport;
+    use std::sync::{Arc, Mutex};
+    let (ours, _theirs) = tokio::io::duplex(4096);
+    let observed = Arc::new(Mutex::new(None));
+    let capture = observed.clone();
+    let pipe =
+        PipeTransport::connect(ours).with_owner_binding(Arc::new(move |id, replica, fence| {
+            *capture.lock().unwrap() = Some((id, replica, fence));
+            Err(TransportError::Client("fenced out".into()))
+        }));
+    let mut routed: RoutedTransport<PipeTransport, PipeTransport> = RoutedTransport::Cursor(pipe);
+    let session = macro_uuid::Uuid::from_u128(1);
+    let replica = macro_uuid::Uuid::from_u128(2);
+    assert!(routed.bind_session_owner(session, replica, 7).is_err());
+    assert_eq!(*observed.lock().unwrap(), Some((session, replica, 7)));
+}

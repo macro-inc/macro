@@ -6,16 +6,19 @@
  * ordered store without a refetch.
  */
 
-import type { FoldedMessage } from '@service-agent-fold/generated/types';
+import type {
+  FoldedMessage,
+  FoldedStreamEvent,
+} from '@service-agent-fold/generated/types';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
-import { createRoot } from 'solid-js';
+import { createComputed, createMemo, createRoot, mapArray } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const worker = vi.hoisted(() => ({
   /** Messages the fold machine reports for the session. */
   messages: [] as FoldedMessage[],
   /** Events the next `pushSessionEntries` resolves with. */
-  pushed: [] as { kind: string; message: FoldedMessage }[],
+  pushed: [] as FoldedStreamEvent[],
   getSession: async (): Promise<{
     isErr: () => boolean;
     value: Partial<AgentSessionResponse>;
@@ -94,6 +97,190 @@ describe('createAgentSessionFeed live updates', () => {
       },
     });
     vi.resetModules();
+  });
+
+  it('keeps committed messages during replay, replaces atomically, and accepts continuation', async () => {
+    const { createAgentSessionFeed } = await import(
+      './create-agent-session-feed'
+    );
+    const { handleAgentSessionLog } = await import(
+      '@queries/agent-session/session-fold'
+    );
+    worker.messages = [
+      message(0, 'user', 'old'),
+      message(0, 'agent', 'old answer'),
+      message(1, 'user', 'obsolete'),
+    ];
+    let dispose!: () => void;
+    const feed = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createAgentSessionFeed(() => 'session');
+    });
+    await flush();
+    await flush();
+    const emit = async () => {
+      handleAgentSessionLog({
+        agentSessionId: 'session',
+        direction: 'to_server',
+        content: { type: 'acp' },
+      } as never);
+      await flush();
+    };
+    // Staged and discarded frames produce no visible fold events.
+    await emit();
+    expect(feed.messages()).toHaveLength(3);
+    const replacement = [
+      message(0, 'user', 'replayed'),
+      message(0, 'agent', 'replayed answer', { kind: 'end_turn' }),
+    ];
+    worker.pushed = [{ kind: 'replace', messages: replacement }];
+    await emit();
+    expect([...feed.messages()]).toEqual(replacement);
+    expect(feed.working()).toBe(false);
+    const continuation = message(1, 'user', 'next');
+    worker.pushed = [{ kind: 'new', message: continuation }];
+    await emit();
+    expect([...feed.messages()]).toEqual([...replacement, continuation]);
+    worker.pushed = [{ kind: 'replace', messages: [] }];
+    await emit();
+    expect(feed.messages()).toHaveLength(0);
+    dispose();
+  });
+
+  it('remounts replay rows when the same message and tool IDs acquire different shapes', async () => {
+    const { createAgentSessionFeed } = await import(
+      './create-agent-session-feed'
+    );
+    const { handleAgentSessionLog } = await import(
+      '@queries/agent-session/session-fold'
+    );
+    const control: FoldedMessage = {
+      ...message(0, 'user', ''),
+      parts: [
+        {
+          kind: 'control',
+          control: { kind: 'stop' },
+          outcome: { kind: 'accepted' },
+        },
+      ],
+    };
+    const tool: FoldedMessage = {
+      ...message(0, 'agent', ''),
+      parts: [
+        {
+          kind: 'tool_use',
+          id: 'same-tool-id',
+          name: { kind: 'native', name: 'Bash' },
+          status: 'completed',
+          detail: {
+            kind: 'terminal',
+            command: 'old command',
+            output: null,
+            exitCode: 0,
+          },
+        },
+      ],
+    };
+    worker.messages = [control, tool, message(1, 'user', 'obsolete')];
+    let dispose!: () => void;
+    const feed = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createAgentSessionFeed(() => 'session');
+    });
+    await flush();
+    await flush();
+    const oldRows = [...feed.messages()];
+    const observed: string[][] = [];
+    let disposeReader!: () => void;
+    createRoot((cleanup) => {
+      disposeReader = cleanup;
+      // Like the transcript's For/Virtualizer and AgentMessagePart, select
+      // the union branch once per mounted object, then read its fields live.
+      const rows = mapArray(feed.messages, (row) =>
+        mapArray(
+          () => row.parts,
+          (part) => {
+            if (part.kind === 'control')
+              return createMemo(() => part.outcome.kind);
+            if (part.kind === 'text') return createMemo(() => part.text);
+            if (part.kind === 'tool_use') {
+              const detail = part.detail;
+              if (detail.kind === 'terminal')
+                return createMemo(() => detail.command);
+              if (detail.kind === 'read')
+                return createMemo(() => detail.paths.join(','));
+            }
+            throw new Error('unexpected fixture part');
+          }
+        )
+      );
+      createComputed(() => {
+        observed.push(
+          rows().map((parts) =>
+            parts()
+              .map((read) => read())
+              .join('|')
+          )
+        );
+      });
+    });
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const replacement: FoldedMessage[] = [
+        message(0, 'user', 'replayed prompt'),
+        {
+          ...tool,
+          stop: { kind: 'end_turn' },
+          parts: [
+            {
+              kind: 'tool_use',
+              id: 'same-tool-id',
+              name: { kind: 'native', name: 'Read' },
+              status: 'completed',
+              detail: { kind: 'read', paths: ['replayed.txt'] },
+            },
+          ],
+        },
+      ];
+      const emit = async (events: FoldedStreamEvent[]) => {
+        worker.pushed = events;
+        handleAgentSessionLog({
+          agentSessionId: 'session',
+          direction: 'to_server',
+          content: { type: 'acp' },
+        } as never);
+        await flush();
+      };
+      await emit([{ kind: 'replace', messages: replacement }]);
+      expect(errors).not.toHaveBeenCalled();
+      expect(observed).toEqual([
+        ['accepted', 'old command', 'obsolete'],
+        ['replayed prompt', 'replayed.txt'],
+      ]);
+      expect([...feed.messages()]).toEqual(replacement);
+      expect(feed.messages()[0]).not.toBe(oldRows[0]);
+      expect(feed.messages()[1]).not.toBe(oldRows[1]);
+      expect(oldRows).toEqual([control, tool, message(1, 'user', 'obsolete')]);
+      expect(feed.working()).toBe(false);
+
+      // Subsequent streaming updates still keep the new row and part alive.
+      const replayedRow = feed.messages()[0];
+      const replayedPart = replayedRow?.parts[0];
+      await emit([
+        { kind: 'update', message: message(0, 'user', 'continued prompt') },
+      ]);
+      expect(feed.messages()[0]).toBe(replayedRow);
+      expect(feed.messages()[0]?.parts[0]).toBe(replayedPart);
+      expect(observed.at(-1)).toEqual(['continued prompt', 'replayed.txt']);
+      await emit([{ kind: 'replace', messages: [] }]);
+      expect(observed.at(-1)).toEqual([]);
+      expect(feed.working()).toBe(false);
+      expect(errors).not.toHaveBeenCalled();
+    } finally {
+      errors.mockRestore();
+      disposeReader();
+      dispose();
+    }
   });
 
   it('applies a streamed frame without refetching', async () => {

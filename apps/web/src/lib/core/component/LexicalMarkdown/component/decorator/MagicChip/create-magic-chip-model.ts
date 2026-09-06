@@ -75,6 +75,7 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
 
   void acquireAgentSessionFold({
     agentSessionId: props.agentSessionId,
+    onReplace: setMessages,
     onChange: (changed) => {
       setMessages((current) =>
         changed.reduce(
