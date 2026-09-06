@@ -107,22 +107,34 @@ describe('MyActivityView', () => {
     expect(container.textContent).toContain('No activity yet.');
   });
 
-  it('lists the most active entities and opens them', () => {
+  it('renders the most active entities as chips under the graph and opens them', () => {
     const { container, onOpen, graphql } = renderView();
     graphql.latest('MyActivityOverview').resolve(
       overviewPage({
-        total: 4,
-        topEntities: [{ entityType: 'DOCUMENT', entityId: 'doc-7', count: 4 }],
+        total: 7,
+        topEntities: [
+          { entityType: 'DOCUMENT', entityId: 'doc-7', count: 4 },
+          { entityType: 'DOCUMENT', entityId: 'doc-8', count: 3 },
+        ],
       })
     );
 
-    expect(container.textContent).toContain('Most active');
-    expect(container.textContent).toContain('4 actions');
-
     const section = screen.getByLabelText('Most active');
-    const body = section.querySelector('.hover\\:bg-hover\\/30');
-    if (!body) throw new Error('top entity body not rendered');
-    fireEvent.click(body);
+    const chips = section.querySelectorAll('[data-activity-top-entity]');
+    expect(chips).toHaveLength(2);
+    expect(chips[0]?.textContent).toContain('4');
+    expect(section.textContent).not.toContain('actions');
+
+    const graph = container.querySelector(
+      '[aria-labelledby="activity-actions-heading"]'
+    );
+    expect(graph?.closest('[data-layer]')?.parentElement).toBe(
+      section.parentElement
+    );
+
+    const chip = chips[0];
+    if (!chip) throw new Error('top entity chip not rendered');
+    fireEvent.click(chip);
 
     expect(onOpen).toHaveBeenCalledExactlyOnceWith({
       block: 'md',
@@ -130,5 +142,12 @@ describe('MyActivityView', () => {
       params: undefined,
       newSplit: false,
     });
+  });
+
+  it('renders no most-active row when the overview has no top entities', () => {
+    const { container, graphql } = renderView();
+    graphql.latest('MyActivityOverview').resolve(overviewPage({ total: 0 }));
+    expect(screen.queryByLabelText('Most active')).toBeNull();
+    expect(container.textContent).not.toContain('No entities yet.');
   });
 });
