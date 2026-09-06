@@ -19,6 +19,9 @@ impl FoldState {
 
     /// Append agent prose, extending the trailing text part when there is one.
     pub(super) fn append_text(&mut self, text: String) -> Option<Changed> {
+        if text.is_empty() {
+            return None;
+        }
         if let Some((message, parts)) = self.agent_parts_mut()
             && let MessagePart::Text { text: existing } = parts.last_mut()
         {
