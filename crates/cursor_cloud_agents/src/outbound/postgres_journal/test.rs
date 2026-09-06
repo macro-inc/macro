@@ -2,9 +2,13 @@ use super::*;
 
 #[sqlx::test(migrations = false)]
 async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
-    sqlx::raw_sql("CREATE TABLE agent_session(id uuid PRIMARY KEY, manager_replica_id uuid, manager_fence bigint NOT NULL);").execute(&pool).await.unwrap();
+    sqlx::raw_sql(
+        "CREATE TABLE agent_session(id uuid PRIMARY KEY, manager_replica_id uuid, manager_fence bigint NOT NULL);
+         CREATE TABLE agent_session_log(id uuid PRIMARY KEY, agent_session_id uuid NOT NULL REFERENCES agent_session(id));
+         CREATE TABLE external_agent_session(agent_session_id uuid PRIMARY KEY REFERENCES agent_session(id));",
+    ).execute(&pool).await.unwrap();
     sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20260906040140_cursor_native_journal.up.sql"
+        "../../../../macro_db_client/migrations/20260906060601_cursor_session_replay.up.sql"
     ))
     .execute(&pool)
     .await
@@ -101,4 +105,17 @@ async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(count, 0);
+
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20260906060601_cursor_session_replay.down.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!(
+        "../../../../macro_db_client/migrations/20260906060601_cursor_session_replay.up.sql"
+    ))
+    .execute(&pool)
+    .await
+    .unwrap();
 }

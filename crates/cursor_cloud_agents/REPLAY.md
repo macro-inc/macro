@@ -18,8 +18,23 @@ Load holds the session turn gate, validates and replays a stable journal snapsho
 
 A session without complete journal history is hydrated by listing every provider run and fetching each native stream in chronological order. Every run must include its original user message and a terminal result. Hydration is capture-only until all history validates. Final-answer-only records, expired/truncated streams, prefix mismatches, missing user prompts, and unavailable history cause an explicit load error, preserving the committed projection. They never publish a successful incomplete replacement. Hydration performs reads only, never prompt or tool execution.
 
-There is no compatibility interpretation for historical lookup-only load successes: every valid correlated ACP load success replaces history, even with no replay frames. The old `agent_session_log.legacy_load` column remains unused so applied migrations and their checksums stay intact; it is not read or exposed to clients.
+There is no compatibility interpretation for historical lookup-only load successes: every valid correlated ACP load success replaces history, even with no replay frames. The consolidated migration does not create or backfill the unused `agent_session_log.legacy_load` column.
 
 A process loss between remote prompt acceptance and persisting the accepted run association can leave an unresolved prompt intent. Without a proven association, load fails explicitly instead of executing that prompt again or dropping its history. Likewise, a foreign run observed only by polling cannot later claim to contain its unavailable original prompt. Operators should retain old Macro history; this migration does not manufacture or backfill missing provider details from ACP frames.
 
-Apply the SQLx-generated `20260906040140_cursor_native_journal` migration and prepare SQLx metadata from the repository root before deploying. No changes to provider resume negotiation or the existing delivered-run checkpoint are required. Cursor advertises ACP load only. The generic session/fold layers own successful-load history selection and failed-load staging.
+Apply the SQLx-generated `20260906060601_cursor_session_replay` migration and prepare SQLx metadata from the repository root before deploying. It adds the delivered-run watermark, session history boundary, and native journal in dependency order. No changes to provider resume negotiation are required. Cursor advertises ACP load only. The generic session/fold layers own successful-load history selection and failed-load staging. A realtime `replace` event means replay has committed while the client is connected, not that a new live turn has started.
+
+### Previously applied PR migrations
+
+PR #6233 consolidated these unreleased migrations into one UP/DOWN pair:
+
+- `20260905234752_cursor_run_watermark`
+- `20260906040138_agent_session_history_boundary`
+- `20260906040140_cursor_native_journal`
+- `20260906042344_agent_session_legacy_load_context`
+
+Fresh environments use the consolidated migration normally. For local environments that already applied the old files, do not reset the database or run their DOWN migrations: that would discard journal inputs and checkpoint values. Back up the database and inspect each database's `_sqlx_migrations` history, including test databases, before changing anything.
+
+For a database with all four old migrations successfully applied, verify their checksums against the old PR revision and compare its columns, defaults, constraints, and indexes with a fresh consolidated schema (excluding only `legacy_load`). In one transaction, lock the migration metadata and affected tables, capture row counts and content hashes, drop only the unused `legacy_load` column without CASCADE, verify the schema and retained data again, then replace exactly those four metadata rows with the consolidated UP version, description, and SHA-384 checksum. Preserve all unrelated migration records. Abort on any mismatch. Check `sqlx migrate run` afterward; it should be a no-op. Do not stamp a partially applied or divergent schema as migrated; finish and verify its missing schema changes first under a separately reviewed procedure.
+
+The combined DOWN is for deliberate rollback only: it drops the new journal and checkpoint columns. Test DOWN/UP on an isolated disposable database, never on an existing session database whose history must survive. This local reconciliation procedure is not an instruction to rewrite production migration history.
