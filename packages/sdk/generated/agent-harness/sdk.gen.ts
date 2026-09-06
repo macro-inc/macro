@@ -132,9 +132,9 @@ export class Sdk extends HeyApiClient {
     /**
      * The raw protocol log of one agent session.
      *
-     * Served unfolded, and whole: the fold is a left fold over the frames from
-     * the beginning, so a reader that skipped any of them would derive different
-     * turn numbering.
+     * Served unfolded from the latest successful load initialization, or the
+     * beginning when no load succeeded. Consumers stage load attempts so failed
+     * or interrupted replay does not become visible conversation content.
      *
      * An unknown session is an error: the response has to name the session's
      * agent, and a session that never existed has none to name.
