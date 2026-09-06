@@ -35,16 +35,42 @@ pub(crate) struct LoginQueryParams {
     referral_code: Option<String>,
 }
 
+macro_env_var::maybe_env_vars! {
+    /// The deployment's own app root, on an installation that is not Macro's.
+    struct AppBaseUrl;
+}
+
+/// The host of `APP_BASE_URL`, when one is configured.
+///
+/// A self-hosted deployment serves the app from a domain this list cannot know
+/// ahead of time, and SSO round-trips `original_url` through the identity
+/// provider back to it. Without this, a configured Google or GitHub connector
+/// cannot complete a login on any domain but Macro's own.
+///
+/// Deliberately narrow: the operator's single configured origin, not a wildcard
+/// or a request-derived host. This function is the open-redirect guard for a
+/// URL the client supplies, so it must never trust anything the client sends.
+fn deployment_host() -> Option<String> {
+    let base = AppBaseUrl::new()?;
+    let url = Url::parse(base.as_ref()).ok()?;
+    url.host_str().map(str::to_owned)
+}
+
 pub(crate) fn is_allowed_original_url(url: &Url) -> bool {
     match url.scheme() {
         // The app owns the custom scheme and handles all macro URI routes itself.
         "macro" => true,
         "tauri" => url.host_str() == Some("localhost"),
         "http" => matches!(url.host_str(), Some("localhost" | "tauri.localhost")),
-        "https" => matches!(
-            url.host_str(),
-            Some("localhost" | "tauri.localhost" | "dev.macro.com" | "macro.com")
-        ),
+        "https" => {
+            matches!(
+                url.host_str(),
+                Some("localhost" | "tauri.localhost" | "dev.macro.com" | "macro.com")
+            ) || matches!(
+                (url.host_str(), deployment_host().as_deref()),
+                (Some(host), Some(configured)) if host == configured
+            )
+        }
         _ => false,
     }
 }
