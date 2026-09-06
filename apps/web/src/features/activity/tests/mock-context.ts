@@ -1,3 +1,4 @@
+import { firstPartyBotName } from '@queries/channel/message-sender';
 import type { Client } from '@urql/core';
 import type { ActivityContext } from '../context/activity-context';
 import { createMockGraphql, type MockGraphql } from './mock-graphql';
@@ -11,7 +12,8 @@ export type MockActivityContext = ActivityContext & {
 /**
  * In-memory implementations of every activity dependency. Entities resolve
  * to `Entity <id>` and link as markdown blocks; actor ids of the form
- * `macro|name@…` resolve to `name`, anything else reads as automation.
+ * `macro|name@…` resolve to `name`; bot ids resolve to their first-party
+ * name or `Bot <first uuid group>`.
  */
 export function createMockActivityContext(
   overrides: Partial<ActivityContext> = {}
@@ -25,6 +27,10 @@ export function createMockActivityContext(
       const id = actorId();
       if (!id.startsWith('macro|')) return () => undefined;
       return () => id.slice('macro|'.length).split('@')[0] ?? '';
+    },
+    botName: (botId) => () => {
+      const id = botId();
+      return firstPartyBotName(id) ?? `Bot ${id.split('-')[0]}`;
     },
     entityDisplay: (entityId) => ({
       name: () => `Entity ${entityId()}`,

@@ -2,9 +2,15 @@ import {
   MACRO_CODER_NAME,
   MACRO_CODER_PRINCIPAL_ID,
 } from '@core/constant/macroCoder';
+import {
+  MACRO_SYSTEM_BOT_ID,
+  MACRO_SYSTEM_NAME,
+  MACRO_SYSTEM_PRINCIPAL_ID,
+} from '@core/constant/macroSystem';
 import { describe, expect, it } from 'vitest';
 import {
   type ChannelMessageWithMaybeSender,
+  firstPartyBotName,
   getBotDisplayName,
   normalizeChannelMessageSender,
   senderFromStorageId,
@@ -100,6 +106,16 @@ describe('message sender normalization', () => {
 
   it('resolves built-in agent names without channel bot data', () => {
     expect(getBotDisplayName(MACRO_CODER_PRINCIPAL_ID)).toBe(MACRO_CODER_NAME);
+  });
+
+  it('names the system principal without channel bot data', () => {
+    expect(getBotDisplayName(MACRO_SYSTEM_PRINCIPAL_ID)).toBe(
+      MACRO_SYSTEM_NAME
+    );
+    expect(firstPartyBotName(MACRO_SYSTEM_BOT_ID)).toBe(MACRO_SYSTEM_NAME);
+    expect(firstPartyBotName('00000000-0000-0000-0000-000000000002')).toBe(
+      undefined
+    );
   });
 
   it('uses a generic label rather than exposing an unknown bot UUID', () => {
