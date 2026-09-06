@@ -2,9 +2,9 @@
  * @vitest-environment jsdom
  */
 
+import type { ModelOption } from '@service-agent-fold/generated/types';
 import { render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
-import type { ModelOption } from '@service-agent-fold/generated/types';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentModelSelector } from './AgentModelSelector';
 
@@ -61,7 +61,9 @@ describe('AgentModelSelector focus', () => {
     ));
 
     await user.click(screen.getByRole('button', { name: /Model One/ }));
-    await user.click(await screen.findByRole('menuitem', { name: 'Model Two' }));
+    await user.click(
+      await screen.findByRole('menuitem', { name: 'Model Two' })
+    );
 
     expect(onSelect).toHaveBeenCalledWith('model-2');
     expect(restoreComposerFocus).not.toHaveBeenCalled();
