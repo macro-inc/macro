@@ -6,9 +6,10 @@
  */
 
 /**
- * Bot the session runs for. Bot callers may omit it (their own identity
-is used) and must not name another bot; user callers must supply a
-bot they own. External sessions only: a managed session runs as the
-bot its deployment is configured for.
+ * Bot the session runs for. On a managed request this optionally selects
+a persisted persona the user owns or may use through team membership;
+omitting it uses the deployment's default coding persona. On an
+external request, bot callers may omit it (their own identity is used)
+and must not name another bot; user callers must supply a bot they own.
  */
 export type CreateAgentSessionRequestBotId = string | null;

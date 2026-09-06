@@ -1095,12 +1095,12 @@
       },
       "CreateAgentSessionRequest": {
         "type": "object",
-        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose sandbox this deployment provisions from its\nown configuration - which is why the fields describing someone else's\nruntime must be omitted along with it rather than quietly ignored. Mixing\nthe two is refused rather than guessed at, so that no request can reach the\nmanaged path carrying a bot the caller was never entitled to name.\n\nClients serialize this, so both derives are used.",
+        "description": "Request body for `POST /agent-sessions`.\n\nCarries two shapes, told apart by `workspace`. Naming one asks for an\nexternal session: the runtime is the bot operator's, so the caller has to\nsay which bot and which directory, and must own that bot. Omitting it asks\nfor a managed session, whose runtime this deployment provisions. A managed\nrequest may select an authorized persisted persona with `botId`; omitting\nit uses the deployment's default coding persona. Fields describing someone\nelse's runtime must still be omitted rather than quietly ignored. Mixing\nthe two shapes is refused rather than guessed at.\n\nClients serialize this, so both derives are used.",
         "properties": {
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. Bot callers may omit it (their own identity\nis used) and must not name another bot; user callers must supply a\nbot they own. External sessions only: a managed session runs as the\nbot its deployment is configured for."
+            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns or may use through team membership;\nomitting it uses the deployment's default coding persona. On an\nexternal request, bot callers may omit it (their own identity is used)\nand must not name another bot; user callers must supply a bot they own."
           },
           "instructions": {
             "type": ["string", "null"],
