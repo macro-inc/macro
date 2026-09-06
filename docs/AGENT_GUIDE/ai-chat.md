@@ -63,9 +63,9 @@ late replay notifications remain hidden across initialization/reconnect markers
 until a valid session open or dispatched prompt establishes live traffic. Reopening
 the session shows the same committed history. Initialization, creating a session, and ACP resume do
 not by themselves clear existing messages. Channel agent-reference previews follow
-the same replacement behavior. Historical pre-rollout Cursor load acknowledgments
-preserve the earlier conversation when reopening old sessions; a new successful
-load can replace it with an empty transcript. If a load finishes while the browser
+the same replacement behavior. Every successful load can replace history with an
+empty transcript, including historical lookup-only Cursor load acknowledgments.
+If a load finishes while the browser
 is fetching history, buffered content from before the selected history boundary
 must stay hidden; subsequent live messages must still appear.
 

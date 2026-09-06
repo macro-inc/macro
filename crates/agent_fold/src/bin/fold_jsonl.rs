@@ -59,8 +59,6 @@ enum RecordingError {
 /// One line of a recording, as the recorder writes it.
 #[derive(Deserialize)]
 struct RecordedLine {
-    #[serde(rename = "legacyLoad", default)]
-    legacy_load: bool,
     direction: Direction,
     content: serde_json::Value,
 }
@@ -135,7 +133,6 @@ fn parse_line(
         }
     };
     Ok(AgentSessionLog {
-        legacy_load: recorded.legacy_load,
         agent_session_id: session,
         user_id: None,
         content,

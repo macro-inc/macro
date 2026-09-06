@@ -195,7 +195,6 @@ fn parse_line(
             source: serde::de::Error::custom("user_id is not a Macro user id"),
         })?;
     Ok(AgentSessionLog {
-        legacy_load: false,
         agent_session_id: session,
         user_id,
         content,

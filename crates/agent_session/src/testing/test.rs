@@ -12,7 +12,6 @@ async fn effective_history_orders_timestamps_and_uuid_ties_before_selecting_boun
         id: Uuid::from_u128(id),
         created_at: time + chrono::Duration::seconds(seconds),
         entry: AgentSessionLog {
-            legacy_load: false,
             agent_session_id: session,
             user_id: None,
             content: Message::ToServer(ToServerMessage::Event {

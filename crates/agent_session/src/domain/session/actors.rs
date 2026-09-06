@@ -305,7 +305,6 @@ where
                     }
                     let log = self.logs.append_with_boundary(
                         AgentSessionLog {
-                            legacy_load: false,
                             agent_session_id: self.machine.id(),
                             user_id: None,
                             content: Message::ToServer(message),
@@ -352,7 +351,6 @@ where
                         let id = self
                             .logs
                             .append(AgentSessionLog {
-                                legacy_load: false,
                                 agent_session_id: self.machine.id(),
                                 user_id: None,
                                 content: Message::ToRuntime(context.request.clone()),
@@ -477,7 +475,6 @@ where
         let id = self
             .logs
             .append(AgentSessionLog {
-                legacy_load: false,
                 agent_session_id: self.machine.id(),
                 user_id: from,
                 content: Message::ToRuntime(message.clone()),
@@ -498,7 +495,6 @@ where
     ) -> Result<()> {
         self.logs
             .append(AgentSessionLog {
-                legacy_load: false,
                 agent_session_id: self.machine.id(),
                 user_id,
                 content,

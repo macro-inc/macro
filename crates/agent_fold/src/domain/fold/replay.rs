@@ -1,13 +1,15 @@
 //! A load is a transaction over the visible projection, not new activity.
 
-use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{
-    LoadSessionResponse, NewSessionRequest, NewSessionResponse, PromptRequest, RequestId, Response,
+    AGENT_METHOD_NAMES, InitializeRequest, LoadSessionRequest, LoadSessionResponse,
+    NewSessionRequest, NewSessionResponse, PromptRequest, RequestId, Response,
     ResumeSessionRequest, ResumeSessionResponse,
 };
+use agent_client_protocol::{JsonRpcMessage, JsonRpcResponse, RawJsonRpcMessage, RawJsonRpcParams};
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
+use agent_runtime_protocol::domain::turn::{HistorySnapshotNotification, HistorySnapshotPhase};
 
-use super::convert::{deserialize_params, param};
+use super::convert::param;
 use super::state::{FoldState, StepChange};
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
 
@@ -34,7 +36,6 @@ pub(super) struct Replay {
 enum Opening {
     New,
     Resume,
-    LegacyLoad,
 }
 
 impl Opening {
@@ -43,11 +44,14 @@ impl Opening {
             return false;
         };
         match self {
-            Self::LegacyLoad => {
-                serde_json::from_value::<LoadSessionResponse>(result.clone()).is_ok()
+            Self::New => {
+                NewSessionResponse::from_value(AGENT_METHOD_NAMES.session_new, result.clone())
+                    .is_ok()
             }
-            Self::New => serde_json::from_value::<NewSessionResponse>(result.clone()).is_ok(),
-            Self::Resume => serde_json::from_value::<ResumeSessionResponse>(result.clone()).is_ok(),
+            Self::Resume => {
+                ResumeSessionResponse::from_value(AGENT_METHOD_NAMES.session_resume, result.clone())
+                    .is_ok()
+            }
         }
     }
 }
@@ -86,18 +90,18 @@ impl Replay {
         if let Message::ToRuntime(ToRuntimeMessage::Acp(acp)) = &entry.content {
             match &acp.0 {
                 RawJsonRpcMessage::Request(request)
-                    if request.method.as_ref() == "session/prompt" =>
+                    if PromptRequest::matches_method(&request.method) =>
                 {
                     self.pending_prompt = Some(request.id.clone());
                     self.pending_local = vec![entry.clone()];
                 }
                 RawJsonRpcMessage::Request(request)
-                    if matches!(
-                        request.method.as_ref(),
-                        "initialize" | "session/load" | "session/new" | "session/resume"
-                    ) =>
+                    if InitializeRequest::matches_method(&request.method)
+                        || LoadSessionRequest::matches_method(&request.method)
+                        || NewSessionRequest::matches_method(&request.method)
+                        || ResumeSessionRequest::matches_method(&request.method) =>
                 {
-                    if request.method.as_ref() == "session/load" {
+                    if LoadSessionRequest::matches_method(&request.method) {
                         if let Some(snapshot) = self.snapshot.take() {
                             self.discarded_snapshot = Some((snapshot.id, snapshot.session));
                         }
@@ -127,13 +131,13 @@ impl Replay {
                 }
             }
             if let RawJsonRpcMessage::Notification(notification) = &acp.0
-                && notification.method.as_ref() == "_session/history_snapshot"
+                && HistorySnapshotNotification::matches_method(&notification.method)
             {
-                use agent_runtime_protocol::domain::turn::{
-                    HistorySnapshotNotification, HistorySnapshotPhase,
+                let Some(RawJsonRpcParams::Object(params)) = notification.params.as_ref() else {
+                    return Outcome::Staged;
                 };
-                let Some(fact) =
-                    deserialize_params::<HistorySnapshotNotification>(notification.params.as_ref())
+                let Ok(fact) =
+                    HistorySnapshotNotification::parse_message(&notification.method, params)
                 else {
                     return Outcome::Staged;
                 };
@@ -243,7 +247,7 @@ impl Replay {
         if let Message::ToRuntime(ToRuntimeMessage::Acp(acp)) = &entry.content
             && let RawJsonRpcMessage::Request(request) = &acp.0
         {
-            if request.method.as_ref() == "initialize" {
+            if InitializeRequest::matches_method(&request.method) {
                 // Initialization starts a correlation epoch, but does not
                 // erase committed messages or imply a successful restore.
                 self.quarantined |= self.candidate.is_some();
@@ -254,12 +258,7 @@ impl Replay {
                 self.initialization.metadata.status = Some("acp_ready".to_owned());
                 committed.clear_pending();
                 self.initialization.step(entry.clone());
-            } else if !self.disconnected && request.method.as_ref() == "session/load" {
-                if entry.legacy_load {
-                    self.candidate = None;
-                    self.pending_open = Some((request.id.clone(), Opening::LegacyLoad));
-                    return Outcome::Changes(committed.step(entry));
-                }
+            } else if !self.disconnected && LoadSessionRequest::matches_method(&request.method) {
                 let Some(session) =
                     param(request.params.as_ref(), "sessionId").and_then(|v| v.as_str())
                 else {
@@ -279,12 +278,16 @@ impl Replay {
                     state,
                 });
                 return Outcome::Staged;
-            } else if !self.disconnected && self.quarantined && self.candidate.is_none() {
-                let params = request.params.as_ref();
+            } else if !self.disconnected
+                && self.quarantined
+                && self.candidate.is_none()
+                && let Some(RawJsonRpcParams::Object(params)) = request.params.as_ref()
+            {
                 match request.method.as_ref() {
-                    "session/prompt"
-                        if deserialize_params::<PromptRequest>(params).is_some()
-                            && self.matches_replay_session(params) =>
+                    method
+                        if PromptRequest::matches_method(method)
+                            && PromptRequest::parse_message(method, params).is_ok()
+                            && self.matches_replay_session(request.params.as_ref()) =>
                     {
                         // Only dispatched prompts enter the log; SessionMachine
                         // dispatches them after the handshake reaches Live.
@@ -292,13 +295,17 @@ impl Replay {
                         self.pending_open = None;
                         committed.clear_pending();
                     }
-                    "session/new" if deserialize_params::<NewSessionRequest>(params).is_some() => {
+                    method
+                        if NewSessionRequest::matches_method(method)
+                            && NewSessionRequest::parse_message(method, params).is_ok() =>
+                    {
                         self.pending_open = Some((request.id.clone(), Opening::New));
                         return Outcome::Changes(committed.step(entry));
                     }
-                    "session/resume"
-                        if deserialize_params::<ResumeSessionRequest>(params).is_some()
-                            && self.matches_replay_session(params) =>
+                    method
+                        if ResumeSessionRequest::matches_method(method)
+                            && ResumeSessionRequest::parse_message(method, params).is_ok()
+                            && self.matches_replay_session(request.params.as_ref()) =>
                     {
                         self.pending_open = Some((request.id.clone(), Opening::Resume));
                         return Outcome::Changes(committed.step(entry));
@@ -331,7 +338,7 @@ impl Replay {
                 // Match SessionMachine::on_session_opened exactly: JSON-RPC
                 // success alone is insufficient; the ACP result must decode.
                 if !matches!(response, Response::Result { result, .. }
-                    if serde_json::from_value::<LoadSessionResponse>(result.clone()).is_ok())
+                    if LoadSessionResponse::from_value(AGENT_METHOD_NAMES.session_load, result.clone()).is_ok())
                 {
                     self.quarantined = true;
                     return Outcome::Staged;

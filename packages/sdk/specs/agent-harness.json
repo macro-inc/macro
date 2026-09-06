@@ -909,10 +909,6 @@
                 "format": "uuid",
                 "description": "Durable transport row identity; together with `createdAt`, its order cursor."
               },
-              "legacyLoad": {
-                "type": "boolean",
-                "description": "Interpretation context for pre-rollout loads; raw content is unchanged."
-              },
               "userId": {
                 "type": ["string", "null"],
                 "description": "The user whose action produced the frame, absent when no user did.\n\nOnly prompts carry one, and only when the frame was attributed at the\ntime - a replayed or recorded session's are anonymous."

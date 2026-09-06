@@ -115,10 +115,6 @@ fn parse_line(session: AgentSessionId, line: &str) -> AgentSessionLog {
     );
 
     AgentSessionLog {
-        legacy_load: value
-            .get("legacyLoad")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false),
         agent_session_id: session,
         user_id: is_prompt.then(|| {
             MacroUserIdStr::try_from_email("eric@example.com").expect("test email parses")

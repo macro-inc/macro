@@ -14,9 +14,11 @@ Completed native turns emit the optional, agent-neutral `_session/turn_complete`
 
 Load holds the session turn gate, validates and replays a stable journal snapshot with fresh translation state, and retains that state for continuation. The ACP adapter queues the load response before releasing the gate and enabling synchronization. Journal failures stop readiness and cannot be masked by cancellation. The delivered-run watermark remains separate: its existing ACP marker still goes through the host's fenced append/checkpoint transaction, only after notifications have been queued.
 
-## Compatibility and rollout limits
+## Recovery and rollout limits
 
-A legacy session without complete journal history is hydrated by listing every provider run and fetching each native stream in chronological order. Every run must include its original user message and a terminal result. Hydration is capture-only until all history validates. Final-answer-only records, expired/truncated streams, prefix mismatches, missing user prompts, and unavailable history cause an explicit load error, preserving the existing Macro history. They never publish a successful incomplete replacement. Hydration performs reads only, never prompt or tool execution.
+A session without complete journal history is hydrated by listing every provider run and fetching each native stream in chronological order. Every run must include its original user message and a terminal result. Hydration is capture-only until all history validates. Final-answer-only records, expired/truncated streams, prefix mismatches, missing user prompts, and unavailable history cause an explicit load error, preserving the committed projection. They never publish a successful incomplete replacement. Hydration performs reads only, never prompt or tool execution.
+
+There is no compatibility interpretation for historical lookup-only load successes: every valid correlated ACP load success replaces history, even with no replay frames. The old `agent_session_log.legacy_load` column remains unused so applied migrations and their checksums stay intact; it is not read or exposed to clients.
 
 A process loss between remote prompt acceptance and persisting the accepted run association can leave an unresolved prompt intent. Without a proven association, load fails explicitly instead of executing that prompt again or dropping its history. Likewise, a foreign run observed only by polling cannot later claim to contain its unavailable original prompt. Operators should retain old Macro history; this migration does not manufacture or backfill missing provider details from ACP frames.
 

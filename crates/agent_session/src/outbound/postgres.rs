@@ -672,7 +672,6 @@ impl AgentSessionRepo for PgAgentSessionRepo {
 }
 
 struct AgentSessionLogRow {
-    legacy_load: bool,
     id: Uuid,
     agent_session_id: Uuid,
     user_id: Option<MacroUserIdStr<'static>>,
@@ -689,7 +688,6 @@ impl TryFrom<AgentSessionLogRow> for StoredAgentSessionLog {
             id: row.id,
             created_at: row.created_at,
             entry: AgentSessionLog {
-                legacy_load: row.legacy_load,
                 agent_session_id: AgentSessionId::new_from_uuid(row.agent_session_id),
                 user_id: row.user_id,
                 content: parse_message(&row.direction, row.content)?,
@@ -987,7 +985,6 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
                 log.id,
                 log.agent_session_id,
                 log.user_id AS "user_id: MacroUserIdStr",
-                log.legacy_load,
                 log.direction,
                 log.content,
                 log.created_at
