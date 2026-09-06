@@ -55,6 +55,10 @@ const harnessMocks = vi.hoisted(() => ({
   setSearchParams: vi.fn(),
 }));
 
+vi.mock('@core/cursor/flag', () => ({
+  useCursorAgentsAccess: () => () => true,
+}));
+
 vi.mock('@queries/auth/cursor-api-key', () => ({
   useCursorApiKeyStatusQuery: () => mocks.status,
   useSaveCursorApiKey: () => ({

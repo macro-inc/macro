@@ -76,8 +76,6 @@ impl AgentKind {
     pub fn of(bot: BotId) -> Self {
         if bot == bot_id::MACRO_CODER_BOT_ID {
             Self::SandboxedCoder
-        } else if bot == bot_id::CURSOR_BOT_ID {
-            Self::Cursor
         } else if bot == bot_id::MACRO_NEW_BOT_ID {
             Self::InMemory
         } else {
@@ -89,7 +87,9 @@ impl AgentKind {
     #[must_use]
     pub fn from_harness(harness: &str) -> Self {
         match harness {
-            "cursor" => Self::Cursor,
+            // A user's Cursor connection creates a private agent on this slug;
+            // sessions run on the owner's own Cursor account.
+            harness_id::CURSOR_HARNESS_SLUG => Self::Cursor,
             "in-memory" | "macro-inmem" => Self::InMemory,
             // Registered macrod harnesses are the deliberate external case:
             // the agent's `harness_id` names whose daemon serves it.

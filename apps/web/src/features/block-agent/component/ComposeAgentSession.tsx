@@ -2,11 +2,6 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import {
-  CURSOR_BOT_HANDLE,
-  CURSOR_BOT_ID,
-  CURSOR_BOT_NAME,
-} from '@core/constant/cursorAgent';
-import {
   MACRO_AGENT_HANDLE,
   MACRO_AGENT_NAME,
 } from '@core/constant/macroAgent';
@@ -79,7 +74,9 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   let promptRef: HTMLTextAreaElement | undefined;
 
-  // The two first-party coders lead, then the user's own personas.
+  // Macro's own agent leads, then the user's agents. An agent on the Cursor
+  // harness (the one connecting Cursor creates, or any the user made) runs on
+  // the user's Cursor account, so it waits until a key is stored.
   const personas = (): PersonaOption[] => [
     {
       id: MACRO_PERSONA_ID,
@@ -87,31 +84,26 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
       handle: MACRO_AGENT_HANDLE,
       harness: 'in-memory',
     },
-    {
-      id: CURSOR_BOT_ID,
-      botId: CURSOR_BOT_ID,
-      name: CURSOR_BOT_NAME,
-      handle: CURSOR_BOT_HANDLE,
-      harness: 'cursor',
-      defaultModel: cursorStatus.data?.defaultModelId ?? undefined,
-      unavailableReason: cursorConnected()
-        ? undefined
-        : 'Connect Cursor in Settings → Harness',
-      unavailableLabel: cursorConnected() ? undefined : 'Not connected',
-    },
     ...(agentsQuery.isSuccess ? agentsQuery.data : [])
       // Only runtimes Macro provisions can be started from here; a persona on
       // a registered macrod daemon opens its own sessions.
       .filter((agent) => isManagedHarness(agent.harness))
-      .map((agent) => ({
-        id: agent.bot.id,
-        botId: agent.bot.id,
-        name: agent.bot.name,
-        handle: agent.bot.handle,
-        avatarUrl: agent.bot.avatar_url ?? undefined,
-        harness: agent.harness,
-        defaultModel: agent.default_model,
-      })),
+      .map((agent) => {
+        const disconnected = agent.harness === 'cursor' && !cursorConnected();
+        return {
+          id: agent.bot.id,
+          botId: agent.bot.id,
+          name: agent.bot.name,
+          handle: agent.bot.handle,
+          avatarUrl: agent.bot.avatar_url ?? undefined,
+          harness: agent.harness,
+          defaultModel: agent.default_model,
+          unavailableReason: disconnected
+            ? 'Connect Cursor in Settings → Harness'
+            : undefined,
+          unavailableLabel: disconnected ? 'Not connected' : undefined,
+        };
+      }),
   ];
   const selectedPersona = () =>
     personas().find((persona) => persona.id === personaId()) ?? personas()[0];
@@ -365,7 +357,7 @@ function PersonaGrid(props: {
       <Show when={props.error}>
         <p class="text-xs text-negative">
           Your saved agents could not be loaded. You can still start with{' '}
-          {MACRO_AGENT_NAME} or {CURSOR_BOT_NAME}.
+          {MACRO_AGENT_NAME}.
         </p>
       </Show>
     </section>

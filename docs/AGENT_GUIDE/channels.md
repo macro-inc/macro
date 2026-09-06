@@ -40,9 +40,12 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` open
-an agent session; follow-up
-`@` mentions of that bot in the same thread route to it.
+bot asks before scheduling a specific clock time. `@macro-new` / `@coder` open an agent
+session, as does any agent from Settings → Agents that is available in the channel;
+follow-up `@` mentions of that bot in the same thread route to it. `@cursor` is not built
+in: connecting Cursor under Settings → Harness creates a private **Cursor** agent (handle
+`cursor`, all channels, editable under Settings → Agents) for that user, mentionable only by
+them and only while a key is stored.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention.
 The Magic Chip that streams the agent's reply stays inside the message column: long

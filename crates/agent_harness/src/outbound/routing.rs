@@ -76,7 +76,8 @@ where
     }
 
     async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
-        match AgentKind::of(self.sessions.get(session).await?.bot_id) {
+        let row = self.sessions.get(session).await?;
+        match AgentKind::for_session(row.bot_id, &row.harness) {
             AgentKind::Cursor => self.cursor.session_token(session).await,
             AgentKind::SandboxedCoder | AgentKind::InMemory => {
                 self.sandbox.session_token(session).await

@@ -1,6 +1,7 @@
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
+import { useCursorAgentsAccess } from '@core/cursor/flag';
 import { ThrownResultError } from '@core/util/result';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
@@ -17,7 +18,7 @@ import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
 } from '@queries/harnesses/harnesses';
-import type { Harness as RegisteredHarness } from '@service-storage/client';
+import type { Harness as RegisteredHarness } from '@service-agent-harness/client';
 import { useSearchParams } from '@solidjs/router';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
@@ -40,6 +41,7 @@ function lastConnectedText(harness: RegisteredHarness): string {
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
 export function Harness() {
+  const canUseCursor = useCursorAgentsAccess();
   const [cursorApiKey, setCursorApiKey] = createSignal('');
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
@@ -149,140 +151,145 @@ export function Harness() {
           </div>
         </section>
 
-        <section class="flex gap-4 px-6 py-5">
-          <HarnessIcon>
-            <CursorIcon />
-          </HarnessIcon>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <h2 class="text-sm font-medium text-ink">Cursor</h2>
-              <Show when={cursorRegistered()}>
-                <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
-                  Connected
-                </span>
-              </Show>
-            </div>
-            <p class="mt-1 text-sm text-ink-muted">
-              Use your Cursor account to run agent sessions in Macro.
-            </p>
+        {/* Connecting Cursor is what creates the user's `@cursor` agent, so
+            this card is the one gate on Cursor agents. */}
+        <Show when={canUseCursor()}>
+          <section class="flex gap-4 px-6 py-5">
+            <HarnessIcon>
+              <CursorIcon />
+            </HarnessIcon>
+            <div class="min-w-0 flex-1">
+              <div class="flex items-center gap-2">
+                <h2 class="text-sm font-medium text-ink">Cursor</h2>
+                <Show when={cursorRegistered()}>
+                  <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
+                    Connected
+                  </span>
+                </Show>
+              </div>
+              <p class="mt-1 text-sm text-ink-muted">
+                Use your Cursor account to run agent sessions in Macro.
+              </p>
 
-            <Show
-              when={!cursorStatus.isPlaceholderData}
-              fallback={<p class="mt-4 text-xs text-ink-muted">Loading…</p>}
-            >
               <Show
-                when={cursorRegistered()}
-                fallback={
-                  <div class="mt-4 flex flex-col gap-1.5">
-                    <label
-                      for="cursor-harness-api-key"
-                      class="text-xs text-ink"
-                    >
-                      API key
-                    </label>
-                    <div class="flex items-center gap-2 mobile:flex-col mobile:items-stretch">
-                      <input
-                        id="cursor-harness-api-key"
-                        type="password"
-                        autocomplete="off"
-                        spellcheck={false}
-                        class="settings-input ph-no-capture min-w-0 flex-1"
-                        placeholder={`${CURSOR_KEY_PREFIX}…`}
-                        value={cursorApiKey()}
-                        onInput={(event) =>
-                          setCursorApiKey(event.currentTarget.value)
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            void handleSaveCursorApiKey();
-                          }
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        depth={3}
-                        disabled={
-                          cursorApiKey().trim().length === 0 ||
-                          saveCursorApiKey.isPending
-                        }
-                        onClick={handleSaveCursorApiKey}
+                when={!cursorStatus.isPlaceholderData}
+                fallback={<p class="mt-4 text-xs text-ink-muted">Loading…</p>}
+              >
+                <Show
+                  when={cursorRegistered()}
+                  fallback={
+                    <div class="mt-4 flex flex-col gap-1.5">
+                      <label
+                        for="cursor-harness-api-key"
+                        class="text-xs text-ink"
                       >
-                        Save
-                      </Button>
+                        API key
+                      </label>
+                      <div class="flex items-center gap-2 mobile:flex-col mobile:items-stretch">
+                        <input
+                          id="cursor-harness-api-key"
+                          type="password"
+                          autocomplete="off"
+                          spellcheck={false}
+                          class="settings-input ph-no-capture min-w-0 flex-1"
+                          placeholder={`${CURSOR_KEY_PREFIX}…`}
+                          value={cursorApiKey()}
+                          onInput={(event) =>
+                            setCursorApiKey(event.currentTarget.value)
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              void handleSaveCursorApiKey();
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          depth={3}
+                          disabled={
+                            cursorApiKey().trim().length === 0 ||
+                            saveCursorApiKey.isPending
+                          }
+                          onClick={handleSaveCursorApiKey}
+                        >
+                          Save
+                        </Button>
+                      </div>
+                      <p class="text-xs text-ink-extra-muted">
+                        Create an API key in Cursor and paste it here. Macro
+                        stores it encrypted.
+                      </p>
                     </div>
+                  }
+                >
+                  <div class="mt-4 flex flex-col gap-1.5">
+                    <label for="cursor-default-model" class="text-xs text-ink">
+                      Default model
+                    </label>
+                    <Show
+                      when={isLargeModelCatalog(cursorModelOptions())}
+                      fallback={
+                        <select
+                          id="cursor-default-model"
+                          class="settings-input w-56"
+                          value={cursorStatus.data?.defaultModelId ?? ''}
+                          disabled={setCursorDefaultModel.isPending}
+                          onChange={(event) =>
+                            void handleCursorModelChange(
+                              event.currentTarget.value
+                            )
+                          }
+                        >
+                          <For each={cursorModels.data?.models ?? []}>
+                            {(model) => (
+                              <option value={model.id}>
+                                {model.displayName}
+                              </option>
+                            )}
+                          </For>
+                        </select>
+                      }
+                    >
+                      <ModelCatalogPicker
+                        value={selectedCursorModelId()}
+                        options={cursorModelOptions()}
+                        onSelect={(id) => void handleCursorModelChange(id)}
+                        disabled={setCursorDefaultModel.isPending}
+                        ariaLabel="Default model"
+                        triggerClass="w-72 max-w-full justify-between"
+                      />
+                    </Show>
                     <p class="text-xs text-ink-extra-muted">
-                      Create an API key in Cursor and paste it here. Macro
-                      stores it encrypted.
+                      The model your Cursor agent is created with. Change it any
+                      time under Settings → Agents. Recommended models stay up
+                      top; everything else is behind More models.
                     </p>
                   </div>
-                }
-              >
-                <div class="mt-4 flex flex-col gap-1.5">
-                  <label for="cursor-default-model" class="text-xs text-ink">
-                    Default model
-                  </label>
-                  <Show
-                    when={isLargeModelCatalog(cursorModelOptions())}
-                    fallback={
-                      <select
-                        id="cursor-default-model"
-                        class="settings-input w-56"
-                        value={cursorStatus.data?.defaultModelId ?? ''}
-                        disabled={setCursorDefaultModel.isPending}
-                        onChange={(event) =>
-                          void handleCursorModelChange(
-                            event.currentTarget.value
-                          )
-                        }
-                      >
-                        <For each={cursorModels.data?.models ?? []}>
-                          {(model) => (
-                            <option value={model.id}>
-                              {model.displayName}
-                            </option>
-                          )}
-                        </For>
-                      </select>
-                    }
-                  >
-                    <ModelCatalogPicker
-                      value={selectedCursorModelId()}
-                      options={cursorModelOptions()}
-                      onSelect={(id) => void handleCursorModelChange(id)}
-                      disabled={setCursorDefaultModel.isPending}
-                      ariaLabel="Default model"
-                      triggerClass="w-72 max-w-full justify-between"
-                    />
-                  </Show>
-                  <p class="text-xs text-ink-extra-muted">
-                    The model new `@cursor` sessions start on. Recommended
-                    models stay up top; everything else is behind More models.
-                  </p>
-                </div>
 
-                <div class="mt-4 flex items-center justify-between gap-4 mobile:items-start">
-                  <p class="text-xs text-ink-extra-muted">
-                    Disconnecting removes Macro's copy of the key but does not
-                    revoke it in Cursor.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="sm"
-                    depth={3}
-                    class="shrink-0"
-                    disabled={disconnectCursor.isPending}
-                    onClick={handleDisconnectCursor}
-                  >
-                    Disconnect
-                  </Button>
-                </div>
+                  <div class="mt-4 flex items-center justify-between gap-4 mobile:items-start">
+                    <p class="text-xs text-ink-extra-muted">
+                      Disconnecting removes Macro's copy of the key but does not
+                      revoke it in Cursor.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      depth={3}
+                      class="shrink-0"
+                      disabled={disconnectCursor.isPending}
+                      onClick={handleDisconnectCursor}
+                    >
+                      Disconnect
+                    </Button>
+                  </div>
+                </Show>
               </Show>
-            </Show>
-          </div>
-        </section>
+            </div>
+          </section>
+        </Show>
 
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>

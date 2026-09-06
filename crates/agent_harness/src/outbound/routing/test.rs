@@ -199,13 +199,13 @@ fn spawn_for(kind: AgentKind) -> SpawnContainer {
 }
 
 #[tokio::test]
-async fn the_cursor_bot_routes_to_cursor_and_everything_else_to_the_sandbox() {
+async fn cursor_spawns_route_to_cursor_and_everything_else_to_the_sandbox() {
     let sandbox = TaggedManager::new("sandbox");
     let cursor = TaggedManager::new("cursor");
     let router = RoutedContainerManager::new(
         sandbox.clone(),
         cursor.clone(),
-        FixedBotSessions(bot_id::CURSOR_BOT_ID),
+        FixedBotSessions(BotId::TEST_A),
     );
 
     let spawned = router
@@ -222,25 +222,8 @@ async fn the_cursor_bot_routes_to_cursor_and_everything_else_to_the_sandbox() {
     assert_eq!(sandbox.calls(), ["sandbox:spawn"]);
 }
 
-/// Resume and teardown route by the session row's bot — the repo says cursor
-/// here, so the sandbox provider must never hear about the session.
-#[tokio::test]
-async fn resume_and_teardown_route_by_the_stored_bot() {
-    let sandbox = TaggedManager::new("sandbox");
-    let cursor = TaggedManager::new("cursor");
-    let router = RoutedContainerManager::new(
-        sandbox.clone(),
-        cursor.clone(),
-        FixedBotSessions(bot_id::CURSOR_BOT_ID),
-    );
-
-    let session = AgentSessionId::new();
-    router.resume(session).await.expect("resume");
-    router.teardown(session).await.expect("teardown");
-    assert_eq!(cursor.calls(), ["cursor:resume", "cursor:teardown"]);
-    assert!(sandbox.calls().is_empty());
-}
-
+/// Resume and teardown route by the session row's stored harness — the repo
+/// says cursor here, so the sandbox provider must never hear about the session.
 #[tokio::test]
 async fn a_database_backed_cursor_agent_routes_by_its_stored_harness() {
     let sandbox = TaggedManager::new("sandbox");

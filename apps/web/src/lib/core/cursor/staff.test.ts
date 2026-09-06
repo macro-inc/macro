@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isMacroStaffEmail } from './cursorAgent';
+import { isMacroStaffEmail } from './staff';
 
 describe('isMacroStaffEmail', () => {
   it('accepts the Macro domain case-insensitively', () => {

@@ -19,7 +19,7 @@
 | `/app/calendar/view` | Calendar |
 | `/app/md/<uuid>` | A document |
 | `/app/chat/<uuid>` | A standalone AI chat |
-| `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
+| `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / a user's own agent such as `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
 | `/app/md/<doc>/channel/<channel>` | Doc + channel in a split |
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |

@@ -100,31 +100,13 @@ where
     ) -> agent_session::domain::error::Result<AgentSession> {
         let managed_defaults = self.inner.defaults.managed();
         let (bot_id, model, harness, instructions, mcp_servers) = match request.profile {
-            Some(SelectedManagedPersona {
-                bot_id,
-                profile: Some(profile),
-            }) => (
+            Some(SelectedManagedPersona { bot_id, profile }) => (
                 bot_id,
                 profile.model,
                 profile.harness,
                 Some(profile.instructions).filter(|value| !value.trim().is_empty()),
                 profile.mcp_servers,
             ),
-            // A fixed system bot picked by name runs on the deployment's
-            // defaults for it, the same way a channel mention would open it.
-            Some(SelectedManagedPersona {
-                bot_id,
-                profile: None,
-            }) => {
-                let defaults = self.inner.defaults.for_bot(bot_id);
-                (
-                    bot_id,
-                    defaults.model.clone(),
-                    defaults.harness.clone(),
-                    request.instructions,
-                    AgentMcpServers::OwnerConnections,
-                )
-            }
             None => (
                 managed_defaults.bot_id,
                 managed_defaults.model.clone(),
