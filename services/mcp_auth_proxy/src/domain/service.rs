@@ -13,14 +13,31 @@ use std::{
 
 use super::{
     models::{
-        AuthorizeRequest, CallbackRequest, IssuedAuthorizationCode, PendingAuthorization,
+        AuthorizeRequest, CallbackRequest, ClientRegistrationRequest, ClientRegistrationResponse,
+        IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RegisteredClient,
         TokenRequest, TokenResponse,
     },
-    ports::OAuthProvider,
+    ports::{ClientRegistrationStore, OAuthProvider, RefreshTokenBindingStore},
+    redirect_uri::RedirectUriPolicy,
 };
 
 pub(crate) const PENDING_AUTH_TTL: Duration = Duration::from_secs(10 * 60);
 pub(crate) const AUTHORIZATION_CODE_TTL: Duration = Duration::from_secs(5 * 60);
+/// How long a dynamic client registration survives without being used. Every
+/// successful lookup extends it, so a client that keeps authorizing keeps its
+/// registration and one that stops is eventually collected.
+pub const CLIENT_REGISTRATION_TTL: Duration = Duration::from_secs(90 * 24 * 60 * 60);
+/// How long a refresh token stays bound to its client. FusionAuth issues
+/// refresh tokens on a 30-day sliding window and each broker refresh re-binds,
+/// so a binding outlives every refresh token that can still be redeemed.
+pub const REFRESH_TOKEN_BINDING_TTL: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+
+/// Redirect URIs accepted per registration. Enough for a client that offers
+/// several callbacks, low enough that open registration cannot be used to
+/// store unbounded data.
+const MAX_REDIRECT_URIS_PER_CLIENT: usize = 8;
+/// Longest redirect URI accepted at registration.
+const MAX_REDIRECT_URI_LEN: usize = 512;
 
 /// Domain interface for the MCP OAuth broker.
 pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
@@ -29,7 +46,10 @@ pub trait McpAuthProxyService: Clone + Send + Sync + 'static {
     /// Returns protected-resource metadata for MCP clients.
     fn protected_resource_metadata(&self) -> serde_json::Value;
     /// Registers a public MCP client dynamically.
-    fn register_client(&self, body: serde_json::Value) -> serde_json::Value;
+    fn register_client(
+        &self,
+        request: ClientRegistrationRequest,
+    ) -> impl Future<Output = Result<ClientRegistrationResponse, RegisterClientError>> + Send;
     /// Starts an OAuth authorization flow and returns the upstream authorize URL.
     fn start_authorization(
         &self,
@@ -81,10 +101,29 @@ pub trait InflightAuthStore: Send + Sync {
     fn cleanup_expired(&self) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
+/// Dependencies and policy required to build the broker service.
+pub struct McpAuthProxyServiceDeps<I> {
+    /// Public base URL the broker is served from.
+    pub public_url: String,
+    /// The redirect URI destinations this deployment trusts.
+    pub redirect_uri_policy: RedirectUriPolicy,
+    /// Store for short-lived handshake state.
+    pub inflight_auth: Arc<I>,
+    /// Store for dynamically registered clients.
+    pub client_registrations: Arc<dyn ClientRegistrationStore>,
+    /// Store binding refresh tokens to the clients that obtained them.
+    pub refresh_token_bindings: Arc<dyn RefreshTokenBindingStore>,
+    /// Upstream OAuth provider the broker fronts.
+    pub oauth_provider: Arc<dyn OAuthProvider>,
+}
+
 /// Domain service backing the MCP OAuth broker.
 pub struct McpAuthProxyServiceImpl<I> {
     inflight_auth: Arc<I>,
+    client_registrations: Arc<dyn ClientRegistrationStore>,
+    refresh_token_bindings: Arc<dyn RefreshTokenBindingStore>,
     oauth_provider: Arc<dyn OAuthProvider>,
+    redirect_uri_policy: RedirectUriPolicy,
     public_url: String,
 }
 
@@ -92,7 +131,10 @@ impl<I> Clone for McpAuthProxyServiceImpl<I> {
     fn clone(&self) -> Self {
         Self {
             inflight_auth: Arc::clone(&self.inflight_auth),
+            client_registrations: Arc::clone(&self.client_registrations),
+            refresh_token_bindings: Arc::clone(&self.refresh_token_bindings),
             oauth_provider: Arc::clone(&self.oauth_provider),
+            redirect_uri_policy: self.redirect_uri_policy.clone(),
             public_url: self.public_url.clone(),
         }
     }
@@ -103,31 +145,91 @@ where
     I: InflightAuthStore + 'static,
 {
     /// Creates a new auth proxy service backed by an upstream OAuth provider.
-    pub fn new(
-        public_url: String,
-        inflight_auth: Arc<I>,
-        oauth_provider: Arc<dyn OAuthProvider>,
-    ) -> Self {
+    pub fn new(deps: McpAuthProxyServiceDeps<I>) -> Self {
+        let McpAuthProxyServiceDeps {
+            public_url,
+            redirect_uri_policy,
+            inflight_auth,
+            client_registrations,
+            refresh_token_bindings,
+            oauth_provider,
+        } = deps;
+
         Self {
             inflight_auth,
+            client_registrations,
+            refresh_token_bindings,
             oauth_provider,
+            redirect_uri_policy,
             public_url,
         }
     }
 
+    /// Refreshes an upstream token for the client the refresh token belongs to.
+    ///
+    /// A public client has no credential to present, so the binding recorded
+    /// when the token was issued is what ties the grant to a client. Rotating
+    /// the binding on every refresh means a replayed token whose binding has
+    /// already moved on finds nothing and is refused.
     async fn refresh_token_exchange(
         &self,
         params: TokenRequest,
     ) -> Result<TokenResponse, TokenExchangeError> {
+        let client_id = params
+            .client_id
+            .ok_or(TokenExchangeError::ClientIdRequired)?;
         let refresh_token = params
             .refresh_token
             .ok_or(TokenExchangeError::RefreshTokenRequired)?;
+
+        let presented_digest = refresh_token_digest(&refresh_token);
+        let bound_client_id = self
+            .refresh_token_bindings
+            .bound_client(&presented_digest)
+            .await
+            .map_err(TokenExchangeError::RefreshTokenBindingStore)?
+            .ok_or(TokenExchangeError::UnboundRefreshToken)?;
+
+        if bound_client_id != client_id {
+            tracing::warn!(
+                %client_id,
+                "refresh token presented by a client it was not issued to"
+            );
+            return Err(TokenExchangeError::ClientMismatch);
+        }
 
         let tokens = self
             .oauth_provider
             .refresh_access_token(&refresh_token)
             .await
             .map_err(TokenExchangeError::RefreshFailed)?;
+
+        let rotated_digest = refresh_token_digest(&tokens.refresh_token);
+        // The upstream token is already issued at this point. A binding write
+        // that fails costs the client its next refresh, which it recovers from
+        // by authorizing again; discarding a token the user just approved
+        // costs them the session outright. So log and hand the token over.
+        let rebound = self
+            .refresh_token_bindings
+            .bind(&rotated_digest, &client_id)
+            .await
+            .inspect_err(|error| {
+                tracing::error!(error=?error, %client_id, "failed to bind rotated refresh token");
+            })
+            .is_ok();
+
+        if rebound && rotated_digest != presented_digest {
+            self.refresh_token_bindings
+                .unbind(&presented_digest)
+                .await
+                .unwrap_or_else(|error| {
+                    tracing::error!(
+                        error=?error,
+                        %client_id,
+                        "failed to drop superseded refresh token binding"
+                    );
+                });
+        }
 
         Ok(TokenResponse {
             access_token: tokens.access_token,
@@ -141,6 +243,13 @@ where
         &self,
         params: TokenRequest,
     ) -> Result<TokenResponse, TokenExchangeError> {
+        // Read the client id before consuming the code, so a malformed request
+        // does not spend a code that is still good.
+        let client_id = params
+            .client_id
+            .as_deref()
+            .ok_or(TokenExchangeError::ClientIdRequired)?;
+
         let issued = self
             .inflight_auth
             .take_issued(
@@ -152,6 +261,15 @@ where
             .await
             .map_err(TokenExchangeError::InflightStore)?
             .ok_or(TokenExchangeError::InvalidOrExpiredCode)?;
+
+        if client_id != issued.client_id {
+            tracing::warn!(
+                presented_client_id = %client_id,
+                issued_client_id = %issued.client_id,
+                "authorization code redeemed by a client it was not issued to"
+            );
+            return Err(TokenExchangeError::ClientMismatch);
+        }
 
         match &params.redirect_uri {
             Some(uri) if *uri != issued.redirect_uri => {
@@ -171,6 +289,14 @@ where
             }
             None => return Err(TokenExchangeError::CodeVerifierRequired),
         }
+
+        self.refresh_token_bindings
+            .bind(
+                &refresh_token_digest(&issued.refresh_token),
+                &issued.client_id,
+            )
+            .await
+            .map_err(TokenExchangeError::RefreshTokenBindingStore)?;
 
         Ok(TokenResponse {
             access_token: issued.access_token,
@@ -211,22 +337,54 @@ where
     }
 
     /// Handles dynamic client registration for public MCP clients.
-    fn register_client(&self, body: serde_json::Value) -> serde_json::Value {
-        let client_id = uuid::Uuid::new_v4().to_string();
-        let client_name = body
-            .get("client_name")
-            .and_then(|v| v.as_str())
-            .unwrap_or("mcp-client");
+    ///
+    /// Registration is open, as MCP clients require, but it is not
+    /// unconstrained: every submitted redirect URI must satisfy the
+    /// deployment's redirect URI policy, and the accepted set is persisted so
+    /// later authorize requests have something to be checked against.
+    async fn register_client(
+        &self,
+        request: ClientRegistrationRequest,
+    ) -> Result<ClientRegistrationResponse, RegisterClientError> {
+        if request.redirect_uris.is_empty() {
+            return Err(RegisterClientError::RedirectUrisRequired);
+        }
+        if request.redirect_uris.len() > MAX_REDIRECT_URIS_PER_CLIENT {
+            return Err(RegisterClientError::TooManyRedirectUris);
+        }
+        for uri in &request.redirect_uris {
+            if uri.len() > MAX_REDIRECT_URI_LEN || !self.redirect_uri_policy.permits(uri) {
+                return Err(RegisterClientError::UnsupportedRedirectUri { uri: uri.clone() });
+            }
+        }
 
-        tracing::info!(%client_id, %client_name, "dynamic client registration");
+        let client = RegisteredClient {
+            client_id: uuid::Uuid::new_v4().to_string(),
+            client_name: request
+                .client_name
+                .unwrap_or_else(|| "mcp-client".to_owned()),
+            redirect_uris: request.redirect_uris,
+        };
 
-        serde_json::json!({
-            "client_id": client_id,
-            "client_name": client_name,
-            "redirect_uris": body.get("redirect_uris").cloned().unwrap_or(serde_json::json!([])),
-            "grant_types": ["authorization_code", "refresh_token"],
-            "response_types": ["code"],
-            "token_endpoint_auth_method": "none",
+        self.client_registrations
+            .insert_client(&client)
+            .await
+            .map_err(RegisterClientError::ClientRegistrationStore)?;
+
+        tracing::info!(
+            client_id = %client.client_id,
+            client_name = %client.client_name,
+            redirect_uris = ?client.redirect_uris,
+            "dynamic client registration"
+        );
+
+        Ok(ClientRegistrationResponse {
+            client_id: client.client_id,
+            client_name: client.client_name,
+            redirect_uris: client.redirect_uris,
+            grant_types: ["authorization_code", "refresh_token"],
+            response_types: ["code"],
+            token_endpoint_auth_method: "none",
         })
     }
 
@@ -243,18 +401,36 @@ where
             if params.code_challenge_method != "S256" {
                 return Err(StartAuthorizationError::UnsupportedCodeChallengeMethod);
             }
-            if !is_allowed_redirect_uri(&params.redirect_uri) {
+            // Applied ahead of the registered set so a registration made
+            // before the policy was narrowed cannot still be used.
+            if !service.redirect_uri_policy.permits(&params.redirect_uri) {
                 return Err(StartAuthorizationError::InvalidRedirectUri);
             }
 
+            let client = service
+                .client_registrations
+                .find_client(&params.client_id)
+                .await
+                .map_err(StartAuthorizationError::ClientRegistrationStore)?
+                .ok_or(StartAuthorizationError::UnknownClient)?;
+
+            if !client.permits_redirect_uri(&params.redirect_uri) {
+                tracing::warn!(
+                    client_id = %params.client_id,
+                    "authorize request used a redirect_uri the client did not register"
+                );
+                return Err(StartAuthorizationError::UnregisteredRedirectUri);
+            }
+
             let session_id = uuid::Uuid::new_v4().to_string();
-            tracing::info!(%session_id, "starting OAuth authorize flow");
+            tracing::info!(%session_id, client_id = %client.client_id, "starting OAuth authorize flow");
 
             service
                 .inflight_auth
                 .insert_pending(
                     &session_id,
                     PendingAuthorization {
+                        client_id: client.client_id,
                         code_challenge: params.code_challenge,
                         client_state: params.state,
                         client_redirect_uri: params.redirect_uri,
@@ -298,19 +474,15 @@ where
                 description = ?params.error_description,
                 "upstream oauth returned error"
             );
-            let mut redirect = format!(
-                "{}?error={}&state={}",
-                pending.client_redirect_uri,
-                urlencoding::encode(&error),
-                urlencoding::encode(&pending.client_state),
-            );
+            let mut params_to_append =
+                vec![("error", error), ("state", pending.client_state.clone())];
             if let Some(desc) = params.error_description {
-                redirect.push_str(&format!(
-                    "&error_description={}",
-                    urlencoding::encode(&desc)
-                ));
+                params_to_append.push(("error_description", desc));
             }
-            return Ok(redirect);
+            return Ok(append_query_params(
+                &pending.client_redirect_uri,
+                &params_to_append,
+            ));
         }
 
         let code = params.code.ok_or(CompleteCallbackError::MissingCode)?;
@@ -333,6 +505,7 @@ where
             .insert_issued(
                 &issued_code,
                 IssuedAuthorizationCode {
+                    client_id: pending.client_id,
                     access_token: tokens.access_token,
                     refresh_token: tokens.refresh_token,
                     code_challenge: pending.code_challenge,
@@ -343,11 +516,12 @@ where
             .await
             .map_err(CompleteCallbackError::InflightStore)?;
 
-        Ok(format!(
-            "{}?code={}&state={}",
-            pending.client_redirect_uri,
-            urlencoding::encode(&issued_code),
-            urlencoding::encode(&pending.client_state),
+        Ok(append_query_params(
+            &pending.client_redirect_uri,
+            &[
+                ("code", issued_code),
+                ("state", pending.client_state.clone()),
+            ],
         ))
     }
 
@@ -379,20 +553,46 @@ fn seconds_until(deadline: SystemTime) -> u64 {
         .unwrap_or(0)
 }
 
-fn is_allowed_redirect_uri(uri: &str) -> bool {
-    let Ok(parsed) = url::Url::parse(uri) else {
-        return false;
-    };
+/// Digest used to key a refresh token binding, so the store never holds a
+/// token that could be replayed if it were read.
+fn refresh_token_digest(refresh_token: &RefreshToken) -> String {
+    let digest = Sha256::digest(refresh_token.as_str().as_bytes());
+    URL_SAFE_NO_PAD.encode(digest)
+}
 
-    if parsed.scheme() == "https" {
-        return true;
+/// Appends query parameters to a redirect URI, keeping any query the client
+/// registered on it.
+fn append_query_params(uri: &str, params: &[(&str, String)]) -> String {
+    let mut redirect = uri.to_owned();
+    let mut separator = if uri.contains('?') { '&' } else { '?' };
+    for (key, value) in params {
+        redirect.push(separator);
+        redirect.push_str(key);
+        redirect.push('=');
+        redirect.push_str(&urlencoding::encode(value));
+        separator = '&';
     }
+    redirect
+}
 
-    if parsed.scheme() == "http" {
-        return matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
-    }
-
-    false
+/// Errors returned when registering a client.
+#[derive(Debug, thiserror::Error)]
+pub enum RegisterClientError {
+    /// A client with no redirect URI could never complete a flow.
+    #[error("at least one redirect_uri is required")]
+    RedirectUrisRequired,
+    /// More redirect URIs than the broker will store for one client.
+    #[error("too many redirect_uris")]
+    TooManyRedirectUris,
+    /// A submitted redirect URI is not a destination this deployment trusts.
+    #[error("redirect_uri is not an allowed destination")]
+    UnsupportedRedirectUri {
+        /// The rejected URI, for logging.
+        uri: String,
+    },
+    /// The registration could not be persisted.
+    #[error("failed to persist client registration")]
+    ClientRegistrationStore(anyhow::Error),
 }
 
 /// Errors returned when starting authorization.
@@ -404,9 +604,18 @@ pub enum StartAuthorizationError {
     /// Only S256 PKCE is supported.
     #[error("unsupported code_challenge_method")]
     UnsupportedCodeChallengeMethod,
-    /// Only https or loopback http redirect URIs are allowed.
-    #[error("redirect_uri must be https or a loopback address")]
+    /// The redirect URI is not a destination this deployment trusts.
+    #[error("redirect_uri is not an allowed destination")]
     InvalidRedirectUri,
+    /// The redirect URI is not one this client registered.
+    #[error("redirect_uri was not registered for this client")]
+    UnregisteredRedirectUri,
+    /// The client_id has no live registration.
+    #[error("unknown client_id")]
+    UnknownClient,
+    /// Client registrations could not be read.
+    #[error("failed to read client registrations")]
+    ClientRegistrationStore(anyhow::Error),
     /// Inflight auth state could not be persisted.
     #[error("failed to persist inflight auth state")]
     InflightStore(anyhow::Error),
@@ -462,9 +671,22 @@ pub enum TokenExchangeError {
     /// Refresh token is required for refresh_token grants.
     #[error("refresh_token required")]
     RefreshTokenRequired,
+    /// The client_id was absent from the token request.
+    #[error("client_id required")]
+    ClientIdRequired,
+    /// The grant was issued to a different client than the one presenting it.
+    #[error("grant was not issued to this client")]
+    ClientMismatch,
+    /// The refresh token has no recorded client binding, so the broker cannot
+    /// tell which client it belongs to.
+    #[error("refresh token is not bound to a client")]
+    UnboundRefreshToken,
     /// Inflight auth state could not be loaded or updated.
     #[error("failed to access inflight auth state")]
     InflightStore(anyhow::Error),
+    /// Refresh token bindings could not be read or written.
+    #[error("failed to access refresh token bindings")]
+    RefreshTokenBindingStore(anyhow::Error),
     /// Upstream refresh failed.
     #[error("refresh token exchange failed")]
     RefreshFailed(anyhow::Error),
