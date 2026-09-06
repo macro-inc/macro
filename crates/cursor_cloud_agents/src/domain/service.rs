@@ -542,57 +542,13 @@ where
             .expect("captured prompt")
             .sequence;
 
-        // Claim the turn before any network call so a racing second prompt
-        // fails fast instead of creating a second agent.
-        // Resolved before the turn commits to a path: both the create-agent
-        // and the follow-up-run branch send it, and a mid-turn change must not
-        // land on a run that is already going.
-
-        let existing_agent = prior_agent;
-
-        let (agent, run) = match existing_agent {
+        let created = match prior_agent {
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
                 // from cursor.com too) instead of failing the prompt.
-                let run = match self
-                    .create_run_when_free(&agent, prompt, model.as_ref(), &cancel)
+                self.create_run_when_free(&agent, prompt, model.as_ref(), &cancel)
                     .await
-                {
-                    Ok(run) => run,
-                    // The wait ended because the client asked to stop, which
-                    // ACP answers with a stop reason rather than an error.
-                    Err(SessionError::Cursor(ref error))
-                        if cancel.is_cancelled()
-                            && error
-                                .downcast_current_context::<crate::domain::error::PromptRejected>()
-                                .is_some() =>
-                    {
-                        self.capture(
-                            session_id,
-                            &session,
-                            None,
-                            JournalInput::PromptAborted(prompt_sequence),
-                            false,
-                        )
-                        .await?;
-                        return Ok(StopReason::Cancelled);
-                    }
-                    Err(error) => {
-                        if matches!(&error, SessionError::Cursor(report) if report.downcast_current_context::<crate::domain::error::PromptRejected>().is_some())
-                        {
-                            self.capture(
-                                session_id,
-                                &session,
-                                None,
-                                JournalInput::PromptAborted(prompt_sequence),
-                                false,
-                            )
-                            .await?;
-                        }
-                        return Err(error);
-                    }
-                };
-                (agent, run)
+                    .map(|run| (agent, run))
             }
             None => {
                 // Snapshotted out of the lock: `create_agent` is a network
@@ -603,29 +559,30 @@ where
                     .expect("session state poisoned")
                     .mcp_servers
                     .clone();
-                match self
-                    .cursor
+                self.cursor
                     .create_agent(prompt, session.repo.as_ref(), &mcp_servers, model.as_ref())
                     .await
+                    .map_err(SessionError::from)
+            }
+        };
+        let (agent, run) = match created {
+            Ok(created) => created,
+            Err(error) => {
+                if matches!(&error, SessionError::Cursor(report) if report.downcast_current_context::<crate::domain::error::PromptRejected>().is_some())
                 {
-                    Ok(created) => created,
-                    Err(error) => {
-                        if error
-                            .downcast_current_context::<crate::domain::error::PromptRejected>()
-                            .is_some()
-                        {
-                            self.capture(
-                                session_id,
-                                &session,
-                                None,
-                                JournalInput::PromptAborted(prompt_sequence),
-                                false,
-                            )
-                            .await?;
-                        }
-                        return Err(error.into());
+                    self.capture(
+                        session_id,
+                        &session,
+                        None,
+                        JournalInput::PromptAborted(prompt_sequence),
+                        false,
+                    )
+                    .await?;
+                    if cancel.is_cancelled() {
+                        return Ok(StopReason::Cancelled);
                     }
                 }
+                return Err(error);
             }
         };
         self.capture(
@@ -1533,7 +1490,7 @@ where
                 let listings = self.cursor.list_runs(agent, None).await?;
                 if listings.is_empty() {
                     return Err(rootcause::report!(
-                        "Cursor history unavailable for legacy session"
+                        "Cursor history unavailable for restored session"
                     )
                     .into());
                 }
@@ -1728,9 +1685,14 @@ fn history_projection(
     require_prompts: bool,
 ) -> Result<(ReplayMachine, HistoryUpdates), SessionError> {
     for entry in entries {
-        if entry.run.is_none() && matches!(entry.input, JournalInput::Prompt(_)) && !entries.iter().any(|e| matches!(e.input, JournalInput::PromptAccepted(n) | JournalInput::PromptAborted(n) if n == entry.sequence)) {
-                return Err(rootcause::report!("Cursor prompt acceptance is unknown; refusing incomplete replacement history").into());
-            }
+        if entry.run.is_none()
+            && matches!(entry.input, JournalInput::Prompt(_))
+            && !entries.iter().any(|e| {
+                matches!(e.input, JournalInput::PromptAccepted(n) | JournalInput::PromptAborted(n) if n == entry.sequence)
+            })
+        {
+            return Err(rootcause::report!("Cursor prompt acceptance is unknown; refusing incomplete replacement history").into());
+        }
     }
     let mut machine = ReplayMachine::default();
     // Validate the whole candidate before publishing even its first frame.

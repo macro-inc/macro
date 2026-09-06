@@ -1609,6 +1609,20 @@ async fn partial_capture_reconnect_matches_the_prefix_without_duplicate_content(
 }
 
 #[tokio::test]
+async fn restored_agent_without_provider_history_cannot_commit_empty_replacement() {
+    let (service, cursor, notifier) = service(None);
+    let id = SessionId::new("restored");
+    service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None, None);
+    cursor.script_run_listings(vec![]);
+
+    assert!(service.replay_session(&id).await.is_err());
+    assert!(notifier.updates().is_empty());
+    assert!(service.journal.read(&id).await.unwrap().is_empty());
+    assert!(service.prompt(&id, "must not execute").await.is_err());
+    assert!(cursor.calls().is_empty());
+}
+
+#[tokio::test]
 async fn incomplete_legacy_hydration_emits_nothing_and_cannot_enable_sync() {
     let (service, cursor, notifier) = service(None);
     let id = SessionId::new("old");

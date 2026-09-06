@@ -386,20 +386,22 @@ where
                     }
                 }
                 Effect::Initialized { restore } => {
-                    // Nothing waits on this today; a failed send would mean
-                    // every receiver is gone, which cannot happen while this
-                    // actor holds one.
-                    if let (Some(request), Some(response)) =
-                        (&self.initialization_request, &self.initialization_response)
-                    {
-                        let _ = self.handshake.send(HandshakeStatus::ReadyWithContext {
-                            restore,
-                            context: std::sync::Arc::new(super::InitializationContext {
-                                request: request.clone(),
-                                response: response.clone(),
-                            }),
-                        });
-                    }
+                    let request = self
+                        .initialization_request
+                        .as_ref()
+                        .expect("initialization request persisted before its response");
+                    let response = self
+                        .initialization_response
+                        .as_ref()
+                        .expect("Initialized follows logging the matching response");
+                    // The actor retains a receiver, so publication cannot fail.
+                    let _ = self.handshake.send(HandshakeStatus::ReadyWithContext {
+                        restore,
+                        context: std::sync::Arc::new(super::InitializationContext {
+                            request: request.clone(),
+                            response: response.clone(),
+                        }),
+                    });
                 }
                 Effect::TurnEnded { action_id } => {
                     tracing::info!(
