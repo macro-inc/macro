@@ -50,6 +50,10 @@ async function render() {
       .replaceAll('>', '&gt;')
       .replaceAll('"', '&quot;');
   const assertions = results.reduce((n, r) => n + r.steps.length, 0);
+  const reconciled = results.filter((r) => r.cleanupVerification);
+  const cleanupNote = reconciled.length
+    ? `${reconciled.reduce((count, r) => count + r.cleanupVerification.draftIds.length, 0)} redundant cleanup request(s) reconciled by database readback; original failures retained.`
+    : 'Recorder cleanup completed without reconciliation.';
   const title = path.join(output, 'video-introduction.txt');
   fs.writeFileSync(
     title,
@@ -59,6 +63,7 @@ async function render() {
       `${results.length} scenes | ${assertions} browser assertions`,
       'Synthetic users, 4 inboxes, 17 threads, 120-message history',
       'Real local APIs, drafts, attachments, schedules and Undo',
+      cleanupNote,
       '',
       'Seeded Gmail accounts have no provider OAuth grant.',
       'The harness holds account health healthy and translates local storage URLs.',
@@ -70,6 +75,21 @@ async function render() {
       `Source ${results[0].revision.slice(0, 9)} | ${results[0].runId}`,
     ].join('\n')
   );
+  // Render separate lines: this ffmpeg/font combination draws newline glyphs.
+  const titleFilters = fs
+    .readFileSync(title, 'utf8')
+    .split('\n')
+    .flatMap((line, index) => {
+      if (!line) return [];
+      const linePath = path.join(
+        output,
+        `video-introduction-line-${index}.txt`
+      );
+      fs.writeFileSync(linePath, line);
+      return [
+        `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:textfile=${linePath}:fontcolor=white:fontsize=26:x=55:y=${100 + index * 43}`,
+      ];
+    });
   const intro = path.join(output, 'video', '00-introduction.webm');
   run([
     '-f',
@@ -77,7 +97,7 @@ async function render() {
     '-i',
     'color=c=0x141816:s=1440x1000:r=25:d=10',
     '-vf',
-    `drawtext=fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:textfile=${title}:fontcolor=white:fontsize=26:line_spacing=15:x=55:y=100`,
+    titleFilters.join(','),
     '-c:v',
     'libvpx',
     '-b:v',
@@ -173,7 +193,7 @@ async function render() {
   );
   fs.writeFileSync(
     path.join(output, 'index.html'),
-    `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Email verification</title><style>body{background:#141816;color:#eee;font:16px system-ui;max-width:1400px;margin:30px auto;padding:0 20px}video{width:100%;max-height:75vh}button{background:#22372d;color:white;border:0;padding:9px;text-align:left;margin:3px;cursor:pointer}details{border-top:1px solid #405047;padding:12px 0}a{color:#a8dcc0}small{color:#aaa}</style><h1>Local email verification</h1><p>${results.length} scenes · ${assertions} assertions · ${time(elapsed)} · source ${escape(results[0].revision.slice(0, 9))}</p><p>Real local services with synthetic seed data. Account-health substitutions, storage routing, fault injection, and device/provider limits are disclosed in the video introduction and <a href="EMAIL_LOCAL_VERIFICATION.md">report</a>.</p><video id="video" controls preload="metadata" src="email-verification.mp4"></video><h2>Chapters</h2>${chapters.map((c) => `<button onclick="document.getElementById('video').currentTime=${c.start};document.getElementById('video').play()">${time(c.start)} ${escape(c.name)}</button>`).join('')}<h2>Assertions</h2>${results.map((r) => `<details><summary>✓ ${escape(r.name)} — ${escape(r.description)}</summary><small>${escape(r.evidence)}</small><ul>${r.steps.map((s) => `<li>✓ ${escape(s.label)}</li>`).join('')}</ul><a href="artifacts/${encodeURIComponent(r.name)}.png">Final screenshot</a></details>`).join('')}<p><a href="results.json">Raw run evidence</a> · <a href="email-verification.mp4">Download MP4</a></p></html>`
+    `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Email verification</title><style>body{background:#141816;color:#eee;font:16px system-ui;max-width:1400px;margin:30px auto;padding:0 20px}video{width:100%;max-height:75vh}button{background:#22372d;color:white;border:0;padding:9px;text-align:left;margin:3px;cursor:pointer}details{border-top:1px solid #405047;padding:12px 0}a{color:#a8dcc0}small{color:#aaa}</style><h1>Local email verification</h1><p>${results.length} scenes · ${assertions} assertions · ${time(elapsed)} · source ${escape(results[0].revision.slice(0, 9))}</p><p>Real local services with synthetic seed data. Account-health substitutions, storage routing, fault injection, and device/provider limits are disclosed in the video introduction and <a href="EMAIL_LOCAL_VERIFICATION.md">report</a>.</p><video id="video" controls preload="metadata" src="email-verification.mp4"></video><p>${escape(cleanupNote)}${reconciled.length ? ` <a href="cleanup-audit.json">Cleanup audit</a> · <a href="${encodeURIComponent(reconciled[0].cleanupVerification.rawResults)}">Original recorder results</a>` : ''}</p><h2>Chapters</h2>${chapters.map((c) => `<button onclick="document.getElementById('video').currentTime=${c.start};document.getElementById('video').play()">${time(c.start)} ${escape(c.name)}</button>`).join('')}<h2>Assertions</h2>${results.map((r) => `<details><summary>✓ ${escape(r.name)} — ${escape(r.description)}</summary><small>${escape(r.evidence)}</small><ul>${r.steps.map((s) => `<li>✓ ${escape(s.label)}</li>`).join('')}</ul><a href="artifacts/${encodeURIComponent(r.name)}.png">Final screenshot</a></details>`).join('')}<p><a href="results.json">${reconciled.length ? 'Reconciled run evidence' : 'Raw run evidence'}</a> · <a href="email-verification.mp4">Download MP4</a></p></html>`
   );
   console.log(
     JSON.stringify(

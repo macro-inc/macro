@@ -81,3 +81,25 @@ on-screen keyboard require their own environments.
 Use `render-video.cjs` after a successful full run to create the MP4, chapter
 metadata, and an HTML player from exactly the scenes in `results.json`. It rejects
 failed or mixed-run evidence.
+
+If the recorder reports a redundant cleanup failure after the application already
+deleted that exact draft successfully, `nix develop --command node
+apps/web/tests/e2e/email-review/audit-cleanup.cjs` can verify its absence directly
+in the dedicated local database. Run it only after the recorder exits. It refuses
+application failures, failed schedule cancellation, missing successful deletion
+evidence, or a draft still present in the database. It preserves the raw failing
+results and original cleanup response, then appends an explicit readback audit.
+This is a reconciled cleanup outcome, not a claim that the original recorder exit
+was successful. The player links both reports.
+
+For an HTTP player with working chapter seeks, run:
+
+```sh
+nix develop --command bun apps/web/tests/e2e/email-review/serve-video.cjs
+```
+
+Open `http://localhost:24891`. `EMAIL_REVIEW_VIDEO_PORT` selects another free
+port. The server binds loopback and allows only published video/evidence and
+synthetic screenshots, excluding auth files. Bun serves byte ranges required by
+the player's seek buttons; a server without range support may restart playback
+instead of seeking.

@@ -285,9 +285,18 @@ async function run(chapters) {
       await page.screencast.stop().catch(() => {});
       await context.close();
       const drafts = new Map();
-      for (const r of result.responses)
+      for (const r of result.responses) {
         if (r.saved?.id && !r.saved.id.startsWith('5eed'))
           drafts.set(r.saved.id, r.linkId);
+        const deleted = r.path.match(/^\/email\/email\/drafts\/([^/?]+)$/);
+        if (
+          deleted &&
+          r.method === 'DELETE' &&
+          r.status >= 200 &&
+          r.status < 300
+        )
+          drafts.delete(deleted[1]);
+      }
       for (const [id, linkId] of drafts) {
         try {
           const response = await fetch(

@@ -113,6 +113,44 @@ failed/duplicate send, discard races, upload completion and captured inbox. The
 shared mark-done action tests retain its existing notification/Undo contracts.
 No dependency or backend production code was added.
 
+## Final recorded result — September 6, 2026
+
+The recording exercised commit `c4961e0e03c8be3f6c4884c9f747277bd1c66f04`
+with an empty application-source diff. All **39 application scenes and 133
+browser assertions passed**, with no failed application assertion or uncaught
+browser exception. The video uses that one run, started at
+`2026-09-06T22:26:28.701Z`; it does not splice passing takes from different builds.
+
+The original recorder exited nonzero because one redundant teardown DELETE
+returned 401 after the application had already deleted that exact draft with
+HTTP 204. Read-only database verification confirmed the draft was absent.
+The original result (`passed: false`) and 401 are preserved in
+`results-before-cleanup-2026-09-06T22-26-28-701Z.json`. `cleanup-audit.json`
+records the exact query, IDs and timestamp; `results.json` explicitly records the
+reconciled outcome. This was cleanup accounting, not a replay of an application
+check. Subsequent recorder changes skip successful application deletions in
+response order, so a later save still requires cleanup. The recorded application
+source remains the commit above.
+
+The exported H.264 MP4 is 12 minutes 11 seconds at 1440 × 1000, with an
+introduction and 39 scene chapters. Chrome playback and chapter seeking were
+verified through the local player, including rendering, mobile forward and
+direct-entry notification chapters. `player-verification.json` records those
+checks. The loopback video server supports byte ranges and excludes private
+authentication files.
+
+The final database audit found **zero pending sends and zero recorder-created
+drafts**. Seeded drafts remain intact. Additional checks passed: **206 email and
+shared-action tests**, **67 renderer Node tests**, **31 Chromium renderer tests**,
+the complete frontend type/schema/Biome check (6,108 files), feature boundaries
+and whitespace checks. Existing renderer snapshots were unchanged. All five QC
+roles passed. The cleanup verifier also rejects application failures, failed
+schedule cancellation and deletions without successful application evidence.
+
+The detailed request log separates explicit send/load/upload failures from local
+optional-service errors and the read-only guest's rejected seen update. The
+limitations below describe what those results do and do not establish.
+
 ## Verification limits
 
 This run covers the inventory above, with earlier renderer parity results and
@@ -129,7 +167,7 @@ of bugs.
 - Touch mode and reduced viewport do not reproduce a physical keyboard, iOS
   WKWebView, Tauri's native image path or device-specific focus behavior.
 - The local stack returns 404 for optional instructions/GitHub-connection queries
-  and 500 for trace ingestion. Failed HTTP paths are recorded separately from
+  and 500 for telemetry ingestion. Failed HTTP paths are recorded separately from
   uncaught browser errors and the deliberately injected email failures; this
   audit does not claim the entire local stack is free of HTTP errors.
 - The local first-login landing initially showed an inbox error. Login setup
@@ -142,6 +180,9 @@ of bugs.
 - Both R and the visible Reply action currently invoke reply-all. Case 08 checks
   that existing behavior and Alt/Option+R; it does not certify a separate
   sender-only Reply UI.
+- The read-only guest can view the shared email, but the owner-inbox seen
+  update is rejected with 404. The recorded permission case checks viewing and
+  unavailable compose controls, not ownership of that inbox.
 - Mailto retains its existing To-only behavior. Read-only coverage checks the
   mail UI, not a complete backend authorization penetration test.
 
