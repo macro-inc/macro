@@ -2,8 +2,9 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import CloseIcon from '@phosphor/x.svg';
-import { Button, Layer } from '@ui';
+import { Button, cn, Layer } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
+import { match, P } from 'ts-pattern';
 import { useSplitPanel } from '../layoutUtils';
 import { useDrawerControl, useDrawerGroup } from './SplitDrawerContext';
 
@@ -64,28 +65,16 @@ export function SplitDrawer(
     return `${constrainedSize}px`;
   };
 
-  const getPositionClasses = () => {
-    const baseClasses = `absolute bg-surface border-edge-muted z-annotation-layer flex flex-col`;
-    let positionClasses = '';
-    switch (props.side) {
-      case 'top':
-        positionClasses = 'left-px right-px border-b';
-        break;
-      case 'bottom':
-        positionClasses = 'top-unset left-px right-px bottom-px border-t';
-        break;
-      case 'left':
-        positionClasses = 'bottom-px left-px border-r border-t';
-        break;
-      case 'right':
-        positionClasses = 'bottom-px right-px border-l border-t';
-        break;
-      default:
-        break;
-    }
-
-    return `${baseClasses} ${positionClasses}`;
-  };
+  const getPositionClasses = () =>
+    cn(
+      'absolute bg-surface border-edge-muted z-annotation-layer flex flex-col',
+      match(props.side)
+        .with('top', () => 'left-0 right-0 border-b')
+        .with('bottom', () => 'top-unset left-0 right-0 bottom-0 border-t')
+        .with('left', () => 'bottom-0 left-0 border-r border-t')
+        .with('right', () => 'bottom-0 right-0 border-l border-t')
+        .exhaustive()
+    );
 
   const getSizeStyle = () => {
     const constrainedSize = getConstrainedSize();
@@ -103,28 +92,34 @@ export function SplitDrawer(
     }
   };
 
-  const getGradientMaskClasses = () => {
-    const baseClasses = 'absolute pattern-panel pattern-diagonal-4 opacity-100';
-    switch (props.side) {
-      case 'left':
-        return `${baseClasses} h-full w-4 left-0 top-0 -translate-x-[calc(100%+1px)] mask-l-from-0`;
-      case 'right':
-        return `${baseClasses} h-full w-4 left-0 top-0 -translate-x-[calc(100%+1px)] mask-l-from-0`;
-      case 'top':
-        return `${baseClasses} w-full h-4 left-0 top-0 -translate-y-[calc(100%+1px)] mask-t-from-0`;
-      case 'bottom':
-        return `${baseClasses} w-full h-4 left-0 bottom-0 translate-y-[calc(100%+1px)] mask-b-from-0`;
-      default:
-        return baseClasses;
-    }
-  };
+  const getGradientMaskClasses = () =>
+    cn(
+      'absolute pattern-panel pattern-diagonal-4 opacity-100',
+      match(props.side)
+        .with(
+          P.union('left', 'right'),
+          () =>
+            'h-full w-4 left-0 top-0 -translate-x-[calc(100%+1px)] mask-l-from-0'
+        )
+        .with(
+          'top',
+          () =>
+            'w-full h-4 left-0 top-0 -translate-y-[calc(100%+1px)] mask-t-from-0'
+        )
+        .with(
+          'bottom',
+          () =>
+            'w-full h-4 left-0 bottom-0 translate-y-[calc(100%+1px)] mask-b-from-0'
+        )
+        .exhaustive()
+    );
 
   return (
     <Show when={drawerControl.isOpen()}>
       <ScopedPortal scope="split">
         <Layer depth={2}>
           <div
-            class="inset-px bg-modal-overlay absolute"
+            class="inset-0 bg-modal-overlay absolute"
             style={{ top: `${contentOffsetTop()}px` }}
             onClick={drawerControl.close}
           />

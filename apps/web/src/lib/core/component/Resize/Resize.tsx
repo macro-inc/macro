@@ -520,6 +520,16 @@ function Gutter(props: GutterProps) {
       onPointerDown={onPointerDown}
       onKeyDown={onKeyDown}
     >
+      {/* Drag hit-area independent of the gutter width, so a zero-width
+          gutter (flush panels) stays grabbable. */}
+      <div
+        class={cn(
+          'absolute',
+          ctx.direction() === 'horizontal'
+            ? 'inset-y-0 -inset-x-1'
+            : 'inset-x-0 -inset-y-1'
+        )}
+      />
       <div
         class={cn(
           'bg-accent absolute opacity-0 group-focus:opacity-100 rounded-[1px]',

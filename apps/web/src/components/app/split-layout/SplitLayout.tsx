@@ -116,8 +116,11 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
       <div
-        class={cn('size-full p-2 touch:p-0', {
-          'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
+        class={cn('size-full', {
+          // A hairline separates the docked sidebar from the splits; the slim
+          // sidebar floats as an overlay and needs none.
+          'border-l border-edge-muted touch:border-l-0':
+            isSidebarVisible() && !sidebar.isCollapsed(),
         })}
       >
         <Show
@@ -126,7 +129,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
             // Desktop: side-by-side resizable splits.
             <Resize.Zone
               direction="horizontal"
-              gutter={8}
+              gutter={0}
               captureResizeCtx={splitManager.setResizeContext}
             >
               <For each={ids()}>
