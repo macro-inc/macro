@@ -28,6 +28,9 @@ pub struct BotFacts {
     /// bots' sessions are opened by the trigger pipeline, never over HTTP,
     /// and nothing may dial in for them.
     pub is_managed: bool,
+    /// Whether this is a first-party system bot rather than a user- or
+    /// team-owned persona. System bots belong to everyone.
+    pub is_system: bool,
     /// The user who owns the bot, when it is user-owned.
     pub owner_user_id: Option<MacroUserIdStr<'static>>,
     /// Team that owns the bot, when it is team-owned.
@@ -52,13 +55,14 @@ pub struct ManagedAgentProfile {
     pub mcp_servers: AgentMcpServers,
 }
 
-/// A persisted persona selected for one managed session.
+/// A managed persona selected for one managed session.
 #[derive(Debug, Clone)]
 pub struct SelectedManagedPersona {
     /// Bot identity used by the session.
     pub bot_id: BotId,
-    /// Runtime settings resolved from the persona.
-    pub profile: ManagedAgentProfile,
+    /// Runtime settings resolved from a persisted persona. `None` for a fixed
+    /// system bot, whose sessions run on the deployment's defaults for it.
+    pub profile: Option<ManagedAgentProfile>,
 }
 
 /// Read-only lookup of the bots sessions may be opened for.
@@ -89,16 +93,17 @@ pub enum ManagedPersonaError {
     Lookup(AgentSessionError),
 }
 
-/// Resolve and authorize a persisted managed persona for a user.
+/// Resolve and authorize a managed persona for a user.
 ///
 /// Ownership policy lives in the domain: private personas belong to their
-/// owner, team personas are available to team members, and system bots are
-/// not selectable through this path.
+/// owner, team personas are available to team members, and managed system
+/// bots (the deployment's own coders) are available to everyone, exactly as
+/// they are when mentioned in a channel.
 pub async fn managed_persona_for_user<Bots: BotDirectory>(
     bots: &Bots,
     bot_id: BotId,
     user: &MacroUserIdStr<'static>,
-) -> std::result::Result<ManagedAgentProfile, ManagedPersonaError> {
+) -> std::result::Result<SelectedManagedPersona, ManagedPersonaError> {
     let facts = bots
         .bot_facts(bot_id)
         .await
@@ -109,6 +114,12 @@ pub async fn managed_persona_for_user<Bots: BotDirectory>(
     }
     if !facts.is_managed {
         return Err(ManagedPersonaError::External);
+    }
+    if facts.is_system {
+        return Ok(SelectedManagedPersona {
+            bot_id,
+            profile: None,
+        });
     }
     let authorized = if let Some(owner) = facts.owner_user_id {
         owner.as_ref() == user.as_ref()
@@ -122,7 +133,11 @@ pub async fn managed_persona_for_user<Bots: BotDirectory>(
     if !authorized {
         return Err(ManagedPersonaError::Forbidden);
     }
-    facts.managed_profile.ok_or(ManagedPersonaError::NotAgent)
+    let profile = facts.managed_profile.ok_or(ManagedPersonaError::NotAgent)?;
+    Ok(SelectedManagedPersona {
+        bot_id,
+        profile: Some(profile),
+    })
 }
 
 /// The mention that triggered a session, when one did.

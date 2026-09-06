@@ -185,6 +185,7 @@ impl OneBotDirectory {
             facts: BotFacts {
                 has_agent: true,
                 is_managed: false,
+                is_system: false,
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: Some(harness_id::HarnessId::TEST_A),
@@ -198,6 +199,7 @@ impl OneBotDirectory {
             facts: BotFacts {
                 has_agent: true,
                 is_managed: true,
+                is_system: false,
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
                 owner_team_id: None,
                 harness_id: None,
@@ -216,7 +218,24 @@ impl OneBotDirectory {
             facts: BotFacts {
                 has_agent: false,
                 is_managed: false,
+                is_system: false,
                 owner_user_id: Some(MacroUserIdStr::try_from(OWNER.to_owned()).unwrap()),
+                owner_team_id: None,
+                harness_id: None,
+                managed_profile: None,
+            },
+        }
+    }
+
+    /// A fixed first-party coder such as the Cursor bot: managed, owned by
+    /// nobody, and with no persisted profile of its own.
+    fn system_coder() -> Self {
+        Self {
+            facts: BotFacts {
+                has_agent: true,
+                is_managed: true,
+                is_system: true,
+                owner_user_id: None,
                 owner_team_id: None,
                 harness_id: None,
                 managed_profile: None,
@@ -622,8 +641,32 @@ async fn an_owner_can_select_a_managed_persona() {
     let managed = opener.managed.lock().unwrap();
     let selected = managed[0].profile.as_ref().expect("selected persona");
     assert_eq!(selected.bot_id, BotId::TEST_A);
-    assert_eq!(selected.profile.model, "persona-model");
-    assert_eq!(selected.profile.instructions, "persona instructions");
+    let profile = selected.profile.as_ref().expect("persisted profile");
+    assert_eq!(profile.model, "persona-model");
+    assert_eq!(profile.instructions, "persona instructions");
+}
+
+/// The deployment's own coders are everybody's: a user who could mention the
+/// Cursor bot in a channel can pick it here too. Having no persisted profile,
+/// it is passed through for the harness to stamp with its per-bot defaults.
+#[tokio::test]
+async fn anyone_can_select_a_managed_system_bot() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        STRANGER,
+        serde_json::json!({ "botId": BotId::TEST_A.as_uuid(), "prompt": "fix it" }).to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::system_coder())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    let selected = managed[0].profile.as_ref().expect("selected persona");
+    assert_eq!(selected.bot_id, BotId::TEST_A);
+    assert!(selected.profile.is_none());
 }
 
 #[tokio::test]

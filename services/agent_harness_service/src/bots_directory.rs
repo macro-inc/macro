@@ -8,7 +8,7 @@ use agent_harness::domain::model::AgentKind;
 use agent_session::domain::error::{AgentSessionError, Result};
 use agent_session::domain::ports::{BotDirectory, BotFacts, ManagedAgentProfile};
 use bot_id::BotId;
-use bots::domain::models::BotOwner;
+use bots::domain::models::{BotKind, BotOwner};
 use bots::domain::ports::BotRepo;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -77,6 +77,7 @@ impl BotDirectory for PgBotDirectory {
         Ok(Some(BotFacts {
             has_agent: row.has_agent,
             is_managed,
+            is_system: row.kind == BotKind::System,
             owner_user_id,
             owner_team_id,
             harness_id,

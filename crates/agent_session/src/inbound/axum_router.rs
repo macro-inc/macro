@@ -50,8 +50,8 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
-    ManagedPersonaError, OpenExternalAgentSession, OpenManagedSession, SelectedManagedPersona,
-    SessionOpener, SessionThread, managed_persona_for_user,
+    ManagedPersonaError, OpenExternalAgentSession, OpenManagedSession, SessionOpener,
+    SessionThread, managed_persona_for_user,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -1490,7 +1490,7 @@ pub async fn create_agent_session_handler<
         }
         let owner = resolve_owner(&caller.authorization, None)?;
         let profile = if let Some(bot_id) = request.bot_id {
-            let profile =
+            let selected =
                 managed_persona_for_user(state.bots.as_ref(), BotId::new_from_uuid(bot_id), &owner)
                     .await
                     .map_err(|error| match error {
@@ -1500,10 +1500,7 @@ pub async fn create_agent_session_handler<
                         ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
                         ManagedPersonaError::Lookup(error) => CreateSessionApiError::Domain(error),
                     })?;
-            Some(SelectedManagedPersona {
-                bot_id: BotId::new_from_uuid(bot_id),
-                profile,
-            })
+            Some(selected)
         } else {
             None
         };
