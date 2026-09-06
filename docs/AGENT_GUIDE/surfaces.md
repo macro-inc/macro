@@ -79,10 +79,14 @@ Board/List views, `Company` create button. Requires a team ("Join a team to enab
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` row of pill chips directly under the card (entity
 icon, name, action count; click opens the entity, shift-click opens a new split; the row is
-absent when there are no entities), then a feed of "You edited/created X" entries grouped
-under day headers. The whole page is one virtualized list: only rows near the viewport are
-in the DOM, and scrolling near the bottom fetches the next page automatically (a `Loading…`
-tail appears while it lands). There is no `Show more` button.
+absent when there are no entities), then a feed of "You edited/created X · 2h" entries grouped
+under day headers, with the relative time inline after a middot rather than right-aligned.
+Consecutive same-actor, same-entity, same-action events within a day read as one line with a
+count (`You edited Doc X 5 times · 2h`; property changes read the net change, `changed Status
+from A to C on Doc X · 3 changes · 2h`), so the row count is lower than the event count
+(`[data-activity-run-size]` carries the fold size). The whole page is one virtualized list:
+only rows near the viewport are in the DOM, and scrolling near the bottom fetches the next
+page automatically (a `Loading…` tail appears while it lands). There is no `Show more` button.
 
 ## Home — `/app/component/home`
 

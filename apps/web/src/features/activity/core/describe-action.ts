@@ -1,5 +1,25 @@
 import { match } from 'ts-pattern';
+import { entryAction, entrySize, type FeedEntry } from './collapse-runs';
 import type { ActivityAction } from './event';
+
+/**
+ * How a feed entry reads: the action its line carries (a property run
+ * collapses to its net change) and, for runs, the count suffix that follows
+ * the entity ("5 times", "3 changes"). Singles carry no suffix.
+ */
+export function describeRun(entry: FeedEntry): {
+  action: ActivityAction;
+  countLabel: string | undefined;
+} {
+  const action = entryAction(entry);
+  const size = entrySize(entry);
+  if (size < 2) return { action, countLabel: undefined };
+  return {
+    action,
+    countLabel:
+      action.kind === 'property-changed' ? `${size} changes` : `${size} times`,
+  };
+}
 
 /**
  * Short verb phrase for one activity action, phrased to follow an actor

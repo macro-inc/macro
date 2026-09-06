@@ -20,7 +20,8 @@ import {
   type OpenEntityTarget,
   useActivityContext,
 } from '../context/activity-context';
-import type { ActivityEvent, ActivityTopEntity } from '../core/event';
+import { entryHead, type FeedEntry } from '../core/collapse-runs';
+import type { ActivityTopEntity } from '../core/event';
 import { type FeedRow, shouldFetchMore } from '../core/feed-rows';
 import { placeholderOverview } from '../core/placeholder-overview';
 import { createActorName } from '../primitives/actor-name';
@@ -127,8 +128,8 @@ function FeedRowView(props: {
     .with({ kind: 'day' }, (row) => (
       <SoupSectionHeader>{row.label}</SoupSectionHeader>
     ))
-    .with({ kind: 'event' }, (row) => (
-      <NamedActivityRow event={row.event} onOpen={props.onOpen} />
+    .with({ kind: 'entry' }, (row) => (
+      <NamedActivityRow entry={row.entry} onOpen={props.onOpen} />
     ))
     .with({ kind: 'status', status: 'loading' }, () => (
       <FeedStatus>Loading…</FeedStatus>
@@ -216,19 +217,19 @@ function OverviewRow(props: {
 // pane boundary never re-inserts the scroller, which would reset its scroll
 // position to the top.
 function NamedActivityRow(props: {
-  event: ActivityEvent;
+  entry: FeedEntry;
   onOpen: (target: OpenEntityTarget) => void;
 }) {
   const context = useActivityContext();
-  const name = createActorName(context, () => props.event.actorId);
+  const name = createActorName(context, () => entryHead(props.entry).actorId);
   return (
     <Suspense
       fallback={
-        <ActivityTimelineRowView event={props.event} actorName={name()} />
+        <ActivityTimelineRowView entry={props.entry} actorName={name()} />
       }
     >
       <ActivityTimelineRow
-        event={props.event}
+        entry={props.entry}
         actorName={name()}
         onOpen={props.onOpen}
       />

@@ -1,4 +1,4 @@
-import type { ActivityEvent } from './event';
+import { entryKey, type FeedEntry } from './collapse-runs';
 import type { FeedGroup } from './group-events';
 
 /**
@@ -8,11 +8,11 @@ import type { FeedGroup } from './group-events';
 export type FeedRow =
   | { kind: 'overview' }
   | { kind: 'day'; key: string; label: string }
-  | { kind: 'event'; event: ActivityEvent }
+  | { kind: 'entry'; entry: FeedEntry }
   | { kind: 'status'; status: 'loading' | 'error' | 'empty' }
   | { kind: 'tail' };
 
-/** Day headers and their events in order, plus a tail row while more pages exist. */
+/** Day headers and their entries in order, plus a tail row while more pages exist. */
 export function flattenFeed(
   groups: FeedGroup[],
   options: { hasMore: boolean }
@@ -20,7 +20,7 @@ export function flattenFeed(
   const rows: FeedRow[] = [];
   for (const group of groups) {
     rows.push({ kind: 'day', key: group.key, label: group.label });
-    for (const event of group.events) rows.push({ kind: 'event', event });
+    for (const entry of group.entries) rows.push({ kind: 'entry', entry });
   }
   if (options.hasMore) rows.push({ kind: 'tail' });
   return rows;
@@ -33,8 +33,8 @@ function rowKey(row: FeedRow): string {
       return row.kind;
     case 'day':
       return `day:${row.key}`;
-    case 'event':
-      return `event:${row.event.id}`;
+    case 'entry':
+      return `entry:${entryKey(row.entry)}`;
     case 'status':
       return `status:${row.status}`;
   }
@@ -44,7 +44,8 @@ function rowKey(row: FeedRow): string {
  * Carry previous row objects forward where the key matches, so the list
  * keys rows by reference and a refetch or a paging flag flip does not
  * remount every mounted row. Events are immutable once recorded, so a
- * matching id is a matching row.
+ * matching id is a matching row; a run is keyed by its first and last event,
+ * so a run that grows with the next page reads as a new row.
  */
 export function reuseRows(previous: FeedRow[], next: FeedRow[]): FeedRow[] {
   if (previous.length === 0) return next;

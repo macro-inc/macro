@@ -3,7 +3,12 @@ import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ActivityContextProvider } from '../context/activity-context';
 import { placeholderOverview } from '../core/placeholder-overview';
-import { createdEvent, messagedEvent } from '../queries/fixtures';
+import {
+  createdEvent,
+  editedEvent,
+  messagedEvent,
+  propertyChangedEvent,
+} from '../queries/fixtures';
 import { createMockActivityContext } from '../tests/mock-context';
 import { feedPage, overviewPage } from '../tests/wire';
 import { MyActivityView } from './my-activity-view';
@@ -152,6 +157,47 @@ describe('MyActivityView', () => {
     // No more pages: scrolling to the end fetches nothing.
     scroll(2200);
     expect(feedRequests()).toBe(2);
+  });
+
+  it('collapses consecutive same-entity edits into one row with a count and inline time', () => {
+    const { graphql } = renderView();
+    const edits = ['e5', 'e4', 'e3', 'e2', 'e1'].map((id) => ({
+      ...editedEvent,
+      id,
+    }));
+    const text = (value: string) => ({ type: 'String', value });
+    const statusChange = (id: string, from: string, to: string) => ({
+      ...propertyChangedEvent,
+      id,
+      action: {
+        ...propertyChangedEvent.action,
+        from: text(from),
+        to: text(to),
+      },
+    });
+    graphql
+      .latest('MyActivity')
+      .resolve(
+        feedPage([
+          ...edits,
+          statusChange('p2', 'Todo', 'Done'),
+          statusChange('p1', 'Backlog', 'Todo'),
+          { ...createdEvent, id: 'c1' },
+        ])
+      );
+
+    const visible = rows();
+    expect(visible).toHaveLength(3);
+    expect(visible[0]?.getAttribute('data-activity-run-size')).toBe('5');
+    expect(visible[0]?.textContent).toContain('5 times');
+    expect(visible[0]?.querySelector('time')).not.toBeNull();
+    expect(visible[1]?.getAttribute('data-activity-run-size')).toBe('2');
+    expect(visible[1]?.textContent).toContain('2 changes');
+    expect(visible[1]?.textContent).toContain('Backlog');
+    expect(visible[1]?.textContent).toContain('Done');
+    expect(visible[1]?.textContent).not.toContain('Todo');
+    expect(visible[2]?.getAttribute('data-activity-run-size')).toBe('1');
+    expect(visible[2]?.textContent).not.toContain('times');
   });
 
   it('asks the host to open the row entity', () => {
