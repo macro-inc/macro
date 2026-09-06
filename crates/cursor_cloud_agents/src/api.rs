@@ -3,8 +3,8 @@
 //! A plain reqwest wrapper over `api.cursor.com`'s Cloud Agents API — create
 //! an agent, follow up with runs, cancel, and stream a run's SSE events. It
 //! knows nothing about ACP; it implements the domain's
-//! [`CursorAgents`]/[`RunStream`] ports and speaks the domain's
-//! [`CursorEvent`] vocabulary at its boundary.
+//! [`CursorAgents`]/[`RunStream`] ports, retaining native SSE records for
+//! capture before the domain decodes them.
 //!
 //! Authentication is HTTP Basic with the API key as username and an empty
 //! password, per Cursor's docs. The key is validated for shape at
@@ -24,12 +24,11 @@ use crate::api::record::SseRecording;
 use crate::api::wire::{
     AgentSummary, ArchiveAgentResponse, CreateAgentRequest, CreateAgentResponse, CreateRunRequest,
     CreateRunResponse, ListAgentsResponse, ListModelsResponse, ListRunsResponse,
-    McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection, RunDetail,
+    McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection,
 };
-use crate::domain::event::CursorEvent;
 use crate::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, ModelParam, ModelVariant,
-    RepoUrl, RunListing, RunOutcome,
+    RepoUrl, RunListing,
 };
 use crate::domain::ports::{CursorAgents, RunStream};
 use futures::{Stream, StreamExt as _};
@@ -413,21 +412,6 @@ impl CursorAgents for CursorClient {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn run_result(
-        &self,
-        agent: &CursorAgentId,
-        run: &CursorRunId,
-    ) -> Result<RunOutcome, rootcause::Report> {
-        let detail: RunDetail = self
-            .get_json(&format!("/v1/agents/{agent}/runs/{run}"))
-            .await?;
-        Ok(RunOutcome {
-            status: detail.status,
-            text: detail.result,
-        })
-    }
-
-    #[tracing::instrument(skip(self), err)]
     async fn list_runs(
         &self,
         agent: &CursorAgentId,
@@ -494,17 +478,6 @@ const STREAM_CONNECT_ATTEMPTS: usize = 5;
 const STREAM_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
 
 impl RunStream for CursorClient {
-    async fn stream(
-        &self,
-        agent: &CursorAgentId,
-        run: &CursorRunId,
-    ) -> Result<impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send, rootcause::Report>
-    {
-        Ok(self
-            .raw_stream(agent, run)
-            .await?
-            .map(|record| record.map(|r| r.decode())))
-    }
     async fn raw_stream(
         &self,
         agent: &CursorAgentId,
@@ -623,7 +596,6 @@ impl CursorClient {
                                     event: message.event.into_owned(),
                                     data: message.data,
                                     id: message.last_event_id.map(|id| id.to_string()),
-                                    scripted_event: None,
                                 }));
                             }
                         }

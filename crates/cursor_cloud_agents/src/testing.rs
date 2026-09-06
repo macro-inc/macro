@@ -1,6 +1,7 @@
 //! In-memory port implementations and recorded fixtures, for tests.
 
 use crate::domain::event::CursorEvent;
+use crate::domain::journal::NativeRecord;
 use crate::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
     RunOutcome,
@@ -33,10 +34,85 @@ pub fn fixture_sse(name: &str) -> String {
         .unwrap_or_else(|error| panic!("cannot read {}: {error}", path.display()))
 }
 
-/// Load a recorded fixture already decoded into domain events.
+/// Load original complete SSE records without decoding their payloads.
 #[must_use]
-pub fn fixture_events(name: &str) -> Vec<CursorEvent> {
-    crate::replay::events(&fixture_sse(name))
+pub fn fixture_records(name: &str) -> Vec<NativeRecord> {
+    crate::replay::records(&fixture_sse(name))
+}
+
+/// Build a fake provider record using Cursor's HTTP SSE payload shape, not
+/// serde's representation of the domain enum. Decoding remains production code.
+pub fn raw_record(event: CursorEvent) -> NativeRecord {
+    use crate::domain::event::InteractionUpdate;
+    use serde_json::json;
+    let (event, data) = match event {
+        CursorEvent::Status { run_id, status } => (
+            "status".to_owned(),
+            json!({"runId": run_id, "status": status}),
+        ),
+        CursorEvent::Assistant { text } => ("assistant".into(), json!({"text": text})),
+        CursorEvent::Thinking { text } => ("thinking".into(), json!({"text": text})),
+        CursorEvent::ToolCall(call) => (
+            "tool_call".into(),
+            json!({
+                "callId": call.call_id, "name": call.name, "status": call.status,
+                "args": call.args, "result": call.result, "truncated": call.truncated,
+            }),
+        ),
+        CursorEvent::Interaction(update) => (
+            "interaction_update".into(),
+            match update {
+                InteractionUpdate::UserMessage { text } => {
+                    json!({"type": "user-message-appended", "userMessage": {"text": text}})
+                }
+                InteractionUpdate::ToolCallStarted { call_id, tool_type } => {
+                    json!({"type": "tool-call-started", "callId": call_id, "toolCall": {"type": tool_type}})
+                }
+                InteractionUpdate::ToolCallCompleted { call_id, tool_type } => {
+                    json!({"type": "tool-call-completed", "callId": call_id, "toolCall": {"type": tool_type}})
+                }
+                InteractionUpdate::TokenDelta { tokens } => {
+                    json!({"type": "token-delta", "tokens": tokens})
+                }
+                InteractionUpdate::Other { kind } => json!({"type": kind}),
+            },
+        ),
+        CursorEvent::Result {
+            run_id,
+            status,
+            text,
+            duration_ms,
+        } => (
+            "result".into(),
+            json!({"runId": run_id, "status": status, "text": text, "durationMs": duration_ms}),
+        ),
+        CursorEvent::Heartbeat => ("heartbeat".into(), json!({})),
+        CursorEvent::Error { code, message } => {
+            ("error".into(), json!({"code": code, "message": message}))
+        }
+        CursorEvent::Done => ("done".into(), json!({})),
+        CursorEvent::Unknown { event, data } => (event, data),
+    };
+    NativeRecord {
+        event,
+        data: data.to_string(),
+        id: None,
+    }
+}
+
+/// Test-side wire encoder. The provider channel carries only native records.
+pub struct ScriptSender(mpsc::UnboundedSender<NativeRecord>);
+
+impl ScriptSender {
+    /// Whether the provider's stream receiver has been dropped.
+    pub fn is_closed(&self) -> bool {
+        self.0.is_closed()
+    }
+
+    /// Encode a desired event as a Cursor wire record before enqueueing it.
+    pub fn send(&self, event: CursorEvent) -> Result<(), mpsc::error::SendError<NativeRecord>> {
+        self.0.send(raw_record(event))
+    }
 }
 
 /// What a [`FakeCursor`] was asked to do.
@@ -64,8 +140,8 @@ pub struct FakeCursor {
 struct FakeCursorState {
     calls: Vec<CursorCall>,
     next_run: u64,
-    /// The receiver the next `stream()` call will drain.
-    streams: Vec<mpsc::UnboundedReceiver<CursorEvent>>,
+    /// The receiver the next `raw_stream()` call will drain.
+    streams: Vec<mpsc::UnboundedReceiver<NativeRecord>>,
     /// Answers for `run_result`, consumed in order.
     run_results: Vec<RunOutcome>,
     /// The answer every `list_runs` call gets.
@@ -89,9 +165,14 @@ impl FakeCursor {
 
     /// Queue a stream for the next run and get its sending half.
     ///
-    /// Each `stream()` call consumes one queued stream in order; the test
+    /// Each `raw_stream()` call consumes one queued stream in order; the test
     /// drives the turn by sending events and dropping the sender to end it.
-    pub fn script_stream(&self) -> mpsc::UnboundedSender<CursorEvent> {
+    pub fn script_stream(&self) -> ScriptSender {
+        ScriptSender(self.script_raw_stream())
+    }
+
+    /// Queue original native records, including recorded wire fixtures.
+    pub fn script_raw_stream(&self) -> mpsc::UnboundedSender<NativeRecord> {
         let (sender, receiver) = mpsc::unbounded_channel();
         self.inner
             .lock()
@@ -288,17 +369,21 @@ impl CursorAgents for FakeCursor {
         Ok(())
     }
 
-    async fn run_result(
+    async fn raw_result(
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
-    ) -> Result<RunOutcome, rootcause::Report> {
+    ) -> Result<String, rootcause::Report> {
         self.record(CursorCall::RunResult(agent.clone(), run.clone()));
         let mut state = self.inner.lock().expect("fake cursor poisoned");
         if state.run_results.is_empty() {
             return Err(rootcause::report!("no scripted run result queued"));
         }
-        Ok(state.run_results.remove(0))
+        let outcome = state.run_results.remove(0);
+        Ok(
+            serde_json::json!({"id": run, "status": outcome.status, "result": outcome.text})
+                .to_string(),
+        )
     }
 
     async fn list_runs(
@@ -316,11 +401,11 @@ impl CursorAgents for FakeCursor {
 }
 
 impl RunStream for FakeCursor {
-    async fn stream(
+    async fn raw_stream(
         &self,
         _agent: &CursorAgentId,
         _run: &CursorRunId,
-    ) -> Result<impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send, rootcause::Report>
+    ) -> Result<impl Stream<Item = Result<NativeRecord, rootcause::Report>> + Send, rootcause::Report>
     {
         let receiver = {
             let mut state = self.inner.lock().expect("fake cursor poisoned");

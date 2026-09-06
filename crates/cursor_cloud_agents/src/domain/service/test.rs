@@ -1405,8 +1405,8 @@ async fn durable_multiturn_load_replays_full_history_and_supports_continuation()
         ("first prompt", "multi_turn_1.sse"),
         ("second prompt", "file_operations.sse"),
     ] {
-        let tx = cursor.script_stream();
-        for event in crate::testing::fixture_events(fixture) {
+        let tx = cursor.script_raw_stream();
+        for event in crate::testing::fixture_records(fixture) {
             tx.send(event).unwrap();
         }
         drop(tx);
@@ -1554,11 +1554,11 @@ async fn partial_capture_reconnect_matches_the_prefix_without_duplicate_content(
                 &id,
                 &session,
                 Some(&run),
-                JournalInput::Sse(crate::domain::journal::NativeRecord::scripted(
-                    CursorEvent::Interaction(InteractionUpdate::UserMessage {
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::Interaction(
+                    InteractionUpdate::UserMessage {
                         text: "asked elsewhere".into(),
-                    }),
-                )),
+                    },
+                ))),
                 false,
             )
             .await
@@ -1568,9 +1568,9 @@ async fn partial_capture_reconnect_matches_the_prefix_without_duplicate_content(
                 &id,
                 &session,
                 Some(&run),
-                JournalInput::Sse(crate::domain::journal::NativeRecord::scripted(
-                    CursorEvent::Assistant { text: "hel".into() },
-                )),
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "hel".into(),
+                })),
                 false,
             )
             .await
@@ -1745,9 +1745,9 @@ async fn terminal_poll_crash_is_reconciled_without_reopening_or_duplicating_tool
                 &id,
                 &session,
                 Some(&run),
-                JournalInput::Sse(crate::domain::journal::NativeRecord::scripted(
-                    CursorEvent::Assistant { text: "hel".into() },
-                )),
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "hel".into(),
+                })),
                 false,
             )
             .await
@@ -1757,16 +1757,16 @@ async fn terminal_poll_crash_is_reconciled_without_reopening_or_duplicating_tool
                 &id,
                 &session,
                 Some(&run),
-                JournalInput::Sse(crate::domain::journal::NativeRecord::scripted(
-                    CursorEvent::ToolCall(ToolCallEvent {
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::ToolCall(
+                    ToolCallEvent {
                         call_id: "tool".into(),
                         name: "shell".into(),
                         args: None,
                         result: None,
                         status: None,
                         truncated: Truncation::default(),
-                    }),
-                )),
+                    },
+                ))),
                 false,
             )
             .await
@@ -1843,9 +1843,9 @@ async fn capture_backlog_includes_the_run_at_the_delivered_watermark_after_resta
                 &id,
                 &session,
                 Some(&run),
-                JournalInput::Sse(crate::domain::journal::NativeRecord::scripted(
-                    CursorEvent::Assistant { text: "hel".into() },
-                )),
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "hel".into(),
+                })),
                 false,
             )
             .await
@@ -2170,11 +2170,9 @@ async fn actual_load_frames_restore_terminal_outcomes_and_leave_partial_tail_ope
                 &id,
                 &session,
                 Some(&run),
-                JournalInput::Sse(crate::domain::journal::NativeRecord::scripted(
-                    CursorEvent::Assistant {
-                        text: "answer".into(),
-                    },
-                )),
+                JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "answer".into(),
+                })),
                 false,
             )
             .await

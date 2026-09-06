@@ -1,4 +1,5 @@
 use super::*;
+use uuid::Uuid;
 
 #[sqlx::test(migrations = false)]
 async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
@@ -13,13 +14,13 @@ async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
     .execute(&pool)
     .await
     .unwrap();
-    let session = Uuid::from_u128(1);
-    let replica = Uuid::from_u128(2);
-    let other = Uuid::from_u128(3);
+    let session = AgentSessionId::new_from_uuid(Uuid::from_u128(1));
+    let replica = ReplicaId::from_uuid(Uuid::from_u128(2));
+    let other = ReplicaId::from_uuid(Uuid::from_u128(3));
     sqlx::query!(
         "INSERT INTO agent_session (id, manager_replica_id, manager_fence) VALUES ($1, $2, 1)",
-        session,
-        replica
+        session.as_uuid(),
+        replica.as_uuid()
     )
     .execute(&pool)
     .await
@@ -30,9 +31,12 @@ async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
         journal.read(&id).await.is_err(),
         "cannot operate before attachment activation"
     );
-    journal.activate(session, replica, 1).unwrap();
+    assert!(journal.activate(session, other, ManagerFence(1)).is_err());
+    journal.activate(session, replica, ManagerFence(1)).unwrap();
     let stale_before_io = PgCursorJournal::new(pool.clone(), session, replica);
-    stale_before_io.activate(session, replica, 1).unwrap();
+    stale_before_io
+        .activate(session, replica, ManagerFence(1))
+        .unwrap();
     assert!(journal.read(&id).await.unwrap().is_empty());
     journal
         .append(&id, 0, None, &JournalInput::HistoryComplete)
@@ -52,15 +56,25 @@ async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
     let rows = journal.read(&id).await.unwrap();
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[1].run.as_ref(), Some(&run));
+    let timestamped = sqlx::query_scalar!(
+        "SELECT count(*) AS \"count!\" FROM cursor_journal_input WHERE inserted_at IS NOT NULL AND inserted_at <= now()"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        timestamped, 2,
+        "appends get a database timestamp by default"
+    );
     let foreign = PgCursorJournal::new(pool.clone(), session, other);
-    foreign.activate(session, other, 1).unwrap();
+    foreign.activate(session, other, ManagerFence(1)).unwrap();
     assert!(
         foreign.read(&id).await.is_err(),
         "must not adopt another replica's fence"
     );
     sqlx::query!(
         "UPDATE agent_session SET manager_fence = 2 WHERE id = $1",
-        session
+        session.as_uuid()
     )
     .execute(&pool)
     .await
@@ -86,17 +100,27 @@ async fn append_is_ordered_fenced_and_session_scoped(pool: PgPool) {
             .is_err()
     );
     assert!(
-        stale_before_io.activate(session, replica, 2).is_err(),
+        stale_before_io
+            .activate(session, replica, ManagerFence(2))
+            .is_err(),
         "cannot rebind old connection"
     );
     let successor = PgCursorJournal::new(pool.clone(), session, replica);
-    successor.activate(session, replica, 2).unwrap();
+    successor
+        .activate(session, replica, ManagerFence(2))
+        .unwrap();
     assert_eq!(successor.read(&id).await.unwrap().len(), 2);
     successor
         .append(&id, 2, Some(&run), &JournalInput::Reconciled)
         .await
         .unwrap();
-    sqlx::query!("DELETE FROM agent_session WHERE id = $1", session)
+    let (first, second) = tokio::join!(
+        successor.append(&id, 3, None, &JournalInput::HistoryComplete),
+        successor.append(&id, 3, None, &JournalInput::HistoryComplete),
+    );
+    assert_ne!(first.is_ok(), second.is_ok(), "only one append can win");
+    assert_eq!(successor.read(&id).await.unwrap().len(), 4);
+    sqlx::query!("DELETE FROM agent_session WHERE id = $1", session.as_uuid())
         .execute(&pool)
         .await
         .unwrap();

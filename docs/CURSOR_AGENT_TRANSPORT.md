@@ -412,9 +412,7 @@ discipline above is the cost of admission.
 
 ### Durable Load History
 
-Cursor restores through ACP `session/load`, not `session/resume`. The native
-journal and effective-history contract are specified in
-[`CURSOR_ACP_REPLAY_PLAN.md`](CURSOR_ACP_REPLAY_PLAN.md). The implementation
+Cursor restores through ACP `session/load`, not `session/resume`. The implementation
 captures original prompts, complete SSE records, polling bodies, and local
 lifecycle decisions before translating them. Loading uses the same processing
 machine as live delivery and never executes a provider prompt or tool again.
@@ -434,6 +432,34 @@ conversation, load must fail explicitly rather than select an incomplete
 replacement. Operators should account for this retention limitation before
 rollout. The delivered-run watermark remains separate from journal capture
 progress, and local journal sequence numbers are not remote SSE resume tokens.
+
+The journal's atomic owner fence is not a second ownership authority. The
+session service acquires the claim and binds that exact generation once through
+`activate_reserved` and `PipeTransport::bind_session_owner`. The journal never
+claims ownership or refreshes its fence from a database read.
+
+Routing new commands away from a stale replica does not stop its existing work.
+`PgAgentSessionRepo::claim` can take over when the old replica's heartbeat is
+stale, without notifying its process. `activate_reserved` gives the actor a
+fenced ACP log writer; the next rejected append stops that actor. `run_session`
+then drops its transport, and the pipe pump closes asynchronously. Independently,
+`CursorContainerManager::serve_session` awaits `sync_foreign_runs` inside its
+timer branch: pipe cancellation is not polled again until that await finishes.
+A provider response can therefore reach the native journal after takeover even
+with no new command dispatched to the old replica.
+
+`PgCursorJournal::lock_owner` checks the bound replica/generation while holding
+the `agent_session` row lock through journal commit. Takeover updates that same
+row: either the old append commits before takeover, or it fails after takeover.
+The existing `SessionClaim` is a token, not a transaction-bound storage capability;
+the existing fenced ACP writer only covers ACP log appends. Wrapping a simple
+journal with a preflight ownership check would lose this atomicity. Retain the
+small storage fence rather than introduce a new generic transaction wrapper.
+
+Native SSE records contain only event name, original data, and provider ID.
+Scripted providers emit the same wire-shaped records through the production
+decoder; recorded fixtures retain their original payloads rather than being
+decoded and re-encoded as domain enums.
 
 Most of the sandbox lifecycle is meaningless for Cursor. Stating what each port
 method degenerates to, so the small implementation does not read as an

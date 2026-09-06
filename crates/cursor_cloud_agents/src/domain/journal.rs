@@ -19,40 +19,19 @@ pub struct NativeRecord {
     pub data: String,
     /// Provider's SSE last-event ID, when supplied.
     pub id: Option<String>,
-    /// Scripted provider vocabulary; HTTP adapters always leave this absent.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub scripted_event: Option<Box<CursorEvent>>,
 }
 impl NativeRecord {
     /// Whether this record participates in reconnect prefix matching. This
     /// examines framing only; native payload decoding happens after append.
     pub(crate) fn is_content(&self) -> bool {
-        match self.scripted_event.as_deref() {
-            Some(
-                CursorEvent::Status { .. } | CursorEvent::Heartbeat | CursorEvent::Error { .. },
-            ) => false,
-            Some(_) => true,
-            None => !matches!(self.event.as_str(), "status" | "heartbeat" | "error"),
-        }
+        !matches!(self.event.as_str(), "status" | "heartbeat" | "error")
     }
     /// Decode only after this record is durably captured.
     pub fn decode(&self) -> CursorEvent {
-        if let Some(event) = &self.scripted_event {
-            return event.as_ref().clone();
-        }
         CursorEvent::from_wire(
             &self.event,
             serde_json::from_str(&self.data).unwrap_or_default(),
         )
-    }
-    /// Bridge for scripted providers that only implement the decoded port.
-    pub fn scripted(event: CursorEvent) -> Self {
-        Self {
-            event: "scripted".into(),
-            data: String::new(),
-            id: None,
-            scripted_event: Some(Box::new(event)),
-        }
     }
 }
 
