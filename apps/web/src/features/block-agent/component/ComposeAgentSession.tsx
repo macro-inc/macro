@@ -207,7 +207,7 @@ export function ComposeAgentSession(props: ComposeAgentSessionProps) {
           rows={4}
           aria-label="Task for the agent"
           class="ph-no-capture min-h-24 w-full grow resize-none bg-transparent px-2 text-xl/7 font-medium text-ink outline-none placeholder:text-ink-placeholder"
-          placeholder="What should the agent work on?"
+          placeholder="Give your agent a prompt..."
           value={prompt()}
           onInput={(event) => setPrompt(event.currentTarget.value)}
           onKeyDown={(event) => {
@@ -345,12 +345,7 @@ function PersonaList(props: {
               >
                 <PersonaAvatar persona={persona} />
                 <span class="flex min-w-0 flex-col leading-tight">
-                  <span
-                    class={cn(
-                      'truncate text-sm',
-                      selected() ? 'font-medium' : 'font-normal'
-                    )}
-                  >
+                  <span class="truncate text-sm font-medium">
                     {persona.name}
                   </span>
                   <span class="truncate text-xs text-ink-extra-muted">
@@ -365,9 +360,13 @@ function PersonaList(props: {
                     </Show>
                   </span>
                 </span>
-                <Show when={selected()}>
-                  <CheckIcon class="ml-auto size-3.5 shrink-0 text-accent" />
-                </Show>
+                {/* Always laid out so selecting a card never changes its width. */}
+                <CheckIcon
+                  class={cn(
+                    'ml-auto size-3.5 shrink-0 text-accent',
+                    !selected() && 'invisible'
+                  )}
+                />
               </button>
             );
           }}

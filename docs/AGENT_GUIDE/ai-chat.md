@@ -12,8 +12,8 @@ Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a b
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
 `Create` → `Agent A`, or keyboard `c` then `a`, opens the **New agent
-session** composer popover. The prompt textarea (`What should the agent work
-on?`) is focused on open, so you can `type_text` immediately. Below the prompt a
+session** composer popover. The prompt textarea (`Give your agent a
+prompt...`) is focused on open, so you can `type_text` immediately. Below the prompt a
 **Persona** section lists the choices in the open, as a `radiogroup` of cards
 (`role="radio"`, `aria-checked`): **Macro** `@macro` (the default), **Cursor**
 `@cursor` (disabled with a `Connect Cursor in Settings → Harness` hint until a
