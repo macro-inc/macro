@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ModelCatalogPicker } from './ModelCatalogPicker';
@@ -40,7 +40,11 @@ describe('ModelCatalogPicker focus', () => {
     });
     await waitFor(() => expect(document.activeElement).toBe(search));
 
+    const menu = screen.getByRole('menu');
     await user.keyboard('{Escape}');
+    // jsdom does not run the CSS close animation that unmounts Kobalte's
+    // focus scope, so complete it explicitly.
+    fireEvent.animationEnd(menu);
 
     await waitFor(() => {
       expect(restoreComposerFocus).toHaveBeenCalledOnce();

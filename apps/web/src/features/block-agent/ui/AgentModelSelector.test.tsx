@@ -3,7 +3,7 @@
  */
 
 import type { ModelOption } from '@service-agent-fold/generated/types';
-import { render, screen, waitFor } from '@solidjs/testing-library';
+import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentModelSelector } from './AgentModelSelector';
@@ -38,7 +38,9 @@ describe('AgentModelSelector focus', () => {
     ));
 
     await user.click(screen.getByRole('button', { name: /Model One/ }));
+    const menu = screen.getByRole('menu');
     await user.keyboard('{Escape}');
+    fireEvent.animationEnd(menu);
 
     await waitFor(() => {
       expect(restoreComposerFocus).toHaveBeenCalledOnce();
