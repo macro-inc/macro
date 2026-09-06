@@ -23,6 +23,17 @@ use std::sync::{Arc, Mutex};
 struct StubSessions {
     external: Arc<Mutex<HashMap<AgentSessionId, ExternalSession>>>,
     acp_session_id: Arc<Mutex<Option<String>>>,
+    /// The model every served session row carries; `auto` when unset.
+    model: Option<&'static str>,
+}
+
+impl StubSessions {
+    fn with_model(model: &'static str) -> Self {
+        Self {
+            model: Some(model),
+            ..Self::default()
+        }
+    }
 }
 
 impl ExternalSessionRepo for StubSessions {
@@ -70,7 +81,7 @@ impl AgentSessionRepo for StubSessions {
             thread_channel_id: None,
             originating_message_id: None,
             bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
-            model: "auto".to_owned(),
+            model: self.model.unwrap_or("auto").to_owned(),
             harness: "cursor".to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
@@ -436,20 +447,21 @@ async fn spawning_and_prompting_records_the_minted_agent() {
     );
 }
 
-/// A fresh session starts on the owner's configured default model, resolved
-/// to its variant against the live model table — the per-user setting reaching
-/// all the way to the agent Cursor mints.
+/// A fresh session starts on the model its row carries - the agent's
+/// configured default, stamped at open - resolved to its variant against the
+/// live model table, so the model chosen under Settings → Agents reaches all
+/// the way to the agent Cursor mints. The key-level default plays no part.
 #[tokio::test]
-async fn spawn_uses_the_owners_default_model() {
+async fn spawn_uses_the_sessions_model() {
     let (base_url, _, created) = fake_cursor_api().await;
-    let sessions = StubSessions::default();
+    let sessions = StubSessions::with_model("grok-4.6");
     let session_id = AgentSessionId::new();
     let manager = manager_with_keys(
         base_url,
         sessions,
         StubKeys {
             key: Some("crsr_test"),
-            model: Some("grok-4.6"),
+            model: Some("some-other-model"),
         },
     );
 

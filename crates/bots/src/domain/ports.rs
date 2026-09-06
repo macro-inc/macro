@@ -40,6 +40,17 @@ pub trait BotRepo: Send + Sync + 'static {
         caller: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<Agent>, Self::Err>> + Send;
 
+    /// The user's own active agent on a harness slug, when they have one.
+    ///
+    /// Private (user-owned) agents only; team agents are not what a user's
+    /// personal connection to a runtime creates. Oldest wins when several
+    /// exist, so the answer is stable across calls.
+    fn find_user_agent_by_harness(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        harness: &str,
+    ) -> impl Future<Output = Result<Option<Agent>, Self::Err>> + Send;
+
     /// Check whether the caller is an active member of every supplied channel.
     fn user_has_channels(
         &self,
@@ -213,6 +224,19 @@ pub trait BotService: Send + Sync + 'static {
         &self,
         caller: MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<Agent>, BotError>> + Send;
+
+    /// The caller's private `@cursor` agent, created on first call.
+    ///
+    /// Registering a Cursor API key is what makes `@cursor` mean something for
+    /// a user, so the connection flow calls this once the key is stored. The
+    /// agent is a plain user-owned, all-channels agent on the `cursor` harness;
+    /// later calls return the existing one untouched, edits and all.
+    /// `default_model` seeds a newly created agent only.
+    fn ensure_cursor_agent(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        default_model: String,
+    ) -> impl Future<Output = Result<Agent, BotError>> + Send;
 
     /// Create a bot owned by the caller or a team they administer.
     fn create_bot(

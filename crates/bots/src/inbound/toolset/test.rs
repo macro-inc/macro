@@ -105,6 +105,14 @@ impl BotService for ToolTestBotService {
         unimplemented!()
     }
 
+    async fn ensure_cursor_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _default_model: String,
+    ) -> Result<Agent, BotError> {
+        unimplemented!()
+    }
+
     async fn create_bot(
         &self,
         _caller: MacroUserIdStr<'static>,

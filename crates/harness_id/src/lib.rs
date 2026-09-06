@@ -20,6 +20,10 @@ mod test;
 /// the harness row id.
 pub const MACROD_HARNESS_SLUG: &str = "macrod";
 
+/// `agent_configs.harness` value for agents served by Cursor cloud agents on
+/// their owner's Cursor account.
+pub const CURSOR_HARNESS_SLUG: &str = "cursor";
+
 /// A harness id UUID.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]

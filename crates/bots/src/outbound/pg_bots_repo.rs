@@ -613,6 +613,72 @@ impl BotRepo for PgBotsRepo {
         rows.into_iter().map(Agent::try_from).collect()
     }
 
+    async fn find_user_agent_by_harness(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        harness: &str,
+    ) -> Result<Option<Agent>, Self::Err> {
+        let row = sqlx::query_as!(
+            AgentRow,
+            r#"
+            SELECT
+                b.id,
+                b.kind,
+                b.owner_user_id,
+                b.team_id,
+                b.name,
+                b.handle,
+                b.description,
+                b.avatar_url,
+                b.created_by,
+                b.created_at,
+                b.updated_at,
+                b.deleted_at,
+                b.has_agent,
+                a.instructions,
+                a.harness,
+                a.harness_id,
+                a.default_model,
+                a.channel_scope,
+                ARRAY(
+                    SELECT p.channel_id
+                    FROM comms_channel_participants p
+                    WHERE p.user_id = 'bot|' || b.id::text
+                      AND p.left_at IS NULL
+                    ORDER BY p.channel_id
+                ) AS "channel_ids!",
+                a.mcp_scope,
+                ARRAY(
+                    SELECT m.app_slug
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.app_slug
+                ) AS "mcp_app_slugs!",
+                ARRAY(
+                    SELECT m.server_name
+                    FROM agent_mcp_servers m
+                    WHERE m.bot_id = b.id
+                    ORDER BY m.app_slug
+                ) AS "mcp_server_names!"
+            FROM bots b
+            INNER JOIN agent_configs a ON a.bot_id = b.id
+            WHERE b.kind = 'owned'
+              AND b.deleted_at IS NULL
+              AND b.owner_user_id = $1
+              AND a.harness = $2
+            ORDER BY b.created_at ASC, b.id ASC
+            LIMIT 1
+            "#,
+            user_id.as_ref(),
+            harness,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to find the user's agent by harness")?;
+
+        row.map(Agent::try_from).transpose()
+    }
+
     async fn user_has_channels(
         &self,
         caller: MacroUserIdStr<'static>,
