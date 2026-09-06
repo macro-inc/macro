@@ -1792,6 +1792,7 @@ fn map_upsert(
         owner_id: target.owner_id.clone(),
         ical_uid: master.ical_uid.clone(),
         calendar_id: Some(target.calendar_id),
+        sources: Vec::new(),
         title: master.summary.clone().unwrap_or_default(),
         description: master.description.clone(),
         location: master.location.clone(),

@@ -1469,6 +1469,7 @@ fn soup_email_thread_with_read_status(thread_id: Uuid, is_read: bool) -> SoupIte
             is_read,
             is_draft: false,
             is_important: true,
+            is_signal: true,
             name: Some("Direct thread".to_owned()),
             snippet: Some("Direct thread snippet".to_owned()),
             sender_email: Some("sender@example.com".to_owned()),

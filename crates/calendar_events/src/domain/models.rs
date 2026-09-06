@@ -527,7 +527,45 @@ impl EventReminders {
     }
 }
 
+/// The content one provider copy of an event carries.
+///
+/// Google keeps these fields per calendar copy: a shared calendar's copy of a
+/// member's event can have its own title, type, reminders, and access role.
+/// The entity holds its canonical source's values. Every other copy's values
+/// are read from here so a client can show the copy that belongs to the
+/// calendar being viewed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEventSourceContent {
+    /// Calendar this copy lives on.
+    pub calendar_id: Uuid,
+    /// Display title.
+    pub title: String,
+    /// Optional event body.
+    pub description: Option<String>,
+    /// Optional physical or virtual location label.
+    pub location: Option<String>,
+    /// Provider event type.
+    pub event_type: EventType,
+    /// Event visibility.
+    pub visibility: EventVisibility,
+    /// Availability behavior.
+    pub transparency: EventTransparency,
+    /// Whether the calendar's access role prohibits editing this copy.
+    pub is_read_only: bool,
+    /// Reminder configuration of this copy.
+    pub reminders: EventReminders,
+    /// Provider-reported creator email.
+    pub creator_email: Option<String>,
+    /// Provider-reported creator display name.
+    pub creator_name: Option<String>,
+}
+
 /// A stable, first-class Macro calendar event entity.
+///
+/// Content fields hold the canonical source's values: the account's primary
+/// calendar copy when one is synced, else the freshest remaining copy.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -542,6 +580,12 @@ pub struct CalendarEvent {
     /// projections stored before calendars were attributed.
     #[serde(default)]
     pub calendar_id: Option<Uuid>,
+    /// Content of every active copy of this event, canonical first: the
+    /// primary calendar's copy, then the freshest. A client picks the copy
+    /// whose calendar it is showing and falls back to the first. Populated
+    /// only on the read path, so stored projections omit it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<CalendarEventSourceContent>,
     /// Display title.
     pub title: String,
     /// Optional event body.
@@ -584,7 +628,7 @@ pub struct CalendarEvent {
     pub conference_provider: Option<ConferenceProvider>,
     /// Provider/iCalendar sequence number.
     pub sequence: u32,
-    /// Whether the current user can edit the canonical source.
+    /// Whether the canonical source's calendar prohibits editing it.
     pub is_read_only: bool,
     /// Attendees, keyed by email during persistence.
     pub attendees: Vec<CalendarAttendee>,
@@ -1023,9 +1067,10 @@ pub struct CalendarLinkTokenIdentity {
 pub struct CalendarEventMutationTarget {
     /// Macro entity identifier.
     pub event_id: Uuid,
-    /// Whether the canonical source prohibits mutation.
+    /// Whether the addressed copy's calendar prohibits mutation.
     pub is_read_only: bool,
-    /// Google event identifier of the best-ranked provider source.
+    /// Google event identifier of the addressed provider copy: the one on
+    /// the requested calendar, else the canonical source.
     pub provider_event_id: String,
     /// Recurring master identifier when the stored source is an instance.
     pub provider_recurring_event_id: Option<String>,

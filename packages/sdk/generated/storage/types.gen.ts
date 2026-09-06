@@ -1323,6 +1323,9 @@ export type CalendarAttendee = {
 
 /**
  * A stable, first-class Macro calendar event entity.
+ *
+ * Content fields hold the canonical source's values: the account's primary
+ * calendar copy when one is synced, else the freshest remaining copy.
  */
 export type CalendarEvent = {
     /**
@@ -1373,7 +1376,7 @@ export type CalendarEvent = {
      */
     id: string;
     /**
-     * Whether the current user can edit the canonical source.
+     * Whether the canonical source's calendar prohibits editing it.
      */
     isReadOnly: boolean;
     /**
@@ -1406,6 +1409,13 @@ export type CalendarEvent = {
      * Provider/iCalendar sequence number.
      */
     sequence: number;
+    /**
+     * Content of every active copy of this event, canonical first: the
+     * primary calendar's copy, then the freshest. A client picks the copy
+     * whose calendar it is showing and falls back to the first. Populated
+     * only on the read path, so stored projections omit it.
+     */
+    sources?: Array<CalendarEventSourceContent>;
     /**
      * Event status.
      */
@@ -1460,6 +1470,62 @@ export type CalendarEventFilters = {
      * Event statuses such as `confirmed`, `tentative`, or `cancelled`.
      */
     statuses?: Array<string>;
+};
+
+/**
+ * The content one provider copy of an event carries.
+ *
+ * Google keeps these fields per calendar copy: a shared calendar's copy of a
+ * member's event can have its own title, type, reminders, and access role.
+ * The entity holds its canonical source's values. Every other copy's values
+ * are read from here so a client can show the copy that belongs to the
+ * calendar being viewed.
+ */
+export type CalendarEventSourceContent = {
+    /**
+     * Calendar this copy lives on.
+     */
+    calendarId: string;
+    /**
+     * Provider-reported creator email.
+     */
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * Provider event type.
+     */
+    eventType: EventType;
+    /**
+     * Whether the calendar's access role prohibits editing this copy.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional physical or virtual location label.
+     */
+    location?: string | null;
+    /**
+     * Reminder configuration of this copy.
+     */
+    reminders: EventReminders;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability behavior.
+     */
+    transparency: EventTransparency;
+    /**
+     * Event visibility.
+     */
+    visibility: EventVisibility;
 };
 
 /**
@@ -7918,6 +7984,12 @@ export type SoupEmailThreadPreview = {
      * Whether the thread has been read.
      */
     isRead: boolean;
+    /**
+     * The denormalized `email_threads.is_signal` importance classification —
+     * the same flag the soup Importance filter evaluates, distinct from
+     * `is_important` (Gmail's IMPORTANT label).
+     */
+    isSignal: boolean;
     /**
      * Thread display name or subject.
      */

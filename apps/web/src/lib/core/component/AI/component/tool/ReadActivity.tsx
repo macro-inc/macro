@@ -1,9 +1,13 @@
-import { ActivityTimelineRow } from '@app/features/activity/activity-timeline-row';
+import type {
+  ActivityAction,
+  ActivityEntityType,
+  ActivityEvent,
+} from '@app/features/activity/core/event';
+import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
+import { ActivityTimelineRow } from '@app/features/activity/views/activity-timeline-row';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import ClockCounterClockwise from '@phosphor-icons/core/regular/clock-counter-clockwise.svg';
-import type { ActivityEvent } from '@queries/activity/graphql/entity';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
-import type { GraphqlEntityType } from '@service-storage/graphql/generated/graphql';
 import { createMemo, createSignal, For } from 'solid-js';
 import { match } from 'ts-pattern';
 import { BaseTool } from './BaseTool';
@@ -15,79 +19,66 @@ type Activity = NamedTool<
   'response'
 >['data']['activities'][number];
 
-const ENTITY_TYPES: Readonly<Record<string, GraphqlEntityType>> = {
-  user: 'USER',
-  chat: 'CHAT',
-  channel: 'CHANNEL',
-  channel_message: 'CHANNEL_MESSAGE',
-  document: 'DOCUMENT',
-  project: 'PROJECT',
-  email_thread: 'EMAIL_THREAD',
-  calendar_event: 'CALENDAR_EVENT',
-  team: 'TEAM',
-  call: 'CALL',
-  foreign_entity: 'FOREIGN_ENTITY',
-  static_file: 'STATIC_FILE',
-  crm_company: 'CRM_COMPANY',
-  crm_contact: 'CRM_CONTACT',
-  reminder: 'REMINDER',
-  skill: 'SKILL',
-  agent_session: 'AGENT_SESSION',
-};
+function decodeToolEntityType(raw: string): ActivityEntityType {
+  return match(raw)
+    .with('document', () => 'document' as const)
+    .with('project', () => 'project' as const)
+    .with('chat', () => 'chat' as const)
+    .with('email_thread', () => 'email-thread' as const)
+    .with('channel', () => 'channel' as const)
+    .with('user', () => 'user' as const)
+    .otherwise((value) => ({ kind: 'unsupported' as const, raw: value }));
+}
 
-function activityAction(action: Activity['action']): ActivityEvent['action'] {
+function activityAction(action: Activity['action']): ActivityAction {
   return match(action)
     .with({ type: 'created' }, () => ({
-      __typename: 'GraphqlActivityCreated' as const,
+      kind: 'created' as const,
     }))
     .with({ type: 'edited' }, () => ({
-      __typename: 'GraphqlActivityEdited' as const,
+      kind: 'edited' as const,
     }))
     .with({ type: 'opened' }, () => ({
-      __typename: 'GraphqlActivityOpened' as const,
+      kind: 'opened' as const,
     }))
     .with({ type: 'deleted' }, () => ({
-      __typename: 'GraphqlActivityDeleted' as const,
+      kind: 'deleted' as const,
     }))
     .with({ type: 'messaged' }, () => ({
-      __typename: 'GraphqlActivityMessaged' as const,
+      kind: 'messaged' as const,
     }))
     .with({ type: 'sent' }, () => ({
-      __typename: 'GraphqlActivitySent' as const,
+      kind: 'email-sent' as const,
     }))
     .with({ type: 'propertyChanged' }, ({ property, from, to }) => ({
-      __typename: 'GraphqlActivityPropertyChanged' as const,
+      kind: 'property-changed' as const,
       property,
       from,
       to,
     }))
     .with({ type: 'participantAdded' }, ({ participant }) => ({
-      __typename: 'GraphqlActivityParticipantAdded' as const,
+      kind: 'participant-added' as const,
       participant,
     }))
     .with({ type: 'participantRemoved' }, ({ participant }) => ({
-      __typename: 'GraphqlActivityParticipantRemoved' as const,
+      kind: 'participant-removed' as const,
       participant,
     }))
-    .with({ type: 'callStarted' }, ({ callId }) => ({
-      __typename: 'GraphqlActivityCallStarted' as const,
-      callId,
+    .with({ type: 'callStarted' }, () => ({
+      kind: 'call-started' as const,
     }))
-    .with({ type: 'unknown' }, ({ tag, payload }) => ({
-      __typename: 'GraphqlActivityUnknownAction' as const,
+    .with({ type: 'unknown' }, ({ tag }) => ({
+      kind: 'unknown' as const,
       tag,
-      payload,
     }))
     .exhaustive();
 }
 
 function activityEvent(activity: Activity, index: number): ActivityEvent {
   return {
-    __typename: 'GraphqlActivityEvent',
     id: `read-activity:${index}:${activity.occurredAt}`,
     actorId: activity.actorId,
-    subjectId: activity.actorId,
-    entityType: ENTITY_TYPES[activity.entityType] ?? 'FOREIGN_ENTITY',
+    entityType: decodeToolEntityType(activity.entityType),
     entityId: activity.entityId,
     action: activityAction(activity.action),
     occurredAt: activity.occurredAt,
@@ -130,7 +121,11 @@ const handler = createToolRenderer({
               <div class="max-h-120 overflow-y-auto rounded-md border border-edge-muted/60 py-1">
                 <For each={events()}>
                   {(event) => (
-                    <ActivityTimelineRow event={event} showActor={false} />
+                    <ActivityTimelineRow
+                      event={event}
+                      showActor={false}
+                      onOpen={openEntityInSplit}
+                    />
                   )}
                 </For>
               </div>

@@ -131,6 +131,16 @@
             }
           },
           {
+            "name": "calendarId",
+            "in": "query",
+            "description": "Calendar whose copy of the event is deleted, for an event synced from\nmore than one calendar. Omit to delete the canonical copy.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
             "name": "scope",
             "in": "query",
             "description": "Deletion scope; defaults to the entire event or series.",
@@ -4505,7 +4515,7 @@
       },
       "CalendarEvent": {
         "type": "object",
-        "description": "A stable, first-class Macro calendar event entity.",
+        "description": "A stable, first-class Macro calendar event entity.\n\nContent fields hold the canonical source's values: the account's primary\ncalendar copy when one is synced, else the freshest remaining copy.",
         "required": [
           "id",
           "ownerId",
@@ -4582,7 +4592,7 @@
           },
           "isReadOnly": {
             "type": "boolean",
-            "description": "Whether the current user can edit the canonical source."
+            "description": "Whether the canonical source's calendar prohibits editing it."
           },
           "location": {
             "type": ["string", "null"],
@@ -4617,6 +4627,13 @@
             "description": "Provider/iCalendar sequence number.",
             "minimum": 0
           },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CalendarEventSourceContent"
+            },
+            "description": "Content of every active copy of this event, canonical first: the\nprimary calendar's copy, then the freshest. A client picks the copy\nwhose calendar it is showing and falls back to the first. Populated\nonly on the read path, so stored projections omit it."
+          },
           "status": {
             "$ref": "#/components/schemas/EventStatus",
             "description": "Event status."
@@ -4637,6 +4654,66 @@
             "type": "string",
             "format": "date-time",
             "description": "Entity update time."
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/EventVisibility",
+            "description": "Event visibility."
+          }
+        }
+      },
+      "CalendarEventSourceContent": {
+        "type": "object",
+        "description": "The content one provider copy of an event carries.\n\nGoogle keeps these fields per calendar copy: a shared calendar's copy of a\nmember's event can have its own title, type, reminders, and access role.\nThe entity holds its canonical source's values. Every other copy's values\nare read from here so a client can show the copy that belongs to the\ncalendar being viewed.",
+        "required": [
+          "calendarId",
+          "title",
+          "eventType",
+          "visibility",
+          "transparency",
+          "isReadOnly",
+          "reminders"
+        ],
+        "properties": {
+          "calendarId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Calendar this copy lives on."
+          },
+          "creatorEmail": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator email."
+          },
+          "creatorName": {
+            "type": ["string", "null"],
+            "description": "Provider-reported creator display name."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional event body."
+          },
+          "eventType": {
+            "$ref": "#/components/schemas/EventType",
+            "description": "Provider event type."
+          },
+          "isReadOnly": {
+            "type": "boolean",
+            "description": "Whether the calendar's access role prohibits editing this copy."
+          },
+          "location": {
+            "type": ["string", "null"],
+            "description": "Optional physical or virtual location label."
+          },
+          "reminders": {
+            "$ref": "#/components/schemas/EventReminders",
+            "description": "Reminder configuration of this copy."
+          },
+          "title": {
+            "type": "string",
+            "description": "Display title."
+          },
+          "transparency": {
+            "$ref": "#/components/schemas/EventTransparency",
+            "description": "Availability behavior."
           },
           "visibility": {
             "$ref": "#/components/schemas/EventVisibility",
@@ -5922,6 +5999,11 @@
         "description": "Request body setting the requester's RSVP on an event.",
         "required": ["response"],
         "properties": {
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar whose copy of the event is answered, for an event synced\nfrom more than one calendar. Omit to answer on the canonical copy."
+          },
           "recurrenceId": {
             "type": ["string", "null"],
             "description": "Original-start key of the occurrence the response targets."
@@ -6204,6 +6286,11 @@
               "$ref": "#/components/schemas/CalendarAttendeeInputBody"
             },
             "description": "Replacement attendee list."
+          },
+          "calendarId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Calendar whose copy of the event is patched, for an event synced from\nmore than one calendar. Omit to patch the canonical copy."
           },
           "conference": {
             "oneOf": [

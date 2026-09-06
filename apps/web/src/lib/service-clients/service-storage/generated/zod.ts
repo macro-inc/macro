@@ -1154,6 +1154,8 @@ export const listOccurrencesResponseItemsItemEventRemindersOverridesItemMinutesM
 
 export const listOccurrencesResponseItemsItemEventSequenceMin = 0;
 
+export const listOccurrencesResponseItemsItemEventSourcesItemRemindersOverridesItemMinutesMin = 0;
+
 export const listOccurrencesResponse = zod
   .object({
     hasMore: zod.boolean(),
@@ -1255,7 +1257,7 @@ export const listOccurrencesResponse = zod
               isReadOnly: zod
                 .boolean()
                 .describe(
-                  'Whether the current user can edit the canonical source.'
+                  "Whether the canonical source's calendar prohibits editing it."
                 ),
               location: zod
                 .string()
@@ -1317,6 +1319,101 @@ export const listOccurrencesResponse = zod
                 .number()
                 .min(listOccurrencesResponseItemsItemEventSequenceMin)
                 .describe('Provider\/iCalendar sequence number.'),
+              sources: zod
+                .array(
+                  zod
+                    .object({
+                      calendarId: zod
+                        .uuid()
+                        .describe('Calendar this copy lives on.'),
+                      creatorEmail: zod
+                        .string()
+                        .nullish()
+                        .describe('Provider-reported creator email.'),
+                      creatorName: zod
+                        .string()
+                        .nullish()
+                        .describe('Provider-reported creator display name.'),
+                      description: zod
+                        .string()
+                        .nullish()
+                        .describe('Optional event body.'),
+                      eventType: zod
+                        .enum([
+                          'default',
+                          'out_of_office',
+                          'focus_time',
+                          'working_location',
+                          'birthday',
+                          'from_gmail',
+                        ])
+                        .describe(
+                          "Google's event type: ordinary meetings versus the status-style entries\n(working location, out of office, focus time, birthdays) Google renders\nand notifies differently. Immutable at the provider after creation."
+                        ),
+                      isReadOnly: zod
+                        .boolean()
+                        .describe(
+                          "Whether the calendar's access role prohibits editing this copy."
+                        ),
+                      location: zod
+                        .string()
+                        .nullish()
+                        .describe(
+                          'Optional physical or virtual location label.'
+                        ),
+                      reminders: zod
+                        .object({
+                          overrides: zod
+                            .array(
+                              zod
+                                .object({
+                                  method: zod
+                                    .string()
+                                    .describe(
+                                      'Provider method, stored verbatim; only `popup` fires Macro\nnotifications.'
+                                    ),
+                                  minutes: zod
+                                    .number()
+                                    .min(
+                                      listOccurrencesResponseItemsItemEventSourcesItemRemindersOverridesItemMinutesMin
+                                    )
+                                    .describe(
+                                      'Minutes before the event start.'
+                                    ),
+                                })
+                                .describe(
+                                  "One reminder: how it alerts and how many minutes before the event start\n(before midnight in the calendar's zone for all-day events) it fires."
+                                )
+                            )
+                            .optional()
+                            .describe(
+                              'Explicit reminders replacing the defaults when `use_default` is off.'
+                            ),
+                          useDefault: zod
+                            .boolean()
+                            .describe(
+                              "Whether the calendar's default reminders apply."
+                            ),
+                        })
+                        .describe(
+                          "Per-user reminder configuration for an event, mirroring Google's model:\neither the calendar's default reminders apply, or the explicit overrides\nreplace them entirely."
+                        ),
+                      title: zod.string().describe('Display title.'),
+                      transparency: zod
+                        .enum(['opaque', 'transparent'])
+                        .describe('Whether an event blocks availability.'),
+                      visibility: zod
+                        .enum(['default', 'public', 'private', 'confidential'])
+                        .describe('Visibility of event details.'),
+                    })
+                    .describe(
+                      "The content one provider copy of an event carries.\n\nGoogle keeps these fields per calendar copy: a shared calendar's copy of a\nmember's event can have its own title, type, reminders, and access role.\nThe entity holds its canonical source's values. Every other copy's values\nare read from here so a client can show the copy that belongs to the\ncalendar being viewed."
+                    )
+                )
+                .optional()
+                .describe(
+                  "Content of every active copy of this event, canonical first: the\nprimary calendar's copy, then the freshest. A client picks the copy\nwhose calendar it is showing and falls back to the first. Populated\nonly on the read path, so stored projections omit it."
+                ),
               status: zod
                 .enum(['confirmed', 'tentative', 'cancelled'])
                 .describe('Canonical event status.'),
@@ -1365,7 +1462,9 @@ export const listOccurrencesResponse = zod
                 .enum(['default', 'public', 'private', 'confidential'])
                 .describe('Visibility of event details.'),
             })
-            .describe('A stable, first-class Macro calendar event entity.'),
+            .describe(
+              "A stable, first-class Macro calendar event entity.\n\nContent fields hold the canonical source's values: the account's primary\ncalendar copy when one is synced, else the freshest remaining copy."
+            ),
           occurrence: zod
             .object({
               eventId: zod.uuid().describe('Owning event entity.'),
@@ -9841,6 +9940,11 @@ export const getItemsSoupResponse = zod
                   isRead: zod
                     .boolean()
                     .describe('Whether the thread has been read.'),
+                  isSignal: zod
+                    .boolean()
+                    .describe(
+                      "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                    ),
                   name: zod
                     .string()
                     .nullish()
@@ -13497,6 +13601,11 @@ export const postItemsSoupResponse = zod
                   isRead: zod
                     .boolean()
                     .describe('Whether the thread has been read.'),
+                  isSignal: zod
+                    .boolean()
+                    .describe(
+                      "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                    ),
                   name: zod
                     .string()
                     .nullish()
@@ -16617,6 +16726,11 @@ export const postItemsSoupAstResponse = zod
                   isRead: zod
                     .boolean()
                     .describe('Whether the thread has been read.'),
+                  isSignal: zod
+                    .boolean()
+                    .describe(
+                      "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                    ),
                   name: zod
                     .string()
                     .nullish()
@@ -19999,6 +20113,11 @@ export const postItemsSoupAstGroupedResponse = zod
                         isRead: zod
                           .boolean()
                           .describe('Whether the thread has been read.'),
+                        isSignal: zod
+                          .boolean()
+                          .describe(
+                            "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                          ),
                         name: zod
                           .string()
                           .nullish()
@@ -23121,6 +23240,11 @@ export const postItemsSoupAstGroupedResponse = zod
                         isRead: zod
                           .boolean()
                           .describe('Whether the thread has been read.'),
+                        isSignal: zod
+                          .boolean()
+                          .describe(
+                            "The denormalized `email_threads.is_signal` importance classification —\nthe same flag the soup Importance filter evaluates, distinct from\n`is_important` (Gmail's IMPORTANT label)."
+                          ),
                         name: zod
                           .string()
                           .nullish()

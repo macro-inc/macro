@@ -18,6 +18,7 @@ Passing `attendees` replaces the full attendee list — include everyone who sho
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `eventId` | string | Yes | The event's id, from ListCalendarEvents or CreateCalendarEvent. |
+| `calendarId` | string | No | The `calendarId` of the copy to update, from the `copies` of its ListCalendarEvents entry, for an event synced from more than one calendar. Omit to update the event's primary copy. |
 | `scope` | `"all"` \| `"this_event"` | Yes | How much of a recurring series an update applies to. |
 | `recurrenceId` | string | No | The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event"; omit for "all". |
 | `title` | string | No | Replacement title. Omit to keep the current title. |

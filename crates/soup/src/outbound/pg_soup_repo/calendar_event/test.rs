@@ -26,12 +26,11 @@ async fn frecency_fallback_keeps_calendar_events_with_aggregates(
         r#"
         INSERT INTO calendar_events (
             id, owner_id, source_link_id, ical_uid, title,
-            starts_at, ends_at, canonical_source_kind,
-            canonical_source_updated_at
+            starts_at, ends_at, canonical_source_kind
         )
         VALUES (
             $1, $2, $3, 'calendar-frecency@example.com', 'Frecency event',
-            now(), now() + interval '1 hour', 'google', now()
+            now(), now() + interval '1 hour', 'google'
         )
         "#,
         event_id,
@@ -102,11 +101,11 @@ async fn recency_sort_uses_reminder_delivery_time(pool: PgPool) -> anyhow::Resul
         INSERT INTO calendar_events (
             id, owner_id, source_link_id, ical_uid, title,
             starts_at, ends_at, canonical_source_kind,
-            canonical_source_updated_at, updated_at, last_reminder_fired_at
+            updated_at, last_reminder_fired_at
         )
         VALUES (
             $1, $2, $3, 'reminded@example.com', 'Reminded event',
-            now(), now() + interval '1 hour', 'google', now(),
+            now(), now() + interval '1 hour', 'google',
             now() - interval '10 days', now()
         )
         "#,
@@ -122,11 +121,11 @@ async fn recency_sort_uses_reminder_delivery_time(pool: PgPool) -> anyhow::Resul
         INSERT INTO calendar_events (
             id, owner_id, source_link_id, ical_uid, title,
             starts_at, ends_at, canonical_source_kind,
-            canonical_source_updated_at, updated_at
+            updated_at
         )
         VALUES (
             $1, $2, $3, 'edited@example.com', 'Edited event',
-            now(), now() + interval '1 hour', 'google', now(),
+            now(), now() + interval '1 hour', 'google',
             now() - interval '1 day'
         )
         "#,

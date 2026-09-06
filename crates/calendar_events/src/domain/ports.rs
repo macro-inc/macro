@@ -516,13 +516,16 @@ pub trait CalendarRepository: Send + Sync + 'static {
         calendar_ids: Vec<Uuid>,
     ) -> impl Future<Output = Result<Vec<RetiredCalendarEvent>, Report>> + Send;
 
-    /// Resolve an event visible to the requester to its best Google source
-    /// and the connected inbox that can mutate it. `None` covers both an
-    /// unknown event and one the requester cannot see.
+    /// Resolve an event visible to the requester to the Google source a
+    /// mutation must address — the copy on `calendar_id` when one is named,
+    /// else the canonical source — and the connected inbox that can mutate
+    /// it. `None` covers an unknown event, one the requester cannot see, and
+    /// a calendar that holds no copy of it.
     fn get_event_mutation_target(
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
     ) -> impl Future<Output = Result<Option<CalendarEventMutationTarget>, Report>> + Send;
 
     /// The stored attendees of a canonical event. Used to carry each retained
@@ -622,11 +625,14 @@ pub trait CalendarMutationService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<VisibleCalendar>, CalendarMutationError>> + Send;
 
     /// Patch an event at its provider — the whole event or series, or one
-    /// occurrence of a recurring series — and persist the echo.
+    /// occurrence of a recurring series — and persist the echo. `calendar_id`
+    /// selects which copy of a multi-calendar event is patched. `None`
+    /// addresses the canonical source.
     fn update_event(
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         patch: CalendarEventPatch,
         scope: CalendarUpdateScope,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;
@@ -637,6 +643,7 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         scope: CalendarDeletionScope,
     ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
 
@@ -646,6 +653,7 @@ pub trait CalendarMutationService: Send + Sync + 'static {
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
     ) -> impl Future<Output = Result<CalendarEvent, CalendarMutationError>> + Send;

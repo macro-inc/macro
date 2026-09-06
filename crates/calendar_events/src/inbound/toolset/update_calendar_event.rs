@@ -103,6 +103,15 @@ pub struct UpdateCalendarEvent {
     #[schemars(description = "The event's id, from ListCalendarEvents or CreateCalendarEvent.")]
     pub event_id: uuid::Uuid,
 
+    /// Calendar whose copy of the event is updated.
+    #[schemars(
+        description = "The `calendarId` of the copy to update, from the `copies` of its \
+                       ListCalendarEvents entry, for an event synced from more than one \
+                       calendar. Omit to update the event's primary copy."
+    )]
+    #[serde(default)]
+    pub calendar_id: Option<uuid::Uuid>,
+
     /// Update scope.
     #[schemars(
         description = "How much of a recurring series to change: \"this_event\" edits one \
@@ -290,7 +299,13 @@ where
             Some(
                 service_context
                     .mutations
-                    .update_event(&requester_id, self.event_id, patch, scope.clone())
+                    .update_event(
+                        &requester_id,
+                        self.event_id,
+                        self.calendar_id,
+                        patch,
+                        scope.clone(),
+                    )
                     .await
                     .map_err(|error| mutation_tool_error("update the calendar event", error))?,
             )
@@ -306,7 +321,13 @@ where
                 };
                 service_context
                     .mutations
-                    .respond_to_event(&requester_id, self.event_id, rsvp.into(), rsvp_scope)
+                    .respond_to_event(
+                        &requester_id,
+                        self.event_id,
+                        self.calendar_id,
+                        rsvp.into(),
+                        rsvp_scope,
+                    )
                     .await
                     .map_err(|error| {
                         let action = if patched.is_some() {

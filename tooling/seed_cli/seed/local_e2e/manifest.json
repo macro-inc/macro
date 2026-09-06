@@ -29,6 +29,9 @@
       }
     }
   },
+  "activity": {
+    "seededEventCount": 60
+  },
   "navigation": {
     "genericChannelMention": {
       "sourceChannelId": "00000000-0000-0000-0000-000000000002",

@@ -1,0 +1,32 @@
+id: ts-feature-data-no-ui
+language: typescript
+# Twin of tsx-feature-data-no-ui — ast-grep rules are single-language, and
+# `tsx` only scans .tsx files.
+severity: warning
+message: Feature queries/ and primitives/ never import components, views, or UI primitives. They produce data and view-state; views render it.
+note: |-
+  Rule FE-33 in docs/STYLE_GUIDE.md. `queries/` decodes wire types and
+  builds query factories; `primitives/` turns query results into view-state
+  unions and actions with Solid primitives but no JSX. Both are tested
+  under `createRoot` against a mock client, which only stays possible
+  while they import nothing that renders.
+files:
+  - apps/web/src/features/activity/queries/**
+  - apps/web/src/features/activity/primitives/**
+rule:
+  kind: string
+  regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views)/)
+  any:
+    - inside:
+        kind: import_statement
+        field: source
+    - inside:
+        kind: export_statement
+        field: source
+    - inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: import

@@ -589,6 +589,9 @@ export type CalendarDeletionScopeParam = 'all' | 'this_event' | 'this_and_follow
 
 /**
  * A stable, first-class Macro calendar event entity.
+ *
+ * Content fields hold the canonical source's values: the account's primary
+ * calendar copy when one is synced, else the freshest remaining copy.
  */
 export type CalendarEvent = {
     /**
@@ -639,7 +642,7 @@ export type CalendarEvent = {
      */
     id: string;
     /**
-     * Whether the current user can edit the canonical source.
+     * Whether the canonical source's calendar prohibits editing it.
      */
     isReadOnly: boolean;
     /**
@@ -673,6 +676,13 @@ export type CalendarEvent = {
      */
     sequence: number;
     /**
+     * Content of every active copy of this event, canonical first: the
+     * primary calendar's copy, then the freshest. A client picks the copy
+     * whose calendar it is showing and falls back to the first. Populated
+     * only on the read path, so stored projections omit it.
+     */
+    sources?: Array<CalendarEventSourceContent>;
+    /**
      * Event status.
      */
     status: EventStatus;
@@ -692,6 +702,62 @@ export type CalendarEvent = {
      * Entity update time.
      */
     updatedAt: string;
+    /**
+     * Event visibility.
+     */
+    visibility: EventVisibility;
+};
+
+/**
+ * The content one provider copy of an event carries.
+ *
+ * Google keeps these fields per calendar copy: a shared calendar's copy of a
+ * member's event can have its own title, type, reminders, and access role.
+ * The entity holds its canonical source's values. Every other copy's values
+ * are read from here so a client can show the copy that belongs to the
+ * calendar being viewed.
+ */
+export type CalendarEventSourceContent = {
+    /**
+     * Calendar this copy lives on.
+     */
+    calendarId: string;
+    /**
+     * Provider-reported creator email.
+     */
+    creatorEmail?: string | null;
+    /**
+     * Provider-reported creator display name.
+     */
+    creatorName?: string | null;
+    /**
+     * Optional event body.
+     */
+    description?: string | null;
+    /**
+     * Provider event type.
+     */
+    eventType: EventType;
+    /**
+     * Whether the calendar's access role prohibits editing this copy.
+     */
+    isReadOnly: boolean;
+    /**
+     * Optional physical or virtual location label.
+     */
+    location?: string | null;
+    /**
+     * Reminder configuration of this copy.
+     */
+    reminders: EventReminders;
+    /**
+     * Display title.
+     */
+    title: string;
+    /**
+     * Availability behavior.
+     */
+    transparency: EventTransparency;
     /**
      * Event visibility.
      */
@@ -1344,6 +1410,11 @@ export type ResyncResponse = {
  */
 export type RsvpCalendarEventRequest = {
     /**
+     * Calendar whose copy of the event is answered, for an event synced
+     * from more than one calendar. Omit to answer on the canonical copy.
+     */
+    calendarId?: string | null;
+    /**
      * Original-start key of the occurrence the response targets.
      */
     recurrenceId?: string | null;
@@ -1483,6 +1554,11 @@ export type UpdateCalendarEventRequest = {
      * Replacement attendee list.
      */
     attendees?: Array<CalendarAttendeeInputBody> | null;
+    /**
+     * Calendar whose copy of the event is patched, for an event synced from
+     * more than one calendar. Omit to patch the canonical copy.
+     */
+    calendarId?: string | null;
     conference?: null | ConferenceChange;
     /**
      * Replacement description; an empty string clears it.
@@ -1723,6 +1799,11 @@ export type DeleteCalendarEventData = {
         event_id: string;
     };
     query?: {
+        /**
+         * Calendar whose copy of the event is deleted, for an event synced from
+         * more than one calendar. Omit to delete the canonical copy.
+         */
+        calendarId?: string;
         /**
          * Deletion scope; defaults to the entire event or series.
          */

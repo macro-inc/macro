@@ -6,6 +6,7 @@
  */
 
 import type { AttendeeResponseStatus } from './attendeeResponseStatus';
+import type { RsvpCalendarEventRequestCalendarId } from './rsvpCalendarEventRequestCalendarId';
 import type { RsvpCalendarEventRequestRecurrenceId } from './rsvpCalendarEventRequestRecurrenceId';
 import type { RsvpCalendarEventRequestScope } from './rsvpCalendarEventRequestScope';
 
@@ -13,6 +14,9 @@ import type { RsvpCalendarEventRequestScope } from './rsvpCalendarEventRequestSc
  * Request body setting the requester's RSVP on an event.
  */
 export interface RsvpCalendarEventRequest {
+  /** Calendar whose copy of the event is answered, for an event synced
+from more than one calendar. Omit to answer on the canonical copy. */
+  calendarId?: RsvpCalendarEventRequestCalendarId;
   /** Original-start key of the occurrence the response targets. */
   recurrenceId?: RsvpCalendarEventRequestRecurrenceId;
   /** The response to record for the connected account. */

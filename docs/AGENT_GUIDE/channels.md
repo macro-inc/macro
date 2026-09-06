@@ -46,6 +46,26 @@ an agent session; follow-up
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention.
 
+## Message scrolling and navigation
+
+Channels open at the latest message, with short conversations aligned above the
+composer. Incoming messages and growing replies stay in view while the channel is
+at the bottom. Scrolling up leaves the viewport on the history being read; loading
+older messages preserves that message's position.
+
+Message and reply links reveal the target inside its thread. Keyboard message
+navigation scrolls only when the selected message is outside the usable viewport.
+Returning through split navigation restores the saved message position and expanded
+threads. Switching channel tabs currently opens Messages at latest. The `Scroll to bottom` control appears when scrolling down through history;
+it returns to the latest page even after opening a link into old history.
+The jump waits for that page to reach the rendered list.
+A newer message navigation cancels a pending jump to latest. Scrolling manually
+or choosing another destination also cancels the initial target's delayed fallback.
+A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
+
+The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
+keyed by message ID; offscreen rows are normally absent from the DOM.
+
 ## Channel tabs
 
 Radio group at the top of the channel pane: `Messages` / `Attachments` / `Participants`,

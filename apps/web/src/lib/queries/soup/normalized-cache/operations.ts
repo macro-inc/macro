@@ -16,7 +16,7 @@ import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
 import { queryClient } from '../../client';
 import { refreshActiveGraphqlSoupQueries } from '../graphql/active-queries';
-import type { SoupApiItemFilter, SoupAstItemsPage } from '../items';
+import type { SoupAstItemsPage } from '../items';
 import { soupKeys } from '../keys';
 import {
   insertGroupedPage,
@@ -291,8 +291,9 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     {
       predicate: (query) => {
         if (!partialMatchKey(query.queryKey, soupKeys.items._def)) return false;
-        const filter = query.meta?.itemFilter as SoupApiItemFilter | undefined;
-        return filter ? filter(item) : true;
+        const meta = getSoupQueryMeta(query.meta);
+        if (meta.itemFilter && !meta.itemFilter(item)) return false;
+        return !meta.insertFilter || meta.insertFilter(item);
       },
     },
     (prev) => {
@@ -318,6 +319,7 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
     );
     const filter = meta.itemFilter;
     if (filter && !filter(item)) continue;
+    if (meta.insertFilter && !meta.insertFilter(item)) continue;
 
     const firstPage = prev.pages[0];
 
@@ -508,8 +510,9 @@ export function restoreSoupEntityToDoneFilteredQueries(entityId: string): void {
     if (!prev?.pages?.length) continue;
     if (prev.pages.some((page) => containsEntity(page.items))) continue;
 
-    const filter = metaFor(key).itemFilter;
-    if (filter && !filter(item)) continue;
+    const flatMeta = metaFor(key);
+    if (flatMeta.itemFilter && !flatMeta.itemFilter(item)) continue;
+    if (flatMeta.insertFilter && !flatMeta.insertFilter(item)) continue;
 
     cancelQuery(key);
     queryClient.setQueryData<SoupItemsInfiniteData>(key, {
@@ -531,6 +534,7 @@ export function restoreSoupEntityToDoneFilteredQueries(entityId: string): void {
 
     const meta = metaFor(key);
     if (meta.itemFilter && !meta.itemFilter(item)) continue;
+    if (meta.insertFilter && !meta.insertFilter(item)) continue;
 
     const firstPage = prev.pages[0];
 

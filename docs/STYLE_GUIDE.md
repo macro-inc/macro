@@ -251,3 +251,29 @@ TypeScript · `[ui]` UI / UX conventions
 - **FE-32** `[ui]` Prefer styling in the component (Tailwind on the markup). Reserve
   `@utility` in `apps/web/src/index.css` for styles widely shared across many
   components — not one-off or two-callsite layouts. (#6038 · also: apps/web/AGENTS.md)
+- **FE-33** `[arch]` Layered feature layout. A feature that adopts it (today:
+  `features/activity`) is split into `core/` (pure TS: types and functions, no
+  Solid, urql, generated GraphQL, or app modules), `queries/` (decode wire types
+  and build query factories that take the feature's context), `primitives/`
+  (reactive view models: Solid primitives, no JSX; each returns a view-state
+  union such as `loading | error | empty | ready` plus actions), `components/`
+  (props in, JSX out; no queries, primitives, or navigation), `views/` (compose
+  context, primitives, and components), `context/` (the injection seam), and
+  `tests/` (mocks shared by the feature's tests). Every ambient capability the
+  feature needs the same way on every surface (GraphQL client, viewer id, display
+  names, entity display, property definitions) is a field on one `Context` type
+  in `context/`. `useContext()` reads an optional Solid context and falls back to
+  the app wiring defined in the same file, so production mounts no provider;
+  tests mount `ContextProvider` with mocks. Keep the record to what the feature
+  must swap in tests; a value derivable from the environment (time zone) or
+  already shaped for one consumer does not belong in it. Behavior that varies
+  per surface (what a row click opens) is a callback prop from the host, so an
+  inert surface simply omits it. `primitives/` run under `createRoot` against a
+  mock client and `views/` render without `vi.mock`. The import graph is
+  one-way: `core` → `queries` → `primitives` → `views` and
+  `core` → `components` → `views`; `components` may import types from
+  `context/`. Feature flags gate mounting at the root and stay outside the
+  context. To adopt, add the feature's layer paths to `files` in each
+  `*-feature-*` rule. (enforced: ast-grep `ts-/tsx-feature-core-pure`,
+  `ts-/tsx-feature-components-presentational`, `ts-/tsx-feature-data-no-ui`,
+  `ts-/tsx-feature-layers-use-context`, warning)

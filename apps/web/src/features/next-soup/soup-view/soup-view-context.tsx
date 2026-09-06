@@ -15,6 +15,7 @@ import {
   type SoupState,
 } from '@app/features/next-soup/create-soup-state';
 import type { FilterContext } from '@app/features/next-soup/filters/configs/';
+import { emailItemMatchesImportance } from '@app/features/next-soup/filters/email-signal';
 import {
   compileToAst,
   NIL_UUID,
@@ -961,6 +962,7 @@ export const SoupViewContextProvider: FlowComponent<
     view: ListView | undefined
   ): boolean => {
     if (!soupItemMatchesListView(item, view)) return false;
+
     if (
       !soupItemMatchesTagFilter(
         item,
@@ -991,12 +993,21 @@ export const SoupViewContextProvider: FlowComponent<
     }),
     () => {
       const view = activeListView();
+      // The clientFilters predicates can't separate signal from noise emails
+      // (the email branch defers to the server), so importance tabs gate
+      // websocket inserts item-side or the insert lands in both tabs. The
+      // importance is captured from the same filter state the query key
+      // compiles from, so a cached tab keeps gating by its own membership
+      // after a tab switch.
+      const emailImportance = queryFilters.state.include.emailImportance;
       return {
         enabled: enabled() && !search.isSearching(),
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
           itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
+          insertFilter: (item) =>
+            emailItemMatchesImportance(item, emailImportance),
         },
       };
     }
@@ -1181,10 +1192,13 @@ export const SoupViewContextProvider: FlowComponent<
     transport: () => itemsQuery.transport,
     queryOptions: () => {
       const view = activeListView();
+      const emailImportance = queryFilters.state.include.emailImportance;
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
           itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
+          insertFilter: (item) =>
+            emailItemMatchesImportance(item, emailImportance),
         },
       };
     },

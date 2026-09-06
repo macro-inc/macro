@@ -83,6 +83,7 @@ pub struct EmailThreadPreview {
     pub is_read: bool,
     pub is_draft: bool,
     pub is_important: bool,
+    pub is_signal: bool,
     pub name: Option<String>,
     pub snippet: Option<String>,
     pub sender_email: Option<String>,

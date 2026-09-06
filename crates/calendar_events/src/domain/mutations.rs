@@ -128,9 +128,10 @@ where
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
     ) -> Result<CalendarEventMutationTarget, CalendarMutationError> {
         self.repository
-            .get_event_mutation_target(requester_id, event_id)
+            .get_event_mutation_target(requester_id, event_id, calendar_id)
             .await
             .map_err(internal)?
             .ok_or(CalendarMutationError::NotFound)
@@ -235,6 +236,7 @@ where
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         mut patch: CalendarEventPatch,
         scope: CalendarUpdateScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
@@ -261,7 +263,9 @@ where
                     .to_string(),
             ));
         }
-        let target = self.resolve_mutation_target(requester_id, event_id).await?;
+        let target = self
+            .resolve_mutation_target(requester_id, event_id, calendar_id)
+            .await?;
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
@@ -353,9 +357,12 @@ where
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         scope: CalendarDeletionScope,
     ) -> Result<(), CalendarMutationError> {
-        let target = self.resolve_mutation_target(requester_id, event_id).await?;
+        let target = self
+            .resolve_mutation_target(requester_id, event_id, calendar_id)
+            .await?;
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }
@@ -426,10 +433,13 @@ where
         &self,
         requester_id: &str,
         event_id: Uuid,
+        calendar_id: Option<Uuid>,
         response: AttendeeResponseStatus,
         scope: CalendarRsvpScope,
     ) -> Result<CalendarEvent, CalendarMutationError> {
-        let target = self.resolve_mutation_target(requester_id, event_id).await?;
+        let target = self
+            .resolve_mutation_target(requester_id, event_id, calendar_id)
+            .await?;
         if target.is_read_only {
             return Err(CalendarMutationError::ReadOnly);
         }

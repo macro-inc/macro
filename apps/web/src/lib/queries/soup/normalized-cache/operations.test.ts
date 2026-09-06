@@ -605,6 +605,7 @@ describe('optimisticUpdateSoupItemUpdatedAt', () => {
 
 // -- Normalized grouped cache tests --
 
+import { soupItemMatchesInboxTab } from '@app/features/inbox-view/queries/inbox-item-filter';
 import type { Query } from '@app/features/next-soup/filters/filter-store/types';
 import {
   soupItemMatchesProjectMembership,
@@ -1305,5 +1306,148 @@ describe('restoreSoupEntityToDoneFilteredQueries', () => {
         InfiniteData<SoupAstItemsGroupedPage, unknown>
       >(key)!.pages[0];
     expect(page.items['ch-1']).toBeUndefined();
+  });
+});
+
+/**
+ * Regression coverage for macro-3272: the composable inbox's Signal and Noise
+ * queries both carry `emailView: 'inbox'`, so a websocket notification for a
+ * cached noise email restored the row into the Signal feed (and vice versa)
+ * until an unrelated refetch corrected it. The inbox now attaches
+ * `soupItemMatchesInboxTab` as each tab query's `insertFilter`.
+ */
+describe('inbox tab gate (Signal vs Noise)', () => {
+  function inboxEmailItem(id: string, isSignal: boolean): SoupApiItem {
+    return {
+      tag: 'emailThread',
+      data: { id, isSignal },
+      frecency_score: 1,
+    } as unknown as SoupApiItem;
+  }
+
+  function seedInboxTabQuery(tab: 'signal' | 'noise', items: SoupApiItem[]) {
+    const key = [
+      ...soupKeys.astItems._def,
+      { emailView: 'inbox' },
+      `inbox-${tab}`,
+    ];
+    testQueryClient.setQueryDefaults(key, {
+      meta: {
+        insertFilter: (item: SoupApiItem) => soupItemMatchesInboxTab(item, tab),
+      },
+    });
+    const data: InfiniteData<SoupAstItemsFlatPage, unknown> = {
+      pages: [{ kind: 'flat', items, nextCursor: null }],
+      pageParams: [null],
+    };
+    testQueryClient.setQueryData(key, data);
+    return key;
+  }
+
+  function cacheEmail(item: SoupApiItem) {
+    mockNormalizer.getObjectById.mockImplementation((normKey) =>
+      normKey === `soup:${getSoupItemId(item)}` ? item : null
+    );
+  }
+
+  it('restores a cached noise email into Noise but not Signal', () => {
+    const noiseEmail = inboxEmailItem('e-noise', false);
+    cacheEmail(noiseEmail);
+    const signalKey = seedInboxTabQuery('signal', [
+      inboxEmailItem('e-signal', true),
+    ]);
+    const noiseKey = seedInboxTabQuery('noise', [
+      inboxEmailItem('e-old-noise', false),
+    ]);
+
+    restoreSoupEntityToDoneFilteredQueries('e-noise');
+
+    const pageOf = (key: unknown[]) =>
+      testQueryClient
+        .getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(key)!
+        .pages[0].items.map(getSoupItemId);
+    expect(pageOf(signalKey)).toEqual(['e-signal']);
+    expect(pageOf(noiseKey)).toEqual(['e-noise', 'e-old-noise']);
+  });
+
+  it('inserts a new signal email into Signal but not Noise', () => {
+    const signalKey = seedInboxTabQuery('signal', [
+      inboxEmailItem('e-signal', true),
+    ]);
+    const noiseKey = seedInboxTabQuery('noise', [
+      inboxEmailItem('e-old-noise', false),
+    ]);
+
+    insertSoupEntity(inboxEmailItem('e-new', true));
+
+    const pageOf = (key: unknown[]) =>
+      testQueryClient
+        .getQueryData<InfiniteData<SoupAstItemsFlatPage, unknown>>(key)!
+        .pages[0].items.map(getSoupItemId);
+    expect(pageOf(signalKey)).toEqual(['e-new', 'e-signal']);
+    expect(pageOf(noiseKey)).toEqual(['e-old-noise']);
+  });
+});
+
+/**
+ * `meta.insertFilter` gates admission only. Unlike `meta.itemFilter`, a
+ * rejection must never evict a row the server already returned — the gate is
+ * an approximation, so grouped membership sync keeps present rows intact.
+ */
+describe('insert gate (meta.insertFilter) — grouped cache', () => {
+  function seedGroupedAstQueryWithInsertFilter(
+    data: InfiniteData<SoupAstItemsGroupedPage, unknown>,
+    insertFilter: (item: SoupApiItem) => boolean,
+    suffix = 'grouped-insert-gated-seed'
+  ) {
+    const key = [...soupKeys.astItems._def, {}, {}, STATUS_GROUP_BY, suffix];
+    testQueryClient.setQueryDefaults(key, {
+      meta: { groupBy: STATUS_GROUP_BY, insertFilter },
+    });
+    testQueryClient.setQueryData(key, data);
+    return key;
+  }
+
+  it('blocks admission of an absent item that fails the gate', () => {
+    const items = [mockTaskItem('a-1', 'in_progress')];
+    const groups = [buildGroup('in_progress', ['a-1'], 1, 0)];
+    const key = seedGroupedAstQueryWithInsertFilter(
+      mockGroupedParentCache(items, groups),
+      (item) => getSoupItemId(item) !== 'a-new'
+    );
+
+    insertSoupEntity(mockTaskItem('a-new', 'in_progress'));
+
+    const page =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!.pages[0];
+    expect(page.items['a-new']).toBeUndefined();
+    expect(page.groups.find((g) => g.key === 'in_progress')!.itemIds).toEqual([
+      'a-1',
+    ]);
+  });
+
+  it('keeps a present row that fails the gate through membership sync', () => {
+    const items = [mockTaskItem('a-1', 'in_progress')];
+    const groups = [buildGroup('in_progress', ['a-1'], 1, 0)];
+    const key = seedGroupedAstQueryWithInsertFilter(
+      mockGroupedParentCache(items, groups),
+      () => false
+    );
+
+    mockNormalizer.getObjectById.mockReturnValue(
+      mockTaskItem('a-1', 'in_progress')
+    );
+    optimisticUpdateSoupEntity(mockTaskItem('a-1', 'in_progress'));
+
+    const page =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!.pages[0];
+    expect(page.items['a-1']).toBeDefined();
+    expect(page.groups.find((g) => g.key === 'in_progress')!.itemIds).toEqual([
+      'a-1',
+    ]);
   });
 });

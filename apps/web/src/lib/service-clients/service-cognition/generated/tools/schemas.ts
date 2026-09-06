@@ -1393,6 +1393,7 @@ export const DeleteBotResponse = z.object({
 
 export const DeleteCalendarEvent = z.object({
   eventId: z.string().uuid(),
+  calendarId: z.union([z.string().uuid(), z.null()]).optional(),
   scope: z
     .any()
     .superRefine((x, ctx) => {
@@ -1826,6 +1827,15 @@ export const ListCalendarEventsResponse = z.object({
       conferenceUrl: z.union([z.string(), z.null()]).optional(),
       isReadOnly: z.boolean(),
       calendarId: z.union([z.string().uuid(), z.null()]).optional(),
+      copies: z
+        .array(
+          z.object({
+            calendarId: z.string().uuid(),
+            title: z.string(),
+            isReadOnly: z.boolean(),
+          })
+        )
+        .optional(),
     })
   ),
   truncated: z.boolean(),
@@ -4433,6 +4443,7 @@ export const TextEditorCodeExecutionResponse = z.object({
 
 export const UpdateCalendarEvent = z.object({
   eventId: z.string().uuid(),
+  calendarId: z.union([z.string().uuid(), z.null()]).optional(),
   scope: z.any().superRefine((x, ctx) => {
     const schemas = [z.literal('all'), z.literal('this_event')];
     const errors = schemas.reduce<z.ZodError[]>(

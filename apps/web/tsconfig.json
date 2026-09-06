@@ -47,12 +47,6 @@
       "@sandbox-sizes": [
         "../../crates/agent_harness/sandbox_sizes.json"
       ],
-      "loro-crdt": [
-        "../../node_modules/loro-crdt"
-      ],
-      "loro-crdt/*": [
-        "../../node_modules/loro-crdt/*"
-      ],
       "@graphql-cache/*": [
         "./src/lib/graphql-cache/*"
       ],
