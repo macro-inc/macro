@@ -92,7 +92,7 @@ export function visiblePersonas(
 
 /**
  * The models offered as explicit overrides. The persona's own default is
- * already the "Persona default" choice, so listing it again would offer two
+ * already the "Agent default" choice, so listing it again would offer two
  * rows that do the same thing.
  */
 export function overrideModelOptions(
@@ -155,10 +155,10 @@ export function personaDefaultLabel(
   available: readonly ModelOption[]
 ): string {
   const defaultModel = persona?.defaultModel;
-  if (!defaultModel) return 'Persona default';
+  if (!defaultModel) return 'Agent default';
   const name =
     available.find((model) => model.id === defaultModel)?.name ?? defaultModel;
-  return `Persona default · ${name}`;
+  return `Agent default · ${name}`;
 }
 
 /** Short label for the closed model pill. */

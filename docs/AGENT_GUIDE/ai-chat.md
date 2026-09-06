@@ -14,18 +14,18 @@ press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alte
 `Create` → `Agent A`, or keyboard `c` then `a`, opens the **New agent
 session** composer popover. The prompt textarea (`Give your agent a
 prompt...`) is focused on open, so you can `type_text` immediately. Below the prompt a
-**Persona** section lists the choices in the open, as a `radiogroup` of cards
-(`role="radio"`, `aria-checked`): **Macro** `@macro` (the default), **Cursor**
-`@cursor` (disabled with a `Connect Cursor in Settings → Harness` hint until a
-Cursor API key is stored), then the user's own personas, each card showing
-avatar, name and `@handle · Macro|Cursor` for the runtime. At most four cards
-show; with more, a `+N more` button expands the full list (`Show fewer`
-collapses it), and the selected card is never hidden. Click a card or use
-arrow keys to change persona. The **Model override** pill (`aria-label`
-`Model override`) at the bottom left opens a menu whose first row is
-`Persona default · <model>`, followed by at most five featured models; longer
-catalogs put the rest under a `More models` submenu. Changing persona resets
-the override. Tab order is prompt → selected persona card → Model →
+**Agent** section (`aria-label` `Agent`) lists the choices in the open, as a
+`radiogroup` of cards (`role="radio"`, `aria-checked`): **Macro** `@macro`
+(the default), **Cursor** `@cursor` (disabled with a `Connect Cursor in
+Settings → Harness` hint until a Cursor API key is stored), then the user's
+own agents, each card showing avatar, name and `@handle · Macro|Cursor` for
+the runtime. At most four cards show; with more, a `+N more` button expands
+the full list (`Show fewer` collapses it), and the selected card is never
+hidden. Click a card or use arrow keys to change agent. The **Model
+override** pill (`aria-label` `Model override`) at the bottom left opens a
+menu whose first row is `Agent default · <model>`, followed by at most five
+featured models; longer catalogs put the rest under a `More models` submenu.
+Changing agent resets the override. Tab order is prompt → selected agent card → Model →
 **Create Session**; the close `X` is skipped. The menu opens on Enter/Space
 and selects with arrow keys + Enter. Escape in the prompt first blurs to the
 dialog, a second Escape closes it. Press **Create Session** or

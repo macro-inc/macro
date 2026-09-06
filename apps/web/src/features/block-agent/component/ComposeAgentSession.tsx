@@ -297,9 +297,9 @@ function PersonaList(props: {
   };
 
   return (
-    <section class="flex shrink-0 flex-col gap-2 px-2" aria-label="Persona">
+    <section class="flex shrink-0 flex-col gap-2 px-2" aria-label="Agent">
       <div class="flex items-center justify-between text-xxs font-medium uppercase text-ink-extra-muted">
-        <span>Persona</span>
+        <span>Agent</span>
         <Show when={props.loading}>
           <span class="normal-case">Loading yours…</span>
         </Show>
@@ -307,7 +307,7 @@ function PersonaList(props: {
       <div
         ref={groupRef}
         role="radiogroup"
-        aria-label="Persona"
+        aria-label="Agent"
         class="flex flex-wrap gap-2"
         onKeyDown={(event) => {
           if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
@@ -385,7 +385,7 @@ function PersonaList(props: {
       </div>
       <Show when={props.error}>
         <p class="text-xs text-negative">
-          Your saved personas could not be loaded. You can still start with{' '}
+          Your saved agents could not be loaded. You can still start with{' '}
           {MACRO_AGENT_NAME} or {CURSOR_BOT_NAME}.
         </p>
       </Show>
@@ -410,7 +410,7 @@ function ModelPicker(props: {
         size="sm"
         class={PILL_CLASS}
         aria-label="Model override"
-        tooltip={props.value ? 'Model override' : 'Model (persona default)'}
+        tooltip={props.value ? 'Model override' : 'Model (agent default)'}
       >
         <CpuIcon class="size-3.5 shrink-0" />
         <span class={cn('min-w-0 truncate', props.value && 'text-ink')}>
@@ -467,7 +467,7 @@ function ModelPicker(props: {
           </Show>
           <Show when={!props.loading && props.available.length === 0}>
             <div class="px-2 py-2 text-xs text-ink-extra-muted">
-              This persona's harness did not report any models.
+              This agent's harness did not report any models.
             </div>
           </Show>
         </Dropdown.Group>

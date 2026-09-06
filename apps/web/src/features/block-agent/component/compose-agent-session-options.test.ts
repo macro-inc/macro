@@ -171,19 +171,19 @@ describe('shortlistModelOptions', () => {
 
 describe('personaDefaultLabel', () => {
   it('is generic without a known default', () => {
-    expect(personaDefaultLabel(CODER, MODELS)).toBe('Persona default');
+    expect(personaDefaultLabel(CODER, MODELS)).toBe('Agent default');
   });
 
   it('names the default model when the persona has one', () => {
     expect(personaDefaultLabel(ENGINEER, MODELS)).toBe(
-      'Persona default · Sonnet 5'
+      'Agent default · Sonnet 5'
     );
   });
 
   it('falls back to the raw id for models the catalog does not know', () => {
     expect(
       personaDefaultLabel({ ...ENGINEER, defaultModel: 'acme/x' }, MODELS)
-    ).toBe('Persona default · acme/x');
+    ).toBe('Agent default · acme/x');
   });
 });
 
