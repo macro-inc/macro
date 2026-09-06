@@ -2,8 +2,9 @@
  * @vitest-environment jsdom
  */
 
+import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import type { Agent } from '@service-agent-harness/generated/schemas/agent';
 import { storageServiceClient } from '@service-storage/client';
-import type { Agent } from '@service-storage/generated/schemas/agent';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
@@ -20,11 +21,16 @@ vi.mock('../client', () => ({
   },
 }));
 
+vi.mock('@service-agent-harness/client', () => ({
+  agentHarnessServiceClient: {
+    createAgent: vi.fn(),
+    updateAgent: vi.fn(),
+  },
+}));
+
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
-    createAgent: vi.fn(),
     deleteBot: vi.fn(),
-    updateAgent: vi.fn(),
   },
 }));
 
@@ -101,7 +107,9 @@ afterEach(() => {
 describe('agent channel-bot cache invalidation', () => {
   it('invalidates selected channel bot queries after creation', async () => {
     const created = agent(['channel-new', 'channel-other']);
-    vi.mocked(storageServiceClient.createAgent).mockResolvedValue(ok(created));
+    vi.mocked(agentHarnessServiceClient.createAgent).mockResolvedValue(
+      ok(created)
+    );
     const invalidateQueries = vi.spyOn(testQueryClient, 'invalidateQueries');
     const mutation = renderHook(() => useCreateAgentMutation());
 
@@ -120,7 +128,9 @@ describe('agent channel-bot cache invalidation', () => {
       agent(['channel-old']),
     ]);
     const updated = agent(['channel-new']);
-    vi.mocked(storageServiceClient.updateAgent).mockResolvedValue(ok(updated));
+    vi.mocked(agentHarnessServiceClient.updateAgent).mockResolvedValue(
+      ok(updated)
+    );
     const invalidateQueries = vi.spyOn(testQueryClient, 'invalidateQueries');
     const mutation = renderHook(() => useUpdateAgentMutation());
 

@@ -1,4 +1,4 @@
-import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
+import type { AgentMcpServer } from '@service-agent-harness/generated/schemas/agentMcpServer';
 import type { ConnectionState } from './integration-ui';
 
 /** A catalog entry reduced to what the agent stores. */

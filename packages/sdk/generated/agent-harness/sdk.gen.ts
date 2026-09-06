@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses } from './types.gen';
+import type { ApproveHarnessPairingData, ApproveHarnessPairingErrors, ApproveHarnessPairingResponses, ClaimHarnessPairingData, ClaimHarnessPairingErrors, ClaimHarnessPairingResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentData, CreateAgentErrors, CreateAgentResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, CreateHarnessPairingData, CreateHarnessPairingErrors, CreateHarnessPairingResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DeleteCursorApiKeyData, DeleteCursorApiKeyErrors, DeleteCursorApiKeyResponses, DeleteHarnessData, DeleteHarnessErrors, DeleteHarnessResponses, DeleteSelfHarnessData, DeleteSelfHarnessErrors, DeleteSelfHarnessResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, GetCursorApiKeyData, GetCursorApiKeyErrors, GetCursorApiKeyResponses, GetHarnessPairingData, GetHarnessPairingErrors, GetHarnessPairingResponses, GetSelfHarnessData, GetSelfHarnessErrors, GetSelfHarnessResponses, ListAgentsData, ListAgentsErrors, ListAgentsResponses, ListCursorModelsData, ListCursorModelsErrors, ListCursorModelsResponses, ListHarnessAgentsData, ListHarnessAgentsErrors, ListHarnessAgentsResponses, ListHarnessesData, ListHarnessesErrors, ListHarnessesResponses, ListHarnessSessionsData, ListHarnessSessionsErrors, ListHarnessSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, PutCursorApiKeyData, PutCursorApiKeyErrors, PutCursorApiKeyResponses, PutCursorDefaultModelData, PutCursorDefaultModelErrors, PutCursorDefaultModelResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, UpdateAgentData, UpdateAgentErrors, UpdateAgentResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -198,5 +198,226 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
+    }
+    
+    /**
+     * Handler for `GET /agents`.
+     */
+    public listAgents<ThrowOnError extends boolean = false>(options?: Options<ListAgentsData, ThrowOnError>): RequestResult<ListAgentsResponses, ListAgentsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListAgentsResponses, ListAgentsErrors, ThrowOnError>({ url: '/agents', ...options });
+    }
+    
+    /**
+     * Handler for `POST /agents`.
+     */
+    public createAgent<ThrowOnError extends boolean = false>(options: Options<CreateAgentData, ThrowOnError>): RequestResult<CreateAgentResponses, CreateAgentErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateAgentResponses, CreateAgentErrors, ThrowOnError>({
+            url: '/agents',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Handler for `PUT /agents/{agent_id}`.
+     */
+    public updateAgent<ThrowOnError extends boolean = false>(options: Options<UpdateAgentData, ThrowOnError>): RequestResult<UpdateAgentResponses, UpdateAgentErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<UpdateAgentResponses, UpdateAgentErrors, ThrowOnError>({
+            url: '/agents/{agent_id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Forgets the caller's Cursor API key.
+     *
+     * This does **not** revoke the key at Cursor — it keeps working everywhere
+     * else it is used, and only Cursor can revoke it. Any UI offering this has to
+     * say so rather than implying otherwise.
+     *
+     * The user's Cursor agent stays: the mention list already hides it while no
+     * key is registered, and reconnecting picks the same agent, with any edits,
+     * back up.
+     *
+     * Deleting when there is nothing to delete succeeds: the caller's intent is
+     * "I should have no key registered", and that is already true.
+     */
+    public deleteCursorApiKey<ThrowOnError extends boolean = false>(options?: Options<DeleteCursorApiKeyData, ThrowOnError>): RequestResult<DeleteCursorApiKeyResponses, DeleteCursorApiKeyErrors, ThrowOnError> {
+        return (options?.client ?? this.client).delete<DeleteCursorApiKeyResponses, DeleteCursorApiKeyErrors, ThrowOnError>({ url: '/cursor-api-key', ...options });
+    }
+    
+    /**
+     * Whether the caller has a Cursor API key registered.
+     *
+     * Never returns the key, or any part of it. There is no screen that needs one,
+     * and a masked key still leaks its length and alphabet.
+     */
+    public getCursorApiKey<ThrowOnError extends boolean = false>(options?: Options<GetCursorApiKeyData, ThrowOnError>): RequestResult<GetCursorApiKeyResponses, GetCursorApiKeyErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetCursorApiKeyResponses, GetCursorApiKeyErrors, ThrowOnError>({ url: '/cursor-api-key', ...options });
+    }
+    
+    /**
+     * Registers or replaces the caller's Cursor API key and makes sure the
+     * caller has their private Cursor agent.
+     *
+     * The agent is what `@cursor` resolves to: a user-owned, all-channels agent on
+     * the `cursor` harness, created once and reused on every later registration.
+     * Its model is seeded from the user's stored default when they have chosen
+     * one, otherwise from the first model the account offers; it is theirs to
+     * change under Settings → Agents afterwards.
+     *
+     * Pasting a key that Cursor does not honour fails here rather than at the
+     * first session: the model listing is the one call that proves the key works.
+     */
+    public putCursorApiKey<ThrowOnError extends boolean = false>(options: Options<PutCursorApiKeyData, ThrowOnError>): RequestResult<PutCursorApiKeyResponses, PutCursorApiKeyErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PutCursorApiKeyResponses, PutCursorApiKeyErrors, ThrowOnError>({
+            url: '/cursor-api-key',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Choose the model a newly created Cursor agent is seeded with.
+     *
+     * Stores the id only; its parameters are resolved from Cursor's own default
+     * variant at session start. Not validated against the live model list here —
+     * the settings dropdown offers only real ids, and a stale id degrades to the
+     * deployment default at spawn rather than failing, so a round trip to Cursor
+     * on every save would buy nothing.
+     */
+    public putCursorDefaultModel<ThrowOnError extends boolean = false>(options: Options<PutCursorDefaultModelData, ThrowOnError>): RequestResult<PutCursorDefaultModelResponses, PutCursorDefaultModelErrors, ThrowOnError> {
+        return (options.client ?? this.client).put<PutCursorDefaultModelResponses, PutCursorDefaultModelErrors, ThrowOnError>({
+            url: '/cursor-api-key/default-model',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * List the models the caller's Cursor account offers.
+     *
+     * Reached only from the settings dropdown, so it decrypts the user's own key
+     * and asks Cursor directly — the list is per-account and changes, so there is
+     * nothing to cache statically. Reuses the harness's Cursor client rather than
+     * reimplementing the `/v1/models` parse, keeping one source of truth for what
+     * a model is.
+     */
+    public listCursorModels<ThrowOnError extends boolean = false>(options?: Options<ListCursorModelsData, ThrowOnError>): RequestResult<ListCursorModelsResponses, ListCursorModelsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListCursorModelsResponses, ListCursorModelsErrors, ThrowOnError>({ url: '/cursor-api-key/models', ...options });
+    }
+    
+    /**
+     * Handler for `POST /harness-pairings`.
+     *
+     * Unauthenticated by design: the daemon has no credential yet - obtaining one
+     * is the point. The pairing releases nothing until a signed-in user approves
+     * it, and creation is throttled in the domain service.
+     */
+    public createHarnessPairing<ThrowOnError extends boolean = false>(options: Options<CreateHarnessPairingData, ThrowOnError>): RequestResult<CreateHarnessPairingResponses, CreateHarnessPairingErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateHarnessPairingResponses, CreateHarnessPairingErrors, ThrowOnError>({
+            url: '/harness-pairings',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Handler for `GET /harness-pairings/{code}`.
+     */
+    public getHarnessPairing<ThrowOnError extends boolean = false>(options: Options<GetHarnessPairingData, ThrowOnError>): RequestResult<GetHarnessPairingResponses, GetHarnessPairingErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetHarnessPairingResponses, GetHarnessPairingErrors, ThrowOnError>({ url: '/harness-pairings/{code}', ...options });
+    }
+    
+    /**
+     * Handler for `POST /harness-pairings/{code}/approve`.
+     */
+    public approveHarnessPairing<ThrowOnError extends boolean = false>(options: Options<ApproveHarnessPairingData, ThrowOnError>): RequestResult<ApproveHarnessPairingResponses, ApproveHarnessPairingErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ApproveHarnessPairingResponses, ApproveHarnessPairingErrors, ThrowOnError>({
+            url: '/harness-pairings/{code}/approve',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Handler for `POST /harness-pairings/{pairing_id}/claim`.
+     *
+     * Unauthenticated like pairing creation; the device secret minted alongside
+     * the pairing is the credential, and the pairing id (not the short user
+     * code) addresses it.
+     */
+    public claimHarnessPairing<ThrowOnError extends boolean = false>(options: Options<ClaimHarnessPairingData, ThrowOnError>): RequestResult<ClaimHarnessPairingResponses, ClaimHarnessPairingErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<ClaimHarnessPairingResponses, ClaimHarnessPairingErrors, ThrowOnError>({
+            url: '/harness-pairings/{pairing_id}/claim',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Handler for `GET /harnesses`.
+     */
+    public listHarnesses<ThrowOnError extends boolean = false>(options?: Options<ListHarnessesData, ThrowOnError>): RequestResult<ListHarnessesResponses, ListHarnessesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListHarnessesResponses, ListHarnessesErrors, ThrowOnError>({ url: '/harnesses', ...options });
+    }
+    
+    /**
+     * Handler for `DELETE /harnesses/me`.
+     *
+     * A daemon retiring itself: the valid credential is the authorization.
+     */
+    public deleteSelfHarness<ThrowOnError extends boolean = false>(options?: Options<DeleteSelfHarnessData, ThrowOnError>): RequestResult<DeleteSelfHarnessResponses, DeleteSelfHarnessErrors, ThrowOnError> {
+        return (options?.client ?? this.client).delete<DeleteSelfHarnessResponses, DeleteSelfHarnessErrors, ThrowOnError>({ url: '/harnesses/me', ...options });
+    }
+    
+    /**
+     * Handler for `GET /harnesses/me`.
+     */
+    public getSelfHarness<ThrowOnError extends boolean = false>(options?: Options<GetSelfHarnessData, ThrowOnError>): RequestResult<GetSelfHarnessResponses, GetSelfHarnessErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<GetSelfHarnessResponses, GetSelfHarnessErrors, ThrowOnError>({ url: '/harnesses/me', ...options });
+    }
+    
+    /**
+     * Handler for `GET /harnesses/me/agents`.
+     */
+    public listHarnessAgents<ThrowOnError extends boolean = false>(options?: Options<ListHarnessAgentsData, ThrowOnError>): RequestResult<ListHarnessAgentsResponses, ListHarnessAgentsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListHarnessAgentsResponses, ListHarnessAgentsErrors, ThrowOnError>({ url: '/harnesses/me/agents', ...options });
+    }
+    
+    /**
+     * Handler for `GET /harnesses/me/sessions`.
+     */
+    public listHarnessSessions<ThrowOnError extends boolean = false>(options?: Options<ListHarnessSessionsData, ThrowOnError>): RequestResult<ListHarnessSessionsResponses, ListHarnessSessionsErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListHarnessSessionsResponses, ListHarnessSessionsErrors, ThrowOnError>({ url: '/harnesses/me/sessions', ...options });
+    }
+    
+    /**
+     * Handler for `DELETE /harnesses/{harness_id}`.
+     */
+    public deleteHarness<ThrowOnError extends boolean = false>(options: Options<DeleteHarnessData, ThrowOnError>): RequestResult<DeleteHarnessResponses, DeleteHarnessErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteHarnessResponses, DeleteHarnessErrors, ThrowOnError>({ url: '/harnesses/{harness_id}', ...options });
     }
 }

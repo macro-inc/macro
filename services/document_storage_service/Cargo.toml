@@ -111,7 +111,6 @@ github = { path = "../../crates/github", default-features = false, features = [
   "sync",
 ] }
 graphql_soup = { path = "../../crates/graphql_soup" }
-harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }

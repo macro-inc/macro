@@ -109,6 +109,15 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
       name: 'ENVIRONMENT',
       value: stack,
     },
+    // The CMK that encrypts users' Cursor API keys. The key itself lives in
+    // the authentication-service stack (which grants this service's role on
+    // it by ARN); it is addressed here by its stable alias rather than a stack
+    // reference, because that stack already references this one for the role
+    // ARN and Pulumi stack references must not form a cycle.
+    {
+      name: 'CURSOR_API_KEY_KMS_KEY_ID',
+      value: `alias/authentication-service-cursor-api-key-${stack}`,
+    },
     // Datadog
     {
       name: 'DD_SERVICE',

@@ -5,16 +5,36 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  Agent,
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
+  ApprovePairingRequest,
+  BotId,
+  ClaimedPairing,
+  ClaimPairingRequest,
   ControlRequest,
   ControlResponse,
+  CreateAgentRequest,
   CreateAgentSessionRequest,
   CreateAgentSessionResponse,
+  CreatedPairing,
+  CreatePairingRequest,
+  CursorApiKeyStatus,
+  CursorModelsResponse,
   EditQueuedActionRequest,
+  ErrorResponse,
+  Harness,
+  HarnessAgent,
+  HarnessId,
+  HarnessSession,
+  PairingDetails,
+  PendingClaimResponse,
+  PutCursorApiKeyRequest,
+  PutCursorDefaultModelRequest,
   RenameAgentSessionRequest,
   SandboxSizeBody,
+  UpdateAgentRequest,
 } from './schemas';
 
 /**
@@ -831,4 +851,1183 @@ export const putAgentSessionSandboxSize = async (
     status: res.status,
     headers: res.headers,
   } as putAgentSessionSandboxSizeResponse;
+};
+
+/**
+ * @summary Handler for `GET /agents`.
+ */
+export type listAgentsResponse200 = {
+  data: Agent[];
+  status: 200;
+};
+
+export type listAgentsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listAgentsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listAgentsResponseSuccess = listAgentsResponse200 & {
+  headers: Headers;
+};
+export type listAgentsResponseError = (
+  | listAgentsResponse401
+  | listAgentsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAgentsResponse =
+  | listAgentsResponseSuccess
+  | listAgentsResponseError;
+
+export const getListAgentsUrl = () => {
+  return `/agents`;
+};
+
+export const listAgents = async (
+  options?: RequestInit
+): Promise<listAgentsResponse> => {
+  const res = await fetch(getListAgentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentsResponse;
+};
+
+/**
+ * @summary Handler for `POST /agents`.
+ */
+export type createAgentResponse201 = {
+  data: Agent;
+  status: 201;
+};
+
+export type createAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createAgentResponseSuccess = createAgentResponse201 & {
+  headers: Headers;
+};
+export type createAgentResponseError = (
+  | createAgentResponse400
+  | createAgentResponse401
+  | createAgentResponse500
+) & {
+  headers: Headers;
+};
+
+export type createAgentResponse =
+  | createAgentResponseSuccess
+  | createAgentResponseError;
+
+export const getCreateAgentUrl = () => {
+  return `/agents`;
+};
+
+export const createAgent = async (
+  createAgentRequest: CreateAgentRequest,
+  options?: RequestInit
+): Promise<createAgentResponse> => {
+  const res = await fetch(getCreateAgentUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createAgentRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createAgentResponse;
+};
+
+/**
+ * @summary Handler for `PUT /agents/{agent_id}`.
+ */
+export type updateAgentResponse200 = {
+  data: Agent;
+  status: 200;
+};
+
+export type updateAgentResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type updateAgentResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type updateAgentResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type updateAgentResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type updateAgentResponseSuccess = updateAgentResponse200 & {
+  headers: Headers;
+};
+export type updateAgentResponseError = (
+  | updateAgentResponse400
+  | updateAgentResponse401
+  | updateAgentResponse404
+  | updateAgentResponse500
+) & {
+  headers: Headers;
+};
+
+export type updateAgentResponse =
+  | updateAgentResponseSuccess
+  | updateAgentResponseError;
+
+export const getUpdateAgentUrl = (agentId: BotId) => {
+  return `/agents/${agentId}`;
+};
+
+export const updateAgent = async (
+  agentId: BotId,
+  updateAgentRequest: UpdateAgentRequest,
+  options?: RequestInit
+): Promise<updateAgentResponse> => {
+  const res = await fetch(getUpdateAgentUrl(agentId), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(updateAgentRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: updateAgentResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as updateAgentResponse;
+};
+
+/**
+ * Never returns the key, or any part of it. There is no screen that needs one,
+and a masked key still leaks its length and alphabet.
+ * @summary Whether the caller has a Cursor API key registered.
+ */
+export type getCursorApiKeyResponse200 = {
+  data: CursorApiKeyStatus;
+  status: 200;
+};
+
+export type getCursorApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type getCursorApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type getCursorApiKeyResponseSuccess = getCursorApiKeyResponse200 & {
+  headers: Headers;
+};
+export type getCursorApiKeyResponseError = (
+  | getCursorApiKeyResponse401
+  | getCursorApiKeyResponse403
+) & {
+  headers: Headers;
+};
+
+export type getCursorApiKeyResponse =
+  | getCursorApiKeyResponseSuccess
+  | getCursorApiKeyResponseError;
+
+export const getGetCursorApiKeyUrl = () => {
+  return `/cursor-api-key`;
+};
+
+export const getCursorApiKey = async (
+  options?: RequestInit
+): Promise<getCursorApiKeyResponse> => {
+  const res = await fetch(getGetCursorApiKeyUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCursorApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getCursorApiKeyResponse;
+};
+
+/**
+ * The agent is what `@cursor` resolves to: a user-owned, all-channels agent on
+the `cursor` harness, created once and reused on every later registration.
+Its model is seeded from the user's stored default when they have chosen
+one, otherwise from the first model the account offers; it is theirs to
+change under Settings → Agents afterwards.
+
+Pasting a key that Cursor does not honour fails here rather than at the
+first session: the model listing is the one call that proves the key works.
+ * @summary Registers or replaces the caller's Cursor API key and makes sure the
+caller has their private Cursor agent.
+ */
+export type putCursorApiKeyResponse200 = {
+  data: CursorApiKeyStatus;
+  status: 200;
+};
+
+export type putCursorApiKeyResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type putCursorApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putCursorApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type putCursorApiKeyResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type putCursorApiKeyResponseSuccess = putCursorApiKeyResponse200 & {
+  headers: Headers;
+};
+export type putCursorApiKeyResponseError = (
+  | putCursorApiKeyResponse400
+  | putCursorApiKeyResponse401
+  | putCursorApiKeyResponse403
+  | putCursorApiKeyResponse502
+) & {
+  headers: Headers;
+};
+
+export type putCursorApiKeyResponse =
+  | putCursorApiKeyResponseSuccess
+  | putCursorApiKeyResponseError;
+
+export const getPutCursorApiKeyUrl = () => {
+  return `/cursor-api-key`;
+};
+
+export const putCursorApiKey = async (
+  putCursorApiKeyRequest: PutCursorApiKeyRequest,
+  options?: RequestInit
+): Promise<putCursorApiKeyResponse> => {
+  const res = await fetch(getPutCursorApiKeyUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(putCursorApiKeyRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putCursorApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putCursorApiKeyResponse;
+};
+
+/**
+ * This does **not** revoke the key at Cursor — it keeps working everywhere
+else it is used, and only Cursor can revoke it. Any UI offering this has to
+say so rather than implying otherwise.
+
+The user's Cursor agent stays: the mention list already hides it while no
+key is registered, and reconnecting picks the same agent, with any edits,
+back up.
+
+Deleting when there is nothing to delete succeeds: the caller's intent is
+"I should have no key registered", and that is already true.
+ * @summary Forgets the caller's Cursor API key.
+ */
+export type deleteCursorApiKeyResponse200 = {
+  data: CursorApiKeyStatus;
+  status: 200;
+};
+
+export type deleteCursorApiKeyResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type deleteCursorApiKeyResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type deleteCursorApiKeyResponseSuccess =
+  deleteCursorApiKeyResponse200 & {
+    headers: Headers;
+  };
+export type deleteCursorApiKeyResponseError = (
+  | deleteCursorApiKeyResponse401
+  | deleteCursorApiKeyResponse403
+) & {
+  headers: Headers;
+};
+
+export type deleteCursorApiKeyResponse =
+  | deleteCursorApiKeyResponseSuccess
+  | deleteCursorApiKeyResponseError;
+
+export const getDeleteCursorApiKeyUrl = () => {
+  return `/cursor-api-key`;
+};
+
+export const deleteCursorApiKey = async (
+  options?: RequestInit
+): Promise<deleteCursorApiKeyResponse> => {
+  const res = await fetch(getDeleteCursorApiKeyUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteCursorApiKeyResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteCursorApiKeyResponse;
+};
+
+/**
+ * Stores the id only; its parameters are resolved from Cursor's own default
+variant at session start. Not validated against the live model list here —
+the settings dropdown offers only real ids, and a stale id degrades to the
+deployment default at spawn rather than failing, so a round trip to Cursor
+on every save would buy nothing.
+ * @summary Choose the model a newly created Cursor agent is seeded with.
+ */
+export type putCursorDefaultModelResponse200 = {
+  data: CursorApiKeyStatus;
+  status: 200;
+};
+
+export type putCursorDefaultModelResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type putCursorDefaultModelResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type putCursorDefaultModelResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type putCursorDefaultModelResponseSuccess =
+  putCursorDefaultModelResponse200 & {
+    headers: Headers;
+  };
+export type putCursorDefaultModelResponseError = (
+  | putCursorDefaultModelResponse401
+  | putCursorDefaultModelResponse403
+  | putCursorDefaultModelResponse409
+) & {
+  headers: Headers;
+};
+
+export type putCursorDefaultModelResponse =
+  | putCursorDefaultModelResponseSuccess
+  | putCursorDefaultModelResponseError;
+
+export const getPutCursorDefaultModelUrl = () => {
+  return `/cursor-api-key/default-model`;
+};
+
+export const putCursorDefaultModel = async (
+  putCursorDefaultModelRequest: PutCursorDefaultModelRequest,
+  options?: RequestInit
+): Promise<putCursorDefaultModelResponse> => {
+  const res = await fetch(getPutCursorDefaultModelUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(putCursorDefaultModelRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: putCursorDefaultModelResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as putCursorDefaultModelResponse;
+};
+
+/**
+ * Reached only from the settings dropdown, so it decrypts the user's own key
+and asks Cursor directly — the list is per-account and changes, so there is
+nothing to cache statically. Reuses the harness's Cursor client rather than
+reimplementing the `/v1/models` parse, keeping one source of truth for what
+a model is.
+ * @summary List the models the caller's Cursor account offers.
+ */
+export type listCursorModelsResponse200 = {
+  data: CursorModelsResponse;
+  status: 200;
+};
+
+export type listCursorModelsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listCursorModelsResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listCursorModelsResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type listCursorModelsResponse502 = {
+  data: ErrorResponse;
+  status: 502;
+};
+
+export type listCursorModelsResponseSuccess = listCursorModelsResponse200 & {
+  headers: Headers;
+};
+export type listCursorModelsResponseError = (
+  | listCursorModelsResponse401
+  | listCursorModelsResponse403
+  | listCursorModelsResponse409
+  | listCursorModelsResponse502
+) & {
+  headers: Headers;
+};
+
+export type listCursorModelsResponse =
+  | listCursorModelsResponseSuccess
+  | listCursorModelsResponseError;
+
+export const getListCursorModelsUrl = () => {
+  return `/cursor-api-key/models`;
+};
+
+export const listCursorModels = async (
+  options?: RequestInit
+): Promise<listCursorModelsResponse> => {
+  const res = await fetch(getListCursorModelsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCursorModelsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listCursorModelsResponse;
+};
+
+/**
+ * Unauthenticated by design: the daemon has no credential yet - obtaining one
+is the point. The pairing releases nothing until a signed-in user approves
+it, and creation is throttled in the domain service.
+ * @summary Handler for `POST /harness-pairings`.
+ */
+export type createHarnessPairingResponse201 = {
+  data: CreatedPairing;
+  status: 201;
+};
+
+export type createHarnessPairingResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createHarnessPairingResponse429 = {
+  data: ErrorResponse;
+  status: 429;
+};
+
+export type createHarnessPairingResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createHarnessPairingResponseSuccess =
+  createHarnessPairingResponse201 & {
+    headers: Headers;
+  };
+export type createHarnessPairingResponseError = (
+  | createHarnessPairingResponse400
+  | createHarnessPairingResponse429
+  | createHarnessPairingResponse500
+) & {
+  headers: Headers;
+};
+
+export type createHarnessPairingResponse =
+  | createHarnessPairingResponseSuccess
+  | createHarnessPairingResponseError;
+
+export const getCreateHarnessPairingUrl = () => {
+  return `/harness-pairings`;
+};
+
+export const createHarnessPairing = async (
+  createPairingRequest: CreatePairingRequest,
+  options?: RequestInit
+): Promise<createHarnessPairingResponse> => {
+  const res = await fetch(getCreateHarnessPairingUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createPairingRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createHarnessPairingResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createHarnessPairingResponse;
+};
+
+/**
+ * @summary Handler for `GET /harness-pairings/{code}`.
+ */
+export type getHarnessPairingResponse200 = {
+  data: PairingDetails;
+  status: 200;
+};
+
+export type getHarnessPairingResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type getHarnessPairingResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getHarnessPairingResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getHarnessPairingResponse410 = {
+  data: ErrorResponse;
+  status: 410;
+};
+
+export type getHarnessPairingResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getHarnessPairingResponseSuccess = getHarnessPairingResponse200 & {
+  headers: Headers;
+};
+export type getHarnessPairingResponseError = (
+  | getHarnessPairingResponse400
+  | getHarnessPairingResponse401
+  | getHarnessPairingResponse404
+  | getHarnessPairingResponse410
+  | getHarnessPairingResponse500
+) & {
+  headers: Headers;
+};
+
+export type getHarnessPairingResponse =
+  | getHarnessPairingResponseSuccess
+  | getHarnessPairingResponseError;
+
+export const getGetHarnessPairingUrl = (code: string) => {
+  return `/harness-pairings/${code}`;
+};
+
+export const getHarnessPairing = async (
+  code: string,
+  options?: RequestInit
+): Promise<getHarnessPairingResponse> => {
+  const res = await fetch(getGetHarnessPairingUrl(code), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getHarnessPairingResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getHarnessPairingResponse;
+};
+
+/**
+ * @summary Handler for `POST /harness-pairings/{code}/approve`.
+ */
+export type approveHarnessPairingResponse200 = {
+  data: Harness;
+  status: 200;
+};
+
+export type approveHarnessPairingResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type approveHarnessPairingResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type approveHarnessPairingResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type approveHarnessPairingResponse410 = {
+  data: ErrorResponse;
+  status: 410;
+};
+
+export type approveHarnessPairingResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type approveHarnessPairingResponseSuccess =
+  approveHarnessPairingResponse200 & {
+    headers: Headers;
+  };
+export type approveHarnessPairingResponseError = (
+  | approveHarnessPairingResponse400
+  | approveHarnessPairingResponse401
+  | approveHarnessPairingResponse404
+  | approveHarnessPairingResponse410
+  | approveHarnessPairingResponse500
+) & {
+  headers: Headers;
+};
+
+export type approveHarnessPairingResponse =
+  | approveHarnessPairingResponseSuccess
+  | approveHarnessPairingResponseError;
+
+export const getApproveHarnessPairingUrl = (code: string) => {
+  return `/harness-pairings/${code}/approve`;
+};
+
+export const approveHarnessPairing = async (
+  code: string,
+  approvePairingRequest: ApprovePairingRequest,
+  options?: RequestInit
+): Promise<approveHarnessPairingResponse> => {
+  const res = await fetch(getApproveHarnessPairingUrl(code), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(approvePairingRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: approveHarnessPairingResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as approveHarnessPairingResponse;
+};
+
+/**
+ * Unauthenticated like pairing creation; the device secret minted alongside
+the pairing is the credential, and the pairing id (not the short user
+code) addresses it.
+ * @summary Handler for `POST /harness-pairings/{pairing_id}/claim`.
+ */
+export type claimHarnessPairingResponse200 = {
+  data: ClaimedPairing;
+  status: 200;
+};
+
+export type claimHarnessPairingResponse202 = {
+  data: PendingClaimResponse;
+  status: 202;
+};
+
+export type claimHarnessPairingResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type claimHarnessPairingResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type claimHarnessPairingResponse410 = {
+  data: ErrorResponse;
+  status: 410;
+};
+
+export type claimHarnessPairingResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type claimHarnessPairingResponseSuccess = (
+  | claimHarnessPairingResponse200
+  | claimHarnessPairingResponse202
+) & {
+  headers: Headers;
+};
+export type claimHarnessPairingResponseError = (
+  | claimHarnessPairingResponse401
+  | claimHarnessPairingResponse404
+  | claimHarnessPairingResponse410
+  | claimHarnessPairingResponse500
+) & {
+  headers: Headers;
+};
+
+export type claimHarnessPairingResponse =
+  | claimHarnessPairingResponseSuccess
+  | claimHarnessPairingResponseError;
+
+export const getClaimHarnessPairingUrl = (pairingId: string) => {
+  return `/harness-pairings/${pairingId}/claim`;
+};
+
+export const claimHarnessPairing = async (
+  pairingId: string,
+  claimPairingRequest: ClaimPairingRequest,
+  options?: RequestInit
+): Promise<claimHarnessPairingResponse> => {
+  const res = await fetch(getClaimHarnessPairingUrl(pairingId), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(claimPairingRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: claimHarnessPairingResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as claimHarnessPairingResponse;
+};
+
+/**
+ * @summary Handler for `GET /harnesses`.
+ */
+export type listHarnessesResponse200 = {
+  data: Harness[];
+  status: 200;
+};
+
+export type listHarnessesResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listHarnessesResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listHarnessesResponseSuccess = listHarnessesResponse200 & {
+  headers: Headers;
+};
+export type listHarnessesResponseError = (
+  | listHarnessesResponse401
+  | listHarnessesResponse500
+) & {
+  headers: Headers;
+};
+
+export type listHarnessesResponse =
+  | listHarnessesResponseSuccess
+  | listHarnessesResponseError;
+
+export const getListHarnessesUrl = () => {
+  return `/harnesses`;
+};
+
+export const listHarnesses = async (
+  options?: RequestInit
+): Promise<listHarnessesResponse> => {
+  const res = await fetch(getListHarnessesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listHarnessesResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listHarnessesResponse;
+};
+
+/**
+ * @summary Handler for `GET /harnesses/me`.
+ */
+export type getSelfHarnessResponse200 = {
+  data: Harness;
+  status: 200;
+};
+
+export type getSelfHarnessResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getSelfHarnessResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type getSelfHarnessResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getSelfHarnessResponseSuccess = getSelfHarnessResponse200 & {
+  headers: Headers;
+};
+export type getSelfHarnessResponseError = (
+  | getSelfHarnessResponse401
+  | getSelfHarnessResponse404
+  | getSelfHarnessResponse500
+) & {
+  headers: Headers;
+};
+
+export type getSelfHarnessResponse =
+  | getSelfHarnessResponseSuccess
+  | getSelfHarnessResponseError;
+
+export const getGetSelfHarnessUrl = () => {
+  return `/harnesses/me`;
+};
+
+export const getSelfHarness = async (
+  options?: RequestInit
+): Promise<getSelfHarnessResponse> => {
+  const res = await fetch(getGetSelfHarnessUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getSelfHarnessResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getSelfHarnessResponse;
+};
+
+/**
+ * A daemon retiring itself: the valid credential is the authorization.
+ * @summary Handler for `DELETE /harnesses/me`.
+ */
+export type deleteSelfHarnessResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteSelfHarnessResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteSelfHarnessResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteSelfHarnessResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteSelfHarnessResponseSuccess = deleteSelfHarnessResponse204 & {
+  headers: Headers;
+};
+export type deleteSelfHarnessResponseError = (
+  | deleteSelfHarnessResponse401
+  | deleteSelfHarnessResponse404
+  | deleteSelfHarnessResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteSelfHarnessResponse =
+  | deleteSelfHarnessResponseSuccess
+  | deleteSelfHarnessResponseError;
+
+export const getDeleteSelfHarnessUrl = () => {
+  return `/harnesses/me`;
+};
+
+export const deleteSelfHarness = async (
+  options?: RequestInit
+): Promise<deleteSelfHarnessResponse> => {
+  const res = await fetch(getDeleteSelfHarnessUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteSelfHarnessResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteSelfHarnessResponse;
+};
+
+/**
+ * @summary Handler for `GET /harnesses/me/agents`.
+ */
+export type listHarnessAgentsResponse200 = {
+  data: HarnessAgent[];
+  status: 200;
+};
+
+export type listHarnessAgentsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listHarnessAgentsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listHarnessAgentsResponseSuccess = listHarnessAgentsResponse200 & {
+  headers: Headers;
+};
+export type listHarnessAgentsResponseError = (
+  | listHarnessAgentsResponse401
+  | listHarnessAgentsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listHarnessAgentsResponse =
+  | listHarnessAgentsResponseSuccess
+  | listHarnessAgentsResponseError;
+
+export const getListHarnessAgentsUrl = () => {
+  return `/harnesses/me/agents`;
+};
+
+export const listHarnessAgents = async (
+  options?: RequestInit
+): Promise<listHarnessAgentsResponse> => {
+  const res = await fetch(getListHarnessAgentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listHarnessAgentsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listHarnessAgentsResponse;
+};
+
+/**
+ * @summary Handler for `GET /harnesses/me/sessions`.
+ */
+export type listHarnessSessionsResponse200 = {
+  data: HarnessSession[];
+  status: 200;
+};
+
+export type listHarnessSessionsResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listHarnessSessionsResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listHarnessSessionsResponseSuccess =
+  listHarnessSessionsResponse200 & {
+    headers: Headers;
+  };
+export type listHarnessSessionsResponseError = (
+  | listHarnessSessionsResponse401
+  | listHarnessSessionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listHarnessSessionsResponse =
+  | listHarnessSessionsResponseSuccess
+  | listHarnessSessionsResponseError;
+
+export const getListHarnessSessionsUrl = () => {
+  return `/harnesses/me/sessions`;
+};
+
+export const listHarnessSessions = async (
+  options?: RequestInit
+): Promise<listHarnessSessionsResponse> => {
+  const res = await fetch(getListHarnessSessionsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listHarnessSessionsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listHarnessSessionsResponse;
+};
+
+/**
+ * @summary Handler for `DELETE /harnesses/{harness_id}`.
+ */
+export type deleteHarnessResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type deleteHarnessResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type deleteHarnessResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type deleteHarnessResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type deleteHarnessResponseSuccess = deleteHarnessResponse204 & {
+  headers: Headers;
+};
+export type deleteHarnessResponseError = (
+  | deleteHarnessResponse401
+  | deleteHarnessResponse404
+  | deleteHarnessResponse500
+) & {
+  headers: Headers;
+};
+
+export type deleteHarnessResponse =
+  | deleteHarnessResponseSuccess
+  | deleteHarnessResponseError;
+
+export const getDeleteHarnessUrl = (harnessId: HarnessId) => {
+  return `/harnesses/${harnessId}`;
+};
+
+export const deleteHarness = async (
+  harnessId: HarnessId,
+  options?: RequestInit
+): Promise<deleteHarnessResponse> => {
+  const res = await fetch(getDeleteHarnessUrl(harnessId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: deleteHarnessResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as deleteHarnessResponse;
 };

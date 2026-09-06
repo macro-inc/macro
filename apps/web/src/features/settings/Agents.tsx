@@ -14,7 +14,6 @@ import TrashIcon from '@phosphor/trash.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import XIcon from '@phosphor/x.svg';
 import {
-  type AgentWithHarnessId,
   type CreateAgentParams,
   useAgentsQuery,
   useCreateAgentMutation,
@@ -28,8 +27,9 @@ import {
 import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { useCurrentTeamQuery, useIsTeamOwner } from '@queries/team/teams';
-import type { AgentMcpServer } from '@service-storage/generated/schemas/agentMcpServer';
-import type { AgentMcpServers } from '@service-storage/generated/schemas/agentMcpServers';
+import type { Agent } from '@service-agent-harness/generated/schemas/agent';
+import type { AgentMcpServer } from '@service-agent-harness/generated/schemas/agentMcpServer';
+import type { AgentMcpServers } from '@service-agent-harness/generated/schemas/agentMcpServers';
 import { Avatar, Button, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { botAssignableChannelOptions } from '../channel/Bots/botChannelOptions';
@@ -56,7 +56,7 @@ type AgentSummary = {
   defaultModel: string;
   channelSummary: string;
   share: AgentShare;
-  persistedAgent?: AgentWithHarnessId;
+  persistedAgent?: Agent;
   editable?: boolean;
 };
 
@@ -100,8 +100,8 @@ const MACRO_AGENT: AgentSummary = {
 /** Settings page for viewing and creating persistent agents. */
 export function Agents() {
   const [creating, setCreating] = createSignal(false);
-  const [editingAgent, setEditingAgent] = createSignal<AgentWithHarnessId>();
-  const [deletingAgent, setDeletingAgent] = createSignal<AgentWithHarnessId>();
+  const [editingAgent, setEditingAgent] = createSignal<Agent>();
+  const [deletingAgent, setDeletingAgent] = createSignal<Agent>();
   const channelsContext = useChannelsContext();
   const currentUserId = useUserId();
   const agentsQuery = useAgentsQuery();
@@ -144,11 +144,11 @@ export function Agents() {
   );
   const currentTeamId = () => currentTeamQuery.data?.team.id;
   const canShareWithTeam = () => currentTeamId() !== undefined;
-  const isAgentCreator = (agent: AgentWithHarnessId) =>
+  const isAgentCreator = (agent: Agent) =>
     agent.bot.created_by === currentUserId();
-  const canMakePrivate = (agent: AgentWithHarnessId) =>
+  const canMakePrivate = (agent: Agent) =>
     agent.bot.owner?.type !== 'team' || isAgentCreator(agent);
-  const canDeleteAgent = (agent: AgentWithHarnessId) =>
+  const canDeleteAgent = (agent: Agent) =>
     canDeleteBot(agent.bot, currentUserId(), currentTeamId(), isTeamOwner());
   const agents = createMemo(() =>
     (agentsQuery.data ?? []).map((agent) =>
@@ -328,7 +328,7 @@ export function Agents() {
 }
 
 function summarizeAgent(
-  agent: AgentWithHarnessId,
+  agent: Agent,
   harnesses: readonly ConnectedHarness[],
   channels: readonly ChannelOption[]
 ): AgentSummary {
@@ -505,7 +505,7 @@ function AgentDeleteDialog(props: {
 }
 
 function AgentDialog(props: {
-  agent?: AgentWithHarnessId;
+  agent?: Agent;
   connectedHarnesses: readonly ConnectedHarness[];
   currentTeamId?: string;
   canShareWithTeam: boolean;

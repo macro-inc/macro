@@ -37,6 +37,8 @@ pub fn stream_scope(scope: HarnessScope) -> WebhookScope {
 pub struct EventStreamClient {
     http: reqwest::Client,
     base: String,
+    /// The agent-harness base, which owns harnesses and their bindings.
+    api_base: String,
     token: String,
     scope: WebhookScope,
 }
@@ -47,6 +49,7 @@ impl EventStreamClient {
         Self {
             http: reqwest::Client::new(),
             base: config.storage_url.trim_end_matches('/').to_owned(),
+            api_base: config.api_url.trim_end_matches('/').to_owned(),
             token: credentials.token.clone(),
             scope: stream_scope(credentials.scope),
         }
@@ -89,7 +92,8 @@ impl EventStreamClient {
         let agents: Vec<HarnessAgent> = self
             .read(
                 "list this harness's agents",
-                self.http.get(format!("{}/harnesses/me/agents", self.base)),
+                self.http
+                    .get(format!("{}/harnesses/me/agents", self.api_base)),
             )
             .await?;
         let ids: BTreeSet<String> = agents

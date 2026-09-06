@@ -75,11 +75,12 @@ impl HarnessCredentials {
 #[serde(deny_unknown_fields)]
 pub struct MacroApi {
     /// Base URL of the agent-harness service, e.g.
-    /// `http://localhost:50009/agent-harness`. Sessions are created and
-    /// prompted here, and its `ws(s)` twin hosts the runtime gateway.
+    /// `http://localhost:50009/agent-harness`. Hosts harness pairing and
+    /// bindings, sessions are created and prompted here, and its `ws(s)` twin
+    /// hosts the runtime gateway.
     pub api_url: String,
     /// Base URL of the storage service, e.g. `http://localhost:50009/dss`.
-    /// Hosts harness pairing and `GET /webhook/events/stream`.
+    /// Hosts `GET /webhook/events/stream`.
     pub storage_url: String,
     /// Base URL of the Macro web app, used only to print the pairing link.
     #[serde(default = "default_web_url")]

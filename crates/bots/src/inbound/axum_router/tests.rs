@@ -2,6 +2,7 @@ use super::*;
 use crate::domain::models::{
     Agent, AuthenticatedBot, BotChannel, BotChannelListCaller, BotChannelType, BotKind, BotOwner,
     CreateAgentRequest, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
+    UpdateAgentRequest,
 };
 use crate::{domain::service::BotServiceImpl, outbound::pg_bots_repo::PgBotsRepo};
 use axum::{
@@ -115,6 +116,14 @@ impl BotService for TestBotService {
     }
 
     async fn list_agents(&self, _caller: MacroUserIdStr<'static>) -> Result<Vec<Agent>, BotError> {
+        unimplemented!()
+    }
+
+    async fn ensure_cursor_agent(
+        &self,
+        _caller: MacroUserIdStr<'static>,
+        _default_model: String,
+    ) -> Result<Agent, BotError> {
         unimplemented!()
     }
 

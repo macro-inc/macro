@@ -2,7 +2,7 @@ import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
-import type { Agent } from '@service-storage/generated/schemas/agent';
+import type { Agent } from '@service-agent-harness/generated/schemas/agent';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { type Accessor, createMemo } from 'solid-js';
 

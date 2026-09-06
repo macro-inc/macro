@@ -29,6 +29,10 @@ ai_usage = { path = "../../crates/ai_usage" }
 aws-sdk-sqs = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots" }
+harnesses = { path = "../../crates/harnesses" }
+model-error-response = { path = "../../crates/model-error-response" }
+chrono = { workspace = true }
+thiserror = { workspace = true }
 harness_id = { path = "../../crates/harness_id" }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 aws-sdk-kms = { workspace = true }

@@ -1,6 +1,9 @@
 //! Inbound HTTP and AI-tool adapters for bots.
 
 #[cfg(feature = "inbound")]
+/// Axum router for persisted AI agents.
+pub mod agents_router;
+#[cfg(feature = "inbound")]
 /// Axum router for bot management.
 pub mod axum_router;
 #[cfg(feature = "inbound")]

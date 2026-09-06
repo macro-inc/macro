@@ -1,4 +1,4 @@
-import type { Agent } from '@service-storage/generated/schemas/agent';
+import type { Agent } from '@service-agent-harness/generated/schemas/agent';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { describe, expect, it } from 'vitest';
 import { availableBotMentionUsers } from './use-channel-bot-mention-users';
