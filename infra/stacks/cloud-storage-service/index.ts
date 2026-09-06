@@ -26,6 +26,7 @@ import {
 } from './document-upload-finalizer-lambda';
 import { CalendarReminderDispatchQueue } from './calendar-reminder-dispatch-queue';
 import { ReminderDispatchQueue } from './reminder-dispatch-queue';
+import { WafObservability } from './waf-observability';
 
 const tags = {
   environment: stack,
@@ -328,6 +329,14 @@ const cloudStorageService = new CloudStorageService(
     tags,
   }
 );
+
+if (stack === 'prod') {
+  new WafObservability(
+    'cloud-storage-service-prod',
+    { albArn: cloudStorageService.lb.arn },
+    { protect: true }
+  );
+}
 
 export const cloudStorageServiceRoleArn = cloudStorageService.role.arn;
 export const cloudStorageServiceSgId = cloudStorageService.serviceSg.id;
