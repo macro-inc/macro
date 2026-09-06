@@ -72,6 +72,49 @@ describe('createMyActivityState', () => {
     expect(feed.hasMore).toBe(false);
   });
 
+  it('exposes the overview as row zero and the flattened feed after it', () => {
+    const { state, graphql } = setup();
+    expect(state.rows().map((row) => row.kind)).toEqual(['overview', 'status']);
+
+    graphql.latest('MyActivity').resolve(feedPage([createdEvent], 'c2'));
+    const ready = state.rows();
+    expect(ready.map((row) => row.kind)).toEqual([
+      'overview',
+      'day',
+      'event',
+      'tail',
+    ]);
+
+    state.loadMore();
+    // The in-flight flag flips but the mounted rows keep their identity.
+    expect(state.rows()[1]).toBe(ready[1]);
+    expect(state.rows()[2]).toBe(ready[2]);
+
+    graphql.latest('MyActivity').resolve(feedPage([editedEvent], null));
+    expect(state.rows().map((row) => row.kind)).toEqual([
+      'overview',
+      'day',
+      'event',
+      'event',
+    ]);
+    expect(state.rows()[2]).toBe(ready[2]);
+  });
+
+  it('ignores loadMore while a page is in flight or none remain', () => {
+    const { state, graphql } = setup();
+    graphql.latest('MyActivity').resolve(feedPage([createdEvent], 'c2'));
+    const requests = () =>
+      graphql.pending.filter((op) => op.name === 'MyActivity').length;
+
+    state.loadMore();
+    state.loadMore();
+    expect(requests()).toBe(2);
+
+    graphql.latest('MyActivity').resolve(feedPage([editedEvent], null));
+    state.loadMore();
+    expect(requests()).toBe(2);
+  });
+
   it('is empty when the first page has no rows', () => {
     const { state, graphql } = setup();
     graphql.latest('MyActivity').resolve(feedPage([]));
