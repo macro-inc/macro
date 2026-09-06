@@ -9,6 +9,7 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
+  ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
@@ -16,8 +17,12 @@ import {
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
   getKafkaClusterPolicy,
+  getGatewayAlb,
+  GatewayService,
   stack,
 } from '../../packages/shared';
+
+const gatewayLoadBalancer = getGatewayAlb();
 
 const BASE_NAME = 'document-cognition';
 const REPO_ROOT = '../../..';
@@ -109,6 +114,22 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
     });
     this.serviceAlbSg = sg.serviceAlbSg;
     this.serviceSg = sg.serviceSg;
+
+    const gatewayTargetGroup = new ServiceTargetGroup(
+      `${stack}-${BASE_NAME}`,
+      {
+        tags: this.tags,
+        listenerArn: gatewayLoadBalancer.httpsListenerArn,
+        vpcId: vpc.vpcId,
+        containerPort: serviceContainerPort,
+        service: GatewayService.DOCUMENT_COGNITION_SERVICE,
+        healthCheckPath,
+        pathPatterns: ['/cognition', '/cognition/*'],
+        serviceSecurityGroupId: this.serviceSg.id,
+        albSecurityGroupId: gatewayLoadBalancer.albSecurityGroupId,
+      },
+      { parent: this }
+    );
 
     // lb
     const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
@@ -249,6 +270,23 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
           enable: true,
           rollback: true,
         },
+        // Register tasks in both the legacy ALB's target group and the gateway
+        // target group while we migrate to the gateway. An explicit
+        // `loadBalancers` replaces the list awsx derives from
+        // `portMappings.targetGroup`, so the legacy entry must be listed here
+        // too.
+        loadBalancers: [
+          {
+            targetGroupArn: targetGroup.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+          {
+            targetGroupArn: gatewayTargetGroup.target_group.arn,
+            containerName: 'service',
+            containerPort: serviceContainerPort,
+          },
+        ],
         taskDefinitionArgs: {
           taskRole: {
             roleArn: this.role.arn,
@@ -303,12 +341,19 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
       },
       {
         parent: this,
+        // ECS refuses a service whose target group is not yet associated with
+        // a load balancer; it is the listener rule that creates that
+        // association
+        dependsOn: [gatewayTargetGroup.listener_rule],
       }
     );
 
     this.service = service;
 
-    this.setupAutoScaling();
+    this.setupAutoScaling({
+      gatewayAlbArnSuffix: gatewayLoadBalancer.albArnSuffix,
+      gatewayTargetGroup: gatewayTargetGroup.target_group,
+    });
 
     this.setupServiceAlarms();
 
@@ -443,7 +488,13 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
     return { serviceAlbSg, serviceSg };
   }
 
-  setupAutoScaling() {
+  setupAutoScaling({
+    gatewayAlbArnSuffix,
+    gatewayTargetGroup,
+  }: {
+    gatewayAlbArnSuffix: pulumi.Output<string>;
+    gatewayTargetGroup: aws.lb.TargetGroup;
+  }) {
     if (!this.service) return;
 
     const serviceScalableTarget = new aws.appautoscaling.Target(
@@ -472,8 +523,8 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
     );
 
     const resourceLabel = pulumi.interpolate`${lbPortion}/${tgPortion}`;
+    const gatewayResourceLabel = pulumi.interpolate`${gatewayAlbArnSuffix}/${gatewayTargetGroup.arnSuffix}`;
 
-    // Create an Auto Scaling policy for request count.
     new aws.appautoscaling.Policy(
       `${BASE_NAME}-scaling-policy-request-count-${stack}`,
       {
@@ -486,6 +537,26 @@ export class DocumentCognitionService extends pulumi.ComponentResource {
           predefinedMetricSpecification: {
             predefinedMetricType: 'ALBRequestCountPerTarget',
             resourceLabel,
+          },
+          scaleInCooldown: 100,
+          scaleOutCooldown: 120,
+        },
+      },
+      { parent: this }
+    );
+
+    new aws.appautoscaling.Policy(
+      `${BASE_NAME}-scaling-policy-gateway-request-count-${stack}`,
+      {
+        policyType: 'TargetTrackingScaling',
+        resourceId: serviceScalableTarget.resourceId,
+        scalableDimension: serviceScalableTarget.scalableDimension,
+        serviceNamespace: serviceScalableTarget.serviceNamespace,
+        targetTrackingScalingPolicyConfiguration: {
+          targetValue: 1000,
+          predefinedMetricSpecification: {
+            predefinedMetricType: 'ALBRequestCountPerTarget',
+            resourceLabel: gatewayResourceLabel,
           },
           scaleInCooldown: 100,
           scaleOutCooldown: 120,
