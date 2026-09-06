@@ -17,6 +17,7 @@ import {
   useGlobalNotificationSource,
 } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { openSplitContentInNewTab } from '@components/app/split-layout/layoutUtils';
 import {
   ContextMenuContent,
   MenuGroup,
@@ -219,6 +220,12 @@ function ChannelRow(props: {
     openChannel(props.channel, true);
   };
 
+  // Unlike the split actions, this opens the channel at its latest message
+  // rather than at the first unread one: the URL addresses the channel, and a
+  // message anchor is not part of it.
+  const openInNewTab = () =>
+    openSplitContentInNewTab({ type: 'channel', id: entity().id });
+
   const markAllAsRead = () => {
     void notificationSource.bulkMarkAsRead(props.channel.unread);
   };
@@ -299,6 +306,7 @@ function ChannelRow(props: {
               text="Open in current split"
               onClick={openInCurrentSplit}
             />
+            <MenuItem text="Open in new tab" onClick={openInNewTab} />
           </MenuGroup>
           <Show when={isUnread()}>
             <MenuSeparator />

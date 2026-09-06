@@ -43,6 +43,7 @@ import type {
   SplitContent,
   SplitHandle,
 } from '@components/app/split-layout/layoutManager';
+import { openSplitContentInNewTab } from '@components/app/split-layout/layoutUtils';
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
@@ -722,6 +723,10 @@ const SidebarDropdownLink = (
     if (props.id === 'search' && handle) requestSearchFocus(handle.id);
     globalSplitManager()?.returnFocus();
   };
+  const openInNewTab = () => {
+    analytics.track('sidebar_click', { view: props.id, target: 'new-tab' });
+    openSplitContentInNewTab({ type: 'component', id: props.id });
+  };
 
   const ContextMenuTriggerItem = (
     triggerProps: ComponentProps<typeof ContextMenu.Trigger>
@@ -739,6 +744,7 @@ const SidebarDropdownLink = (
             <MenuItem text="Open fullscreen" onClick={openFullscreen} />
           </Show>
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+          <MenuItem text="Open in new tab" onClick={openInNewTab} />
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>
@@ -1796,6 +1802,17 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
     globalSplitManager()?.returnFocus();
   };
 
+  // The new tab loads from the URL, so it can't run `onOpened` — content
+  // params and the scoping those callbacks do (e.g. an Email row's inbox
+  // filter) don't survive; the view opens in its default state.
+  const openInNewTab = () => {
+    analytics.track('sidebar_click', {
+      view: props.content().id,
+      target: 'new-tab',
+    });
+    openSplitContentInNewTab(props.content());
+  };
+
   return (
     <ContextMenu onOpenChange={props.onOpenChange}>
       <ContextMenu.Trigger class={cn('w-full h-7', props.triggerClass)}>
@@ -1813,6 +1830,7 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
             <MenuItem text="Open fullscreen" onClick={openFullscreen} />
           </Show>
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+          <MenuItem text="Open in new tab" onClick={openInNewTab} />
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>
