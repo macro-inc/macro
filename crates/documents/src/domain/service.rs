@@ -23,7 +23,7 @@ use connection::domain::ports::ConnectionService;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
     BotReceiptScope, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, MemberTeamRole,
-    OwnerAccessLevel, ViewAccessLevel,
+    OwnerAccessLevel, RequiredPermission, ViewAccessLevel,
 };
 use foreign_entity::domain::models::{ForeignEntity, SourceId};
 use foreign_entity::domain::ports::ForeignEntityService;
@@ -744,6 +744,58 @@ impl<
             file_type: file_type.map(|f| f.to_string()),
         })
     }
+
+    /// Only the literal document owner may share the document with (or unshare it
+    /// from) their team. An Owner-level *access* row is not enough: project owners
+    /// inherit one on child documents, and bots/internal callers have no user at all.
+    fn require_literal_owner<L: RequiredPermission>(
+        entity_access_receipt: &EntityAccessReceipt<L>,
+        document_context: &DocumentBasic,
+    ) -> Result<(), DocumentError> {
+        let user_id = entity_access_receipt
+            .get_authenticated_user()
+            .map_err(|_| DocumentError::Unauthorized)?;
+
+        if document_context.owner != *user_id {
+            return Err(DocumentError::Unauthorized);
+        }
+
+        Ok(())
+    }
+
+    /// Validate a share-permission edit that sets or clears the team share:
+    /// literal owner only, `Owner` is not grantable, and setting a level requires
+    /// the owner to be on a team.
+    async fn authorize_team_share_change<L: RequiredPermission>(
+        &self,
+        entity_access_receipt: &EntityAccessReceipt<L>,
+        document_context: &DocumentBasic,
+        share_permission: &UpdateSharePermissionRequestV2,
+    ) -> Result<(), DocumentError> {
+        Self::require_literal_owner(entity_access_receipt, document_context)?;
+
+        if !share_permission.team_share_access_level_is_grantable() {
+            return Err(DocumentError::BadRequest(
+                "owner access cannot be granted to a team".to_string(),
+            ));
+        }
+
+        if matches!(share_permission.team_share_access_level, Some(Some(_))) {
+            let team_share = self
+                .repo
+                .get_team_share(&document_context.document_id)
+                .await
+                .map_err(|e| DocumentError::Internal(e.into()))?;
+
+            if team_share.team_id.is_none() {
+                return Err(DocumentError::BadRequest(
+                    "document owner does not belong to a team".to_string(),
+                ));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(feature = "document_create")]
@@ -1372,6 +1424,17 @@ impl<
             }
         }
 
+        if let Some(share_permission) = args.share_permission.as_ref()
+            && share_permission.changes_team_share()
+        {
+            self.authorize_team_share_change(
+                &entity_access_receipt,
+                &document_context,
+                share_permission,
+            )
+            .await?;
+        }
+
         if let Some(file_type_update) = &args.file_type {
             let current_file_type = document_context
                 .file_type
@@ -1933,6 +1996,9 @@ impl<
         share: bool,
     ) -> Result<DocumentTeamShareResponse, DocumentError> {
         let document_id = entity_access_receipt.entity().entity_id.clone();
+
+        let document = self.internal_get_basic_document(&document_id).await?;
+        Self::require_literal_owner(&entity_access_receipt, &document)?;
 
         let state = self
             .repo

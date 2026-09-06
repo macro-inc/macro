@@ -16,6 +16,7 @@ fn share_permission(
     link_share_access_level: Option<AccessLevel>,
 ) -> SharePermissionV2 {
     SharePermissionV2 {
+        team_share_access_level: None,
         id: String::new(),
         link_share,
         link_share_access_level,

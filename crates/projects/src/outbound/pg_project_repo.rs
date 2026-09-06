@@ -51,6 +51,11 @@ impl ProjectRepo for PgProjectRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_user_team_id(&self, user_id: &str) -> Result<Option<uuid::Uuid>, Self::Err> {
+        share_permission_db_utils::get_user_team_id(&self.pool, user_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn get_basic_project(&self, project_id: &str) -> Result<Option<BasicProject>, Self::Err> {
         sqlx::query!(
             r#"

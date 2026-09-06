@@ -1378,8 +1378,8 @@ export class Sdk extends HeyApiClient {
     
     /**
      * Sets the team-share state of a document. Sharing grants the document
-     * owner's team Edit access; unsharing removes the team's access. Requires
-     * Edit access on the document.
+     * owner's team Edit access; unsharing removes the team's access. Only the
+     * document owner may change it; anyone else is rejected with 401.
      */
     public setDocumentTeamShare<ThrowOnError extends boolean = false>(options: Options<SetDocumentTeamShareData, ThrowOnError>): RequestResult<SetDocumentTeamShareResponses, SetDocumentTeamShareErrors, ThrowOnError> {
         return (options.client ?? this.client).put<SetDocumentTeamShareResponses, SetDocumentTeamShareErrors, ThrowOnError>({

@@ -17,6 +17,7 @@ pub(crate) async fn get_chat_share_permission(
             sp.id as id,
             sp."linkShare" as "link_share?",
             sp."linkShareAccessLevel" as "link_share_access_level?: AccessLevel",
+            sp."teamShareAccessLevel" as "team_share_access_level?: AccessLevel",
             c."userId" as owner,
             COALESCE(
                 json_agg(json_build_object(
@@ -63,5 +64,6 @@ pub(crate) async fn get_chat_share_permission(
         link_share_access_level: result.link_share_access_level,
         owner: result.owner,
         channel_share_permissions,
+        team_share_access_level: result.team_share_access_level,
     })
 }

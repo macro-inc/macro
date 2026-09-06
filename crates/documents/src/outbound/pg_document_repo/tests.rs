@@ -116,6 +116,7 @@ async fn insert_github_pr_task(
 struct SharePermissionColumns {
     link_share: Option<String>,
     link_share_access_level: Option<String>,
+    team_share_access_level: Option<String>,
 }
 
 async fn share_permission_columns(
@@ -127,7 +128,8 @@ async fn share_permission_columns(
         r#"
         SELECT
             sp."linkShare" as "link_share?",
-            sp."linkShareAccessLevel"::text as "link_share_access_level?"
+            sp."linkShareAccessLevel"::text as "link_share_access_level?",
+            sp."teamShareAccessLevel"::text as "team_share_access_level?"
         FROM "SharePermission" sp
         JOIN "DocumentPermission" dp ON dp."sharePermissionId" = sp.id
         WHERE dp."documentId" = $1
@@ -137,6 +139,53 @@ async fn share_permission_columns(
     .fetch_one(pool)
     .await
     .unwrap()
+}
+
+/// The access levels of the document's direct (not project-granted) team-source
+/// `entity_access` rows for `team_id`. Empty when the team has no row.
+async fn team_entity_access_levels(
+    pool: &Pool<Postgres>,
+    document_id: &str,
+    team_id: uuid::Uuid,
+) -> Vec<String> {
+    let document_id = macro_uuid::string_to_uuid(document_id).unwrap();
+
+    sqlx::query_scalar!(
+        r#"
+        SELECT access_level::text as "access_level!"
+        FROM entity_access
+        WHERE entity_id = $1
+          AND entity_type = 'document'
+          AND source_type = 'team'
+          AND source_id = $2
+          AND granted_from_project_id IS NULL
+        "#,
+        document_id,
+        &team_id.to_string(),
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+}
+
+/// Edit args that only touch the team share.
+fn edit_team_share_args(
+    document_id: &str,
+    team_share_access_level: Option<Option<AccessLevel>>,
+) -> EditDocumentRepoArgs {
+    EditDocumentRepoArgs {
+        document_id: document_id.to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: None,
+            channel_share_permissions: None,
+            team_share_access_level,
+        }),
+        revoke_non_owner_user_access: false,
+        file_type: None,
+    }
 }
 
 async fn insert_non_owner_user_access(pool: &Pool<Postgres>) {
@@ -584,6 +633,7 @@ async fn test_edit_document_public_to_null_revokes_non_owner_access(pool: Pool<P
             link_share: Some(None),
             link_share_access_level: Some(None),
             channel_share_permissions: None,
+            team_share_access_level: None,
         }),
         revoke_non_owner_user_access: true,
         file_type: None,
@@ -617,6 +667,7 @@ async fn test_edit_document_public_to_team_revokes_non_owner_access(pool: Pool<P
             link_share: Some(Some(LinkShare::Team)),
             link_share_access_level: Some(Some(AccessLevel::Comment)),
             channel_share_permissions: None,
+            team_share_access_level: None,
         }),
         revoke_non_owner_user_access: true,
         file_type: None,
@@ -650,6 +701,7 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
             link_share: None,
             link_share_access_level: Some(Some(AccessLevel::Edit)),
             channel_share_permissions: None,
+            team_share_access_level: None,
         }),
         revoke_non_owner_user_access: false,
         file_type: None,
@@ -670,6 +722,7 @@ async fn test_edit_document_omitted_link_share_does_not_revoke(pool: Pool<Postgr
             link_share: None,
             link_share_access_level: Some(None),
             channel_share_permissions: None,
+            team_share_access_level: None,
         }),
         revoke_non_owner_user_access: false,
         file_type: None,
@@ -705,6 +758,7 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
             link_share: Some(Some(LinkShare::Public)),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
             channel_share_permissions: None,
+            team_share_access_level: None,
         }),
         revoke_non_owner_user_access: false,
         file_type: None,
@@ -1021,6 +1075,312 @@ async fn test_share_with_explicit_team_id(pool: Pool<Postgres>) {
         .find(|r| r.source_id == "a0000000-0000-0000-0000-000000000001")
         .unwrap();
     assert_eq!(t1.access_level, Some("comment".to_string()));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_team_share_sets_column_and_team_access(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(edit_team_share_args(
+        TEST_DOCUMENT_ID,
+        Some(Some(AccessLevel::Comment)),
+    ))
+    .await
+    .unwrap();
+
+    let columns = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(columns.team_share_access_level.as_deref(), Some("comment"));
+    // Link share is left alone
+    assert_eq!(columns.link_share.as_deref(), Some("PUBLIC"));
+    assert_eq!(columns.link_share_access_level.as_deref(), Some("view"));
+
+    assert_eq!(
+        team_entity_access_levels(&pool, TEST_DOCUMENT_ID, TEST_TEAM_ID).await,
+        vec!["comment".to_string()]
+    );
+    // The owner's own row is untouched
+    assert_eq!(
+        direct_user_access_sources(&pool).await,
+        vec![TEST_DOCUMENT_OWNER_ID.to_string()]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_team_share_changes_level_in_place(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(edit_team_share_args(
+        TEST_DOCUMENT_ID,
+        Some(Some(AccessLevel::Comment)),
+    ))
+    .await
+    .unwrap();
+    repo.edit_document(edit_team_share_args(
+        TEST_DOCUMENT_ID,
+        Some(Some(AccessLevel::Edit)),
+    ))
+    .await
+    .unwrap();
+
+    let columns = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(columns.team_share_access_level.as_deref(), Some("edit"));
+    assert_eq!(
+        team_entity_access_levels(&pool, TEST_DOCUMENT_ID, TEST_TEAM_ID).await,
+        vec!["edit".to_string()],
+        "the team row is updated in place, not duplicated"
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_team_share_clear_removes_column_and_team_access(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(edit_team_share_args(
+        TEST_DOCUMENT_ID,
+        Some(Some(AccessLevel::Edit)),
+    ))
+    .await
+    .unwrap();
+    repo.edit_document(edit_team_share_args(TEST_DOCUMENT_ID, Some(None)))
+        .await
+        .unwrap();
+
+    let columns = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(columns.team_share_access_level, None);
+    assert!(
+        team_entity_access_levels(&pool, TEST_DOCUMENT_ID, TEST_TEAM_ID)
+            .await
+            .is_empty()
+    );
+    assert_eq!(
+        direct_user_access_sources(&pool).await,
+        vec![TEST_DOCUMENT_OWNER_ID.to_string()]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_omitted_team_share_leaves_it_unchanged(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.edit_document(edit_team_share_args(
+        TEST_DOCUMENT_ID,
+        Some(Some(AccessLevel::Edit)),
+    ))
+    .await
+    .unwrap();
+
+    // A later link-share-only edit must not touch the team share
+    repo.edit_document(EditDocumentRepoArgs {
+        document_id: TEST_DOCUMENT_ID.to_string(),
+        document_name: None,
+        project_id: None,
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: Some(None),
+            link_share_access_level: Some(None),
+            channel_share_permissions: None,
+            team_share_access_level: None,
+        }),
+        revoke_non_owner_user_access: false,
+        file_type: None,
+    })
+    .await
+    .unwrap();
+
+    let columns = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(columns.link_share, None);
+    assert_eq!(columns.team_share_access_level.as_deref(), Some("edit"));
+    assert_eq!(
+        team_entity_access_levels(&pool, TEST_DOCUMENT_ID, TEST_TEAM_ID).await,
+        vec!["edit".to_string()]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_team_share_rejects_owner_level(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    let result = repo
+        .edit_document(edit_team_share_args(
+            TEST_DOCUMENT_ID,
+            Some(Some(AccessLevel::Owner)),
+        ))
+        .await;
+
+    assert!(result.is_err());
+    let columns = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(columns.team_share_access_level, None);
+    assert!(
+        team_entity_access_levels(&pool, TEST_DOCUMENT_ID, TEST_TEAM_ID)
+            .await
+            .is_empty()
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_team_share_without_team_errors_and_rolls_back(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    let metadata = repo
+        .create_document(
+            create_document_args("macro|no-team@user.com", false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    let result = repo
+        .edit_document(EditDocumentRepoArgs {
+            document_name: Some("renamed".to_string()),
+            ..edit_team_share_args(&metadata.document_id, Some(Some(AccessLevel::Comment)))
+        })
+        .await;
+
+    assert!(result.is_err());
+
+    // The whole edit is rolled back: neither the column nor the rename stuck
+    let columns = share_permission_columns(&pool, &metadata.document_id).await;
+    assert_eq!(columns.team_share_access_level, None);
+    let name = repo
+        .get_document_metadata(&metadata.document_id)
+        .await
+        .unwrap()
+        .document_name;
+    assert_eq!(name, "task");
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_edit_document_clear_team_share_without_team_is_noop(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    let metadata = repo
+        .create_document(
+            create_document_args("macro|no-team@user.com", false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    repo.edit_document(edit_team_share_args(&metadata.document_id, Some(None)))
+        .await
+        .unwrap();
+
+    let columns = share_permission_columns(&pool, &metadata.document_id).await;
+    assert_eq!(columns.team_share_access_level, None);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_set_team_share_writes_column(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.set_team_share(TEST_DOCUMENT_ID, true).await.unwrap();
+
+    let columns = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(columns.team_share_access_level.as_deref(), Some("edit"));
+    assert_eq!(
+        team_entity_access_levels(&pool, TEST_DOCUMENT_ID, TEST_TEAM_ID).await,
+        vec!["edit".to_string()]
+    );
+
+    repo.set_team_share(TEST_DOCUMENT_ID, false).await.unwrap();
+
+    let columns = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(columns.team_share_access_level, None);
+    assert!(
+        team_entity_access_levels(&pool, TEST_DOCUMENT_ID, TEST_TEAM_ID)
+            .await
+            .is_empty()
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_get_team_share_reads_column(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    // Sharing through the share dialog (the column) is what the toggle reports
+    repo.edit_document(edit_team_share_args(
+        TEST_DOCUMENT_ID,
+        Some(Some(AccessLevel::Comment)),
+    ))
+    .await
+    .unwrap();
+
+    let state = repo.get_team_share(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(state.team_id, Some(TEST_TEAM_ID));
+    assert!(state.shared_with_team);
+
+    repo.edit_document(edit_team_share_args(TEST_DOCUMENT_ID, Some(None)))
+        .await
+        .unwrap();
+
+    let state = repo.get_team_share(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(state.team_id, Some(TEST_TEAM_ID));
+    assert!(!state.shared_with_team);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_share_with_team_writes_comment_column(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.share_with_team(&TEST_TEAM_ID, TEST_DOCUMENT_ID)
+        .await
+        .unwrap();
+
+    let columns = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(columns.team_share_access_level.as_deref(), Some("comment"));
+    assert_eq!(
+        team_entity_access_levels(&pool, TEST_DOCUMENT_ID, TEST_TEAM_ID).await,
+        vec!["comment".to_string()]
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn test_share_with_team_does_not_downgrade_existing_edit_share(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.set_team_share(TEST_DOCUMENT_ID, true).await.unwrap();
+    repo.share_with_team(&TEST_TEAM_ID, TEST_DOCUMENT_ID)
+        .await
+        .unwrap();
+
+    let columns = share_permission_columns(&pool, TEST_DOCUMENT_ID).await;
+    assert_eq!(columns.team_share_access_level.as_deref(), Some("edit"));
+    assert_eq!(
+        team_entity_access_levels(&pool, TEST_DOCUMENT_ID, TEST_TEAM_ID).await,
+        vec!["edit".to_string()]
+    );
 }
 
 #[sqlx::test(
@@ -1423,6 +1783,7 @@ async fn test_edit_document_channel_share_creates_user_item_access(pool: Pool<Po
                 channel_id: channel_id.to_string(),
                 access_level: Some(AccessLevel::View),
             }]),
+            team_share_access_level: None,
         }),
         revoke_non_owner_user_access: false,
         file_type: None,
@@ -1496,6 +1857,7 @@ async fn test_edit_document_channel_share_idempotent(pool: Pool<Postgres>) {
                 channel_id: channel_id.to_string(),
                 access_level: Some(AccessLevel::View),
             }]),
+            team_share_access_level: None,
         }),
         revoke_non_owner_user_access: false,
         file_type: None,

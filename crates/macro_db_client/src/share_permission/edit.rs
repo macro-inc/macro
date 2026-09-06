@@ -17,6 +17,12 @@ pub async fn edit_share_permission(
     share_permission_id: &str,
     share_permission: &UpdateSharePermissionRequestV2,
 ) -> anyhow::Result<()> {
+    // Team sharing writes a team row into `entity_access` and needs the owner's team, which the
+    // thread flow does not resolve yet. Fail loudly rather than silently dropping the field.
+    if share_permission.changes_team_share() {
+        anyhow::bail!("sharing {entity_type:?} items with a team is not supported");
+    }
+
     // The optional update fields determine which assignments are present, so this query must be
     // assembled dynamically. Every value remains bound; only trusted SQL fragments are appended.
     let mut query =

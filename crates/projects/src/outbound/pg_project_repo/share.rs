@@ -35,6 +35,7 @@ pub(super) async fn get_project_share_permission(
             permission.id,
             permission."linkShare" AS "link_share?",
             permission."linkShareAccessLevel" AS "link_share_access_level?: AccessLevel",
+            permission."teamShareAccessLevel" AS "team_share_access_level?: AccessLevel",
             project."userId" AS owner,
             COALESCE(
                 json_agg(json_build_object(
@@ -75,6 +76,7 @@ pub(super) async fn get_project_share_permission(
         link_share_access_level: row.link_share_access_level,
         owner: row.owner,
         channel_share_permissions,
+        team_share_access_level: row.team_share_access_level,
     })
 }
 
@@ -93,14 +95,16 @@ pub(super) async fn create_project_share_permission(
         INSERT INTO "SharePermission" (
             "linkShare",
             "linkShareAccessLevel",
+            "teamShareAccessLevel",
             "createdAt",
             "updatedAt"
         )
-        VALUES ($1, $2, NOW(), NOW())
+        VALUES ($1, $2, $3, NOW(), NOW())
         RETURNING id
         "#,
         link_share,
         link_share_access_level as _,
+        permission.team_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;
@@ -161,6 +165,16 @@ pub(super) async fn edit_project_share_permission(
     };
     let link_share = link_share.map(|value| value.to_string());
 
+    let update_team_share = update.changes_team_share();
+    let team_share_access_level = update.team_share_access_level.flatten();
+    // Resolve the owner's team before touching any row so a project whose owner has no team
+    // fails the whole edit instead of leaving a dangling column value.
+    let owner_team_id = if update_team_share {
+        resolve_owner_team_id(transaction, project_id, team_share_access_level.is_some()).await?
+    } else {
+        None
+    };
+
     sqlx::query!(
         r#"
         UPDATE "SharePermission"
@@ -173,6 +187,10 @@ pub(super) async fn edit_project_share_permission(
                 WHEN $4 THEN NULL
                 ELSE "linkShareAccessLevel"
             END,
+            "teamShareAccessLevel" = CASE
+                WHEN $6 THEN $7::"AccessLevel"
+                ELSE "teamShareAccessLevel"
+            END,
             "updatedAt" = NOW()
         WHERE id = $1
         "#,
@@ -181,17 +199,33 @@ pub(super) async fn edit_project_share_permission(
         link_share,
         update_link_share_access_level,
         link_share_access_level as _,
+        update_team_share,
+        team_share_access_level as _,
     )
     .execute(transaction.as_mut())
     .await?;
+
+    let entity_id = project_id
+        .parse()
+        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+
+    // Mirror the team share into `entity_access`, fanning out to every nested entity. When the
+    // owner has no team there is nothing to grant or revoke (a set was already rejected above).
+    if let Some(team_id) = owner_team_id.as_ref() {
+        entity_access_db_utils::set_team_entity_access(
+            transaction,
+            &entity_id,
+            EntityType::Project,
+            team_id,
+            team_share_access_level,
+        )
+        .await?;
+    }
 
     let Some(channel_updates) = update.channel_share_permissions.as_ref() else {
         return Ok(());
     };
 
-    let entity_id = project_id
-        .parse()
-        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
     entity_access_db_utils::update_entity_access_channel_share_permissions(
         transaction,
         &entity_id,
@@ -247,4 +281,29 @@ pub(super) async fn edit_project_share_permission(
         }
     }
     Ok(())
+}
+
+/// Look up the team of the project's owner for a team-share change.
+///
+/// Returns `None` when the owner is not on a team, which is only acceptable when the team share
+/// is being cleared; granting a level to a nonexistent team is rejected so the column never
+/// claims a share that has no `entity_access` rows behind it.
+async fn resolve_owner_team_id(
+    transaction: &mut Transaction<'_, Postgres>,
+    project_id: &str,
+    granting: bool,
+) -> Result<Option<macro_uuid::Uuid>, sqlx::Error> {
+    let owner = sqlx::query_scalar!(
+        r#"SELECT "userId" FROM "Project" WHERE id = $1"#,
+        project_id
+    )
+    .fetch_one(transaction.as_mut())
+    .await?;
+    let team_id = share_permission_db_utils::get_user_team_id(transaction.as_mut(), &owner).await?;
+    if granting && team_id.is_none() {
+        return Err(sqlx::Error::InvalidArgument(format!(
+            "project {project_id} cannot be shared with a team: its owner is not in a team"
+        )));
+    }
+    Ok(team_id)
 }

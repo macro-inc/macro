@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"SharePermission\" (\n                \"linkShare\",\n                \"linkShareAccessLevel\",\n                \"teamShareAccessLevel\",\n                \"createdAt\",\n                \"updatedAt\"\n            )\n            VALUES ($1, $2, $3, NOW(), NOW())\n            RETURNING id;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "4ede552c3ad2596cbf05130339e4ae4635c789cdc3176652bdeebc074f3a4151"
+}

@@ -207,6 +207,7 @@ fn share_policy_input(
         link_share,
         link_share_access_level,
         channel_share_permissions: None,
+        team_share_access_level: MaybeUndefined::Undefined,
     }
 }
 
@@ -310,8 +311,36 @@ fn share_policy_validation_requires_access_levels_for_channel_grants() {
                 channel_id: "channel-1".into(),
                 access_level: None,
             }]),
+            team_share_access_level: MaybeUndefined::Undefined,
         },
     }];
     let error = super::validate_share_policy_inputs(&inputs).unwrap_err();
     assert!(error.message.contains("accessLevel is required"));
+}
+
+#[test]
+fn share_policy_validation_rejects_owner_team_share() {
+    let mut input = share_policy_update_input(MaybeUndefined::Undefined, MaybeUndefined::Undefined);
+    input.policy.team_share_access_level = MaybeUndefined::Value(GraphqlEntityAccessLevel::Owner);
+    let error = super::validate_share_policy_inputs(std::slice::from_ref(&input)).unwrap_err();
+    assert!(error.message.contains("teamShareAccessLevel"));
+}
+
+#[test]
+fn share_policy_team_share_maps_omitted_null_and_value() {
+    let omitted = share_policy_input(MaybeUndefined::Undefined, MaybeUndefined::Undefined);
+    assert_eq!(omitted.into_model().team_share_access_level, None);
+
+    let mut cleared = share_policy_input(MaybeUndefined::Undefined, MaybeUndefined::Undefined);
+    cleared.team_share_access_level = MaybeUndefined::Null;
+    assert_eq!(cleared.into_model().team_share_access_level, Some(None));
+
+    let mut shared = share_policy_input(MaybeUndefined::Undefined, MaybeUndefined::Undefined);
+    shared.team_share_access_level = MaybeUndefined::Value(GraphqlEntityAccessLevel::Comment);
+    assert_eq!(
+        shared.into_model().team_share_access_level,
+        Some(Some(
+            models_permissions::share_permission::access_level::AccessLevel::Comment
+        ))
+    );
 }

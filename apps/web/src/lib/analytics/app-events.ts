@@ -166,6 +166,7 @@ export type AppEvents = {
     shareMethod?:
       | 'public_link'
       | 'team_link'
+      | 'team'
       | 'channel'
       | 'forward'
       | 'attachment_public'

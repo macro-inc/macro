@@ -39,6 +39,33 @@ where
     Ok(row.map(|r| TeamLinkShareDefault(r.default_link_share)))
 }
 
+/// Look up the id of the team the user belongs to.
+///
+/// Returns `None` if the user is not on a team. `team_user.user_id` is unique, so a user has at
+/// most one team; the ordering only guards against that constraint ever being relaxed, mirroring
+/// [`get_team_default_link_share`]. Used to resolve *the item owner's* team when an item is
+/// shared with the team, so callers should pass the owner's id rather than the acting user's.
+pub async fn get_user_team_id<'e, E>(
+    executor: E,
+    user_id: &str,
+) -> Result<Option<macro_uuid::Uuid>, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query_scalar!(
+        r#"
+        SELECT team_id
+        FROM team_user
+        WHERE user_id = $1
+        ORDER BY team_role DESC
+        LIMIT 1
+        "#,
+        user_id,
+    )
+    .fetch_optional(executor)
+    .await
+}
+
 /// The result of attempting to insert a channel share permission row.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InsertChannelSharePermissionResult {

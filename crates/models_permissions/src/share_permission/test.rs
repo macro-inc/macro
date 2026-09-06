@@ -16,6 +16,7 @@ fn share(
         link_share_access_level,
         owner: String::new(),
         channel_share_permissions: None,
+        team_share_access_level: None,
     }
 }
 
@@ -144,15 +145,64 @@ fn update_request_round_trip_preserves_omitted_fields() {
         link_share: None,
         link_share_access_level: None,
         channel_share_permissions: None,
+        team_share_access_level: None,
     };
 
     let serialized = serde_json::to_value(&request).unwrap();
     assert!(serialized.get("linkShare").is_none());
     assert!(serialized.get("linkShareAccessLevel").is_none());
+    assert!(serialized.get("teamShareAccessLevel").is_none());
 
     let deserialized: UpdateSharePermissionRequestV2 = serde_json::from_value(serialized).unwrap();
     assert_eq!(deserialized.link_share, None);
     assert_eq!(deserialized.link_share_access_level, None);
+    assert_eq!(deserialized.team_share_access_level, None);
+    assert!(!deserialized.changes_team_share());
+}
+
+#[test]
+fn update_request_distinguishes_omitted_null_and_present_team_share() {
+    let omitted: UpdateSharePermissionRequestV2 = serde_json::from_value(json!({})).unwrap();
+    assert_eq!(omitted.team_share_access_level, None);
+    assert!(!omitted.changes_team_share());
+    assert!(omitted.team_share_access_level_is_grantable());
+
+    let cleared: UpdateSharePermissionRequestV2 =
+        serde_json::from_value(json!({ "teamShareAccessLevel": null })).unwrap();
+    assert_eq!(cleared.team_share_access_level, Some(None));
+    assert!(cleared.changes_team_share());
+    assert!(cleared.team_share_access_level_is_grantable());
+
+    let shared: UpdateSharePermissionRequestV2 =
+        serde_json::from_value(json!({ "teamShareAccessLevel": "edit" })).unwrap();
+    assert_eq!(
+        shared.team_share_access_level,
+        Some(Some(AccessLevel::Edit))
+    );
+    assert!(shared.changes_team_share());
+    assert!(shared.team_share_access_level_is_grantable());
+}
+
+#[test]
+fn update_request_rejects_granting_owner_to_the_team() {
+    let request: UpdateSharePermissionRequestV2 =
+        serde_json::from_value(json!({ "teamShareAccessLevel": "owner" })).unwrap();
+    assert!(request.changes_team_share());
+    assert!(!request.team_share_access_level_is_grantable());
+}
+
+#[test]
+fn share_permission_always_serializes_team_share_access_level() {
+    let mut permission = share(None, None);
+    let serialized = serde_json::to_value(&permission).unwrap();
+    assert_eq!(serialized["teamShareAccessLevel"], serde_json::Value::Null);
+
+    permission.team_share_access_level = Some(AccessLevel::Comment);
+    let serialized = serde_json::to_value(&permission).unwrap();
+    assert_eq!(serialized["teamShareAccessLevel"], json!("comment"));
+
+    let round_tripped: SharePermissionV2 = serde_json::from_value(serialized).unwrap();
+    assert_eq!(round_tripped, permission);
 }
 
 #[test]

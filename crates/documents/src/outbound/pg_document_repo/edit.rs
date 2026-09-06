@@ -78,6 +78,15 @@ pub(super) async fn update_share_permission(
     document_id: &str,
     share_permission: &UpdateSharePermissionRequestV2,
 ) -> Result<(), sqlx::Error> {
+    if !share_permission.team_share_access_level_is_grantable() {
+        return Err(sqlx::Error::InvalidArgument(
+            "owner access cannot be granted to a team".to_string(),
+        ));
+    }
+
+    let document_uuid = macro_uuid::string_to_uuid(document_id)
+        .map_err(|e| sqlx::Error::Protocol(e.to_string()))?;
+
     // Look up the share permission ID for this document
     let share_permission_id = sqlx::query_scalar!(
         r#"
@@ -99,14 +108,57 @@ pub(super) async fn update_share_permission(
 
         entity_access_db_utils::update_entity_access_channel_share_permissions(
             transaction,
-            &macro_uuid::string_to_uuid(document_id).unwrap(),
+            &document_uuid,
             EntityType::Document,
             channel_perms,
         )
         .await?;
     }
 
+    // Mirror the team share column onto the owner's team `entity_access` row.
+    if let Some(team_share_access_level) = share_permission.team_share_access_level {
+        update_team_entity_access(
+            transaction,
+            document_id,
+            &document_uuid,
+            team_share_access_level,
+        )
+        .await?;
+    }
+
     Ok(())
+}
+
+/// Upsert (`Some`) or remove (`None`) the team-source `entity_access` row for the
+/// document owner's team, matching the `"teamShareAccessLevel"` column.
+///
+/// Clearing when the owner has no team is a no-op; setting a level without a team is
+/// an error, since there is no team to grant access to.
+async fn update_team_entity_access(
+    transaction: &mut Transaction<'_, Postgres>,
+    document_id: &str,
+    document_uuid: &macro_uuid::Uuid,
+    team_share_access_level: Option<AccessLevel>,
+) -> Result<(), sqlx::Error> {
+    let owner = get_document_owner(transaction, document_id).await?;
+    let team_id = share_permission_db_utils::get_user_team_id(transaction.as_mut(), &owner).await?;
+
+    match (team_id, team_share_access_level) {
+        (Some(team_id), level) => {
+            entity_access_db_utils::set_team_entity_access(
+                transaction,
+                document_uuid,
+                EntityType::Document,
+                &team_id,
+                level,
+            )
+            .await
+        }
+        (None, Some(_)) => Err(sqlx::Error::InvalidArgument(
+            "document owner does not belong to a team".to_string(),
+        )),
+        (None, None) => Ok(()),
+    }
 }
 
 /// Update the SharePermission row.
@@ -139,6 +191,13 @@ async fn update_share_permission_row(
         query
             .push(r#", "linkShareAccessLevel" = "#)
             .push_bind(access_level);
+    }
+
+    // `None` = unchanged, `Some(None)` = stop sharing with the team, `Some(Some(level))` = share.
+    if let Some(team_share_access_level) = share_permission.team_share_access_level {
+        query
+            .push(r#", "teamShareAccessLevel" = "#)
+            .push_bind(team_share_access_level);
     }
 
     query

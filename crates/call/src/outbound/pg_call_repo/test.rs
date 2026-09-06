@@ -2225,6 +2225,7 @@ async fn patch_call_record_sets_public_link_and_defaults_level_to_view(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: Some(UpdateSharePermissionRequestV2 {
+                team_share_access_level: None,
                 link_share: Some(Some(LinkShare::Public)),
                 link_share_access_level: None,
                 channel_share_permissions: None,
@@ -2254,6 +2255,7 @@ async fn patch_call_record_sets_team_link_and_explicit_level(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: Some(UpdateSharePermissionRequestV2 {
+                team_share_access_level: None,
                 link_share: Some(Some(LinkShare::Team)),
                 link_share_access_level: Some(Some(AccessLevel::Edit)),
                 channel_share_permissions: None,
@@ -2284,6 +2286,7 @@ async fn patch_call_record_explicit_null_disables_link_sharing(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: Some(UpdateSharePermissionRequestV2 {
+                team_share_access_level: None,
                 link_share: Some(None),
                 link_share_access_level: Some(Some(AccessLevel::Edit)),
                 channel_share_permissions: None,
@@ -2319,6 +2322,7 @@ async fn patch_call_record_level_only_update_updates_link_share_access_level(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: Some(UpdateSharePermissionRequestV2 {
+                team_share_access_level: None,
                 link_share: None,
                 link_share_access_level: Some(Some(AccessLevel::Comment)),
                 channel_share_permissions: None,
@@ -2352,6 +2356,7 @@ async fn patch_call_record_adds_channel_share_permission(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: Some(UpdateSharePermissionRequestV2 {
+                team_share_access_level: None,
                 link_share: None,
                 link_share_access_level: None,
                 channel_share_permissions: Some(vec![UpdateChannelSharePermission {
@@ -2427,6 +2432,7 @@ async fn patch_call_record_removes_channel_share_permission(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: Some(UpdateSharePermissionRequestV2 {
+                team_share_access_level: None,
                 link_share: None,
                 link_share_access_level: None,
                 channel_share_permissions: Some(vec![UpdateChannelSharePermission {
@@ -2471,6 +2477,7 @@ async fn patch_call_record_empty_share_permission_update_is_noop(
         &CALL_ARCHIVED,
         &EditCallRecordRequest {
             share_permission: Some(UpdateSharePermissionRequestV2 {
+                team_share_access_level: None,
                 link_share: None,
                 link_share_access_level: None,
                 channel_share_permissions: None,

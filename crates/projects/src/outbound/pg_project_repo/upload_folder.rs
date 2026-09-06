@@ -274,14 +274,16 @@ async fn create_document_share_permission(
         INSERT INTO "SharePermission" (
             "linkShare",
             "linkShareAccessLevel",
+            "teamShareAccessLevel",
             "createdAt",
             "updatedAt"
         )
-        VALUES ($1, $2, NOW(), NOW())
+        VALUES ($1, $2, $3, NOW(), NOW())
         RETURNING id
         "#,
         link_share,
         link_share_access_level as _,
+        permission.team_share_access_level as _,
     )
     .fetch_one(transaction.as_mut())
     .await?;

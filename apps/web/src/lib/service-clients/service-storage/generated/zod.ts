@@ -2067,6 +2067,14 @@ export const editCallRecordBody = zod
                 .describe('Ordered from least to most access top -> bottom'),
             ])
             .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
         }),
       ])
       .optional(),
@@ -7094,6 +7102,14 @@ export const editDocumentBody = zod
                 .describe('Ordered from least to most access top -> bottom'),
             ])
             .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
         }),
       ])
       .optional(),
@@ -8011,8 +8027,8 @@ export const getDocumentTeamShareResponse = zod
 
 /**
  * @summary Sets the team-share state of a document. Sharing grants the document
-owner's team Edit access; unsharing removes the team's access. Requires
-Edit access on the document.
+owner's team Edit access; unsharing removes the team's access. Only the
+document owner may change it; anyone else is rejected with 401.
  */
 export const setDocumentTeamShareParams = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -27210,6 +27226,14 @@ export const getProjectPermissionsV2Response = zod.object({
     ])
     .optional(),
   owner: zod.string().describe('The owner of the item'),
+  teamShareAccessLevel: zod
+    .union([
+      zod.null(),
+      zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+    ])
+    .optional(),
 });
 
 /**
@@ -27970,6 +27994,14 @@ export const editThreadV2Body = zod.object({
               .describe('Ordered from least to most access top -> bottom'),
           ])
           .optional(),
+        teamShareAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
       }),
     ])
     .optional(),
@@ -28101,6 +28133,14 @@ export const getDocumentPermissionsV2Response = zod.object({
       ])
       .optional(),
     owner: zod.string().describe('The owner of the item'),
+    teamShareAccessLevel: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['view', 'comment', 'edit', 'owner'])
+          .describe('Ordered from least to most access top -> bottom'),
+      ])
+      .optional(),
   }),
 });
 
@@ -28153,6 +28193,14 @@ export const editProjectV2Body = zod.object({
           ])
           .optional(),
         linkShareAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
+        teamShareAccessLevel: zod
           .union([
             zod.null(),
             zod

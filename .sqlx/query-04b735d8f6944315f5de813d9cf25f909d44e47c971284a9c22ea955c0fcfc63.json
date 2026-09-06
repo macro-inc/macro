@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT tu.team_id\n        FROM \"Document\" d\n        JOIN team_user tu ON tu.user_id = d.owner\n        WHERE d.id = $1\n        LIMIT 1\n        ",
+  "query": "\n        SELECT team_id\n        FROM team_user\n        WHERE user_id = $1\n        ORDER BY team_role DESC\n        LIMIT 1\n        ",
   "describe": {
     "columns": [
       {
@@ -18,5 +18,5 @@
       false
     ]
   },
-  "hash": "de888f70b426374eb436dfab5e58cab5a5d5423325a7834515c9c6a327f25f50"
+  "hash": "04b735d8f6944315f5de813d9cf25f909d44e47c971284a9c22ea955c0fcfc63"
 }

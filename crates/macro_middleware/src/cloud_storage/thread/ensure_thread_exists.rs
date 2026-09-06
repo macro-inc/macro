@@ -74,6 +74,7 @@ pub async fn insert_thread_share_permissions(
         link_share_access_level: None,
         owner: owner_id.to_string(),
         channel_share_permissions: None,
+        team_share_access_level: None,
     };
 
     let mut tx = db.begin().await.context("Failed to start transaction")?;

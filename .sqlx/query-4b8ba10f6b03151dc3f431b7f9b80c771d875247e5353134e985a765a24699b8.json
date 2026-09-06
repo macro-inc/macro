@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"SharePermission\" sp\n        SET \"teamShareAccessLevel\" = COALESCE(sp.\"teamShareAccessLevel\", 'comment'::\"AccessLevel\"),\n            \"updatedAt\" = NOW()\n        FROM \"DocumentPermission\" dp\n        WHERE dp.\"sharePermissionId\" = sp.id\n          AND dp.\"documentId\" = $1\n        RETURNING sp.\"teamShareAccessLevel\" as \"team_share_access_level!: AccessLevel\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_share_access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "4b8ba10f6b03151dc3f431b7f9b80c771d875247e5353134e985a765a24699b8"
+}

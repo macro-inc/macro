@@ -7,6 +7,7 @@
 import type { SharePermissionV2ChannelSharePermissions } from './sharePermissionV2ChannelSharePermissions';
 import type { SharePermissionV2LinkShare } from './sharePermissionV2LinkShare';
 import type { SharePermissionV2LinkShareAccessLevel } from './sharePermissionV2LinkShareAccessLevel';
+import type { SharePermissionV2TeamShareAccessLevel } from './sharePermissionV2TeamShareAccessLevel';
 
 export interface SharePermissionV2 {
   /** The channel share permissions for the item */
@@ -17,4 +18,5 @@ export interface SharePermissionV2 {
   linkShareAccessLevel?: SharePermissionV2LinkShareAccessLevel;
   /** The owner of the item */
   owner: string;
+  teamShareAccessLevel?: SharePermissionV2TeamShareAccessLevel;
 }

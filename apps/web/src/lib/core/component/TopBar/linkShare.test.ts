@@ -77,14 +77,13 @@ describe('link share copy', () => {
     });
   });
 
-  it('distinguishes team links from explicit team or channel sharing', () => {
-    const copy = getLinkShareScopeCopy('TEAM');
-
-    expect(copy.title).toBe('Team link');
-    expect(copy.description).toContain("Members of the owner's team");
-    expect(copy.description).toContain(
-      'does not share it directly with a team or channel'
-    );
+  it('points team links at the explicit team share in People with access', () => {
+    expect(getLinkShareScopeCopy('TEAM')).toEqual({
+      label: 'Team',
+      title: 'Team link',
+      description:
+        "Members of the owner's team with the link can access this item. To share it with the whole team, use the Team row under People with access.",
+    });
   });
 });
 
@@ -106,6 +105,39 @@ describe('getShareStatus', () => {
   it('uses link-specific tooltip copy for team links', () => {
     expect(getShareStatus('TEAM', false).tooltip).toBe(
       getLinkShareScopeCopy('TEAM').description
+    );
+  });
+
+  it.each([
+    ['PUBLIC', false, 'Public'],
+    ['TEAM', false, 'Team'],
+    [null, false, 'Shared'],
+    [null, true, 'Shared'],
+  ] as const)(
+    'keeps the %s link label over an explicit team share (channels: %s) and otherwise reads %s',
+    (linkShare, hasExplicitShares, expectedLabel) => {
+      expect(getShareStatus(linkShare, hasExplicitShares, true).label).toBe(
+        expectedLabel
+      );
+    }
+  );
+
+  it('describes a team-only share without mentioning channels', () => {
+    expect(getShareStatus(null, false, true)).toEqual({
+      label: 'Shared',
+      tooltip: "Shared with everyone on the owner's team.",
+    });
+  });
+
+  it('describes a team share alongside channel shares', () => {
+    expect(getShareStatus(null, true, true).tooltip).toBe(
+      "Shared with everyone on the owner's team and specific people or channels."
+    );
+  });
+
+  it('defaults to no team share', () => {
+    expect(getShareStatus(null, true)).toEqual(
+      getShareStatus(null, true, false)
     );
   });
 });

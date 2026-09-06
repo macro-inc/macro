@@ -27,6 +27,10 @@ pub struct SharePermissionV2 {
     /// The channel share permissions for the item
     #[serde(skip_serializing_if = "Option::is_none")]
     pub channel_share_permissions: Option<Vec<ChannelSharePermission>>,
+    /// The access level granted to every member of the owner's team, or `None` when the item is
+    /// not shared with the team. Distinct from a `Team` link share, which only grants access to
+    /// team members who have the link.
+    pub team_share_access_level: Option<AccessLevel>,
 }
 
 /// The owner's team link-share preference. `Some(scope)` = the team wants new items link-shared
@@ -43,6 +47,7 @@ impl SharePermissionV2 {
             link_share_access_level,
             owner: String::new(),
             channel_share_permissions: None,
+            team_share_access_level: None,
         }
     }
 
@@ -123,6 +128,29 @@ pub struct UpdateSharePermissionRequestV2 {
     pub link_share_access_level: Option<Option<AccessLevel>>,
     /// Any channel share permissions to be created/updated/removed
     pub channel_share_permissions: Option<Vec<UpdateChannelSharePermission>>,
+    /// The access level to grant every member of the owner's team. Omit to leave unchanged or
+    /// pass `null` to stop sharing with the team. Only the item owner may change this, and
+    /// `owner` cannot be granted to a team.
+    #[serde(
+        default,
+        deserialize_with = "double_option",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub team_share_access_level: Option<Option<AccessLevel>>,
+}
+
+impl UpdateSharePermissionRequestV2 {
+    /// Whether the request changes the team share (either sets a level or clears it).
+    pub fn changes_team_share(&self) -> bool {
+        self.team_share_access_level.is_some()
+    }
+
+    /// Whether the requested team share level can be granted to a team. `Owner` cannot be: it
+    /// would let every teammate act as the item's owner, so callers should reject it with a
+    /// bad-request error.
+    pub fn team_share_access_level_is_grantable(&self) -> bool {
+        !matches!(self.team_share_access_level, Some(Some(AccessLevel::Owner)))
+    }
 }
 
 #[cfg(test)]

@@ -8,6 +8,13 @@ VALUES
     ('macro|owner@test.com', 'owner@test.com', 'stripe-owner', 'a1111111-1111-1111-1111-111111111111'),
     ('macro|viewer@test.com', 'viewer@test.com', 'stripe-viewer', 'a2222222-2222-2222-2222-222222222222');
 
+-- The owner is on a team (link sharing off by default) so projects can be shared with it;
+-- the viewer deliberately has no team.
+INSERT INTO public.team (id, name, owner_id, seat_count, default_link_share)
+VALUES ('c1111111-1111-1111-1111-111111111111', 'owner-team', 'macro|owner@test.com', 1, NULL);
+INSERT INTO public.team_user (team_id, user_id, team_role)
+VALUES ('c1111111-1111-1111-1111-111111111111', 'macro|owner@test.com', 'owner');
+
 INSERT INTO public."Project"
     (id, name, "userId", "parentId", "createdAt", "updatedAt", "deletedAt", "uploadPending", "uploadRequestId")
 VALUES

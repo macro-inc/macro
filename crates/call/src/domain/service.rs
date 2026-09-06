@@ -1381,6 +1381,18 @@ impl<
 
         let call_id = macro_uuid::string_to_uuid(&entity.entity_id)
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
+        // Calls share with the creator's team through `share_with_team`; the generic team share
+        // field on the share permission is not wired for calls, so reject it instead of
+        // silently dropping it.
+        if request
+            .share_permission
+            .as_ref()
+            .is_some_and(|share_permission| share_permission.changes_team_share())
+        {
+            return Err(CallError::InvalidRequest(
+                "use shareWithTeam to share a call with your team".into(),
+            ));
+        }
         let actor_user_id = event_actor_user_id(receipt.auth());
         let custom_name = request.custom_name.clone();
         let share_with_team = request.share_with_team;

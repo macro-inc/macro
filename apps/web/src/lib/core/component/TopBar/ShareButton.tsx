@@ -32,7 +32,7 @@ import {
 } from '@core/signal/permissions';
 import { idToEmail } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import type { ResultError } from '@core/util/result';
+import { type ResultError, thrownResultErrorHasCode } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import UserCircle from '@icon/wide-user-circle.svg';
 import WideUsers from '@icon/wide-users.svg';
@@ -45,7 +45,14 @@ import IconEye from '@phosphor/eye.svg';
 import IconLink from '@phosphor/link.svg';
 import IconEdit from '@phosphor/pencil.svg';
 import IconShared from '@phosphor/share.svg';
+import UsersThreeIcon from '@phosphor/users-three.svg';
 import IconX from '@phosphor/x.svg';
+import { queryReadyGate } from '@queries/gate';
+import {
+  isTeamShareItemType,
+  useSetTeamShareAccessLevelMutation,
+} from '@queries/storage/team-share';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import {
   blockNameToItemType,
@@ -99,6 +106,12 @@ import {
   type LinkSharePayload,
   type LinkShareScope,
 } from './linkShare';
+import { registerSharePermissionsRefetch } from './sharePermissionsRefetch';
+import {
+  buildTeamSharePayload,
+  getTeamShareRowLabel,
+  TEAM_SHARE_ROW_COPY,
+} from './teamShare';
 
 false && clickOutside;
 
@@ -147,10 +160,7 @@ const permissionsBlockResource = createBlockResource(
 
 createBlockEffect(() => {
   const [, { refetch }] = permissionsBlockResource;
-  setRefetchArray((prev) => [...prev, refetch]);
-  onCleanup(() => {
-    setRefetchArray((prev) => prev.filter((r) => r !== refetch));
-  });
+  onCleanup(registerSharePermissionsRefetch(refetch));
 });
 
 const accessLevelText = (accessLevel?: AccessLevel | null) => {
@@ -170,16 +180,6 @@ const accessLevelText = (accessLevel?: AccessLevel | null) => {
     default:
       return 'Remove Access';
   }
-};
-
-const [refetchArray, setRefetchArray] = createSignal<(() => void)[]>([]);
-export const refetchDocumentShareButtonResource = () => {
-  const refetchArray_ = refetchArray();
-  if (refetchArray_.length === 0) {
-    console.warn('no document share permission refetch functions initialized');
-    return;
-  }
-  refetchArray_.forEach((refetch) => refetch());
 };
 
 export function getShareDrawerRecipientInput(): HTMLElement | null {
@@ -267,10 +267,57 @@ function GroupChannelLabel(props: { channelId: string; fallbackName: string }) {
   );
 }
 
+interface TeamShareRowProps {
+  label: string;
+  accessLevel: AccessLevel | null | undefined;
+  /** Only the item's owner may change the team share. */
+  canEdit: boolean;
+  setAccessLevel: (accessLevel: AccessLevel | null) => void;
+}
+
+/**
+ * "People with access" row for the explicit team share: everyone on the
+ * owner's team at one level. Distinct from a `TEAM` link, which only grants
+ * access to teammates who open the link.
+ */
+function TeamShareRow(props: TeamShareRowProps) {
+  return (
+    <div class="flex justify-between">
+      <div class="flex items-center gap-2 overflow-hidden">
+        <UsersThreeIcon class="shrink-0 size-4" />
+        <div class="min-w-0">
+          <div class="font-medium truncate">{props.label}</div>
+          <div class="text-xs text-ink-muted truncate">
+            {TEAM_SHARE_ROW_COPY.subtitle}
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center">
+        <Show
+          when={props.canEdit}
+          fallback={
+            <div class="font-medium text-ink-muted text-xs">
+              {props.accessLevel == null
+                ? 'No access'
+                : accessLevelText(props.accessLevel)}
+            </div>
+          }
+        >
+          <ShareOptions
+            permissions={props.accessLevel}
+            setPermissions={props.setAccessLevel}
+          />
+        </Show>
+      </div>
+    </div>
+  );
+}
+
 interface LinkSharingControlsProps {
   linkShare: LinkShare | null | undefined;
   linkShareAccessLevel: AccessLevel | null | undefined;
   hasExplicitShares: boolean;
+  hasTeamShare: boolean;
   setLinkShareScope: (scope: LinkShareScope) => void;
   setLinkShareAccessLevel: (accessLevel: AccessLevel | null) => void;
   copyLink: () => void;
@@ -280,7 +327,11 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
   const scope = () => getLinkShareScope(props.linkShare);
   const scopeCopy = () => getLinkShareScopeCopy(scope());
   const shareStatus = () =>
-    getShareStatus(props.linkShare, props.hasExplicitShares);
+    getShareStatus(
+      props.linkShare,
+      props.hasExplicitShares,
+      props.hasTeamShare
+    );
 
   return (
     <div class="flex flex-col gap-3 p-4 text-sm text-ink">
@@ -345,6 +396,11 @@ interface MobileShareDrawerProps {
   formattedOwner: string;
   linkShare: LinkShare | null | undefined;
   linkShareAccessLevel: AccessLevel | null | undefined;
+  showTeamShareRow: boolean;
+  teamShareRowLabel: string;
+  teamShareAccessLevel: AccessLevel | null | undefined;
+  canEditTeamShare: boolean;
+  setTeamShareAccessLevel: (accessLevel: AccessLevel | null) => void;
   refetch: () => void;
   navigateToChannel: (channelId: string) => void;
   removeChannelAccess: (channelId: string) => void;
@@ -370,7 +426,11 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
 
   const mobileTabs = createMemo((): TabItem[] => {
     const tabs: TabItem[] = [{ value: 'share', label: 'Share' }];
-    if ((props.recipients?.length ?? 0) > 0 || props.owner)
+    if (
+      (props.recipients?.length ?? 0) > 0 ||
+      props.owner ||
+      props.showTeamShareRow
+    )
       tabs.push({ value: 'people', label: 'People' });
     if (
       props.userPermissions === Permissions.OWNER &&
@@ -475,6 +535,14 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                   </div>
                 </div>
               </Show>
+              <Show when={props.showTeamShareRow}>
+                <TeamShareRow
+                  label={props.teamShareRowLabel}
+                  accessLevel={props.teamShareAccessLevel}
+                  canEdit={props.canEditTeamShare}
+                  setAccessLevel={props.setTeamShareAccessLevel}
+                />
+              </Show>
               <For each={props.recipients || []}>
                 {(recipient) => (
                   <div class="flex justify-between">
@@ -545,6 +613,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               linkShare={props.linkShare}
               linkShareAccessLevel={props.linkShareAccessLevel}
               hasExplicitShares={(props.recipients?.length ?? 0) > 0}
+              hasTeamShare={props.teamShareAccessLevel != null}
               setLinkShareScope={props.setLinkShareScope}
               setLinkShareAccessLevel={props.setLinkShareAccessLevel}
               copyLink={props.copyLink}
@@ -850,6 +919,85 @@ export function ShareModal(props: ShareModalProps) {
     return currentPermissions.value.linkShareAccessLevel;
   });
 
+  const teamShareAccessLevel = createMemo(() => {
+    const currentPermissions = permissionsResource.latest;
+    if (!currentPermissions || currentPermissions.isErr()) {
+      return;
+    }
+
+    return currentPermissions.value.teamShareAccessLevel;
+  });
+
+  // Only the literal owner may change the team share (the backend 403s anyone
+  // else), so the owner check is stricter than Card 3's permissions gate.
+  const canEditTeamShare = () =>
+    props.userPermissions === Permissions.OWNER &&
+    (!props.owner || props.owner === userId());
+  const isTeamShareable = () => isTeamShareItemType(props.itemType);
+  // The owner's team is the viewer's team only when the viewer is the owner,
+  // so the query is disabled for everyone else. Reads are gated on readiness
+  // (never suspends) — the nearest boundary is ShareBlockModal's Suspense,
+  // or Layout's for the global share modal.
+  const currentTeamQuery = useCurrentTeamQuery(
+    () => isTeamShareable() && canEditTeamShare()
+  );
+  const ownerTeam = () =>
+    queryReadyGate(currentTeamQuery) ? currentTeamQuery.data?.team : undefined;
+  const showTeamShareRow = () => {
+    if (!isTeamShareable()) return false;
+    if (canEditTeamShare()) return !!ownerTeam();
+    return teamShareAccessLevel() != null;
+  };
+  const teamShareRowLabel = () => getTeamShareRowLabel(ownerTeam()?.name);
+
+  const setTeamShareMutation = useSetTeamShareAccessLevelMutation();
+  const setTeamShareAccessLevel = createCallback(
+    async (accessLevel: AccessLevel | null) => {
+      const itemType = props.itemType;
+      if (!canEditTeamShare() || !isTeamShareItemType(itemType)) return;
+      const payload = buildTeamSharePayload(
+        accessLevel,
+        teamShareAccessLevel()
+      );
+      if (!payload) return;
+
+      const entityLabel = itemType === 'project' ? 'folder' : itemType;
+      try {
+        await setTeamShareMutation.mutateAsync({
+          itemType,
+          id: props.id,
+          ...payload,
+        });
+      } catch (error) {
+        toast.alert(`Failed to change ${entityLabel} access`, {
+          subtext: thrownResultErrorHasCode(error, 'FORBIDDEN')
+            ? `Only the owner can share this ${entityLabel} with the team`
+            : 'Please try again',
+        });
+        return;
+      }
+
+      refetch();
+      const level = payload.teamShareAccessLevel;
+      if (level === null) {
+        toast.success('Removed team access', {
+          subtext: `Your team no longer has access to this ${entityLabel}`,
+        });
+        return;
+      }
+
+      toast.success(`Shared with ${teamShareRowLabel()}`, {
+        subtext: `Everyone on the team can ${accessLevelText(level).toLowerCase()} this ${entityLabel}`,
+      });
+      analytics.track('share_entity', {
+        entityType: itemType,
+        entityId: props.id,
+        shareMethod: 'team',
+        accessLevel: level,
+      });
+    }
+  );
+
   const updateLinkSharePermissions = createCallback(
     async (sharePermission: LinkSharePayload) => {
       const scope = getLinkShareScope(sharePermission.linkShare);
@@ -957,6 +1105,11 @@ export function ShareModal(props: ShareModalProps) {
           formattedOwner={formattedOwner()}
           linkShare={linkShare()}
           linkShareAccessLevel={linkShareAccessLevel()}
+          showTeamShareRow={showTeamShareRow()}
+          teamShareRowLabel={teamShareRowLabel()}
+          teamShareAccessLevel={teamShareAccessLevel()}
+          canEditTeamShare={canEditTeamShare()}
+          setTeamShareAccessLevel={setTeamShareAccessLevel}
           refetch={refetch}
           navigateToChannel={navigateToChannel}
           removeChannelAccess={removeChannelAccess}
@@ -1014,7 +1167,13 @@ export function ShareModal(props: ShareModalProps) {
               </Panel>
 
               {/* Card 2: Recipients — plain border */}
-              <Show when={(recipients()?.length ?? 0) > 0 || !!props.owner}>
+              <Show
+                when={
+                  (recipients()?.length ?? 0) > 0 ||
+                  !!props.owner ||
+                  showTeamShareRow()
+                }
+              >
                 <Panel depth={2} class="rounded-xl bg-dialog">
                   <Panel.Header class="px-4">
                     <span class="text-sm font-medium">
@@ -1055,6 +1214,14 @@ export function ShareModal(props: ShareModalProps) {
                                 </div>
                               </div>
                             </div>
+                          </Show>
+                          <Show when={showTeamShareRow()}>
+                            <TeamShareRow
+                              label={teamShareRowLabel()}
+                              accessLevel={teamShareAccessLevel()}
+                              canEdit={canEditTeamShare()}
+                              setAccessLevel={setTeamShareAccessLevel}
+                            />
                           </Show>
                           <For each={recipients() || []}>
                             {(recipient) => (
@@ -1155,6 +1322,7 @@ export function ShareModal(props: ShareModalProps) {
                       linkShare={linkShare()}
                       linkShareAccessLevel={linkShareAccessLevel()}
                       hasExplicitShares={(recipients()?.length ?? 0) > 0}
+                      hasTeamShare={teamShareAccessLevel() != null}
                       setLinkShareScope={setLinkShareScope}
                       setLinkShareAccessLevel={setLinkShareAccessLevel}
                       copyLink={copyLink}
@@ -1233,7 +1401,8 @@ export function ShareTrigger(props: { copyLink?: () => void }) {
     const sharePermission = result.value;
     return getShareStatus(
       sharePermission.linkShare,
-      (sharePermission.channelSharePermissions?.length ?? 0) > 0
+      (sharePermission.channelSharePermissions?.length ?? 0) > 0,
+      sharePermission.teamShareAccessLevel != null
     );
   });
 

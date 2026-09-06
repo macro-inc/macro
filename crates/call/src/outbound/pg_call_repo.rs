@@ -320,6 +320,7 @@ impl CallRepository for PgCallRepo {
                 channel_id: channel_id.to_string(),
                 access_level: AccessLevel::Edit,
             }]),
+            team_share_access_level: None,
         };
         let link_share = share_permission.link_share.map(|value| value.to_string());
         let link_share_access_level = share_permission.link_share_access_level;

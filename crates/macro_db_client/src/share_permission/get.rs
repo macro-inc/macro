@@ -9,6 +9,7 @@ fn parse_share_permission(
     id: String,
     link_share: Option<String>,
     link_share_access_level: Option<AccessLevel>,
+    team_share_access_level: Option<AccessLevel>,
     owner: String,
     channel_share_permissions: Option<serde_json::Value>,
 ) -> anyhow::Result<SharePermissionV2> {
@@ -29,6 +30,7 @@ fn parse_share_permission(
         link_share_access_level,
         owner,
         channel_share_permissions,
+        team_share_access_level,
     })
 }
 
@@ -142,6 +144,7 @@ pub async fn get_document_share_permission(
                 sp.id as id,
                 sp."linkShare" as "link_share?",
                 sp."linkShareAccessLevel" as "link_share_access_level?: AccessLevel",
+                sp."teamShareAccessLevel" as "team_share_access_level?: AccessLevel",
                 d."owner" as owner,
                 COALESCE(
                     json_agg(json_build_object(
@@ -169,6 +172,7 @@ pub async fn get_document_share_permission(
         result.id,
         result.link_share,
         result.link_share_access_level,
+        result.team_share_access_level,
         result.owner,
         result.channel_share_permissions,
     )
@@ -185,6 +189,7 @@ pub async fn get_chat_share_permission(
                 sp.id as id,
                 sp."linkShare" as "link_share?",
                 sp."linkShareAccessLevel" as "link_share_access_level?: AccessLevel",
+                sp."teamShareAccessLevel" as "team_share_access_level?: AccessLevel",
                 c."userId" as owner,
                 COALESCE(
                     json_agg(json_build_object(
@@ -212,6 +217,7 @@ pub async fn get_chat_share_permission(
         result.id,
         result.link_share,
         result.link_share_access_level,
+        result.team_share_access_level,
         result.owner,
         result.channel_share_permissions,
     )
@@ -228,6 +234,7 @@ pub async fn get_macro_share_permission(
                 sp.id as id,
                 sp."linkShare" as "link_share?",
                 sp."linkShareAccessLevel" as "link_share_access_level?: AccessLevel",
+                sp."teamShareAccessLevel" as "team_share_access_level?: AccessLevel",
                 m."user_id" as owner,
                 COALESCE(
                     json_agg(json_build_object(
@@ -255,6 +262,7 @@ pub async fn get_macro_share_permission(
         result.id,
         result.link_share,
         result.link_share_access_level,
+        result.team_share_access_level,
         result.owner,
         result.channel_share_permissions,
     )

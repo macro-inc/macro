@@ -14,8 +14,8 @@ use crate::domain::{
 use agent::types::{AssistantMessagePart, ChatMessageContent};
 use ai_toolset::{AsyncToolCollection, RequestContext, tool_object::UserToolResponse};
 use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
-    OwnerAccessLevel, ViewAccessLevel,
+    AccessError, AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt,
+    EntityPermission, OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
@@ -352,12 +352,33 @@ where
         let user_id = entity_access_receipt.get_authenticated_user()?;
         let chat_id = &entity_access_receipt.entity().entity_id;
 
-        let old_project_id = self
-            .repo
-            .get_metadata(chat_id)
-            .await
-            .ok()
-            .and_then(|c| c.project_id);
+        let metadata = self.repo.get_metadata(chat_id).await;
+        let old_project_id = match args
+            .share_permission
+            .as_ref()
+            .filter(|share_permission| share_permission.changes_team_share())
+        {
+            Some(share_permission) => {
+                // Sharing a chat with (or unsharing it from) a team is reserved
+                // for the chat's literal owner. An owner-level grant on the chat
+                // is not enough, so the receipt alone cannot authorize it.
+                let chat = metadata?;
+                let acting_user: &str = user_id.as_ref();
+                if chat.user_id != acting_user {
+                    return Err(AccessError::UnauthorizedWithMessage(
+                        "only the chat owner can change team sharing",
+                    )
+                    .into());
+                }
+                if !share_permission.team_share_access_level_is_grantable() {
+                    return Err(ChatErr::BadRequest(
+                        "owner access cannot be granted to a team".to_string(),
+                    ));
+                }
+                chat.project_id
+            }
+            None => metadata.ok().and_then(|chat| chat.project_id),
+        };
         let new_project_id = args.project_id.clone();
         let project_changing =
             new_project_id.is_some() && new_project_id.as_deref() != old_project_id.as_deref();

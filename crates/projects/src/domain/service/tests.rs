@@ -500,6 +500,17 @@ fn share_update() -> UpdateSharePermissionRequestV2 {
         link_share: Some(Some(LinkShare::Public)),
         link_share_access_level: Some(Some(AccessLevel::View)),
         channel_share_permissions: None,
+        team_share_access_level: None,
+    }
+}
+
+/// A share update that only changes the team share: `Some(level)` grants, `None` clears.
+fn team_share_update(level: Option<AccessLevel>) -> UpdateSharePermissionRequestV2 {
+    UpdateSharePermissionRequestV2 {
+        link_share: None,
+        link_share_access_level: None,
+        channel_share_permissions: None,
+        team_share_access_level: Some(level),
     }
 }
 
@@ -1018,6 +1029,126 @@ async fn edit_requires_owner_for_moves_and_share_changes() {
         share_error,
         ProjectError::UnauthorizedWithMessage(_)
     ));
+}
+
+#[tokio::test]
+async fn edit_team_share_requires_the_literal_project_owner() {
+    let project_id = Uuid::new_v4();
+    // No repository expectations: a rejected request must never reach persistence.
+    let repo = MockProjectRepo::new();
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+
+    // Owner *access* on the project is not enough; the actor must be the project's owner.
+    let other_user = service
+        .edit_project(
+            mutation_receipt_with_auth::<EditAccessLevel>(
+                project_id,
+                AccessLevel::Owner,
+                EntityAccessAuth::Authenticated(user_id("macro|other@example.com")),
+            ),
+            basic_project(project_id, None, false),
+            patch_request(None, Some(team_share_update(Some(AccessLevel::View)))),
+        )
+        .await
+        .unwrap_err();
+    let internal = service
+        .edit_project(
+            mutation_receipt_with_auth::<EditAccessLevel>(
+                project_id,
+                AccessLevel::Owner,
+                EntityAccessAuth::Internal,
+            ),
+            basic_project(project_id, None, false),
+            patch_request(None, Some(team_share_update(None))),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        other_user,
+        ProjectError::UnauthorizedWithMessage(_)
+    ));
+    assert!(matches!(internal, ProjectError::UnauthorizedWithMessage(_)));
+}
+
+#[tokio::test]
+async fn edit_team_share_rejects_owner_level_and_owners_without_a_team() {
+    let project_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_user_team_id()
+        .withf(|user_id| user_id == "macro|owner@example.com")
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+
+    let owner_level = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            patch_request(None, Some(team_share_update(Some(AccessLevel::Owner)))),
+        )
+        .await
+        .unwrap_err();
+    let no_team = service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            patch_request(None, Some(team_share_update(Some(AccessLevel::Edit)))),
+        )
+        .await
+        .unwrap_err();
+
+    assert!(matches!(owner_level, ProjectError::BadRequest(_)));
+    assert!(matches!(no_team, ProjectError::BadRequest(_)));
+}
+
+#[tokio::test]
+async fn edit_team_share_by_owner_reaches_the_repository() {
+    let project_id = Uuid::new_v4();
+    let team_id = Uuid::new_v4();
+    let mut repo = MockProjectRepo::new();
+    repo.expect_get_user_team_id()
+        .withf(|user_id| user_id == "macro|owner@example.com")
+        .return_once(move |_| Box::pin(async move { Ok(Some(team_id)) }));
+    repo.expect_edit_project()
+        .times(2)
+        .withf(move |args| {
+            args.project_id == project_id.to_string()
+                && args
+                    .share_permission
+                    .as_ref()
+                    .is_some_and(|share| share.changes_team_share())
+        })
+        .returning(move |_| {
+            Box::pin(async move {
+                Ok(project(
+                    &project_id.to_string(),
+                    "macro|owner@example.com",
+                    None,
+                ))
+            })
+        });
+    repo.expect_update_project_modified()
+        .times(2)
+        .returning(|_| Box::pin(async { Ok(()) }));
+    let service = mutation_service(repo, RecordingEam::default(), RecordingIndexer::default());
+
+    service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            patch_request(None, Some(team_share_update(Some(AccessLevel::Edit)))),
+        )
+        .await
+        .unwrap();
+    // Clearing does not need a team lookup: it must work even after the owner left their team.
+    service
+        .edit_project(
+            mutation_receipt::<EditAccessLevel>(project_id, AccessLevel::Owner),
+            basic_project(project_id, None, false),
+            patch_request(None, Some(team_share_update(None))),
+        )
+        .await
+        .unwrap();
 }
 
 #[tokio::test]
