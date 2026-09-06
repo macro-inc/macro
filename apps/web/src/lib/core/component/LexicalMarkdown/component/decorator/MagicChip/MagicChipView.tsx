@@ -116,7 +116,7 @@ const AnswerBody: Component<{ markdown: string; expanded: boolean }> = (
         </StaticMarkdownContext>
       </div>
       <Show when={overflowing() && !props.expanded}>
-        <div class="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-linear-to-b from-transparent via-surface/80 to-surface group-hover/answer:via-hover/80 group-hover/answer:to-hover" />
+        <div class="pointer-events-none absolute inset-x-0 top-1/2 bottom-0 bg-linear-to-b from-transparent via-surface/80 to-surface group-hover/answer:via-hover/80 group-hover/answer:to-hover" />
         <ExpandHint expanded={false} />
       </Show>
       <Show when={props.expanded}>
@@ -126,12 +126,17 @@ const AnswerBody: Component<{ markdown: string; expanded: boolean }> = (
   );
 };
 
-/** The disclosure cue: `Show more` over the fade, `Show less` under the text. */
+/**
+ * The disclosure cue: `Show more` over the fade, `Show less` under the text.
+ * The collapsed cue steps aside while the area is hovered so it never sits
+ * on top of the text the hover is inviting you to read.
+ */
 const ExpandHint: Component<{ expanded: boolean }> = (props) => (
   <span
-    class="pointer-events-none flex items-center gap-1 text-xs text-ink-extra-muted group-hover/answer:text-ink-muted"
+    class="pointer-events-none flex items-center gap-1 text-xs text-ink-extra-muted transition-opacity motion-reduce:transition-none"
     classList={{
-      'absolute right-0 bottom-0 pb-0.5': !props.expanded,
+      'absolute right-0 bottom-0 pb-0.5 group-hover/answer:opacity-0':
+        !props.expanded,
       'pt-1 pb-0.5': props.expanded,
     }}
     aria-hidden="true"
