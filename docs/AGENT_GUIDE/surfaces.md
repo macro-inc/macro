@@ -57,15 +57,13 @@ provider does not report the stored ones. Out-of-office events render on the gri
 chips filled with their calendar color (like Google), unlike regular events' outlined chips,
 and their details card shows an `Out of office` line under the schedule.
 An event that Google carries on several of an account's calendars (a shared calendar's
-re-import of a member's own event, for example) renders as one chip. The chip takes the
-copy belonging to the first calendar that is on, preferring the account's primary: its
-title, color, and editability. Reminders, guests, and conferencing always show and follow
-the primary copy, since that is the copy Macro's alerts fire from and whose guest list and
-join link Macro records, and the editor only lets them be changed there. Answering an
-invitation likewise addresses the primary copy.
-Hiding a calendar switches the chip to the other copy rather than removing it, and the
-event disappears only once every calendar it is on is hidden. The details popover and the
-editor act on the displayed copy, so editing or deleting it targets that calendar's event
+re-import of a member's own event, for example) renders once per calendar, side by side,
+the way Google Calendar shows it: each chip carries its own copy's title, color, and
+editability, and hiding a calendar hides its chip. Reminders, guests, and conferencing
+always show and follow the primary copy, since that is the copy Macro's alerts fire from
+and whose guest list and join link Macro records, and the editor only lets them be changed
+there. Answering an invitation likewise addresses the primary copy. The details popover and
+the editor act on the chip's copy, so editing or deleting it targets that calendar's event
 at Google.
 
 Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled

@@ -204,10 +204,10 @@ export function CalendarGrid(props: CalendarGridProps) {
     equals: false,
   });
 
-  // A chip keeps its element across data changes, so a switch to another
-  // calendar's copy recolors it here rather than through a remount. The map
-  // is read before the loop because the element map is empty on the first
-  // run and the effect would otherwise never subscribe.
+  // A chip keeps its element across data changes, so a calendar color change
+  // recolors it here rather than through a remount. The map is read before
+  // the loop because the element map is empty on the first run and the
+  // effect would otherwise never subscribe.
   createEffect(() => {
     const eventsById = props.eventsById;
     for (const [id, el] of eventElements) {

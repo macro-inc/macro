@@ -1,6 +1,5 @@
 import type { EventInput } from '@fullcalendar/core';
 import type { CalendarAttendee } from '@service-storage/generated/schemas/calendarAttendee';
-import type { CalendarEvent as CalendarEventEntity } from '@service-storage/generated/schemas/calendarEvent';
 import type { CalendarEventSourceContent } from '@service-storage/generated/schemas/calendarEventSourceContent';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
 import type { EventReminders } from '@service-storage/generated/schemas/eventReminders';
@@ -74,7 +73,7 @@ export interface CalendarEvent {
   attendees: CalendarAttendee[];
   /**
    * Reminder configuration of the primary copy, the one Macro's alerts
-   * follow whichever copy is displayed. Absent means the calendar default.
+   * follow whichever copy a chip shows. Absent means the calendar default.
    */
   reminders?: EventReminders;
   /** Calendar whose defaults `reminders` resolve against: the primary copy's. */
@@ -86,15 +85,12 @@ export interface CalendarEvent {
   reminderEventType?: EventType;
   /** Provider event type; absent means a regular event. */
   eventType?: EventType;
-  /**
-   * Calendar of the displayed copy: the first visible one of the event's
-   * copies, preferring the primary. Mutations address this copy.
-   */
+  /** Calendar of the copy this chip shows. Mutations address that copy. */
   calendarId?: string;
   /**
-   * Every calendar this event is synced from, shown or hidden. A shared
-   * calendar can re-import an event a member also owns, so one event belongs
-   * to several calendars at once and stays visible while any of them is shown.
+   * Calendars whose visibility governs this chip: the copy's own calendar,
+   * or the overlay id for a teammate's out-of-office event. Empty when the
+   * event has no copy data, in which case `calendar` decides.
    */
   sourceCalendarIds: string[];
   /** Raw recurrence rules attached to the canonical event. */
@@ -128,26 +124,9 @@ function optionalText(value: string | null | undefined) {
   return value ?? undefined;
 }
 
-/** How an occurrence is attributed to the calendars the viewer is showing. */
+/** How an occurrence's chips resolve the calendars they belong to. */
 interface CalendarOccurrenceMappingOptions {
   sourceById?: ReadonlyMap<string, CalendarSource>;
-  isSourceVisible?: (sourceId: string) => boolean;
-}
-
-/**
- * The copy of an event to display: the first copy whose calendar is shown,
- * in the server's canonical-first order (primary calendar, then freshest),
- * falling back to the canonical copy when none of them is shown.
- */
-function selectEventSource(
-  event: Pick<CalendarEventEntity, 'sources'>,
-  isSourceVisible?: (sourceId: string) => boolean
-): CalendarEventSourceContent | undefined {
-  const sources = event.sources ?? [];
-  return (
-    sources.find((source) => isSourceVisible?.(source.calendarId) !== false) ??
-    sources[0]
-  );
 }
 
 /**
@@ -175,14 +154,30 @@ export function reminderCalendarIdOf(
 }
 
 /**
- * Maps one backend occurrence projection into the calendar event model,
- * showing the copy that belongs to a calendar the viewer has on. The entity
- * itself carries the canonical copy's content, so an event with no copy
- * data reads the same as its first copy.
+ * Maps one backend occurrence projection into the chips it renders as: one
+ * per calendar the event is synced from, each carrying that copy's content,
+ * so an event on several calendars sits side by side the way the provider
+ * shows it. The entity carries the canonical copy's content, so an event
+ * with no copy data reads the same as its only copy.
  */
-export function mapCalendarOccurrence(
+export function mapCalendarOccurrenceChips(
   item: CalendarOccurrenceItem,
   options: CalendarOccurrenceMappingOptions = {}
+): CalendarEvent[] {
+  const sources = item.event.sources ?? [];
+  if (sources.length <= 1) {
+    return [buildCalendarEvent(item, options, sources[0], undefined)];
+  }
+  return sources.map((copy) =>
+    buildCalendarEvent(item, options, copy, copy.calendarId)
+  );
+}
+
+function buildCalendarEvent(
+  item: CalendarOccurrenceItem,
+  options: CalendarOccurrenceMappingOptions,
+  copy: CalendarEventSourceContent | undefined,
+  chipCalendarId: string | undefined
 ): CalendarEvent {
   const { event, occurrence } = item;
   const time = occurrence.time;
@@ -190,17 +185,19 @@ export function mapCalendarOccurrence(
     time.kind === 'timed'
       ? { allDay: false, start: time.startsAt, end: time.endsAt }
       : { allDay: true, start: time.startDate, end: time.endDate };
-  const selected = selectEventSource(event, options.isSourceVisible);
-  const content = selected ?? event;
+  const content = copy ?? event;
   const canonical = event.sources?.[0] ?? event;
-  const calendarId = selected?.calendarId ?? event.calendarId ?? undefined;
+  const calendarId = copy?.calendarId ?? event.calendarId ?? undefined;
   const source =
     (calendarId ? options.sourceById?.get(calendarId) : undefined) ??
     DEFAULT_CALENDAR_SOURCE;
 
   return {
     ...range,
-    id: JSON.stringify([event.id, occurrence.occurrenceKey]),
+    id:
+      chipCalendarId === undefined
+        ? JSON.stringify([event.id, occurrence.occurrenceKey])
+        : JSON.stringify([event.id, occurrence.occurrenceKey, chipCalendarId]),
     eventId: event.id,
     occurrenceKey: occurrence.occurrenceKey,
     recurrenceId: occurrence.recurrenceId ?? undefined,
@@ -221,7 +218,7 @@ export function mapCalendarOccurrence(
     reminderEventType: canonical.eventType ?? undefined,
     eventType: content.eventType ?? undefined,
     calendarId,
-    sourceCalendarIds: (event.sources ?? []).map((copy) => copy.calendarId),
+    sourceCalendarIds: copy ? [copy.calendarId] : [],
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: content.title,
     calendar: source,

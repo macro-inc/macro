@@ -6,7 +6,7 @@ import {
   type CalendarSource,
   isCalendarEventVisible,
   mapCalendarEventToFullCalendar,
-  mapCalendarOccurrence,
+  mapCalendarOccurrenceChips,
 } from './types';
 
 const PRIMARY: CalendarSource = {
@@ -97,67 +97,76 @@ const hidden = (...ids: string[]) => {
   return (id: string) => !set.has(id);
 };
 
-describe('mapCalendarOccurrence', () => {
-  it('shows the primary copy while its calendar is on', () => {
-    const event = mapCalendarOccurrence(item([copy('primary'), sharedCopy]), {
-      sourceById,
-      isSourceVisible: hidden(),
-    });
+describe('mapCalendarOccurrenceChips', () => {
+  it('renders one chip per calendar copy, each with its own content', () => {
+    const [primary, shared] = mapCalendarOccurrenceChips(
+      item([copy('primary'), sharedCopy]),
+      { sourceById }
+    );
 
-    expect(event.calendar).toBe(PRIMARY);
-    expect(event.calendarId).toBe('primary');
-    expect(event.title).toBe('OOO');
-    expect(event.eventType).toBe('out_of_office');
-    expect(event.isReadOnly).toBe(false);
-    expect(event.reminders?.overrides).toEqual([
-      { method: 'popup', minutes: 30 },
+    expect(primary.calendar).toBe(PRIMARY);
+    expect(primary.calendarId).toBe('primary');
+    expect(primary.title).toBe('OOO');
+    expect(primary.eventType).toBe('out_of_office');
+    expect(primary.isReadOnly).toBe(false);
+    expect(primary.creatorEmail).toBe('teo@example.com');
+    expect(primary.sourceCalendarIds).toEqual(['primary']);
+    expect(shared.calendar).toBe(SHARED);
+    expect(shared.calendarId).toBe('shared');
+    expect(shared.title).toBe('[teo] OOO');
+    expect(shared.eventType).toBe('default');
+    expect(shared.isReadOnly).toBe(true);
+    expect(shared.creatorEmail).toBe('script@example.com');
+    expect(shared.sourceCalendarIds).toEqual(['shared']);
+  });
+
+  it('gives each copy its own identity on the shared occurrence', () => {
+    const [primary, shared] = mapCalendarOccurrenceChips(
+      item([copy('primary'), sharedCopy]),
+      { sourceById }
+    );
+
+    expect(JSON.parse(primary.id)).toEqual([
+      'event',
+      '2026-09-10T13:00:00+00:00',
+      'primary',
     ]);
-    expect(event.reminderCalendarId).toBe('primary');
-    expect(event.creatorEmail).toBe('teo@example.com');
-    expect(event.sourceCalendarIds).toEqual(['primary', 'shared']);
-  });
-
-  it('falls through to the shared copy once the primary calendar is hidden', () => {
-    const event = mapCalendarOccurrence(item([copy('primary'), sharedCopy]), {
-      sourceById,
-      isSourceVisible: hidden('primary'),
-    });
-
-    expect(event.calendar).toBe(SHARED);
-    expect(event.calendarId).toBe('shared');
-    expect(event.title).toBe('[teo] OOO');
-    expect(event.eventType).toBe('default');
-    expect(event.isReadOnly).toBe(true);
-    expect(event.creatorEmail).toBe('script@example.com');
-  });
-
-  it('keeps the reminders that fire on the primary copy whichever copy shows', () => {
-    const event = mapCalendarOccurrence(item([copy('primary'), sharedCopy]), {
-      sourceById,
-      isSourceVisible: hidden('primary'),
-    });
-
-    expect(event.reminders?.overrides).toEqual([
-      { method: 'popup', minutes: 30 },
+    expect(JSON.parse(shared.id)).toEqual([
+      'event',
+      '2026-09-10T13:00:00+00:00',
+      'shared',
     ]);
-    expect(event.reminderCalendarId).toBe('primary');
-    expect(event.reminderEventType).toBe('out_of_office');
-    expect(event.eventType).toBe('default');
-    expect(event.calendarId).toBe('shared');
+    expect(shared.eventId).toBe(primary.eventId);
+    expect(shared.occurrenceKey).toBe(primary.occurrenceKey);
   });
 
-  it('keeps the canonical copy when every calendar is hidden', () => {
-    const event = mapCalendarOccurrence(item([copy('primary'), sharedCopy]), {
+  it('keeps the reminders that fire on the primary copy on every chip', () => {
+    const chips = mapCalendarOccurrenceChips(
+      item([copy('primary'), sharedCopy]),
+      { sourceById }
+    );
+
+    for (const chip of chips) {
+      expect(chip.reminders?.overrides).toEqual([
+        { method: 'popup', minutes: 30 },
+      ]);
+      expect(chip.reminderCalendarId).toBe('primary');
+      expect(chip.reminderEventType).toBe('out_of_office');
+    }
+  });
+
+  it('renders a single-copy event as one chip with the plain occurrence id', () => {
+    const chips = mapCalendarOccurrenceChips(item([copy('primary')]), {
       sourceById,
-      isSourceVisible: hidden('primary', 'shared'),
     });
 
-    expect(event.calendarId).toBe('primary');
-    expect(event.title).toBe('OOO');
+    expect(chips).toHaveLength(1);
+    expect(chips[0].id).toBe('["event","2026-09-10T13:00:00+00:00"]');
+    expect(chips[0].sourceCalendarIds).toEqual(['primary']);
   });
 
   it('reads the entity when no copy data is present', () => {
-    const event = mapCalendarOccurrence(item([]), { sourceById });
+    const [event] = mapCalendarOccurrenceChips(item([]), { sourceById });
 
     expect(event.title).toBe('OOO');
     expect(event.calendarId).toBeUndefined();
@@ -191,21 +200,16 @@ describe('isCalendarEventVisible', () => {
 });
 
 describe('mapCalendarEventToFullCalendar', () => {
-  it('keeps the occurrence identity whichever copy is displayed', () => {
-    const merged = item([copy('primary'), sharedCopy]);
-    const onPrimary = mapCalendarEventToFullCalendar(
-      mapCalendarOccurrence(merged, { sourceById, isSourceVisible: hidden() })
-    );
-    const onShared = mapCalendarEventToFullCalendar(
-      mapCalendarOccurrence(merged, {
-        sourceById,
-        isSourceVisible: hidden('primary'),
-      })
-    );
+  it('keeps each copy identity and title on the rendered event', () => {
+    const [primary, shared] = mapCalendarOccurrenceChips(
+      item([copy('primary'), sharedCopy]),
+      { sourceById }
+    ).map(mapCalendarEventToFullCalendar);
 
-    expect(onPrimary.id).toBe('["event","2026-09-10T13:00:00+00:00"]');
-    expect(onShared.id).toBe(onPrimary.id);
-    expect(onShared.title).toBe('[teo] OOO');
-    expect(onShared.extendedProps?.calendarEventId).toBe(onPrimary.id);
+    expect(primary.id).toBe('["event","2026-09-10T13:00:00+00:00","primary"]');
+    expect(shared.id).toBe('["event","2026-09-10T13:00:00+00:00","shared"]');
+    expect(shared.title).toBe('[teo] OOO');
+    expect(primary.extendedProps?.calendarEventId).toBe(primary.id);
+    expect(shared.extendedProps?.calendarEventId).toBe(shared.id);
   });
 });
