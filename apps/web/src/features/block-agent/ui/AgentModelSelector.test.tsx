@@ -3,7 +3,7 @@
  */
 
 import type { ModelOption } from '@service-agent-fold/generated/types';
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentModelSelector } from './AgentModelSelector';
@@ -11,6 +11,40 @@ import { AgentModelSelector } from './AgentModelSelector';
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => false,
 }));
+
+vi.mock('@ui', () => {
+  const cn = (...args: unknown[]) =>
+    args.flat(Infinity).filter(Boolean).join(' ');
+  const Button = (props: any) => (
+    <button type="button">{props.children}</button>
+  );
+  const Dropdown: any = (props: any) => <div>{props.children}</div>;
+  Dropdown.Trigger = (props: any) => (
+    <button type="button">{props.children}</button>
+  );
+  Dropdown.Content = (props: any) => (
+    <div
+      role="menu"
+      tabIndex={-1}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        props.onEscapeKeyDown?.(event);
+        queueMicrotask(() =>
+          props.onCloseAutoFocus?.(new Event('close', { cancelable: true }))
+        );
+      }}
+    >
+      {props.children}
+    </div>
+  );
+  Dropdown.Group = (props: any) => <div>{props.children}</div>;
+  Dropdown.Item = (props: any) => (
+    <button type="button" role="menuitem" onClick={() => props.onSelect?.()}>
+      {props.children}
+    </button>
+  );
+  return { Button, cn, Dropdown };
+});
 
 const OPTIONS: ModelOption[] = [
   { id: 'model-1', name: 'Model One', description: null, group: null },
@@ -37,10 +71,9 @@ describe('AgentModelSelector focus', () => {
       </>
     ));
 
-    await user.click(screen.getByRole('button', { name: /Model One/ }));
     const menu = screen.getByRole('menu');
+    menu.focus();
     await user.keyboard('{Escape}');
-    fireEvent.animationEnd(menu);
 
     await waitFor(() => {
       expect(restoreComposerFocus).toHaveBeenCalledOnce();
@@ -62,7 +95,6 @@ describe('AgentModelSelector focus', () => {
       />
     ));
 
-    await user.click(screen.getByRole('button', { name: /Model One/ }));
     await user.click(
       await screen.findByRole('menuitem', { name: 'Model Two' })
     );

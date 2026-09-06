@@ -2,10 +2,49 @@
  * @vitest-environment jsdom
  */
 
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
+import { render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
+import { onMount } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { ModelCatalogPicker } from './ModelCatalogPicker';
+
+// Exercise the picker's focus contract without Kobalte's CSS-presence layer,
+// whose close animation never completes in jsdom.
+vi.mock('@ui', () => {
+  const cn = (...args: unknown[]) =>
+    args.flat(Infinity).filter(Boolean).join(' ');
+  const Dropdown: any = (props: any) => <div>{props.children}</div>;
+  Dropdown.Trigger = (props: any) => (
+    <button type="button" aria-label={props['aria-label']}>
+      {props.children}
+    </button>
+  );
+  Dropdown.Content = (props: any) => {
+    onMount(() => props.onOpenAutoFocus?.(new Event('open')));
+    return (
+      <div
+        role="menu"
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') return;
+          props.onEscapeKeyDown?.(event);
+          queueMicrotask(() =>
+            props.onCloseAutoFocus?.(new Event('close', { cancelable: true }))
+          );
+        }}
+      >
+        {props.children}
+      </div>
+    );
+  };
+  Dropdown.Group = (props: any) => <div>{props.children}</div>;
+  Dropdown.GroupLabel = (props: any) => <div>{props.children}</div>;
+  Dropdown.Item = (props: any) => <div>{props.children}</div>;
+  Dropdown.Separator = () => <hr />;
+  Dropdown.Sub = (props: any) => <div>{props.children}</div>;
+  Dropdown.SubTrigger = (props: any) => <div>{props.children}</div>;
+  Dropdown.SubContent = (props: any) => <div>{props.children}</div>;
+  return { cn, Dropdown };
+});
 
 const OPTIONS = Array.from({ length: 11 }, (_, index) => ({
   id: `model-${index}`,
@@ -33,18 +72,12 @@ describe('ModelCatalogPicker focus', () => {
       </>
     ));
 
-    await user.click(screen.getByRole('button', { name: 'Agent model' }));
-
     const search = await screen.findByRole('textbox', {
       name: 'Search models',
     });
     await waitFor(() => expect(document.activeElement).toBe(search));
 
-    const menu = screen.getByRole('menu');
     await user.keyboard('{Escape}');
-    // jsdom does not run the CSS close animation that unmounts Kobalte's
-    // focus scope, so complete it explicitly.
-    fireEvent.animationEnd(menu);
 
     await waitFor(() => {
       expect(restoreComposerFocus).toHaveBeenCalledOnce();
