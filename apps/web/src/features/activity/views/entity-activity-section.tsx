@@ -1,19 +1,31 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
-import { formatRelativeTimestamp } from '@entity/utils/timestamp';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import CaretUpDownIcon from '@phosphor/caret-up-down.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { cn } from '@ui';
-import { createSignal, For, Match, Show, Suspense, Switch } from 'solid-js';
-import { ActionPhrase } from '../components/action-phrase';
-import { ActorName } from '../components/actor-name';
+import {
+  createMemo,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+} from 'solid-js';
+import { ActivityTimelineRow } from '../components/activity-timeline-row';
 import { useActivityContext } from '../context/activity-context';
+import {
+  collapseRuns,
+  entryAction,
+  entryHead,
+  type FeedEntry,
+} from '../core/collapse-runs';
 import type { ActivityEvent } from '../core/event';
+import { foldPanel } from '../core/fold-panel';
 import { createActorName } from '../primitives/actor-name';
 import { createEntityActivityState } from '../primitives/entity-activity';
 import { useEntityActivityFlag } from '../use-entity-activity-flag';
 
-/** Rows shown before the section collapses behind a "Show all" toggle. */
-const COLLAPSED_ROW_LIMIT = 10;
+/** Newest entries shown before the section folds behind its toggle. */
+const PANEL_HEAD_LIMIT = 3;
 
 export interface EntityActivitySectionProps {
   entityId: string;
@@ -72,67 +84,76 @@ export function EntityActivitySection(props: EntityActivitySectionProps) {
   );
 }
 
+/**
+ * Newest entries first, folded to `PANEL_HEAD_LIMIT` lines plus the oldest
+ * fetched entry pinned last so the line that started the history stays in
+ * view. The rail is trimmed to the glyph centers at both ends.
+ */
 function ReadyActivityList(props: { events: ActivityEvent[] }) {
   const [expanded, setExpanded] = createSignal(false);
-  const visibleEvents = () =>
-    expanded() ? props.events : props.events.slice(0, COLLAPSED_ROW_LIMIT);
-  const hasOverflow = () => props.events.length > COLLAPSED_ROW_LIMIT;
+  const entries = createMemo(() => collapseRuns(props.events));
+  const fold = createMemo(() => foldPanel(entries(), PANEL_HEAD_LIMIT));
+  const folded = () => fold().tail !== undefined;
+  const visible = () => (expanded() ? entries() : fold().head);
 
   return (
-    <div class="text-xs">
-      <SidePanel.Card>
-        <For each={visibleEvents()}>
-          {(event) => <ActivityRow event={event} />}
-        </For>
-      </SidePanel.Card>
-      <Show when={hasOverflow()}>
-        <button
-          type="button"
-          aria-expanded={expanded()}
-          class="mt-1 flex w-full items-center gap-1.5 rounded-md px-1 py-1 text-ink-muted text-xs hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          onClick={() => setExpanded((current) => !current)}
-        >
-          <CaretRightIcon
-            class={cn(
-              'size-3 shrink-0 transition-transform duration-90',
-              expanded() && 'rotate-90'
-            )}
-          />
-          <span>
-            {expanded() ? 'Show less' : `Show all (${props.events.length})`}
-          </span>
-        </button>
+    <div
+      class="flex flex-col [&>:first-child_[data-activity-rail]]:top-1/2 [&>:last-child_[data-activity-rail]]:bottom-1/2"
+      data-activity-panel
+    >
+      <For each={visible()}>{(entry) => <PanelRow entry={entry} />}</For>
+      <Show when={folded()}>
+        <FoldToggle
+          expanded={expanded()}
+          onToggle={() => setExpanded((current) => !current)}
+        />
+        <Show when={!expanded() ? fold().tail : undefined}>
+          {(tail) => <PanelRow entry={tail()} />}
+        </Show>
       </Show>
     </div>
   );
 }
 
-function ActivityRow(props: { event: ActivityEvent }) {
+function PanelRow(props: { entry: FeedEntry }) {
   const context = useActivityContext();
-  const name = createActorName(context, () => props.event.actorId);
+  const name = createActorName(context, () => entryHead(props.entry).actorId);
   const definition = context.propertyDefinition(() => {
-    const action = props.event.action;
+    const action = entryAction(props.entry);
     return action.kind === 'property-changed' ? action.property : undefined;
   });
   return (
-    <div
-      class="flex min-h-7 min-w-0 items-center gap-2 px-2 py-1"
-      data-activity-row
-      data-activity-action={props.event.action.kind}
+    <ActivityTimelineRow
+      entry={props.entry}
+      actorName={name()}
+      propertyDefinition={definition()}
+      compact
+    />
+  );
+}
+
+/** The fold row sits in the rail with a dotted connector in place of the line. */
+function FoldToggle(props: { expanded: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={props.expanded}
+      class="flex w-full items-stretch gap-1 text-left text-ink-muted text-xs hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      data-activity-fold-toggle
+      onClick={() => props.onToggle()}
     >
-      <span class="flex min-w-0 flex-1 flex-wrap items-center gap-x-1 gap-y-0.5">
-        <span class="font-medium text-ink">
-          <ActorName name={name()} />
-        </span>
-        <span class="min-w-0 text-ink-muted">
-          <ActionPhrase event={props.event} propertyDefinition={definition()} />
+      <span class="relative flex w-5 shrink-0 items-center justify-center">
+        <span
+          class="absolute inset-y-0 border-edge-muted border-l border-dotted"
+          data-activity-rail
+        />
+        <span class="relative flex size-4 items-center justify-center rounded-full bg-surface ring ring-edge-muted">
+          <CaretUpDownIcon class="size-2.5" />
         </span>
       </span>
-      <span class="ml-auto shrink-0 text-ink-extra-muted">
-        {formatRelativeTimestamp(new Date(props.event.occurredAt), {
-          condensed: true,
-        })}
+      <span class="flex min-h-7 min-w-0 flex-1 items-center rounded-lg px-1.5 py-0.5 hover:bg-hover/30">
+        {props.expanded ? 'Show less' : 'View all activities'}
       </span>
-    </div>
+    </button>
   );
 }

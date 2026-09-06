@@ -1,50 +1,57 @@
 import { describe, expect, it } from 'vitest';
 import { decodeActivityEvent } from '../queries/decode';
 import { createdEvent, editedEvent } from '../queries/fixtures';
+import type { FeedEntry } from './collapse-runs';
 import { flattenFeed, reuseRows, shouldFetchMore } from './feed-rows';
 
-const created = decodeActivityEvent(createdEvent);
-const edited = decodeActivityEvent(editedEvent);
+const created: FeedEntry = {
+  kind: 'single',
+  event: decodeActivityEvent(createdEvent),
+};
+const edited: FeedEntry = {
+  kind: 'single',
+  event: decodeActivityEvent(editedEvent),
+};
 
 describe('flattenFeed', () => {
   it('interleaves day headers and events in order and ends with a tail when more pages exist', () => {
     const rows = flattenFeed(
       [
-        { key: 'today', label: 'Today', events: [created] },
-        { key: 'yesterday', label: 'Yesterday', events: [edited] },
+        { key: 'today', label: 'Today', entries: [created] },
+        { key: 'yesterday', label: 'Yesterday', entries: [edited] },
       ],
       { hasMore: true }
     );
     expect(rows.map((row) => row.kind)).toEqual([
       'day',
-      'event',
+      'entry',
       'day',
-      'event',
+      'entry',
       'tail',
     ]);
     expect(rows[0]).toEqual({ kind: 'day', key: 'today', label: 'Today' });
-    expect(rows[1]).toEqual({ kind: 'event', event: created });
+    expect(rows[1]).toEqual({ kind: 'entry', entry: created });
   });
 
   it('omits the tail on the last page', () => {
     const rows = flattenFeed(
-      [{ key: 'today', label: 'Today', events: [created] }],
+      [{ key: 'today', label: 'Today', entries: [created] }],
       { hasMore: false }
     );
-    expect(rows.map((row) => row.kind)).toEqual(['day', 'event']);
+    expect(rows.map((row) => row.kind)).toEqual(['day', 'entry']);
   });
 });
 
 describe('reuseRows', () => {
   it('keeps previous row objects for matching keys and adds the rest', () => {
     const previous = flattenFeed(
-      [{ key: 'today', label: 'Today', events: [created] }],
+      [{ key: 'today', label: 'Today', entries: [created] }],
       { hasMore: true }
     );
     const next = flattenFeed(
       [
-        { key: 'today', label: 'Today', events: [{ ...created }] },
-        { key: 'yesterday', label: 'Yesterday', events: [edited] },
+        { key: 'today', label: 'Today', entries: [{ ...created }] },
+        { key: 'yesterday', label: 'Yesterday', entries: [edited] },
       ],
       { hasMore: false }
     );
@@ -55,9 +62,9 @@ describe('reuseRows', () => {
     expect(reused[3]).toBe(next[3]);
     expect(reused.map((row) => row.kind)).toEqual([
       'day',
-      'event',
+      'entry',
       'day',
-      'event',
+      'entry',
     ]);
   });
 });

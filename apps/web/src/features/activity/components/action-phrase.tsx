@@ -1,7 +1,7 @@
 import type { PropertyDefinitionDomain } from '@property/types';
 import { Show } from 'solid-js';
 import { describeAction } from '../core/describe-action';
-import type { ActivityEvent } from '../core/event';
+import type { ActivityAction } from '../core/event';
 import { PropertyChangeText } from './property-change';
 
 function capitalize(value: string): string {
@@ -14,21 +14,17 @@ function capitalize(value: string): string {
  * phrase.
  */
 export function ActionPhrase(props: {
-  event: ActivityEvent;
+  action: ActivityAction;
   propertyDefinition?: PropertyDefinitionDomain;
   capitalize?: boolean;
 }) {
   return (
     <Show
-      when={
-        props.event.action.kind === 'property-changed'
-          ? props.event.action
-          : undefined
-      }
+      when={props.action.kind === 'property-changed' ? props.action : undefined}
       fallback={
         props.capitalize
-          ? capitalize(describeAction(props.event.action))
-          : describeAction(props.event.action)
+          ? capitalize(describeAction(props.action))
+          : describeAction(props.action)
       }
     >
       {(change) => (
