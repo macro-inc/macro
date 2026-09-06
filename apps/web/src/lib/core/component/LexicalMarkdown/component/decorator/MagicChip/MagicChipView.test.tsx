@@ -23,7 +23,8 @@ vi.mock('@core/component/LexicalMarkdown/theme', () => ({
 afterEach(cleanup);
 
 describe('MagicChipView', () => {
-  it('keeps working state as a single activity line', () => {
+  it('shows the card with the activity row before any answer arrives', () => {
+    const onOpen = vi.fn();
     const { container } = render(() => (
       <MagicChipView
         agentSessionId="session"
@@ -31,14 +32,27 @@ describe('MagicChipView', () => {
           kind: 'working',
           activity: { label: 'Booting agent', busy: true },
         }}
+        onOpen={onOpen}
       />
     ));
 
-    expect(container.querySelector('[data-magic-chip-preview]')).toBeNull();
-    expect(container.textContent).toContain('Booting agent');
+    const card = container.querySelector('[data-magic-chip-preview]');
+    expect(card?.className).toContain('rounded-lg');
+    expect(card?.className).not.toContain('border-accent');
+    expect(container.querySelector('[data-testid="chip-markdown"]')).toBeNull();
+
+    const footer = card?.querySelector('button');
+    expect(footer?.textContent).toContain('Booting agent');
+    expect(footer?.className).not.toContain('border-t');
+    expect(footer?.getAttribute('data-message-reply-preview')).toBe(
+      'Booting agent'
+    );
+
+    fireEvent.click(footer!);
+    expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it('clips the answering card and shows the activity in its footer', () => {
+  it('clips the answer above the activity row while streaming', () => {
     const onOpen = vi.fn();
     const { container } = render(() => (
       <MagicChipView
@@ -53,15 +67,13 @@ describe('MagicChipView', () => {
     ));
 
     const card = container.querySelector('[data-magic-chip-preview]');
-    expect(card?.className).toContain('rounded-lg');
-    expect(card?.className).not.toContain('border-accent');
-
     const body = card?.querySelector('[data-message-reply-preview]');
     expect(body?.className).toContain('max-h-32');
     expect(body?.className).toContain('overflow-hidden');
-    expect(body?.textContent).toContain('Hello from the agent');
+    expect(body?.textContent).toBe('Hello from the agent');
 
     const footer = card?.querySelector('button');
+    expect(footer?.className).toContain('border-t');
     expect(footer?.textContent).toContain('Writing response');
     expect(footer?.textContent).not.toContain('Open session');
 
@@ -80,26 +92,9 @@ describe('MagicChipView', () => {
       />
     ));
 
-    const card = container.querySelector('[data-magic-chip-preview]');
-    const footer = card?.querySelector('button');
+    const footer = container.querySelector('[data-magic-chip-preview] button');
     expect(footer?.textContent).toContain('Open session');
     fireEvent.click(footer!);
     expect(onOpen).toHaveBeenCalledTimes(1);
-  });
-
-  it('uses the rendered answer as the reply preview, not the footer', () => {
-    const { container } = render(() => (
-      <MagicChipView
-        agentSessionId="session"
-        presentation={{
-          kind: 'answering',
-          markdown: 'Answer text',
-          activity: { label: 'Writing response', busy: true },
-        }}
-      />
-    ));
-
-    const preview = container.querySelector('[data-message-reply-preview]');
-    expect(preview?.textContent).toBe('Answer text');
   });
 });

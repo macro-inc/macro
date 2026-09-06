@@ -8,31 +8,26 @@ import { Layer } from '@ui';
 import {
   type Component,
   createSignal,
-  Match,
   onCleanup,
   onMount,
   Show,
-  Switch,
 } from 'solid-js';
 import type { MagicChipActivity, MagicChipPresentation } from './presentation';
 
-function working(presentation: MagicChipPresentation) {
-  return presentation.kind === 'working' ? presentation : undefined;
+function answerMarkdown(presentation: MagicChipPresentation) {
+  return presentation.kind === 'working' ? undefined : presentation.markdown;
 }
 
-function answering(presentation: MagicChipPresentation) {
-  return presentation.kind === 'answering' ? presentation : undefined;
+function currentActivity(presentation: MagicChipPresentation) {
+  return presentation.kind === 'settled' ? undefined : presentation.activity;
 }
 
-function settled(presentation: MagicChipPresentation) {
-  return presentation.kind === 'settled' ? presentation : undefined;
-}
-
-function replyPreview(activity: MagicChipActivity) {
+function replyPreview(activity: MagicChipActivity | undefined) {
+  if (!activity) return 'Open session';
   return `${activity.label}${activity.detail ? ` ${activity.detail}` : ''}`;
 }
 
-/** The shimmering label plus its muted detail, shared by every activity row. */
+/** The shimmering label plus its muted detail. */
 const ActivityText: Component<{ activity: MagicChipActivity }> = (props) => (
   <>
     <span
@@ -59,36 +54,11 @@ const ActivityText: Component<{ activity: MagicChipActivity }> = (props) => (
   </>
 );
 
-/** Fixed-height activity line — no box, just a shimmering label in the flow. */
-const ActivityLine: Component<{
-  agentSessionId: string;
-  activity: MagicChipActivity;
-  onOpen?: () => void;
-}> = (props) => (
-  <button
-    type="button"
-    class="flex h-6 w-full min-w-0 items-center gap-1.5 text-left text-xs"
-    data-magic-chip={props.agentSessionId}
-    data-message-reply-preview={replyPreview(props.activity)}
-    disabled={!props.onOpen}
-    onMouseDown={(event) => event.preventDefault()}
-    onClick={props.onOpen}
-  >
-    <ActivityText activity={props.activity} />
-  </button>
-);
-
 /**
- * The answer as a card: the opening of the response, clipped to six lines
- * and faded out, with a footer that says what the agent is doing (or that it
- * is done). Clicking anywhere opens the session for the rest.
+ * The opening of the answer, clipped to six lines. The fade only shows once
+ * the text is actually taller than the clip, so short answers read whole.
  */
-const AnswerCard: Component<{
-  agentSessionId: string;
-  markdown: string;
-  activity?: MagicChipActivity;
-  onOpen?: () => void;
-}> = (props) => {
+const AnswerBody: Component<{ markdown: string }> = (props) => {
   const [overflowing, setOverflowing] = createSignal(false);
   let clip: HTMLDivElement | undefined;
 
@@ -105,6 +75,40 @@ const AnswerCard: Component<{
   });
 
   return (
+    <div
+      ref={(el) => {
+        clip = el;
+      }}
+      class="relative max-h-32 overflow-hidden px-3 py-1"
+      data-message-reply-preview
+    >
+      <div class="pointer-events-none min-w-0 max-w-full wrap-break-word">
+        <StaticMarkdownContext theme={channelTheme}>
+          <StaticMarkdown markdown={props.markdown} target="external" />
+        </StaticMarkdownContext>
+      </div>
+      <Show when={overflowing()}>
+        <div class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-b from-transparent to-surface" />
+      </Show>
+    </div>
+  );
+};
+
+/**
+ * One card for the whole turn, so the chrome is there from the first
+ * moment: a status row while the agent works, the opening of the answer
+ * above that row as it is written, and `Open session` once the turn ends.
+ * Clicking anywhere opens the session.
+ */
+export const MagicChipView: Component<{
+  agentSessionId: string;
+  presentation: MagicChipPresentation;
+  onOpen?: () => void;
+}> = (props) => {
+  const markdown = () => answerMarkdown(props.presentation);
+  const activity = () => currentActivity(props.presentation);
+
+  return (
     <Layer depth={2}>
       <div
         class="my-2 w-full overflow-hidden rounded-lg border border-edge-muted bg-surface"
@@ -113,33 +117,24 @@ const AnswerCard: Component<{
         onMouseDown={(event) => event.preventDefault()}
         onClick={props.onOpen}
       >
-        <div
-          ref={(el) => {
-            clip = el;
-          }}
-          class="relative max-h-32 overflow-hidden px-3 py-1"
-          data-message-reply-preview
-        >
-          <div class="pointer-events-none min-w-0 max-w-full wrap-break-word">
-            <StaticMarkdownContext theme={channelTheme}>
-              <StaticMarkdown markdown={props.markdown} target="external" />
-            </StaticMarkdownContext>
-          </div>
-          <Show when={overflowing()}>
-            <div class="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-linear-to-b from-transparent to-surface" />
-          </Show>
-        </div>
+        <Show when={markdown()}>
+          {(answer) => <AnswerBody markdown={answer()} />}
+        </Show>
         <button
           type="button"
-          class="flex min-h-9 w-full items-center gap-1.5 border-t border-edge-muted px-3 py-2 text-left text-xs leading-5 text-ink-extra-muted hover:bg-hover"
+          class="flex min-h-9 w-full items-center gap-1.5 px-3 py-2 text-left text-xs leading-5 text-ink-extra-muted hover:bg-hover"
+          classList={{ 'border-t border-edge-muted': Boolean(markdown()) }}
+          data-message-reply-preview={
+            markdown() ? undefined : replyPreview(activity())
+          }
           disabled={!props.onOpen}
         >
           <span class="flex min-w-0 flex-1 items-center gap-1.5">
             <Show
-              when={props.activity}
+              when={activity()}
               fallback={<span class="text-ink-muted">Open session</span>}
             >
-              {(activity) => <ActivityText activity={activity()} />}
+              {(current) => <ActivityText activity={current()} />}
             </Show>
           </span>
           <ArrowUpRight aria-hidden="true" class="size-3 shrink-0" />
@@ -148,41 +143,3 @@ const AnswerCard: Component<{
     </Layer>
   );
 };
-
-/** Render an already-derived Magic Chip presentation. */
-export const MagicChipView: Component<{
-  agentSessionId: string;
-  presentation: MagicChipPresentation;
-  onOpen?: () => void;
-}> = (props) => (
-  <Switch>
-    <Match when={working(props.presentation)}>
-      {(presentation) => (
-        <ActivityLine
-          agentSessionId={props.agentSessionId}
-          activity={presentation().activity}
-          onOpen={props.onOpen}
-        />
-      )}
-    </Match>
-    <Match when={answering(props.presentation)}>
-      {(presentation) => (
-        <AnswerCard
-          agentSessionId={props.agentSessionId}
-          markdown={presentation().markdown}
-          activity={presentation().activity}
-          onOpen={props.onOpen}
-        />
-      )}
-    </Match>
-    <Match when={settled(props.presentation)}>
-      {(presentation) => (
-        <AnswerCard
-          agentSessionId={props.agentSessionId}
-          markdown={presentation().markdown}
-          onOpen={props.onOpen}
-        />
-      )}
-    </Match>
-  </Switch>
-);
