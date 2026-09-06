@@ -115,12 +115,11 @@ pub trait SessionNotifier {
         session: &SessionId,
         update: SessionUpdate,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
-    /// Stage or commit a full reconstructed history before a pending prompt.
-    fn history_snapshot(
+    /// Ask the host to load recovered history after the current prompt completes.
+    /// This must only enqueue a signal: the caller holds the session writer gate.
+    fn require_reload(
         &self,
         session: &SessionId,
-        snapshot_id: &str,
-        phase: agent_runtime_protocol::domain::turn::HistorySnapshotPhase,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
     /// Emit a terminal lifecycle fact after the reconstructed turn's updates.
     fn turn_complete(

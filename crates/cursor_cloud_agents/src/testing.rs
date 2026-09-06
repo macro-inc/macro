@@ -422,12 +422,12 @@ impl RunStream for FakeCursor {
 
 type RecordedUpdates = Vec<(SessionId, SessionUpdate)>;
 
-/// Records selected updates, committing history replacements atomically.
+/// Records live updates and host-local reload requirements.
 /// Tests of raw frame ordering use the served ACP transport instead.
 #[derive(Debug, Clone, Default)]
 pub struct RecordingNotifier {
     updates: Arc<Mutex<RecordedUpdates>>,
-    candidate: Arc<Mutex<Option<RecordedUpdates>>>,
+    reloads: Arc<Mutex<Vec<SessionId>>>,
     delivered: Arc<tokio::sync::Notify>,
 }
 
@@ -442,6 +442,11 @@ impl RecordingNotifier {
     #[must_use]
     pub fn updates(&self) -> Vec<(SessionId, SessionUpdate)> {
         self.updates.lock().expect("notifier poisoned").clone()
+    }
+
+    /// Sessions whose recovered history needs a client load.
+    pub fn reloads(&self) -> Vec<SessionId> {
+        self.reloads.lock().expect("notifier poisoned").clone()
     }
 
     /// Resolve once `at_least` updates have been delivered.
@@ -469,35 +474,19 @@ impl SessionNotifier for RecordingNotifier {
         session: &SessionId,
         update: SessionUpdate,
     ) -> Result<(), rootcause::Report> {
-        let mut candidate = self.candidate.lock().expect("notifier poisoned");
-        if let Some(updates) = candidate.as_mut() {
-            updates.push((session.clone(), update));
-        } else {
-            self.updates
-                .lock()
-                .expect("notifier poisoned")
-                .push((session.clone(), update));
-        }
+        self.updates
+            .lock()
+            .expect("notifier poisoned")
+            .push((session.clone(), update));
         self.delivered.notify_waiters();
         Ok(())
     }
 
-    async fn history_snapshot(
-        &self,
-        _session: &SessionId,
-        _snapshot_id: &str,
-        phase: agent_runtime_protocol::domain::turn::HistorySnapshotPhase,
-    ) -> Result<(), rootcause::Report> {
-        use agent_runtime_protocol::domain::turn::HistorySnapshotPhase;
-        let mut candidate = self.candidate.lock().expect("notifier poisoned");
-        match phase {
-            HistorySnapshotPhase::Begin => *candidate = Some(Vec::new()),
-            HistorySnapshotPhase::Commit => {
-                *self.updates.lock().expect("notifier poisoned") =
-                    candidate.take().expect("snapshot began");
-                self.delivered.notify_waiters();
-            }
-        }
+    async fn require_reload(&self, session: &SessionId) -> Result<(), rootcause::Report> {
+        self.reloads
+            .lock()
+            .expect("notifier poisoned")
+            .push(session.clone());
         Ok(())
     }
 

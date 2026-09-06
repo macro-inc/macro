@@ -28,7 +28,8 @@ pub(super) async fn replay_with_runs(
     id: SessionId,
     runs: Option<Vec<(CursorRunId, Vec<CursorEvent>)>>,
 ) -> Vec<FoldedMessage> {
-    let notifier = AcpNotifier::new();
+    let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel();
+    let notifier = AcpNotifier::new().with_reload(reload_tx);
     let cursor = FakeCursor::new();
     let service = Arc::new(CursorSessionService::new(
         cursor.clone(),
@@ -42,38 +43,7 @@ pub(super) async fn replay_with_runs(
     let mut log = Vec::new();
     let mut previous = None;
     for request_id in [91, 92] {
-        let request: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
-            "jsonrpc":"2.0", "id":request_id, "method":"session/load",
-            "params":{"sessionId":id,"cwd":"/workspace","mcpServers":[]}
-        }))
-        .unwrap();
-        log.push(entry(Message::ToRuntime(ToRuntimeMessage::Acp(
-            AcpMessage(request.clone()),
-        ))));
-        client
-            .tx
-            .unbounded_send(TransportFrame::Single(request))
-            .unwrap();
-        loop {
-            let frame = tokio::time::timeout(std::time::Duration::from_secs(5), client.rx.next())
-                .await
-                .unwrap()
-                .unwrap();
-            let TransportFrame::Single(frame) = frame else {
-                panic!("single frame")
-            };
-            let value = serde_json::to_value(&frame).unwrap();
-            let response = value["id"] == request_id;
-            if response {
-                assert!(value.get("result").is_some(), "{value}");
-            }
-            log.push(entry(Message::ToServer(ToServerMessage::Acp(AcpMessage(
-                frame,
-            )))));
-            if response {
-                break;
-            }
-        }
+        load(&mut client, &mut log, &id, request_id).await;
         assert_incremental_matches_batch(&log);
         let messages = agent_fold::domain::fold::fold(log.clone());
         if let Some(previous) = &previous {
@@ -103,28 +73,73 @@ pub(super) async fn replay_with_runs(
             drop(events);
         }
         service.sync_foreign_runs().await;
-        loop {
-            let frame = tokio::time::timeout(std::time::Duration::from_secs(5), client.rx.next())
-                .await
-                .unwrap()
-                .unwrap();
-            let TransportFrame::Single(frame) = frame else {
-                panic!("single frame")
-            };
-            let value = serde_json::to_value(&frame).unwrap();
-            let complete = value["method"] == "_session/history_snapshot"
-                && value["params"]["phase"] == "commit";
-            log.push(entry(Message::ToServer(ToServerMessage::Acp(AcpMessage(
-                frame,
-            )))));
-            if complete {
-                break;
-            }
-        }
+        // Recovery is host-local: one reload requirement for this session and
+        // no frame on the wire until the client's own standard load.
+        assert_eq!(reload_rx.try_recv().ok(), Some(id.clone()));
+        assert!(reload_rx.try_recv().is_err());
+        assert_no_frame(&mut client).await;
+        load(&mut client, &mut log, &id, 93).await;
     }
     task.abort();
     assert_incremental_matches_batch(&log);
     agent_fold::domain::fold::fold(log)
+}
+
+/// One standard `session/load` on the served transport, recording every frame
+/// through its successful response into `log`.
+pub(super) async fn load(
+    client: &mut agent_client_protocol::Channel,
+    log: &mut Vec<AgentSessionLog>,
+    id: &SessionId,
+    request_id: u64,
+) {
+    let request: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
+        "jsonrpc":"2.0", "id":request_id, "method":"session/load",
+        "params":{"sessionId":id,"cwd":"/workspace","mcpServers":[]}
+    }))
+    .unwrap();
+    log.push(entry(Message::ToRuntime(ToRuntimeMessage::Acp(
+        AcpMessage(request.clone()),
+    ))));
+    client
+        .tx
+        .unbounded_send(TransportFrame::Single(request))
+        .unwrap();
+    loop {
+        let frame = tokio::time::timeout(std::time::Duration::from_secs(5), client.rx.next())
+            .await
+            .unwrap()
+            .unwrap();
+        let TransportFrame::Single(frame) = frame else {
+            panic!("single frame")
+        };
+        let value = serde_json::to_value(&frame).unwrap();
+        let response = value["id"] == request_id;
+        if response {
+            assert!(value.get("result").is_some(), "{value}");
+        } else {
+            assert!(
+                value.get("id").is_none() && value.get("method").is_some(),
+                "only history notifications precede the load response: {value}"
+            );
+        }
+        log.push(entry(Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            frame,
+        )))));
+        if response {
+            break;
+        }
+    }
+}
+
+/// The served transport stays silent: recovered history never streams live.
+async fn assert_no_frame(client: &mut agent_client_protocol::Channel) {
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(100), client.rx.next())
+            .await
+            .is_err(),
+        "a frame left the agent without a client request"
+    );
 }
 
 fn entry(content: Message) -> AgentSessionLog {
@@ -167,7 +182,8 @@ fn assert_incremental_matches_batch(log: &[AgentSessionLog]) {
 async fn actual_live_backfill_keeps_older_answer_out_of_pending_or_cancelled_prompt() {
     for (cancel, late) in [(false, false), (true, false), (false, true)] {
         let cursor = FakeCursor::new();
-        let notifier = AcpNotifier::new();
+        let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel();
+        let notifier = AcpNotifier::new().with_reload(reload_tx);
         let journal = Arc::new(crate::outbound::memory_journal::MemoryJournal::default());
         let service = Arc::new(CursorSessionService::new(
             cursor.clone(),
@@ -284,6 +300,29 @@ async fn actual_live_backfill_keeps_older_answer_out_of_pending_or_cancelled_pro
             }
         }
         assert_incremental_matches_batch(&log);
+        // The older run was recovered while R2 was pending, but only into the
+        // journal: the live view holds nothing but the prompt's own turn.
+        assert_eq!(
+            conversation_texts(&agent_fold::domain::fold::fold(log.clone())),
+            if cancel {
+                vec!["R2", ""]
+            } else {
+                vec!["R2", "newer"]
+            }
+        );
+        assert_eq!(
+            reload_rx.try_recv().ok(),
+            Some(id.clone()),
+            "recovery requires a host-local reload"
+        );
+        assert!(
+            reload_rx.try_recv().is_err(),
+            "pre- and post-acceptance recovery coalesce into one requirement"
+        );
+        // The client's standard load, after the prompt response, shows the
+        // recovered older turn before the one it was pending behind.
+        load(&mut client, &mut log, &id, 42).await;
+        assert_incremental_matches_batch(&log);
         let messages = agent_fold::domain::fold::fold(log);
         let conversation: Vec<_> = messages
             .iter()
@@ -293,22 +332,8 @@ async fn actual_live_backfill_keeps_older_answer_out_of_pending_or_cancelled_pro
                     .any(|p| matches!(p, agent_fold::domain::model::MessagePart::Text { .. }))
             })
             .collect();
-        let texts: Vec<_> = conversation
-            .iter()
-            .map(|m| {
-                m.parts
-                    .iter()
-                    .filter_map(|p| match p {
-                        agent_fold::domain::model::MessagePart::Text { text } => {
-                            Some(text.as_str())
-                        }
-                        _ => None,
-                    })
-                    .collect::<String>()
-            })
-            .collect();
         assert_eq!(
-            texts,
+            conversation_texts(&messages),
             if cancel {
                 vec!["R1", "older", "R2", ""]
             } else {
@@ -338,6 +363,27 @@ async fn actual_live_backfill_keeps_older_answer_out_of_pending_or_cancelled_pro
         }
         task.abort();
     }
+}
+
+/// Text of every message carrying text, in conversation order.
+fn conversation_texts(messages: &[FoldedMessage]) -> Vec<String> {
+    messages
+        .iter()
+        .filter(|m| {
+            m.parts
+                .iter()
+                .any(|p| matches!(p, agent_fold::domain::model::MessagePart::Text { .. }))
+        })
+        .map(|m| {
+            m.parts
+                .iter()
+                .filter_map(|p| match p {
+                    agent_fold::domain::model::MessagePart::Text { text } => Some(text.as_str()),
+                    _ => None,
+                })
+                .collect::<String>()
+        })
+        .collect()
 }
 
 #[tokio::test]
@@ -464,9 +510,10 @@ async fn accepted_newer_run_survives_partial_crash_load_then_actual_sync_without
 }
 
 #[tokio::test]
-async fn load_waiting_for_active_snapshot_replays_one_copy_through_fold() {
+async fn load_waiting_for_an_active_backfill_replays_one_copy_through_fold() {
     let cursor = FakeCursor::new();
-    let notifier = AcpNotifier::new();
+    let (reload_tx, mut reload_rx) = tokio::sync::mpsc::unbounded_channel();
+    let notifier = AcpNotifier::new().with_reload(reload_tx);
     let journal = Arc::new(crate::outbound::memory_journal::MemoryJournal::default());
     let service = Arc::new(CursorSessionService::new(
         cursor.clone(),
@@ -517,74 +564,33 @@ async fn load_waiting_for_active_snapshot_replays_one_copy_through_fold() {
     .unwrap();
     assert!(
         service.has_active_turn(),
-        "snapshot producer holds the turn gate"
+        "the backfill holds the turn gate"
     );
-    let request: RawJsonRpcMessage = serde_json::from_value(serde_json::json!({
-        "jsonrpc":"2.0", "id":91, "method":"session/load",
-        "params":{"sessionId":id,"cwd":"/workspace","mcpServers":[]}
-    }))
-    .unwrap();
-    let mut log = vec![entry(Message::ToRuntime(ToRuntimeMessage::Acp(
-        AcpMessage(request.clone()),
-    )))];
-    client
-        .tx
-        .unbounded_send(TransportFrame::Single(request))
-        .unwrap();
+    assert!(
+        reload_rx.try_recv().is_err(),
+        "no reload is required before the recovered run is reconciled"
+    );
+    // The load arrives mid-backfill and waits behind the gate; the run's
+    // completion is captured before the load reads the journal.
+    let mut log = Vec::new();
+    let loading = tokio::spawn(async move {
+        load(&mut client, &mut log, &id, 91).await;
+        (client, log, id)
+    });
     older.send(finished("R1")).unwrap();
     older.send(CursorEvent::Done).unwrap();
-    let mut methods = Vec::new();
-    loop {
-        let frame = tokio::time::timeout(std::time::Duration::from_secs(5), client.rx.next())
-            .await
-            .unwrap()
-            .unwrap();
-        let TransportFrame::Single(frame) = frame else {
-            panic!("single frame")
-        };
-        let value = serde_json::to_value(&frame).unwrap();
-        let response = value["id"] == 91;
-        methods.push((
-            value["method"].as_str().unwrap_or("response").to_owned(),
-            value["params"]["phase"].as_str().unwrap_or("").to_owned(),
-        ));
-        if response {
-            assert!(value.get("result").is_some(), "{value}");
-        }
-        log.push(entry(Message::ToServer(ToServerMessage::Acp(AcpMessage(
-            frame,
-        )))));
-        if response {
-            break;
-        }
-    }
     producer.await.unwrap();
+    let (mut client, log, id) = loading.await.unwrap();
+    assert_eq!(reload_rx.try_recv().ok(), Some(id.clone()));
+    assert!(reload_rx.try_recv().is_err());
+    assert_no_frame(&mut client).await;
     task.abort();
-    let begin = methods
-        .iter()
-        .position(|(m, p)| m == "_session/history_snapshot" && p == "begin")
-        .unwrap();
-    let commit = methods
-        .iter()
-        .position(|(m, p)| m == "_session/history_snapshot" && p == "commit")
-        .unwrap();
-    assert!(begin < commit);
-    assert!(
-        methods[begin + 1..commit]
-            .iter()
-            .any(|(m, _)| m == "session/update")
-    );
-    assert!(
-        methods[commit + 1..methods.len() - 1]
-            .iter()
-            .any(|(m, _)| m == "session/update")
-    );
     assert_incremental_matches_batch(&log);
     let messages = agent_fold::domain::fold::fold(log);
     assert_eq!(
         messages.len(),
         2,
-        "snapshot and load must display one conversation copy"
+        "backfill and load must display one conversation copy"
     );
     assert_eq!(
         messages[0].parts.iter().cloned().collect::<Vec<_>>(),

@@ -73,6 +73,21 @@ impl PipeTransport {
         Pipe: AsyncRead + AsyncWrite + Unpin + Send + 'static,
         Observer: Fn() + Send + 'static,
     {
+        Self::connect_recoverable(pipe, on_frame, shutdown, None)
+    }
+
+    /// Receive recovery requirements for this solo attachment's hosted session.
+    #[must_use]
+    pub(crate) fn connect_recoverable<Pipe, Observer>(
+        pipe: Pipe,
+        on_frame: Observer,
+        shutdown: CancellationToken,
+        reload: Option<mpsc::UnboundedReceiver<agent_client_protocol::schema::v1::SessionId>>,
+    ) -> Self
+    where
+        Pipe: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+        Observer: Fn() + Send + 'static,
+    {
         let (outbound_tx, outbound_rx) = mpsc::unbounded_channel();
         let (inbound_tx, inbound_rx) = mpsc::unbounded_channel();
 
@@ -83,7 +98,14 @@ impl PipeTransport {
         };
         let _ = inbound_tx.send(ready);
 
-        tokio::spawn(pump(pipe, outbound_rx, inbound_tx, on_frame, shutdown));
+        tokio::spawn(pump(
+            pipe,
+            outbound_rx,
+            inbound_tx,
+            on_frame,
+            shutdown,
+            reload,
+        ));
 
         Self {
             outbound: outbound_tx,
@@ -133,6 +155,7 @@ async fn pump<Pipe, Observer>(
     inbound: mpsc::UnboundedSender<ToServerMessage>,
     on_frame: Observer,
     shutdown: CancellationToken,
+    mut reload: Option<mpsc::UnboundedReceiver<agent_client_protocol::schema::v1::SessionId>>,
 ) where
     Pipe: AsyncRead + AsyncWrite + Unpin + Send + 'static,
     Observer: Fn() + Send + 'static,
@@ -142,7 +165,24 @@ async fn pump<Pipe, Observer>(
 
     loop {
         tokio::select! {
+            // Recovery is enqueued before the prompt response. Observe it
+            // first even when that response is already readable on the pipe.
+            biased;
             () = shutdown.cancelled() => break,
+            signal = async {
+                match reload.as_mut() {
+                    Some(receiver) => receiver.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                if signal.is_none() {
+                    reload = None;
+                } else if inbound.send(ToServerMessage::Event {
+                    event: SystemEvent::ReloadRequired,
+                }).is_err() {
+                    break;
+                }
+            }
             outgoing = outbound.recv() => {
                 let Some(Outbound { frame, completed }) = outgoing else { break };
                 // Activity begins when a frame is accepted for delivery, not

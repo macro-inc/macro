@@ -426,6 +426,27 @@ reads the selected indexed range. Generic server and browser folds stage load
 updates separately and replace visible history only on success. Failed or
 incomplete loads preserve the committed conversation; resume does not replace it.
 
+Live recovery uses this same load path. Cursor captures foreign or interrupted
+runs into its native journal without publishing replacement conversation frames.
+Its notifier enqueues a typed, host-local reload requirement; the pipe adapter
+delivers that requirement before a queued prompt response. The session domain
+waits for the current prompt response, queues subsequent commands, and initiates
+`initialize` followed by standard `session/load`. Each successful load therefore
+has its own durable initialization boundary. There is no agent-initiated client
+request or separate history replacement protocol. The notification never waits
+for load while holding Cursor's writer gate; the load reply remains serialized
+with live writers through `ReplayGuard`.
+The requirement is consumed internally, never persisted as a user-facing status.
+Already-dispatched prompts may finish while reload is pending; subsequent commands
+wait at the host's handshake gate. Recovery observed while a load reply is queued
+causes another load before those commands are flushed. Standalone ACP clients
+without the host channel continue serving prompts and expose captured history on
+their next client-initiated load, without unsolicited replacement traffic.
+One pending-reload bit suppresses further background capture until load completes,
+without rejecting already-dispatched prompts. Recovery validates the journal before
+requesting load; unavailable original prompts retain the old visible history rather
+than demanding a replacement known to be incomplete.
+
 Existing sessions without a complete native journal require provider-history
 hydration. If Cursor no longer exposes enough history to reconstruct the
 conversation, load must fail explicitly rather than select an incomplete

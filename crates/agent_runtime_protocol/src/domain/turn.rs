@@ -30,28 +30,3 @@ pub enum TurnOutcome {
         message: String,
     },
 }
-
-/// Transactionally replaces earlier conversation history while retaining a
-/// currently pending prompt after it. Optional projection traffic, independent
-/// of standard ACP load success and its request/response contract.
-#[derive(Debug, Clone, Serialize, Deserialize, JsonRpcNotification)]
-#[notification(method = "_session/history_snapshot")]
-#[serde(rename_all = "camelCase")]
-pub struct HistorySnapshotNotification {
-    /// The ACP session being reconstructed.
-    pub session_id: SessionId,
-    /// Correlation token unique to the ordered snapshot attempt.
-    pub snapshot_id: String,
-    /// Whether the snapshot is starting or committing.
-    pub phase: HistorySnapshotPhase,
-}
-
-/// The boundaries of an optional history replacement transaction.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HistorySnapshotPhase {
-    /// Stage subsequent history facts without changing the visible conversation.
-    Begin,
-    /// Replace history and restore any still-pending local request after it.
-    Commit,
-}

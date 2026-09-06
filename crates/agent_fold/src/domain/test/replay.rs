@@ -573,80 +573,42 @@ fn recovered_user_boundaries_open_new_turns_and_never_echo_a_correlated_prompt()
     );
 }
 
-fn snapshot(id: &str, phase: &str) -> AgentSessionLog {
-    frame(
+#[test]
+fn initialization_during_load_is_staged_until_commit() {
+    use crate::domain::model::Harness;
+
+    let mut machine = FoldMachineImpl::new();
+    machine.push(request("initialize", json!(0)));
+    machine.push(request("session/load", json!(1)));
+    assert!(machine.push(frame(
         "to_server",
-        json!({"method":"_session/history_snapshot","params":{"sessionId":"s","snapshotId":id,"phase":phase}}),
-    )
+        json!({"id":0,"result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"cursor","version":"1"}}}),
+    )).is_empty());
+    assert_eq!(machine.metadata().harness, Harness::Unknown);
+    let events = machine.push(result(json!(1)));
+    assert!(matches!(&events[0], FoldEvent::MessagesReplaced(_)));
+    assert!(
+        matches!(&events[1], FoldEvent::MetadataUpdated(metadata) if metadata.harness == Harness::Cursor)
+    );
+    assert_eq!(machine.metadata().harness, Harness::Cursor);
 }
 
 #[test]
-fn initialization_during_replay_is_staged_until_commit() {
-    use crate::domain::model::Harness;
-
-    for load in [false, true] {
-        let mut machine = FoldMachineImpl::new();
-        machine.push(request("initialize", json!(0)));
-        machine.push(if load {
-            request("session/load", json!(1))
-        } else {
-            snapshot("a", "begin")
-        });
-        assert!(machine.push(frame(
-            "to_server",
-            json!({"id":0,"result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"cursor","version":"1"}}}),
-        )).is_empty());
-        assert_eq!(machine.metadata().harness, Harness::Unknown);
-        let events = machine.push(if load {
-            result(json!(1))
-        } else {
-            snapshot("a", "commit")
-        });
-        assert!(matches!(&events[0], FoldEvent::MessagesReplaced(_)));
-        assert!(
-            matches!(&events[1], FoldEvent::MetadataUpdated(metadata) if metadata.harness == Harness::Cursor)
-        );
-        assert_eq!(machine.metadata().harness, Harness::Cursor);
-    }
-}
-
-#[test]
-fn snapshot_preserves_harness_when_initialization_does_not_announce_one() {
-    use crate::domain::model::Harness;
-
-    for response in [
-        json!({"id":1,"result":{"protocolVersion":1,"agentCapabilities":{}}}),
-        json!({"id":1,"result":false}),
-        json!({"id":1,"error":{"code":-32603,"message":"failed"}}),
-    ] {
-        let mut machine = FoldMachineImpl::new();
-        machine.push(request("initialize", json!(0)));
-        machine.push(frame("to_server", json!({"id":0,"result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"cursor","version":"1"}}})));
-        assert_eq!(machine.metadata().harness, Harness::Cursor);
-        machine.push(request("initialize", json!(1)));
-        machine.push(snapshot("a", "begin"));
-        assert!(machine.push(frame("to_server", response)).is_empty());
-        machine.push(snapshot("a", "commit"));
-        assert_eq!(machine.metadata().harness, Harness::Cursor);
-    }
-}
-
-#[test]
-fn snapshot_keeps_live_status_and_ready_aborts_replacement() {
+fn load_keeps_live_status_and_ready_aborts_replacement() {
     for status in ["custom_status", "acp_ready"] {
         let mut machine = FoldMachineImpl::new();
         for entry in parse_log(TURN) {
             machine.push(entry);
         }
         let old = machine.messages().to_vec();
-        machine.push(event("before_snapshot"));
-        machine.push(snapshot("a", "begin"));
+        machine.push(event("before_load"));
+        machine.push(request("session/load", json!(1)));
         machine.push(update("agent_message_chunk", "replacement"));
         assert!(
             matches!(&machine.push(event(status))[0], FoldEvent::MetadataUpdated(metadata) if metadata.status.as_deref() == Some(status))
         );
         assert_eq!(machine.messages(), old);
-        let events = machine.push(snapshot("a", "commit"));
+        let events = machine.push(result(json!(1)));
         if status == "acp_ready" {
             assert!(events.is_empty());
             assert!(
@@ -664,30 +626,13 @@ fn snapshot_keeps_live_status_and_ready_aborts_replacement() {
 }
 
 #[test]
-fn history_snapshot_stages_older_history_and_restores_pending_request_after_it() {
+fn recovered_history_appears_only_through_a_later_standard_load() {
+    // A pending prompt's turn stays open while older provider history is
+    // recovered out of band; nothing changes until the client loads.
     let mut log = vec![frame(
         "to_runtime",
         json!({"id":31,"method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"new question"}]}}),
     )];
-    let pending = fold(log.clone());
-    log.extend([snapshot("a", "begin"), update("user_message_chunk", "old question"), update("agent_message_chunk", "old answer"), frame("to_server", json!({"method":"_session/turn_complete","params":{"sessionId":"s","outcome":{"kind":"finished"}}}))]);
-    assert_eq!(fold(log.clone()), pending, "history is hidden until commit");
-    log.push(snapshot("wrong", "commit"));
-    assert_eq!(
-        fold(log.clone()),
-        pending,
-        "unmatched commit cannot replace"
-    );
-    log.push(snapshot("a", "commit"));
-    let staged = fold(log.clone());
-    assert_eq!(staged.len(), 3);
-    assert_eq!(staged[0].id, staged[1].id);
-    assert_eq!(
-        staged[2].parts.first(),
-        Some(&MessagePart::Text {
-            text: "new question".into()
-        })
-    );
     log.extend([
         update("agent_message_chunk", "new answer"),
         frame(
@@ -695,6 +640,29 @@ fn history_snapshot_stages_older_history_and_restores_pending_request_after_it()
             json!({"id":31,"result":{"stopReason":"end_turn"}}),
         ),
     ]);
+    let live = fold(log.clone());
+    assert_eq!(live.len(), 2);
+    log.extend([
+        request("session/load", json!(32)),
+        update("user_message_chunk", "old question"),
+        update("agent_message_chunk", "old answer"),
+        frame(
+            "to_server",
+            json!({"method":"_session/turn_complete","params":{"sessionId":"s","outcome":{"kind":"finished"}}}),
+        ),
+        update("user_message_chunk", "new question"),
+        update("agent_message_chunk", "new answer"),
+        frame(
+            "to_server",
+            json!({"method":"_session/turn_complete","params":{"sessionId":"s","outcome":{"kind":"finished"}}}),
+        ),
+    ]);
+    assert_eq!(
+        fold(log.clone()),
+        live,
+        "history is hidden until the load succeeds"
+    );
+    log.push(result(json!(32)));
     let mut machine = FoldMachineImpl::new();
     let mut visible = Vec::new();
     for (i, entry) in log.iter().enumerate() {
@@ -704,103 +672,23 @@ fn history_snapshot_stages_older_history_and_restores_pending_request_after_it()
         assert_eq!(visible, fold(log[..=i].iter().cloned()));
     }
     assert_eq!(visible.len(), 4);
-    assert_ne!(visible[0].id, visible[2].id);
+    assert_eq!(visible[0].id, visible[1].id);
     assert_eq!(visible[2].id, visible[3].id);
-}
-
-#[test]
-fn incomplete_history_snapshot_never_commits_on_response_or_disconnect() {
-    for disconnect in [false, true] {
-        let pending_request = frame(
-            "to_runtime",
-            json!({"id":31,"method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"pending"}]}}),
-        );
-        let mut log = vec![
-            pending_request,
-            snapshot("a", "begin"),
-            update("user_message_chunk", "wrong"),
-            update("agent_message_chunk", "wrong"),
-        ];
-        if disconnect {
-            log.push(event("disconnected"));
-        } else {
-            log.push(frame(
-                "to_server",
-                json!({"id":31,"error":{"code":-32603,"message":"failed"}}),
-            ));
-        }
-        let expected = fold(log.clone());
-        log.extend([
-            update("agent_message_chunk", "late"),
-            snapshot("a", "commit"),
-        ]);
-        assert_eq!(fold(log.clone()), expected);
-        log.extend([
-            request("initialize", json!(40)),
-            result(json!(40)),
-            request("session/load", json!(41)),
-            result(json!(41)),
-        ]);
-        assert!(
-            fold(log).is_empty(),
-            "standard successful empty load still replaces"
-        );
-    }
-}
-
-#[test]
-fn overlapping_snapshot_contents_never_enter_load_candidate() {
-    for begin_before_load in [false, true] {
-        for succeeds in [false, true] {
-            let mut log = replay(json!(1));
-            let previous = fold(log.clone());
-            if begin_before_load {
-                log.extend([
-                    snapshot("overlap", "begin"),
-                    update("user_message_chunk", "partial"),
-                ]);
-            }
-            log.push(request("session/load", json!(2)));
-            if !begin_before_load {
-                log.push(snapshot("overlap", "begin"));
-            }
-            log.extend([
-                update("user_message_chunk", "question"),
-                update("agent_message_chunk", "snapshot answer"),
-                snapshot("wrong", "commit"),
-                update("agent_message_chunk", "still snapshot"),
-                snapshot("overlap", "commit"),
-                update("user_message_chunk", "question"),
-                update("agent_message_chunk", "load answer"),
-            ]);
-            assert_eq!(fold(log.clone()), previous);
-            log.push(if succeeds {
-                result(json!(2))
-            } else {
-                frame(
-                    "to_server",
-                    json!({"id":2,"error":{"code":-32603,"message":"failed"}}),
-                )
-            });
-            let mut machine = FoldMachineImpl::new();
-            let mut visible = Vec::new();
-            for (i, entry) in log.iter().enumerate() {
-                for event in machine.push(entry.clone()) {
-                    apply(&mut visible, event.into_owned());
-                }
-                assert_eq!(visible, fold(log[..=i].iter().cloned()));
-            }
-            if succeeds {
-                assert_eq!(visible.len(), 2);
-                assert_eq!(
-                    visible[1].parts.iter().cloned().collect::<Vec<_>>(),
-                    vec![MessagePart::Text {
-                        text: "load answer".into()
-                    }]
-                );
-            } else {
-                assert_eq!(visible, previous);
-            }
-        }
-    }
+    assert_ne!(visible[0].id, visible[2].id);
+    assert_eq!(
+        visible[0].parts.first(),
+        Some(&MessagePart::Text {
+            text: "old question".into()
+        })
+    );
+    assert_eq!(
+        visible[2].parts.first(),
+        Some(&MessagePart::Text {
+            text: "new question".into()
+        })
+    );
+    assert_eq!(
+        visible[3].stop,
+        Some(crate::domain::model::StopReason::EndTurn)
+    );
 }

@@ -149,6 +149,67 @@ fn a_command_while_booting_queues_silently() {
 }
 
 #[test]
+fn recovery_waits_for_prompt_then_loads_with_a_new_durable_boundary() {
+    for active in [false, true] {
+        let mut machine = machine();
+        begin_opening(&mut machine);
+        machine.handle(session_opened("cursor-session"));
+        machine.initialization_persisted(macro_uuid::generate_uuid_v7());
+        let prompt = if active {
+            Some(sent_request_ids(&machine.handle(command("current", 1)))[0].clone())
+        } else {
+            None
+        };
+        let mut effects = machine.handle(Input::Inbound(ToServerMessage::Event {
+            event: SystemEvent::ReloadRequired,
+        }));
+        if let Some(prompt) = prompt {
+            assert!(sent_methods(&effects).is_empty());
+            assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
+            effects = machine.handle(frame(RawJsonRpcMessage::response(
+                prompt,
+                Ok(serde_json::json!({"stopReason":"end_turn"})),
+            )));
+            assert!(
+                effects
+                    .iter()
+                    .any(|effect| matches!(effect, Effect::TurnEnded { .. }))
+            );
+        }
+        assert_eq!(sent_methods(&effects), ["initialize"]);
+        let initialize = sent_request_ids(&effects)[0].clone();
+        assert!(machine.handle(command("queued", 2)).is_empty());
+        let boundary = macro_uuid::generate_uuid_v7();
+        machine.initialization_persisted(boundary);
+        let response = InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new()
+                .load_session(true)
+                .session_capabilities(
+                    SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                ),
+        );
+        let opening = machine.handle(frame(RawJsonRpcMessage::response(
+            initialize,
+            Ok(serde_json::to_value(response).unwrap()),
+        )));
+        assert_eq!(
+            sent_methods(&opening),
+            ["session/load"],
+            "recovery must not prefer generic resume"
+        );
+        let load = sent_request_ids(&opening)[0].clone();
+        let committed = machine.handle(frame(RawJsonRpcMessage::response(
+            load,
+            Ok(serde_json::json!({})),
+        )));
+        assert!(
+            matches!(&committed[0], Effect::Log { boundary: Some(selected), .. } if selected.initialization_log_id == boundary)
+        );
+        assert_eq!(sent_methods(&committed), ["session/prompt"]);
+    }
+}
+
+#[test]
 fn acp_ready_logs_then_sends_initialize() {
     let mut machine = machine();
 
@@ -158,6 +219,36 @@ fn acp_ready_logs_then_sends_initialize() {
     assert_eq!(sent_request_ids(&effects), [request_id(0)]);
     assert_eq!(effects.len(), 2);
     assert_eq!(machine.status(), RuntimeStatus::Handshaking);
+}
+
+#[test]
+fn recovery_while_a_load_reply_is_queued_loads_again_before_dispatch() {
+    let mut machine = machine();
+    begin_opening(&mut machine);
+    machine.handle(session_opened("cursor-session"));
+    let requirement = || {
+        Input::Inbound(ToServerMessage::Event {
+            event: SystemEvent::ReloadRequired,
+        })
+    };
+    let initialize = sent_request_ids(&machine.handle(requirement()))[0].clone();
+    machine.initialization_persisted(macro_uuid::generate_uuid_v7());
+    let opening = machine.handle(frame(RawJsonRpcMessage::response(
+        initialize,
+        Ok(serde_json::to_value(
+            InitializeResponse::new(PROTOCOL_VERSION)
+                .agent_capabilities(AgentCapabilities::new().load_session(true)),
+        )
+        .unwrap()),
+    )));
+    assert!(machine.handle(requirement()).is_empty());
+    assert!(machine.handle(command("queued", 1)).is_empty());
+    let again = machine.handle(frame(RawJsonRpcMessage::response(
+        sent_request_ids(&opening)[0].clone(),
+        Ok(serde_json::json!({})),
+    )));
+    assert_eq!(sent_methods(&again), ["initialize"]);
+    assert_eq!(machine.pending_count(), 1);
 }
 
 #[test]

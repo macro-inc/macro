@@ -82,6 +82,7 @@ pub struct AcpNotifier {
     /// connection, exactly as one service does.
     connection: Arc<OnceLock<ConnectionTo<Client>>>,
     bound: Arc<tokio::sync::Notify>,
+    reload: Option<tokio::sync::mpsc::UnboundedSender<SessionId>>,
 }
 
 impl AcpNotifier {
@@ -89,6 +90,12 @@ impl AcpNotifier {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Deliver recovery requirements to the embedding ACP client, not the wire.
+    pub fn with_reload(mut self, reload: tokio::sync::mpsc::UnboundedSender<SessionId>) -> Self {
+        self.reload = Some(reload);
+        self
     }
 
     /// Attach the connection updates will travel over.
@@ -120,24 +127,15 @@ impl SessionNotifier for AcpNotifier {
             .map_err(|error| rootcause::report!("{error}"))
     }
 
-    async fn history_snapshot(
-        &self,
-        session: &SessionId,
-        snapshot_id: &str,
-        phase: agent_runtime_protocol::domain::turn::HistorySnapshotPhase,
-    ) -> Result<(), rootcause::Report> {
-        let connection = self
-            .connection
-            .get()
-            .ok_or_else(|| rootcause::report!("ACP connection is not bound"))?;
-        connection
-            .send_notification(
-                agent_runtime_protocol::domain::turn::HistorySnapshotNotification {
-                    session_id: session.clone(),
-                    snapshot_id: snapshot_id.to_owned(),
-                    phase,
-                },
-            )
+    async fn require_reload(&self, session: &SessionId) -> Result<(), rootcause::Report> {
+        let Some(reload) = &self.reload else {
+            // Standalone ACP clients own their load lifecycle. Keep serving
+            // prompts without inventing a client request or pushing history.
+            tracing::warn!(%session, "recovered Cursor history is available on session/load");
+            return Ok(());
+        };
+        reload
+            .send(session.clone())
             .map_err(|error| rootcause::report!("{error}"))
     }
 

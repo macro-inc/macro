@@ -130,6 +130,9 @@ struct SessionState {
     /// connection. Restored sessions must not emit recovered updates before
     /// `session/load` re-establishes the host's routing for their session id.
     ready_for_sync: bool,
+    /// Pause background capture while the host loads, without refusing prompts
+    /// it already dispatched before observing the recovery requirement.
+    reload_pending: bool,
     /// Set by cancel; read by the turn when its stream ends.
     ///
     /// The *verdict*, not the mechanism: a cancel that raced the stream's own
@@ -157,7 +160,6 @@ struct SessionState {
     /// session.
     machine: ReplayMachine,
     journal_entries: Vec<JournalEntry>,
-    snapshot_serial: u64,
     journal_loaded: bool,
     fresh: bool,
     capture_failed: bool,
@@ -520,9 +522,6 @@ where
             self.backfill_foreign_runs(session_id, &session, agent, None)
                 .await?;
         }
-        if cancel.is_cancelled() {
-            return Ok(StopReason::Cancelled);
-        }
         // Preserve original content before the provider creates remote work.
         self.capture(
             session_id,
@@ -541,6 +540,18 @@ where
             .last()
             .expect("captured prompt")
             .sequence;
+
+        if cancel.is_cancelled() {
+            self.capture(
+                session_id,
+                &session,
+                None,
+                JournalInput::PromptAborted(prompt_sequence),
+                false,
+            )
+            .await?;
+            return Ok(StopReason::Cancelled);
+        }
 
         let created = match prior_agent {
             Some(agent) => {
@@ -1273,57 +1284,25 @@ where
             }
         }
         if mirrored {
-            let entries = session
-                .state
-                .lock()
-                .expect("session state poisoned")
-                .journal_entries
-                .clone();
-            let (_, updates) = history_projection(&entries, current_run, false)?;
-            let snapshot = {
+            let notify = {
                 let mut state = session.state.lock().expect("session state poisoned");
-                state.snapshot_serial += 1;
-                format!(
-                    "{}:{}",
-                    entries.last().map_or(0, |e| e.sequence),
-                    state.snapshot_serial
-                )
-            };
-            use agent_runtime_protocol::domain::turn::HistorySnapshotPhase;
-            let published: Result<(), rootcause::Report> = async {
-                self.notifier
-                    .history_snapshot(session_id, &snapshot, HistorySnapshotPhase::Begin)
-                    .await?;
-                for (batch, completion) in updates {
-                    for update in batch {
-                        self.notifier.notify(session_id, update).await?;
-                    }
-                    if let Some(completion) = completion {
-                        self.notifier.turn_complete(session_id, completion).await?;
-                    }
+                if let Err(error) = history_projection(&state.journal_entries) {
+                    tracing::warn!(error = ?error, %session_id, "captured recovery cannot replace history yet");
+                    return Ok(mirrored);
                 }
+                !std::mem::replace(&mut state.reload_pending, true)
+            };
+            if notify {
                 self.notifier
-                    .history_snapshot(session_id, &snapshot, HistorySnapshotPhase::Commit)
-                    .await?;
-                Ok(())
-            }
-            .await;
-            published.map_err(|error| {
-                let mut state = session.state.lock().expect("session state poisoned");
-                state.capture_failed = true;
-                state.ready_for_sync = false;
-                SessionError::Journal(error)
-            })?;
-        }
-        for run in runs {
-            // Advance delivery only after the complete replacement was queued.
-            if newer.contains(&run) {
-                self.notifier.checkpoint(session_id, &run).await?;
-                session
-                    .state
-                    .lock()
-                    .expect("session state poisoned")
-                    .last_run = Some(run);
+                    .require_reload(session_id)
+                    .await
+                    .inspect_err(|_| {
+                        session
+                            .state
+                            .lock()
+                            .expect("session state poisoned")
+                            .reload_pending = false;
+                    })?;
             }
         }
         Ok(mirrored)
@@ -1526,7 +1505,7 @@ where
             .expect("session state poisoned")
             .journal_entries
             .clone();
-        let (machine, updates) = history_projection(&entries, None, true)?;
+        let (machine, updates) = history_projection(&entries)?;
         for (batch, outcome) in updates {
             for update in batch {
                 self.notifier.notify(id, update).await?;
@@ -1534,6 +1513,18 @@ where
             if let Some(outcome) = outcome {
                 self.notifier.turn_complete(id, outcome).await?;
             }
+        }
+        if let Some(run) = entries.iter().rev().find_map(|entry| {
+            (entry.input == JournalInput::Reconciled)
+                .then_some(entry.run.as_ref())
+                .flatten()
+        }) {
+            self.notifier.checkpoint(id, run).await?;
+            session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .last_run = Some(run.clone());
         }
         session
             .state
@@ -1567,7 +1558,9 @@ where
             };
             let agent = {
                 let state = session.state.lock().expect("session state poisoned");
-                state.ready_for_sync.then(|| state.agent.clone()).flatten()
+                (state.ready_for_sync && !state.reload_pending)
+                    .then(|| state.agent.clone())
+                    .flatten()
             };
             let Some(agent) = agent else {
                 continue;
@@ -1612,11 +1605,9 @@ pub struct ReplayGuard {
 impl ReplayGuard {
     /// Enable continuation only after the response was successfully queued.
     pub fn complete(self) {
-        self.session
-            .state
-            .lock()
-            .expect("session state poisoned")
-            .ready_for_sync = true;
+        let mut state = self.session.state.lock().expect("session state poisoned");
+        state.ready_for_sync = true;
+        state.reload_pending = false;
     }
 }
 
@@ -1681,8 +1672,6 @@ type HistoryUpdates = Vec<(
 
 fn history_projection(
     entries: &[JournalEntry],
-    excluded: Option<&CursorRunId>,
-    require_prompts: bool,
 ) -> Result<(ReplayMachine, HistoryUpdates), SessionError> {
     for entry in entries {
         if entry.run.is_none()
@@ -1700,9 +1689,6 @@ fn history_projection(
     // prompts project immediately before their first native run input.
     let mut updates = Vec::new();
     for entry in entries {
-        if entry.run.as_ref().is_some_and(|run| Some(run) == excluded) {
-            continue;
-        }
         let before = entry
             .run
             .as_ref()
@@ -1728,7 +1714,6 @@ fn history_projection(
     for entry in entries {
         if let JournalInput::PromptAccepted(_) = entry.input
             && let Some(run) = &entry.run
-            && Some(run) != excluded
             && !machine.has_prompt(run)
             && !entries
                 .iter()
@@ -1741,16 +1726,12 @@ fn history_projection(
             ));
         }
     }
-    for run in entries
-        .iter()
-        .filter_map(|e| e.run.as_ref())
-        .filter(|run| Some(*run) != excluded)
-    {
+    for run in entries.iter().filter_map(|e| e.run.as_ref()) {
         let accepted_only = entries
             .iter()
             .filter(|e| e.run.as_ref() == Some(run))
             .all(|e| matches!(e.input, JournalInput::PromptAccepted(_)));
-        if require_prompts && !machine.has_prompt(run) && !accepted_only {
+        if !machine.has_prompt(run) && !accepted_only {
             return Err(rootcause::report!(
                 "Cursor original prompt unavailable for {run}; preserving existing history"
             )
