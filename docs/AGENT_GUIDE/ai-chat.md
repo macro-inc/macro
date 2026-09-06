@@ -11,11 +11,19 @@
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
-`Create` → `Coding Agent A`, or keyboard `c` then `a`, opens the agent-session
-composer. Enter an optional first request, choose a **Persona**, and optionally
-choose a **Model override** (the default leaves the persona's configured model
-unchanged). Press **Create Session** or `Cmd/Ctrl+Enter`; the composer closes and
-the new `/app/agent/<uuid>` session opens while its runtime starts.
+`Create` → `Coding Agent A`, or keyboard `c` then `a`, opens the **New agent
+session** composer popover. The prompt textarea (`What should the agent work
+on?`) is focused on open, so you can `type_text` immediately. Two outline pills
+sit at the bottom left: the **Persona** pill (avatar + name; `aria-label`
+`Persona`) opens a menu of personas with `@handle · harness` subtitles, and the
+**Model override** pill (`aria-label` `Model override`) opens a menu whose first
+row is `Persona default · <model>` followed by the other models the persona's
+harness offers. Changing persona resets the override. Tab order is prompt →
+Persona → Model → **Create Session**; the close `X` is skipped. Menus open on
+Enter/Space and select with arrow keys + Enter. Escape in the prompt first
+blurs to the dialog, a second Escape closes it. Press **Create Session** or
+`Cmd/Ctrl+Enter`; the composer closes and the new `/app/agent/<uuid>` session
+opens while its runtime starts.
 
 ## Start a doc-scoped chat
 
