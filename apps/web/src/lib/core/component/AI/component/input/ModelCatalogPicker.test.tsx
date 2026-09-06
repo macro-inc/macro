@@ -13,9 +13,10 @@ import { ModelCatalogPicker } from './ModelCatalogPicker';
 vi.mock('@ui', () => {
   const cn = (...args: unknown[]) =>
     args.flat(Infinity).filter(Boolean).join(' ');
+  let trigger: HTMLButtonElement | undefined;
   const Dropdown: any = (props: any) => <div>{props.children}</div>;
   Dropdown.Trigger = (props: any) => (
-    <button type="button" aria-label={props['aria-label']}>
+    <button ref={trigger} type="button" aria-label={props['aria-label']}>
       {props.children}
     </button>
   );
@@ -27,9 +28,9 @@ vi.mock('@ui', () => {
         onKeyDown={(event) => {
           if (event.key !== 'Escape') return;
           props.onEscapeKeyDown?.(event);
-          queueMicrotask(() =>
-            props.onCloseAutoFocus?.(new Event('close', { cancelable: true }))
-          );
+          props.onCloseAutoFocus?.(new Event('close', { cancelable: true }));
+          // Kobalte does this after calling onCloseAutoFocus.
+          trigger?.focus();
         }}
       >
         {props.children}
@@ -77,6 +78,9 @@ describe('ModelCatalogPicker focus', () => {
     });
     await waitFor(() => expect(document.activeElement).toBe(search));
 
+    // Hovering model rows can move focus away from search. Escape must still
+    // restore the composer from anywhere in the picker.
+    screen.getByRole('menu').focus();
     await user.keyboard('{Escape}');
 
     await waitFor(() => {

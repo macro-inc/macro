@@ -107,6 +107,10 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           // Register after it so the list cannot take focus back from search.
           setTimeout(() => searchRef?.focus(), 0);
         }}
+        onEscapeKeyDown={() => {
+          // Escape can originate from search or from a hovered/focused row.
+          dismissedWithEscape = true;
+        }}
         onCloseAutoFocus={(event) => {
           if (!dismissedWithEscape) return;
           dismissedWithEscape = false;

@@ -18,9 +18,12 @@ vi.mock('@ui', () => {
   const Button = (props: any) => (
     <button type="button">{props.children}</button>
   );
+  let trigger: HTMLButtonElement | undefined;
   const Dropdown: any = (props: any) => <div>{props.children}</div>;
   Dropdown.Trigger = (props: any) => (
-    <button type="button">{props.children}</button>
+    <button ref={trigger} type="button">
+      {props.children}
+    </button>
   );
   Dropdown.Content = (props: any) => (
     <div
@@ -29,9 +32,9 @@ vi.mock('@ui', () => {
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return;
         props.onEscapeKeyDown?.(event);
-        queueMicrotask(() =>
-          props.onCloseAutoFocus?.(new Event('close', { cancelable: true }))
-        );
+        props.onCloseAutoFocus?.(new Event('close', { cancelable: true }));
+        // Kobalte manually restores its trigger after this callback.
+        trigger?.focus();
       }}
     >
       {props.children}
