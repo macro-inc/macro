@@ -4526,6 +4526,7 @@ dependencies = [
  "agent-client-protocol",
  "agent_fold",
  "agent_runtime_protocol",
+ "agent_session",
  "futures",
  "insta",
  "macro_env_var",

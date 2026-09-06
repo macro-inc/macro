@@ -51,7 +51,6 @@ pub fn chunked(sse: &str, chunk_size: usize) -> Vec<Record> {
                     event: message.event.into_owned(),
                     data: message.data,
                     id: message.last_event_id.map(|id| id.to_string()),
-                    scripted_event: None,
                 }),
                 // Cursor has never sent one; nothing reconnects on it yet.
                 SseEvent::Retry(_) => {}
@@ -76,10 +75,7 @@ pub fn records(sse: &str) -> Vec<Record> {
 pub fn events(sse: &str) -> Vec<CursorEvent> {
     records(sse)
         .into_iter()
-        .map(|record| {
-            let data = serde_json::from_str(&record.data).unwrap_or(serde_json::Value::Null);
-            CursorEvent::from_wire(&record.event, data)
-        })
+        .map(|record| record.decode())
         .collect()
 }
 

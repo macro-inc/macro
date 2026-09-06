@@ -2,23 +2,23 @@
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput};
 use crate::domain::model::CursorRunId;
 use agent_client_protocol::schema::v1::SessionId;
+use agent_session::domain::model::{AgentSessionId, ManagerFence, ReplicaId};
 use futures::future::BoxFuture;
 use sqlx::PgPool;
-use uuid::Uuid;
 
 /// Bound to exactly one authorized host session and its current management
 /// claim. A takeover updates the same locked row and invalidates this writer.
 #[derive(Debug)]
 pub struct PgCursorJournal {
     pool: PgPool,
-    session: Uuid,
-    replica: Uuid,
-    fence: std::sync::OnceLock<i64>,
+    session: AgentSessionId,
+    replica: ReplicaId,
+    fence: std::sync::OnceLock<ManagerFence>,
 }
 impl PgCursorJournal {
     /// Construct an inactive journal. The attachment must activate it with
     /// its actual acquired claim before any read, append or provider action.
-    pub fn new(pool: PgPool, session: Uuid, replica: Uuid) -> Self {
+    pub fn new(pool: PgPool, session: AgentSessionId, replica: ReplicaId) -> Self {
         Self {
             pool,
             session,
@@ -30,9 +30,9 @@ impl PgCursorJournal {
     /// Never infer or refresh authority from a database read.
     pub fn activate(
         &self,
-        session: Uuid,
-        replica: Uuid,
-        fence: i64,
+        session: AgentSessionId,
+        replica: ReplicaId,
+        fence: ManagerFence,
     ) -> Result<(), rootcause::Report> {
         if session != self.session || replica != self.replica {
             return Err(rootcause::report!(
@@ -50,14 +50,17 @@ impl PgCursorJournal {
         &self,
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     ) -> Result<(), rootcause::Report> {
+        // Dispatch fencing cannot stop an already-running stream or mirror
+        // poll. Hold the same row takeover updates until the journal commits;
+        // checking the claim before opening this transaction would race.
         let expected = *self
             .fence
             .get()
             .ok_or_else(|| rootcause::report!("Cursor journal attachment is not activated"))?;
-        let current = sqlx::query_scalar!("SELECT manager_fence FROM agent_session WHERE id = $1 AND manager_replica_id = $2 FOR UPDATE", self.session, self.replica)
+        let current = sqlx::query_scalar!("SELECT manager_fence FROM agent_session WHERE id = $1 AND manager_replica_id = $2 FOR UPDATE", self.session.as_uuid(), self.replica.as_uuid())
             .fetch_optional(&mut **tx).await.map_err(|e| rootcause::report!(e))?
             .ok_or_else(|| rootcause::report!("Cursor journal writer fenced out"))?;
-        if current != expected {
+        if ManagerFence(current) != expected {
             return Err(rootcause::report!("Cursor journal writer fenced out"));
         }
         Ok(())
@@ -73,7 +76,7 @@ impl CursorJournal for PgCursorJournal {
             // ACP ID, which is only unique within a transport.
             let mut tx = self.pool.begin().await.map_err(|e| rootcause::report!(e))?;
             self.lock_owner(&mut tx).await?;
-            let rows = sqlx::query!("SELECT sequence, run_id, input FROM cursor_journal_input WHERE agent_session_id = $1 ORDER BY sequence", self.session)
+            let rows = sqlx::query!("SELECT sequence, run_id, input FROM cursor_journal_input WHERE agent_session_id = $1 ORDER BY sequence", self.session.as_uuid())
                 .fetch_all(&mut *tx).await.map_err(|e| rootcause::report!(e))?;
             tx.commit().await.map_err(|e| rootcause::report!(e))?;
             rows.into_iter()
@@ -98,7 +101,7 @@ impl CursorJournal for PgCursorJournal {
         Box::pin(async move {
             let mut tx = self.pool.begin().await.map_err(|e| rootcause::report!(e))?;
             self.lock_owner(&mut tx).await?;
-            let high = sqlx::query_scalar!("SELECT COALESCE(MAX(sequence), 0) AS \"high!\" FROM cursor_journal_input WHERE agent_session_id = $1", self.session)
+            let high = sqlx::query_scalar!("SELECT COALESCE(MAX(sequence), 0) AS \"high!\" FROM cursor_journal_input WHERE agent_session_id = $1", self.session.as_uuid())
                 .fetch_one(&mut *tx).await.map_err(|e| rootcause::report!(e))?;
             if high != expected {
                 return Err(rootcause::report!(
@@ -108,7 +111,7 @@ impl CursorJournal for PgCursorJournal {
             let payload = serde_json::to_value(input).map_err(|e| rootcause::report!(e))?;
             let sequence = expected + 1;
             let run_id = run.map(CursorRunId::as_str);
-            sqlx::query!("INSERT INTO cursor_journal_input(agent_session_id, sequence, run_id, input) VALUES ($1, $2, $3, $4)", self.session, sequence, run_id, payload)
+            sqlx::query!("INSERT INTO cursor_journal_input(agent_session_id, sequence, run_id, input) VALUES ($1, $2, $3, $4)", self.session.as_uuid(), sequence, run_id, payload)
                 .execute(&mut *tx).await.map_err(|e| rootcause::report!(e))?;
             tx.commit().await.map_err(|e| rootcause::report!(e))?;
             Ok(JournalEntry {

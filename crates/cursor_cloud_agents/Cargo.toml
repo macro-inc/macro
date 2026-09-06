@@ -6,7 +6,7 @@ version = "0.1.0"
 
 [features]
 default = ["postgres"]
-postgres = []
+postgres = ["dep:agent_session"]
 # In-memory port implementations and recorded fixtures, for crates that test
 # against this one.
 test-utils = []
@@ -15,6 +15,7 @@ test-utils = []
 name = "cursor_cloud_agents"
 
 [dependencies]
+agent_session = { path = "../agent_session", optional = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 sqlx = { workspace = true }
 uuid = { workspace = true }

@@ -387,9 +387,7 @@ async fn accepted_newer_run_survives_partial_crash_load_then_actual_sync_without
                 &id,
                 &session,
                 Some(&r1),
-                JournalInput::Sse(crate::domain::journal::NativeRecord::scripted(
-                    event.clone(),
-                )),
+                JournalInput::Sse(crate::testing::raw_record(event.clone())),
                 false,
             )
             .await

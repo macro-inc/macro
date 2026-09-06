@@ -214,15 +214,23 @@ where
                 let journal = Arc::new(
                     cursor_cloud_agents::outbound::postgres_journal::PgCursorJournal::new(
                         pool.clone(),
-                        session_id.as_uuid(),
-                        *replica,
+                        session_id,
+                        agent_session::domain::model::ReplicaId::from_uuid(*replica),
                     ),
                 );
                 let activated = journal.clone();
                 owner_binding = Some(Arc::new(move |session, replica, fence| {
-                    activated.activate(session, replica, fence).map_err(|e| {
-                        agent_runtime_protocol::domain::ports::TransportError::Client(e.to_string())
-                    })
+                    activated
+                        .activate(
+                            AgentSessionId::new_from_uuid(session),
+                            agent_session::domain::model::ReplicaId::from_uuid(replica),
+                            agent_session::domain::model::ManagerFence(fence),
+                        )
+                        .map_err(|e| {
+                            agent_runtime_protocol::domain::ports::TransportError::Client(
+                                e.to_string(),
+                            )
+                        })
                 }));
                 journal
             }
@@ -538,15 +546,6 @@ where
         self.client.cancel_run(agent, run).await
     }
 
-    async fn run_result(
-        &self,
-        agent: &CursorAgentId,
-        run: &CursorRunId,
-    ) -> std::result::Result<cursor_cloud_agents::domain::model::RunOutcome, rootcause::Report>
-    {
-        self.client.run_result(agent, run).await
-    }
-
     async fn list_runs(
         &self,
         agent: &CursorAgentId,
@@ -575,21 +574,5 @@ where
         rootcause::Report,
     > {
         self.client.raw_stream(agent, run).await
-    }
-
-    async fn stream(
-        &self,
-        agent: &CursorAgentId,
-        run: &CursorRunId,
-    ) -> std::result::Result<
-        impl Stream<
-            Item = std::result::Result<
-                cursor_cloud_agents::domain::event::CursorEvent,
-                rootcause::Report,
-            >,
-        > + Send,
-        rootcause::Report,
-    > {
-        self.client.stream(agent, run).await
     }
 }

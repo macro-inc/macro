@@ -4,13 +4,12 @@
 //! client ([`crate::api`]); [`SessionNotifier`] by whatever transport the
 //! session's updates travel over (the ACP stdio connection today, anything
 //! that can carry a `session/update` tomorrow); [`RepoResolver`] by the git
-//! adapter in [`crate::outbound`]. The service never sees HTTP, SSE framing,
-//! JSON-RPC, or a subprocess — only these contracts.
+//! adapter in [`crate::outbound`]. Native records and polling bodies cross these
+//! contracts for capture before decoding; HTTP I/O, SSE framing, JSON-RPC, and
+//! subprocesses remain outside the service.
 
-use crate::domain::event::CursorEvent;
 use crate::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
-    RunOutcome,
 };
 use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
@@ -18,18 +17,14 @@ use std::path::Path;
 
 /// Create and control Cursor cloud agents.
 pub trait CursorAgents: Sync {
-    /// Raw successful polling body, captured before interpretation. Production
-    /// clients override this to retain provider fields unknown to the domain.
+    /// Raw successful polling body, captured before interpretation, including
+    /// provider fields unknown to the domain. A turn whose stream is unavailable
+    /// falls back to polling this until the run is terminal.
     fn raw_result(
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
-    ) -> impl Future<Output = Result<String, rootcause::Report>> + Send {
-        async move {
-            let outcome = self.run_result(agent, run).await?;
-            serde_json::to_string(&outcome).map_err(|e| rootcause::report!(e).into_dynamic())
-        }
-    }
+    ) -> impl Future<Output = Result<String, rootcause::Report>> + Send;
 
     /// Create an agent with its first run. Cursor has no bare "create agent":
     /// an agent only exists once there is a prompt to run, which is why this
@@ -77,21 +72,6 @@ pub trait CursorAgents: Sync {
         run: &CursorRunId,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 
-    /// The run's current status and, once terminal, its final answer text.
-    ///
-    /// The non-streaming read of what [`RunStream`] delivers live. It exists
-    /// because the stream is the unreliable half of the API — observed
-    /// answering `stream_unavailable` both in-stream and as a 409 in the
-    /// seconds after a run's creation — while the run itself finishes fine
-    /// server-side. A turn that cannot hold a stream falls back to polling
-    /// this until the run is terminal, so flaky streaming degrades to a
-    /// non-streamed answer instead of a lost one.
-    fn run_result(
-        &self,
-        agent: &CursorAgentId,
-        run: &CursorRunId,
-    ) -> impl Future<Output = Result<RunOutcome, rootcause::Report>> + Send;
-
     /// The agent's runs, newest first.
     ///
     /// How a session finds out what happened to its agent while it was not
@@ -107,15 +87,14 @@ pub trait CursorAgents: Sync {
     ) -> impl Future<Output = Result<Vec<RunListing>, rootcause::Report>> + Send;
 }
 
-/// Observe a run as a stream of decoded events.
+/// Observe a run as a stream of native SSE records.
 ///
 /// The stream ends when the server closes it — normally just after a
-/// [`CursorEvent::Done`]. A consumer that never sees a terminal
-/// [`CursorEvent::Result`] must treat the run's outcome as unknown rather
+/// [`CursorEvent::Done`](super::event::CursorEvent::Done). A consumer that never sees a terminal
+/// [`CursorEvent::Result`](super::event::CursorEvent::Result) must treat the run's outcome as unknown rather
 /// than successful.
 pub trait RunStream: Sync {
-    /// Complete native records, before decoding or translation. The default
-    /// bridges scripted providers; HTTP adapters must override it.
+    /// Complete native records, captured before decoding or translation.
     fn raw_stream(
         &self,
         agent: &CursorAgentId,
@@ -123,26 +102,6 @@ pub trait RunStream: Sync {
     ) -> impl Future<
         Output = Result<
             impl Stream<Item = Result<super::journal::NativeRecord, rootcause::Report>> + Send,
-            rootcause::Report,
-        >,
-    > + Send {
-        async move {
-            use futures::StreamExt;
-            Ok(self
-                .stream(agent, run)
-                .await?
-                .map(|event| event.map(super::journal::NativeRecord::scripted)))
-        }
-    }
-
-    /// The run's events, in arrival order.
-    fn stream(
-        &self,
-        agent: &CursorAgentId,
-        run: &CursorRunId,
-    ) -> impl Future<
-        Output = Result<
-            impl Stream<Item = Result<CursorEvent, rootcause::Report>> + Send,
             rootcause::Report,
         >,
     > + Send;

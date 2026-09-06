@@ -1224,8 +1224,8 @@ async fn load_queues_all_native_history_before_its_response_and_repeats_without_
         id: CursorRunId::new("old-run"),
         status: RunStatus::Finished,
     }]);
-    let tx = cursor.script_stream();
-    for event in crate::testing::fixture_events("file_operations.sse") {
+    let tx = cursor.script_raw_stream();
+    for event in crate::testing::fixture_records("file_operations.sse") {
         tx.send(event).unwrap();
     }
     drop(tx);

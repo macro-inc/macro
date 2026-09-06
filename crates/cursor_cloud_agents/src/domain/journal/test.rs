@@ -2,6 +2,41 @@ use super::*;
 use crate::testing::fixture_sse;
 
 #[test]
+fn fake_wire_encoder_matches_recorded_vocabulary() {
+    for name in [
+        "multi_turn_1.sse",
+        "file_operations.sse",
+        "cancelled.sse",
+        "mcp_servers.sse",
+    ] {
+        for record in crate::testing::fixture_records(name) {
+            let event = record.decode();
+            let encoded = crate::testing::raw_record(event.clone());
+            assert_eq!(encoded.decode(), event, "{name}: {record:?}");
+            assert_eq!(encoded.event, record.event);
+        }
+    }
+    let user =
+        crate::testing::raw_record(CursorEvent::Interaction(InteractionUpdate::UserMessage {
+            text: "hello".into(),
+        }));
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&user.data).unwrap(),
+        serde_json::json!({"type": "user-message-appended", "userMessage": {"text": "hello"}})
+    );
+    let result = crate::testing::raw_record(CursorEvent::Result {
+        run_id: CursorRunId::new("r"),
+        status: RunStatus::Finished,
+        text: Some("answer".into()),
+        duration_ms: Some(42),
+    });
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(&result.data).unwrap(),
+        serde_json::json!({"runId": "r", "status": "FINISHED", "text": "answer", "durationMs": 42})
+    );
+}
+
+#[test]
 fn complete_native_fixtures_roundtrip_with_prompts_tools_and_terminal_states() {
     for name in [
         "multi_turn_1.sse",
@@ -45,7 +80,7 @@ fn polling_appends_only_missing_suffix_and_never_repeats_a_final_answer() {
     machine
         .push(
             Some(&run),
-            &JournalInput::Sse(NativeRecord::scripted(CursorEvent::Assistant {
+            &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
                 text: "hel".into(),
             })),
         )
@@ -87,7 +122,7 @@ fn original_blocks_suppress_the_provider_prompt_echo_once_per_run() {
         machine
             .push(
                 Some(&run),
-                &JournalInput::Sse(NativeRecord::scripted(CursorEvent::Interaction(
+                &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Interaction(
                     InteractionUpdate::UserMessage {
                         text: "original\ncontent".into()
                     }
@@ -131,7 +166,7 @@ fn result_requires_a_known_terminal_status_before_completeness_or_tool_cleanup()
             machine
                 .push(
                     Some(&run),
-                    &JournalInput::Sse(NativeRecord::scripted(CursorEvent::Result {
+                    &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Result {
                         run_id: run.clone(),
                         status,
                         text: Some("not final".into()),

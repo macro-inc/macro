@@ -21,6 +21,7 @@ CREATE TABLE cursor_journal_input (
     sequence BIGINT NOT NULL CHECK (sequence > 0),
     run_id TEXT CHECK (run_id <> ''),
     input JSONB NOT NULL,
+    inserted_at timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (agent_session_id, sequence)
 );
 CREATE INDEX cursor_journal_input_run ON cursor_journal_input(agent_session_id, run_id, sequence);
