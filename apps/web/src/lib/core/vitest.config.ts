@@ -4,6 +4,7 @@ import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { defineConfig } from 'vitest/config';
+import { unpluginIcons } from '../../../vite.icons';
 
 export default defineConfig({
   plugins: [
@@ -12,6 +13,7 @@ export default defineConfig({
     }),
     solidPlugin(),
     solidSvg({ defaultAsComponent: true }),
+    unpluginIcons(),
     wasm(),
   ],
   resolve: {

@@ -3,12 +3,14 @@ import solidPlugin from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
 import tsconfigPaths from 'vite-tsconfig-paths';
 import { configDefaults, defineConfig } from 'vitest/config';
+import { unpluginIcons } from './vite.icons';
 
 export default defineConfig({
   plugins: [
     tsconfigPaths(),
     solidPlugin(),
     solidSvg({ defaultAsComponent: true }),
+    unpluginIcons(),
   ],
   resolve: {
     dedupe: ['solid-js'],

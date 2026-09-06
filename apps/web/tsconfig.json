@@ -37,6 +37,7 @@
     "esModuleInterop": true,
     "types": [
       "vite-plugin-solid-svg/types-component-solid",
+      "unplugin-icons/types/solid",
       "vite/client",
       "vite-plugin-solid-svg/types",
       "wicg-file-system-access",

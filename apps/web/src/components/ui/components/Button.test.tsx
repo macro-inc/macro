@@ -44,21 +44,37 @@ describe('buttonClasses', () => {
   });
 
   it.each([
-    ['sm', 'h-6', 'px-2', 'text-xs', 'size-3'],
-    ['md', 'h-8', 'px-2', 'text-sm', 'size-3.5'],
-    ['lg', 'h-9', 'px-3', 'text-base', 'size-[1em]'],
-    ['xl', 'h-12', 'px-4', 'text-base', 'size-5'],
+    ['sm', 'h-6', 'px-2', 'text-xs'],
+    ['md', 'h-8', 'px-2', 'text-sm'],
+    ['lg', 'h-9', 'px-3', 'text-base'],
+    ['xl', 'h-12', 'px-4', 'text-base'],
   ] as const)(
-    'gives %s buttons the intended height, padding, text size, and icon size',
-    (size, heightClass, paddingClass, textClass, iconClass) => {
+    'gives %s buttons the intended height, padding, and text size',
+    (size, heightClass, paddingClass, textClass) => {
       const classes = buttonClasses({ size });
 
       expect(classes).toContain(heightClass);
       expect(classes).toContain(paddingClass);
       expect(classes).toContain(textClass);
-      expect(classes).toContain(`[&>svg:not([class*='size-'])]:${iconClass}`);
+      expect(classes).not.toContain('[&>svg');
       expect(classes).not.toContain('aspect-square');
       expect(classes).not.toContain('p-0');
+    }
+  );
+
+  it.each([
+    ['icon-xs', 'size-5', 'text-base'],
+    ['icon-sm', 'size-6', 'text-base'],
+    ['icon-md', 'size-9', 'text-2xl'],
+    ['icon-lg', 'size-11', 'text-[1.75rem]'],
+  ] as const)(
+    'sets icon %s font size without locking svg children',
+    (size, buttonSize, textClass) => {
+      const classes = buttonClasses({ size });
+
+      expect(classes).toContain(buttonSize);
+      expect(classes).toContain(textClass);
+      expect(classes).not.toContain('[&>svg');
     }
   );
 

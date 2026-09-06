@@ -11,6 +11,7 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 import { keepImportMetaDev } from './scripts/keep-import-meta-dev';
+import { unpluginIcons } from './vite.icons';
 
 function readShortSha(): string {
   try {
@@ -88,6 +89,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         wasm(),
         tailwind(),
         solidSvg({ defaultAsComponent: true }),
+        unpluginIcons(),
         tsconfigpaths({
           root: './',
         }),

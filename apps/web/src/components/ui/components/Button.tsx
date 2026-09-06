@@ -12,8 +12,7 @@ import { useButtonGroupContext } from './ButtonGroup';
 import { Layer } from './Layer';
 import { Tooltip } from './Tooltip';
 
-const BUTTON_TOUCH_STYLES =
-  "touch:min-h-9 touch:min-w-9 touch:[&>svg:not([class*='size-'])]:size-6";
+const BUTTON_TOUCH_STYLES = 'touch:min-h-9 touch:min-w-9';
 
 // Hover/press feedback is painted as a translucent scrim *on top of* each
 // variant's base background-color (via the `overlay-*` background-image utility)
@@ -44,18 +43,15 @@ export const buttonVariants = createVariants(
       cta: 'bg-accent text-accent-contrast focus-visible:ring-accent-contrast/70 [--color-edge:var(--color-accent-contrast-muted)] [--color-edge-muted:var(--color-accent-contrast-muted)] not-disabled:hover:overlay-[color-mix(in_oklch,var(--color-surface)_12%,transparent)] not-disabled:active:overlay-[color-mix(in_oklch,var(--color-surface)_22%,transparent)]',
     },
     size: {
-      xs: "h-5 gap-1 px-1 text-xs [&>svg:not([class*='size-'])]:size-3",
-      'icon-xs': "size-5 p-0.5 [&>svg:not([class*='size-'])]:size-4",
+      xs: 'h-5 gap-1 px-1 text-xs',
+      'icon-xs': 'size-5 p-0.5 text-base',
       sm: CONTROL_SIZE_VARIANTS.sm,
       md: CONTROL_SIZE_VARIANTS.md,
       lg: `${CONTROL_SIZE_VARIANTS.lg} rounded-lg`,
-      xl: "h-12 gap-2 px-4 text-base rounded-lg [&>svg:not([class*='size-'])]:size-5",
-      'icon-lg':
-        "size-11 aspect-square p-2 [&>svg:not([class*='size-'])]:size-7",
-      'icon-md':
-        "size-9 aspect-square p-1.5 [&>svg:not([class*='size-'])]:size-6",
-      'icon-sm':
-        "size-6 aspect-square p-1 [&>svg:not([class*='size-'])]:size-4",
+      xl: 'h-12 gap-2 px-4 text-base rounded-lg',
+      'icon-lg': 'size-11 aspect-square p-2 text-[1.75rem]',
+      'icon-md': 'size-9 aspect-square p-1.5 text-2xl',
+      'icon-sm': 'size-6 aspect-square p-1 text-base',
     },
   },
   {
