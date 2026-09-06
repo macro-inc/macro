@@ -220,7 +220,9 @@ pub trait ContainerManager: Send + Sync + 'static {
     fn spawn(
         &self,
         command: SpawnContainer,
-    ) -> impl Future<Output = Result<Self::Transport>> + Send;
+    ) -> impl Future<
+        Output = Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>>,
+    > + Send;
 
     /// How this manager applies a change from `from` to `to`.
     ///
@@ -245,7 +247,9 @@ pub trait ContainerManager: Send + Sync + 'static {
     fn resume(
         &self,
         session: AgentSessionId,
-    ) -> impl Future<Output = Result<Self::Transport>> + Send;
+    ) -> impl Future<
+        Output = Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>>,
+    > + Send;
 
     /// The raw egress session token the session's container holds, if this
     /// provider's containers hold one.

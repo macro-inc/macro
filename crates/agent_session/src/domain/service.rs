@@ -401,11 +401,9 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         if !Arc::ptr_eq(&active.marker, &reservation.marker) || active.stopping {
             return Err(AgentSessionError::Disconnected(id));
         }
-        attachment.connector.bind_session_owner(
-            claim.session.as_uuid(),
-            claim.replica.as_uuid(),
-            claim.fence.0,
-        )?;
+        if let Some(activate) = attachment.activation.take() {
+            activate(claim)?;
+        }
         active.commands = Some(commands.clone());
         drop(active);
         let (marker, stopped_tx) = reservation.commit();

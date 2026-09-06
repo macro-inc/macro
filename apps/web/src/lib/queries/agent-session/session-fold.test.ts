@@ -22,7 +22,6 @@ vi.mock('@service-agent-harness/client', () => ({
 
 import {
   acquireAgentSessionFold,
-  dropOverlap,
   handleAgentSessionLog,
   subscribeAgentSessionLog,
 } from './session-fold';
@@ -58,52 +57,8 @@ beforeEach(() => {
   harness.getLog.mockResolvedValue(ok({ bot, entries: [] }));
 });
 
-describe('buffer overlap', () => {
-  const log = Array.from({ length: 10 }, (_, n) => frame(n));
-
-  it('drops the longest buffered prefix already in the snapshot', () => {
-    expect(dropOverlap(log.slice(0, 8), log.slice(5))).toEqual(log.slice(8));
-    expect(
-      dropOverlap([frame(1), frame(2), frame(2)], [frame(2), frame(2)])
-    ).toEqual([]);
-  });
-
-  it('keeps frames that start after the snapshot or do not overlap', () => {
-    expect(dropOverlap(log.slice(0, 6), log.slice(6))).toEqual(log.slice(6));
-    expect(dropOverlap(log.slice(0, 4), [frame(99)])).toEqual([frame(99)]);
-  });
-
-  it('reconciles snapshot row IDs regardless of delivery order', () => {
-    expect(
-      dropOverlap([frame(1), frame(2), frame(3)], [frame(3), frame(1)])
-    ).toEqual([]);
-    expect(dropOverlap([frame(1)], [frame(1), frame(1)])).toEqual([]);
-  });
-
-  it('uses UUID order at equal timestamps and preserves distinct identical content', () => {
-    const boundary = frame(2);
-    const old = { ...boundary, id: frame(1).id };
-    const live = { ...boundary, id: frame(3).id };
-    expect(dropOverlap([boundary], [old, boundary, live])).toEqual([live]);
-    expect(dropOverlap([], [old, live])).toEqual([old, live]);
-  });
-
-  it('preserves microsecond order and normalizes variable UTC precision', () => {
-    const boundary = { ...frame(2), createdAt: '2026-08-13T00:00:00.000002Z' };
-    const old = { ...frame(9), createdAt: '2026-08-13T00:00:00.000001Z' };
-    const live = { ...frame(1), createdAt: '2026-08-13T00:00:00.000003Z' };
-    expect(dropOverlap([boundary], [old, live])).toEqual([live]);
-    expect(
-      dropOverlap(
-        [{ ...boundary, createdAt: '2026-08-13T00:00:00Z' }],
-        [{ ...old, createdAt: '2026-08-13T00:00:00.000000Z' }]
-      )
-    ).toEqual([{ ...old, createdAt: '2026-08-13T00:00:00.000000Z' }]);
-  });
-});
-
 describe('shared session folds', () => {
-  it('buffers realtime overlap while fetching and replays only its suffix', async () => {
+  it('passes buffered overlap to the durable fold after fetching', async () => {
     // This test verifies that buffered entries are replayed during opening.
     // Sinks are registered AFTER getting the snapshot to prevent duplicate
     // notifications: replayed entries update the worker but don't notify sinks,
@@ -127,12 +82,13 @@ describe('shared session folds', () => {
       frame(2),
     ]);
     expect(fold.pushSessionEntries).toHaveBeenCalledWith('session-a', [
+      frame(2),
       frame(3),
     ]);
     (await acquired).release();
   });
 
-  it('drops excluded old content and lifecycle rows across every catch-up drain', async () => {
+  it('drains every raced row to Rust in delivery order before becoming ready', async () => {
     let resolveFetch!: (
       value: Result<AgentSessionLogResponse, unknown>
     ) => void;
@@ -187,8 +143,11 @@ describe('shared session folds', () => {
     const result = await acquired;
     expect(fold.openSession).toHaveBeenCalledWith('boundary-race', snapshot);
     expect(fold.pushSessionEntries.mock.calls).toEqual([
-      ['boundary-race', [frame(6)]],
-      ['boundary-race', [frame(7)]],
+      [
+        'boundary-race',
+        [oldChunk, oldLifecycle, frame(4), frame(6), oldChunk, frame(5)],
+      ],
+      ['boundary-race', [oldLifecycle, frame(4), frame(7)]],
     ]);
     result.release();
   });

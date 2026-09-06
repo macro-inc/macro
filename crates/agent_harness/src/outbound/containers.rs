@@ -52,10 +52,19 @@ impl HarnessContainers {
 impl ContainerManager for HarnessContainers {
     type Transport = HarnessContainer;
 
-    async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         match self {
-            Self::Daytona(manager) => manager.spawn(command).await.map(HarnessContainer::Daytona),
-            Self::Local(manager) => manager.spawn(command).await.map(HarnessContainer::Local),
+            Self::Daytona(manager) => manager
+                .spawn(command)
+                .await
+                .map(|attachment| attachment.map_transport(HarnessContainer::Daytona)),
+            Self::Local(manager) => manager
+                .spawn(command)
+                .await
+                .map(|attachment| attachment.map_transport(HarnessContainer::Local)),
         }
     }
 
@@ -73,10 +82,19 @@ impl ContainerManager for HarnessContainers {
         }
     }
 
-    async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
+    async fn resume(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         match self {
-            Self::Daytona(manager) => manager.resume(session).await.map(HarnessContainer::Daytona),
-            Self::Local(manager) => manager.resume(session).await.map(HarnessContainer::Local),
+            Self::Daytona(manager) => manager
+                .resume(session)
+                .await
+                .map(|attachment| attachment.map_transport(HarnessContainer::Daytona)),
+            Self::Local(manager) => manager
+                .resume(session)
+                .await
+                .map(|attachment| attachment.map_transport(HarnessContainer::Local)),
         }
     }
 

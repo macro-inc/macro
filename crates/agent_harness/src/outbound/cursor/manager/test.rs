@@ -389,7 +389,9 @@ async fn spawning_and_prompting_records_the_minted_agent() {
         })
         .await
         .expect("spawn");
-    let (sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (sender, mut receiver) = halves.unwrap();
 
     send_acp(
         &sender,
@@ -467,7 +469,9 @@ async fn spawn_uses_the_owners_default_model() {
         })
         .await
         .expect("spawn");
-    let (sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (sender, mut receiver) = halves.unwrap();
 
     send_acp(
         &sender,
@@ -527,7 +531,9 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
         })
         .await
         .expect("spawn");
-    let (sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (sender, mut receiver) = halves.unwrap();
 
     send_acp(
         &sender,
@@ -619,7 +625,9 @@ async fn resume_restores_the_persisted_identity() {
     let manager = manager(base_url, sessions.clone());
 
     let transport = manager.resume(session_id).await.expect("resume");
-    let (sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (sender, mut receiver) = halves.unwrap();
 
     send_acp(
         &sender,
@@ -659,7 +667,9 @@ async fn resume_answers_session_load_even_before_an_agent_was_minted() {
     let manager = manager(base_url, sessions.clone());
 
     let transport = manager.resume(session_id).await.expect("resume");
-    let (sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (sender, mut receiver) = halves.unwrap();
 
     send_acp(
         &sender,
@@ -720,7 +730,9 @@ async fn an_idle_pipe_is_shut_down() {
         })
         .await
         .expect("spawn");
-    let (_sender, mut receiver) = transport.split();
+    let mut halves = None;
+    transport.map_transport(|pipe| halves = Some(pipe.split()));
+    let (_sender, mut receiver) = halves.unwrap();
 
     // The ready marker arrives; then nothing ever does, and after the idle
     // timeout (paused clock, so instantly) the stream ends instead of

@@ -210,6 +210,7 @@ version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "agent_runtime_protocol",
+ "chrono",
  "clap",
  "insta",
  "lazy-regex",

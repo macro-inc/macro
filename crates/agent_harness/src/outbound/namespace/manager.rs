@@ -100,7 +100,10 @@ impl ContainerManager for NamespaceContainerManager {
             session_id = %command.session_id,
         )
     )]
-    async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         let mut env = Vec::new();
         env.extend(command.egress.environment());
         let container = ContainerSpec {
@@ -117,7 +120,9 @@ impl ContainerManager for NamespaceContainerManager {
         let instance_id = instance.id.clone();
 
         match self.bring_up(instance).await {
-            Ok(container) => Ok(container),
+            Ok(container) => Ok(agent_session::domain::connection::RuntimeAttachment::solo(
+                container,
+            )),
             Err(error) => {
                 if let Err(destroy_error) = self.client.destroy_instance(&instance_id).await {
                     tracing::error!(
@@ -141,7 +146,10 @@ impl ContainerManager for NamespaceContainerManager {
         ))
     }
 
-    async fn resume(&self, _session: AgentSessionId) -> Result<Self::Transport> {
+    async fn resume(
+        &self,
+        _session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         todo!("resuming Namespace instances is not implemented yet")
     }
 
