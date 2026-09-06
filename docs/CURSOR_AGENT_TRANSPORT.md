@@ -4,6 +4,14 @@ Status: implemented. This is the design as built; where the shipped code
 diverged from the original draft the text says so rather than describing a plan
 that no longer exists.
 
+Since then the fixed `CURSOR_BOT_ID` system bot described below has been
+retired: connecting Cursor now creates the user a private, all-channels agent
+on the `cursor` harness (`BotService::ensure_cursor_agent`), and the Cursor
+connection, agents and harnesses are served by `agent_harness_service` rather
+than the authentication and storage services. Everything below about the
+transport itself still holds; read `CURSOR_BOT_ID` as "an agent whose harness
+is `cursor`".
+
 ## Goal
 
 Let a user register their Cursor API key in Macro settings, then `@cursor` in any
