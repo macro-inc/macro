@@ -9,10 +9,12 @@ import {
   on,
   onCleanup,
   Show,
+  Suspense,
 } from 'solid-js';
 import { match } from 'ts-pattern';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { ActionGraph } from '../components/action-graph';
+import { ActivityTimelineRow as ActivityTimelineRowView } from '../components/activity-timeline-row';
 import { TopEntitiesSection, TopEntityChip } from '../components/top-entities';
 import {
   type OpenEntityTarget,
@@ -209,6 +211,10 @@ function OverviewRow(props: {
   );
 }
 
+// Rows mount as the user scrolls, and a row whose entity preview is still a
+// cold query suspends the nearest boundary. Each row carries its own so the
+// pane boundary never re-inserts the scroller, which would reset its scroll
+// position to the top.
 function NamedActivityRow(props: {
   event: ActivityEvent;
   onOpen: (target: OpenEntityTarget) => void;
@@ -216,15 +222,32 @@ function NamedActivityRow(props: {
   const context = useActivityContext();
   const name = createActorName(context, () => props.event.actorId);
   return (
-    <ActivityTimelineRow
-      event={props.event}
-      actorName={name()}
-      onOpen={props.onOpen}
-    />
+    <Suspense
+      fallback={
+        <ActivityTimelineRowView event={props.event} actorName={name()} />
+      }
+    >
+      <ActivityTimelineRow
+        event={props.event}
+        actorName={name()}
+        onOpen={props.onOpen}
+      />
+    </Suspense>
   );
 }
 
 function OpenableTopEntityChip(props: {
+  entity: ActivityTopEntity;
+  onOpen: (target: OpenEntityTarget) => void;
+}) {
+  return (
+    <Suspense fallback={<TopEntityChip entity={props.entity} />}>
+      <ResolvedTopEntityChip entity={props.entity} onOpen={props.onOpen} />
+    </Suspense>
+  );
+}
+
+function ResolvedTopEntityChip(props: {
   entity: ActivityTopEntity;
   onOpen: (target: OpenEntityTarget) => void;
 }) {
