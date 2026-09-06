@@ -36,6 +36,7 @@ const ActivityText: Component<{ activity: MagicChipActivity }> = (props) => (
         'magic-chip-shimmer': props.activity.busy,
         'text-ink-muted': !props.activity.busy,
       }}
+      aria-live="polite"
     >
       {props.activity.label}
     </span>
@@ -45,13 +46,34 @@ const ActivityText: Component<{ activity: MagicChipActivity }> = (props) => (
           <span aria-hidden="true" class="shrink-0 text-ink-placeholder">
             ·
           </span>
-          <span class="min-w-0 truncate text-ink-extra-muted" title={detail()}>
+          <span
+            class="min-w-0 flex-1 truncate text-ink-extra-muted"
+            title={detail()}
+          >
             {detail()}
           </span>
         </>
       )}
     </Show>
   </>
+);
+
+/** Placeholder lines that hold the answer's space until the agent writes. */
+const AnswerSkeleton: Component<{ busy: boolean }> = (props) => (
+  <div class="flex flex-col gap-3 pt-2" aria-hidden="true">
+    <div
+      class="h-3 w-11/12 rounded-full bg-skeleton"
+      classList={{ 'skeleton-shimmer': props.busy }}
+    />
+    <div
+      class="h-3 w-4/5 rounded-full bg-skeleton"
+      classList={{ 'skeleton-shimmer': props.busy }}
+    />
+    <div
+      class="h-3 w-3/5 rounded-full bg-skeleton"
+      classList={{ 'skeleton-shimmer': props.busy }}
+    />
+  </div>
 );
 
 /**
@@ -79,7 +101,7 @@ const AnswerBody: Component<{ markdown: string }> = (props) => {
       ref={(el) => {
         clip = el;
       }}
-      class="relative max-h-32 overflow-hidden px-3 py-1"
+      class="relative h-full overflow-hidden"
       data-message-reply-preview
     >
       <div class="pointer-events-none min-w-0 max-w-full wrap-break-word">
@@ -95,10 +117,10 @@ const AnswerBody: Component<{ markdown: string }> = (props) => {
 };
 
 /**
- * One card for the whole turn, so the chrome is there from the first
- * moment: a status row while the agent works, the opening of the answer
- * above that row as it is written, and `Open session` once the turn ends.
- * Clicking anywhere opens the session.
+ * One card, one height, for the whole turn: the answer area is reserved from
+ * the first moment (skeleton lines while the agent works, the opening of the
+ * answer once it writes) so the thread never jumps, and the bottom row reads
+ * the current activity or `Open session`. Clicking anywhere opens the session.
  */
 export const MagicChipView: Component<{
   agentSessionId: string;
@@ -111,19 +133,23 @@ export const MagicChipView: Component<{
   return (
     <Layer depth={2}>
       <div
-        class="my-2 w-full overflow-hidden rounded-lg border border-edge-muted bg-surface"
+        class="my-2 w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-edge-muted bg-surface"
         data-magic-chip={props.agentSessionId}
         data-magic-chip-preview
         onMouseDown={(event) => event.preventDefault()}
         onClick={props.onOpen}
       >
-        <Show when={markdown()}>
-          {(answer) => <AnswerBody markdown={answer()} />}
-        </Show>
+        <div class="h-32 px-3 py-1" data-magic-chip-answer>
+          <Show
+            when={markdown()}
+            fallback={<AnswerSkeleton busy={activity()?.busy ?? false} />}
+          >
+            {(answer) => <AnswerBody markdown={answer()} />}
+          </Show>
+        </div>
         <button
           type="button"
-          class="flex min-h-9 w-full items-center gap-1.5 px-3 py-2 text-left text-xs leading-5 text-ink-extra-muted hover:bg-hover"
-          classList={{ 'border-t border-edge-muted': Boolean(markdown()) }}
+          class="flex min-h-9 w-full items-center gap-1.5 border-t border-edge-muted px-3 py-2 text-left text-xs leading-5 text-ink-extra-muted hover:bg-hover"
           data-message-reply-preview={
             markdown() ? undefined : replyPreview(activity())
           }

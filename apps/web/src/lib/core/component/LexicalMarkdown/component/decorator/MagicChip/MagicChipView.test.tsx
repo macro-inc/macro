@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MagicChipView } from './MagicChipView';
 
@@ -22,8 +22,15 @@ vi.mock('@core/component/LexicalMarkdown/theme', () => ({
 
 afterEach(cleanup);
 
+const LONG_PATH =
+  '/home/ubuntu/.cursor/projects/workspace/terminals/261831.txt'.repeat(8);
+
+function answerArea(container: HTMLElement) {
+  return container.querySelector('[data-magic-chip-answer]');
+}
+
 describe('MagicChipView', () => {
-  it('shows the card with the activity row before any answer arrives', () => {
+  it('reserves the answer height and shows the activity row while working', () => {
     const onOpen = vi.fn();
     const { container } = render(() => (
       <MagicChipView
@@ -39,11 +46,14 @@ describe('MagicChipView', () => {
     const card = container.querySelector('[data-magic-chip-preview]');
     expect(card?.className).toContain('rounded-lg');
     expect(card?.className).not.toContain('border-accent');
+
+    expect(answerArea(container)?.className).toContain('h-32');
     expect(container.querySelector('[data-testid="chip-markdown"]')).toBeNull();
+    expect(container.querySelectorAll('.bg-skeleton')).toHaveLength(3);
+    expect(container.querySelectorAll('.skeleton-shimmer')).toHaveLength(3);
 
     const footer = card?.querySelector('button');
     expect(footer?.textContent).toContain('Booting agent');
-    expect(footer?.className).not.toContain('border-t');
     expect(footer?.getAttribute('data-message-reply-preview')).toBe(
       'Booting agent'
     );
@@ -52,7 +62,7 @@ describe('MagicChipView', () => {
     expect(onOpen).toHaveBeenCalledTimes(1);
   });
 
-  it('clips the answer above the activity row while streaming', () => {
+  it('keeps the same answer height once the answer streams in', () => {
     const onOpen = vi.fn();
     const { container } = render(() => (
       <MagicChipView
@@ -66,14 +76,14 @@ describe('MagicChipView', () => {
       />
     ));
 
-    const card = container.querySelector('[data-magic-chip-preview]');
-    const body = card?.querySelector('[data-message-reply-preview]');
-    expect(body?.className).toContain('max-h-32');
+    expect(answerArea(container)?.className).toContain('h-32');
+    expect(container.querySelector('.bg-skeleton')).toBeNull();
+
+    const body = container.querySelector('[data-message-reply-preview]');
     expect(body?.className).toContain('overflow-hidden');
     expect(body?.textContent).toBe('Hello from the agent');
 
-    const footer = card?.querySelector('button');
-    expect(footer?.className).toContain('border-t');
+    const footer = container.querySelector('[data-magic-chip-preview] button');
     expect(footer?.textContent).toContain('Writing response');
     expect(footer?.textContent).not.toContain('Open session');
 
@@ -92,9 +102,31 @@ describe('MagicChipView', () => {
       />
     ));
 
+    expect(answerArea(container)?.className).toContain('h-32');
     const footer = container.querySelector('[data-magic-chip-preview] button');
     expect(footer?.textContent).toContain('Open session');
     fireEvent.click(footer!);
     expect(onOpen).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a long activity detail inside the message column', () => {
+    const { container } = render(() => (
+      <div style={{ width: '320px' }}>
+        <MagicChipView
+          agentSessionId="session-1"
+          presentation={{
+            kind: 'working',
+            activity: { label: 'Thinking', detail: LONG_PATH, busy: true },
+          }}
+        />
+      </div>
+    ));
+
+    const card = container.querySelector('[data-magic-chip="session-1"]');
+    expect(card?.className).toContain('min-w-0');
+    expect(card?.className).toContain('max-w-full');
+    expect(card?.className).toContain('overflow-hidden');
+    expect(screen.getByText('Thinking')).toBeTruthy();
+    expect(screen.getByText(LONG_PATH).className).toContain('truncate');
   });
 });
