@@ -505,6 +505,7 @@ async fn main() -> anyhow::Result<()> {
                             Environment::Local => vec!["http://localhost:3000".to_owned()],
                         },
                     },
+                    webhook_uri: config.pipedream_webhook_uri.as_ref().to_owned(),
                 },
             )
             .context("failed to build Pipedream client")?,
