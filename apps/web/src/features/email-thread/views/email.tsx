@@ -9,6 +9,7 @@ import type {
   EmailThreadHost,
 } from '../context/email-thread-dependencies';
 import { createThreadNavigation } from '../primitives/thread-navigation';
+import { createThreadReplyArea } from '../primitives/thread-reply-area';
 import { BottomReplyButtons } from './bottom-reply-buttons';
 import { useEmailContext } from './email-thread-context';
 import { MessageList } from './message-list';
@@ -34,10 +35,24 @@ export function EmailThreadView(props: EmailThreadViewProps) {
     armKeyboardPointer,
     leaveHiddenChip,
     setUserOpenedMiddle,
-    emailReplyInfo,
-    replyInputInFlow,
-    mobileBottomReplyMessage,
   } = navigation;
+  const {
+    info: emailReplyInfo,
+    inFlow: replyInputInFlow,
+    mobileMessage: mobileBottomReplyMessage,
+  } = createThreadReplyArea({
+    threadId: props.threadId,
+    isTouch: deps.isTouch,
+    messages: context.messages.list,
+    allMessages: context.messages.unfiltered,
+    canCompose: () => context.permissions().isOwner,
+    drafts: context.drafts,
+    bottomReply: {
+      open: context.messages.bottomReplyOpen,
+      setOpen: context.messages.setBottomReplyOpen,
+    },
+    mobileReply: context.mobileReplyComposer,
+  });
   return (
     <Show when={!deps.viewerLoading()}>
       <Switch>

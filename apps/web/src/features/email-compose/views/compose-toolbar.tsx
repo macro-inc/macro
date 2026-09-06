@@ -127,18 +127,6 @@ export function EmailComposeToolbar(props: {
           </div>
 
           <div class="flex items-center gap-1">
-            <Show when={ctx.onSaveDraft}>
-              <Button
-                disabled={
-                  ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()
-                }
-                onClick={() => void ctx.onSaveDraft?.()}
-                variant="outline"
-                size="sm"
-              >
-                {ctx.isSavingDraft?.() ? 'Saving…' : 'Save Draft'}
-              </Button>
-            </Show>
             <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
               <EmailDateSelector
                 mobile={ctx.isMobile()}
@@ -194,18 +182,7 @@ function MobileToolbar(props: {
               </Button>
             </div>
           </Show>
-          <Show when={ctx.onSaveDraft}>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={
-                ctx.isSending() || ctx.isSavingDraft?.() || ctx.disabled()
-              }
-              onClick={() => void ctx.onSaveDraft?.()}
-            >
-              {ctx.isSavingDraft?.() ? 'Saving…' : 'Draft'}
-            </Button>
-          </Show>
+
           <Show when={ctx.scheduleEnabled && ctx.onSendTimeChange}>
             <EmailDateSelector
               mobile={ctx.isMobile()}

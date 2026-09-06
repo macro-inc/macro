@@ -7,7 +7,7 @@ import {
 import { debounce } from '@solid-primitives/scheduled';
 import * as EmailValidator from 'email-validator';
 import type { LexicalEditor } from 'lexical';
-import { createEffect, createMemo, createSignal, on } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { EmailContact } from '../../email-message/core/email-message';
 import type {
@@ -35,6 +35,8 @@ import {
   prepareEmailBody,
 } from '../primitives/prepare-email-body';
 import { endUndoSend } from '../primitives/undo-send-claim';
+import { createAttachmentPersistence } from './attachment-persistence';
+import { createEmailSendSchedule } from './email-send-schedule';
 import { createEmailUndoStore } from './undo-store';
 
 const DRAFT_DEBOUNCE_MS = 500;
@@ -61,11 +63,7 @@ export type EmailComposeInput = {
 
 export function createEmailComposer(props: EmailComposeInput) {
   const services = props.services;
-  const [scheduling, setScheduling] = createSignal(false);
   const hasPaidAccess = services.hasPaidAccess;
-  const uploadAttachmentMutation = createComposeOperation(
-    services.uploadAttachments
-  );
   const saveDraftMutation = createComposeOperation(services.saveDraft);
   const deleteDraftMutation = createComposeOperation(services.deleteDraft);
   const emailContext = props.session;
@@ -93,8 +91,8 @@ export function createEmailComposer(props: EmailComposeInput) {
 
   const primaryLinkId = services.accounts.primaryId;
   const link = createMemo(() => {
-    const data = { links: services.accounts.inboxes() };
-    if (!data || data.links.length === 0) return undefined;
+    const inboxes = services.accounts.inboxes();
+    if (inboxes.length === 0) return undefined;
     // Send from the inbox the user picked, else the inbox that owns the draft
     // being edited, else the primary inbox — not whichever inbox sorts first.
     const draftLinkId = props.draftID
@@ -103,7 +101,7 @@ export function createEmailComposer(props: EmailComposeInput) {
           .find((m) => m.db_id === props.draftID)?.link_id
       : undefined;
     const targetId = form.selectedLinkId() ?? draftLinkId ?? primaryLinkId();
-    return data.links.find((l) => l.id === targetId) ?? data.links[0];
+    return inboxes.find((inbox) => inbox.id === targetId) ?? inboxes[0];
   });
 
   const toHeaderLinkId = services.accounts.headerId;
@@ -145,6 +143,13 @@ export function createEmailComposer(props: EmailComposeInput) {
           .find((m) => m.db_id === props.draftID)?.thread_db_id
       : undefined
   );
+
+  const attachmentPersistence = createAttachmentPersistence({
+    services,
+    attachments: () => form.attachments,
+    draftId: currentDraftID,
+    linkId: headerLinkId,
+  });
 
   // Restore form state from undo-send snapshot if available
   const restoredSnapshot = props.draftID
@@ -209,12 +214,6 @@ export function createEmailComposer(props: EmailComposeInput) {
     };
   }
 
-  // Content uploads still in flight, including ones started by earlier saves.
-  // attachmentID only proves the draft record exists, and the send path treats
-  // a resolved save as "attachments ready", so a save must not resolve while
-  // any of these are pending.
-  const inFlightAttachmentUploads = new Set<Promise<void>>();
-
   async function executeSaveDraft() {
     if (sendMutation.pending()) {
       return;
@@ -251,35 +250,7 @@ export function createEmailComposer(props: EmailComposeInput) {
 
     const draftId = draftResponse.draft.db_id;
     if (draftId) {
-      const attachments = form.attachments
-        .list()
-        .filter((a) => a.type === 'local' && !a.attachmentID) as Extract<
-        DraftFormAttachment,
-        { type: 'local' }
-      >[];
-
-      let uploadRun: Promise<void> | undefined;
-      if (attachments.length) {
-        uploadRun = uploadAttachmentMutation.run({
-          draftID: draftId,
-          attachments: attachments.map((a) => a.file),
-          linkId: headerLinkId(),
-          onAttachmentAdded: form.attachments.assignAttachmentID,
-          onAttachmentUploadFailed: form.attachments.clearAttachmentID,
-        });
-        const tracked = uploadRun.then(
-          () => undefined,
-          () => undefined
-        );
-        inFlightAttachmentUploads.add(tracked);
-        tracked.then(() => inFlightAttachmentUploads.delete(tracked));
-      }
-
-      while (inFlightAttachmentUploads.size) {
-        await Promise.all([...inFlightAttachmentUploads]);
-      }
-      // Settled by the drain above, this only rethrows this save's own failure
-      if (uploadRun) await uploadRun;
+      await attachmentPersistence.upload(draftId);
 
       setCurrentDraftID(draftId);
       return draftId;
@@ -301,13 +272,6 @@ export function createEmailComposer(props: EmailComposeInput) {
 
   // --- Attachment handling ---
 
-  const removeAttachmentMutation = createComposeOperation(
-    services.removeAttachment
-  );
-  const removeForwardedAttachmentMutation = createComposeOperation(
-    services.removeForwardedAttachment
-  );
-
   const handleAddAttachments = (attachments: DraftFormAttachment[]) => {
     for (const attachment of attachments) {
       form.attachments.add(attachment);
@@ -317,30 +281,7 @@ export function createEmailComposer(props: EmailComposeInput) {
 
   const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
     setDraftDirty(true);
-    if (attachment.type === 'local') {
-      form.attachments.removeByFile(attachment.file);
-    } else if (attachment.type === 'forwarded') {
-      form.attachments.removeForwarded(attachment.attachmentID);
-    } else {
-      form.attachments.removeByID(attachment.attachmentID);
-    }
-
-    const savedDraftID = currentDraftID();
-    if (!savedDraftID || !attachment.attachmentID) return;
-
-    if (attachment.type === 'forwarded') {
-      removeForwardedAttachmentMutation.start({
-        draftID: savedDraftID,
-        attachmentID: attachment.attachmentID,
-        linkId: headerLinkId(),
-      });
-    } else {
-      removeAttachmentMutation.start({
-        draftID: savedDraftID,
-        attachmentID: attachment.attachmentID,
-        linkId: headerLinkId(),
-      });
-    }
+    attachmentPersistence.remove(attachment);
   };
 
   // --- Content change ---
@@ -560,89 +501,26 @@ export function createEmailComposer(props: EmailComposeInput) {
 
   // --- Schedule ---
 
-  const unscheduleMessageMutation = createComposeOperation(
-    services.unschedule,
-    {
-      onSuccess: (_data, vars) => {
-        services.feedback.success('Email unscheduled');
-        services.invalidatePreview(vars.draftID);
-      },
-      onError: () => {
-        services.feedback.failure('Failed to unschedule email');
-      },
-    }
-  );
-
-  const handleSendTimeChange = async (date: Date | null) => {
-    if (scheduling()) return;
-    setScheduling(true);
-    try {
-      const previous = form.sendTime();
-      const currentDraft = currentDraftID();
-      if (!date && previous && currentDraft) {
-        try {
-          await unscheduleMessageMutation.run({
-            draftID: currentDraft,
-            linkId: headerLinkId(),
-          });
-          form.setSendTime(null);
-          setDraftDirty(true);
-        } catch {
-          /* The operation reports the failure; keep the confirmed send time. */
-        }
-        return;
-      }
-      if (!date) {
-        form.setSendTime(null);
-        setDraftDirty(true);
-        return;
-      }
-      try {
-        const draftID = currentDraft ?? (await executeSaveDraft());
-        if (!draftID) throw new Error('Draft required');
-        await services.schedule(
-          { draftID, send_time: date.toISOString() },
-          headerLinkId()
-        );
-        form.setSendTime(date);
-        setDraftDirty(true);
-      } catch (error) {
-        services.reportError(error);
-        services.feedback.failure('Failed to schedule message');
-        return;
-      }
-      const threadID = saveDraftMutation.result()?.draft.thread_db_id;
-      if (threadID) {
-        try {
-          await services.archive({ id: threadID, value: true }, headerLinkId());
-        } catch (error) {
-          services.reportError(error);
-          services.feedback.failure(
-            'Email scheduled, but unable to mark thread done'
-          );
-        }
-      }
-    } finally {
-      setScheduling(false);
-    }
-  };
-
-  // Unschedule when all recipients are removed
   const totalRecipientCount = () => {
-    const r = form.recipients();
-    return r.to.length + r.cc.length + r.bcc.length;
+    const recipients = form.recipients();
+    return recipients.to.length + recipients.cc.length + recipients.bcc.length;
   };
-  createEffect(
-    on(
-      totalRecipientCount,
-      (count) => {
-        if (count === 0 && form.sendTime()) {
-          handleSendTimeChange(null);
-        }
-      },
-      { defer: true }
-    )
-  );
+  const schedule = createEmailSendSchedule({
+    services,
+    draftId: currentDraftID,
+    saveDraft: executeSaveDraft,
+    threadId: () => saveDraftMutation.result()?.draft.thread_db_id,
+    linkId: headerLinkId,
+    sendTime: form.sendTime,
+    setSendTime: (date) => {
+      form.setSendTime(date);
+      setDraftDirty(true);
+    },
+    recipientCount: totalRecipientCount,
+    onUnscheduled: services.invalidatePreview,
+  });
+  const scheduling = schedule.pending;
+  const handleSendTimeChange = schedule.change;
 
   // --- Reset / delete ---
 
@@ -742,7 +620,6 @@ export function createEmailComposer(props: EmailComposeInput) {
     isMobile: services.isMobile,
     scheduleEnabled: services.scheduleEnabled,
     attachmentFailure: services.feedback.failure,
-    prepareSignatureLinks: services.prepareSignatureLinks,
     onUpgrade: services.onUpgrade,
     viewerLoading: services.viewerLoading,
     // Form state (read)

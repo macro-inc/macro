@@ -281,7 +281,7 @@ export function ComposeLayout(props: {
             );
           }}
         />
-        {props.toolbar ?? ctx.toolbar?.()}
+        {props.toolbar}
       </div>
     </div>
   );

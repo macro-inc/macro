@@ -108,6 +108,44 @@ and signature button do not resolve the current user themselves. Clipboard
 feedback, uploads, signature link interception, and editor focus traversal are
 also supplied capabilities or host actions.
 
+### Responsibilities within a feature
+
+A feature boundary is not sufficient if a controller still owns every concern
+inside it. Keep a primitive around one invariant or lifetime, and share it when
+two controllers implement that same behavior. Avoid splitting a workflow into
+helpers that need the entire controller passed back to them.
+
+The compose controllers now assemble these smaller responsibilities:
+
+| Module | Responsibility and boundary |
+| --- | --- |
+| `attachment-persistence.ts` | Upload/remove operations and completion tracking. Receives attachment state and three transport capabilities. A saved attachment ID does not mean its content upload has finished; every save waits for outstanding uploads. |
+| `email-send-schedule.ts` | Confirmed send time, pending schedule changes, unscheduling and archive feedback. Reply and standalone compose supply their own draft/thread identity and post-unschedule callback. |
+| `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
+| `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |
+| `views/reply-envelope.tsx` | Sender, recipients and subject presentation. One recipient input implementation supplies the desktop/mobile layouts while the parent keeps a single editor mounted. |
+
+The reply controller still owns draft collection, sending, reset and undo as one
+coordinated workflow: they share editor snapshots, draft identity and pending
+operation guards. Breaking that sequence into mutually dependent controllers
+would make ordering harder to inspect. Its view receives named actions and
+pending accessors instead of mutation objects, and derives layout details itself.
+
+The reply autosave timer intentionally remains explicit. Cleanup flushes an
+engaged draft only when its save/send/delete guards permit it. The installed
+`@solid-primitives/scheduled` debounce cancels on cleanup; substituting it would
+change persistence behavior. DOM listeners use the installed
+`@solid-primitives/event-listener` cleanup instead of duplicating registration
+and removal. Choose a primitive by its lifetime semantics, not its name.
+
+Thread state composes `thread-drafts.ts` for stale-response reconciliation and
+`thread-recipients.ts` for contact aggregation. `thread-navigation.ts` owns reading
+stops, focus and scrolling; `thread-reply-area.ts` owns bottom/drawer reply
+placement. Thread reset and cached-draft auto-open remain in one effect so reset
+cannot overwrite an immediately available draft. Production read/unread and
+completion/undo wiring live in separate adapters, with one shared link-header
+converter created by `thread-action-adapter.tsx`.
+
 ## State and lifetime rules
 
 Ordinary email body rendering is now owned by

@@ -1,11 +1,8 @@
-import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
 import { EmailAttachmentPill } from '@app/features/email-message/components/attachment-pill';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
-import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
-import { RecipientSelector } from '@core/component/RecipientSelector';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -13,8 +10,6 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { ToggleButton as KToggleButton } from '@kobalte/core/toggle-button';
-import ChevronDown from '@phosphor/caret-down.svg';
-import CaretRight from '@phosphor/caret-right.svg';
 import DotsThree from '@phosphor/dots-three.svg';
 import Paperclip from '@phosphor/paperclip.svg';
 import Trash from '@phosphor/trash.svg';
@@ -22,40 +17,18 @@ import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, Layer, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
-import {
-  type Accessor,
-  createSignal,
-  For,
-  Match,
-  onMount,
-  Show,
-  Switch,
-} from 'solid-js';
+import { createSignal, For, onMount, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
-import { FromInboxSelector } from '../components/from-inbox-selector';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { SignaturePreview } from '../components/signature-preview';
 import { registerToggleAppendedThread } from '../primitives/prepare-email-body';
 import { getOrInitEmailFormContext } from './email-form-context';
+import { ReplyEnvelope } from './reply-envelope';
 
 false && fileFolderDrop;
 false && fileSelector;
 
-type CreateConfiguredEmailMarkdownEditorOptions = {
-  namespace: string;
-  onChange?: (markdown: string) => void;
-  onUserMention?: (mention: UserMentionRecord) => void;
-  onDocumentMention?: (item: { id: string }) => void;
-  onPasteFilesAndDirs?: (
-    files: FileSystemFileEntry[],
-    directories: FileSystemDirectoryEntry[]
-  ) => void;
-  scrollContainer?: Accessor<HTMLElement | undefined>;
-};
-
-function createConfiguredEmailMarkdownEditor(
-  options: CreateConfiguredEmailMarkdownEditorOptions
-) {
+function createConfiguredEmailMarkdownEditor(options: ReplyEditorOptions) {
   const editor = buildConfig('markdown')
     .namespace(options.namespace)
     .withMentions({
@@ -89,12 +62,15 @@ function createConfiguredEmailMarkdownEditor(
   return editor;
 }
 
-import { RecipientDropRow } from '../components/recipient-drop-row';
 import {
   createReplyInput,
+  type ReplyEditorOptions,
   type ReplyInputProps,
 } from '../primitives/reply-input';
 export function ReplyInputView(props: ReplyInputProps) {
+  const services = props.services;
+  const ctx = props.session;
+  const [isDragging, setIsDragging] = createSignal<boolean>();
   let composeContainerRef: HTMLDivElement | undefined;
   let bottomBarRef: HTMLDivElement | undefined;
   const [editor, setEditor] = createSignal<LexicalEditor>();
@@ -105,10 +81,7 @@ export function ReplyInputView(props: ReplyInputProps) {
     getOrInitEmailFormContext
   );
   const {
-    ctx,
     form,
-    sourceEntityId,
-    services,
     activeLinkId,
     activeInboxEmail,
     setIncludeSignature,
@@ -117,50 +90,32 @@ export function ReplyInputView(props: ReplyInputProps) {
     setComposerExpanded,
     quoteCollapsed,
     setQuoteCollapsed,
-    showExpandedRecipients,
-    setShowExpandedRecipients,
-    isDragging,
-    setIsDragging,
-    setToRef,
-    ccRef,
-    setCcRef,
-    bccRef,
-    setBccRef,
-    showCc,
-    setShowCc,
-    showBcc,
-    setShowBcc,
-    recipientDragState,
     savedDraftId,
     initialHtml,
     handleEditorConnect,
-    sendMutation,
-    uploadAttachmentMutation,
+    isSending,
+    isUploading,
     collectDraft,
     scheduleDraftSave,
     persistDraftOnSenderSwitch,
-    handleChipDragStart,
-    handleChipDragEnd,
-    handleRecipientDrop,
-    withDraftSave,
     hasPaidAccess,
     sendEmail,
     deleteDraftAndReset,
     handleAddAttachments,
     handleRemoveAttachment,
     handleSendTimeChange,
-    isMobileDrawer,
-    composePortalScope,
     sendActionHidden,
     sendActionDisabled,
     scheduleSendDisabled,
-    scrollAreaSignatureHtml,
-    footerSignatureHtml,
-    replyingToSummary,
-    mobileDrawerCcBccOpen,
-    toggleMobileDrawerCcBcc,
     toggleQuotedText,
   } = state;
+  const isMobileDrawer = () => props.mobileDrawer !== undefined;
+  const composePortalScope = () =>
+    isMobileDrawer() ? ('local' as const) : undefined;
+  const scrollAreaSignatureHtml = () =>
+    isMobileDrawer() ? state.signatureHtml() : undefined;
+  const footerSignatureHtml = () =>
+    isMobileDrawer() ? undefined : state.signatureHtml();
   const editorConfig = createConfiguredEmailMarkdownEditor(state.editorOptions);
   const markdownHandle = editorConfig.buildHandle();
   setEditor(markdownHandle.lexical);
@@ -275,44 +230,22 @@ export function ReplyInputView(props: ReplyInputProps) {
       >
         <For each={form().attachments.list()}>
           {(attachment) => (
-            <Switch>
-              <Match when={attachment.type === 'local' && attachment}>
-                {(attachment) => (
-                  <EmailAttachmentPill
-                    attachment={{
-                      fileName: attachment().file.name,
-                      mimeType: attachment().file.type,
-                    }}
-                    removable
-                    onRemove={() => handleRemoveAttachment(attachment())}
-                  />
-                )}
-              </Match>
-              <Match when={attachment.type === 'remote' && attachment}>
-                {(attachment) => (
-                  <EmailAttachmentPill
-                    attachment={{
-                      fileName: attachment().fileName,
-                      mimeType: attachment().contentType,
-                    }}
-                    removable
-                    onRemove={() => handleRemoveAttachment(attachment())}
-                  />
-                )}
-              </Match>
-              <Match when={attachment.type === 'forwarded' && attachment}>
-                {(attachment) => (
-                  <EmailAttachmentPill
-                    attachment={{
-                      fileName: attachment().fileName,
-                      mimeType: attachment().mimeType,
-                    }}
-                    removable
-                    onRemove={() => handleRemoveAttachment(attachment())}
-                  />
-                )}
-              </Match>
-            </Switch>
+            <EmailAttachmentPill
+              attachment={{
+                fileName:
+                  attachment.type === 'local'
+                    ? attachment.file.name
+                    : attachment.fileName,
+                mimeType:
+                  attachment.type === 'local'
+                    ? attachment.file.type
+                    : attachment.type === 'remote'
+                      ? attachment.contentType
+                      : attachment.mimeType,
+              }}
+              removable
+              onRemove={() => handleRemoveAttachment(attachment)}
+            />
           )}
         </For>
       </div>
@@ -378,367 +311,37 @@ export function ReplyInputView(props: ReplyInputProps) {
               />
               <SendButton
                 disabled={sendActionDisabled() || sendActionHidden()}
-                pending={sendMutation.pending()}
+                pending={isSending()}
                 onClick={() => sendEmail()}
               />
             </div>
           </div>
         </Layer>
       </Show>
-      <Show
-        when={isMobileDrawer()}
-        fallback={
-          <>
-            <div
-              class={cn(
-                'relative mb-4 min-w-0 text-sm text-ink-muted flex items-center gap-2 wrap',
-                !showExpandedRecipients() && 'py-3'
-              )}
-            >
-              <Show
-                when={showExpandedRecipients()}
-                fallback={
-                  <div class="flex flex-1 min-w-0">
-                    <button
-                      type="button"
-                      class="flex w-full min-w-0 items-center gap-2 text-sm text-ink-muted"
-                      onClick={() => setShowExpandedRecipients(true)}
-                    >
-                      <span class="block min-w-0 flex-1 truncate text-left">
-                        {replyingToSummary()}
-                      </span>
-                      <CaretRight class="size-3 shrink-0 text-ink-extra-muted" />
-                    </button>
-                  </div>
-                }
-              >
-                <div class="min-w-0 w-full">
-                  <div class="flex items-center gap-2 min-w-0 border-b border-edge-muted">
-                    <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
-                      <div class="w-14 shrink-0 text-sm text-ink-placeholder">
-                        From
-                      </div>
-                      <FromInboxSelector
-                        pill
-                        class="min-w-0"
-                        links={services.accounts.inboxes() ?? []}
-                        activeLinkId={activeLinkId()}
-                        onSelect={persistDraftOnSenderSwitch}
-                        portalScope={composePortalScope()}
-                      />
-                    </div>
-                    <div class="flex items-center ml-auto shrink-0">
-                      <Show when={!showCc()}>
-                        <Button
-                          size="sm"
-                          class="rounded-lg"
-                          onClick={() => {
-                            setShowCc(true);
-                            queueMicrotask(() => ccRef()?.focus());
-                          }}
-                        >
-                          Cc
-                        </Button>
-                      </Show>
-                      <Show when={!showBcc()}>
-                        <Button
-                          size="sm"
-                          class="rounded-lg"
-                          onClick={() => {
-                            setShowBcc(true);
-                            queueMicrotask(() => bccRef()?.focus());
-                          }}
-                        >
-                          Bcc
-                        </Button>
-                      </Show>
-                    </div>
-                  </div>
-
-                  <RecipientDropRow
-                    field="to"
-                    class="w-full gap-2 py-3 border-b border-edge-muted focus-within:border-accent items-center"
-                    dragState={recipientDragState}
-                    onDrop={handleRecipientDrop}
-                  >
-                    <div class="w-14 shrink-0 text-sm text-ink-placeholder">
-                      To
-                    </div>
-                    <RecipientSelector<EmailRecipient['kind']>
-                      openOnFocus={false}
-                      class="min-w-0 bg-transparent rounded-none! [&_input]:ml-0!"
-                      inputRef={setToRef}
-                      options={ctx.recipientOptions}
-                      selfEmail={activeInboxEmail()}
-                      selectedOptions={form().recipients().to}
-                      setSelectedOptions={withDraftSave((v) =>
-                        form().setRecipients('to', v)
-                      )}
-                      triggerMode="input"
-                      hideBorder
-                      noPadding
-                      onChipDragStart={(option, e) =>
-                        handleChipDragStart('to', option, e)
-                      }
-                      onChipDragEnd={handleChipDragEnd}
-                      hideMenuOnEscape
-                    />
-                  </RecipientDropRow>
-                  {/* Expanded CC */}
-                  <Show when={showCc() || form().recipients().cc.length > 0}>
-                    <RecipientDropRow
-                      field="cc"
-                      class="w-full gap-2 py-3 border-b border-edge-muted focus-within:border-accent items-center"
-                      dragState={recipientDragState}
-                      onDrop={handleRecipientDrop}
-                    >
-                      <div class="w-14 shrink-0 text-sm text-ink-placeholder">
-                        Cc
-                      </div>
-                      <RecipientSelector<EmailRecipient['kind']>
-                        openOnFocus={false}
-                        class="min-w-0 bg-transparent rounded-none! [&_input]:ml-0!"
-                        inputRef={setCcRef}
-                        options={ctx.recipientOptions}
-                        selfEmail={activeInboxEmail()}
-                        selectedOptions={form().recipients().cc}
-                        setSelectedOptions={withDraftSave((v) =>
-                          form().setRecipients('cc', v)
-                        )}
-                        triggerMode="input"
-                        hideBorder
-                        noPadding
-                        onChipDragStart={(option, e) =>
-                          handleChipDragStart('cc', option, e)
-                        }
-                        onChipDragEnd={handleChipDragEnd}
-                        hideMenuOnEscape
-                      />
-                    </RecipientDropRow>
-                  </Show>
-                  {/* Expanded BCC */}
-                  <Show when={showBcc() || form().recipients().bcc.length > 0}>
-                    <RecipientDropRow
-                      field="bcc"
-                      class="w-full gap-2 py-3 border-b border-edge-muted focus-within:border-accent items-center"
-                      dragState={recipientDragState}
-                      onDrop={handleRecipientDrop}
-                    >
-                      <div class="w-14 shrink-0 text-sm text-ink-placeholder">
-                        Bcc
-                      </div>
-                      <RecipientSelector<EmailRecipient['kind']>
-                        openOnFocus={false}
-                        class="min-w-0 bg-transparent rounded-none! [&_input]:ml-0!"
-                        inputRef={setBccRef}
-                        options={ctx.recipientOptions}
-                        selfEmail={activeInboxEmail()}
-                        selectedOptions={form().recipients().bcc}
-                        setSelectedOptions={withDraftSave((v) =>
-                          form().setRecipients('bcc', v)
-                        )}
-                        triggerMode="input"
-                        hideBorder
-                        noPadding
-                        onChipDragStart={(option, e) =>
-                          handleChipDragStart('bcc', option, e)
-                        }
-                        onChipDragEnd={handleChipDragEnd}
-                        hideMenuOnEscape
-                      />
-                    </RecipientDropRow>
-                  </Show>
-                </div>
-              </Show>
-            </div>
-            <div
-              class={cn(
-                'flex-row items-center',
-                props.isEditingExisting || props.newMessage ? 'flex' : 'hidden'
-              )}
-            >
-              <div class="text-sm min-w-16 pl-4">Subject</div>
-              <input
-                type="text"
-                class="flex-1 text-sm bg-transparent outline-none border-0 px-3 py-1"
-                value={form().subject()}
-                onInput={(e) => {
-                  form().setSubject(e.currentTarget.value);
-                  scheduleDraftSave();
-                }}
-                onKeyDown={(e) => {
-                  if (e.key !== 'Escape') return;
-                  e.preventDefault();
-                  e.currentTarget.blur();
-                }}
-                placeholder="Subject"
-              />
-            </div>
-          </>
-        }
-      >
-        <div class="pt-1 relative min-w-0 leading-6 text-ink-muted px-5">
-          <RecipientDropRow
-            field="to"
-            class={cn(
-              'w-full gap-2 min-h-16 border-b border-edge-muted/70 focus-within:border-accent',
-              'items-center py-2'
-            )}
-            dragState={recipientDragState}
-            onDrop={handleRecipientDrop}
-          >
-            <div class="shrink-0 text-ink-placeholder">To:</div>
-            <RecipientSelector<EmailRecipient['kind']>
-              openOnFocus={false}
-              class={
-                'min-w-0 flex-1 bg-transparent rounded-none! [&_input]:ml-0! [&_input]:min-w-0! [&_input]:text-[17px] [&_input]:leading-6 [&_input]:text-ink [&_input]:placeholder:text-ink-placeholder'
-              }
-              inputRef={setToRef}
-              options={ctx.recipientOptions}
-              selfEmail={activeInboxEmail()}
-              selectedOptions={form().recipients().to}
-              setSelectedOptions={withDraftSave((v) =>
-                form().setRecipients('to', v)
-              )}
-              triggerMode="input"
-              portalScope={composePortalScope()}
-              hideBorder
-              noPadding
-              onChipDragStart={(option, e) =>
-                handleChipDragStart('to', option, e)
-              }
-              onChipDragEnd={handleChipDragEnd}
-              hideMenuOnEscape
-            />
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              class="shrink-0 rounded-full bg-transparent text-ink-placeholder"
-              tooltip={mobileDrawerCcBccOpen() ? 'Hide Cc/Bcc' : 'Show Cc/Bcc'}
-              aria-expanded={mobileDrawerCcBccOpen()}
-              onClick={toggleMobileDrawerCcBcc}
-            >
-              <Show
-                when={mobileDrawerCcBccOpen()}
-                fallback={<CaretRight class="size-4" />}
-              >
-                <ChevronDown class="size-4" />
-              </Show>
-            </Button>
-          </RecipientDropRow>
-
-          <Show when={showCc() || form().recipients().cc.length > 0}>
-            <RecipientDropRow
-              field="cc"
-              class={cn(
-                'w-full gap-2 min-h-16 border-b border-edge-muted/70 focus-within:border-accent',
-                'items-center py-2'
-              )}
-              dragState={recipientDragState}
-              onDrop={handleRecipientDrop}
-            >
-              <div class="shrink-0 text-ink-placeholder">Cc:</div>
-              <RecipientSelector<EmailRecipient['kind']>
-                openOnFocus={false}
-                class={
-                  'min-w-0 flex-1 bg-transparent rounded-none! [&_input]:ml-0! [&_input]:min-w-0! [&_input]:text-[17px] [&_input]:leading-6 [&_input]:text-ink [&_input]:placeholder:text-ink-placeholder'
-                }
-                inputRef={setCcRef}
-                options={ctx.recipientOptions}
-                selfEmail={activeInboxEmail()}
-                selectedOptions={form().recipients().cc}
-                setSelectedOptions={withDraftSave((v) =>
-                  form().setRecipients('cc', v)
-                )}
-                triggerMode="input"
-                portalScope={composePortalScope()}
-                hideBorder
-                noPadding
-                onChipDragStart={(option, e) =>
-                  handleChipDragStart('cc', option, e)
-                }
-                onChipDragEnd={handleChipDragEnd}
-                hideMenuOnEscape
-              />
-            </RecipientDropRow>
-          </Show>
-
-          <Show when={showBcc() || form().recipients().bcc.length > 0}>
-            <RecipientDropRow
-              field="bcc"
-              class={cn(
-                'w-full gap-2 min-h-16 border-b border-edge-muted/70 focus-within:border-accent',
-                'items-center py-2'
-              )}
-              dragState={recipientDragState}
-              onDrop={handleRecipientDrop}
-            >
-              <div class="shrink-0 text-ink-placeholder">Bcc:</div>
-              <RecipientSelector<EmailRecipient['kind']>
-                openOnFocus={false}
-                class={
-                  'min-w-0 flex-1 bg-transparent rounded-none! [&_input]:ml-0! [&_input]:min-w-0! [&_input]:text-[17px] [&_input]:leading-6 [&_input]:text-ink [&_input]:placeholder:text-ink-placeholder'
-                }
-                inputRef={setBccRef}
-                options={ctx.recipientOptions}
-                selfEmail={activeInboxEmail()}
-                selectedOptions={form().recipients().bcc}
-                setSelectedOptions={withDraftSave((v) =>
-                  form().setRecipients('bcc', v)
-                )}
-                triggerMode="input"
-                portalScope={composePortalScope()}
-                hideBorder
-                noPadding
-                onChipDragStart={(option, e) =>
-                  handleChipDragStart('bcc', option, e)
-                }
-                onChipDragEnd={handleChipDragEnd}
-                hideMenuOnEscape
-              />
-            </RecipientDropRow>
-          </Show>
-
-          <div
-            class="min-h-14 border-b border-edge-muted/70 flex items-center min-w-0"
-            data-corvu-no-drag=""
-          >
-            <span class="shrink-0 text-ink-placeholder">From:&nbsp;</span>
-            <FromInboxSelector
-              compact
-              class="min-w-0 truncate text-ink-muted"
-              links={services.accounts.inboxes() ?? []}
-              activeLinkId={activeLinkId()}
-              onSelect={persistDraftOnSenderSwitch}
-              portalScope={composePortalScope()}
-            />
-          </div>
-
-          <div class="min-h-14 border-b border-edge-muted/70 flex items-center">
-            <input
-              type="text"
-              class="w-full bg-transparent outline-none border-0 text-[17px] leading-6 text-ink placeholder:text-ink-placeholder"
-              value={form().subject()}
-              onInput={(e) => {
-                form().setSubject(e.currentTarget.value);
-                scheduleDraftSave();
-              }}
-              onKeyDown={(e) => {
-                if (e.key !== 'Escape') return;
-                e.preventDefault();
-                e.currentTarget.blur();
-              }}
-              placeholder="Subject:"
-            />
-          </div>
-        </div>
-      </Show>
+      <ReplyEnvelope
+        fields={state.recipients}
+        values={() => form().recipients()}
+        options={props.session.recipientOptions}
+        inboxes={services.accounts.inboxes}
+        activeLinkId={activeLinkId}
+        senderEmail={activeInboxEmail}
+        onSenderChange={persistDraftOnSenderSwitch}
+        subject={() => form().subject()}
+        onSubjectChange={(subject) => {
+          form().setSubject(subject);
+          scheduleDraftSave();
+        }}
+        showSubject={!!(props.isEditingExisting || props.newMessage)}
+        mobile={isMobileDrawer}
+        portalScope={composePortalScope}
+        replyType={state.replyType}
+      />
       <div
         class={cn(
           isMobileDrawer()
             ? 'relative flex-1 flex flex-col'
             : 'size-full flex flex-col min-h-0',
-          showExpandedRecipients() && 'mt-4'
+          state.recipients.showExpandedRecipients() && 'mt-4'
         )}
       >
         <div
@@ -770,21 +373,10 @@ export function ReplyInputView(props: ReplyInputProps) {
           use:fileFolderDrop={{
             onDragStart: (valid) => setIsDragging(valid),
             onDragEnd: () => setIsDragging(false),
-            onDrop: (fileEntries, folderEntries, e) => {
-              const editor_ = editor();
-              if (!editor_ || !e) return;
-              services.uploadEditorFiles({
-                editor: editor_,
-                sourceId: sourceEntityId,
-                files: fileEntries,
-                directories: folderEntries,
-                dropEvent: e,
-                onUploaded: (ids) => {
-                  setIsDragging(false);
-                  ids.forEach(services.makePublic);
-                  scheduleDraftSave();
-                },
-              });
+            onDrop: (files, directories, event) => {
+              state.handleEditorDrop(files, directories, event, () =>
+                setIsDragging(false)
+              );
             },
           }}
         >
@@ -804,7 +396,7 @@ export function ReplyInputView(props: ReplyInputProps) {
               quoteCollapsed() && 'quote-collapsed',
               isDragging() && 'blur'
             )}
-            disabled={sendMutation.pending()}
+            disabled={isSending()}
             initialValue={initialHtml() ? undefined : props.preloadedBody}
             placeholder={
               isMobileDrawer()
@@ -942,12 +534,8 @@ export function ReplyInputView(props: ReplyInputProps) {
                 />
               </Show>
               <SendButton
-                disabled={
-                  uploadAttachmentMutation.pending() ||
-                  sendMutation.pending() ||
-                  !!form().sendTime()
-                }
-                pending={sendMutation.pending()}
+                disabled={isUploading() || isSending() || !!form().sendTime()}
+                pending={isSending()}
                 hidden={sendActionHidden()}
                 onClick={() => sendEmail()}
               />

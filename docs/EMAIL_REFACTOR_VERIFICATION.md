@@ -202,3 +202,92 @@ explicitly marked integration paths still need their respective environments.
 Future structural changes should preserve this inventory, compare the baseline
 and proposed version in the same environment, and add a regression test for each
 confirmed failure before claiming it is fixed.
+
+## Simplicity pass — September 6, 2026
+
+The compatibility work above was committed as `f240ea771` before this pass began.
+That exact source is the new comparison baseline, served at port 24831 alongside
+the worktree at 24710 against the same local backend and Chrome session. This
+comparison evaluates the subsequent simplification; it does not replace the
+earlier comparison against the original email implementation.
+
+The pass separates recipient interaction, deferred focus, attachment persistence
+and scheduling from the compose controllers. The reply envelope owns repeated
+sender/recipient/subject presentation. Thread draft reconciliation, contact
+aggregation, reply placement, read actions and completion/undo wiring have their
+own modules. Each boundary takes the values or capabilities it actually uses.
+The [architecture document](EMAIL_FEATURE_ARCHITECTURE.md#responsibilities-within-a-feature)
+explains why send/reset/undo and guarded autosave remain coordinated.
+
+The reply controller decreased from 1,414 to 1,133 lines and its view from 960 to
+548; standalone compose decreased from 830 to 707. These counts describe the
+remaining coordinators, not code deletion: the extracted modules own the moved
+behavior. The substantive changes are shared schedule/upload implementations,
+one recipient input implementation, narrower view contracts, and independently
+testable lifetimes. No dependency was added.
+
+Eleven additional tests cover concurrent attachment upload completion and retry,
+attachment removal, recipient drag/drop and outside interaction, focus guard
+release and disposal, and cached-draft reply placement across thread changes.
+The resulting 138 app email tests pass. The existing 67 renderer Node tests and
+31 Chromium tests also pass, including the unchanged visual snapshots. The full
+frontend check (6,106 files), feature ast-grep rules and whitespace check pass.
+All five QC review roles pass. Review caught and removed an accidental standalone
+Send-disabled-during-autosave binding before final browser verification.
+
+The tested cleanup improvement cancels deferred focus and removes the forward
+focus guard when its composer is disposed. Reply autosave keeps its prior guarded
+flush-on-disposal behavior. The installed Solid event-listener primitive supplies
+listener cleanup; the installed debounce's cancel-on-cleanup behavior is not used
+as a substitute for draft persistence.
+
+Chrome verification against `f240ea771` includes real local draft save, navigation
+and reload, plus saved-draft drawer close/reopen in touch mode. The original local
+draft was restored after each round trip. Standalone compose produces identical
+To/Cc/Bcc, formatted draft, send and retry payloads; simulated delivery failures
+retain the same editor content and feedback. Product sends and command mutations
+were intercepted.
+
+Four additional mounted-app comparisons cover reply and forward on desktop and
+mobile. They check forward focus in To, deliberate focus transfer into the
+editor, Cc/Bcc edits, one mounted editor, desktop recipient collapse/reopen, and
+serialized draft content. All four states and payloads match with no page errors.
+Three screenshots are pixel-identical; desktop reply differs by 27 pixels within
+the attachment icon, with no visible layout change. The seed account's reconnect
+toast is dismissed before opening the drawer: dismissing it afterward closes the
+drawer through the baseline's outside-click behavior.
+
+Mounted sender Block/Signal/Noise and read/unread/done/not-done commands produce
+identical email request sequences and payloads with no page errors. These checks
+exercise the extracted production read/completion adapters as well as their
+feature consumers.
+
+All eleven navigation states match, including active focus after allowing the
+deep-link route to settle. The initial 150 ms deep-link capture caught a transient
+body-versus-container focus difference; the settled comparison matches.
+
+The full-app rendering run compares 30 pairs across both themes, including the
+calendar cases, newsletter, GitHub, quote/plaintext/Markdown and CSS fixtures,
+plus narrow/wide tables. All computed measurements, media settings and image
+dimensions match, with no page errors. Twenty-one screenshot pairs are identical
+and seven differ by 2–6 border pixels. Two calendar pairs initially had different
+card backgrounds; one also included the reconnect toast over the card. Their
+hover state was not recorded in that run, so those images alone did not establish
+visual parity. A controlled repeat of all four calendar/theme combinations moves
+the pointer outside the card, asserts no hover or selection, and dismisses the
+toast. Three repeated pairs are pixel-identical; the fourth differs by six border
+pixels. Their measured backgrounds, overlays and content styles match. No source
+change was needed for those repeats.
+
+Early standalone and baseline fixture probes encountered initial-load timeouts.
+The completed probes allow 60 seconds for initial app loading; these comparisons
+verify the loaded behavior and are not startup-performance benchmarks.
+
+Local artifacts for this pass are under `/tmp/email-simplicity-reply-envelope`,
+`/tmp/email-simplicity-render-verified`, `/tmp/email-simplicity-render-hover`,
+`/tmp/email-simplicity-navigation`,
+`/tmp/email-simplicity-compose-results.json`,
+`/tmp/email-simplicity-compose-extended-results.json`, and
+`/tmp/email-simplicity-thread-action-done-compare.json`. As in the previous audit,
+they record local seed data and intercepted operations; they do not establish
+provider delivery or native-device parity.

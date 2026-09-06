@@ -2,12 +2,8 @@ import type { Accessor } from 'solid-js';
 import { createEffect, createMemo, createSignal, untrack } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { EmailRecipient } from '../../email-compose/core/email-recipient';
-import { convertContactInfoToEmailRecipient } from '../../email-compose/core/recipient-conversion';
 import type { ReplyType } from '../../email-compose/core/reply-type';
-import type {
-  EmailContact,
-  EmailMessage,
-} from '../../email-message/core/email-message';
+import type { EmailMessage } from '../../email-message/core/email-message';
 import type {
   ArchiveThreadOptions,
   EmailThreadDependencies,
@@ -17,6 +13,8 @@ import type { EmailThread } from '../core/email-thread';
 import { selectThreadMessages } from '../core/thread-messages';
 import type { HoveredThreadStop } from '../core/thread-stops';
 import { hiddenMessagesControl } from './scroll-to-message';
+import { createThreadDrafts } from './thread-drafts';
+import { createThreadRecipients } from './thread-recipients';
 import { createThreadSnapshot } from './thread-snapshot';
 export type EmailThreadState = {
   isScrollingToMessage: Accessor<boolean>;
@@ -137,121 +135,12 @@ export function createEmailThreadState(
     setHasHandledTarget(false);
   });
 
-  // The newest version of each reply draft seen across query snapshots,
-  // keyed by the replied-to message id. A cached snapshot populates this the
-  // moment it's available (the composer must not wait on the network), and a
-  // later fetch upgrades an entry only when its updated_at is newer — so the
-  // revalidation of a stale cache wins, but an out-of-order response can't
-  // downgrade a draft. Entries missing from a fetch are kept: deletes are
-  // handled locally below, and dropping one would collapse an open composer.
-  const serverDrafts = createMemo<
-    { threadDbId: string; map: Record<string, EmailMessage> } | undefined
-  >((prev) => {
-    const data = selected();
-    if (!data) return undefined;
-    const next = data.draftMap;
-    if (!prev || prev.threadDbId !== data.db_id) {
-      return { threadDbId: data.db_id, map: next };
-    }
-    const map: Record<string, EmailMessage> = { ...next };
-    for (const [messageId, prevDraft] of Object.entries(prev.map)) {
-      const nextDraft = map[messageId];
-      if (
-        !nextDraft ||
-        new Date(nextDraft.updated_at).getTime() <
-          new Date(prevDraft.updated_at).getTime()
-      ) {
-        map[messageId] = prevDraft;
-      }
-    }
-    return { threadDbId: data.db_id, map };
-  });
+  const drafts = createThreadDrafts(selected);
 
-  // Drafts the user discarded this session. Kept apart from the server map so
-  // a fetch that still contains the deleted draft (delete propagation lag)
-  // can't resurrect it.
-  const [deletedDraftIds, setDeletedDraftIds] = createStore<
-    Record<string, true>
-  >({});
-
-  const deleteDraftForMessage = (messageID: string) => {
-    setDeletedDraftIds(messageID, true);
-  };
-
-  const getDraftForMessage = (messageID: string) => {
-    if (deletedDraftIds[messageID]) return undefined;
-    return serverDrafts()?.map[messageID];
-  };
-
-  // Drafts derive straight from the query, so "settled" is simply "we have a
-  // thread snapshot" — cached or fresh, revalidating or not.
-  const initialDraftsSettled = () => serverDrafts() !== undefined;
-
-  const contacts = deps.recipients;
-
-  const [augmentedRecipients, setAugmentedRecipients] = createSignal<
-    EmailRecipient[]
-  >([]);
-
-  function onRecipientsChange(items: EmailRecipient[]) {
-    const existing = augmentedRecipients();
-    const existingEmails = new Set(
-      existing.map((r) => r.data.email).filter((e) => e.length > 0)
-    );
-
-    const uniques: EmailRecipient[] = [];
-    for (const r of items) {
-      const email = r.data.email;
-      if (email && !existingEmails.has(email)) {
-        existingEmails.add(email);
-        uniques.push(r);
-      }
-    }
-
-    if (uniques.length === 0) return;
-    setAugmentedRecipients([...existing, ...uniques]);
-  }
-
-  const getRecipientOptions = () => {
-    const optionsMap = new Map<string, EmailRecipient>();
-
-    for (const contact of contacts()) {
-      optionsMap.set(contact.data.email, contact);
-    }
-
-    const thread = selected();
-    if (thread) {
-      const seen = new Map<string, EmailContact>();
-
-      const add = (c: EmailContact) => {
-        const existing = seen.get(c.email);
-        if (!existing || (!existing.name && c.name)) seen.set(c.email, c);
-      };
-
-      thread.messages.forEach((m) => {
-        m.to.forEach(add);
-        m.cc.forEach(add);
-        m.bcc.forEach(add);
-        if (m.from?.email)
-          add({
-            email: m.from.email,
-            name: m.from.name ?? undefined,
-          });
-      });
-
-      for (const value of seen.values()) {
-        const mapped = convertContactInfoToEmailRecipient(value);
-        optionsMap.set(mapped.data.email, mapped);
-      }
-    }
-
-    augmentedRecipients().forEach((r) => {
-      const email = r.data.email;
-      if (email && !optionsMap.has(email)) optionsMap.set(email, r);
-    });
-
-    return Array.from(optionsMap.values());
-  };
+  const recipients = createThreadRecipients(
+    deps.recipients,
+    () => selected()?.messages
+  );
 
   const [messagesListRef, setMessagesListRef] = createSignal<
     HTMLDivElement | undefined
@@ -321,8 +210,8 @@ export function createEmailThreadState(
     registerMessagesList: setMessagesListRef,
     registerMessagesContainer: setMessagesContainerRef,
     thread: createMemo(() => selected()),
-    recipientOptions: createMemo(getRecipientOptions),
-    onRecipientsChange,
+    recipientOptions: recipients.options,
+    onRecipientsChange: recipients.add,
     ...deps.commands,
     messagesContainerRef,
     messagesListRef,
@@ -333,11 +222,7 @@ export function createEmailThreadState(
         deps.source.isLoading() || deps.source.isFetchingOlder(),
       refetch: deps.source.refresh,
     },
-    drafts: {
-      deleteDraftForMessage,
-      getDraftForMessage,
-      initialDraftsSettled,
-    },
+    drafts,
     messages: {
       focusedID: focusedMessageId,
       setFocused,

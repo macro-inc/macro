@@ -1,3 +1,10 @@
+import type { EmailFormRecipients } from '../core/email-recipient';
+
+export type {
+  EmailFormRecipients,
+  RecipientFieldId,
+} from '../core/email-recipient';
+
 import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import type { LexicalEditor } from 'lexical';
@@ -13,12 +20,6 @@ import {
 import type { ReplyType } from '../core/reply-type';
 import { getSubjectText } from '../core/subject-text';
 import { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from './email-editor-commands';
-
-export type EmailFormRecipients = {
-  to: EmailRecipient[];
-  cc: EmailRecipient[];
-  bcc: EmailRecipient[];
-};
 
 export type DraftFormAttachment =
   | {

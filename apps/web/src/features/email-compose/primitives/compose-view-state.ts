@@ -1,15 +1,15 @@
+import type { EmailFormRecipients } from '../core/email-recipient';
+
+export type {
+  EmailFormRecipients,
+  RecipientFieldId,
+} from '../core/email-recipient';
+
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, JSX } from 'solid-js';
 import type { ComposeBodyActions } from '../context/editor-capabilities';
 import type { EmailRecipient } from '../core/email-recipient';
 import type { DraftFormAttachment } from './email-form-state';
-export type EmailFormRecipients = {
-  to: EmailRecipient[];
-  cc: EmailRecipient[];
-  bcc: EmailRecipient[];
-};
-
-export type RecipientFieldId = 'to' | 'cc' | 'bcc';
 
 export type ComposeValidationError = {
   type: 'no_recipient' | 'no_message' | 'no_subject' | 'no_link';
@@ -21,7 +21,6 @@ export interface ComposeContextValue {
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
   attachmentFailure(message: string, options?: { subtext?: string }): void;
-  prepareSignatureLinks?: (root: ShadowRoot) => void;
   onUpgrade?: () => void;
   viewerLoading?: Accessor<boolean>;
   // Form state (read)
@@ -47,7 +46,6 @@ export interface ComposeContextValue {
 
   // Actions
   onSend: () => void;
-  onSaveDraft?: () => void | Promise<void>;
   onDelete?: () => void;
   onSendTimeChange?: (date: Date | null) => void;
 
@@ -86,9 +84,6 @@ export interface ComposeContextValue {
   selectedFromLinkId?: Accessor<string | undefined>;
   onSelectFromLink?: (linkId: string) => void;
   hasPaidAccess: Accessor<boolean>;
-
-  // Toolbar slot — allows orchestrators to provide a custom toolbar
-  toolbar?: () => JSX.Element;
 
   // Signature preview slot — rendered below the body. Provided by the new-email
   // composer and the AI chat composer (ChatCompose); the reply/forward input

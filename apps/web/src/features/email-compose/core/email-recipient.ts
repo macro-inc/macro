@@ -26,6 +26,7 @@ export type EmailRecipient =
     };
 
 export type RecipientFieldId = 'to' | 'cc' | 'bcc';
+export type EmailFormRecipients = Record<RecipientFieldId, EmailRecipient[]>;
 
 export function getRecipientDisplayName(item: EmailRecipient): string {
   if (item.kind === 'custom') return item.data.email;

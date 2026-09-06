@@ -2,7 +2,6 @@ import {
   MACRO_EMAIL_SIGNATURE,
   MAX_ATTACHMENTS_BYTES_SIZE,
 } from '@app/features/email-compose/core/constants';
-import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { isPersonalMessage } from '@app/features/email-message/core/is-personal-message';
 import type {
@@ -11,8 +10,11 @@ import type {
 } from '../context/compose-services';
 import type { EmailReplySession } from '../context/email-form-dependencies';
 import type { EmailDraft } from '../core/email-draft';
-import { getRecipientDisplayName } from '../core/email-recipient';
 import { createComposeOperation } from '../primitives/compose-operation';
+import { createAttachmentPersistence } from './attachment-persistence';
+import { createEmailSendSchedule } from './email-send-schedule';
+import { createReplyComposerFocus } from './reply-composer-focus';
+import { createReplyRecipientFields } from './reply-recipient-fields';
 import { createEmailUndoStore } from './undo-store';
 
 type EmailDraftId = string | null;
@@ -106,7 +108,7 @@ export type ReplyInputProps = {
     onClose: () => void;
   };
 };
-type ReplyEditorOptions = {
+export type ReplyEditorOptions = {
   namespace: string;
   onChange?: (markdown: string) => void;
   onUserMention?: (mention: UserMentionRecord) => void;
@@ -164,7 +166,6 @@ export function createReplyInput(
   const sourceEntityId = props.sourceEntityId;
   const undoKey = `${sourceEntityId}:${props.replyingTo()?.db_id ?? props.draft?.replying_to_id ?? props.draft?.db_id ?? 'new'}`;
   const services = props.services;
-  const [scheduling, setScheduling] = createSignal(false);
   const userEmail = services.viewerEmail;
 
   const toHeaderLinkId = services.accounts.headerId;
@@ -189,10 +190,7 @@ export function createReplyInput(
   const sendingLink = createMemo(() =>
     services.accounts.inboxes().find((l) => l.id === activeLinkId())
   );
-  const signature = () =>
-    services.accounts.inboxes().find((inbox) => inbox.id === activeLinkId())
-      ?.settings.signature ?? undefined;
-  const emailSignaturesFlag = () => ({ enabled: services.signaturesEnabled() });
+  const signature = () => sendingLink()?.settings.signature ?? undefined;
   // Whether this reply includes the signature. Defaults on, reset per reply,
   // and dismissable via the preview ✕.
   const [includeSignature, setIncludeSignature] = createSignal(true);
@@ -201,7 +199,7 @@ export function createReplyInput(
   // and the user hasn't dismissed it. The backend does the actual injection on
   // send — this just mirrors when that will happen.
   const replySignatureHtml = (): string | undefined =>
-    emailSignaturesFlag().enabled &&
+    services.signaturesEnabled() &&
     props.replyingTo() &&
     includeSignature() &&
     sendingLink()?.settings.signature_on_replies_forwards
@@ -219,18 +217,20 @@ export function createReplyInput(
   const [quoteCollapsed, setQuoteCollapsed] = createSignal(
     !form().replyAppended()
   );
-  const [showExpandedRecipients, setShowExpandedRecipients] =
-    createSignal<boolean>(false);
-  const [isDragging, setIsDragging] = createSignal<boolean>();
-  const [toRef, setToRef] = createSignal<HTMLInputElement>();
-  const [ccRef, setCcRef] = createSignal<HTMLInputElement>();
-  const [bccRef, setBccRef] = createSignal<HTMLInputElement>();
-  const [showCc, setShowCc] = createSignal<boolean>();
-  const [showBcc, setShowBcc] = createSignal<boolean>();
-  const [recipientDragState, setRecipientDragState] = createSignal<{
-    recipient: EmailRecipient;
-    sourceField: 'to' | 'cc' | 'bcc';
-  } | null>(null);
+  const recipients = createReplyRecipientFields({
+    values: () => form().recipients(),
+    setValues: (field, values) => form().setRecipients(field, values),
+    onChange: scheduleDraftSave,
+    container: dom.container,
+  });
+  const focus = createReplyComposerFocus({
+    editor,
+    container: dom.container,
+    footer: dom.footer,
+    scrollContainer,
+    toInput: recipients.toRef,
+    expandRecipients: () => recipients.setShowExpandedRecipients(true),
+  });
   // A pending undo-send restore that belongs to this thread (inline reply
   // remount case). It carries a just-undone send. Consumed below.
   const restoredSnapshot = replyUndo.takePending(undoKey);
@@ -445,9 +445,13 @@ export function createReplyInput(
     },
   });
 
-  const uploadAttachmentMutation = createComposeOperation(
-    services.uploadAttachments
-  );
+  const attachmentPersistence = createAttachmentPersistence({
+    services,
+    attachments: () => form().attachments,
+    draftId: savedDraftId,
+    linkId: headerLinkId,
+  });
+
   const addForwardedAttachmentsMutation = createComposeOperation(
     services.addForwardedAttachments
   );
@@ -461,52 +465,6 @@ export function createReplyInput(
     }
   }
 
-  // Lexical setup after the quote append (decorator mounts, mutation flushes)
-  // keeps flushing stale selections into the editor, yanking focus out of the
-  // To field. While armed, bounce those grabs back to To; any deliberate user
-  // interaction (pointer, Tab/Escape, focus leaving the composer) disarms it.
-  let bounceEditorFocusGrabs = false;
-
-  onMount(() => {
-    const disarm = () => {
-      bounceEditorFocusGrabs = false;
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Tab' || e.key === 'Escape') disarm();
-    };
-    const onFocusIn = (e: FocusEvent) => {
-      if (!bounceEditorFocusGrabs) return;
-      const target = e.target as Node;
-      if (!dom.container()?.contains(target)) {
-        disarm();
-        return;
-      }
-      if (scrollContainer()?.contains(target)) {
-        toRef()?.focus();
-      }
-    };
-    document.addEventListener('pointerdown', disarm, true);
-    document.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('focusin', onFocusIn, true);
-    onCleanup(() => {
-      document.removeEventListener('pointerdown', disarm, true);
-      document.removeEventListener('keydown', onKeyDown, true);
-      document.removeEventListener('focusin', onFocusIn, true);
-    });
-  });
-
-  const focusForwardRecipients = () => {
-    setShowExpandedRecipients(true);
-    setTimeout(() => {
-      if (toRef()) {
-        bounceEditorFocusGrabs = true;
-        toRef()?.focus();
-      }
-      // After the quoted thread is appended, keep the send bar in view
-      dom.footer()?.scrollIntoView({ block: 'nearest' });
-    }, 100);
-  };
-
   // Attach side-effect handlers on mount; they replay against current state
   onMount(() => {
     form().setOnDirty(() => {
@@ -517,12 +475,9 @@ export function createReplyInput(
       setComposerExpanded(false);
       if (rt === 'forward') {
         setQuoteCollapsed(true);
-        focusForwardRecipients();
+        focus.forward();
       } else if (rt === 'reply' || rt === 'reply-all') {
-        setTimeout(() => {
-          editor()?.focus();
-          dom.footer()?.scrollIntoView({ block: 'nearest' });
-        }, 100);
+        focus.reply();
       }
     });
   });
@@ -574,12 +529,6 @@ export function createReplyInput(
     };
   }
 
-  // Content uploads still in flight, including ones started by earlier saves.
-  // attachmentID only proves the draft record exists, and the send path treats
-  // a resolved save as "attachments ready", so a save must not resolve while
-  // any of these are pending.
-  const inFlightAttachmentUploads = new Set<Promise<void>>();
-
   async function executeSaveDraft(skipSoupRefetch = false) {
     if (sendMutation.pending() || pendingDeletion || pendingSend) {
       return;
@@ -629,40 +578,7 @@ export function createReplyInput(
 
     const draftId = draftResponse.draft.db_id;
     if (draftId) {
-      // If the email draft saved successfully, we want to upload the
-      // attachments as well. We should grab only the attachments that
-      // haven't been uploaded yet
-      const attachments = form()
-        .attachments.list()
-        .filter((a) => a.type === 'local' && !a.attachmentID) as Extract<
-        DraftFormAttachment,
-        { type: 'local' }
-      >[];
-
-      let uploadRun: Promise<void> | undefined;
-      if (attachments.length) {
-        uploadRun = uploadAttachmentMutation.run({
-          draftID: draftId,
-          attachments: attachments.map((a) => a.file),
-          linkId: headerLinkId(),
-          onAttachmentAdded: (file, attachmentID) =>
-            form().attachments.assignAttachmentID(file, attachmentID),
-          onAttachmentUploadFailed: (file) =>
-            form().attachments.clearAttachmentID(file),
-        });
-        const tracked = uploadRun.then(
-          () => undefined,
-          () => undefined
-        );
-        inFlightAttachmentUploads.add(tracked);
-        tracked.then(() => inFlightAttachmentUploads.delete(tracked));
-      }
-
-      while (inFlightAttachmentUploads.size) {
-        await Promise.all([...inFlightAttachmentUploads]);
-      }
-      // Settled by the drain above, this only rethrows this save's own failure
-      if (uploadRun) await uploadRun;
+      await attachmentPersistence.upload(draftId);
 
       // Sync forwarded attachments
       const forwardedAttachments = form()
@@ -783,7 +699,7 @@ export function createReplyInput(
     } else if (requestReplyType === 'forward') {
       // setReplyType is skipped when the type is unchanged, so land the
       // cursor in the To field explicitly
-      focusForwardRecipients();
+      focus.forward();
     }
     // Forwards focus the To field; focusing the editor would steal it back
     if (requestReplyType !== 'forward') {
@@ -791,47 +707,6 @@ export function createReplyInput(
     }
     ctx.replyRequest.clear();
   });
-
-  const handleChipDragStart = (
-    field: 'to' | 'cc' | 'bcc',
-    recipient: EmailRecipient,
-    e: DragEvent
-  ) => {
-    if (!e.dataTransfer) return;
-    setRecipientDragState({ recipient, sourceField: field });
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', '');
-  };
-
-  const handleChipDragEnd = () => {
-    setRecipientDragState(null);
-  };
-
-  const handleRecipientDrop = (
-    targetField: 'to' | 'cc' | 'bcc',
-    recipient: EmailRecipient,
-    sourceField: 'to' | 'cc' | 'bcc'
-  ) => {
-    const sourceList = form().recipients()[sourceField];
-    form().setRecipients(
-      sourceField,
-      sourceList.filter((r) => r.id !== recipient.id)
-    );
-    const targetList = form().recipients()[targetField];
-    if (!targetList.some((r) => r.id === recipient.id)) {
-      form().setRecipients(targetField, [...targetList, recipient]);
-    }
-    if (targetField === 'cc') setShowCc(true);
-    if (targetField === 'bcc') setShowBcc(true);
-    scheduleDraftSave();
-  };
-
-  const withDraftSave =
-    <T>(setter: (v: T) => void) =>
-    (v: T) => {
-      setter(v);
-      scheduleDraftSave();
-    };
 
   // We are consuming the first change, because it is the initial value
   let firstChangeConsumed = false;
@@ -844,34 +719,11 @@ export function createReplyInput(
     untrack(scheduleDraftSave);
   };
 
-  // Keep expanded recipients open while composing; collapse only when leaving
-  // the composer or selecting outside its recipient popover.
-  const expandedPointerDownHandler = (e: PointerEvent) => {
-    if (showExpandedRecipients()) {
-      const target = e.target as Node | null;
-      if (!target) return;
-      const combobox = document.querySelector('div[data-popper-positioner]');
-      if (!dom.container()?.contains(target) && !combobox?.contains(target)) {
-        setShowExpandedRecipients(false);
-        setShowCc(form().recipients().cc.length > 0);
-        setShowBcc(form().recipients().bcc.length > 0);
-      }
-    }
-  };
-
-  onMount(() => {
-    document.addEventListener('pointerdown', expandedPointerDownHandler);
-
-    onCleanup(() => {
-      document.removeEventListener('pointerdown', expandedPointerDownHandler);
-    });
-  });
-
   const hasPaidAccess = services.hasPaidAccess;
 
   const sendEmail = async (markDone = false) => {
     if (scheduling()) return;
-    if (sendMutation.pending() || uploadAttachmentMutation.pending()) return;
+    if (sendMutation.pending() || attachmentPersistence.uploading()) return;
 
     const to = form().recipients().to.map(convertEmailRecipientToContactInfo);
     const cc = form().recipients().cc.map(convertEmailRecipientToContactInfo);
@@ -1121,10 +973,7 @@ export function createReplyInput(
     }
     const ed = editor();
     if (!ed) return;
-    requestAnimationFrame(() => {
-      ed.focus();
-      form().setShouldFocusInput(false);
-    });
+    focus.editor(() => form().setShouldFocusInput(false));
   });
 
   const handleAddAttachments = (files: File[]) => {
@@ -1164,124 +1013,27 @@ export function createReplyInput(
     scheduleDraftSave();
   };
 
-  const removeAttachmentMutation = createComposeOperation(
-    services.removeAttachment
-  );
-  const removeForwardedAttachmentMutation = createComposeOperation(
-    services.removeForwardedAttachment
-  );
+  const handleRemoveAttachment = attachmentPersistence.remove;
 
-  const handleRemoveAttachment = (attachment: DraftFormAttachment) => {
-    if (attachment.type === 'local') {
-      form().attachments.removeByFile(attachment.file);
-    } else if (attachment.type === 'forwarded') {
-      form().attachments.removeForwarded(attachment.attachmentID);
-    } else {
-      form().attachments.removeByID(attachment.attachmentID);
-    }
-
-    const currentDraftID = savedDraftId();
-
-    if (!currentDraftID || !attachment.attachmentID) return;
-
-    if (attachment.type === 'forwarded') {
-      removeForwardedAttachmentMutation.start({
-        draftID: currentDraftID,
-        attachmentID: attachment.attachmentID,
-        linkId: headerLinkId(),
-      });
-    } else {
-      removeAttachmentMutation.start({
-        draftID: currentDraftID,
-        attachmentID: attachment.attachmentID,
-        linkId: headerLinkId(),
-      });
-    }
-  };
-
-  const unscheduleMessageMutation = createComposeOperation(
-    services.unschedule,
-    {
-      onSuccess: () => {
-        services.feedback.success('Email unscheduled');
-      },
-      onError: () => {
-        services.feedback.failure('Failed to unschedule email');
-      },
-    }
-  );
-
-  const handleSendTimeChange = async (date: Date | null) => {
-    if (scheduling()) return;
-    setScheduling(true);
-    try {
-      const previous = form().sendTime();
-      const currentDraft = savedDraftId();
-      if (!date && previous && currentDraft) {
-        try {
-          await unscheduleMessageMutation.run({
-            draftID: currentDraft,
-            linkId: headerLinkId(),
-          });
-          form().setSendTime(null);
-        } catch {
-          /* The operation reports the failure; keep the confirmed send time. */
-        }
-        return;
-      }
-      if (!date) {
-        form().setSendTime(null);
-        return;
-      }
-      try {
-        const draftID = currentDraft ?? (await executeSaveDraft());
-        if (!draftID) throw new Error('Draft required');
-        await services.schedule(
-          { draftID, send_time: date.toISOString() },
-          headerLinkId()
-        );
-        form().setSendTime(date);
-      } catch (error) {
-        services.reportError(error);
-        services.feedback.failure('Failed to schedule message');
-        return;
-      }
-      const threadID = ctx.thread()?.db_id;
-      if (threadID) {
-        try {
-          await services.archive({ id: threadID, value: true }, headerLinkId());
-        } catch (error) {
-          services.reportError(error);
-          services.feedback.failure(
-            'Email scheduled, but unable to mark thread done'
-          );
-        }
-      }
-    } finally {
-      setScheduling(false);
-    }
-  };
-
-  // Unschedule when all recipients are removed
-  const totalRecipientCount = () => {
-    const r = form().recipients();
-    return r.to.length + r.cc.length + r.bcc.length;
-  };
-  createEffect(
-    on(
-      totalRecipientCount,
-      (count) => {
-        if (count === 0 && form().sendTime()) {
-          handleSendTimeChange(null);
-        }
-      },
-      { defer: true }
-    )
-  );
+  const schedule = createEmailSendSchedule({
+    services,
+    draftId: savedDraftId,
+    saveDraft: executeSaveDraft,
+    threadId: () => ctx.thread()?.db_id,
+    linkId: headerLinkId,
+    sendTime: () => form().sendTime(),
+    setSendTime: (date) => form().setSendTime(date),
+    recipientCount: () => {
+      const recipients = form().recipients();
+      return (
+        recipients.to.length + recipients.cc.length + recipients.bcc.length
+      );
+    },
+  });
+  const scheduling = schedule.pending;
+  const handleSendTimeChange = schedule.change;
 
   const hasBodyText = () => bodyMacro().trim().length > 0;
-  const isMobileDrawer = () => props.mobileDrawer !== undefined;
-  const composePortalScope = () => (isMobileDrawer() ? 'local' : undefined);
   const sendActionHidden = () =>
     services.isTouch() &&
     !hasBodyText() &&
@@ -1289,7 +1041,7 @@ export function createReplyInput(
     effectiveReplyType() !== 'forward';
   const sendActionDisabled = () =>
     scheduling() ||
-    uploadAttachmentMutation.pending() ||
+    attachmentPersistence.uploading() ||
     sendMutation.pending() ||
     !!form().sendTime();
   const scheduleSendDisabled = () =>
@@ -1297,36 +1049,6 @@ export function createReplyInput(
     (form().recipients().to.length === 0 &&
       form().recipients().cc.length === 0 &&
       form().recipients().bcc.length === 0);
-  const scrollAreaSignatureHtml = () =>
-    isMobileDrawer() ? replySignatureHtml() : undefined;
-  const footerSignatureHtml = () =>
-    isMobileDrawer() ? undefined : replySignatureHtml();
-  const replyingToSummary = () => {
-    const recipients = [
-      ...form().recipients().to,
-      ...form().recipients().cc,
-      ...form().recipients().bcc,
-    ];
-    const firstRecipient = recipients[0];
-    const action =
-      effectiveReplyType() === 'forward' ? 'Forwarding' : 'Replying to';
-    if (!firstRecipient) return action;
-
-    const remainingCount = recipients.length - 1;
-    const suffix = remainingCount > 0 ? ` + ${remainingCount}` : '';
-    return `${action} ${getRecipientDisplayName(firstRecipient)}${suffix}`;
-  };
-  const mobileDrawerCcBccOpen = () =>
-    !!showCc() ||
-    !!showBcc() ||
-    form().recipients().cc.length > 0 ||
-    form().recipients().bcc.length > 0;
-  const toggleMobileDrawerCcBcc = () => {
-    const next = !mobileDrawerCcBccOpen();
-    setShowCc(next);
-    setShowBcc(next);
-  };
-
   const toggleQuotedText = () => {
     const replyingTo = props.replyingTo();
     if (!replyingTo) return;
@@ -1352,63 +1074,60 @@ export function createReplyInput(
     });
   };
 
+  const handleEditorDrop = (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[],
+    event: DragEvent | undefined,
+    onUploaded: () => void
+  ) => {
+    const currentEditor = editor();
+    if (!currentEditor || !event) return;
+    services.uploadEditorFiles({
+      editor: currentEditor,
+      sourceId: sourceEntityId,
+      files,
+      directories,
+      dropEvent: event,
+      onUploaded: (ids) => {
+        onUploaded();
+        ids.forEach(services.makePublic);
+        scheduleDraftSave();
+      },
+    });
+  };
+
   return {
     editorOptions,
-    ctx,
     form,
-    sourceEntityId,
-    services,
     activeLinkId,
     activeInboxEmail,
-    signature,
+    replyType: effectiveReplyType,
+    signatureHtml: replySignatureHtml,
     setIncludeSignature,
     setScrollContainer,
     composerExpanded,
     setComposerExpanded,
     quoteCollapsed,
     setQuoteCollapsed,
-    showExpandedRecipients,
-    setShowExpandedRecipients,
-    isDragging,
-    setIsDragging,
-    setToRef,
-    ccRef,
-    setCcRef,
-    bccRef,
-    setBccRef,
-    showCc,
-    setShowCc,
-    showBcc,
-    setShowBcc,
-    recipientDragState,
     savedDraftId,
     initialHtml,
     handleEditorConnect,
-    sendMutation,
-    uploadAttachmentMutation,
+    isSending: sendMutation.pending,
+    isUploading: attachmentPersistence.uploading,
+    recipients,
     collectDraft,
     scheduleDraftSave,
     persistDraftOnSenderSwitch,
-    handleChipDragStart,
-    handleChipDragEnd,
-    handleRecipientDrop,
-    withDraftSave,
     hasPaidAccess,
     sendEmail,
     deleteDraftAndReset,
     handleAddAttachments,
     handleRemoveAttachment,
+    handleEditorDrop,
     handleSendTimeChange,
-    isMobileDrawer,
-    composePortalScope,
     sendActionHidden,
     sendActionDisabled,
     scheduleSendDisabled,
-    scrollAreaSignatureHtml,
-    footerSignatureHtml,
-    replyingToSummary,
-    mobileDrawerCcBccOpen,
-    toggleMobileDrawerCcBcc,
     toggleQuotedText,
   };
 }
