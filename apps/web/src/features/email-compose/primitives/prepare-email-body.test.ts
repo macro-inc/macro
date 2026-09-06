@@ -1,5 +1,8 @@
 // @vitest-environment jsdom
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import { $generateNodesFromDOM } from '@lexical/html';
+import { DocumentMentionNode } from '@macro-inc/lexical-core';
+import { $getRoot, $nodesOfType, createEditor } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { prepareEmailBodyFromHtml } from './prepare-email-body';
 
@@ -20,6 +23,61 @@ const replyingTo = {
 } as unknown as EmailMessage;
 
 describe('prepareEmailBodyFromHtml', () => {
+  it.each(['reply', 'forward'] as const)(
+    'keeps quoted Macro document links re-importable as rich mentions in a %s',
+    (replyType) => {
+      const prepared = prepareEmailBodyFromHtml('<p>My reply</p>', {
+        replyType,
+        replyingTo: {
+          ...replyingTo,
+          body_html_sanitized:
+            '<p>Read <a href="https://example.com/app/md/document-123" data-document-mention="true" data-document-id="document-123" data-document-name="Architecture" data-block-name="md">Architecture</a></p>',
+        },
+      });
+      const dom = new DOMParser().parseFromString(
+        decodeBodyHtml(prepared.bodyHtml),
+        'text/html'
+      );
+      const editor = createEditor({
+        nodes: [DocumentMentionNode],
+        onError(error) {
+          throw error;
+        },
+      });
+      editor.update(
+        () => $getRoot().append(...$generateNodesFromDOM(editor, dom)),
+        { discrete: true }
+      );
+      editor.read(() => {
+        expect(
+          $nodesOfType(DocumentMentionNode).map((node) => node.exportJSON())
+        ).toMatchObject([
+          {
+            documentId: 'document-123',
+            documentName: 'Architecture',
+            blockName: 'md',
+          },
+        ]);
+      });
+    }
+  );
+  it.each(['reply', 'forward'] as const)(
+    'preserves original theme rules and image-map links in an outgoing %s',
+    (replyType) => {
+      const prepared = prepareEmailBodyFromHtml('<p>My reply</p>', {
+        replyType,
+        replyingTo: {
+          ...replyingTo,
+          body_html_sanitized:
+            '<style>@media(prefers-color-scheme:dark){.message{color:white}}.message{color:var(--tone,black)}</style><p class="message">Original message</p><map name="offer"><area href="https://example.com/accept"></map>',
+        },
+      });
+      const decoded = decodeBodyHtml(prepared.bodyHtml);
+      expect(decoded).toContain('prefers-color-scheme');
+      expect(decoded).toContain('var(--tone,black)');
+      expect(decoded).toContain('href="https://example.com/accept"');
+    }
+  );
   it('does not add a quote block without appendReply (undo-send restore)', () => {
     const prepared = prepareEmailBodyFromHtml('<p>hi there</p>');
     const decoded = decodeBodyHtml(prepared.bodyHtml);

@@ -38,6 +38,7 @@ import type {
   ArchiveThreadOptions,
   EmailThreadCommands,
 } from './context/email-thread-dependencies';
+import { selectThreadSender } from './core/thread-messages';
 export function createThreadActionAdapter(
   threadId: Accessor<string>,
   threadSource: Accessor<EmailThread | undefined>
@@ -396,33 +397,16 @@ export function createThreadActionAdapter(
 
   const currentUserEmail = useEmail();
 
-  const blockSender = () => {
-    const thread = threadSource();
-    if (!thread?.messages?.length) return false;
-
-    const userEmail = currentUserEmail()?.toLowerCase();
-    const senderEmail = thread.messages.find(
-      (m) =>
-        m.from?.email &&
-        (!userEmail || m.from.email.toLowerCase() !== userEmail)
-    )?.from?.email;
-
-    if (!senderEmail) return false;
-
-    blockSenderWithToast(senderEmail, toHeaderLinkId(thread.link_id));
-    return true;
-  };
-
   const getSenderEmail = (): string | undefined => {
     const thread = threadSource();
-    if (!thread?.messages?.length) return undefined;
+    return thread ? selectThreadSender(thread, currentUserEmail()) : undefined;
+  };
 
-    const userEmail = currentUserEmail()?.toLowerCase();
-    return thread.messages.find(
-      (m) =>
-        m.from?.email &&
-        (!userEmail || m.from.email.toLowerCase() !== userEmail)
-    )?.from?.email;
+  const blockSender = () => {
+    const senderEmail = getSenderEmail();
+    if (!senderEmail) return false;
+    blockSenderWithToast(senderEmail, toHeaderLinkId(threadSource()?.link_id));
+    return true;
   };
 
   const markSenderSignal = () => {

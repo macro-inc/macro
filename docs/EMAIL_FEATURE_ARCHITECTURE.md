@@ -120,10 +120,11 @@ Production adapters supply theme, image proxy policy, CID resolution, native
 authenticated image fetching, and mailto interception. The package never imports
 the app to obtain those capabilities.
 
-Macro Markdown remains a separate app rendering path because document mentions
-and editor semantics belong to the app. That branch does not mount an invisible
-HTML renderer or start its resource requests. Ordinary plaintext is escaped and
-displayed literally, including Markdown punctuation. Missing replyless HTML
+Macro Markdown and the existing plaintext fallback remain app Markdown rendering
+paths because document mentions and editor semantics belong to the app. Neither
+branch mounts an invisible HTML renderer or starts its resource requests. The
+standalone package also offers literal plaintext preparation, but adopting that
+policy in the app would be a separate behavior change. Missing replyless HTML
 falls back to recognized quote removal or the full body instead of a blank body.
 The shared editor HTML decorator still owns its Lexical/Solid lifecycle; its
 sanitization/color helpers delegate to the package through `@core/email`.
@@ -154,9 +155,9 @@ sanitization/color helpers delegate to the package through `@core/email`.
    operation is pending. A rejected schedule keeps the previous confirmed time.
    If scheduling succeeds and archiving fails, the confirmed time remains and the
    user receives accurate feedback. A failed unschedule also retains that time.
-8. Renderer resources follow their Solid owner. Image blob URLs, resize observers,
-   image listeners, and pending measurement frames are released on source changes
-   or disposal.
+8. Renderer resources follow their Solid owner. Source changes or disposal release
+   image blob URLs, resize observers and image listeners, and abort pending adapter
+   work.
 
 ## Shared UI and explicit exceptions
 
@@ -234,44 +235,38 @@ the full rendering pipeline. Committed screenshots were not regenerated then. Th
 seeded inbox has no real provider credentials, so these checks do not establish
 Gmail delivery or native iOS behavior.
 
-### Standalone renderer verification
+### Compatibility audit — September 6, 2026
 
-The fixture viewer and Chromium suite now call the same public preparation and
-mounting API as the app. Node tests cover preparation, content/resource policy,
-pure color calculations, and width fitting. A separate TypeScript build excludes
-DOM libraries from core. Import checks reject app/framework dependencies and
-browser imports from core. Browser tests cover CSS/layout, color round trips,
-quote expansion, image visibility, resource replacement, late cleanup, and
-adapter failures. App tests verify the Solid lifecycle and native image adapter.
-The package's Node tests are included in the app's default Vitest projects and
-existing CI job. They also compile production core without DOM libraries.
+The earlier checks above did not establish full behavioral parity. The follow-up
+[feature inventory and verification record](EMAIL_REFACTOR_VERIFICATION.md)
+compares the actual application before both email refactors (`5a3d970fb`) with the
+current worktree. It records confirmed regressions, fixes, browser evidence, and
+paths that still require integration or device testing.
 
-The new visual baselines cover all five migrated fixtures across both themes,
-including narrow/wide panes. Resources are blocked before insertion and the
-suite asserts no external requests. Screenshots have a zero-pixel difference
-tolerance. A comparison with a captured bundle of the previous production
-renderer found identical calendar and wide-table images (six screenshots).
-The paragraph fixtures have contained outer margins: the new shadow host keeps
-layout and paint within the body, increasing the captured height by the margins
-that previously collapsed outside it. This is an intentional containment change.
-The package README documents additional explicit content policies, including
-literal plaintext and exclusion of origin-dependent URLs and external fonts.
+The renderer's fixture viewer and Chromium suite call the same public preparation
+and mounting API as the app. Node tests cover preparation, resource policy, CSS
+recovery, quote/signature selection, colors, and width fitting. A separate
+TypeScript build excludes DOM libraries from core; import checks reject app and
+framework dependencies. The package Node tests also run through the app's default
+Vitest projects. Browser tests cover actual layout, delayed attachment, color
+round trips, collapse/expansion, URL handling, CSS cascade, and resource cleanup.
 
-Use `bun run --cwd packages/email-renderer viewer` to inspect these fixtures
-without an account or backend. Full inbox interactions still require browser
-checks against the running app; passing package tests alone is insufficient.
+The seven visual fixtures include personal calendar responses and announcements
+in both themes. Personal fixtures explicitly enable color adaptation even when
+they contain tables. Screenshots have a zero differing pixel tolerance within the
+controlled Chromium/font environment. The full-app comparison additionally uses
+the old and new production pipelines, mounted through their real Solid hosts;
+standalone fixture snapshots alone do not establish parity.
 
-The completed extraction passes 53 package Node tests, 18 Chromium tests, and
-121 app email tests, plus the full frontend check, package type/lint checks,
-feature ast-grep scan, viewer production build, and five QC reviews. The package
-Node tests also pass when invoked through the app's Vitest project list.
-Linux's Nix dependency artifact passes a forced rebuild. The Darwin dependency
-hash was generated and verified using the same recipe with Bun's Darwin/arm64
-installation flags on Linux; a native macOS build was not run.
+Current checks pass 67 package Node tests, 31 Chromium tests, and 127 app email
+tests, plus the full frontend check and package type checking. See the verification
+record for the separate browser interaction matrix and its limits. Literal
+plaintext is an independent package API capability; the app retains its original
+Markdown fallback. Default URL and CSS policy preserves browser resolution and
+cascade semantics. The optional remote-image blocking policy is stricter and is
+not the normal app reader policy.
 
-Chrome checked message bodies and quote expansion against the previous and new
-implementations. Final checks covered deep-link reveal, keyboard reply,
-standalone compose, a saved reply surviving a fresh browser context, and the
-mobile reply drawer at 390px. The standalone scenarios reported no page errors.
-The combined script encountered full-page navigation timeouts before and after
-the extraction; persistence and compose were verified in separate contexts.
+Use `bun run --cwd packages/email-renderer viewer` to inspect fixtures without an
+account or backend. Do not regenerate visual expectations simply to make a
+refactor pass: reproduce the baseline in the same browser and explain each
+remaining difference before accepting it.

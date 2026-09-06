@@ -26,7 +26,7 @@ export interface EmailBodyRenderer {
   dispose(): void;
 }
 
-/** Owns one empty host's shadow tree. Call after connecting the host to the DOM. */
+/** Owns one empty host's shadow tree; visual preparation waits for attachment. */
 export function mountEmailBody(
   host: HTMLElement,
   body: PreparedEmailBody,
@@ -60,8 +60,10 @@ export function mountEmailBody(
     style.textContent = `:host{display:block;contain:content}${EMAIL_BODY_CONTAINMENT_CSS}${font}`;
     const content = document.createElement('div');
     content.innerHTML = prepared.html;
-    for (const anchor of content.querySelectorAll<HTMLAnchorElement>('a')) {
-      if (anchor.style.backgroundColor) {
+    for (const anchor of content.querySelectorAll<
+      HTMLAnchorElement | HTMLAreaElement
+    >('a, area')) {
+      if (anchor.tagName === 'A' && anchor.style.backgroundColor) {
         anchor.dataset.macroBtn = '';
         for (const child of anchor.querySelectorAll<HTMLElement>('*'))
           child.dataset.macroBtn = '';
@@ -76,11 +78,18 @@ export function mountEmailBody(
     settings.prepareLinks?.(content);
 
     let expanded = settings.expanded !== false;
-    const measure = () => {
-      if (abort.signal.aborted) return;
+    let colorsPrepared = false;
+    const refresh = () => {
+      // Solid can create a host well before inserting it. Computed colors are
+      // unavailable while detached; retry on attachment via ResizeObserver.
+      if (abort.signal.aborted || !host.isConnected) return;
+      if (!colorsPrepared) {
+        if (settings.adaptColors) processEmailColors(shadow, settings.theme);
+        colorsPrepared = true;
+      }
       content.style.zoom = '';
-      content.style.overflow = '';
       content.style.overflowX = '';
+      content.style.overflow = expanded ? '' : 'hidden';
       if (!expanded) return;
       const fit = fitToWidthZoom({
         containerWidth: host.clientWidth,
@@ -92,25 +101,27 @@ export function mountEmailBody(
     };
     applyExpanded = (value) => {
       expanded = value;
+      // Host containment prevents an ancestor's line clamp from reaching this
+      // content, so the collapsed summary must be clipped inside the boundary.
+      content.style.display = value ? '' : '-webkit-box';
+      content.style.webkitBoxOrient = value ? '' : 'vertical';
+      content.style.webkitLineClamp = value ? '' : '3';
       host.style.setProperty(
         '--macro-email-img-display',
         value ? 'initial' : 'none'
       );
-      measure();
+      refresh();
     };
     applyExpanded(expanded);
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver(refresh);
     observer.observe(host);
     lifetime.onDispose(() => observer.disconnect());
     // Capture catches non-bubbling load events, including resolved CID images.
-    shadow.addEventListener('load', measure, true);
-    lifetime.onDispose(() => shadow.removeEventListener('load', measure, true));
-    const frame = requestAnimationFrame(() => {
-      if (abort.signal.aborted) return;
-      if (settings.adaptColors) processEmailColors(shadow, settings.theme);
-      measure();
-    });
-    lifetime.onDispose(() => cancelAnimationFrame(frame));
+    shadow.addEventListener('load', refresh, true);
+    lifetime.onDispose(() => shadow.removeEventListener('load', refresh, true));
+    // Cover synchronous framework insertion without depending on a paint frame
+    // (which can be suspended in a background tab or embedded browser).
+    queueMicrotask(refresh);
     if (!settings.adaptColors) {
       content.style.setProperty('background-color', 'white', 'important');
       content.style.color = 'black';

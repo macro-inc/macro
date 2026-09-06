@@ -49,6 +49,13 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
               );
             }}
           </Match>
+          <Match when={!props.message.body_html_sanitized}>
+            <StaticMarkdown
+              markdown={props.message.body_text ?? ''}
+              theme={channelTheme}
+              target="internal"
+            />
+          </Match>
           <Match when={true}>{host()}</Match>
         </Switch>
         <Show when={!showFullHTML() && hasHiddenReplyStructure()}>

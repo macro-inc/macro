@@ -1,5 +1,5 @@
 export type { ThemeColorParams } from './colors';
-export { processEmailColors, stripContentBackgrounds } from './colors';
+export { processEmailColors } from './colors';
 export type {
   BrowserOptions,
   EmailBodyRenderer,

@@ -42,9 +42,13 @@ export function createEmailMessageBody(
     )
   );
   const rendered = createMemo(() => {
-    // Macro Markdown owns its mentions/editor integration. Do not mount an
-    // invisible HTML renderer or start image requests behind that branch.
-    if (!showFullHTML() && props.message.body_macro) return;
+    // Preserve the app's existing Markdown paths without starting hidden HTML
+    // resources behind them. Their Lexical semantics stay at the app boundary.
+    if (
+      (!showFullHTML() && props.message.body_macro) ||
+      !props.message.body_html_sanitized
+    )
+      return;
     const body = prepared();
     const attachments = props.message.attachments;
     const host = document.createElement('div');

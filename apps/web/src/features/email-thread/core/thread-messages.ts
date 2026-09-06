@@ -1,6 +1,15 @@
 import type { EmailMessage } from '../../email-message/core/email-message';
 import type { EmailThread } from './email-thread';
 
+/** Sender actions historically target the earliest sender other than the viewer. */
+export function selectThreadSender(thread: EmailThread, viewerEmail?: string) {
+  const viewer = viewerEmail?.toLowerCase();
+  return selectThreadMessages(thread).messages.find(
+    (message) =>
+      message.from?.email && message.from.email.toLowerCase() !== viewer
+  )?.from?.email;
+}
+
 /** Select chronological messages and reply drafts without mutating the source. */
 export function selectThreadMessages(thread: EmailThread) {
   const messages = [...thread.messages];

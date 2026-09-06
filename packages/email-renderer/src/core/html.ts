@@ -3,7 +3,6 @@ import {
   defaultTreeAdapter,
   html as htmlConstants,
   parse,
-  parseFragment,
   serialize,
   serializeOuter,
 } from 'parse5';
@@ -20,14 +19,23 @@ const ACTIVE = new Set(
 );
 const IMAGES_ALLOWED: ImagePolicy = { remote: 'allow' };
 
+interface ScrubOptions {
+  stripColorScheme?: boolean;
+  preserveDataAttributes?: boolean;
+}
+
 function isElement(node: Node): node is Element {
   return 'tagName' in node;
 }
 function elements(root: Parent): Element[] {
   const result: Element[] = [];
-  for (const child of root.childNodes) {
+  const pending = [...root.childNodes].reverse();
+  while (pending.length) {
+    const child = pending.pop()!;
     if (isElement(child)) {
-      result.push(child, ...elements(child));
+      result.push(child);
+      for (let index = child.childNodes.length - 1; index >= 0; index--)
+        pending.push(child.childNodes[index]);
     }
   }
   return result;
@@ -41,10 +49,10 @@ function remove(node: Element) {
 function hasClass(node: Element, name: string) {
   return node.attrs
     .find((attr) => attr.name === 'class')
-    ?.value.split(/\s+/)
+    ?.value.split(/[\t\n\f\r ]+/)
     .includes(name);
 }
-function scrub(root: Parent, images: ImagePolicy) {
+function scrub(root: Parent, images: ImagePolicy, options: ScrubOptions = {}) {
   for (const node of elements(root)) {
     if (
       ACTIVE.has(node.tagName) ||
@@ -70,12 +78,17 @@ function scrub(root: Parent, images: ImagePolicy) {
           'contenteditable',
           'is',
           'slot',
+          // The editor interprets this legacy attribute as unsanitized HTML.
+          // Its current exporter uses child markup, which we scrub normally.
+          'data-html',
         ].includes(name) ||
-        name.startsWith('data-')
+        (name.startsWith('data-') && !options.preserveDataAttributes)
       )
         return [];
       if (name === 'href') {
-        const value = node.tagName === 'a' ? linkUrl(attr.value) : undefined;
+        const value = ['a', 'area'].includes(node.tagName)
+          ? linkUrl(attr.value)
+          : undefined;
         return value ? [{ ...attr, value }] : [];
       }
       if (name === 'src' || name === 'background') {
@@ -89,7 +102,7 @@ function scrub(root: Parent, images: ImagePolicy) {
         return value ? [{ ...attr, value }] : [];
       }
       if (name === 'style') {
-        const value = prepareCss(attr.value, true, images);
+        const value = prepareCss(attr.value, true, images, options);
         return value ? [{ ...attr, value }] : [];
       }
       return [attr];
@@ -105,16 +118,53 @@ function scrub(root: Parent, images: ImagePolicy) {
       node.childNodes = [
         {
           nodeName: '#text',
-          value: prepareCss(css, false, images),
+          value: prepareCss(css, false, images, {
+            stripColorScheme:
+              options.stripColorScheme && node.parentNode?.nodeName === 'head',
+          }),
           parentNode: node,
         },
       ];
     }
   }
 }
-function documentParts(html: string, images: ImagePolicy) {
+
+// Native HTML parsing bounds nesting at roughly 512 levels. parse5 does not,
+// and its serializer recurses. Unwrap excessive containers after sanitization
+// so readable content keeps its order without exposing discarded active markup.
+function boundNesting(root: Parent) {
+  const pending = [{ node: root, depth: 0 }];
+  while (pending.length) {
+    const { node, depth } = pending.pop()!;
+    if (depth < 512) {
+      for (const child of node.childNodes)
+        if (isElement(child)) pending.push({ node: child, depth: depth + 1 });
+      continue;
+    }
+    const flattened: typeof node.childNodes = [];
+    const descendants = [...node.childNodes].reverse();
+    while (descendants.length) {
+      const child = descendants.pop()!;
+      if (isElement(child) && child.childNodes.some(isElement)) {
+        for (let index = child.childNodes.length - 1; index >= 0; index--)
+          descendants.push(child.childNodes[index]);
+      } else {
+        child.parentNode = node;
+        flattened.push(child);
+      }
+    }
+    node.childNodes = flattened;
+  }
+}
+
+function documentParts(
+  html: string,
+  images: ImagePolicy,
+  options?: ScrubOptions
+) {
   const document = parse(html);
-  scrub(document, images);
+  scrub(document, images, options);
+  boundNesting(document);
   const nodes = elements(document);
   let body = nodes.find((node) => node.tagName === 'body');
   if (!body) {
@@ -139,7 +189,7 @@ function trim(root: Parent) {
     if (last.nodeName === '#text') {
       if ((last as DefaultTreeAdapterMap['textNode']).value.trim()) return;
     } else if (isElement(last)) {
-      if (last.tagName === 'img' || last.tagName === 'style') return;
+      if (last.tagName === 'img') return;
       if (last.tagName !== 'br') {
         trim(last);
         if (last.childNodes.length) return;
@@ -149,29 +199,29 @@ function trim(root: Parent) {
   }
 }
 
-export function trimTrailingHtml(html: string): string {
-  const fragment = parseFragment(html);
-  trim(fragment);
-  return serialize(fragment);
-}
-
 export function sanitizeEmailHtml(
   html: string,
   images: ImagePolicy = IMAGES_ALLOWED
 ): string {
-  const { document } = documentParts(html, images);
+  // Outgoing quoted HTML round-trips through the editor using inert data
+  // attributes (mentions, indentation and embedded HTML). Reader preparation
+  // strips these separately before mounting application-visible content.
+  const { document } = documentParts(html, images, {
+    preserveDataAttributes: true,
+  });
   return serialize(elements(document).find((node) => node.tagName === 'html')!);
 }
 
-export interface ContentOptions {
+interface ContentOptions {
   removeSignature?: boolean;
   removeTrailingBrs?: boolean;
   images?: ImagePolicy;
 }
-export function parseEmailContent(html: string, options: ContentOptions = {}) {
+function parseEmailContent(html: string, options: ContentOptions = {}) {
   const { body, styles } = documentParts(
     html,
-    options.images ?? IMAGES_ALLOWED
+    options.images ?? IMAGES_ALLOWED,
+    { stripColorScheme: true }
   );
   const nodes = elements(body);
   const hasTable = nodes.some((node) => node.tagName === 'table');
@@ -238,12 +288,14 @@ export function prepareEmailBody(
   const replyless =
     input.replylessHtml || (quote ? styles + serialize(body) : input.html);
   const full = !!(options.showQuotedContent || options.showFullContent);
-  const parsed = parseEmailContent(full ? input.html : replyless, {
-    removeSignature: !options.showQuotedContent,
-    removeTrailingBrs: !options.showQuotedContent,
-    images,
-  });
   const shortened = parseEmailContent(replyless, { images });
+  const parsed = full
+    ? parseEmailContent(input.html, {
+        removeSignature: !options.showQuotedContent,
+        removeTrailingBrs: !options.showQuotedContent,
+        images,
+      })
+    : shortened;
   return {
     html: parsed.mainContent,
     kind: 'html',

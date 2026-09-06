@@ -36,6 +36,278 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
 });
 
+test('preserves CSS recovery and native variable cascade and fallbacks', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const host = document.createElement('div');
+    host.id = 'css-compat';
+    host.style.setProperty('--gap', '9px');
+    document.body.append(host);
+    mountEmailBody(
+      host,
+      prepareEmailBody(
+        {
+          html: '<style>.preheader{display:none;color:red !}.message{--tone:green;color:var(--tone,red);padding:var(--gap,5px);font-size:32px}.fallback{color:var(--missing,#dd1111);background:var(--image)}</style><div class="preheader">Hidden preview</div><div class="message"><p>Inherited green</p><p class="fallback">Fallback red</p></div><map name="offer"><area shape="rect" coords="0,0,20,20" href="//example.com/accept"></map><p>Image map footer</p>',
+        },
+        { images: { remote: 'allow' } }
+      ),
+      { theme: themes.light, adaptColors: false, normalizeFonts: false }
+    );
+  });
+  const host = page.locator('#css-compat');
+  await expect(host.locator('.preheader')).toBeHidden();
+  await expect(host.locator('.message')).toHaveCSS('font-size', '32px');
+  await expect(host.locator('.message')).toHaveCSS('padding', '9px');
+  await expect(host.getByText('Inherited green')).toHaveCSS(
+    'color',
+    'rgb(0, 128, 0)'
+  );
+  await expect(host.locator('.fallback')).toHaveCSS(
+    'color',
+    'rgb(221, 17, 17)'
+  );
+  await expect(host.locator('.fallback')).toHaveCSS('background-image', 'none');
+  await expect(host.locator('area')).toHaveAttribute(
+    'href',
+    'https://example.com/accept'
+  );
+  await expect(host.locator('area')).toHaveAttribute('target', '_blank');
+  await expect(host.locator('area')).toHaveAttribute(
+    'rel',
+    'noopener noreferrer'
+  );
+});
+
+test('loads protocol-relative images and retains protocol-relative navigation', async ({
+  page,
+}) => {
+  await page.route('https://renderer.invalid/image', (route) =>
+    route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1sAAAAASUVORK5CYII=',
+        'base64'
+      ),
+    })
+  );
+  await page.evaluate(() => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const host = document.createElement('div');
+    host.id = 'url-compat';
+    document.body.append(host);
+    mountEmailBody(
+      host,
+      prepareEmailBody({
+        html: '<img src="//renderer.invalid/image"><a href="//example.com/open">Open</a>',
+      }),
+      { theme: themes.light, adaptColors: false, normalizeFonts: false }
+    );
+  });
+  const host = page.locator('#url-compat');
+  await expect
+    .poll(() =>
+      host
+        .locator('img')
+        .evaluate((image) => (image as HTMLImageElement).naturalWidth)
+    )
+    .toBe(1);
+  await expect(host.locator('a')).toHaveAttribute(
+    'href',
+    'https://example.com/open'
+  );
+});
+
+test('preserves namespace, layer and scope styling in the browser', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const host = document.createElement('div');
+    host.id = 'grouped-css';
+    document.body.append(host);
+    mountEmailBody(
+      host,
+      prepareEmailBody({
+        html: '<style>@namespace h url(http://www.w3.org/1999/xhtml);@layer email{@scope (.group){h|p{color:red;font-size:32px}}}</style><div class="group"><p>Styled inside scope</p></div><p>Outside scope</p>',
+      }),
+      { theme: themes.light, adaptColors: false, normalizeFonts: false }
+    );
+  });
+  const host = page.locator('#grouped-css');
+  await expect(host.getByText('Styled inside scope')).toHaveCSS(
+    'color',
+    'rgb(255, 0, 0)'
+  );
+  await expect(host.getByText('Styled inside scope')).toHaveCSS(
+    'font-size',
+    '32px'
+  );
+  await expect(host.getByText('Outside scope')).toHaveCSS(
+    'color',
+    'rgb(0, 0, 0)'
+  );
+});
+
+test('preserves nested and body theme rules while stripping top-level head overrides', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.evaluate(() => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const host = document.createElement('div');
+    host.id = 'theme-rule-scope';
+    document.body.append(host);
+    mountEmailBody(
+      host,
+      prepareEmailBody({
+        html: '<head><style>@media(prefers-color-scheme:dark){.head{color:red}}@media screen{@media(prefers-color-scheme:dark){.nested{color:green}}}</style></head><body><style>@media(prefers-color-scheme:dark){.body{color:blue}}</style><p class="head">Head</p><p class="nested">Nested</p><p class="body">Body</p></body>',
+      }),
+      { theme: themes.dark, adaptColors: false, normalizeFonts: false }
+    );
+  });
+  const host = page.locator('#theme-rule-scope');
+  await expect(host.getByText('Head', { exact: true })).toHaveCSS(
+    'color',
+    'rgb(0, 0, 0)'
+  );
+  await expect(host.getByText('Nested', { exact: true })).toHaveCSS(
+    'color',
+    'rgb(0, 128, 0)'
+  );
+  await expect(host.getByText('Body', { exact: true })).toHaveCSS(
+    'color',
+    'rgb(0, 0, 255)'
+  );
+});
+
+test('keeps custom-property names consistent with selectors and container queries', async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const host = document.createElement('div');
+    host.id = 'variable-names';
+    document.body.append(host);
+    mountEmailBody(
+      host,
+      prepareEmailBody({
+        html: '<style>[style*="--tone"] p{color:var(--tone)}@container style(--tone:red){p{font-size:32px}}</style><div style="--tone:red"><p>Variable styled text</p></div>',
+      }),
+      { theme: themes.light, adaptColors: false, normalizeFonts: false }
+    );
+  });
+  const text = page
+    .locator('#variable-names')
+    .getByText('Variable styled text');
+  await expect(text).toHaveCSS('color', 'rgb(255, 0, 0)');
+  await expect(text).toHaveCSS('font-size', '32px');
+});
+
+test('allows image-set backgrounds explicitly and blocks strings expanded by CSS functions', async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  await page.route('https://renderer.invalid/**', async (route) => {
+    requests.push(route.request().url());
+    await route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aL1sAAAAASUVORK5CYII=',
+        'base64'
+      ),
+    });
+  });
+  await page.evaluate(() => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    for (const remote of ['allow', 'block'] as const) {
+      const host = document.createElement('div');
+      host.id = `image-set-${remote}`;
+      document.body.append(host);
+      const html = `<div style="--source:'https://renderer.invalid/${remote}-variable';background:image-set(var(--source) 1x)">Variable image</div><div style="background:image-set(env(no-such-environment,'https://renderer.invalid/${remote}-environment') 1x)">Environment image</div><div style="background:image-set('https://renderer.invalid/${remote}-direct' 1x)">Direct image</div>`;
+      mountEmailBody(host, prepareEmailBody({ html }, { images: { remote } }), {
+        theme: themes.light,
+        adaptColors: false,
+        normalizeFonts: false,
+      });
+    }
+  });
+  await expect
+    .poll(() => requests.filter((url) => url.includes('/allow-')).length)
+    .toBe(3);
+  for (const label of ['Variable image', 'Environment image', 'Direct image'])
+    await expect(page.locator('#image-set-block').getByText(label)).toHaveCSS(
+      'background-image',
+      'none'
+    );
+  expect(requests.filter((url) => url.includes('/block-'))).toEqual([]);
+});
+
+test('adapts text, links and status backgrounds after delayed attachment, exactly once', async ({
+  page,
+}) => {
+  await page.evaluate(async () => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const host = document.createElement('div');
+    host.id = 'delayed-host';
+    host.style.width = '600px';
+    mountEmailBody(
+      host,
+      prepareEmailBody({
+        html: '<div id="status" style="background-color:#fef7e0;color:#3c1e0a">A guest has accepted this invitation.</div><p id="details" style="color:#3c4043">When: Thursday at 7pm</p><a href="https://example.com">View all guest info</a>',
+      }),
+      { theme: themes.dark, adaptColors: true, normalizeFonts: false }
+    );
+    // Solid may construct a body before its parent/Suspense inserts the host.
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+    document.body.append(host);
+  });
+  const host = page.locator('#delayed-host');
+  await expect(host.locator('#status')).toHaveCSS(
+    'background-color',
+    'rgba(0, 0, 0, 0)'
+  );
+  await expect(host.locator('#details')).toHaveAttribute('style', /oklch/);
+  await expect(host.locator('a')).toHaveCSS('color', 'oklch(0.75 0.15 250)');
+  const styles = () =>
+    host.evaluate((element) => element.shadowRoot!.innerHTML);
+  const adapted = await styles();
+  await host.evaluate((element) => {
+    element.style.width = '400px';
+  });
+  await expect(host).toHaveCSS('width', '400px');
+  await page.evaluate(() => new Promise(requestAnimationFrame));
+  expect(await styles()).toEqual(adapted);
+});
+
+test('prepares colors without waiting for an animation frame', async ({
+  page,
+}) => {
+  const color = await page.evaluate(async () => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    const originalFrame = window.requestAnimationFrame;
+    window.requestAnimationFrame = () => 0;
+    const host = document.createElement('div');
+    document.body.append(host);
+    const renderer = mountEmailBody(
+      host,
+      prepareEmailBody({ html: '<a href="https://example.com">iOS</a>' }),
+      { theme: themes.dark, adaptColors: true, normalizeFonts: false }
+    );
+    try {
+      await Promise.resolve();
+      return getComputedStyle(host.shadowRoot!.querySelector('a')!).color;
+    } finally {
+      renderer.dispose();
+      host.remove();
+      window.requestAnimationFrame = originalFrame;
+    }
+  });
+  expect(color).toBe('oklch(0.75 0.15 250)');
+});
+
 test('blocked resource policy prevents real requests from escaped CSS URL functions', async ({
   page,
 }) => {
@@ -145,7 +417,60 @@ test('resizes wide content, removes stale scaling, hides collapsed images', asyn
   await expect(content).toHaveCSS('zoom', '1');
   await expect(content).toHaveCSS('overflow-x', 'visible');
   await page.locator('#resize-host').dispatchEvent('collapse');
+  await expect(content).toHaveCSS('overflow-x', 'hidden');
+  await expect(content).toHaveCSS('overflow-y', 'hidden');
   await expect(page.locator('#resize-host img')).toHaveCSS('display', 'none');
+});
+
+test('collapsed HTML stays within three lines without replacing image resources', async ({
+  page,
+}) => {
+  const result = await page.evaluate(async () => {
+    const { prepareEmailBody, mountEmailBody, themes } = window.emailRenderer;
+    // Match the reader's outer clamp. Containment must not let the full body
+    // escape this summary when the renderer establishes its own layout boundary.
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText =
+      'width:240px;font:16px/20px sans-serif;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden';
+    const host = document.createElement('div');
+    wrapper.append(host);
+    document.body.append(wrapper);
+    let resolutions = 0;
+    const renderer = mountEmailBody(
+      host,
+      prepareEmailBody({
+        html: `<p style="margin:0">${'A line of text<br>'.repeat(20)}</p><img src="cid:photo">`,
+      }),
+      {
+        theme: themes.light,
+        adaptColors: false,
+        normalizeFonts: false,
+        expanded: false,
+        async resolveImages() {
+          resolutions++;
+        },
+      }
+    );
+    const image = host.shadowRoot!.querySelector('img');
+    const frame = () => new Promise(requestAnimationFrame);
+    await frame();
+    const collapsed = wrapper.getBoundingClientRect().height;
+    renderer.setExpanded(true);
+    await frame();
+    const expanded = wrapper.getBoundingClientRect().height;
+    renderer.setExpanded(false);
+    await frame();
+    const collapsedAgain = wrapper.getBoundingClientRect().height;
+    const sameImage = host.shadowRoot!.querySelector('img') === image;
+    renderer.dispose();
+    wrapper.remove();
+    return { collapsed, expanded, collapsedAgain, sameImage, resolutions };
+  });
+  expect(result.collapsed).toBe(60);
+  expect(result.expanded).toBeGreaterThan(300);
+  expect(result.collapsedAgain).toBe(60);
+  expect(result.sameImage).toBe(true);
+  expect(result.resolutions).toBe(1);
 });
 
 test('aborts replaced resources, releases late results, and handles rejected adapters', async ({

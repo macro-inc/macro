@@ -26,12 +26,6 @@ describe('independent email body', () => {
     );
     const revoke = vi.fn();
     vi.stubGlobal('URL', { ...URL, revokeObjectURL: revoke });
-    const cancelFrame = vi.fn();
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn(() => 1)
-    );
-    vi.stubGlobal('cancelAnimationFrame', cancelFrame);
     const resolveImages = vi.fn(
       async (_root, _attachments, lifetime: ResourceLifetime) => {
         lifetime.onDispose(() => URL.revokeObjectURL('blob:email'));
@@ -85,26 +79,34 @@ describe('independent email body', () => {
     expect(resolveImages).toHaveBeenCalled();
     expect(revoke).toHaveBeenCalledWith('blob:email');
     expect(disconnect).toHaveBeenCalled();
-    expect(cancelFrame).toHaveBeenCalled();
   });
-  it('keeps the Macro Markdown branch free of hidden HTML resources', async () => {
-    const resolveImages = vi.fn(async () => {});
-    createRoot((dispose) => {
-      const body = createEmailMessageBody(
-        {
-          message: message('macro', { body_macro: 'A document mention' }),
-          isPersonal: true,
-          isBodyExpanded: () => true,
-          setExpandedMessageBody() {},
-          setFocusedMessageId() {},
-          isFocused: false,
-        },
-        { theme: () => theme, resolveImages }
-      );
-      expect(body.host()).toBeUndefined();
-      dispose();
-    });
-    await Promise.resolve();
-    expect(resolveImages).not.toHaveBeenCalled();
-  });
+  it.each([
+    { body_macro: 'A document mention' },
+    {
+      body_html_sanitized: null,
+      body_text: '**Plaintext using the existing app renderer**',
+    },
+  ])(
+    'keeps the app Markdown paths free of hidden HTML resources: %j',
+    async (content) => {
+      const resolveImages = vi.fn(async () => {});
+      createRoot((dispose) => {
+        const body = createEmailMessageBody(
+          {
+            message: message('markdown', content),
+            isPersonal: true,
+            isBodyExpanded: () => true,
+            setExpandedMessageBody() {},
+            setFocusedMessageId() {},
+            isFocused: false,
+          },
+          { theme: () => theme, resolveImages }
+        );
+        expect(body.host()).toBeUndefined();
+        dispose();
+      });
+      await Promise.resolve();
+      expect(resolveImages).not.toHaveBeenCalled();
+    }
+  );
 });

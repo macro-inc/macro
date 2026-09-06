@@ -113,7 +113,7 @@ const LIGHT_BG_THRESHOLD = 0.85;
 
 /** Remove light/white backgrounds from all elements, preserving colored/dark backgrounds (buttons, banners).
  *  Uses getComputedStyle to resolve all color formats (named colors, hex, rgb, etc.) */
-export function stripContentBackgrounds(root: Node) {
+function stripContentBackgrounds(root: Node) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
   let el = walker.nextNode();
   while (el) {

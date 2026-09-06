@@ -47,16 +47,21 @@ the framework boundary is checked during the ordinary frontend test run.
 `src/browser` consumes prepared content. Only pass output from `prepareEmailBody`
 to `mountEmailBody` or `update`; prepared HTML is a trusted intermediate value,
 not another untrusted input boundary. The browser layer owns one host's shadow
-tree and all listeners, resize observers, animation frames, and resource
-lifetimes it starts. Connect an empty host before mounting. In a synchronous
-framework render, inserting it immediately after construction is also supported;
-the first computed-style and layout pass runs in the next animation frame.
+tree and all listeners, resize observers, and resource lifetimes it starts.
+The host can be attached before mounting or inserted later by the framework.
+Color preparation waits until it is connected and runs once per content update;
+resizes and image loads then only refit layout. A microtask handles synchronous
+insertion, and ResizeObserver handles later attachment without polling. Color
+preparation does not depend on animation frames being scheduled.
 
 `update` replaces the current content and aborts its resource generation. It
 restarts color processing from the original prepared HTML, so toggling themes
-does not accumulate transformations. `setExpanded` preserves content and resource
-identity. `dispose` is idempotent, aborts work, disconnects observers, cancels
-frames, removes listeners, and empties the shadow tree. Updating a disposed
+does not accumulate transformations. `setExpanded(false)` hides images and applies
+a three-line CSS text clamp inside its containment boundary. Tables and other
+atomic layouts may remain taller; this is not a fixed-height preview. Expansion
+removes the text clamp and restores width fitting. These toggles preserve content
+and resource identity. `dispose` is idempotent, aborts work, disconnects observers,
+removes listeners, and empties the shadow tree. Updating a disposed
 renderer does nothing. Mount a new instance into a new host.
 
 The host supplies `resolveImages(root, lifetime)` for authenticated or CID image
@@ -70,7 +75,8 @@ There is no implicit fetch client or native-platform detection in this package.
 ## Content policy
 
 - Nonempty HTML takes precedence over plaintext. Plaintext is escaped and rendered
-  literally with preserved line breaks; Markdown punctuation stays literal.
+  literally with preserved line breaks when using this package directly. The
+  application's plaintext fallback retains its existing Markdown renderer.
 - Prefer supplied replyless HTML. If absent/empty, derive it by removing the
   first recognized `.macro_quote`; otherwise show the full body. Missing
   generated replyless data must never blank a valid HTML message.
@@ -79,14 +85,32 @@ There is no implicit fetch client or native-platform detection in this package.
   `showFullContent` chooses the full body while retaining signature trimming.
 - Parse with parse5 before DOM insertion. Drop active/embedded markup, form
   controls, handlers, dangerous URL schemes, and application-sensitive attributes.
+  Excessive nesting is flattened before serialization to bound tree depth while
+  preserving readable content. Excessively deep containers are unwrapped, so
+  their wrapper styles and layout relationships are not preserved.
   CSS is parsed with css-tree. Drop imports, external fonts, animations, host
-  selectors, unparsed/unsupported constructs, and color-scheme overrides,
-  including nested overrides. Malformed CSS fails closed without dropping text.
+  selectors, and unparsed/unsupported constructs. Recover at declaration or rule
+  boundaries: a malformed declaration must not erase unrelated valid styling.
+  Keep supported grouping rules, custom-property names, values, and fallbacks.
+  The normal browser cascade, including inherited variables, still applies.
+  Reader preparation removes only top-level `prefers-color-scheme` media rules
+  in head styles, matching the previous reader. Nested rules and body styles
+  remain. Shared sanitization used by replies/forwards preserves safe theme rules;
+  display policy must not modify outgoing quoted HTML. Shared sanitization also
+  preserves inert `data-*` metadata needed to reimport authored quotes into the
+  editor (mentions, indentation and scaled media). Reader preparation strips
+  those attributes before mounting; active markup and event handlers are removed
+  in both paths. Encoded `data-html` is excluded because the editor interprets it
+  as HTML rather than inert metadata; sanitized child markup remains available.
 - `images.remote` is explicit and defaults to `allow` for existing reader behavior.
   `block` removes remote image references from HTML and CSS before insertion.
-  CID references and base64 raster images remain supported. Relative image and
-  navigation URLs are excluded because they depend on the embedding app's origin.
-  `srcset`, SVG data images, and CSS image-set are excluded. `proxyUrl` rewrites
+  CID references and base64 raster images remain supported. Relative URLs retain
+  their original spelling and resolve in the browser; protocol-relative URLs
+  normalize to HTTPS. Safe navigation includes image-map areas and CID links.
+  `srcset` and SVG data images are excluded. CSS image-set is supported with the
+  default allow policy. The stricter opt-in block policy excludes image-set and
+  declarations using `var()`, whose resolved values could hide resource URLs;
+  it can therefore change sender styling. `proxyUrl` rewrites
   HTTP(S) `img[src]` images to the supplied endpoint, matching the native
   authenticated-image adapter. CSS URLs and HTML background attributes follow
   the same allow/block policy but keep direct URLs; authenticated backgrounds
@@ -99,9 +123,10 @@ There is no implicit fetch client or native-platform detection in this package.
   adapts personal/table-less email and preserves designed newsletters on a white
   background. Sender classification and Macro-specific rendering stay in the app.
 
-Ordinary HTML/plaintext and Macro Markdown are separate paths. Macro Markdown
-still uses the app's Lexical/Solid renderer for document mentions and other app
-semantics. This package does not render a thread, message header, attachments
+The app sends ordinary HTML through this package. Plaintext and Macro Markdown
+retain the app's existing Markdown renderer, including document mentions and
+other app semantics. Those paths do not start an invisible HTML renderer or its
+resources. This package does not render a thread, message header, attachments
 list, editor, reply composer, or quote-expansion button.
 
 ## Verification and fixture viewer
@@ -121,8 +146,14 @@ and expansion controls. It calls the same `prepareEmailBody` and `mountEmailBody
 exports as production. It requires no backend or account. Fixtures live under
 `tests/fixtures`; use synthetic or redacted messages. Remote resources are blocked
 by preparation, and screenshot tests assert that no external requests occurred.
+Fixtures can set `adaptColors` and `normalizeFonts` to exercise personal-message
+policy, including calendar invitations that contain tables. Without an override,
+the viewer preserves table email on white and adapts table-less email.
 Inter is loaded locally. The browser suite covers actual CSS/layout, resource
 replacement, late cleanup, error handling, theme round trips, and image visibility.
+It also constructs detached hosts, inserts them after the initial frames have
+elapsed, and verifies that theme colors are applied once after attachment. A
+separate test pauses animation frames to ensure color preparation still runs.
 
 From the repository root, `just test-email-rendering` runs both the Node and
 Chromium suites. `just test-email-rendering-update` regenerates visual baselines;

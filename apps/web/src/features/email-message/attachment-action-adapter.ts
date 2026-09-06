@@ -39,7 +39,7 @@ export function createEmailAttachmentOpener() {
 
     refetchSoupEntity(document_id, 'document');
 
-    const fileType = Object.values(FileTypeMap).find(
+    const fileType = Object.values(FileTypeMap).findLast(
       (type) => type.mime === attachment.mime_type
     )?.extension;
     const blockName = fileType

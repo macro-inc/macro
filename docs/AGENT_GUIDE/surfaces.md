@@ -21,11 +21,13 @@ connected account. Search is `Ctrl+F` within the surface.
 Threads open at `/app/email/<thread-id>`. Click a message header to expand or
 collapse it; `Show N hidden messages` reveals the collapsed middle of a longer
 conversation. A link with `?email_message_id=<message-id>` reveals that message.
+Collapsed thread cards use a compact text snippet; expanding mounts the message
+body and its attachments.
 Replies appear inline on desktop and in a composer drawer on touch devices.
 An edited reply remains a draft when navigating away and returning.
 The three-dot button beneath a body reveals quoted content and a trimmed
-signature. Ordinary plaintext displays literally, including Markdown punctuation;
-Macro Markdown messages retain document mentions. HTML/plaintext bodies use an
+signature. Plaintext and Macro Markdown use the existing Markdown renderer;
+Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
 open shadow root: Playwright text locators can reach them, but a card's ordinary
 `innerText` or `querySelector` does not traverse that root.
 

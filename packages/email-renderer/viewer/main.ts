@@ -31,6 +31,8 @@ interface Fixture extends EmailBodyInput {
   name: string;
   description: string;
   container_widths?: number[];
+  adaptColors?: boolean;
+  normalizeFonts?: boolean;
 }
 const fixtures = Object.values(
   import.meta.glob<Fixture>('../tests/fixtures/*.json', {
@@ -66,8 +68,8 @@ function renderFixture() {
   });
   const options = {
     theme,
-    adaptColors: !prepared.hasTable,
-    normalizeFonts: false,
+    adaptColors: fixture.adaptColors ?? !prepared.hasTable,
+    normalizeFonts: fixture.normalizeFonts ?? false,
     expanded: expandedInput.checked,
   };
   if (renderer) renderer.update(prepared, options);
