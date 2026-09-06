@@ -11,8 +11,11 @@
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively
-`Create` → `Agent A`, or keyboard `c` then `a`, opens the **New agent
-session** composer popover. The prompt textarea (`Give your agent a
+`Create` → `Agent A`, or keyboard `c` then `a`, opens a managed agent session
+directly at `/app/agent/<uuid>` (the runtime starts while the block mounts).
+When the `enable-agent-session-composer` flag is on (default in dev;
+`VITE_ENABLE_AGENT_SESSION_COMPOSER` overrides), the same entry instead opens
+the **New agent session** composer popover. The prompt textarea (`Give your agent a
 prompt...`) is focused on open, so you can `type_text` immediately. Below the prompt a
 **Agent** section (`aria-label` `Agent`) lists the choices in the open, as a
 `radiogroup` of cards (`role="radio"`, `aria-checked`): **Macro** `@macro`
