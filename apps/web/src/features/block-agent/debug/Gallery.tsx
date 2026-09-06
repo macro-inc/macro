@@ -181,6 +181,16 @@ const FIXTURE_DIFF = {
     'fn fold(log: &[Frame]) -> Vec<Message> {\n    let mut machine = FoldMachine::default();\n    for frame in log {\n        machine.push(frame);\n    }\n    machine.finish()\n}\n',
 };
 
+/** The prompt that the agent message below answers. */
+const FIXTURE_USER_MESSAGE: FoldedMessage = {
+  agentSessionId: 'demo',
+  requestId: null,
+  turn: 0,
+  author: { kind: 'user', userId: null },
+  stop: null,
+  parts: [{ kind: 'text', text: 'Tighten up the fold implementation.' }],
+};
+
 const FIXTURE_MESSAGE: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
@@ -511,6 +521,7 @@ export default function AgentUiGallery() {
           </Item>
 
           <Item label="AgentMessage (end-to-end)">
+            <Message message={FIXTURE_USER_MESSAGE} />
             <Message message={FIXTURE_MESSAGE} />
           </Item>
         </div>
