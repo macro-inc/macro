@@ -47,10 +47,10 @@ describe('MagicChipView', () => {
     expect(card?.className).toContain('rounded-lg');
     expect(card?.className).not.toContain('border-accent');
 
-    expect(answerArea(container)?.className).toContain('h-32');
+    expect(answerArea(container)?.className).toContain('h-22');
     expect(container.querySelector('[data-testid="chip-markdown"]')).toBeNull();
-    expect(container.querySelectorAll('.bg-skeleton')).toHaveLength(3);
-    expect(container.querySelectorAll('.skeleton-shimmer')).toHaveLength(3);
+    expect(container.querySelector('[data-magic-chip-pending]')).toBeTruthy();
+    expect(container.querySelector('.bg-skeleton')).toBeNull();
 
     const footer = card?.querySelector('button');
     expect(footer?.textContent).toContain('Booting agent');
@@ -76,8 +76,8 @@ describe('MagicChipView', () => {
       />
     ));
 
-    expect(answerArea(container)?.className).toContain('h-32');
-    expect(container.querySelector('.bg-skeleton')).toBeNull();
+    expect(answerArea(container)?.className).toContain('h-22');
+    expect(container.querySelector('[data-magic-chip-pending]')).toBeNull();
 
     const body = container.querySelector('[data-message-reply-preview]');
     expect(body?.className).toContain('overflow-hidden');
@@ -102,7 +102,7 @@ describe('MagicChipView', () => {
       />
     ));
 
-    expect(answerArea(container)?.className).toContain('h-32');
+    expect(answerArea(container)?.className).toContain('h-22');
     const footer = container.querySelector('[data-magic-chip-preview] button');
     expect(footer?.textContent).toContain('Open session');
     fireEvent.click(footer!);

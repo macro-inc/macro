@@ -44,8 +44,8 @@ bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cu
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 The reply renders a Magic Chip: a rounded card of constant height that is present
-from the moment the session boots. Its answer area shows skeleton lines while the
-agent works, then the opening of the answer clipped to six lines and faded out; its
+from the moment the session boots. Its answer area shows a pulsing star while the
+agent works, then the opening of the answer clipped to four lines and faded out; its
 bottom row reads the current activity (`Booting agent`, `Writing response`, ...) and
 `Open session` once the turn ends. Click anywhere on the card to open the agent
 session and read the rest.

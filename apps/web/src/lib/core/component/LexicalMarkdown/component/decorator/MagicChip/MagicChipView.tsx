@@ -3,6 +3,7 @@ import {
   StaticMarkdownContext,
 } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
+import { PulsingStar } from '@entity/components/PulsingStar';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import { Layer } from '@ui';
 import {
@@ -58,26 +59,23 @@ const ActivityText: Component<{ activity: MagicChipActivity }> = (props) => (
   </>
 );
 
-/** Placeholder lines that hold the answer's space until the agent writes. */
-const AnswerSkeleton: Component<{ busy: boolean }> = (props) => (
-  <div class="flex flex-col gap-3 pt-2" aria-hidden="true">
-    <div
-      class="h-3 w-11/12 rounded-full bg-skeleton"
-      classList={{ 'skeleton-shimmer': props.busy }}
-    />
-    <div
-      class="h-3 w-4/5 rounded-full bg-skeleton"
-      classList={{ 'skeleton-shimmer': props.busy }}
-    />
-    <div
-      class="h-3 w-3/5 rounded-full bg-skeleton"
-      classList={{ 'skeleton-shimmer': props.busy }}
-    />
+/**
+ * Holds the answer's space until the agent writes: the chat's own waiting
+ * glyph, pulsing while the agent is busy and still while it is not (a
+ * disconnected session, a turn that ended without prose).
+ */
+const AnswerPending: Component<{ busy: boolean }> = (props) => (
+  <div
+    class="flex h-full items-center justify-center"
+    data-magic-chip-pending
+    aria-hidden="true"
+  >
+    <PulsingStar kind="streamIndicator" animate={props.busy} />
   </div>
 );
 
 /**
- * The opening of the answer, clipped to six lines. The fade only shows once
+ * The opening of the answer, clipped to four lines. The fade only shows once
  * the text is actually taller than the clip, so short answers read whole.
  */
 const AnswerBody: Component<{ markdown: string }> = (props) => {
@@ -118,7 +116,7 @@ const AnswerBody: Component<{ markdown: string }> = (props) => {
 
 /**
  * One card, one height, for the whole turn: the answer area is reserved from
- * the first moment (skeleton lines while the agent works, the opening of the
+ * the first moment (a pulsing star while the agent works, the opening of the
  * answer once it writes) so the thread never jumps, and the bottom row reads
  * the current activity or `Open session`. Clicking anywhere opens the session.
  */
@@ -139,10 +137,10 @@ export const MagicChipView: Component<{
         onMouseDown={(event) => event.preventDefault()}
         onClick={props.onOpen}
       >
-        <div class="h-32 px-3 py-1" data-magic-chip-answer>
+        <div class="h-22 px-3 py-1" data-magic-chip-answer>
           <Show
             when={markdown()}
-            fallback={<AnswerSkeleton busy={activity()?.busy ?? false} />}
+            fallback={<AnswerPending busy={activity()?.busy ?? false} />}
           >
             {(answer) => <AnswerBody markdown={answer()} />}
           </Show>
