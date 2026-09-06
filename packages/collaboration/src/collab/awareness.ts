@@ -8,12 +8,14 @@ import { type Accessor, createSignal, untrack } from 'solid-js';
 import { getRandomPaletteColor } from '../internal/palette';
 import type { RawUpdate } from './shared';
 
-/** The default timeout for a user's awareness is 10 seconds */
-const DEFAULT_AWARENESS_TIMEOUT = 10_000;
+/** The default timeout for a user's awareness is 5 seconds */
+const DEFAULT_AWARENESS_TIMEOUT = 5_000;
+const MAX_AWARENESS_AGE_MS = 5_000;
 
 type PeerAwarenessRaw<EncodedSelection extends Value = Value> = {
   user: { userId: string | undefined; color: string; peerId: PeerID };
   selection: EncodedSelection | undefined;
+  updatedAt?: number;
 };
 
 export type PeerAwareness<DecodedSelection> = {
@@ -107,6 +109,7 @@ export function createAwareness<
       peerId,
     },
     selection: undefined,
+    updatedAt: Date.now(),
   };
 
   store.set(peerId, initialLocalPeerAwarenessRaw);
@@ -124,13 +127,26 @@ export function createAwareness<
   const updateRemoteAwarenessSignal = () => {
     const allStates = store.getAllStates();
 
+    const now = Date.now();
     const remoteAwareness: PeerAwareness<DecodedSelection>[] = Object.entries(
       allStates
     )
       .filter(([id, awareness]) => {
-        return (
-          peerId !== id && !!awareness && awareness?.selection !== undefined
-        );
+        const age = awareness?.updatedAt
+          ? Math.max(now - awareness.updatedAt, 0)
+          : undefined;
+
+        if (id === peerId) {
+          return false;
+        } else if (!awareness) {
+          return false;
+        } else if (awareness.selection === undefined) {
+          return false;
+        } else if (age === undefined || age > MAX_AWARENESS_AGE_MS) {
+          return false;
+        }
+
+        return true;
       })
       .map(([id, awareness]) => {
         return [id, decodeAwareness(awareness, selectionCodec)];
@@ -153,12 +169,14 @@ export function createAwareness<
     const changes = [...update.added, ...update.removed, ...update.updated];
     if (changes.length === 0) return;
 
-    if (update.by === 'local' && changes.includes(peerId)) {
+    const localChanged = changes.includes(peerId);
+    const remoteChanged = changes.some((id) => id !== peerId);
+    if (localChanged) {
       updateLocalAwarenessSignal();
-      return;
-    } else {
+    }
+
+    if (remoteChanged || update.by !== 'local') {
       updateRemoteAwarenessSignal();
-      return;
     }
   };
 
@@ -176,6 +194,7 @@ export function createAwareness<
       {
         user: currAwareness.user,
         selection: selection,
+        updatedAt: Date.now(),
       },
       selectionCodec
     );
@@ -253,13 +272,14 @@ function decodeAwareness<EncodedSelection extends Value, DecodedSelection>(
  * @returns The encoded awareness
  */
 function encodeAwareness<DecodedSelection extends Value>(
-  awareness: PeerAwareness<unknown>,
+  awareness: PeerAwarenessRaw<Value>,
   codec: SelectionCodec<any, DecodedSelection>
 ) {
-  if (!awareness.selection) {
+  if (awareness.selection === undefined) {
     return {
       user: awareness.user,
       selection: undefined,
+      updatedAt: awareness.updatedAt,
     };
   }
 
@@ -268,6 +288,7 @@ function encodeAwareness<DecodedSelection extends Value>(
   return {
     user: awareness.user,
     selection: encodedSelection,
+    updatedAt: awareness.updatedAt,
   };
 }
 
