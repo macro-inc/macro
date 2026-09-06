@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE thread_id = $1\n            ORDER BY agent_session.created_at DESC\n            ",
+  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, sandbox_size, instructions,\n                acp_session_id, status, status_event_name, egress_token_hash,\n                mcp_scope, mcp_servers\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)\n            RETURNING\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                -- A row being created cannot have an external identity yet.\n                NULL::TEXT AS \"external_provider?\", NULL::TEXT AS \"external_id?\",\n                NULL::TEXT AS \"external_name?\", NULL::TEXT AS \"external_url?\",\n                NULL::TEXT AS \"external_last_run_id?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -122,11 +122,32 @@
         "ordinal": 23,
         "name": "external_url?",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "external_last_run_id?",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb"
       ]
     },
     "nullable": [
@@ -150,11 +171,12 @@
       false,
       false,
       null,
-      false,
-      false,
-      true,
-      true
+      null,
+      null,
+      null,
+      null,
+      null
     ]
   },
-  "hash": "a82f6bfedc84f43370145bf86222f10d1d83e53f5413f1c4fafcd122f052a2c0"
+  "hash": "541351c610e04f6aea7c532c6b84aa117fd37024aca5a4c63afa1d05fc4eb6ce"
 }

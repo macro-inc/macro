@@ -40,6 +40,18 @@ fn cancelled(run: &str) -> CursorEvent {
 }
 
 #[tokio::test]
+async fn active_turn_is_reported_while_cursor_is_working() {
+    let (service, _cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let stored = service.session(&session).expect("session exists");
+    let turn = stored.turn_gate.lock().await;
+    assert!(service.has_active_turn());
+
+    drop(turn);
+    assert!(!service.has_active_turn());
+}
+
+#[tokio::test]
 async fn first_prompt_creates_the_agent_with_the_session_repo() {
     let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("valid repo");
     let (service, cursor, notifier) = service(Some(repo.clone()));
@@ -1063,6 +1075,155 @@ async fn sync_mirrors_foreign_runs_once() {
     assert_eq!(notifier.updates().len(), after_first);
 }
 
+/// Restore seeds the durable watermark, so only runs Cursor finished after
+/// the last delivered one are recovered. The checkpoint advances after each
+/// successful delivery, making later sync ticks idempotent.
+#[tokio::test]
+async fn restore_recovers_runs_after_the_durable_watermark_once() {
+    let cursor = FakeCursor::new();
+    let notifier = RecordingNotifier::new();
+    let service = CursorSessionService::new(cursor.clone(), notifier.clone(), FixedRepos(None));
+    let session = SessionId::new("cursor-acp-restored");
+    service.restore_session_with_watermark(
+        session.clone(),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+        Some(CursorRunId::new("run-delivered")),
+    );
+    service.loaded(&session);
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-missed"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-delivered"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    let missed = cursor.script_stream();
+    missed
+        .send(CursorEvent::Assistant {
+            text: "recovered answer".to_owned(),
+        })
+        .expect("stream open");
+    missed.send(finished("run-missed")).expect("stream open");
+    missed.send(CursorEvent::Done).expect("stream open");
+
+    service.sync_foreign_runs().await;
+    service.sync_foreign_runs().await;
+
+    let recovered: Vec<_> = notifier
+        .updates()
+        .into_iter()
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::AgentMessageChunk(chunk) => match chunk.content {
+                ContentBlock::Text(text) => Some(text.text),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(recovered, ["recovered answer"]);
+}
+
+/// Sessions created before run checkpoints existed have no durable watermark.
+/// Recover every run: a one-time duplicate is safer than discarding genuinely
+/// missed output from a longer outage.
+#[tokio::test]
+async fn restore_without_a_watermark_recovers_every_run() {
+    let cursor = FakeCursor::new();
+    let notifier = RecordingNotifier::new();
+    let service = CursorSessionService::new(cursor.clone(), notifier.clone(), FixedRepos(None));
+    let session = SessionId::new("cursor-acp-restored");
+    service.restore_session_with_watermark(
+        session.clone(),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+        None,
+    );
+    service.loaded(&session);
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-latest"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-old"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    let old = cursor.script_stream();
+    old.send(CursorEvent::Assistant {
+        text: "old answer".to_owned(),
+    })
+    .expect("stream open");
+    old.send(finished("run-old")).expect("stream open");
+    old.send(CursorEvent::Done).expect("stream open");
+    let latest = cursor.script_stream();
+    latest
+        .send(CursorEvent::Assistant {
+            text: "latest answer".to_owned(),
+        })
+        .expect("stream open");
+    latest.send(finished("run-latest")).expect("stream open");
+    latest.send(CursorEvent::Done).expect("stream open");
+
+    service.sync_foreign_runs().await;
+
+    let recovered: Vec<_> = notifier
+        .updates()
+        .into_iter()
+        .filter_map(|(_, update)| match update {
+            SessionUpdate::AgentMessageChunk(chunk) => match chunk.content {
+                ContentBlock::Text(text) => Some(text.text),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    assert_eq!(recovered, ["old answer", "latest answer"]);
+
+    assert_eq!(
+        service
+            .session(&session)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .last_run,
+        Some(CursorRunId::new("run-latest"))
+    );
+}
+
+/// The host cannot route session updates until `session/load` has rebound the
+/// restored ACP id. A mirror tick before then must leave the durable checkpoint
+/// untouched so the next tick can recover the run after load.
+#[tokio::test]
+async fn restore_waits_for_session_load_before_recovering_runs() {
+    let cursor = FakeCursor::new();
+    let notifier = RecordingNotifier::new();
+    let service = CursorSessionService::new(cursor.clone(), notifier.clone(), FixedRepos(None));
+    let session = SessionId::new("cursor-acp-restored");
+    service.restore_session_with_watermark(
+        session.clone(),
+        Some(CursorAgentId::new("bc-restored")),
+        None,
+        None,
+        Some(CursorRunId::new("run-delivered")),
+    );
+    cursor.script_run_listings(vec![RunListing {
+        id: CursorRunId::new("run-missed"),
+        status: RunStatus::Finished,
+    }]);
+
+    service.sync_foreign_runs().await;
+
+    assert!(notifier.updates().is_empty());
+}
+
 /// A foreign run whose stream is gone (retention expired) still delivers its
 /// recorded final text rather than vanishing.
 #[tokio::test(start_paused = true)]
@@ -1110,6 +1271,47 @@ async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
             .iter()
             .any(|text| text.contains("answered on cursor.com") && text.contains("the old answer")),
         "got {texts:?}"
+    );
+}
+
+/// A run that is still executing cannot become the watermark when its stream
+/// is unavailable: the next sync must retry it after Cursor finishes.
+#[tokio::test]
+async fn a_running_foreign_run_is_not_checkpointed_after_stream_fallback() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let initial = cursor.script_stream();
+    initial.send(finished("run-fake-1")).expect("stream open");
+    initial.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Running,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    // No stream is queued, so recovery falls back to this still-running record.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Running,
+        text: None,
+    });
+
+    service.sync_foreign_runs().await;
+
+    assert_eq!(
+        service
+            .session(&session)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .last_run,
+        Some(CursorRunId::new("run-fake-1"))
     );
 }
 

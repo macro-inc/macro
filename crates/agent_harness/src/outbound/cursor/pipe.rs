@@ -145,6 +145,10 @@ async fn pump<Pipe, Observer>(
             () = shutdown.cancelled() => break,
             outgoing = outbound.recv() => {
                 let Some(Outbound { frame, completed }) = outgoing else { break };
+                // Activity begins when a frame is accepted for delivery, not
+                // after I/O completes: the idle reaper must not close a prompt
+                // already waiting to be written.
+                on_frame();
                 let mut json = match serde_json::to_string(&frame) {
                     Ok(json) => json,
                     Err(error) => {
@@ -164,7 +168,6 @@ async fn pump<Pipe, Observer>(
                     let _ = completed.send(Err(TransportError::Client(error.to_string())));
                     break;
                 }
-                on_frame();
                 let _ = completed.send(Ok(()));
             }
             incoming = lines.next_line() => {
@@ -180,9 +183,11 @@ async fn pump<Pipe, Observer>(
                 if line.trim().is_empty() {
                     continue;
                 }
+                // A complete inbound line was accepted from the peer. Mark it
+                // before parsing so a reaper cannot win on the activity lock.
+                on_frame();
                 match serde_json::from_str::<RawJsonRpcMessage>(&line) {
                     Ok(frame) => {
-                        on_frame();
                         let message = ToServerMessage::Acp(AcpMessage(frame));
                         if inbound.send(message).is_err() {
                             break; // receiver dropped: the session is gone

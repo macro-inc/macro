@@ -844,6 +844,7 @@ fn cursor_external(agent: &str) -> ExternalSession {
         external_id: agent.to_string(),
         external_name: Some("Add README".to_string()),
         external_url: Some(format!("https://cursor.com/agents/{agent}")),
+        last_run_id: None,
     }
 }
 
@@ -971,6 +972,27 @@ fn fenced_log(id: AgentSessionId) -> AgentSessionLog {
     }
 }
 
+fn cursor_checkpoint_log(id: AgentSessionId, run: &str) -> AgentSessionLog {
+    AgentSessionLog {
+        agent_session_id: id,
+        user_id: None,
+        content: Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::notification(
+                "session/update".to_owned(),
+                serde_json::json!({
+                    "sessionId": "cursor-acp-1",
+                    "update": {
+                        "sessionUpdate": "agent_message_chunk",
+                        "content": {"type": "text", "text": ""}
+                    },
+                    "_meta": {"macroCursorRunCheckpoint": run}
+                }),
+            )
+            .expect("valid checkpoint notification"),
+        ))),
+    }
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn claiming_is_reentrant_and_every_claim_bumps_the_fence(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
@@ -1074,5 +1096,47 @@ async fn a_fenced_append_rejects_a_superseded_writer(pool: PgPool) {
         log.len(),
         2,
         "exactly the two live-holder appends are in the log"
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn cursor_checkpoint_advances_atomically_under_the_session_fence(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot_id, None, None)).await;
+    ExternalSessionRepo::upsert(&repo, session.id, cursor_external("bc-1"))
+        .await
+        .expect("external row");
+    let zombie = ReplicaId::mint();
+    let successor = ReplicaId::mint();
+    let old_claim = claimed(repo.claim(session.id, zombie).await.expect("claim"));
+
+    repo.create_fenced(cursor_checkpoint_log(session.id, "run-1"), &old_claim)
+        .await
+        .expect("live checkpoint");
+    assert_eq!(
+        ExternalSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get")
+            .and_then(|external| external.last_run_id),
+        Some("run-1".to_owned())
+    );
+
+    let_heartbeat_go_stale(&pool, zombie).await;
+    let new_claim = claimed(repo.claim(session.id, successor).await.expect("takeover"));
+    assert!(matches!(
+        repo.create_fenced(cursor_checkpoint_log(session.id, "run-stale"), &old_claim)
+            .await,
+        Err(AgentSessionError::FencedOut(_))
+    ));
+    repo.create_fenced(cursor_checkpoint_log(session.id, "run-2"), &new_claim)
+        .await
+        .expect("successor checkpoint");
+    assert_eq!(
+        ExternalSessionRepo::get(&repo, session.id)
+            .await
+            .expect("get")
+            .and_then(|external| external.last_run_id),
+        Some("run-2".to_owned())
     );
 }

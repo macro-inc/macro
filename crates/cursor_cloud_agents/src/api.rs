@@ -398,20 +398,60 @@ impl CursorAgents for CursorClient {
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn list_runs(&self, agent: &CursorAgentId) -> Result<Vec<RunListing>, rootcause::Report> {
-        // One page is plenty: the caller walks back only to the last run it
-        // drove itself, which is at most one cursor.com visit ago.
-        let page: ListRunsResponse = self
-            .get_json(&format!("/v1/agents/{agent}/runs?limit=20"))
-            .await?;
-        Ok(page
-            .items
-            .into_iter()
-            .map(|item| RunListing {
+    async fn list_runs(
+        &self,
+        agent: &CursorAgentId,
+        through: Option<&CursorRunId>,
+    ) -> Result<Vec<RunListing>, rootcause::Report> {
+        let mut listings = Vec::new();
+        let mut cursor = None;
+        let mut seen_cursors = std::collections::HashSet::new();
+        loop {
+            let mut request = self
+                .http
+                .get(self.url(&format!("/v1/agents/{agent}/runs")))
+                .basic_auth(self.config.api_key.expose(), Some(""))
+                .query(&[("limit", "100")]);
+            if let Some(cursor) = cursor.as_deref() {
+                request = request.query(&[("cursor", cursor)]);
+            }
+            let response = request
+                .send()
+                .await
+                .map_err(|error| rootcause::report!(error))?;
+            let status = response.status();
+            let text = response
+                .text()
+                .await
+                .map_err(|error| rootcause::report!(error))?;
+            if !status.is_success() {
+                return Err(rootcause::report!(
+                    "cursor GET /v1/agents/{agent}/runs -> {status}: {text}"
+                ));
+            }
+            let page: ListRunsResponse = serde_json::from_str(&text).map_err(|error| {
+                rootcause::report!("cursor run list: bad response body: {error}")
+            })?;
+            let reached = through
+                .is_some_and(|through| page.items.iter().any(|item| item.id == through.as_str()));
+            listings.extend(page.items.into_iter().map(|item| RunListing {
                 id: CursorRunId::new(item.id),
                 status: item.status,
-            })
-            .collect())
+            }));
+            if reached {
+                break;
+            }
+            let Some(next) = page.next_cursor else {
+                break;
+            };
+            if !seen_cursors.insert(next.clone()) {
+                return Err(rootcause::report!(
+                    "cursor run list repeated pagination cursor"
+                ));
+            }
+            cursor = Some(next);
+        }
+        Ok(listings)
     }
 }
 

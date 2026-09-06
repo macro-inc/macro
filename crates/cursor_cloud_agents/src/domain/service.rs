@@ -107,6 +107,10 @@ struct SessionState {
     /// or restored session, whose history is already rendered or unknowable —
     /// so nothing is backfilled rather than everything replayed.
     last_run: Option<CursorRunId>,
+    /// Whether the ACP client has opened or loaded this session on the current
+    /// connection. Restored sessions must not emit recovered updates before
+    /// `session/load` re-establishes the host's routing for their session id.
+    ready_for_sync: bool,
     /// Set by cancel; read by the turn when its stream ends.
     ///
     /// The *verdict*, not the mechanism: a cancel that raced the stream's own
@@ -193,7 +197,6 @@ where
             models: tokio::sync::Mutex::new(None),
         }
     }
-
     /// Pin the model every new session starts on, by id.
     ///
     /// The id alone, because a caller configuring this has only ever had an id
@@ -225,6 +228,7 @@ where
             turn_gate: tokio::sync::Mutex::new(()),
             state: Mutex::new(SessionState {
                 mcp_servers,
+                ready_for_sync: true,
                 ..SessionState::default()
             }),
         });
@@ -395,6 +399,17 @@ where
         }
     }
 
+    /// Mark a restored session safe for background updates after load replies.
+    pub fn loaded(&self, session_id: &SessionId) {
+        if let Ok(session) = self.session(session_id) {
+            session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .ready_for_sync = true;
+        }
+    }
+
     /// Run one prompt to completion, delivering updates as they stream.
     ///
     /// Resolves with the turn's ACP stop reason once the run's stream ends.
@@ -444,6 +459,7 @@ where
             (state.agent.clone(), state.cancel.clone())
         };
 
+        let mut may_checkpoint_run = true;
         let (agent, run) = match existing_agent {
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
@@ -469,6 +485,9 @@ where
                     .await
                 {
                     tracing::warn!(%agent, %error, "could not backfill cursor.com runs");
+                    // Advancing past a failed older run would make it
+                    // unreachable on every later newest-first scan.
+                    may_checkpoint_run = false;
                 }
                 (agent, run)
             }
@@ -515,9 +534,19 @@ where
         let cancelled = {
             let mut state = session.state.lock().expect("session state poisoned");
             state.active_run = None;
-            state.last_run = Some(run.clone());
             state.cancelled
         };
+        if outcome.is_ok() && may_checkpoint_run {
+            self.notifier
+                .checkpoint(session_id, &run)
+                .await
+                .map_err(SessionError::Cursor)?;
+            session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .last_run = Some(run.clone());
+        }
         // A cancel that raced the stream's own ending still reports
         // Cancelled: ACP requires it once the client sent `session/cancel`.
         match outcome {
@@ -582,7 +611,7 @@ where
     /// this client does not enforce, so every match is cancelled rather than
     /// just the first — cheap insurance against it ever slipping.
     async fn current_runs(&self, agent: &CursorAgentId) -> Vec<CursorRunId> {
-        let listings = match self.cursor.list_runs(agent).await {
+        let listings = match self.cursor.list_runs(agent, None).await {
             Ok(listings) => listings,
             Err(error) => {
                 tracing::warn!(%agent, %error, "could not list runs to find one to cancel");
@@ -637,6 +666,18 @@ where
         repo: Option<RepoUrl>,
         model_id: Option<String>,
     ) {
+        self.restore_session_with_watermark(id, agent, repo, model_id, None);
+    }
+
+    /// Restore a session together with its durable run-delivery checkpoint.
+    pub fn restore_session_with_watermark(
+        &self,
+        id: SessionId,
+        agent: Option<CursorAgentId>,
+        repo: Option<RepoUrl>,
+        model_id: Option<String>,
+        last_run: Option<CursorRunId>,
+    ) {
         // No MCP servers here on purpose: the host never had the truth to
         // hand over — the list belongs to the ACP client, and the client
         // restates it on `session/load`, which is where it re-enters.
@@ -646,6 +687,7 @@ where
             turn_gate: tokio::sync::Mutex::new(()),
             state: Mutex::new(SessionState {
                 agent,
+                last_run,
                 ..SessionState::default()
             }),
         });
@@ -903,10 +945,11 @@ where
     /// and the answer. A run still going is simply followed to its end. Only
     /// when the stream is gone (retention expired, connection refused past
     /// retries) does a run degrade to its recorded final text. Bounded by
-    /// the session's own watermark: with none, nothing is mirrored, because
-    /// a restored session cannot tell missed runs from already-rendered
-    /// history. Best-effort by design — callers log and proceed, since a
-    /// failed mirror must not block the prompt or the next tick.
+    /// the session's durable watermark. With none, all runs are mirrored: an
+    /// older row may replay already-rendered history once, but dropping a run
+    /// that really was missed is worse than a duplicate. Best-effort by design
+    /// — callers log and proceed, since a failed mirror must not block the
+    /// prompt or the next tick.
     ///
     /// Callers hold the session's turn gate.
     async fn backfill_foreign_runs(
@@ -916,19 +959,16 @@ where
         agent: &CursorAgentId,
         current_run: Option<&CursorRunId>,
     ) -> Result<bool, SessionError> {
-        let Some(last_run) = session
+        let last_run = session
             .state
             .lock()
             .expect("session state poisoned")
             .last_run
-            .clone()
-        else {
-            return Ok(false);
-        };
+            .clone();
 
         let listings = self
             .cursor
-            .list_runs(agent)
+            .list_runs(agent, last_run.as_ref())
             .await
             .map_err(SessionError::Cursor)?;
         // Newest first; keep what is newer than the watermark. A watermark
@@ -936,7 +976,7 @@ where
         // the page rather than nothing.
         let unseen: Vec<_> = listings
             .into_iter()
-            .take_while(|listing| listing.id != last_run)
+            .take_while(|listing| Some(&listing.id) != last_run.as_ref())
             // The run this prompt just created is newer than everything
             // foreign; its own turn delivers it.
             .filter(|listing| current_run != Some(&listing.id))
@@ -948,6 +988,10 @@ where
             tracing::info!(%agent, run = %listing.id, "mirroring a cursor.com run");
             self.mirror_foreign_run(session_id, session, agent, &listing.id)
                 .await?;
+            self.notifier
+                .checkpoint(session_id, &listing.id)
+                .await
+                .map_err(SessionError::Cursor)?;
             session
                 .state
                 .lock()
@@ -1038,6 +1082,11 @@ where
             .run_result(agent, run)
             .await
             .map_err(SessionError::Cursor)?;
+        if !outcome.is_terminal() {
+            return Err(SessionError::Cursor(rootcause::report!(
+                "cursor run {run} is still running"
+            )));
+        }
         let mut events = Vec::new();
         if let Some(text) = outcome.text.clone() {
             events.push(CursorEvent::Assistant {
@@ -1148,8 +1197,7 @@ where
     /// The host calls this on a timer while a session's transport is up, so
     /// the cursor.com half of a conversation appears here within a tick of
     /// happening rather than waiting for the next Macro prompt. A session
-    /// mid-turn is skipped (the turn gate is held), as is one that never
-    /// drove a run (no watermark to mirror from). Failures are logged per
+    /// mid-turn is skipped (the turn gate is held). Failures are logged per
     /// session and never stop the sweep.
     pub async fn sync_foreign_runs(&self) {
         let sessions: Vec<(SessionId, Arc<Session>)> = self
@@ -1163,13 +1211,11 @@ where
             let Ok(_turn) = session.turn_gate.try_lock() else {
                 continue;
             };
-            let Some(agent) = session
-                .state
-                .lock()
-                .expect("session state poisoned")
-                .agent
-                .clone()
-            else {
+            let agent = {
+                let state = session.state.lock().expect("session state poisoned");
+                state.ready_for_sync.then(|| state.agent.clone()).flatten()
+            };
+            let Some(agent) = agent else {
                 continue;
             };
             if let Err(error) = self
@@ -1179,6 +1225,19 @@ where
                 tracing::warn!(%session_id, %agent, %error, "could not mirror cursor.com runs");
             }
         }
+    }
+
+    /// Whether any session is currently executing a turn.
+    ///
+    /// Hosts use this to distinguish a genuinely idle connection from one
+    /// whose provider is still working without producing client updates.
+    #[must_use]
+    pub fn has_active_turn(&self) -> bool {
+        self.sessions
+            .lock()
+            .expect("session map poisoned")
+            .values()
+            .any(|session| session.turn_gate.try_lock().is_err())
     }
 
     fn session(&self, id: &SessionId) -> Result<Arc<Session>, SessionError> {

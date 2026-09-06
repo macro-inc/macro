@@ -34,14 +34,14 @@ use crate::domain::service::CursorSessionService;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AuthenticateRequest, AuthenticateResponse, CancelNotification,
-    CloseSessionRequest, CloseSessionResponse, ContentBlock, Error as AcpError, HttpHeader,
-    Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
-    McpCapabilities, McpServer as AcpMcpServer, NewSessionRequest, NewSessionResponse,
-    PromptCapabilities, PromptRequest, PromptResponse, SessionConfigGroupId, SessionConfigId,
-    SessionConfigKind, SessionConfigOption, SessionConfigSelect, SessionConfigSelectGroup,
-    SessionConfigSelectOption, SessionConfigSelectOptions, SessionConfigValueId, SessionId,
-    SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse,
+    CloseSessionRequest, CloseSessionResponse, ContentBlock, ContentChunk, Error as AcpError,
+    HttpHeader, Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest,
+    LoadSessionResponse, McpCapabilities, McpServer as AcpMcpServer, Meta, NewSessionRequest,
+    NewSessionResponse, PromptCapabilities, PromptRequest, PromptResponse, SessionConfigGroupId,
+    SessionConfigId, SessionConfigKind, SessionConfigOption, SessionConfigSelect,
+    SessionConfigSelectGroup, SessionConfigSelectOption, SessionConfigSelectOptions,
+    SessionConfigValueId, SessionId, SessionNotification, SessionUpdate,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, TextContent,
 };
 use agent_client_protocol::{
     Agent, ByteStreams, Client, ConnectTo, ConnectionTo, on_receive_notification,
@@ -113,6 +113,30 @@ impl SessionNotifier for AcpNotifier {
             .ok_or_else(|| rootcause::report!("session update before the acp connection was up"))?;
         connection
             .send_notification(SessionNotification::new(session.clone(), update))
+            .map_err(|error| rootcause::report!("{error}"))
+    }
+
+    async fn checkpoint(
+        &self,
+        session: &SessionId,
+        run: &crate::domain::model::CursorRunId,
+    ) -> Result<(), rootcause::Report> {
+        // Standalone domain tests and embedders without a durable host have no
+        // connection to checkpoint through. The Macro host always binds first;
+        // there the metadata marker is persisted with the ordinary ACP log.
+        let Some(connection) = self.connection.get() else {
+            return Ok(());
+        };
+        let mut meta = Meta::new();
+        meta.insert(
+            "macroCursorRunCheckpoint".to_owned(),
+            serde_json::Value::String(run.to_string()),
+        );
+        let update = SessionUpdate::AgentMessageChunk(ContentChunk::new(ContentBlock::Text(
+            TextContent::new(""),
+        )));
+        connection
+            .send_notification(SessionNotification::new(session.clone(), update).meta(meta))
             .map_err(|error| rootcause::report!("{error}"))
     }
 }
@@ -365,7 +389,12 @@ where
                             forwardable_mcp_servers(request.mcp_servers),
                         );
                         let options = session_config_options(&service, &session).await;
-                        responder.respond(LoadSessionResponse::new().config_options(options))
+                        let response =
+                            responder.respond(LoadSessionResponse::new().config_options(options));
+                        if response.is_ok() {
+                            service.loaded(&session);
+                        }
+                        response
                     } else {
                         responder.respond_with_error(AcpError::invalid_params())
                     }

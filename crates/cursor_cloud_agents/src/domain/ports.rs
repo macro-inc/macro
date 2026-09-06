@@ -90,6 +90,7 @@ pub trait CursorAgents {
     fn list_runs(
         &self,
         agent: &CursorAgentId,
+        through: Option<&CursorRunId>,
     ) -> impl Future<Output = Result<Vec<RunListing>, rootcause::Report>> + Send;
 }
 
@@ -120,6 +121,13 @@ pub trait SessionNotifier {
         &self,
         session: &SessionId,
         update: SessionUpdate,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+    /// Emit a non-rendering marker after every update for `run` was delivered.
+    /// Durable hosts use it to atomically checkpoint the run with their log.
+    fn checkpoint(
+        &self,
+        session: &SessionId,
+        run: &CursorRunId,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 

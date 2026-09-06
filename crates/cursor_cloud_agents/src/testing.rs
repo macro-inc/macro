@@ -274,6 +274,7 @@ impl CursorAgents for FakeCursor {
     async fn list_runs(
         &self,
         _agent: &CursorAgentId,
+        _through: Option<&CursorRunId>,
     ) -> Result<Vec<RunListing>, rootcause::Report> {
         Ok(self
             .inner
@@ -354,6 +355,14 @@ impl SessionNotifier for RecordingNotifier {
             .expect("notifier poisoned")
             .push((session.clone(), update));
         self.delivered.notify_waiters();
+        Ok(())
+    }
+
+    async fn checkpoint(
+        &self,
+        _session: &SessionId,
+        _run: &CursorRunId,
+    ) -> Result<(), rootcause::Report> {
         Ok(())
     }
 }

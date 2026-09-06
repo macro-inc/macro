@@ -1,0 +1,3 @@
+ALTER TABLE external_agent_session
+DROP CONSTRAINT external_agent_session_last_run_id_not_empty,
+DROP COLUMN last_run_id;

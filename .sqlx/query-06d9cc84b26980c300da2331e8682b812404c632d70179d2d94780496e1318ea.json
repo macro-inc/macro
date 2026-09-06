@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE egress_token_hash = $1\n            ",
+  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\",\n                ext.last_run_id AS \"external_last_run_id?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE egress_token_hash = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -122,6 +122,11 @@
         "ordinal": 23,
         "name": "external_url?",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 24,
+        "name": "external_last_run_id?",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -153,8 +158,9 @@
       false,
       false,
       true,
+      true,
       true
     ]
   },
-  "hash": "51442f5d740386b1d930feba1450f46991917be4d87a9774105daa1c245bd458"
+  "hash": "06d9cc84b26980c300da2331e8682b812404c632d70179d2d94780496e1318ea"
 }
