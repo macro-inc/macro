@@ -68,6 +68,8 @@ pub(crate) enum Stepped {
 /// machine, and executes the effects - nothing else.
 pub(crate) struct SessionActor<Connector: AgentConnector, Logs> {
     machine: SessionMachine<SessionCompletion>,
+    initialization_request: Option<ToRuntimeMessage>,
+    initialization_response: Option<ToServerMessage>,
     /// The carrier's halves. Sending is shared with whoever else is on the
     /// same connection; receiving is this actor's alone, which is why it can
     /// be read with `&mut` and needs no lock.
@@ -122,6 +124,8 @@ where
         );
 
         Self {
+            initialization_request: None,
+            initialization_response: None,
             outbound,
             inbound,
             handshake_seen,
@@ -129,7 +133,8 @@ where
             machine: match acp_session_id {
                 None => SessionMachine::new(id, workspace, mcp_servers),
                 Some(session_id) => SessionMachine::resume(id, session_id, workspace, mcp_servers),
-            },
+            }
+            .with_connection_context(macro_uuid::generate_uuid_v7()),
             logs,
             commands,
             handshake_span: Some(handshake_span),
@@ -190,8 +195,8 @@ where
             // A handshake somebody else ran. The machine ignores it unless it
             // is still booting, which is what makes the session that ran the
             // handshake ignore its own result coming back.
-            Ok(()) = self.handshake_seen.changed() => match *self.handshake_seen.borrow_and_update() {
-                HandshakeStatus::Ready(restore) => Input::Ready { restore },
+            Ok(()) = self.handshake_seen.changed() => match self.handshake_seen.borrow_and_update().clone() {
+                HandshakeStatus::ReadyWithContext { restore, context } => Input::SharedReady { restore, context },
                 // Nothing to act on yet, but the wait must resume.
                 HandshakeStatus::Pending | HandshakeStatus::InFlight => continue,
             },
@@ -289,8 +294,24 @@ where
                         self.finish_handshake_if_complete();
                     }
                 }
-                Effect::Log { message } => {
-                    let log = self.log(None, Message::ToServer(message));
+                Effect::Log { message, boundary } => {
+                    if let Some(ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(
+                        request,
+                    )))) = &self.initialization_request
+                        && let ToServerMessage::Acp(AcpMessage(frame)) = &message
+                        && frame.response_id() == Some(&request.id)
+                    {
+                        self.initialization_response = Some(message.clone());
+                    }
+                    let log = self.logs.append_with_boundary(
+                        AgentSessionLog {
+                            legacy_load: false,
+                            agent_session_id: self.machine.id(),
+                            user_id: None,
+                            content: Message::ToServer(message),
+                        },
+                        boundary,
+                    );
                     let (result, close_reason) = match handshake_span.as_ref() {
                         Some(span) => match tokio::time::timeout_at(
                             handshake_deadline,
@@ -326,6 +347,29 @@ where
                         self.finish_handshake_if_complete();
                     }
                 }
+                Effect::EstablishInitialization { context } => {
+                    let establish = async {
+                        let id = self
+                            .logs
+                            .append(AgentSessionLog {
+                                legacy_load: false,
+                                agent_session_id: self.machine.id(),
+                                user_id: None,
+                                content: Message::ToRuntime(context.request.clone()),
+                            })
+                            .await?;
+                        self.machine.initialization_persisted(id);
+                        self.log(None, Message::ToServer(context.response.clone()))
+                            .await
+                    };
+                    let result = tokio::time::timeout_at(handshake_deadline, establish)
+                        .await
+                        .unwrap_or_else(|_| Err(AgentSessionError::LogTimedOut(self.machine.id())));
+                    if let Err(error) = result {
+                        self.fail_remaining_completions(&mut effects, error);
+                        effects.extend(self.machine.handle(Input::Closed(CloseReason::LogFailed)));
+                    }
+                }
                 Effect::PersistAcpSession { session_id } => {
                     let result = tokio::time::timeout(
                         COMMAND_DELIVERY_TIMEOUT,
@@ -347,7 +391,17 @@ where
                     // Nothing waits on this today; a failed send would mean
                     // every receiver is gone, which cannot happen while this
                     // actor holds one.
-                    let _ = self.handshake.send(HandshakeStatus::Ready(restore));
+                    if let (Some(request), Some(response)) =
+                        (&self.initialization_request, &self.initialization_response)
+                    {
+                        let _ = self.handshake.send(HandshakeStatus::ReadyWithContext {
+                            restore,
+                            context: std::sync::Arc::new(super::InitializationContext {
+                                request: request.clone(),
+                                response: response.clone(),
+                            }),
+                        });
+                    }
                 }
                 Effect::TurnEnded { action_id } => {
                     tracing::info!(
@@ -420,7 +474,19 @@ where
             tracing::Span::current().record("rpc.system.name", "jsonrpc");
             tracing::Span::current().record("rpc.method", method);
         }
-        self.log(from, Message::ToRuntime(message.clone())).await?;
+        let id = self
+            .logs
+            .append(AgentSessionLog {
+                legacy_load: false,
+                agent_session_id: self.machine.id(),
+                user_id: from,
+                content: Message::ToRuntime(message.clone()),
+            })
+            .await?;
+        if acp_method(&message) == Some("initialize") {
+            self.machine.initialization_persisted(id);
+            self.initialization_request = Some(message.clone());
+        }
         self.outbound.send(message).await?;
         Ok(())
     }
@@ -432,11 +498,13 @@ where
     ) -> Result<()> {
         self.logs
             .append(AgentSessionLog {
+                legacy_load: false,
                 agent_session_id: self.machine.id(),
                 user_id,
                 content,
             })
             .await
+            .map(|_| ())
     }
 
     async fn persist_acp_session(&self, acp_session_id: SessionId) -> Result<()> {
@@ -484,6 +552,7 @@ where
                 effect @ Effect::Stop { .. } => stop = Some(effect),
                 Effect::Send { .. }
                 | Effect::Log { .. }
+                | Effect::EstablishInitialization { .. }
                 | Effect::PersistAcpSession { .. }
                 | Effect::Initialized { .. }
                 | Effect::TurnEnded { .. } => {}

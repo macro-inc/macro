@@ -57,7 +57,7 @@ pub fn fold_session(session_id: &str, entries: JsValue) -> Result<JsValue, JsVal
 /// The streaming counterpart to [`fold_session`], wrapping the same
 /// [`FoldMachineImpl`] the server folds with. A caller following a session
 /// keeps one of these per session for as long as the session lasts: frames
-/// must arrive in log order, and the machine only ever grows.
+/// must arrive in log order. Successful loads replace its committed history.
 ///
 /// A client that opens a channel mid-session catches up with [`Self::extend`]
 /// and then follows with [`Self::push`] on the *same* machine. Refolding the
@@ -102,7 +102,8 @@ impl FoldStream {
     }
 
     /// Fold one more frame, reporting the changes it implied as an array of
-    /// `{kind: "new" | "update", message}` and `{kind: "metadata", metadata}`
+    /// `{kind: "new" | "update", message}`, `{kind: "replace", messages}`,
+    /// and `{kind: "metadata", metadata}`
     /// events - empty for a frame that changes nothing, which is most of
     /// them.
     ///
@@ -208,6 +209,8 @@ fn encode<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen:
 /// One entry of a session's protocol log, as the endpoint serves it.
 #[derive(Deserialize)]
 struct LogEntry {
+    #[serde(rename = "legacyLoad", default)]
+    legacy_load: bool,
     /// The user whose action produced the frame, when one did. Absent on
     /// everything the runtime originated.
     #[serde(rename = "userId", default)]
@@ -220,6 +223,7 @@ struct LogEntry {
 impl LogEntry {
     fn into_log(self, session: AgentSessionId) -> AgentSessionLog {
         AgentSessionLog {
+            legacy_load: self.legacy_load,
             agent_session_id: session,
             // A user id that will not parse is dropped rather than rejected:
             // it costs the prompt its attribution, and the placeholder row it

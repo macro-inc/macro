@@ -65,7 +65,19 @@ impl TestClient {
             "method": method,
             "params": params,
         }));
-        self.next_frame().await
+        loop {
+            let frame = self.next_frame().await;
+            if method != "session/load" || frame.get("id") == Some(&serde_json::json!(id)) {
+                return frame;
+            }
+            assert!(
+                matches!(
+                    frame["method"].as_str(),
+                    Some("session/update" | "_session/turn_complete")
+                ),
+                "load emits only replay facts before its response"
+            );
+        }
     }
 }
 
@@ -98,8 +110,13 @@ fn serve_over_channel_with_default_model(
 ) -> (Arc<Service>, TestClient) {
     let notifier = AcpNotifier::new();
     let service = Arc::new(
-        CursorSessionService::new(cursor, notifier.clone(), FixedRepos(None))
-            .with_default_model(default_model.map(str::to_owned)),
+        CursorSessionService::new(
+            cursor,
+            notifier.clone(),
+            FixedRepos(None),
+            Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        )
+        .with_default_model(default_model.map(str::to_owned)),
     );
     configure(&service);
     let (agent_end, client_end) = Channel::duplex();
@@ -356,6 +373,7 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
         cursor,
         notifier.clone(),
         FixedRepos(None),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
     ));
     let serve_task = tokio::spawn(serve(service, notifier, agent_reader, agent_writer));
 
@@ -656,7 +674,10 @@ async fn session_load_answers_for_restored_sessions_only() {
             }),
         )
         .await;
-    assert!(loaded.get("error").is_none(), "got {loaded}");
+    assert!(
+        loaded.get("error").is_some(),
+        "legacy session without native history must fail: {loaded}"
+    );
 
     let unknown = client
         .call(
@@ -937,6 +958,7 @@ async fn setting_an_unoffered_model_is_refused() {
 async fn a_restored_session_keeps_its_model() {
     let cursor = FakeCursor::new();
     cursor.script_models(offered_models());
+    crate::testing::script_legacy_history(&cursor);
     let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
         service.restore_session(
             SessionId::new("cursor-acp-3"),
@@ -1001,7 +1023,8 @@ async fn a_restored_session_keeps_its_model() {
 async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
     let cursor = FakeCursor::new();
     cursor.script_models(offered_models());
-    let (service, _client) = serve_over_channel(cursor.clone(), |service| {
+    crate::testing::script_legacy_history(&cursor);
+    let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
         service.restore_session(
             SessionId::new("cursor-acp-3"),
             Some(crate::domain::model::CursorAgentId::new("bc-restored")),
@@ -1010,6 +1033,14 @@ async fn a_restored_deployment_slug_falls_back_to_cursors_default() {
         );
     });
 
+    let loaded = client
+        .call(
+            1,
+            "session/load",
+            serde_json::json!({"sessionId":"cursor-acp-3", "cwd":"/workspace", "mcpServers":[]}),
+        )
+        .await;
+    expect_result(&loaded);
     let events = cursor.script_stream();
     events
         .send(CursorEvent::Result {
@@ -1184,4 +1215,65 @@ async fn no_auto_entry_means_no_picker_rather_than_a_guess() {
             .is_none_or(|options| options.is_empty()),
         "no resting value, no picker: {result}"
     );
+}
+
+#[tokio::test]
+async fn load_queues_all_native_history_before_its_response_and_repeats_without_execution() {
+    let cursor = FakeCursor::new();
+    cursor.script_run_listings(vec![crate::domain::model::RunListing {
+        id: CursorRunId::new("old-run"),
+        status: RunStatus::Finished,
+    }]);
+    let tx = cursor.script_stream();
+    for event in crate::testing::fixture_events("file_operations.sse") {
+        tx.send(event).unwrap();
+    }
+    drop(tx);
+    let (service, mut client) = serve_over_channel(cursor.clone(), |service| {
+        service.restore_session(
+            SessionId::new("restored"),
+            Some(crate::domain::model::CursorAgentId::new("agent")),
+            None,
+            None,
+        );
+    });
+    let mut first = Vec::new();
+    for id in [11, 12] {
+        client.send(serde_json::json!({"jsonrpc":"2.0", "id":id, "method":"session/load", "params":{"sessionId":"restored", "cwd":"/workspace", "mcpServers":[]}}));
+        let mut replay = Vec::new();
+        loop {
+            let frame = client.next_frame().await;
+            if frame.get("id") == Some(&serde_json::json!(id)) {
+                expect_result(&frame);
+                break;
+            }
+            assert!(matches!(
+                frame["method"].as_str(),
+                Some("session/update" | "_session/turn_complete")
+            ));
+            replay.push(
+                frame["params"]
+                    .get("update")
+                    .cloned()
+                    .unwrap_or_else(|| frame.clone()),
+            );
+        }
+        assert_eq!(replay[0]["sessionUpdate"], "user_message_chunk");
+        assert!(replay.iter().any(|u| u["sessionUpdate"] == "tool_call"));
+        assert!(
+            replay
+                .iter()
+                .any(|u| u["sessionUpdate"] == "tool_call_update")
+        );
+        if id == 11 {
+            first = replay;
+        } else {
+            assert_eq!(first, replay);
+        }
+    }
+    assert!(
+        cursor.calls().is_empty(),
+        "replay never executes provider actions"
+    );
+    assert!(service.has_session(&SessionId::new("restored")));
 }

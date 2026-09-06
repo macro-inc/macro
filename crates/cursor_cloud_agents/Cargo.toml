@@ -5,7 +5,8 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = []
+default = ["postgres"]
+postgres = []
 # In-memory port implementations and recorded fixtures, for crates that test
 # against this one.
 test-utils = []
@@ -14,6 +15,9 @@ test-utils = []
 name = "cursor_cloud_agents"
 
 [dependencies]
+agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
+sqlx = { workspace = true }
+uuid = { workspace = true }
 agent-client-protocol = { workspace = true }
 futures = { workspace = true }
 macro_env_var = { path = "../macro_env_var" }
@@ -38,5 +42,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 zeroize = { workspace = true }
 
 [dev-dependencies]
+agent_fold = { path = "../agent_fold", default-features = false, features = ["test-utils"] }
 insta = { version = "1.48.0", features = ["glob", "json"] }
 tokio = { workspace = true, features = ["io-std", "io-util", "sync", "time", "test-util"] }

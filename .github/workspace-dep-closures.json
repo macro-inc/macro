@@ -2439,8 +2439,10 @@
       "crates/workspace-hack"
     ],
     "cursor_cloud_agents": [
+      "crates/agent_runtime_protocol",
       "crates/cursor_cloud_agents",
       "crates/macro_env_var",
+      "crates/macro_uuid",
       "crates/workspace-hack"
     ],
     "database_env_vars": [

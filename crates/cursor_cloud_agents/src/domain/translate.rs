@@ -159,8 +159,9 @@ impl TranslateMachine {
     /// outcome for these, so `Completed` would claim a success nobody
     /// witnessed.
     pub fn close_open_calls(&mut self) -> Vec<SessionUpdate> {
-        self.open
-            .drain()
+        let mut open: Vec<_> = self.open.drain().collect();
+        open.sort();
+        open.into_iter()
             .map(|call_id| {
                 SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
                     call_id,

@@ -212,6 +212,9 @@ async fn fake_cursor_api() -> (
                 }))
             }),
         )
+        .route("/v1/agents/{id}/runs", axum::routing::get(|axum::extract::Path(id): axum::extract::Path<String>| async move {
+            axum::Json(if id == "bc-restored" { serde_json::json!({"items":[{"id":"run-delivered","status":"FINISHED"}]}) } else { serde_json::json!({"items":[]}) })
+        }))
         .route(
             "/v1/agents/{id}/archive",
             axum::routing::post(move |axum::extract::Path(id): axum::extract::Path<String>| {
@@ -257,6 +260,8 @@ async fn fake_cursor_api() -> (
                                 "event: status\n",
                                 "data: {\"runId\":\"run-test-1\",\"status\":\"RUNNING\"}\n",
                                 "\n",
+                                "event: interaction_update\n",
+                                "data: {\"type\":\"user-message-appended\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"original\"}]}}\n\n",
                                 "event: assistant\n",
                                 "data: {\"text\":\"done\"}\n",
                                 "\n",
@@ -628,7 +633,16 @@ async fn resume_restores_the_persisted_identity() {
             "sessionId":"cursor-acp-1","cwd":"/workspace","mcpServers":[]}}),
     )
     .await;
-    let loaded = next_acp(&mut receiver).await;
+    let loaded = loop {
+        let frame = next_acp(&mut receiver).await;
+        if frame["id"] == 2 {
+            break frame;
+        }
+        assert!(matches!(
+            frame["method"].as_str(),
+            Some("session/update" | "_session/turn_complete")
+        ));
+    };
     assert_eq!(loaded["id"], 2);
     assert!(loaded.get("error").is_none(), "got {loaded}");
 }

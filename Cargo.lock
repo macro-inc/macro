@@ -4524,6 +4524,8 @@ name = "cursor_cloud_agents"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "agent_fold",
+ "agent_runtime_protocol",
  "futures",
  "insta",
  "macro_env_var",
@@ -4531,12 +4533,14 @@ dependencies = [
  "rootcause",
  "serde",
  "serde_json",
+ "sqlx",
  "sse-core",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "uuid",
  "workspace-hack",
  "zeroize",
 ]

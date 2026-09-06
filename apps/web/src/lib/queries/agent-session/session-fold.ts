@@ -29,6 +29,7 @@ type SessionState = {
   bot?: SessionBot;
   buffered: AgentSessionLogEntryDto[];
   foldedSinks: Set<FoldedMessageSink>;
+  replacementSinks: Set<FoldedMessageSink>;
   metadataSinks: Set<SessionMetadataSink>;
   opening?: Promise<void>;
   ready: boolean;
@@ -63,6 +64,7 @@ export function subscribeAgentSessionLog(
 export async function acquireAgentSessionFold(args: {
   agentSessionId: string;
   onChange?: FoldedMessageSink;
+  onReplace?: FoldedMessageSink;
   onMetadata?: SessionMetadataSink;
 }): Promise<{
   bot: SessionBot;
@@ -70,11 +72,12 @@ export async function acquireAgentSessionFold(args: {
   metadata: SessionMetadata;
   release: () => void;
 }> {
-  const { agentSessionId, onChange, onMetadata } = args;
+  const { agentSessionId, onChange, onReplace, onMetadata } = args;
   const state = sessions.get(agentSessionId) ?? {
     agentSessionId,
     buffered: [],
     foldedSinks: new Set<FoldedMessageSink>(),
+    replacementSinks: new Set<FoldedMessageSink>(),
     metadataSinks: new Set<SessionMetadataSink>(),
     ready: false,
     references: 0,
@@ -87,6 +90,7 @@ export async function acquireAgentSessionFold(args: {
     if (released) return;
     released = true;
     if (onChange) state.foldedSinks.delete(onChange);
+    if (onReplace) state.replacementSinks.delete(onReplace);
     if (onMetadata) state.metadataSinks.delete(onMetadata);
     state.references -= 1;
     releaseState(state);
@@ -104,6 +108,7 @@ export async function acquireAgentSessionFold(args: {
     // notify the sinks, and then the caller would also process the snapshot
     // (which includes those same messages).
     if (onChange) state.foldedSinks.add(onChange);
+    if (onReplace) state.replacementSinks.add(onReplace);
     if (onMetadata) state.metadataSinks.add(onMetadata);
 
     return {
@@ -132,12 +137,11 @@ async function open(state: SessionState): Promise<void> {
 
     // Frames can continue arriving while each worker request is in flight.
     // Drain until an empty check and `ready` assignment can happen together.
-    let fetched = result.value.entries;
+    const fetched = result.value.entries;
     while (state.buffered.length > 0) {
       const buffered = state.buffered;
       state.buffered = [];
       const replay = dropOverlap(fetched, buffered);
-      fetched = [];
       if (replay.length > 0) await push(state, replay);
     }
     state.ready = true;
@@ -183,36 +187,62 @@ async function push(
 ): Promise<void> {
   const events = await pushSessionEntries(state.agentSessionId, entries);
   if (sessions.get(state.agentSessionId) !== state) return;
-  const messages = events.flatMap((event) =>
-    event.kind === 'metadata' ? [] : [event.message]
-  );
-  // Metadata is carried whole per event, latest-wins — only the last matters.
+  // Apply in order: a replacement invalidates every earlier message event,
+  // and later live updates must land on the newly committed conversation.
+  for (const event of events) {
+    if (event.kind === 'metadata') continue;
+    if (event.kind === 'replace') {
+      for (const sink of state.replacementSinks) sink(event.messages);
+    } else {
+      for (const sink of state.foldedSinks) sink([event.message]);
+    }
+  }
   const metadata = events.findLast((event) => event.kind === 'metadata');
   if (metadata) {
     for (const sink of state.metadataSinks) sink(metadata.metadata);
   }
-  if (messages.length === 0) return;
-  for (const sink of state.foldedSinks) sink(messages);
 }
 
-/** Return buffered frame occurrences not already present in the snapshot. */
+/**
+ * Reconcile transport rows against an authoritative effective-history snapshot.
+ * Its first row is the inclusive boundary in the repository's (createdAt, id)
+ * order. Older rows were excluded by history selection, not missed by GET.
+ * Distinct rows with identical ACP content remain distinct.
+ */
 export function dropOverlap(
   fetched: AgentSessionLogEntryDto[],
   buffered: AgentSessionLogEntryDto[]
 ): AgentSessionLogEntryDto[] {
-  if (buffered.length === 0 || fetched.length === 0) return buffered;
+  const boundary = fetched[0];
+  if (!boundary) return buffered;
+  const snapshotIds = new Set(fetched.map((entry) => entry.id));
+  return buffered.filter(
+    (entry) =>
+      compareLogCursor(entry, boundary) >= 0 && !snapshotIds.has(entry.id)
+  );
+}
 
-  const fetchedCounts = new Map<string, number>();
-  for (const entry of fetched) {
-    const key = JSON.stringify(entry);
-    fetchedCounts.set(key, (fetchedCounts.get(key) ?? 0) + 1);
-  }
-
-  return buffered.filter((entry) => {
-    const key = JSON.stringify(entry);
-    const remaining = fetchedCounts.get(key) ?? 0;
-    if (remaining === 0) return true;
-    fetchedCounts.set(key, remaining - 1);
-    return false;
-  });
+/** Compare UTC timestamps without losing Postgres submillisecond precision. */
+function compareLogCursor(
+  left: AgentSessionLogEntryDto,
+  right: AgentSessionLogEntryDto
+): number {
+  // Chrono emits UTC with variable fractional precision. Pad before comparing;
+  // Date.parse would collapse distinct microseconds into the same millisecond.
+  const timestamp = (entry: AgentSessionLogEntryDto) =>
+    entry.createdAt.replace(
+      /(?:\.(\d+))?Z$/,
+      (_match, fraction: string = '') => `.${fraction.padEnd(9, '0')}Z`
+    );
+  const a = timestamp(left);
+  const b = timestamp(right);
+  return a < b
+    ? -1
+    : a > b
+      ? 1
+      : left.id < right.id
+        ? -1
+        : left.id > right.id
+          ? 1
+          : 0;
 }

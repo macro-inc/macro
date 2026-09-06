@@ -53,6 +53,22 @@ used in chat and channels; they serialize as `<m-document-mention>` tags in the 
 the agent sees. Agent replies that emit those tags render as clickable chips in the
 transcript (and in the originating channel thread).
 
+When a session reconnects using ACP load, the last committed conversation stays
+visible while history is reconstructed. A successful load replaces the transcript
+once, including prompts, thoughts, and tool results; it does not append another
+copy. Replayed rows can change content type under existing message or tool IDs;
+the live transcript must show the new content without an error or a reload.
+A failed or interrupted load leaves the previous conversation visible, and
+late replay notifications remain hidden across initialization/reconnect markers
+until a valid session open or dispatched prompt establishes live traffic. Reopening
+the session shows the same committed history. Initialization, creating a session, and ACP resume do
+not by themselves clear existing messages. Channel agent-reference previews follow
+the same replacement behavior. Historical pre-rollout Cursor load acknowledgments
+preserve the earlier conversation when reopening old sessions; a new successful
+load can replace it with an empty transcript. If a load finishes while the browser
+is fetching history, buffered content from before the selected history boundary
+must stay hidden; subsequent live messages must still appear.
+
 - Sending is never blocked by a running turn. A prompt sent mid-turn is queued
   **server-side** and dispatches automatically when the current turn ends, one per turn.
   The queue holds at most 50 entries; past that a send is refused with an error rather

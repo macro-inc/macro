@@ -78,6 +78,8 @@ pub(super) struct FoldState {
     /// Every message derived so far, oldest first - including the open turn's
     /// agent message, which is appended to in place as the agent talks.
     pub(super) messages: Vec<FoldedMessage>,
+    /// User notifications are authoritative only inside a staged load.
+    pub(super) replaying: bool,
     /// The session the entry currently being folded belongs to, for
     /// [`State::warn`]. Set fresh from each log entry, so it is always
     /// current even though it rarely changes within one fold.
@@ -158,6 +160,15 @@ pub(super) struct Turn {
 }
 
 impl FoldState {
+    /// Forget request correlations at a connection boundary without clearing history.
+    pub(super) fn clear_pending(&mut self) {
+        self.pending_initialize = None;
+        self.pending_config_requests.clear();
+        self.pending_permissions.clear();
+        self.pending_controls.clear();
+        self.close_turn(None);
+    }
+
     /// Advance by one log entry, returning what it changed in emission order.
     ///
     /// One entry changes at most one message today - see [`FoldEvent`]
@@ -222,6 +233,35 @@ impl FoldState {
             }
 
             Message::ToServer(ToServerMessage::Acp(acp)) => match &acp.0 {
+                RawJsonRpcMessage::Notification(notification)
+                    if notification.method.as_ref() == "_session/turn_complete" =>
+                {
+                    use agent_runtime_protocol::domain::turn::{
+                        TurnCompleteNotification, TurnOutcome,
+                    };
+                    // A real pending prompt completes only through its correlated
+                    // response. Historical facts may finish replay or an unprompted
+                    // continuation, never an unrelated pending user request.
+                    if !self.replaying
+                        && self
+                            .turn
+                            .as_ref()
+                            .is_some_and(|turn| turn.prompt_id.is_some())
+                    {
+                        return Vec::new();
+                    }
+                    let stop = super::convert::deserialize_params::<TurnCompleteNotification>(
+                        notification.params.as_ref(),
+                    )
+                    .map(|fact| match fact.outcome {
+                        TurnOutcome::Finished => crate::domain::model::StopReason::EndTurn,
+                        TurnOutcome::Cancelled => crate::domain::model::StopReason::Cancelled,
+                        TurnOutcome::Failed { message } => {
+                            crate::domain::model::StopReason::Failed { message }
+                        }
+                    });
+                    StepChange::message(stop.and_then(|stop| self.close_turn(Some(stop))))
+                }
                 // The bulk of the log: streamed content and tool activity.
                 RawJsonRpcMessage::Notification(notification)
                     if SessionNotification::matches_method(&notification.method) =>
@@ -333,8 +373,19 @@ impl FoldState {
             SessionUpdate::AgentThoughtChunk(chunk) => StepChange::message(
                 content_block_text(chunk.content).and_then(|text| self.append_thought(text)),
             ),
-            // The agent replaying the user's own message. The prompt frame is
-            // the authoritative copy, so this is dropped.
+            // Replay has no original prompt requests: user chunks are its
+            // authoritative prompts. Outside load, ignore prompt echoes.
+            SessionUpdate::UserMessageChunk(chunk)
+                if self.replaying
+                    || self
+                        .turn
+                        .as_ref()
+                        .is_none_or(|turn| turn.prompt_id.is_none()) =>
+            {
+                StepChange::message(
+                    content_block_text(chunk.content).and_then(|text| self.replay_user_text(text)),
+                )
+            }
             SessionUpdate::UserMessageChunk(_) => Vec::new(),
             SessionUpdate::ToolCall(call) => {
                 let mut changes =

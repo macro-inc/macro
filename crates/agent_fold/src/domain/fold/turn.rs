@@ -14,6 +14,33 @@ use super::convert::{content_block_text, deserialize_params};
 use super::state::{Changed, FoldState, Turn};
 
 impl FoldState {
+    /// Adjacent user chunks form one replayed prompt; agent activity separates turns.
+    pub(super) fn replay_user_text(&mut self, text: String) -> Option<Changed> {
+        if text.is_empty() {
+            return None;
+        }
+        if self.turn.as_ref().is_some_and(|turn| turn.agent.is_none())
+            && let Some(message) = self.messages.last_mut()
+            && matches!(message.author, Author::User { .. })
+            && let Some(MessagePart::Text { text: held }) = message.parts.get_mut(0)
+        {
+            held.push_str(&text);
+            return Some(Changed::updated(self.messages.len() - 1));
+        }
+        self.close_turn(Some(StopReason::EndTurn));
+        self.begin_turn_without_prompt();
+        let id = self.open_turn().id;
+        let message = self.messages.len();
+        self.messages.push(FoldedMessage {
+            id,
+            author: Author::User { user_id: None },
+            request_id: None,
+            parts: NonEmpty::one(MessagePart::Text { text }),
+            stop: None,
+        });
+        Some(Changed::new(message))
+    }
+
     /// Handle a `session/prompt`: emit the user's message, open a turn.
     pub(super) fn begin_turn(
         &mut self,

@@ -158,6 +158,18 @@ where
     type Sender = RoutedSender<Sandbox::Sender, Cursor::Sender>;
     type Receiver = RoutedReceiver<Sandbox::Receiver, Cursor::Receiver>;
 
+    fn bind_session_owner(
+        &mut self,
+        session_id: macro_uuid::Uuid,
+        replica: macro_uuid::Uuid,
+        fence: i64,
+    ) -> std::result::Result<(), TransportError> {
+        match self {
+            Self::Sandbox(transport) => transport.bind_session_owner(session_id, replica, fence),
+            Self::Cursor(transport) => transport.bind_session_owner(session_id, replica, fence),
+        }
+    }
+
     fn split(self) -> (Self::Sender, Self::Receiver) {
         match self {
             Self::Sandbox(transport) => {

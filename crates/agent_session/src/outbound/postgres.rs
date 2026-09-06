@@ -672,6 +672,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
 }
 
 struct AgentSessionLogRow {
+    legacy_load: bool,
+    id: Uuid,
     agent_session_id: Uuid,
     user_id: Option<MacroUserIdStr<'static>>,
     direction: String,
@@ -684,8 +686,10 @@ impl TryFrom<AgentSessionLogRow> for StoredAgentSessionLog {
 
     fn try_from(row: AgentSessionLogRow) -> anyhow::Result<Self> {
         Ok(Self {
+            id: row.id,
             created_at: row.created_at,
             entry: AgentSessionLog {
+                legacy_load: row.legacy_load,
                 agent_session_id: AgentSessionId::new_from_uuid(row.agent_session_id),
                 user_id: row.user_id,
                 content: parse_message(&row.direction, row.content)?,
@@ -771,13 +775,14 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .begin()
             .await
             .context("begin agent session log create")?;
+        let id = macro_uuid::generate_uuid_v7();
         let created_at = sqlx::query_scalar!(
             r#"
             INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING created_at
             "#,
-            macro_uuid::generate_uuid_v7(),
+            id,
             log.agent_session_id.as_uuid(),
             log.user_id.as_ref().map(|user_id| user_id.as_ref()),
             direction,
@@ -812,6 +817,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .context("commit agent session log create")?;
 
         Ok(StoredAgentSessionLog {
+            id,
             created_at,
             entry: log,
         })
@@ -822,6 +828,18 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         log: AgentSessionLog,
         claim: &SessionClaim,
     ) -> Result<StoredAgentSessionLog> {
+        self.create_fenced_with_boundary(log, claim, None).await
+    }
+
+    async fn create_fenced_with_boundary(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+    ) -> Result<StoredAgentSessionLog> {
+        if claim.session != log.agent_session_id {
+            return Err(AgentSessionError::FencedOut(log.agent_session_id));
+        }
         let event_status = match &log.content {
             Message::ToServer(ToServerMessage::Event { event }) => {
                 Some(SessionStatus::Event(event.clone()))
@@ -856,13 +874,14 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             return Err(AgentSessionError::FencedOut(log.agent_session_id));
         }
 
+        let id = macro_uuid::generate_uuid_v7();
         let created_at = sqlx::query_scalar!(
             r#"
             INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content)
             VALUES ($1, $2, $3, $4, $5)
             RETURNING created_at
             "#,
-            macro_uuid::generate_uuid_v7(),
+            id,
             log.agent_session_id.as_uuid(),
             log.user_id.as_ref().map(|user_id| user_id.as_ref()),
             direction,
@@ -871,6 +890,34 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
         .fetch_one(&mut *transaction)
         .await
         .context("failed to create fenced agent session log entry")?;
+
+        if let Some(boundary) = boundary {
+            let updated = sqlx::query!(
+                r#"
+                UPDATE agent_session AS session
+                SET history_start_log_id = boundary.id
+                FROM agent_session_log AS boundary
+                WHERE session.id = $1
+                  AND session.manager_replica_id = $2 AND session.manager_fence = $3
+                  AND boundary.id = $4 AND boundary.agent_session_id = session.id
+                  AND (boundary.created_at, boundary.id) <= ($5, $6)
+                "#,
+                log.agent_session_id.as_uuid(),
+                claim.replica.as_uuid(),
+                claim.fence.0,
+                boundary.initialization_log_id,
+                created_at,
+                id,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("select successful load history boundary")?;
+            if updated.rows_affected() != 1 {
+                return Err(AgentSessionError::Handshake(
+                    "invalid history boundary".into(),
+                ));
+            }
+        }
 
         if let Some(run_id) = checkpoint {
             let updated = sqlx::query!(
@@ -923,6 +970,7 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             .context("commit fenced agent session log create")?;
 
         Ok(StoredAgentSessionLog {
+            id,
             created_at,
             entry: log,
         })
@@ -936,14 +984,25 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             AgentSessionLogRow,
             r#"
             SELECT
-                agent_session_id,
-                user_id AS "user_id: MacroUserIdStr",
-                direction,
-                content,
-                created_at
-            FROM agent_session_log
-            WHERE agent_session_id = $1
-            ORDER BY created_at ASC, id ASC
+                log.id,
+                log.agent_session_id,
+                log.user_id AS "user_id: MacroUserIdStr",
+                log.legacy_load,
+                log.direction,
+                log.content,
+                log.created_at
+            FROM agent_session_log AS log
+            WHERE log.agent_session_id = $1
+              AND (log.created_at, log.id) >= (
+                  COALESCE((SELECT boundary.created_at
+                    FROM agent_session AS session
+                    JOIN agent_session_log AS boundary ON boundary.id = session.history_start_log_id
+                      AND boundary.agent_session_id = session.id
+                    WHERE session.id = $1), '-infinity'::timestamptz),
+                  COALESCE((SELECT history_start_log_id FROM agent_session WHERE id = $1),
+                    '00000000-0000-0000-0000-000000000000'::uuid)
+              )
+            ORDER BY log.created_at ASC, log.id ASC
             "#,
             agent_session_id.as_uuid(),
         )

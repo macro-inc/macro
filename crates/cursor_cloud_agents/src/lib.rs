@@ -22,10 +22,9 @@
 //! - [`inbound`] is the ACP adapter: it parses newline-delimited JSON-RPC
 //!   frames from any reader, dispatches them to the session service, and
 //!   writes responses and notifications to any writer. Nothing else ever
-//!   touches that writer. Stdio is one instantiation
-//!   ([`inbound::acp::AcpWriter::stdio`]); an in-process client over a
+//!   touches that writer. Stdio is one instantiation; an in-process client over a
 //!   `tokio::io::duplex` pipe is another.
-//! - [`outbound`] holds the remaining driven adapters — today, resolving a
+//! - [`outbound`] holds fenced journal storage and resolves a
 //!   checkout's origin remote so a session lands under the right repository
 //!   in the Cursor dashboard.
 //!

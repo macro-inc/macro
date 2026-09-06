@@ -22,19 +22,8 @@ use crate::domain::translate::TranslateMachine;
 use agent_client_protocol::schema::v1::SessionUpdate;
 use sse_core::SseEvent;
 
-/// One decoded record: the SSE event name and its payload.
-///
-/// `sse_core`'s `MessageEvent` also carries `last_event_id`, which nothing
-/// consumes yet — it is what a reconnect would resume from. Reduced to the
-/// two fields the translation reads so that comparing two decodings compares
-/// what matters.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Record {
-    /// The `event:` name, defaulted to `message` by the spec.
-    pub event: String,
-    /// All `data:` lines, joined with newlines.
-    pub data: String,
-}
+/// A complete native record, including the provider ID when present.
+pub use crate::domain::journal::NativeRecord as Record;
 
 /// Decode a recording, feeding the decoder `chunk_size` bytes at a time.
 ///
@@ -61,6 +50,8 @@ pub fn chunked(sse: &str, chunk_size: usize) -> Vec<Record> {
                 SseEvent::Message(message) => records.push(Record {
                     event: message.event.into_owned(),
                     data: message.data,
+                    id: message.last_event_id.map(|id| id.to_string()),
+                    scripted_event: None,
                 }),
                 // Cursor has never sent one; nothing reconnects on it yet.
                 SseEvent::Retry(_) => {}
@@ -100,4 +91,21 @@ pub fn updates(sse: &str) -> Vec<SessionUpdate> {
         .into_iter()
         .flat_map(|event| machine.push(event))
         .collect()
+}
+
+/// Complete replay, including native user messages and terminal tool updates.
+/// Production capture and ACP load use this same machine.
+pub fn complete_updates(
+    sse: &str,
+    run: &crate::domain::model::CursorRunId,
+) -> Result<Vec<SessionUpdate>, rootcause::Report> {
+    let mut machine = crate::domain::journal::ReplayMachine::default();
+    let mut updates = Vec::new();
+    for record in records(sse) {
+        updates.extend(machine.push(
+            Some(run),
+            &crate::domain::journal::JournalInput::Sse(record),
+        )?);
+    }
+    Ok(updates)
 }

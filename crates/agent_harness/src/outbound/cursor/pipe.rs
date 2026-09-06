@@ -28,7 +28,13 @@ mod test;
 pub struct PipeTransport {
     outbound: mpsc::UnboundedSender<Outbound>,
     inbound: mpsc::UnboundedReceiver<ToServerMessage>,
+    owner_binding: Option<OwnerBinding>,
 }
+
+/// Host-supplied activation of this connection's actual session claim.
+pub type OwnerBinding = std::sync::Arc<
+    dyn Fn(macro_uuid::Uuid, macro_uuid::Uuid, i64) -> Result<(), TransportError> + Send + Sync,
+>;
 
 /// The pipe's sending half.
 pub struct PipeSender {
@@ -41,6 +47,12 @@ struct Outbound {
 }
 
 impl PipeTransport {
+    /// Activate the journal when the generic attachment supplies its claim.
+    pub fn with_owner_binding(mut self, binding: OwnerBinding) -> Self {
+        self.owner_binding = Some(binding);
+        self
+    }
+
     /// Wire our end of a byte pipe up as a runtime protocol transport.
     ///
     /// The pump runs on its own task until either side closes. It owns both
@@ -88,6 +100,7 @@ impl PipeTransport {
         Self {
             outbound: outbound_tx,
             inbound: inbound_rx,
+            owner_binding: None,
         }
     }
 }
@@ -95,6 +108,18 @@ impl PipeTransport {
 impl Transport<ToRuntimeMessage, ToServerMessage> for PipeTransport {
     type Sender = PipeSender;
     type Receiver = mpsc::UnboundedReceiver<ToServerMessage>;
+
+    fn bind_session_owner(
+        &mut self,
+        session_id: macro_uuid::Uuid,
+        replica: macro_uuid::Uuid,
+        fence: i64,
+    ) -> Result<(), TransportError> {
+        if let Some(binding) = &self.owner_binding {
+            binding(session_id, replica, fence)?;
+        }
+        Ok(())
+    }
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         (

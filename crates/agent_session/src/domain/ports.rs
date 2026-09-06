@@ -342,7 +342,7 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
     /// session's current fence.
     ///
     /// This is the write half of the fencing contract: the check and the
-    /// append are one atomic statement, so a replica that stalled past its
+    /// append are one atomic operation, so a replica that stalled past its
     /// heartbeat and was superseded cannot interleave frames no matter when
     /// it wakes - its append matches nothing and fails with
     /// [`FencedOut`](super::error::AgentSessionError::FencedOut), which the
@@ -353,7 +353,20 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         claim: &SessionClaim,
     ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
 
-    /// List all log entries for a session, in chronological order.
+    /// Append a successful load response and select its initialization atomically,
+    /// under the current ownership fence. The boundary must belong to this session.
+    fn create_fenced_with_boundary(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
+        boundary: Option<HistoryBoundary>,
+    ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
+
+    /// List effective ACP history in deterministic `(created_at, id)` order.
+    /// Starts at the latest successfully loaded initialization, or the beginning.
+    /// Raw failed/partial replay frames remain; consumers must stage load attempts.
+    /// The first returned row is the inclusive transport reconciliation cursor;
+    /// buffered rows ordered before it are obsolete. An empty result has none.
     ///
     /// Entries come back stamped with when the log recorded them: the frame
     /// itself carries no time, and a reader ordering or merging a session's
@@ -367,7 +380,17 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
 /// Sequential live log writer owned by one session actor.
 pub trait AgentSessionLogWriter: Send + 'static {
     /// Persist and fold one frame into this connection's live projection.
-    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
+    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Uuid>> + Send {
+        self.append_with_boundary(log, None)
+    }
+
+    /// Persist a frame and optional successful-load boundary in one transaction.
+    /// Returns its durable row identity before the actor continues.
+    fn append_with_boundary(
+        &mut self,
+        log: AgentSessionLog,
+        boundary: Option<HistoryBoundary>,
+    ) -> impl Future<Output = Result<Uuid>> + Send;
 }
 
 /// A session's queue changed; this is the whole queue as it stands now.
