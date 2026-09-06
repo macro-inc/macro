@@ -260,7 +260,7 @@ export default function AgentReplay() {
               <div class="flex-1 min-h-0 flex flex-col">
                 <SessionChrome />
                 <Transcript />
-                <div class="shrink-0 w-full max-w-3xl mx-auto px-4 pb-4">
+                <div class="shrink-0 w-full md:w-1/2 mx-auto px-4 pb-4">
                   <AgentComposer />
                 </div>
               </div>
