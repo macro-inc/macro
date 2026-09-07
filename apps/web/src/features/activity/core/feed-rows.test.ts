@@ -12,6 +12,13 @@ const edited: FeedEntry = {
   kind: 'single',
   event: decodeActivityEvent(editedEvent),
 };
+const withId = (entry: FeedEntry, id: string): FeedEntry =>
+  entry.kind === 'single'
+    ? { kind: 'single', event: { ...entry.event, id } }
+    : entry;
+
+const rails = (rows: ReturnType<typeof flattenFeed>) =>
+  rows.flatMap((row) => (row.kind === 'entry' ? [row.rail] : []));
 
 describe('flattenFeed', () => {
   it('interleaves day headers and events in order and ends with a tail when more pages exist', () => {
@@ -30,7 +37,11 @@ describe('flattenFeed', () => {
       'tail',
     ]);
     expect(rows[0]).toEqual({ kind: 'day', key: 'today', label: 'Today' });
-    expect(rows[1]).toEqual({ kind: 'entry', entry: created });
+    expect(rows[1]).toEqual({
+      kind: 'entry',
+      entry: created,
+      rail: { above: false, below: false },
+    });
   });
 
   it('omits the tail on the last page', () => {
@@ -39,6 +50,38 @@ describe('flattenFeed', () => {
       { hasMore: false }
     );
     expect(rows.map((row) => row.kind)).toEqual(['day', 'entry']);
+  });
+
+  it('draws no rail around a single-entry day', () => {
+    const rows = flattenFeed(
+      [{ key: 'today', label: 'Today', entries: [created] }],
+      { hasMore: false }
+    );
+    expect(rails(rows)).toEqual([{ above: false, below: false }]);
+  });
+
+  it('joins the entries of a day and stops the rail at the day header', () => {
+    const rows = flattenFeed(
+      [
+        {
+          key: 'today',
+          label: 'Today',
+          entries: [
+            withId(created, 'e3'),
+            withId(edited, 'e2'),
+            withId(created, 'e1'),
+          ],
+        },
+        { key: 'yesterday', label: 'Yesterday', entries: [edited] },
+      ],
+      { hasMore: false }
+    );
+    expect(rails(rows)).toEqual([
+      { above: false, below: true },
+      { above: true, below: true },
+      { above: true, below: false },
+      { above: false, below: false },
+    ]);
   });
 });
 
@@ -66,6 +109,40 @@ describe('reuseRows', () => {
       'day',
       'entry',
     ]);
+  });
+
+  it('replaces the last entry of a day when the next page extends its rail below', () => {
+    const previous = flattenFeed(
+      [
+        {
+          key: 'today',
+          label: 'Today',
+          entries: [withId(created, 'e2'), withId(edited, 'e1')],
+        },
+      ],
+      { hasMore: true }
+    );
+    const next = flattenFeed(
+      [
+        {
+          key: 'today',
+          label: 'Today',
+          entries: [
+            withId(created, 'e2'),
+            withId(edited, 'e1'),
+            withId(created, 'e0'),
+          ],
+        },
+      ],
+      { hasMore: false }
+    );
+    const reused = reuseRows(previous, next);
+    expect(reused[1]).toBe(previous[1]);
+    expect(reused[2]).toBe(next[2]);
+    expect(reused[2]).toEqual(
+      expect.objectContaining({ rail: { above: true, below: true } })
+    );
+    expect(reused[3]).toBe(next[3]);
   });
 });
 
