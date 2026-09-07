@@ -5,20 +5,31 @@
 //! `AWS_LC_SYS_CMAKE_BUILDER=1` (aws-lc-sys's cc-builder rejects the zig C
 //! compiler), `SQLX_OFFLINE`, and writable zig cache dirs.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result, bail};
 
 use super::super::arch::Target;
-use super::super::inventory::RUST_SERVICES;
+use super::super::inventory::{RUST_SERVICES, RustService};
 use super::super::{stage::Stage, workspace_root};
+
+#[cfg(test)]
+mod test;
 
 /// Build every non-opt-in service binary (debug profile) for `target`.
 ///
-/// Most bins build together in one invocation; bins that need
-/// `--no-default-features` (e.g. `authentication_service`, to drop `rate_limit`)
-/// build in their own invocation since `--no-default-features` is package-wide.
+/// One unified invocation builds as many bins as possible, with each service's
+/// extra features passed package-qualified (`<package>/<feature>`) so they
+/// compose instead of forcing a separate build. Services that must drop a
+/// *default* feature still need their own package-scoped invocation, and that
+/// is expensive in a way that is invisible at the call site: a package-scoped
+/// build resolves features over a different package selection, so it
+/// invalidates shared dependency artifacts the unified build produced, and the
+/// *next* run pays to rebuild them. Measured on a 12-core Linux host: with the
+/// extra invocations, a `run_local` with zero source changes rebuilt 230 units
+/// in 2m06s; unified, the same no-op build is 16s. Keep
+/// [`RustService::no_default_features`] as close to empty as the features allow.
 // xtask is host tooling; reading CARGO_BUILD_JOBS from the process env is correct.
 #[allow(clippy::disallowed_methods)]
 pub fn run(stage: &Stage, target: Target) -> Result<()> {
@@ -36,43 +47,97 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
                 .to_string()
         });
 
-    // Group 1: default-feature bins, all in one invocation.
-    let default_bins: Vec<&str> = RUST_SERVICES
-        .iter()
-        .filter(|s| !s.is_opt_in() && !s.no_default_features)
-        .map(|s| s.cargo_bin)
-        .collect();
     let mut cmd = base_command(&ws, &zig_cache, &jobs, target);
-    for bin in &default_bins {
-        cmd.arg("--bin").arg(bin);
-    }
+    cmd.args(unified_args());
     stage.run(
         &format!("Building service binaries ({})", target.triple),
         &mut cmd,
     )?;
 
-    // Group 2: each --no-default-features bin in its own package-scoped invocation.
-    for svc in RUST_SERVICES
-        .iter()
-        .filter(|s| !s.is_opt_in() && s.no_default_features)
-    {
+    // Each --no-default-features bin in its own package-scoped invocation, and
+    // in its own target dir: that is what keeps its different feature
+    // resolution from invalidating the unified build's shared artifacts (and
+    // vice versa). Each dir then only ever sees one resolution, so both stay
+    // incrementally fresh. Costs one cold build per dir, once.
+    for svc in isolated_services() {
+        let target_dir = isolated_target_dir(&ws, svc);
         let mut cmd = base_command(&ws, &zig_cache, &jobs, target);
-        cmd.arg("-p")
-            .arg(svc.package)
-            .arg("--no-default-features")
-            .arg("--bin")
-            .arg(svc.cargo_bin);
-        let features = svc.build_features();
-        if !features.is_empty() {
-            cmd.arg("--features").arg(features.join(","));
-        }
+        cmd.args(isolated_args(svc, &target_dir));
         stage.run(
             &format!("Building {} (no default features)", svc.cargo_bin),
             &mut cmd,
         )?;
+        // The stack mounts one directory at `/app/out`, so land the binary
+        // beside the unified ones.
+        let built = target_dir
+            .join(target.triple)
+            .join("debug")
+            .join(svc.cargo_bin);
+        let dest = ws.join(target.debug_dir()).join(svc.cargo_bin);
+        std::fs::copy(&built, &dest)
+            .with_context(|| format!("copying {} to {}", built.display(), dest.display()))?;
     }
 
     Ok(())
+}
+
+/// Where a `--no-default-features` service builds. Under `target/` so it is
+/// covered by the same ignore rules and cleaned by `cargo clean`'s neighbors.
+fn isolated_target_dir(ws: &Path, svc: &RustService) -> PathBuf {
+    ws.join("target/local-isolated").join(svc.cargo_bin)
+}
+
+/// The services built together in the unified invocation.
+fn unified_services() -> impl Iterator<Item = &'static RustService> {
+    RUST_SERVICES
+        .iter()
+        .filter(|s| !s.is_opt_in() && !s.no_default_features)
+}
+
+/// The services that need their own package-scoped, own-target-dir build.
+fn isolated_services() -> impl Iterator<Item = &'static RustService> {
+    RUST_SERVICES
+        .iter()
+        .filter(|s| !s.is_opt_in() && s.no_default_features)
+}
+
+/// `--bin` per service plus one `--features` carrying every service's local
+/// features, package-qualified so a feature only reaches the package that
+/// declares it.
+fn unified_args() -> Vec<String> {
+    let mut args: Vec<String> = unified_services()
+        .flat_map(|svc| ["--bin".to_owned(), svc.cargo_bin.to_owned()])
+        .collect();
+    let features: Vec<String> = unified_services()
+        .flat_map(|svc| {
+            svc.local_features()
+                .iter()
+                .map(|f| format!("{}/{f}", svc.package))
+        })
+        .collect();
+    if !features.is_empty() {
+        args.push("--features".to_owned());
+        args.push(features.join(","));
+    }
+    args
+}
+
+fn isolated_args(svc: &RustService, target_dir: &Path) -> Vec<String> {
+    let mut args = vec![
+        "--target-dir".to_owned(),
+        target_dir.display().to_string(),
+        "-p".to_owned(),
+        svc.package.to_owned(),
+        "--no-default-features".to_owned(),
+        "--bin".to_owned(),
+        svc.cargo_bin.to_owned(),
+    ];
+    let features = svc.local_features();
+    if !features.is_empty() {
+        args.push("--features".to_owned());
+        args.push(features.join(","));
+    }
+    args
 }
 
 /// A `cargo zigbuild` command with the shared env (mirrors flake.nix
@@ -98,35 +163,13 @@ fn base_command(ws: &Path, zig_cache: &Path, jobs: &str, target: Target) -> Comm
         .env("ZIG_LOCAL_CACHE_DIR", zig_cache)
         .env("RUSTC_WRAPPER", "sccache")
         .env("XDG_CACHE_HOME", zig_cache);
-    if let Some(flag) = curl_include_flag() {
-        // First-found wins in cc's env chain (CFLAGS_<target> before CFLAGS),
-        // so set the target-specific var too in case something else exports a
-        // plain CFLAGS that would otherwise shadow ours — and vice versa.
-        let var = format!("CFLAGS_{}", target.triple.replace('-', "_"));
-        cmd.env(var, &flag).env("CFLAGS", &flag);
-    }
+    // No CFLAGS here. The dev shell already exports target-scoped
+    // `CFLAGS_<triple>`/`CXXFLAGS_<triple>` pointing at curl.dev for exactly
+    // this cross build (see `nix/cloud-storage.nix`). Setting our own spelling
+    // of the same include path only differed textually — and cargo fingerprints
+    // these env vars, so the two spellings alternating rebuilt aws-lc-sys and
+    // everything downstream.
     cmd
-}
-
-/// librdkafka 2.12's bundled cmake build needs curl *headers* even with
-/// `WITH_CURL=0` (its config header always defines `WITH_OAUTHBEARER_OIDC` via
-/// `#cmakedefine01`, and rdkafka_conf.c guards the curl include with `#ifdef`
-/// instead of `#if`). Host builds get them from the Nix cc-wrapper, which
-/// reads `NIX_CFLAGS_COMPILE` — but `zig cc` is a raw clang that ignores it,
-/// so the dev shell's `curl.dev` never reaches the cross cmake build. Mine
-/// the wrapper flags for an include dir that actually carries `curl/curl.h`
-/// and hand it to cc/cmake explicitly; `-idirafter` keeps it at the lowest
-/// search priority so it cannot shadow zig's own libc headers.
-// Reading the ambient Nix shell env is the point here; there is no config
-// layer this could come from.
-#[allow(clippy::disallowed_methods)]
-fn curl_include_flag() -> Option<String> {
-    let flags = std::env::var("NIX_CFLAGS_COMPILE").ok()?;
-    flags
-        .split_whitespace()
-        .filter(|tok| tok.starts_with('/'))
-        .find(|dir| Path::new(dir).join("curl/curl.h").is_file())
-        .map(|dir| format!("-idirafter {dir}"))
 }
 
 /// Fail with an actionable hint if the rust-std for `target` is not installed.

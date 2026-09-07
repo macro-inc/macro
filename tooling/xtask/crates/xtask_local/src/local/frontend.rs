@@ -154,7 +154,7 @@ fn dev_env(
 pub fn wait_backend_ready(stage: &Stage, instance: &Instance) -> Result<()> {
     let url = format!("{}/auth/health", proxy::url(instance));
     let script = format!(
-        "for i in $(seq 1 60); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 2; done; echo 'backend not ready'; exit 1"
+        "for i in $(seq 1 600); do curl -fsS --max-time 3 {url} >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo 'backend not ready'; exit 1"
     );
     let mut cmd = Command::new("bash");
     cmd.arg("-lc").arg(script);
