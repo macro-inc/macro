@@ -202,9 +202,7 @@ export function Transcript() {
               }}
             >
               {(message) => (
-                // Half the pane on desktop so expanding Context grows
-                // down, not out. A phone is full-bleed.
-                <div class="w-full md:w-1/2 mx-auto px-4 pb-4 min-w-0">
+                <div class="macro-message-width mx-auto px-4 pb-4 min-w-0">
                   <Message message={message} />
                 </div>
               )}
