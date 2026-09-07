@@ -1,8 +1,10 @@
 import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
+  createMemo,
   createSignal,
   For,
   type JSX,
@@ -24,6 +26,7 @@ import { entryHead, type FeedEntry } from '../core/collapse-runs';
 import type { ActivityTopEntity } from '../core/event';
 import {
   type FeedRow,
+  pinnedDayLabel,
   type RailEnds,
   shouldFetchMore,
 } from '../core/feed-rows';
@@ -59,6 +62,15 @@ function FeedStatus(props: { children: JSX.Element }) {
  * The user's own activity, newest first, as one virtualized list with the
  * overview card as its first row. Scrolling near the end fetches the next
  * page. Reads `ActivityContext`; the host decides what a row click opens.
+ *
+ * Rows are absolutely positioned by the virtualizer, so a day header cannot
+ * stick on its own. Instead a zero-height sticky slot at the head of the
+ * scroller repeats the day header that governs the first visible row.
+ *
+ * On full-frame touch devices the split header floats over the content, so
+ * an in-scroll spacer (measured, then handed to virtua as `startMargin`, the
+ * `SoupList` pattern) rests the list below it and the pinned header sticks
+ * under it; a matching spacer clears the bottom toolbar.
  */
 export function MyActivityView(props: {
   onOpen: (target: OpenEntityTarget) => void;
@@ -66,7 +78,14 @@ export function MyActivityView(props: {
   const context = useActivityContext();
   const state = createMyActivityState(context);
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
+  const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
+  const topSpacerSize = createElementSize(topSpacer);
+  const [startIndex, setStartIndex] = createSignal(0);
   let handle: VirtualizerHandle | undefined;
+
+  const pinnedDay = createMemo(() =>
+    pinnedDayLabel(state.rows(), startIndex())
+  );
 
   const fetchMoreIfNearEnd = (offset: number) => {
     if (!handle) return;
@@ -79,6 +98,11 @@ export function MyActivityView(props: {
     ) {
       state.loadMore();
     }
+  };
+
+  const onScroll = (offset: number) => {
+    if (handle) setStartIndex(handle.findItemIndex(offset));
+    fetchMoreIfNearEnd(offset);
   };
 
   // A page that does not fill the viewport never scrolls, so re-check once
@@ -99,6 +123,20 @@ export function MyActivityView(props: {
       </SplitHeaderLeft>
       <StaticMarkdownContext>
         <div ref={setScroller} class="min-h-0 flex-1 overflow-y-auto py-1">
+          <div class="pointer-events-none sticky top-0 z-10 mx-auto h-0 w-full max-w-[1000px] touch:top-(--mobile-content-inset-top)">
+            <Show when={pinnedDay()}>
+              {(label) => (
+                <div class="pt-1" data-activity-pinned-day>
+                  <SoupSectionHeader>{label()}</SoupSectionHeader>
+                </div>
+              )}
+            </Show>
+          </div>
+          <div
+            ref={setTopSpacer}
+            aria-hidden
+            class="h-0 touch:h-(--mobile-content-inset-top)"
+          />
           <div class="mx-auto w-full max-w-[1000px]">
             <Virtualizer
               data={state.rows()}
@@ -106,14 +144,19 @@ export function MyActivityView(props: {
               ref={(next) => {
                 handle = next;
               }}
+              startMargin={topSpacerSize.height ?? 0}
               bufferSize={FEED_BUFFER_PX}
-              onScroll={fetchMoreIfNearEnd}
+              onScroll={onScroll}
             >
               {(row) => (
                 <FeedRowView row={row} state={state} onOpen={props.onOpen} />
               )}
             </Virtualizer>
           </div>
+          <div
+            aria-hidden
+            class="h-0 touch:h-(--mobile-content-inset-bottom)"
+          />
         </div>
       </StaticMarkdownContext>
     </div>

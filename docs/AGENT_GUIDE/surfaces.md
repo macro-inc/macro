@@ -132,6 +132,15 @@ are in the DOM, and scrolling near the bottom fetches the next page automaticall
 `Loading…` tail appears while it lands). If a page fails, the tail reads `Couldn't load more.`
 with a `Retry` button and automatic paging stops until it is pressed. There is no `Show more`
 button.
+Once the heatmap card scrolls away, the day header for the topmost visible row stays pinned at
+the top of the list (`[data-activity-pinned-day]`, a non-interactive copy), so a snapshot taken
+mid-scroll shows that label twice at most. The heatmap always shows the whole year, including
+the partial first and current weeks: its cells shrink from 12px to 8px as the pane narrows, and
+below that (a phone) the week area scrolls sideways with the month letters, opened on the newest
+week and with no visible scrollbar. Under ~672px the four stats read as a two-column grid; under
+~448px (a phone) the legend drops its `Fewer`/`More` words, each stat stacks its label over its
+value, and chips shorten. Rows stay on one line at every width. On touch devices the list rests
+below the floating page title and above the bottom toolbar.
 
 ## Home — `/app/component/home`
 
