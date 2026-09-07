@@ -47,9 +47,9 @@ The reply renders a Magic Chip: a rounded card of constant height that is presen
 from the moment the session boots. Its answer area shows a pulsing star while the
 agent works, then the opening of the answer clipped to four lines and faded out; its
 bottom row reads the current activity (`Booting agent`, `Writing response`, ...) and
-`Open session` once the turn ends. A `Show more` cue sits over the fade when the
-answer is longer than the clip: click the answer text to expand it in place (`Show
-less` collapses it again); click the bottom row to open the agent session. Before an
+`Open session` once the turn ends. A `Show more` cue sits over the fade: click the
+answer text to expand it in place (`Show less` collapses it again); click the
+bottom row to open the agent session. Before an
 answer exists, clicking the answer area also opens the session.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention.

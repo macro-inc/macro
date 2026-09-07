@@ -7,13 +7,7 @@ import { PulsingStar } from '@entity/components/PulsingStar';
 import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import { Layer } from '@ui';
-import {
-  type Component,
-  createSignal,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
+import { type Component, createSignal, Show } from 'solid-js';
 import type { MagicChipActivity, MagicChipPresentation } from './presentation';
 
 function answerMarkdown(presentation: MagicChipPresentation) {
@@ -76,55 +70,41 @@ const AnswerPending: Component<{ busy: boolean }> = (props) => (
 );
 
 /**
- * The answer: clipped to four lines with a fade while collapsed, whole once
- * expanded. The fade only shows when the text is actually taller than the
- * clip, so short answers read whole either way.
+ * The answer: clipped to the fixed answer area with a fade while collapsed,
+ * whole once expanded.
  */
 const AnswerBody: Component<{ markdown: string; expanded: boolean }> = (
   props
-) => {
-  const [overflowing, setOverflowing] = createSignal(false);
-  let clip: HTMLDivElement | undefined;
-
-  onMount(() => {
-    const el = clip;
-    if (!el) return;
-    const measure = () => setOverflowing(el.scrollHeight > el.clientHeight + 1);
-    measure();
-    if (typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    if (el.firstElementChild) observer.observe(el.firstElementChild);
-    onCleanup(() => observer.disconnect());
-  });
-
-  return (
+) => (
+  <div
+    class="relative"
+    classList={{ 'h-full overflow-hidden': !props.expanded }}
+    data-magic-chip-clip
+  >
     <div
-      ref={(el) => {
-        clip = el;
-      }}
-      class="relative"
-      classList={{ 'h-full overflow-hidden': !props.expanded }}
-      data-magic-chip-clip
+      class="pointer-events-none min-w-0 max-w-full wrap-break-word"
+      data-message-reply-preview
     >
-      <div
-        class="pointer-events-none min-w-0 max-w-full wrap-break-word"
-        data-message-reply-preview
-      >
-        <StaticMarkdownContext theme={channelTheme}>
-          <StaticMarkdown markdown={props.markdown} target="external" />
-        </StaticMarkdownContext>
-      </div>
-      <Show when={overflowing() && !props.expanded}>
-        <div class="pointer-events-none absolute inset-x-0 top-1/2 bottom-0 bg-linear-to-b from-transparent via-surface/80 to-surface group-hover/answer:via-hover/80 group-hover/answer:to-hover" />
-        <ExpandHint expanded={false} />
-      </Show>
-      <Show when={props.expanded}>
-        <ExpandHint expanded />
-      </Show>
+      <StaticMarkdownContext theme={channelTheme}>
+        <StaticMarkdown markdown={props.markdown} target="external" />
+      </StaticMarkdownContext>
     </div>
-  );
-};
+    <Show
+      when={props.expanded}
+      fallback={
+        <>
+          <div
+            class="pointer-events-none absolute inset-x-0 top-1/2 bottom-0 bg-linear-to-b from-transparent via-surface/80 to-surface group-hover/answer:via-hover/80 group-hover/answer:to-hover"
+            data-magic-chip-fade
+          />
+          <ExpandHint expanded={false} />
+        </>
+      }
+    >
+      <ExpandHint expanded />
+    </Show>
+  </div>
+);
 
 /**
  * The disclosure cue: `Show more` over the fade, `Show less` under the text.

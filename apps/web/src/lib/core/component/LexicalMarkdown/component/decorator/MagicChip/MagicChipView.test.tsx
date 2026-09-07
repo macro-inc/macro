@@ -107,14 +107,17 @@ describe('MagicChipView', () => {
 
     const area = answerArea(container)!;
     const clip = () => container.querySelector('[data-magic-chip-clip]');
+    const fade = () => container.querySelector('[data-magic-chip-fade]');
     expect(area.getAttribute('aria-expanded')).toBe('false');
     expect(area.className).toContain('h-22');
-    expect(area.textContent).not.toContain('Show less');
+    expect(fade()).toBeTruthy();
+    expect(area.textContent).toContain('Show more');
 
     fireEvent.click(area);
     expect(area.getAttribute('aria-expanded')).toBe('true');
     expect(area.className).not.toContain('h-22');
     expect(clip()?.className).not.toContain('overflow-hidden');
+    expect(fade()).toBeNull();
     expect(area.textContent).toContain('Show less');
     expect(onOpen).not.toHaveBeenCalled();
 
@@ -122,7 +125,8 @@ describe('MagicChipView', () => {
     expect(area.getAttribute('aria-expanded')).toBe('false');
     expect(area.className).toContain('h-22');
     expect(clip()?.className).toContain('overflow-hidden');
-    expect(area.textContent).not.toContain('Show less');
+    expect(fade()).toBeTruthy();
+    expect(area.textContent).toContain('Show more');
     expect(onOpen).not.toHaveBeenCalled();
   });
 
