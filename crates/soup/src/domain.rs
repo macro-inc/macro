@@ -1,3 +1,5 @@
+/// Task-list query policy used by the ListTasks AI tool.
+pub mod list_tasks;
 /// Domain model types for soup requests, responses, grouping, and errors.
 pub mod models;
 #[cfg(feature = "ports")]

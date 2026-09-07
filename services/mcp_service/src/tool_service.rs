@@ -111,7 +111,8 @@ where
              Use ReadContent, ReadMetadata, and ReadThread to read them. \
              Use CreateDocument to create new documents. \
              Use EditDocument to edit existing documents. \
-             Use ListEntities to browse recent items.\n\n{}",
+             Use ListEntities to browse recent items. \
+             Use ListTasks to query Macro tasks by status, priority, assignee, or due date.\n\n{}",
             prompt::mcp_instructions(base_url),
         ));
         info

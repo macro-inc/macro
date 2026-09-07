@@ -1,10 +1,13 @@
 use super::list_entities::{build_summary, retain_excluding_self_chat};
+use super::list_tasks::{ListTasks, TaskListItem, TaskScope, build_summary as build_task_summary};
 #[allow(unused_imports)]
 use super::*;
+use crate::domain::list_tasks::{OPEN_STATUSES, TaskAssigneeScope, TaskSort};
 use ai_toolset::schema::generate_validated_input_schema;
 use chrono::Utc;
 use models_soup::{foreign_entity::SoupForeignEntity, item::SoupItem};
 use non_empty::IsEmpty;
+use system_properties::StatusOption;
 use uuid::Uuid;
 
 #[test]
@@ -26,21 +29,17 @@ fn test_list_entities_schema_validation() {
 }
 
 #[test]
-fn test_list_entities_schema_guides_macro_task_queries() {
+fn test_list_entities_schema_points_task_queries_at_list_tasks() {
     let validated = generate_validated_input_schema::<ListEntities>().unwrap();
     let schema_json = serde_json::to_string(&validated.schema).unwrap();
 
     assert!(
-        schema_json.contains("prefer this tool over external task trackers such as Linear"),
-        "schema should prefer Macro tasks over Linear for unqualified task requests"
+        schema_json.contains("ListTasks"),
+        "schema should send task queries to ListTasks"
     );
     assert!(
-        schema_json.contains("00000001-0000-0000-0000-000000000001"),
-        "schema should document the Assignees property id"
-    );
-    assert!(
-        schema_json.contains("00000001-0000-0000-0002-000000000004"),
-        "schema should document the Completed status option id"
+        !schema_json.contains("00000001-0000-0000-0002-000000000004"),
+        "schema should not teach agents to hand-build task status propf trees"
     );
 }
 
@@ -551,4 +550,115 @@ fn print_input_schema() {
 fn print_output_schema() {
     let schema = schemars::schema_for!(ListEntitiesResponse);
     println!("{}", serde_json::to_string_pretty(&schema).unwrap());
+}
+
+#[test]
+fn test_list_tasks_schema_validation() {
+    let result = generate_validated_input_schema::<ListTasks>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(validated.name, "ListTasks");
+    assert!(
+        validated.description.contains("tasks view"),
+        "description should mention the tasks view"
+    );
+    let schema_json = serde_json::to_string(&validated.schema).unwrap();
+    assert!(schema_json.contains("my_tasks"));
+    assert!(schema_json.contains("urgent"));
+    assert!(schema_json.contains("due_date"));
+}
+
+#[test]
+fn my_tasks_defaults_to_open_statuses_owned_or_assigned_sorted_by_priority() {
+    let list = ListTasks::default();
+    let query = list.resolved_query("macro|me@example.com");
+    assert_eq!(query.statuses, OPEN_STATUSES);
+    assert_eq!(
+        query.assignee,
+        TaskAssigneeScope::Mine("macro|me@example.com".into())
+    );
+    assert_eq!(query.sort, TaskSort::Priority);
+}
+
+#[test]
+fn explicit_assignee_overrides_my_tasks_mine_scope() {
+    let list = ListTasks {
+        assignee: Some("me".into()),
+        ..ListTasks::default()
+    };
+    let query = list.resolved_query("macro|me@example.com");
+    assert_eq!(
+        query.assignee,
+        TaskAssigneeScope::Assignee("macro|me@example.com".into())
+    );
+}
+
+#[test]
+fn explicit_completed_status_overrides_open_default() {
+    let list = ListTasks {
+        status: Some(vec![StatusOption::Completed]),
+        ..ListTasks::default()
+    };
+    let query = list.resolved_query("macro|me@example.com");
+    assert_eq!(query.statuses, vec![StatusOption::Completed]);
+}
+
+#[test]
+fn scope_all_drops_assignee_and_status_defaults() {
+    let list = ListTasks {
+        scope: TaskScope::All,
+        ..ListTasks::default()
+    };
+    let query = list.resolved_query("macro|me@example.com");
+    assert!(query.statuses.is_empty());
+    assert_eq!(query.assignee, TaskAssigneeScope::Any);
+    assert_eq!(query.sort, TaskSort::RecentlyUpdated);
+}
+
+#[test]
+fn list_tasks_summary_is_honest_when_soup_has_another_page() {
+    let item = TaskListItem {
+        id: Uuid::from_u128(1),
+        name: "Task".into(),
+        status: None,
+        priority: None,
+        assignees: vec![],
+        due_date: None,
+        project_id: None,
+        tags: vec![],
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    };
+    let items = std::slice::from_ref(&item);
+    let found = build_task_summary(items, 1, false, TaskSort::RecentlyUpdated);
+    assert!(found.starts_with("Found 1 task,"), "{found}");
+
+    let showing = build_task_summary(items, 1, true, TaskSort::RecentlyUpdated);
+    assert!(
+        showing.contains("Showing 1 matching tasks") && showing.contains("More tasks match"),
+        "{showing}"
+    );
+
+    let truncated = build_task_summary(items, 80, false, TaskSort::Priority);
+    assert!(
+        truncated.contains("Showing 1 of 80 matching tasks"),
+        "{truncated}"
+    );
+
+    let truncated_and_more = build_task_summary(items, 80, true, TaskSort::Priority);
+    assert!(
+        truncated_and_more.contains("Showing 1 of at least 80 matching tasks"),
+        "{truncated_and_more}"
+    );
+}
+
+#[test]
+fn explicit_sort_wins_over_scope_default() {
+    let list = ListTasks {
+        sort_by: Some(TaskSort::DueDate),
+        ..ListTasks::default()
+    };
+    let query = list.resolved_query("macro|me@example.com");
+    assert_eq!(query.sort, TaskSort::DueDate);
 }

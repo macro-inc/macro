@@ -233,6 +233,33 @@ pub struct EntityFilterAst {
 }
 
 impl EntityFilterAst {
+    /// An ast that matches no rows of any entity type.
+    ///
+    /// Each type is pinned to the nil id, which its repository treats as an
+    /// impossible filter. Reminders are opt-in, so their absent filter is
+    /// already the exclusion. Use with struct update syntax to allow-list the
+    /// types a query wants: `EntityFilterAst { document_filter, ..Self::match_nothing() }`.
+    pub fn match_nothing() -> Self {
+        let nil = uuid::Uuid::nil();
+        Self {
+            calendar_event_filter: Some(Arc::new(Expr::val(CalendarEventLiteral::Id(nil)))),
+            document_filter: Some(Arc::new(Expr::val(DocumentLiteral::Id(nil)))),
+            project_filter: Some(Arc::new(Expr::val(ProjectLiteral::ProjectId(nil)))),
+            chat_filter: Some(Arc::new(Expr::val(ChatLiteral::ChatId(nil)))),
+            email_filter: EmailFilterAst {
+                tree: Some(Arc::new(Expr::val(EmailLiteral::ThreadId(nil)))),
+                crm_scope: None,
+            },
+            channel_filter: Some(Arc::new(Expr::val(ChannelLiteral::ChannelId(nil)))),
+            channel_thread_filter: Some(Arc::new(Expr::val(ChannelThreadLiteral::ThreadId(nil)))),
+            call_filter: Some(Arc::new(Expr::val(CallLiteral::CallId(nil)))),
+            crm_company_filter: Some(Arc::new(Expr::val(CrmCompanyLiteral::Id(nil)))),
+            foreign_entity_filter: Some(Arc::new(Expr::val(ForeignEntityLiteral::Id(nil)))),
+            reminder_filter: None,
+            properties_filter: None,
+        }
+    }
+
     /// expand the input [EntityFilters] into an ast representation
     pub fn new_from_filters(entity_filter: EntityFilters) -> Result<Option<Self>, ExpandErr> {
         if entity_filter.is_empty() {

@@ -522,6 +522,33 @@ export type NotificationEntityType =
   | 'reminder'
   | 'skill';
 /**
+ * Which task list to query, matching the tasks view tabs.
+ */
+export type TaskScope = 'my_tasks' | 'all';
+/**
+ * Type-safe enum for Status property options.
+ */
+export type StatusOption =
+  | 'not_started'
+  | 'in_progress'
+  | 'in_review'
+  | 'completed'
+  | 'canceled';
+/**
+ * Task priority labels used by the tasks view, plus "no priority".
+ */
+export type ToolTaskPriority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
+/**
+ * Sort modes that match the tasks view, plus recency.
+ */
+export type TaskSort =
+  | 'recently_updated'
+  | 'recently_viewed'
+  | 'recently_created'
+  | 'priority'
+  | 'status'
+  | 'due_date';
+/**
  * Channel-access change to apply to a bot.
  */
 export type BotChannelAccessAction = 'grant' | 'revoke';
@@ -3235,16 +3262,16 @@ export interface CompanyListItem {
   revenue?: number | null;
 }
 /**
- * Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as "what happened today", "what's going on", "catch me up", or "what happened in standup today"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For Macro task requests such as "list my tasks", "tasks assigned to me", or "tasks I completed yesterday", prefer this tool over external task trackers such as Linear unless the user explicitly asks for Linear. Macro tasks are document items with df subtype {"l":{"dst":"task"}} and includeTypes ["document"]. Filter task Status and Assignees through propf using entity_type TASK: Status property 00000001-0000-0000-0000-000000000002, Completed option 00000001-0000-0000-0002-000000000004, Assignees property 00000001-0000-0000-0000-000000000001. The current user's assignee entity id is their Macro user id, usually macro|<their email address from context>. For "completed yesterday", combine status Completed, assigned-to-me, and a df updatedAt yesterday window with ua gte/lt ISO timestamps. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. "my items tagged bug-report"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use the search tool instead.
+ * Browse the user's Macro workspace to see recent items they have access to. Returns Macro documents, AI conversations, projects, emails, chat channels, call records, and foreign entities. Use this to get an overview of what the user has been working on or to find items by type. Start here for activity-summary questions such as "what happened today", "what's going on", "catch me up", or "what happened in standup today"; apply precise time, type, channel, or mailbox filters when the user gives that scope. For listing or filtering Macro tasks (status, priority, assignee, due date, my tasks), use ListTasks — do not reconstruct task queries with df/propf here. Returned documents, AI chats, projects, emails, and call records include the tags visible to the user as {label, scope} pairs. To filter by tag (e.g. "my items tagged bug-report"), pass the tag labels in the tags argument — ListTags shows which tags exist. For finding specific items by name or content, use NameSearch or ContentSearch instead.
  */
 export interface ListEntities {
   /**
-   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. Macro tasks are returned as document items, so use includeTypes=["document"] with df subtype task for task requests. This is folded into the AST and applied as part of cursor-level filtering.
+   * Filter returned items to specific item types. If not provided, returns all types. Example: ["document", "email"] returns only documents and emails. For task lists, use ListTasks instead of includeTypes=["document"] plus a task subtype filter.
    */
   includeTypes?: ItemType[] | null;
   sortBy?: SortBy;
   /**
-   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For Macro tasks, use {"l":{"dst":"task"}}; for skills, {"l":{"dst":"skill"}}. For "completed yesterday", AND the task subtype with updatedAt bounds, e.g. {"&":[{"l":{"dst":"task"}},{"&":[{"l":{"ua":{"gte":"<start>"}}},{"l":{"ua":{"lt":"<end>"}}}]}]} using ISO timestamps.
+   * Full soup AST document filter (df). Use the same shape as /items/soup/ast, e.g. {"l":{"id":"..."}}. For skills, {"l":{"dst":"skill"}}. For task queries, use ListTasks.
    */
   df?: {
     [k: string]: unknown;
@@ -3296,7 +3323,7 @@ export interface ListEntities {
     [k: string]: unknown;
   };
   /**
-   * Full soup AST property filter (propf). Use this for Macro task Status, Assignees, Priority, and other entity properties. For task Status Completed: {"l":{"pd":"00000001-0000-0000-0000-000000000002","et":"TASK","v":{"so":"00000001-0000-0000-0002-000000000004"}}}. For tasks assigned to the current user: {"l":{"pd":"00000001-0000-0000-0000-000000000001","et":"TASK","v":{"er":"macro|user@example.com"}}}. Combine both with &: {"&":[statusCompleted, assignedToMe]}. Prefer this over Linear tools for unqualified task requests.
+   * Full soup AST property filter (propf) for non-task entity properties. For task Status, Priority, Assignees, or Due Date, use ListTasks instead of building a propf tree here.
    */
   propf?: {
     [k: string]: unknown;
@@ -3679,6 +3706,137 @@ export interface ToolTag {
    * The tag's display color, when set.
    */
   color?: string | null;
+}
+/**
+ * List Macro tasks with the same filters and sorts as the tasks view. Prefer this over ListEntities for any task question ("my tasks", "urgent tasks", "tasks assigned to me", "overdue", "in review"). Do not use Linear or other external trackers unless the user names them.
+ *
+ * Defaults match the My tasks tab: owned by or assigned to the current user, open statuses (Not Started, In Progress, In Review), sorted by priority (Urgent first). Pass scope="all" to see every task the user can access. Each row includes id, name, status, priority, assignees, dueDate, projectId, and tags — use SetEntityProperty (entity_type=document) to change those fields, and GetEntityProperties for custom properties.
+ *
+ * Filters compose with AND. Multiple values on one filter are OR (status=["in_progress","in_review"] matches either). dueAfter/dueBefore filter the Due Date property; updatedAfter/updatedBefore filter last edit time (use those for "completed yesterday").
+ */
+export interface ListTasks {
+  scope?: TaskScope;
+  /**
+   * Filter by status. Values: not_started, in_progress, in_review, completed, canceled. Multiple values are OR'd. On my_tasks this defaults to the three open statuses; pass completed to see finished work.
+   */
+  status?: StatusOption[] | null;
+  /**
+   * Filter by priority. Values: urgent, high, medium, low, none. Multiple values are OR'd. "none" matches tasks with no priority set.
+   */
+  priority?: ToolTaskPriority[] | null;
+  /**
+   * Filter by assignee. Use "me" for the current user, a Macro user id (macro|user@example.com), or a bare email. Use ListTeamMembers to find ids. Overrides the my_tasks owner-or-assignee default when set.
+   */
+  assignee?: string | null;
+  /**
+   * Only tasks in this project (UUID from ListEntities or ReadProject).
+   */
+  projectId?: string | null;
+  /**
+   * Inclusive Due Date lower bound, RFC 3339 UTC (e.g. 2026-08-20T00:00:00Z). Tasks with no due date are excluded when this or dueBefore is set.
+   */
+  dueAfter?: string | null;
+  /**
+   * Inclusive Due Date upper bound, RFC 3339 UTC.
+   */
+  dueBefore?: string | null;
+  /**
+   * Inclusive last-updated lower bound, RFC 3339 UTC. Use with status=["completed"] for "tasks I completed yesterday".
+   */
+  updatedAfter?: string | null;
+  /**
+   * Exclusive last-updated upper bound, RFC 3339 UTC.
+   */
+  updatedBefore?: string | null;
+  /**
+   * Case-insensitive substring matched against the task title.
+   */
+  search?: string | null;
+  /**
+   * Filter to tasks carrying these tags — any of them by default, every one of them with tagsMatch="all". Call ListTags first when unsure what tags exist.
+   */
+  tags?: TagFilter[] | null;
+  tagsMatch?: TagMatch;
+  /**
+   * Sort order: priority (default on my_tasks), status, due_date, recently_updated (default on scope=all), recently_viewed, recently_created.
+   */
+  sortBy?: TaskSort | null;
+  /**
+   * Maximum tasks to return. Defaults to 50; max 200.
+   */
+  limit?: number | null;
+}
+/**
+ * Response from ListTasks.
+ */
+export interface ListTasksResponse {
+  /**
+   * Matching tasks, already sorted.
+   */
+  tasks: TaskListItem[];
+  /**
+   * Human-readable summary of the results.
+   */
+  summary: string;
+}
+/**
+ * One Macro task.
+ */
+export interface TaskListItem {
+  /**
+   * Task document id. Use with ReadContent, GetEntityProperties,
+   * SetEntityProperty (entity_type=document).
+   */
+  id: string;
+  /**
+   * Task title.
+   */
+  name: string;
+  /**
+   * Status, when set.
+   */
+  status?: TaskSelectValue | null;
+  /**
+   * Priority, when set.
+   */
+  priority?: TaskSelectValue | null;
+  /**
+   * Assignee Macro user ids.
+   */
+  assignees: string[];
+  /**
+   * Due date, when set.
+   */
+  dueDate?: string | null;
+  /**
+   * Project the task belongs to, when set.
+   */
+  projectId?: string | null;
+  /**
+   * Tags visible to the user.
+   */
+  tags?: AppliedTag[];
+  /**
+   * Created timestamp (UTC).
+   */
+  createdAt: string;
+  /**
+   * Updated timestamp (UTC).
+   */
+  updatedAt: string;
+}
+/**
+ * A select option returned with both its id and display label.
+ */
+export interface TaskSelectValue {
+  /**
+   * Option id, usable with SetEntityProperty.
+   */
+  optionId: string;
+  /**
+   * Human-readable label (e.g. "In Progress", "Urgent").
+   */
+  label: string;
 }
 /**
  * List the current members and pending invites for the authenticated user's team. Requires the caller to be a team member. The returned roles (owner/admin/member) are app permission levels only, not job titles — they say nothing about the org chart. Never infer that someone is a founder, an executive, or the company's owner from their workspace role.
