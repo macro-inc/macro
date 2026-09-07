@@ -49,6 +49,7 @@ it('keeps cached secondary-inbox reply semantics after a failed refresh and does
           getDraftForMessageReply: () => undefined,
         }
       );
+      expect(form.selectedLinkId()).toBe('secondary');
       expect(form.recipients().to.map((item) => item.data.email)).toEqual([
         'colleague@example.com',
       ]);

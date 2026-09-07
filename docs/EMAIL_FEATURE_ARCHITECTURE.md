@@ -248,38 +248,7 @@ inline draft persistence, standalone compose, and mobile reply presentation. A
 local account without a real mail-provider connection can verify local drafts
 and UI behavior; actual provider delivery requires its own integration environment.
 
-### Migration verification — September 5, 2026
-
-The pre-extraction email suite passed 94 tests in 9 files. The extracted features
-pass 122 tests in 24 files, including 28 added regression tests. The full frontend
-check (cache schema, TypeScript, and Biome), feature-scoped ast-grep scan, and all
-five QC reviews passed.
-
-The local stack was started with `just run_local --instance email-feature-eval
---port-base 24700 --no-doppler --with-chrome --no-build`. Chrome checks before and
-after extraction exercised hidden-message expansion, email rendering, newsletter
-containment, and reply draft persistence across navigation. Final checks also
-covered header details, quoted content, deep-link reveal, keyboard movement and
-reply, standalone compose, and a saved draft's touch drawer closing and reopening.
-The final interaction runs reported no page errors.
-
-The five existing rendering fixture tests differ from their committed screenshots
-on this machine. The original pre-extraction renderer reproduces those failures.
-A separate comparison using the original assets as temporary baselines passed all
-12 screenshots, across both themes and narrow/wide panes, under the harness's
-100-pixel tolerance. That harness shared containment/zoom helpers but bypassed
-the production parser and color adaptation; it did not establish equivalence of
-the full rendering pipeline. Committed screenshots were not regenerated then. The local
-seeded inbox has no real provider credentials, so these checks do not establish
-Gmail delivery or native iOS behavior.
-
-### Compatibility audit — September 6, 2026
-
-The earlier checks above did not establish full behavioral parity. The follow-up
-[feature inventory and verification record](EMAIL_REFACTOR_VERIFICATION.md)
-compares the actual application before both email refactors (`5a3d970fb`) with the
-current worktree. It records confirmed regressions, fixes, browser evidence, and
-paths that still require integration or device testing.
+### Renderer regression coverage
 
 The renderer's fixture viewer and Chromium suite call the same public preparation
 and mounting API as the app. Node tests cover preparation, resource policy, CSS
@@ -289,20 +258,11 @@ framework dependencies. The package Node tests also run through the app's defaul
 Vitest projects. Browser tests cover actual layout, delayed attachment, color
 round trips, collapse/expansion, URL handling, CSS cascade, and resource cleanup.
 
-The seven visual fixtures include personal calendar responses and announcements
-in both themes. Personal fixtures explicitly enable color adaptation even when
-they contain tables. Screenshots have a zero differing pixel tolerance within the
-controlled Chromium/font environment. The full-app comparison additionally uses
-the old and new production pipelines, mounted through their real Solid hosts;
-standalone fixture snapshots alone do not establish parity.
-
-Current checks pass 67 package Node tests, 31 Chromium tests, and 127 app email
-tests, plus the full frontend check and package type checking. See the verification
-record for the separate browser interaction matrix and its limits. Literal
-plaintext is an independent package API capability; the app retains its original
-Markdown fallback. Default URL and CSS policy preserves browser resolution and
-cascade semantics. The optional remote-image blocking policy is stricter and is
-not the normal app reader policy.
+The visual fixtures include personal calendar responses and announcements in both
+themes. Personal fixtures explicitly enable color adaptation even when they
+contain tables. Screenshots have a zero differing pixel tolerance within the
+controlled Chromium/font environment. Standalone fixture snapshots complement
+mounted-app interaction checks; they do not establish full application parity.
 
 Use `bun run --cwd packages/email-renderer viewer` to inspect fixtures without an
 account or backend. Do not regenerate visual expectations simply to make a

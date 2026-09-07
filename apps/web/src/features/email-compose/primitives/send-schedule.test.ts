@@ -100,26 +100,44 @@ function composer(
   });
 }
 
-describe.each(['standalone', 'reply'] as const)(
-  '%s send and schedule ordering',
-  (kind) => {
-    beforeEach(() => vi.useFakeTimers());
-    afterEach(() => vi.useRealTimers());
+describe('send and schedule ordering', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
 
-    it('sends a valid message after the draft is saved', async () => {
-      const services = composeServices();
-      const state = composer(kind, services);
-      try {
-        state.send();
-        await vi.advanceTimersByTimeAsync(0);
-        expect(services.saveDraft).toHaveBeenCalledOnce();
-        expect(services.sendMessage).toHaveBeenCalledOnce();
-      } finally {
-        state.dispose();
-      }
-    });
+  it('waits for a saved reply and dispatches with its returned draft ID', async () => {
+    let finishSaving!: (value: { draft: SavedEmailDraft }) => void;
+    const services = composeServices();
+    vi.mocked(services.saveDraft).mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishSaving = resolve;
+      })
+    );
+    const state = composer('reply', services);
+    try {
+      state.send();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(services.saveDraft).toHaveBeenCalledOnce();
+      expect(services.sendMessage).not.toHaveBeenCalled();
+      finishSaving({
+        draft: {
+          db_id: 'saved-reply',
+          thread_db_id: 'thread',
+          link_id: 'inbox',
+        },
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(services.sendMessage).toHaveBeenCalledOnce();
+      expect(
+        vi.mocked(services.sendMessage).mock.calls[0][0].message.db_id
+      ).toBe('saved-reply');
+    } finally {
+      state.dispose();
+    }
+  });
 
-    it('does not dispatch when scheduling starts during the pending draft save', async () => {
+  it.each(['standalone', 'reply'] as const)(
+    '%s does not dispatch when scheduling starts during the pending draft save',
+    async (kind) => {
       let finishSaving!: (value: { draft: SavedEmailDraft }) => void;
       let finishScheduling!: () => void;
       const services = composeServices({
@@ -154,6 +172,6 @@ describe.each(['standalone', 'reply'] as const)(
       } finally {
         state.dispose();
       }
-    });
-  }
-);
+    }
+  );
+});

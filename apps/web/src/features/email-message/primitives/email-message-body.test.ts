@@ -68,11 +68,18 @@ describe('independent email body', () => {
       expect(link?.target).toBe('_blank');
       expect(link?.rel).toBe('noopener noreferrer');
       expect(prepareLinks).toHaveBeenCalled();
+      const expandedHost = root.body.host();
       root.setValue(
-        message('two', { body_replyless: '<p>Second message</p>' })
+        message('two', {
+          body_html_sanitized: '<p>Second message</p>',
+          body_replyless: '<p>Second message</p>',
+        })
       );
       await Promise.resolve();
-      expect(root.body.host()).not.toBe(host);
+      expect(root.body.host()).not.toBe(expandedHost);
+      expect(root.body.host()!.shadowRoot?.textContent).toContain(
+        'Second message'
+      );
     } finally {
       root.dispose();
     }

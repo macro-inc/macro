@@ -142,7 +142,7 @@ it('keeps the draft editable after failed deletion and saves later edits', async
   root.dispose();
   expect(services.saveDraft).toHaveBeenCalledTimes(2);
 });
-it('prevents duplicate send during the pre-send save and does not recreate a sent draft on disposal', async () => {
+it('waits for the saved draft ID, prevents duplicate sends, and does not recreate the sent draft on disposal', async () => {
   const pending = deferred<{ draft: SavedEmailDraft }>();
   const services = composeServices();
   vi.mocked(services.saveDraft).mockReturnValueOnce(pending.promise);
@@ -151,9 +151,15 @@ it('prevents duplicate send during the pre-send save and does not recreate a sen
   root.state.context.onSend();
   root.state.context.onSend();
   expect(root.state.context.disabled()).toBe(true);
+  await vi.advanceTimersByTimeAsync(1);
+  expect(services.saveDraft).toHaveBeenCalledOnce();
+  expect(services.sendMessage).not.toHaveBeenCalled();
   pending.resolve(response);
   await vi.advanceTimersByTimeAsync(1);
   expect(services.sendMessage).toHaveBeenCalledOnce();
+  expect(vi.mocked(services.sendMessage).mock.calls[0][0].message.db_id).toBe(
+    'saved-id'
+  );
   root.dispose();
   await vi.advanceTimersByTimeAsync(1000);
   expect(services.saveDraft).toHaveBeenCalledOnce();

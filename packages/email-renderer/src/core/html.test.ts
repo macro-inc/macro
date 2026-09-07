@@ -66,7 +66,6 @@ describe('prepareEmailBody in Node, without a DOM', () => {
     expect(JSON.parse(JSON.stringify(first))).toEqual(first);
     expect(first.html).toBe('<p>Hello</p>');
     expect(first.hasHiddenContent).toBe(true);
-    expect(typeof globalThis).toBe('object');
     expect('document' in globalThis).toBe(false);
   });
   it('falls back to actual content while replyless HTML is unavailable', () => {
