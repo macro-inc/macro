@@ -1,22 +1,25 @@
+import { SoupSectionHeader } from '@app/features/next-soup/soup-view/section-header';
 import { type JSX, Show } from 'solid-js';
 import type { EntityDisplay } from '../context/activity-context';
 import type { ActivityTopEntity } from '../core/event';
 
 /**
- * The "Most active" chips as one wrapping row under the graph card, with a
- * muted lead-in label. The view supplies the chips and hides the row when
- * there are none.
+ * The "Most active" chips as one wrapping row under the graph card, headed
+ * like the feed's day sections. The view supplies the chips and hides the
+ * section when there are none.
  */
 export function TopEntitiesSection(props: { children: JSX.Element }) {
   return (
     <section
-      class="flex min-w-0 flex-wrap items-center gap-1.5 px-1"
-      aria-label="Most active"
+      class="flex min-w-0 flex-col gap-1.5"
+      aria-labelledby="activity-most-active-heading"
     >
-      <span class="mr-0.5 shrink-0 text-ink-extra-muted text-xs">
-        Most active
-      </span>
-      {props.children}
+      <SoupSectionHeader class="mx-0 my-0 w-full">
+        <h2 id="activity-most-active-heading">Most active</h2>
+      </SoupSectionHeader>
+      <div class="flex min-w-0 flex-wrap items-center gap-1.5 px-1">
+        {props.children}
+      </div>
     </section>
   );
 }
