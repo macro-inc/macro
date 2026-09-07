@@ -46,7 +46,7 @@ export function TopEntityChip(props: {
             <span class="flex shrink-0 items-center [&_svg]:size-3.5">
               {display().icon()}
             </span>
-            <span class="max-w-[24ch] truncate text-ink">
+            <span class="max-w-[24ch] truncate text-ink @max-md/u-list:max-w-[16ch]">
               {display().name()}
             </span>
           </>

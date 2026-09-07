@@ -87,6 +87,12 @@ from A to C on Doc X · 3 changes · 2h`), so the row count is lower than the ev
 (`[data-activity-run-size]` carries the fold size). The whole page is one virtualized list:
 only rows near the viewport are in the DOM, and scrolling near the bottom fetches the next
 page automatically (a `Loading…` tail appears while it lands). There is no `Show more` button.
+Once the heatmap card scrolls away, the day header for the topmost visible row stays pinned at
+the top of the list (`[data-activity-pinned-day]`, a non-interactive copy), so a snapshot taken
+mid-scroll shows that label twice at most. The heatmap never scrolls sideways: its cells are a
+fixed size and a narrow pane (a phone, or a split under ~448px) shows only the most recent
+weeks that fit, drops the `Fewer`/`More` legend words, lays the four stats out as two columns,
+and lets row text wrap to a second line instead of truncating.
 
 ## Home — `/app/component/home`
 

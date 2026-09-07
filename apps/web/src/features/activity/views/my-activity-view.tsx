@@ -3,6 +3,7 @@ import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHe
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
   createEffect,
+  createMemo,
   createSignal,
   For,
   type JSX,
@@ -22,7 +23,11 @@ import {
 } from '../context/activity-context';
 import { entryHead, type FeedEntry } from '../core/collapse-runs';
 import type { ActivityTopEntity } from '../core/event';
-import { type FeedRow, shouldFetchMore } from '../core/feed-rows';
+import {
+  type FeedRow,
+  pinnedDayLabel,
+  shouldFetchMore,
+} from '../core/feed-rows';
 import { placeholderOverview } from '../core/placeholder-overview';
 import { createActorName } from '../primitives/actor-name';
 import { createEntityOpener } from '../primitives/entity-opener';
@@ -55,6 +60,10 @@ function FeedStatus(props: { children: JSX.Element }) {
  * The user's own activity, newest first, as one virtualized list with the
  * overview card as its first row. Scrolling near the end fetches the next
  * page. Reads `ActivityContext`; the host decides what a row click opens.
+ *
+ * Rows are absolutely positioned by the virtualizer, so a day header cannot
+ * stick on its own. Instead a zero-height sticky slot at the head of the
+ * scroller repeats the day header that governs the first visible row.
  */
 export function MyActivityView(props: {
   onOpen: (target: OpenEntityTarget) => void;
@@ -62,7 +71,12 @@ export function MyActivityView(props: {
   const context = useActivityContext();
   const state = createMyActivityState(context);
   const [scroller, setScroller] = createSignal<HTMLDivElement>();
+  const [startIndex, setStartIndex] = createSignal(0);
   let handle: VirtualizerHandle | undefined;
+
+  const pinnedDay = createMemo(() =>
+    pinnedDayLabel(state.rows(), startIndex())
+  );
 
   const fetchMoreIfNearEnd = (offset: number) => {
     if (!handle) return;
@@ -75,6 +89,11 @@ export function MyActivityView(props: {
     ) {
       state.loadMore();
     }
+  };
+
+  const onScroll = (offset: number) => {
+    if (handle) setStartIndex(handle.findItemIndex(offset));
+    fetchMoreIfNearEnd(offset);
   };
 
   // A page that does not fill the viewport never scrolls, so re-check once
@@ -95,6 +114,15 @@ export function MyActivityView(props: {
       </SplitHeaderLeft>
       <StaticMarkdownContext>
         <div ref={setScroller} class="min-h-0 flex-1 overflow-y-auto py-1">
+          <div class="pointer-events-none sticky top-0 z-10 mx-auto h-0 w-full max-w-[1000px]">
+            <Show when={pinnedDay()}>
+              {(label) => (
+                <div class="pt-1" data-activity-pinned-day>
+                  <SoupSectionHeader>{label()}</SoupSectionHeader>
+                </div>
+              )}
+            </Show>
+          </div>
           <div class="mx-auto w-full max-w-[1000px]">
             <Virtualizer
               data={state.rows()}
@@ -103,7 +131,7 @@ export function MyActivityView(props: {
                 handle = next;
               }}
               bufferSize={FEED_BUFFER_PX}
-              onScroll={fetchMoreIfNearEnd}
+              onScroll={onScroll}
             >
               {(row) => (
                 <FeedRowView row={row} state={state} onOpen={props.onOpen} />

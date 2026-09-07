@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActivityContextProvider } from '../context/activity-context';
 import { placeholderOverview } from '../core/placeholder-overview';
 import {
@@ -18,11 +18,46 @@ vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
 }));
 
 // jsdom has no layout, so the virtualizer renders every row and exposes a
-// fake handle plus its scroll callback so tests can drive paging.
-const virtual = vi.hoisted(() => ({
-  onScroll: undefined as ((offset: number) => void) | undefined,
-  handle: { scrollSize: 3000, viewportSize: 800, scrollOffset: 0 },
-}));
+// fake handle plus its scroll callback so tests can drive paging. The fake
+// treats every row as `rowPx` tall for `findItemIndex`.
+const virtual = vi.hoisted(() => {
+  const rowPx = 100;
+  return {
+    rowPx,
+    onScroll: undefined as ((offset: number) => void) | undefined,
+    handle: {
+      scrollSize: 3000,
+      viewportSize: 800,
+      scrollOffset: 0,
+      findItemIndex: (offset: number) => Math.floor(offset / rowPx),
+    },
+  };
+});
+
+// jsdom has neither ResizeObserver nor layout. The graph measures its week
+// area to decide how many columns fit, so give it a desktop-width answer.
+const WEEK_AREA_PX = 900;
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    width: WEEK_AREA_PX,
+    height: 0,
+    top: 0,
+    left: 0,
+    right: WEEK_AREA_PX,
+    bottom: 0,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+});
 
 vi.mock('virtua/solid', async () => {
   const { For } = await import('solid-js');
@@ -63,7 +98,11 @@ vi.mock('@service-storage/websocket', () => ({
   createWebSocketJob: () => Promise.reject(new Error('no websocket in tests')),
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 function renderView() {
   const context = createMockActivityContext();
@@ -86,6 +125,7 @@ describe('MyActivityView', () => {
     const skeletonDays = skeleton.querySelectorAll(
       '[data-activity-day]'
     ).length;
+    // 900px of week area fits 60 columns, more than the placeholder year has.
     expect(skeletonDays).toBeGreaterThan(300);
     expect(container.textContent).not.toContain('Loading activity overview');
     expect(container.textContent).toContain('Loading…');
@@ -198,6 +238,39 @@ describe('MyActivityView', () => {
     expect(visible[1]?.textContent).not.toContain('Todo');
     expect(visible[2]?.getAttribute('data-activity-run-size')).toBe('1');
     expect(visible[2]?.textContent).not.toContain('times');
+  });
+
+  it('pins the day header of the first visible row once the overview scrolls away', () => {
+    const { container, graphql } = renderView();
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    graphql.latest('MyActivity').resolve(
+      feedPage([
+        {
+          ...createdEvent,
+          id: 'c-today',
+          occurredAt: new Date().toISOString(),
+        },
+        { ...editedEvent, id: 'e-yesterday', occurredAt: yesterday },
+      ])
+    );
+    // Rows: overview, Today, entry, Yesterday, entry.
+    const pinned = () => container.querySelector('[data-activity-pinned-day]');
+    const scroll = virtual.onScroll;
+    if (!scroll) throw new Error('virtualizer did not register onScroll');
+
+    expect(pinned()).toBeNull();
+
+    scroll(virtual.rowPx * 1);
+    expect(pinned()?.textContent).toBe('Today');
+
+    scroll(virtual.rowPx * 2);
+    expect(pinned()?.textContent).toBe('Today');
+
+    scroll(virtual.rowPx * 3);
+    expect(pinned()?.textContent).toBe('Yesterday');
+
+    scroll(0);
+    expect(pinned()).toBeNull();
   });
 
   it('asks the host to open the row entity', () => {

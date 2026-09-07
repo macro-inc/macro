@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { decodeActivityEvent } from '../queries/decode';
 import { createdEvent, editedEvent } from '../queries/fixtures';
 import type { FeedEntry } from './collapse-runs';
-import { flattenFeed, reuseRows, shouldFetchMore } from './feed-rows';
+import {
+  type FeedRow,
+  flattenFeed,
+  pinnedDayLabel,
+  reuseRows,
+  shouldFetchMore,
+} from './feed-rows';
 
 const created: FeedEntry = {
   kind: 'single',
@@ -66,6 +72,43 @@ describe('reuseRows', () => {
       'day',
       'entry',
     ]);
+  });
+});
+
+describe('pinnedDayLabel', () => {
+  const rows: FeedRow[] = [
+    { kind: 'overview' },
+    ...flattenFeed(
+      [
+        { key: 'today', label: 'Today', entries: [created, edited] },
+        { key: 'yesterday', label: 'Yesterday', entries: [created] },
+      ],
+      { hasMore: true }
+    ),
+  ];
+
+  it.each([
+    // [startIndex, expected]
+    [0, undefined],
+    [1, 'Today'],
+    [2, 'Today'],
+    [3, 'Today'],
+    [4, 'Yesterday'],
+    [5, 'Yesterday'],
+    [6, 'Yesterday'],
+    [99, 'Yesterday'],
+  ])('start index %i -> %s', (startIndex, expected) => {
+    expect(pinnedDayLabel(rows, startIndex)).toBe(expected);
+  });
+
+  it('pins nothing while the feed has no day rows', () => {
+    expect(
+      pinnedDayLabel(
+        [{ kind: 'overview' }, { kind: 'status', status: 'loading' }],
+        1
+      )
+    ).toBeUndefined();
+    expect(pinnedDayLabel([], 0)).toBeUndefined();
   });
 });
 

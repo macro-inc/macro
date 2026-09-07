@@ -53,6 +53,23 @@ export function reuseRows(previous: FeedRow[], next: FeedRow[]): FeedRow[] {
   return next.map((row) => byKey.get(rowKey(row)) ?? row);
 }
 
+/**
+ * The day header that governs the row at `startIndex` (the first row under
+ * the top edge of the scroller): the nearest `day` row at or before it.
+ * `undefined` while the overview is still at the top, so nothing pins over
+ * the graph.
+ */
+export function pinnedDayLabel(
+  rows: readonly FeedRow[],
+  startIndex: number
+): string | undefined {
+  for (let index = Math.min(startIndex, rows.length - 1); index >= 0; index--) {
+    const row = rows[index];
+    if (row?.kind === 'day') return row.label;
+  }
+  return undefined;
+}
+
 /** Floor for the near-bottom threshold so tiny viewports still page. */
 const MIN_FETCH_THRESHOLD = 100;
 

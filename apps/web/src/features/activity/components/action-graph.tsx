@@ -1,6 +1,7 @@
+import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer, Tooltip } from '@ui';
 import { format } from 'date-fns';
-import { createMemo, For, type JSX, Show } from 'solid-js';
+import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { OVERVIEW_TZ, parseOverviewDate } from '../core/activity-dates';
 import {
@@ -14,11 +15,20 @@ import {
   buildContributionGrid,
   type ContributionDay,
   type ContributionWeek,
+  weeksThatFit,
 } from '../core/contribution-grid';
 import type { ActivityOverview } from '../core/event';
 import type { ActivityIntensity } from '../core/intensity';
 
 const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
+
+// Cell geometry in px, kept in step with HEATMAP_CELL_PX / HEATMAP_GAP_PX /
+// HEATMAP_HEIGHT_PX in core/contribution-grid.ts. Pixels rather than rem so
+// the "how many weeks fit" arithmetic holds when Dynamic Type scales the root
+// font size on touch devices.
+const CELL_CLASS = 'size-[12px]';
+const COLUMN_GAP_CLASS = 'gap-[3px]';
+const HEATMAP_HEIGHT_CLASS = 'h-[102px]';
 
 function dateLabel(date: string): string {
   return format(parseOverviewDate(date), 'EEE, MMM d, yyyy', {
@@ -51,12 +61,23 @@ function dayStat(date: string | null): string {
  * With `skeleton`, the same layout renders shimmer placeholders in place of
  * the numbers and day cells. Pass a `placeholderOverview` so the geometry
  * matches the card that replaces it.
+ *
+ * Day cells are a fixed size, so the card is the same height at every width
+ * and a narrow card shows the most recent weeks that fit instead of
+ * scrolling sideways. The count comes from measuring the week area;
+ * `maxWeeks` overrides the measurement.
  */
 export function ActionGraph(props: {
   overview: ActivityOverview;
   skeleton?: boolean;
+  maxWeeks?: number;
 }) {
-  const grid = createMemo(() => buildContributionGrid(props.overview));
+  const [weekArea, setWeekArea] = createSignal<HTMLDivElement>();
+  const weekAreaSize = createElementSize(weekArea);
+  const maxWeeks = () => props.maxWeeks ?? weeksThatFit(weekAreaSize.width);
+  const grid = createMemo(() =>
+    buildContributionGrid(props.overview, { maxWeeks: maxWeeks() })
+  );
   const monthLabels = createMemo(
     () =>
       new Map(
@@ -86,6 +107,7 @@ export function ActionGraph(props: {
             weeks={grid().weeks}
             monthLabels={monthLabels()}
             skeleton={skeleton()}
+            weekAreaRef={setWeekArea}
           />
           <ActionGraphStats stats={stats()} skeleton={skeleton()} />
         </div>
@@ -128,13 +150,13 @@ function ActionGraphHeader(props: { total: number; skeleton: boolean }) {
 function IntensityLegend() {
   return (
     <div class="ml-auto flex shrink-0 items-center gap-1 text-ink-extra-muted">
-      <span>Fewer</span>
+      <span class="@max-md/u-list:hidden">Fewer</span>
       <For each={[0, 1, 2, 3, 4] as const}>
         {(level) => (
           <IntensitySwatch level={level} class="size-2.5 rounded-[3px]" />
         )}
       </For>
-      <span>More</span>
+      <span class="@max-md/u-list:hidden">More</span>
     </div>
   );
 }
@@ -143,19 +165,22 @@ function ContributionHeatmap(props: {
   weeks: ContributionWeek[];
   monthLabels: Map<number, string>;
   skeleton: boolean;
+  weekAreaRef: (element: HTMLDivElement) => void;
 }) {
   return (
-    <div class="overflow-x-auto px-4 py-3 scrollbar-hidden">
-      <div class="w-max min-w-full">
-        <WeekRow class="mb-1 pl-5">
-          <For each={props.weeks}>
-            {(_, index) => (
-              <MonthLetter label={props.monthLabels.get(index())} />
-            )}
-          </For>
-        </WeekRow>
-        <div class="flex items-stretch">
-          <WeekdayGutter />
+    <div class="px-4 py-3">
+      <WeekRow class="mb-1 h-3 pl-5">
+        <For each={props.weeks}>
+          {(_, index) => <MonthLetter label={props.monthLabels.get(index())} />}
+        </For>
+      </WeekRow>
+      <div class="flex items-stretch">
+        <WeekdayGutter />
+        <div
+          ref={props.weekAreaRef}
+          class={cn('min-w-0 flex-1 overflow-hidden', HEATMAP_HEIGHT_CLASS)}
+          data-activity-heatmap-weeks
+        >
           <WeekRow>
             <For each={props.weeks}>
               {(week) => <HeatmapWeek week={week} skeleton={props.skeleton} />}
@@ -169,12 +194,15 @@ function ContributionHeatmap(props: {
 
 function WeekdayGutter() {
   return (
-    <div class="mr-1.5 flex w-3.5 shrink-0 flex-col gap-[3px] text-ink-extra-muted text-xs">
+    <div
+      class={cn(
+        'mr-1.5 flex w-3.5 shrink-0 flex-col text-ink-extra-muted text-xs',
+        COLUMN_GAP_CLASS
+      )}
+    >
       <For each={WEEKDAY_LABELS}>
         {(label) => (
-          <span class="flex min-h-0 flex-1 items-center leading-none">
-            {label}
-          </span>
+          <span class="flex h-[12px] items-center leading-none">{label}</span>
         )}
       </For>
     </div>
@@ -183,7 +211,7 @@ function WeekdayGutter() {
 
 function HeatmapWeek(props: { week: ContributionWeek; skeleton: boolean }) {
   return (
-    <WeekColumn class="flex flex-col gap-[3px]">
+    <WeekColumn class={cn('flex flex-col', COLUMN_GAP_CLASS)}>
       <For each={props.week}>
         {(day) => <DaySquare day={day} skeleton={props.skeleton} />}
       </For>
@@ -202,7 +230,7 @@ function MonthLetter(props: { label?: string }) {
 function DaySquare(props: { day: ContributionDay | null; skeleton: boolean }) {
   const day = props.day;
   if (!day) {
-    return <span class="aspect-square w-full shrink-0" />;
+    return <span class={cn('shrink-0', CELL_CLASS)} />;
   }
 
   const label = actionLabel(day);
@@ -213,14 +241,17 @@ function DaySquare(props: { day: ContributionDay | null; skeleton: boolean }) {
         <span
           aria-hidden
           data-activity-day
-          class="skeleton-shimmer block aspect-square w-full shrink-0 rounded-[3px] bg-skeleton"
+          class={cn(
+            'skeleton-shimmer block shrink-0 rounded-[3px] bg-skeleton',
+            CELL_CLASS
+          )}
         />
       }
     >
       <Tooltip
         as="span"
         placement="top"
-        class="aspect-square w-full shrink-0"
+        class={cn('block shrink-0', CELL_CLASS)}
         label={label}
       >
         <IntensitySwatch
@@ -258,22 +289,16 @@ function IntensitySwatch(props: {
   );
 }
 
-/**
- * One week column. Grows to fill the card width, floored at the day-cell
- * size (a very narrow panel scrolls horizontally rather than squashing the
- * cells) and capped so leftover width goes to the row gaps.
- */
+/** One week column, exactly one cell wide. */
 function WeekColumn(props: { class?: string; children?: JSX.Element }) {
   return (
-    <div class={cn('max-w-3.5 shrink-0 grow basis-2.5', props.class)}>
-      {props.children}
-    </div>
+    <div class={cn('w-[12px] shrink-0', props.class)}>{props.children}</div>
   );
 }
 
 function WeekRow(props: { class?: string; children?: JSX.Element }) {
   return (
-    <div class={cn('flex flex-1 justify-between gap-[3px]', props.class)}>
+    <div class={cn('flex', COLUMN_GAP_CLASS, props.class)}>
       {props.children}
     </div>
   );
@@ -281,7 +306,7 @@ function WeekRow(props: { class?: string; children?: JSX.Element }) {
 
 function ActionGraphStats(props: { stats: ActivityStats; skeleton: boolean }) {
   return (
-    <dl class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
+    <dl class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 @max-md/u-list:grid @max-md/u-list:grid-cols-2 @max-md/u-list:gap-y-2">
       <Stat
         label="Most active month"
         value={monthStat(props.stats.mostActiveMonth)}
@@ -308,9 +333,9 @@ function ActionGraphStats(props: { stats: ActivityStats; skeleton: boolean }) {
 
 function Stat(props: { label: string; value: string; skeleton: boolean }) {
   return (
-    <div class="flex min-w-0 items-center gap-1.5">
+    <div class="flex min-w-0 items-center gap-1.5 @max-md/u-list:flex-col @max-md/u-list:items-start @max-md/u-list:gap-0">
       <dt class="shrink-0 text-ink-extra-muted">{props.label}</dt>
-      <dd class="min-w-0 truncate font-medium text-ink tabular-nums">
+      <dd class="min-w-0 max-w-full truncate font-medium text-ink tabular-nums">
         <Show when={!props.skeleton} fallback={<SkeletonText class="w-12" />}>
           {props.value}
         </Show>

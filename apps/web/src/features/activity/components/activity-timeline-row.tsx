@@ -23,6 +23,12 @@ function Separator() {
   );
 }
 
+// Feed rows sit in the `@container/u-list` shell. Under `@max-md` the body
+// wraps onto a second line instead of truncating the entity name. Hosts
+// outside that container (the side panel, the chat tool) never match.
+const BODY_NARROW_CLASS = '@max-md/u-list:flex-wrap @max-md/u-list:py-1';
+const TEXT_NARROW_CLASS = '@max-md/u-list:whitespace-normal';
+
 /**
  * Glyph-rail activity line for a single event or a collapsed run. Reads
  * "<actor> <verb> [connector] <entity> [count] · <time>" with the timestamp
@@ -82,7 +88,10 @@ export function ActivityTimelineRow(props: {
         {...props.rowProps}
         class={cn(
           'flex min-w-0 flex-1 items-center rounded-lg py-0.5 hover:bg-hover/30',
-          props.compact ? 'min-h-7 gap-1 px-1.5' : 'min-h-10 gap-1.5 px-2'
+          BODY_NARROW_CLASS,
+          props.compact
+            ? 'min-h-7 gap-1 px-1.5'
+            : 'min-h-10 gap-1.5 px-2 touch:min-h-11'
         )}
       >
         <Show when={showActor()}>
@@ -93,7 +102,9 @@ export function ActivityTimelineRow(props: {
         <Show
           when={props.display}
           fallback={
-            <span class="min-w-0 truncate text-ink-muted">
+            <span
+              class={cn('min-w-0 truncate text-ink-muted', TEXT_NARROW_CLASS)}
+            >
               <ActionPhrase
                 action={action()}
                 propertyDefinition={props.propertyDefinition}
@@ -125,7 +136,7 @@ export function ActivityTimelineRow(props: {
                   <span class="shrink-0 text-ink-muted">{connector()}</span>
                 )}
               </Show>
-              <span class="min-w-0 truncate">
+              <span class={cn('min-w-0 truncate', TEXT_NARROW_CLASS)}>
                 <EntityMention entityId={head().entityId} display={display()} />
               </span>
             </>
