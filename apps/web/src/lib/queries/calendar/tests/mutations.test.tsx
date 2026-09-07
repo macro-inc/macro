@@ -106,6 +106,42 @@ const recurringItem = (): CalendarOccurrenceItem =>
     },
   }) as unknown as CalendarOccurrenceItem;
 
+const copy = (calendarId: string, title: string) => ({
+  calendarId,
+  title,
+  eventType: 'default',
+  visibility: 'default',
+  transparency: 'opaque',
+  isReadOnly: false,
+  reminders: { useDefault: true, overrides: [] },
+});
+
+const sharedItem = (): CalendarOccurrenceItem =>
+  ({
+    event: {
+      id: 'event-3',
+      title: 'OOO',
+      recurrenceLines: [],
+      calendarId: 'primary',
+      sources: [copy('primary', 'OOO'), copy('shared', '[me] OOO')],
+      time: {
+        kind: 'timed',
+        startsAt: '2026-08-07T13:00:00Z',
+        endsAt: '2026-08-07T17:00:00Z',
+      },
+      attendees: [],
+    },
+    occurrence: {
+      eventId: 'event-3',
+      occurrenceKey: '2026-08-07T13:00:00Z',
+      time: {
+        kind: 'timed',
+        startsAt: '2026-08-07T13:00:00Z',
+        endsAt: '2026-08-07T17:00:00Z',
+      },
+    },
+  }) as unknown as CalendarOccurrenceItem;
+
 const seedViewports = () => {
   const data = (): CalendarOccurrencesData => ({
     items: [standaloneItem(), recurringItem()],
@@ -482,6 +518,50 @@ describe('useDeleteCalendarEventMutation', () => {
       const items = viewportData(range)?.items ?? [];
       expect(items).toHaveLength(2);
     }
+  });
+
+  it('drops only the addressed copy of a multi-calendar event', async () => {
+    deleteCalendarEventMock.mockResolvedValue(ok({}));
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: [sharedItem()], syncStatus: 'ready' }
+    );
+    const remove = renderHook(() => useDeleteCalendarEventMutation());
+
+    await remove.mutateAsync({ eventId: 'event-3', calendarId: 'primary' });
+    expect(deleteCalendarEventMock).toHaveBeenCalledWith('event-3', {
+      calendarId: 'primary',
+      scope: undefined,
+      recurrenceId: undefined,
+    });
+    let items = viewportData(viewportA)?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect(items[0].event.sources?.map((source) => source.calendarId)).toEqual([
+      'shared',
+    ]);
+    expect(items[0].event.calendarId).toBe('shared');
+    expect(items[0].event.title).toBe('[me] OOO');
+
+    await remove.mutateAsync({ eventId: 'event-3', calendarId: 'shared' });
+    items = viewportData(viewportA)?.items ?? [];
+    expect(items).toHaveLength(0);
+  });
+
+  it('drops the canonical copy when no calendar is named', async () => {
+    deleteCalendarEventMock.mockResolvedValue(ok({}));
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: [sharedItem()], syncStatus: 'ready' }
+    );
+    const remove = renderHook(() => useDeleteCalendarEventMutation());
+
+    await remove.mutateAsync({ eventId: 'event-3' });
+    const items = viewportData(viewportA)?.items ?? [];
+    expect(items).toHaveLength(1);
+    expect(items[0].event.sources?.map((source) => source.calendarId)).toEqual([
+      'shared',
+    ]);
+    expect(items[0].event.calendarId).toBe('shared');
   });
 });
 

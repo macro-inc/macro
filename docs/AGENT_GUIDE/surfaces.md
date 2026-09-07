@@ -56,6 +56,15 @@ out-of-office event's decline settings can still be changed — they read as uns
 provider does not report the stored ones. Out-of-office events render on the grid as solid
 chips filled with their calendar color (like Google), unlike regular events' outlined chips,
 and their details card shows an `Out of office` line under the schedule.
+An event that Google carries on several of an account's calendars (a shared calendar's
+re-import of a member's own event, for example) renders once per calendar, side by side,
+the way Google Calendar shows it: each chip carries its own copy's title, color, and
+editability, and hiding a calendar hides its chip. Reminders, guests, and conferencing
+always show and follow the primary copy, since that is the copy Macro's alerts fire from
+and whose guest list and join link Macro records, and the editor only lets them be changed
+there. Answering an invitation likewise addresses the primary copy. The details popover and
+the editor act on the chip's copy, so editing or deleting it targets that calendar's event
+at Google.
 
 Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
 `<name>: <event title>`. The side panel's `Team out of office` section (shown only when the

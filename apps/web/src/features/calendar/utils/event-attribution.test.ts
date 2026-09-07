@@ -11,6 +11,7 @@ function event(overrides: Partial<CalendarEvent>): CalendarEvent {
     isReadOnly: false,
     attendees: [],
     recurrenceLines: [],
+    sourceCalendarIds: [],
     title: 'd',
     start: '2026-08-27T19:00:00.000Z',
     end: '2026-08-27T20:45:00.000Z',

@@ -381,7 +381,7 @@ function EventRemindersItem(props: {
     resolveReminderOverrides(
       props.event.reminders,
       props.defaultReminders,
-      props.event.eventType
+      props.event.reminderEventType ?? props.event.eventType
     ).toSorted((a, b) => a.minutes - b.minutes)
   );
 

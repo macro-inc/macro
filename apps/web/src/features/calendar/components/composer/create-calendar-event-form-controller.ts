@@ -206,7 +206,7 @@ export function createCalendarEventFormController(
           values.reminders,
           calendarOptionFor(values.calendarId ?? effectiveCalendarId())
             ?.defaultReminders,
-          values.eventType
+          values.reminderEventType ?? values.eventType
         )
       )
     );

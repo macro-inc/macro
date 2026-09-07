@@ -13,6 +13,7 @@ import interactionPlugin from '@fullcalendar/interaction';
 import timeGridPlugin from '@fullcalendar/timegrid';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
   type JSX,
@@ -201,6 +202,20 @@ export function CalendarGrid(props: CalendarGridProps) {
   const eventElements = new Map<string, HTMLElement>();
   const [chipMounts, notifyChipMount] = createSignal(undefined, {
     equals: false,
+  });
+
+  // A chip keeps its element across data changes, so a calendar color change
+  // recolors it here rather than through a remount. The map is read before
+  // the loop because the element map is empty on the first run and the
+  // effect would otherwise never subscribe.
+  createEffect(() => {
+    const eventsById = props.eventsById;
+    for (const [id, el] of eventElements) {
+      const event = eventsById.get(id);
+      if (event) {
+        el.style.setProperty('--event-calendar-color', event.calendar.color);
+      }
+    }
   });
 
   return (

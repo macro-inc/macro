@@ -17,7 +17,7 @@ import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
 export const TEAM_OOO_SOURCE_ID = 'team-ooo';
 
 /** Prefix of every per-teammate visibility-source id. */
-export const TEAM_OOO_SOURCE_PREFIX = 'team-ooo:';
+const TEAM_OOO_SOURCE_PREFIX = 'team-ooo:';
 
 const TEAM_OOO_COLOR = 'var(--color-ink-muted)';
 const TEAM_OOO_FALLBACK_TITLE = 'Out of office';
@@ -57,6 +57,7 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
     isReadOnly: true,
     attendees: [],
     recurrenceLines: [],
+    sourceCalendarIds: [TEAM_OOO_SOURCE_ID],
     eventType: EventType.out_of_office,
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: name ? `${name}: ${title}` : title,
