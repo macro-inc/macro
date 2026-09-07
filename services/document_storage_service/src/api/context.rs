@@ -591,6 +591,9 @@ impl From<&ApiContext> for PropertiesHandlerState {
             ctx.entity_access_service.clone(),
             ctx.authorization_state.clone(),
         )
+        .with_managed_team_definitions([
+            crm::domain::stages::CRM_TEAM_STAGE_DEFINITION_NAME.to_string(),
+        ])
     }
 }
 
