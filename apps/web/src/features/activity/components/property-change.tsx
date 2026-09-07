@@ -20,7 +20,7 @@ type PropertyChangedAction = Extract<
  * colors); scalars render as text. Falls back word by word: unknown
  * definition → "a property", unlabelable values → plain "changed"/"cleared"
  * wording. `from` is rendered only when the source event carried it (most
- * producers don't yet).
+ * producers don't yet). Stays on one line: values truncate, never wrap.
  */
 export function PropertyChangeText(props: {
   action: PropertyChangedAction;
@@ -38,7 +38,7 @@ export function PropertyChangeText(props: {
     propertyValueLabel(props.action.to, definition()) !== undefined;
 
   return (
-    <span class="inline-flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5">
+    <span class="inline-flex min-w-0 max-w-full items-center gap-1">
       <span class="shrink-0">
         {cleared()
           ? props.capitalize
@@ -84,7 +84,7 @@ function PropertyValueDisplay(props: {
       }
     >
       {(entries) => (
-        <span class="inline-flex min-w-0 flex-wrap items-center gap-1">
+        <span class="inline-flex min-w-0 items-center gap-1">
           <For each={entries()}>
             {(entry) => (
               <span class="inline-flex min-w-0 max-w-[20ch] items-center gap-1 rounded-full px-1.5 py-0.5 text-ink text-xs leading-tight ring ring-edge-muted/50 ring-inset">

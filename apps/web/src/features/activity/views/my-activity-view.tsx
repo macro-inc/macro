@@ -22,7 +22,11 @@ import {
 } from '../context/activity-context';
 import { entryHead, type FeedEntry } from '../core/collapse-runs';
 import type { ActivityTopEntity } from '../core/event';
-import { type FeedRow, shouldFetchMore } from '../core/feed-rows';
+import {
+  type FeedRow,
+  type RailEnds,
+  shouldFetchMore,
+} from '../core/feed-rows';
 import { placeholderOverview } from '../core/placeholder-overview';
 import { createActorName } from '../primitives/actor-name';
 import { createEntityOpener } from '../primitives/entity-opener';
@@ -129,7 +133,11 @@ function FeedRowView(props: {
       <SoupSectionHeader>{row.label}</SoupSectionHeader>
     ))
     .with({ kind: 'entry' }, (row) => (
-      <NamedActivityRow entry={row.entry} onOpen={props.onOpen} />
+      <NamedActivityRow
+        entry={row.entry}
+        rail={row.rail}
+        onOpen={props.onOpen}
+      />
     ))
     .with({ kind: 'status', status: 'loading' }, () => (
       <FeedStatus>Loading…</FeedStatus>
@@ -228,6 +236,7 @@ function OverviewRow(props: {
 // position to the top.
 function NamedActivityRow(props: {
   entry: FeedEntry;
+  rail: RailEnds;
   onOpen: (target: OpenEntityTarget) => void;
 }) {
   const context = useActivityContext();
@@ -235,12 +244,17 @@ function NamedActivityRow(props: {
   return (
     <Suspense
       fallback={
-        <ActivityTimelineRowView entry={props.entry} actorName={name()} />
+        <ActivityTimelineRowView
+          entry={props.entry}
+          actorName={name()}
+          rail={props.rail}
+        />
       }
     >
       <ActivityTimelineRow
         entry={props.entry}
         actorName={name()}
+        rail={props.rail}
         onOpen={props.onOpen}
       />
     </Suspense>

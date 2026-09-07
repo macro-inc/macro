@@ -1,6 +1,7 @@
 import { SidePanel } from '@components/app/side-panel/SidePanel';
 import CaretUpDownIcon from '@phosphor/caret-up-down.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { cn } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -19,6 +20,7 @@ import {
   type FeedEntry,
 } from '../core/collapse-runs';
 import type { ActivityEvent } from '../core/event';
+import type { RailEnds } from '../core/feed-rows';
 import { foldPanel } from '../core/fold-panel';
 import { createActorName } from '../primitives/actor-name';
 import { createEntityActivityState } from '../primitives/entity-activity';
@@ -87,7 +89,7 @@ export function EntityActivitySection(props: EntityActivitySectionProps) {
 /**
  * Newest entries first, folded to `PANEL_HEAD_LIMIT` lines plus the oldest
  * fetched entry pinned last so the line that started the history stays in
- * view. The rail is trimmed to the glyph centers at both ends.
+ * view. The rail runs from the first glyph to the last, through the toggle.
  */
 function ReadyActivityList(props: { events: ActivityEvent[] }) {
   const [expanded, setExpanded] = createSignal(false);
@@ -97,25 +99,34 @@ function ReadyActivityList(props: { events: ActivityEvent[] }) {
   const visible = () => (expanded() ? entries() : fold().head);
 
   return (
-    <div
-      class="flex flex-col [&>:first-child_[data-activity-rail]]:top-1/2 [&>:last-child_[data-activity-rail]]:bottom-1/2"
-      data-activity-panel
-    >
-      <For each={visible()}>{(entry) => <PanelRow entry={entry} />}</For>
+    <div class="flex flex-col" data-activity-panel>
+      <For each={visible()}>
+        {(entry, index) => (
+          <PanelRow
+            entry={entry}
+            rail={{
+              above: index() > 0,
+              below: index() < visible().length - 1 || folded(),
+            }}
+          />
+        )}
+      </For>
       <Show when={folded()}>
         <FoldToggle
           expanded={expanded()}
           onToggle={() => setExpanded((current) => !current)}
         />
         <Show when={!expanded() ? fold().tail : undefined}>
-          {(tail) => <PanelRow entry={tail()} />}
+          {(tail) => (
+            <PanelRow entry={tail()} rail={{ above: true, below: false }} />
+          )}
         </Show>
       </Show>
     </div>
   );
 }
 
-function PanelRow(props: { entry: FeedEntry }) {
+function PanelRow(props: { entry: FeedEntry; rail: RailEnds }) {
   const context = useActivityContext();
   const name = createActorName(context, () => entryHead(props.entry).actorId);
   const definition = context.propertyDefinition(() => {
@@ -127,31 +138,42 @@ function PanelRow(props: { entry: FeedEntry }) {
       entry={props.entry}
       actorName={name()}
       propertyDefinition={definition()}
+      rail={props.rail}
       compact
     />
   );
 }
 
-/** The fold row sits in the rail with a dotted connector in place of the line. */
+/**
+ * The fold row sits in the rail like a compact entry, with dotted connectors
+ * in place of the line. Expanded, it is the last row, so nothing runs below.
+ */
 function FoldToggle(props: { expanded: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
       aria-expanded={props.expanded}
-      class="flex w-full items-stretch gap-1 text-left text-ink-muted text-xs hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      class="flex w-full items-stretch gap-1.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       data-activity-fold-toggle
       onClick={() => props.onToggle()}
     >
-      <span class="relative flex w-5 shrink-0 items-center justify-center">
+      <span class="flex w-3.5 shrink-0 flex-col items-center">
         <span
-          class="absolute inset-y-0 border-edge-muted border-l border-dotted"
-          data-activity-rail
+          aria-hidden
+          class="mb-[3px] flex-1 border-edge-muted border-l border-dotted"
+          data-activity-rail="above"
         />
-        <span class="relative flex size-4 items-center justify-center rounded-full bg-surface ring ring-edge-muted">
-          <CaretUpDownIcon class="size-2.5" />
-        </span>
+        <CaretUpDownIcon class="size-3.5 shrink-0 text-ink-muted" />
+        <span
+          aria-hidden
+          class={cn(
+            'mt-[3px] flex-1 border-edge-muted border-l border-dotted',
+            props.expanded && 'invisible'
+          )}
+          data-activity-rail="below"
+        />
       </span>
-      <span class="flex min-h-7 min-w-0 flex-1 items-center rounded-lg px-1.5 py-0.5 hover:bg-hover/30">
+      <span class="flex min-h-8 min-w-0 flex-1 items-center rounded-lg px-1 text-ink hover:bg-hover/30">
         {props.expanded ? 'Show less' : 'View all activities'}
       </span>
     </button>

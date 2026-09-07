@@ -1,15 +1,21 @@
-import { formatRelativeTimestamp } from '@entity/utils/timestamp';
+import {
+  formatCompactRelativeTimestamp,
+  formatDateAndTime,
+} from '@entity/utils/timestamp';
 import type { PropertyDefinitionDomain } from '@property/types';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { EntityDisplay } from '../context/activity-context';
 import { entryHead, entrySize, type FeedEntry } from '../core/collapse-runs';
 import { describeActionForEntity, describeRun } from '../core/describe-action';
+import type { RailEnds } from '../core/feed-rows';
 import { ActionGlyph } from './action-glyph';
 import { ActionPhrase } from './action-phrase';
 import { ActorName } from './actor-name';
 import { EntityMention } from './entity-mention';
 import { PropertyChangeText } from './property-change';
+
+const NO_RAIL: RailEnds = { above: false, below: false };
 
 function capitalize(value: string): string {
   return value.length === 0 ? value : value[0].toUpperCase() + value.slice(1);
@@ -25,21 +31,26 @@ function Separator() {
 
 /**
  * Glyph-rail activity line for a single event or a collapsed run. Reads
- * "<actor> <verb> [connector] <entity> [count] · <time>" with the timestamp
- * inline. Mentions and click-to-open handlers arrive already resolved so
- * this leaf stays presentational. `compact` is the side panel's density.
+ * "<actor> <verb> [connector] <entity> [count] · <time>" on one line; long
+ * content truncates. The glyph is a plain icon; `rail` says which connector
+ * segments run from it toward the neighbouring rows, so the rows read as one
+ * line with a gap around each glyph. Mentions and click-to-open handlers
+ * arrive already resolved so this leaf stays presentational. `compact` is
+ * the side panel's density.
  */
 export function ActivityTimelineRow(props: {
   entry: FeedEntry;
   actorName?: string;
   showActor?: boolean;
   compact?: boolean;
+  rail?: RailEnds;
   display?: EntityDisplay;
   propertyDefinition?: PropertyDefinitionDomain;
   rowProps?: JSX.HTMLAttributes<HTMLDivElement>;
 }) {
   const showActor = () => props.showActor !== false;
   const actorName = () => props.actorName ?? '';
+  const rail = () => props.rail ?? NO_RAIL;
   const head = () => entryHead(props.entry);
   const described = () => describeRun(props.entry);
   const action = () => described().action;
@@ -52,8 +63,10 @@ export function ActivityTimelineRow(props: {
   return (
     <div
       class={cn(
-        'flex items-stretch gap-1',
-        props.compact ? 'text-xs' : 'mx-1 w-[calc(100%-0.5rem)] px-2 text-sm'
+        'flex items-stretch',
+        props.compact
+          ? 'gap-1.5 text-xs'
+          : 'mx-1 w-[calc(100%-0.5rem)] gap-2 px-2 text-sm'
       )}
       data-activity-row
       data-activity-action={action().kind}
@@ -61,32 +74,43 @@ export function ActivityTimelineRow(props: {
     >
       <div
         class={cn(
-          'relative flex shrink-0 items-center justify-center',
-          props.compact ? 'w-5' : 'w-6'
+          'flex shrink-0 flex-col items-center',
+          props.compact ? 'w-3.5' : 'w-4'
         )}
       >
-        <div class="absolute inset-y-0 w-px bg-edge-muted" data-activity-rail />
         <span
+          aria-hidden
           class={cn(
-            'relative flex items-center justify-center rounded-full bg-surface ring ring-edge-muted',
-            props.compact ? 'size-4' : 'size-5'
+            'mb-[3px] w-px flex-1 bg-edge-muted',
+            !rail().above && 'invisible'
           )}
-        >
-          <ActionGlyph
-            action={action()}
-            class={cn('text-ink-muted', props.compact ? 'size-2.5' : 'size-3')}
-          />
-        </span>
+          data-activity-rail="above"
+        />
+        <ActionGlyph
+          action={action()}
+          class={cn(
+            'shrink-0 text-ink-muted',
+            props.compact ? 'size-3.5' : 'size-4'
+          )}
+        />
+        <span
+          aria-hidden
+          class={cn(
+            'mt-[3px] w-px flex-1 bg-edge-muted',
+            !rail().below && 'invisible'
+          )}
+          data-activity-rail="below"
+        />
       </div>
       <div
         {...props.rowProps}
         class={cn(
-          'flex min-w-0 flex-1 items-center rounded-lg py-0.5 hover:bg-hover/30',
-          props.compact ? 'min-h-7 gap-1 px-1.5' : 'min-h-10 gap-1.5 px-2'
+          'flex min-w-0 flex-1 items-center whitespace-nowrap rounded-lg hover:bg-hover/30',
+          props.compact ? 'min-h-8 gap-1 px-1' : 'min-h-10 gap-1.5 px-2'
         )}
       >
         <Show when={showActor()}>
-          <span class="shrink-0 font-medium">
+          <span class="shrink-0 font-medium text-ink">
             <ActorName name={actorName()} />
           </span>
         </Show>
@@ -104,7 +128,7 @@ export function ActivityTimelineRow(props: {
         >
           {(display) => (
             <>
-              <span class="min-w-0 text-ink-muted">
+              <span class="min-w-0 truncate text-ink-muted">
                 <Show
                   when={propertyChange()}
                   fallback={
@@ -125,7 +149,12 @@ export function ActivityTimelineRow(props: {
                   <span class="shrink-0 text-ink-muted">{connector()}</span>
                 )}
               </Show>
-              <span class="min-w-0 truncate">
+              {/* A zero basis grown up to its own content sizes the mention
+                  to whatever room is left, so a long name gives way before
+                  the verb loses a pixel. Proportional shrinking nicks the
+                  verb by a subpixel and ellipsizes it ("edit…"). The full
+                  name stays in the mention's hover preview. */}
+              <span class="min-w-0 max-w-max flex-1 truncate">
                 <EntityMention entityId={head().entityId} display={display()} />
               </span>
             </>
@@ -141,15 +170,15 @@ export function ActivityTimelineRow(props: {
             </>
           )}
         </Show>
-        <Separator />
-        <time
-          class="shrink-0 text-ink-extra-muted"
-          dateTime={head().occurredAt}
-        >
-          {formatRelativeTimestamp(new Date(head().occurredAt), {
-            condensed: true,
-          })}
-        </time>
+        <span class="flex shrink-0 items-center gap-1 text-ink-extra-muted">
+          <Separator />
+          <time
+            dateTime={head().occurredAt}
+            title={formatDateAndTime(head().occurredAt)}
+          >
+            {formatCompactRelativeTimestamp(head().occurredAt)}
+          </time>
+        </span>
       </div>
     </div>
   );

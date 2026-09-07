@@ -126,10 +126,14 @@ const handler = createToolRenderer({
             <StaticMarkdownContext>
               <div class="max-h-120 overflow-y-auto rounded-md border border-edge-muted/60 py-1">
                 <For each={entries()}>
-                  {(entry) => (
+                  {(entry, index) => (
                     <ActivityTimelineRow
                       entry={entry}
                       showActor={false}
+                      rail={{
+                        above: index() > 0,
+                        below: index() < entries().length - 1,
+                      }}
                       onOpen={openEntityInSplit}
                     />
                   )}

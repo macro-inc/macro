@@ -4,6 +4,7 @@ import {
   useActivityContext,
 } from '../context/activity-context';
 import { entryAction, entryHead, type FeedEntry } from '../core/collapse-runs';
+import type { RailEnds } from '../core/feed-rows';
 import { createEntityOpener } from '../primitives/entity-opener';
 
 /**
@@ -14,6 +15,7 @@ export function ActivityTimelineRow(props: {
   entry: FeedEntry;
   actorName?: string;
   showActor?: boolean;
+  rail?: RailEnds;
   onOpen?: (target: OpenEntityTarget) => void;
 }) {
   const context = useActivityContext();
@@ -34,6 +36,7 @@ export function ActivityTimelineRow(props: {
       entry={props.entry}
       actorName={props.actorName}
       showActor={props.showActor}
+      rail={props.rail}
       display={opener()?.display}
       rowProps={opener()?.handlers}
       propertyDefinition={definition()}

@@ -126,6 +126,13 @@ describe('MyActivityView', () => {
     expect(rows()[0]?.getAttribute('data-activity-action')).toBe('created');
     expect(rows()[1]?.getAttribute('data-activity-action')).toBe('messaged');
     expect(screen.getAllByText('sarah')).toHaveLength(2);
+    // Same day: one rail segment joins the two glyphs, nothing runs past them.
+    const rail = (row: Element | undefined, end: string) =>
+      row?.querySelector(`[data-activity-rail="${end}"]`)?.classList;
+    expect(rail(rows()[0], 'above')).toContain('invisible');
+    expect(rail(rows()[0], 'below')).not.toContain('invisible');
+    expect(rail(rows()[1], 'above')).not.toContain('invisible');
+    expect(rail(rows()[1], 'below')).toContain('invisible');
     expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
     expect(container.querySelector('[data-activity-feed-tail]')).not.toBeNull();
 
@@ -228,7 +235,9 @@ describe('MyActivityView', () => {
     expect(visible).toHaveLength(3);
     expect(visible[0]?.getAttribute('data-activity-run-size')).toBe('5');
     expect(visible[0]?.textContent).toContain('5 times');
-    expect(visible[0]?.querySelector('time')).not.toBeNull();
+    expect(visible[0]?.querySelector('time')?.textContent).toMatch(
+      /^(now|\d+(m|h|d|w|mo|y))$/
+    );
     expect(visible[1]?.getAttribute('data-activity-run-size')).toBe('2');
     expect(visible[1]?.textContent).toContain('2 changes');
     expect(visible[1]?.textContent).toContain('Backlog');

@@ -68,6 +68,8 @@ function resolve(
 }
 
 const rows = () => document.querySelectorAll('[data-activity-row]');
+const RAIL_ABOVE = '[data-activity-rail="above"]';
+const RAIL_BELOW = '[data-activity-rail="below"]';
 const at = (id: string, event: ActivityEventFieldsFragment) => ({
   ...event,
   id,
@@ -91,8 +93,15 @@ describe('EntityActivitySection', () => {
     const { container, graphql } = renderSection();
     resolve(graphql, HISTORY.slice(4));
 
-    expect(rows()).toHaveLength(4);
+    const visible = rows();
+    expect(visible).toHaveLength(4);
     expect(container.querySelector('[data-activity-fold-toggle]')).toBeNull();
+    expect(visible[0]?.querySelector(RAIL_ABOVE)?.classList).toContain(
+      'invisible'
+    );
+    expect(visible[3]?.querySelector(RAIL_BELOW)?.classList).toContain(
+      'invisible'
+    );
   });
 
   it('folds to three newest entries, a toggle, and the pinned creation row', () => {
@@ -111,14 +120,39 @@ describe('EntityActivitySection', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(container.textContent).not.toContain('Show all');
 
+    // The rail starts at the first glyph, runs through the toggle, and ends
+    // at the pinned row's glyph.
+    expect(visible[0]?.querySelector(RAIL_ABOVE)?.classList).toContain(
+      'invisible'
+    );
+    expect(visible[0]?.querySelector(RAIL_BELOW)?.classList).not.toContain(
+      'invisible'
+    );
+    expect(visible[2]?.querySelector(RAIL_BELOW)?.classList).not.toContain(
+      'invisible'
+    );
+    expect(toggle.querySelector(RAIL_BELOW)?.classList).not.toContain(
+      'invisible'
+    );
+    expect(visible[3]?.querySelector(RAIL_ABOVE)?.classList).not.toContain(
+      'invisible'
+    );
+    expect(visible[3]?.querySelector(RAIL_BELOW)?.classList).toContain(
+      'invisible'
+    );
+    expect(container.querySelector('.ring')).toBeNull();
+
     fireEvent.click(toggle);
     expect(rows()).toHaveLength(6);
-    expect(
-      screen
-        .getByRole('button', { name: 'Show less' })
-        .getAttribute('aria-expanded')
-    ).toBe('true');
+    const showLess = screen.getByRole('button', { name: 'Show less' });
+    expect(showLess.getAttribute('aria-expanded')).toBe('true');
     expect(rows()[5]?.getAttribute('data-activity-action')).toBe('created');
+    expect(rows()[5]?.querySelector(RAIL_BELOW)?.classList).not.toContain(
+      'invisible'
+    );
+    expect(showLess.querySelector(RAIL_BELOW)?.classList).toContain(
+      'invisible'
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Show less' }));
     expect(rows()).toHaveLength(4);
@@ -127,7 +161,7 @@ describe('EntityActivitySection', () => {
     ).toBeTruthy();
   });
 
-  it('reads compact rows with the actor, the phrase, and an inline time', () => {
+  it('reads compact rows with the actor, the phrase, and a compact inline time', () => {
     const { graphql } = renderSection();
     resolve(graphql, [at('e1', createdEvent)]);
 
@@ -135,8 +169,12 @@ describe('EntityActivitySection', () => {
     if (!row) throw new Error('row not rendered');
     expect(row.textContent).toContain('sarah');
     expect(row.textContent).toContain('created this');
-    expect(row.querySelector('time')).not.toBeNull();
+    const time = row.querySelector('time');
+    expect(time?.getAttribute('dateTime')).toBe(createdEvent.occurredAt);
+    expect(time?.textContent).toMatch(/^(now|\d+(m|h|d|w|mo|y))$/);
+    expect(time?.getAttribute('title')).toBeTruthy();
     expect(row.textContent).toContain('·');
+    expect(row.textContent).not.toContain('ago');
   });
 
   it('shows the empty and error states', () => {

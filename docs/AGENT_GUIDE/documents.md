@@ -53,10 +53,12 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
 - `Details` → Owner, Created, Last updated.
 - `Tags` → `Add tags` (dialog). `Properties` → `Add property`.
 - Collapsed sections: `Stats`, `History` (version time-travel), `Activity`.
-- `Activity` lists the same glyph-rail lines as `/app/component/activity` (consecutive edits
-  fold into one `3 times` line). Past four entries it shows the three newest, a
-  `View all activities` toggle row, and the oldest fetched entry (usually `created this`)
-  pinned last; the toggle flips to `Show less` once expanded.
+- `Activity` lists the same glyph-rail lines as `/app/component/activity` (plain glyphs on a
+  thin connector, one line each with long names truncated, compact `17h` / `8d` / `1mo`
+  times; consecutive edits fold into one `3 times` line). Past four entries it shows the
+  three newest, a `View all activities` toggle row (dotted connector, caret glyph), and the
+  oldest fetched entry (usually `created this`) pinned last; the toggle flips to `Show less`
+  once expanded.
 - Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
   doc's visibility/permissions.
 
