@@ -10,7 +10,9 @@ use models_properties::{DataType, EntityType, db};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::domain::model::{GetOrCreateTagDefinitionResult, PropertyDefinitionOwner};
+use crate::domain::model::{
+    CreatePropertyDefinitionOutcome, GetOrCreateTagDefinitionResult, PropertyDefinitionOwner,
+};
 
 /// Gets a single property definition by ID (includes system properties).
 pub async fn get_property_definition(
@@ -312,7 +314,7 @@ pub async fn create_property_definition(
     is_multi_select: bool,
     specific_entity_type: Option<EntityType>,
     options: Vec<PropertyOption>,
-) -> anyhow::Result<PropertyDefinition> {
+) -> anyhow::Result<CreatePropertyDefinitionOutcome> {
     let (team_id, user_id) = owner.into_ids();
     let user_id: Option<&str> = user_id.map(|u| u.as_ref());
 
@@ -320,7 +322,7 @@ pub async fn create_property_definition(
 
     let mut tx = pool.begin().await?;
 
-    let row = sqlx::query!(
+    let inserted = sqlx::query!(
         r#"
         INSERT INTO property_definitions (
             id,
@@ -352,7 +354,17 @@ pub async fn create_property_definition(
         specific_entity_type as Option<EntityType>
     )
     .fetch_one(&mut *tx)
-    .await?;
+    .await;
+
+    // Per-owner display-name uniqueness (and the one-tag-set-per-owner rule) are
+    // enforced by unique indexes; report a collision as an outcome, not a failure.
+    let row = match inserted {
+        Ok(row) => row,
+        Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+            return Ok(CreatePropertyDefinitionOutcome::DuplicateDisplayName);
+        }
+        Err(e) => return Err(e.into()),
+    };
 
     let db_property_def = db::PropertyDefinition {
         id: row.id,
@@ -367,34 +379,42 @@ pub async fn create_property_definition(
         is_system: false, // User-created properties are never system properties
     };
 
+    let mut property_options = Vec::with_capacity(options.len());
     for option in options {
-        create_property_option_tx(
-            &mut tx,
-            db_property_def.id,
-            option.display_order,
-            option.value,
-            option.color,
-        )
-        .await?;
+        property_options.push(
+            create_property_option_tx(
+                &mut tx,
+                db_property_def.id,
+                option.display_order,
+                option.value,
+                option.color,
+            )
+            .await?,
+        );
     }
 
     tx.commit().await?;
 
-    Ok(db_property_def.into())
+    Ok(CreatePropertyDefinitionOutcome::Created(
+        PropertyDefinitionWithOptions {
+            definition: db_property_def.into(),
+            property_options,
+        },
+    ))
 }
 
-/// Inserts a property option within an existing transaction.
+/// Inserts a property option within an existing transaction and returns it.
 pub(super) async fn create_property_option_tx(
     tx: &mut sqlx::Transaction<'_, Postgres>,
     property_definition_id: Uuid,
     display_order: i32,
     value: PropertyOptionValue,
     color: Option<String>,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<PropertyOption> {
     let id = macro_uuid::generate_uuid_v7();
     let (number_value, string_value) = value.to_db_values();
 
-    sqlx::query!(
+    let row = sqlx::query!(
         r#"
         INSERT INTO property_options (
             id,
@@ -405,18 +425,27 @@ pub(super) async fn create_property_option_tx(
             color
         )
         VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, created_at, updated_at
         "#,
         id,
         property_definition_id,
         display_order,
         number_value,
         string_value,
-        color
+        color.clone()
     )
-    .execute(&mut **tx)
+    .fetch_one(&mut **tx)
     .await?;
 
-    Ok(())
+    Ok(PropertyOption {
+        id: row.id,
+        property_definition_id,
+        display_order,
+        value,
+        color,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    })
 }
 
 /// Display name used for the auto-provisioned tag definition.
@@ -500,19 +529,21 @@ pub async fn get_or_create_tag_definition(
         None,
         Vec::new(),
     )
-    .await
+    .await?
     {
-        Ok(definition) => Ok(GetOrCreateTagDefinitionResult {
-            definition,
+        CreatePropertyDefinitionOutcome::Created(created) => Ok(GetOrCreateTagDefinitionResult {
+            definition: created.definition,
             created: true,
         }),
-        Err(create_error) => match get_tag_definition(pool, owner).await? {
-            Some(definition) => Ok(GetOrCreateTagDefinitionResult {
+        CreatePropertyDefinitionOutcome::DuplicateDisplayName => {
+            let definition = get_tag_definition(pool, owner).await?.ok_or_else(|| {
+                anyhow::anyhow!("tag definition create lost a race but the winner was not found")
+            })?;
+            Ok(GetOrCreateTagDefinitionResult {
                 definition,
                 created: false,
-            }),
-            None => Err(create_error),
-        },
+            })
+        }
     }
 }
 

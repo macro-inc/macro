@@ -175,14 +175,16 @@ pub trait PropertiesService: Send + Sync + 'static {
 
     /// Create a property definition owned by the caller (their user property,
     /// or their team's when the request has team scope). Fails with
-    /// [`PropertiesErr::TeamMembershipRequired`] for team scope without a team.
-    /// Validates the request and creates any select options atomically.
+    /// [`PropertiesErr::TeamMembershipRequired`] for team scope without a team
+    /// and [`PropertiesErr::DuplicatePropertyName`] when the owner already has
+    /// a property with that name. Validates the request, creates any select
+    /// options atomically, and returns them with the definition.
     fn create_property_definition(
         &self,
         user_id: &MacroUserIdStr<'_>,
         team: Option<&TeamReceipt>,
         request: &CreatePropertyDefinitionRequest,
-    ) -> impl Future<Output = Result<PropertyDefinition, PropertiesErr>> + Send;
+    ) -> impl Future<Output = Result<PropertyDefinitionWithOptions, PropertiesErr>> + Send;
 
     /// Delete a property definition owned by the caller.
     ///

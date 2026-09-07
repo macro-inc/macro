@@ -1094,6 +1094,96 @@ export const CreateChannelResponse = z.object({
   summary: z.string(),
 });
 
+export const CreateCustomProperty = z.object({
+  display_name: z.string(),
+  data_type: z.enum([
+    'string',
+    'number',
+    'boolean',
+    'date',
+    'select',
+    'select_number',
+    'entity',
+    'link',
+  ]),
+  scope: z
+    .intersection(
+      z.any().superRefine((x, ctx) => {
+        const schemas = [z.literal('user'), z.literal('team')];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
+      z.any().default('team')
+    )
+    .optional(),
+  options: z.array(z.string()).optional(),
+  multi: z.boolean().optional(),
+  referenced_entity_type: z
+    .union([
+      z.enum([
+        'document',
+        'task',
+        'project',
+        'chat',
+        'thread',
+        'channel',
+        'call',
+        'user',
+        'company',
+      ]),
+      z.null(),
+    ])
+    .optional(),
+});
+
+export const CreateCustomPropertyResponse = z.object({
+  propertyDefinitionId: z.string().uuid(),
+  displayName: z.string(),
+  dataType: z.string(),
+  isMultiSelect: z.boolean(),
+  scope: z.any().superRefine((x, ctx) => {
+    const schemas = [z.literal('user'), z.literal('team')];
+    const errors = schemas.reduce<z.ZodError[]>(
+      (errors, schema) =>
+        ((result) => (result.error ? [...errors, result.error] : errors))(
+          schema.safeParse(x)
+        ),
+      []
+    );
+    if (schemas.length - errors.length !== 1) {
+      ctx.addIssue({
+        path: ctx.path,
+        code: 'invalid_union',
+        unionErrors: errors,
+        message: 'Invalid input: Should pass single schema',
+      });
+    }
+  }),
+  options: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        displayOrder: z.number().int(),
+        displayValue: z.string(),
+      })
+    )
+    .optional(),
+  summary: z.string(),
+});
+
 export const CreateDocument = z.object({
   documentName: z.string(),
   fileContent: z.string(),

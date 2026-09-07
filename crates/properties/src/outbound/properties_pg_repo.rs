@@ -15,9 +15,9 @@ use super::{
     task_property_queries,
 };
 use crate::domain::model::{
-    EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome,
-    UpdatePropertyOptionOutcome,
+    CreatePropertyDefinitionOutcome, EntityPropertiesKey, EntityPropertyInfo,
+    EntityPropertyMutationSnapshot, GetOrCreateTagDefinitionResult, PropertyDefinitionOwner,
+    TagPromotionOutcome, TagRemapOutcome, UpdatePropertyOptionOutcome,
 };
 use crate::domain::ports::PropertiesRepo;
 use models_properties::DataType;
@@ -131,7 +131,7 @@ impl PropertiesRepo for PropertiesPgRepo {
         is_multi_select: bool,
         specific_entity_type: Option<EntityType>,
         options: Vec<PropertyOption>,
-    ) -> Result<PropertyDefinition, Self::Err> {
+    ) -> Result<CreatePropertyDefinitionOutcome, Self::Err> {
         property_definition_queries::create_property_definition(
             &self.pool,
             owner,

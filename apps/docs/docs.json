@@ -78,6 +78,7 @@
               "AI/mcp/tools/create-bot",
               "AI/mcp/tools/create-calendar-event",
               "AI/mcp/tools/create-channel",
+              "AI/mcp/tools/create-custom-property",
               "AI/mcp/tools/create-document",
               "AI/mcp/tools/create-import-entity",
               "AI/mcp/tools/create-project",

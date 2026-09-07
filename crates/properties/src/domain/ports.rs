@@ -21,10 +21,10 @@ use models_properties::{DataType, EntityPropertyReference, EntityReference, Enti
 use uuid::Uuid;
 
 use super::model::{
-    EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreateTagDefinitionResult,
-    PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
-    UpdatePropertyOptionOutcome, ViewReceipt,
+    CreatePropertyDefinitionOutcome, EditReceipt, EntityPropertiesKey, EntityPropertyInfo,
+    EntityPropertyMutationSnapshot, EntityPropertyOptionSelection, EntityPropertyOptionUpdate,
+    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome,
+    TaskAssignedNotification, UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -80,7 +80,9 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
 
     /// Create a property definition, optionally with select options
-    /// (atomically when options are provided).
+    /// (atomically when options are provided). Reports a display-name
+    /// collision with the owner's existing definitions as an outcome rather
+    /// than an error.
     fn create_property_definition<'a>(
         &self,
         owner: PropertyDefinitionOwner<'a>,
@@ -89,7 +91,7 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         is_multi_select: bool,
         specific_entity_type: Option<EntityType>,
         options: Vec<PropertyOption>,
-    ) -> impl Future<Output = Result<PropertyDefinition, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<CreatePropertyDefinitionOutcome, Self::Err>> + Send;
 
     /// Delete a property definition and all associated data (cascades).
     /// A no-op if the definition doesn't exist.

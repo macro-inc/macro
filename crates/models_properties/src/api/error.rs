@@ -11,6 +11,15 @@ pub enum PropertyDefinitionValidationError {
         min: usize,
         max: usize,
     },
+
+    #[error("Option values cannot be empty or whitespace")]
+    EmptyOptionValue,
+
+    #[error("Number option values must be finite (not NaN or Infinity)")]
+    InvalidOptionNumber,
+
+    #[error("Duplicate option value \"{value}\". Each option must be unique.")]
+    DuplicateOptionValue { value: String },
 }
 
 /// Errors that can occur during property option validation

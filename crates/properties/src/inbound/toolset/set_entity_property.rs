@@ -58,7 +58,7 @@ CRM companies (entity_type='company', entity_id=the company UUID) always have th
 - Revenue (00000001-0000-0000-0000-000000000012): number, single. Use number_value (dollars).
 Any member of the owning team can edit visible company properties; hidden records remain admin/owner-only.
 
-For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options."
+For non-system or custom properties, call GetEntityProperties first to discover property_definition_id values and options. To create a new custom property (not a tag), use CreateCustomProperty."
 )]
 #[serde(rename_all = "snake_case")]
 pub struct SetEntityProperty {

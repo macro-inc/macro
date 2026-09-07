@@ -334,7 +334,7 @@ export const createPropertyDefinitionBody = zod
     scope: zod
       .enum(['user', 'team'])
       .describe(
-        'Ownership scope a client may request when creating a property definition.\nThe owning user or team is derived server-side from the authenticated caller -\nclients never supply owner ids. System properties are not creatable via the API.'
+        'Who owns a new property definition: the requesting user or their team.\nThe owner is derived from the authenticated caller, never supplied by id;\nteam scope requires team membership. System properties cannot be created.'
       ),
   })
   .describe('Request to create a new property definition.');
