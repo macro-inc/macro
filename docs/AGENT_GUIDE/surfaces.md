@@ -77,7 +77,24 @@ Board/List views, `Company` create button. Requires a team ("Join a team to enab
 ## Activity — `/app/component/activity`
 
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
-snapshot to a file) plus a feed of "You edited/created X" entries.
+snapshot to a file), then a `Most active` row of pill chips directly under the card (entity
+icon, name, action count; click opens the entity, shift-click opens a new split; the row is
+absent when there are no entities), then a feed of "You edited/created X · 2h" entries grouped
+under day headers, with the relative time inline after a middot rather than right-aligned.
+Consecutive same-actor, same-entity, same-action events within a day read as one line with a
+count (`You edited Doc X 5 times · 2h`; property changes read the net change, `changed Status
+from A to C on Doc X · 3 changes · 2h`), so the row count is lower than the event count
+(`[data-activity-run-size]` carries the fold size). The whole page is one virtualized list:
+only rows near the viewport are in the DOM, and scrolling near the bottom fetches the next
+page automatically (a `Loading…` tail appears while it lands). There is no `Show more` button.
+Once the heatmap card scrolls away, the day header for the topmost visible row stays pinned at
+the top of the list (`[data-activity-pinned-day]`, a non-interactive copy), so a snapshot taken
+mid-scroll shows that label twice at most. The heatmap never scrolls sideways: its cells are a
+fixed size and a narrow pane shows only the most recent weeks that fit. Under ~672px the four
+stats read as a two-column grid; under ~448px (a phone) the legend drops its `Fewer`/`More`
+words, each stat stacks its label over its value, chips shorten, and row text wraps to a second
+line instead of truncating. On touch devices the list rests below the floating page title and
+above the bottom toolbar.
 
 ## Home — `/app/component/home`
 

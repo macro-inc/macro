@@ -1,3 +1,4 @@
+import type { FeedEntry } from '@app/features/activity/core/collapse-runs';
 import type {
   ActivityAction,
   ActivityEntityType,
@@ -99,7 +100,12 @@ const handler = createToolRenderer({
       ctx.renderContext.grouped !== true
     );
     const activities = () => ctx.response?.data.activities ?? [];
-    const events = createMemo(() => activities().map(activityEvent));
+    const entries = createMemo<FeedEntry[]>(() =>
+      activities().map((activity, index) => ({
+        kind: 'single',
+        event: activityEvent(activity, index),
+      }))
+    );
     const hasResults = () => activities().length > 0;
     const statusText = () => {
       if (!ctx.response) return undefined;
@@ -119,10 +125,10 @@ const handler = createToolRenderer({
           hasResults() && isExpanded() ? (
             <StaticMarkdownContext>
               <div class="max-h-120 overflow-y-auto rounded-md border border-edge-muted/60 py-1">
-                <For each={events()}>
-                  {(event) => (
+                <For each={entries()}>
+                  {(entry) => (
                     <ActivityTimelineRow
-                      event={event}
+                      entry={entry}
                       showActor={false}
                       onOpen={openEntityInSplit}
                     />
