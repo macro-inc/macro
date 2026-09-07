@@ -306,7 +306,7 @@ function WeekRow(props: { class?: string; children?: JSX.Element }) {
 
 function ActionGraphStats(props: { stats: ActivityStats; skeleton: boolean }) {
   return (
-    <dl class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 @max-md/u-list:grid @max-md/u-list:grid-cols-2 @max-md/u-list:gap-y-2">
+    <dl class="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 @max-2xl/u-list:grid @max-2xl/u-list:grid-cols-2 @max-md/u-list:gap-y-2">
       <Stat
         label="Most active month"
         value={monthStat(props.stats.mostActiveMonth)}

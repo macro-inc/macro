@@ -152,15 +152,19 @@ export function ActivityTimelineRow(props: {
             </>
           )}
         </Show>
-        <Separator />
-        <time
-          class="shrink-0 text-ink-extra-muted"
-          dateTime={head().occurredAt}
+        <span
+          class={cn(
+            'flex shrink-0 items-center',
+            props.compact ? 'gap-1' : 'gap-1.5'
+          )}
         >
-          {formatRelativeTimestamp(new Date(head().occurredAt), {
-            condensed: true,
-          })}
-        </time>
+          <Separator />
+          <time class="text-ink-extra-muted" dateTime={head().occurredAt}>
+            {formatRelativeTimestamp(new Date(head().occurredAt), {
+              condensed: true,
+            })}
+          </time>
+        </span>
       </div>
     </div>
   );

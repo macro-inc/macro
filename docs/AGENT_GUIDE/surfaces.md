@@ -90,9 +90,11 @@ page automatically (a `Loading…` tail appears while it lands). There is no `Sh
 Once the heatmap card scrolls away, the day header for the topmost visible row stays pinned at
 the top of the list (`[data-activity-pinned-day]`, a non-interactive copy), so a snapshot taken
 mid-scroll shows that label twice at most. The heatmap never scrolls sideways: its cells are a
-fixed size and a narrow pane (a phone, or a split under ~448px) shows only the most recent
-weeks that fit, drops the `Fewer`/`More` legend words, lays the four stats out as two columns,
-and lets row text wrap to a second line instead of truncating.
+fixed size and a narrow pane shows only the most recent weeks that fit. Under ~672px the four
+stats read as a two-column grid; under ~448px (a phone) the legend drops its `Fewer`/`More`
+words, each stat stacks its label over its value, chips shorten, and row text wraps to a second
+line instead of truncating. On touch devices the list rests below the floating page title and
+above the bottom toolbar.
 
 ## Home — `/app/component/home`
 
