@@ -276,8 +276,7 @@ TypeScript · `[ui]` UI / UX conventions
   context/production wiring, raw-client injection, and UI/import-side-effect
   stubs; these are documented migration gaps.
   The detailed document covers layer responsibilities, narrow reference exceptions,
-  adoption, and review. Use the
-  [frontend-feature-architecture skill](../.claude/skills/frontend-feature-architecture/SKILL.md).
+  adoption, and review.
   Register adopting feature paths in both language variants of every feature
   rule. (enforced: ast-grep `ts-/tsx-feature-core-pure`,
   `ts-/tsx-feature-components-presentational`, `ts-/tsx-feature-data-no-ui`,

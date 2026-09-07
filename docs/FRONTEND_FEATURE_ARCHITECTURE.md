@@ -7,8 +7,7 @@ restructuring an existing feature, with the stronger production-composition and
 feature-contract boundaries defined here. Activity is a worked example with
 documented migration gaps, not a complete implementation of every rule below.
 This is the detailed companion to FE-33 in
-[the style guide](STYLE_GUIDE.md) and the
-[frontend-feature-architecture skill](../.claude/skills/frontend-feature-architecture/SKILL.md).
+[the style guide](STYLE_GUIDE.md).
 
 The goal is to make ownership visible: feature logic can run without the app,
 reactive behavior can be tested without rendering, and the same visual component

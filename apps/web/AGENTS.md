@@ -79,7 +79,7 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - Keep reusable components small, atomic, and decoupled from queries/complex state. Push data-fetching and mutations up to use-case-specific composed components.
 - Context should be scoped to a component subtree — Message.Content consuming a MessageContext is fine because the ownership boundary is clear.
 - Composed primitives must not depend on use-case-specific context — a RecipientsSelector should never require an EmailComposeContext.
-- New features and feature restructures use the layered layout in [docs/FRONTEND_FEATURE_ARCHITECTURE.md](../../docs/FRONTEND_FEATURE_ARCHITECTURE.md), summarized by FE-33 (`core / queries / primitives / components / views` plus an injected `context/`). Keep production wiring in an app-facing entry point and give reactive logic narrow feature-owned contracts. `src/features/activity` illustrates the layers but still has documented composition and contract migration gaps. Use the [frontend-feature-architecture skill](../../.claude/skills/frontend-feature-architecture/SKILL.md) when adding or restructuring feature folders or changing their dependency and composition boundaries.
+- New features and feature restructures use the layered layout in [docs/FRONTEND_FEATURE_ARCHITECTURE.md](../../docs/FRONTEND_FEATURE_ARCHITECTURE.md), summarized by FE-33 (`core / queries / primitives / components / views` plus an injected `context/`). Keep production wiring in an app-facing entry point and give reactive logic narrow feature-owned contracts. `src/features/activity` illustrates the layers but still has documented composition and contract migration gaps.
 
 ## Styling
 - Use semantic color tokens, not raw Tailwind color classes.
