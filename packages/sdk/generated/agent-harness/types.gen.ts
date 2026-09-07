@@ -42,6 +42,16 @@ export type AgentPromptAction = {
 };
 
 /**
+ * Response body for `GET /agent-sessions`: the caller's own sessions.
+ */
+export type AgentSessionListResponse = {
+    /**
+     * The caller's sessions, most recently modified first.
+     */
+    sessions: Array<AgentSessionResponse>;
+};
+
+/**
  * One entry of a session's protocol log.
  *
  * Serializes as `{"userId": ..., "direction": ..., "content": ...}` - the
@@ -516,6 +526,26 @@ export type PutAgentSandboxSizeResponses = {
 };
 
 export type PutAgentSandboxSizeResponse = PutAgentSandboxSizeResponses[keyof PutAgentSandboxSizeResponses];
+
+export type ListAgentSessionsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-sessions';
+};
+
+export type ListAgentSessionsErrors = {
+    401: string;
+    500: string;
+};
+
+export type ListAgentSessionsError = ListAgentSessionsErrors[keyof ListAgentSessionsErrors];
+
+export type ListAgentSessionsResponses = {
+    200: AgentSessionListResponse;
+};
+
+export type ListAgentSessionsResponse = ListAgentSessionsResponses[keyof ListAgentSessionsResponses];
 
 export type CreateAgentSessionData = {
     body: CreateAgentSessionRequest;

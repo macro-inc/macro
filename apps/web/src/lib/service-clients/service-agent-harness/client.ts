@@ -1,6 +1,7 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type {
+  AgentSessionListResponse,
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
@@ -26,6 +27,14 @@ export const agentHarnessServiceClient = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
       }
+    );
+  },
+
+  /** The caller's own sessions, most recently modified first. */
+  list() {
+    return fetchWithToken<AgentSessionListResponse>(
+      `${agentHarnessHost}/agent-sessions`,
+      { method: 'GET' }
     );
   },
 

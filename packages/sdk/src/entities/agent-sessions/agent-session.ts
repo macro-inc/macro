@@ -30,6 +30,17 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return new AgentSession(client, session.id, session);
   }
 
+  /**
+   * The caller's own sessions, most recently modified first. Each handle is
+   * pre-loaded with the snapshot the list returned.
+   */
+  static async listOwned(client: MacroClient): Promise<AgentSession[]> {
+    const { sessions } = unwrap(await client.agentHarness.listAgentSessions());
+    return sessions.map(
+      (session) => new AgentSession(client, session.id, session),
+    );
+  }
+
   protected async fetch(): Promise<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSession({

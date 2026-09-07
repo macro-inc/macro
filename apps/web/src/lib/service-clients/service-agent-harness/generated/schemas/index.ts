@@ -18,6 +18,7 @@ export * from './agentActionOneOfNineType';
 export * from './agentActionOneOfSeven';
 export * from './agentActionOneOfSevenType';
 export * from './agentPromptAction';
+export * from './agentSessionListResponse';
 export * from './agentSessionLogEntryDto';
 export * from './agentSessionLogEntryDtoAllOf';
 export * from './agentSessionLogEntryDtoAllOfUserId';

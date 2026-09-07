@@ -97,6 +97,44 @@
       }
     },
     "/agent-sessions": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "List the agent sessions the caller owns, most recently modified first.",
+        "description": "Owner-scoped rather than access-scoped: a session shared with the caller\nthrough a channel grant is reachable from that channel, and this list is\nwhat the Agents view shows as the caller's own sessions.",
+        "operationId": "list_agent_sessions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": ["agent-sessions"],
         "summary": "Open an agent session served by an external runtime.",
@@ -886,6 +924,20 @@
           "prompt": {
             "type": "string",
             "description": "What to tell the agent."
+          }
+        }
+      },
+      "AgentSessionListResponse": {
+        "type": "object",
+        "description": "Response body for `GET /agent-sessions`: the caller's own sessions.",
+        "required": ["sessions"],
+        "properties": {
+          "sessions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentSessionResponse"
+            },
+            "description": "The caller's sessions, most recently modified first."
           }
         }
       },

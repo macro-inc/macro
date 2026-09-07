@@ -11,6 +11,11 @@ export class AgentSessionNamespace {
     return AgentSession.byId(this.client, id);
   }
 
+  /** The sessions the authenticated user owns, most recently modified first. */
+  list(): Promise<AgentSession[]> {
+    return AgentSession.listOwned(this.client);
+  }
+
   /** Create a managed agent session. */
   createManaged(opts?: {
     prompt?: string;

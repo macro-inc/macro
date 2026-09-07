@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentSessionListResponse,
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
@@ -132,6 +133,63 @@ export const putAgentSandboxSize = async (
     status: res.status,
     headers: res.headers,
   } as putAgentSandboxSizeResponse;
+};
+
+/**
+ * Owner-scoped rather than access-scoped: a session shared with the caller
+through a channel grant is reachable from that channel, and this list is
+what the Agents view shows as the caller's own sessions.
+ * @summary List the agent sessions the caller owns, most recently modified first.
+ */
+export type listAgentSessionsResponse200 = {
+  data: AgentSessionListResponse;
+  status: 200;
+};
+
+export type listAgentSessionsResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listAgentSessionsResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listAgentSessionsResponseSuccess = listAgentSessionsResponse200 & {
+  headers: Headers;
+};
+export type listAgentSessionsResponseError = (
+  | listAgentSessionsResponse401
+  | listAgentSessionsResponse500
+) & {
+  headers: Headers;
+};
+
+export type listAgentSessionsResponse =
+  | listAgentSessionsResponseSuccess
+  | listAgentSessionsResponseError;
+
+export const getListAgentSessionsUrl = () => {
+  return `/agent-sessions`;
+};
+
+export const listAgentSessions = async (
+  options?: RequestInit
+): Promise<listAgentSessionsResponse> => {
+  const res = await fetch(getListAgentSessionsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentSessionsResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentSessionsResponse;
 };
 
 /**
