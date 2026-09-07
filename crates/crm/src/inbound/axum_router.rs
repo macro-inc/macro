@@ -44,6 +44,9 @@ pub mod comments;
 /// team saved views).
 pub mod team_settings;
 
+/// The team's deal stage set, gated on `edit_stages_role`.
+pub mod stages;
+
 use std::sync::Arc;
 
 use axum::{
@@ -57,7 +60,7 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 
-use crate::domain::{model::CrmError, service::CrmService};
+use crate::domain::{model::CrmError, service::CrmService, stages::CrmStageService};
 
 /// Router state for the CRM endpoints, including service-backed authorization
 /// for direct user credentials and internal service access.
@@ -114,14 +117,58 @@ impl<C, Eas, Auth> Clone for CrmRouterState<C, Eas, Auth> {
     }
 }
 
+/// Router state for the deal stage endpoints.
+pub struct CrmStageRouterState<St, Eas, Auth> {
+    /// Team deal stage service.
+    pub stage_service: Arc<St>,
+    /// Entity access service used by the team extractor.
+    pub entity_access_service: Arc<Eas>,
+    /// State used to authorize direct users and internal service callers.
+    pub authorization_state: MacroAuthorizationState<Auth>,
+}
+
+impl<St, Eas, Auth> FromRef<CrmStageRouterState<St, Eas, Auth>> for Arc<Eas> {
+    fn from_ref(state: &CrmStageRouterState<St, Eas, Auth>) -> Self {
+        state.entity_access_service.clone()
+    }
+}
+
+impl<St, Eas, Auth> FromRef<CrmStageRouterState<St, Eas, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &CrmStageRouterState<St, Eas, Auth>) -> Self {
+        state.authorization_state.clone()
+    }
+}
+
+impl<St, Eas, Auth> Clone for CrmStageRouterState<St, Eas, Auth> {
+    fn clone(&self) -> Self {
+        Self {
+            stage_service: self.stage_service.clone(),
+            entity_access_service: self.entity_access_service.clone(),
+            authorization_state: self.authorization_state.clone(),
+        }
+    }
+}
+
 /// Build the CRM router with all endpoints.
-pub fn crm_router<C, Eas, Auth, S>(state: CrmRouterState<C, Eas, Auth>) -> Router<S>
+pub fn crm_router<C, St, Eas, Auth, S>(
+    state: CrmRouterState<C, Eas, Auth>,
+    stage_state: CrmStageRouterState<St, Eas, Auth>,
+) -> Router<S>
 where
     C: CrmService,
+    St: CrmStageService,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
-    S: Send + Sync + 'static,
+    S: Clone + Send + Sync + 'static,
 {
+    let stage_router = Router::new()
+        .route(
+            "/stages",
+            put(stages::replace_handler::<St, Eas, Auth>)
+                .delete(stages::reset_handler::<St, Eas, Auth>),
+        )
+        .with_state(stage_state);
+
     Router::new()
         .route("/companies", post(create_company::handler::<C, Eas, Auth>))
         .route(
@@ -177,6 +224,7 @@ where
                 .put(team_settings::update_handler::<C, Eas, Auth>),
         )
         .with_state(state)
+        .merge(stage_router)
 }
 
 impl IntoResponse for CrmError {
@@ -230,6 +278,16 @@ impl IntoResponse for CrmError {
                     message:
                         "changing crm permission or stage settings requires admin/owner team role"
                             .into(),
+                }),
+            ),
+            CrmError::StageEditRoleRequired(role) => (
+                StatusCode::FORBIDDEN,
+                Json(ErrorResponse {
+                    message: format!(
+                        "editing deal stages requires the {} team role",
+                        role.as_db_str()
+                    )
+                    .into(),
                 }),
             ),
             CrmError::CompanyHidden => (

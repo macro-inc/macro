@@ -7,7 +7,9 @@ use models_properties::service::property_option::{PropertyOption, PropertyOption
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-use crate::domain::model::UpdatePropertyOptionOutcome;
+use crate::domain::model::{
+    PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, UpdatePropertyOptionOutcome,
+};
 
 /// Gets a single property option by ID.
 #[tracing::instrument(skip(pool))]
@@ -226,7 +228,16 @@ pub async fn delete_property_option(
     property_option_id: Uuid,
 ) -> anyhow::Result<bool> {
     let mut tx = pool.begin().await?;
+    let deleted = delete_option_in_tx(&mut tx, property_definition_id, property_option_id).await?;
+    tx.commit().await?;
+    Ok(deleted)
+}
 
+async fn delete_option_in_tx(
+    tx: &mut sqlx::Transaction<'_, Postgres>,
+    property_definition_id: Uuid,
+    property_option_id: Uuid,
+) -> anyhow::Result<bool> {
     sqlx::query!(
         r#"
         UPDATE entity_properties
@@ -250,17 +261,131 @@ pub async fn delete_property_option(
         property_definition_id,
         property_option_id.to_string(),
     )
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
 
     let result = sqlx::query!(
-        "DELETE FROM property_options WHERE id = $1",
-        property_option_id
+        "DELETE FROM property_options WHERE id = $1 AND property_definition_id = $2",
+        property_option_id,
+        property_definition_id
     )
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await?;
 
+    Ok(result.rows_affected() > 0)
+}
+
+/// Applies a [`PropertyOptionReplacePlan`] in one transaction. Rewrites are
+/// staged through a placeholder value first so options can trade values
+/// under the per-definition uniqueness index.
+#[tracing::instrument(skip(pool, plan), err)]
+pub async fn replace_property_options(
+    pool: &Pool<Postgres>,
+    property_definition_id: Uuid,
+    plan: &PropertyOptionReplacePlan,
+) -> anyhow::Result<PropertyOptionReplaceOutcome> {
+    let mut tx = pool.begin().await?;
+
+    for option_id in &plan.delete {
+        if !delete_option_in_tx(&mut tx, property_definition_id, *option_id).await? {
+            return Ok(PropertyOptionReplaceOutcome::OptionNotFound);
+        }
+    }
+
+    for rewrite in &plan.rewrite {
+        let placeholder = format!("\u{1F}{}", rewrite.option_id);
+        let result = sqlx::query!(
+            r#"
+            UPDATE property_options
+            SET string_value = $3, number_value = NULL, updated_at = NOW()
+            WHERE id = $1 AND property_definition_id = $2
+            "#,
+            rewrite.option_id,
+            property_definition_id,
+            placeholder
+        )
+        .execute(&mut *tx)
+        .await?;
+        if result.rows_affected() == 0 {
+            return Ok(PropertyOptionReplaceOutcome::OptionNotFound);
+        }
+    }
+
+    for rewrite in &plan.rewrite {
+        let (number_value, string_value) = rewrite.value.to_db_values();
+        let result = sqlx::query!(
+            r#"
+            UPDATE property_options
+            SET number_value = $3, string_value = $4, display_order = $5, updated_at = NOW()
+            WHERE id = $1 AND property_definition_id = $2
+            "#,
+            rewrite.option_id,
+            property_definition_id,
+            number_value,
+            string_value,
+            rewrite.display_order
+        )
+        .execute(&mut *tx)
+        .await;
+        match result {
+            Ok(_) => {}
+            Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                return Ok(PropertyOptionReplaceOutcome::DuplicateValue);
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+
+    for insert in &plan.insert {
+        let (number_value, string_value) = insert.value.to_db_values();
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO property_options (
+                id, property_definition_id, display_order, number_value, string_value
+            )
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
+            macro_uuid::generate_uuid_v7(),
+            property_definition_id,
+            insert.display_order,
+            number_value,
+            string_value
+        )
+        .execute(&mut *tx)
+        .await;
+        match result {
+            Ok(_) => {}
+            Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
+                return Ok(PropertyOptionReplaceOutcome::DuplicateValue);
+            }
+            Err(e) => return Err(e.into()),
+        }
+    }
+
+    let rows = sqlx::query_as!(
+        db::PropertyOption,
+        r#"
+        SELECT
+            id,
+            property_definition_id,
+            display_order,
+            number_value,
+            string_value,
+            color,
+            created_at,
+            updated_at
+        FROM property_options
+        WHERE property_definition_id = $1
+        ORDER BY display_order, number_value, LOWER(string_value)
+        "#,
+        property_definition_id
+    )
+    .fetch_all(&mut *tx)
+    .await?;
     tx.commit().await?;
 
-    Ok(result.rows_affected() > 0)
+    rows.into_iter()
+        .map(|row| row.try_into().map_err(anyhow::Error::from))
+        .collect::<anyhow::Result<Vec<_>>>()
+        .map(PropertyOptionReplaceOutcome::Replaced)
 }

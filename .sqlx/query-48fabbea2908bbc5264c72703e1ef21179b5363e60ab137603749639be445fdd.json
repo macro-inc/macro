@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE property_options\n            SET number_value = $3, string_value = $4, display_order = $5, updated_at = NOW()\n            WHERE id = $1 AND property_definition_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Float8",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "48fabbea2908bbc5264c72703e1ef21179b5363e60ab137603749639be445fdd"
+}

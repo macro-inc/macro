@@ -23,8 +23,9 @@ use uuid::Uuid;
 use super::model::{
     EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
     EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreateTagDefinitionResult,
-    PropertyDefinitionOwner, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
-    UpdatePropertyOptionOutcome, ViewReceipt,
+    PropertyDefinitionOwner, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
+    TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification, UpdatePropertyOptionOutcome,
+    ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -130,6 +131,15 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         color: Option<String>,
         display_order: i32,
     ) -> impl Future<Output = Result<UpdatePropertyOptionOutcome, Self::Err>> + Send;
+
+    /// Apply a whole-set option change in one transaction: deletes (stripping
+    /// ids from entity values), in-place rewrites, then inserts. Rewrites go
+    /// through temporary values so a set of options can trade values.
+    fn replace_property_options(
+        &self,
+        property_definition_id: Uuid,
+        plan: &PropertyOptionReplacePlan,
+    ) -> impl Future<Output = Result<PropertyOptionReplaceOutcome, Self::Err>> + Send;
 
     /// Delete a property option and strip its id from every entity value that
     /// references it, atomically. Returns `true` if the option was deleted,

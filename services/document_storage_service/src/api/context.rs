@@ -154,6 +154,18 @@ pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     AuthorizationService,
 >;
 
+pub(crate) type DssCrmStageService = crm::domain::stages::CrmStageServiceImpl<
+    crm::outbound::companies_repo::CompaniesRepositoryImpl,
+    crm::outbound::stage_definitions::PropertiesStageDefinitionStore<PropertiesService>,
+>;
+
+/// CRM deal stage router state.
+pub(crate) type DssCrmStageState = crm::inbound::axum_router::CrmStageRouterState<
+    DssCrmStageService,
+    EntityAccessService,
+    AuthorizationService,
+>;
+
 pub(crate) type DssSoupService = SoupImpl<
     PgSoupRepo,
     FrecencyQueryServiceImpl<FrecencyPgStorage>,
@@ -571,6 +583,7 @@ pub(crate) struct ApiContext {
     pub cal_webhook_state: DssCalWebhookState,
     pub entity_access_management_service: EntityAccessManagementService,
     pub crm_state: DssCrmState,
+    pub crm_stage_state: DssCrmStageState,
 }
 
 env_var! {

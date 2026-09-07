@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE property_options\n            SET string_value = $3, number_value = NULL, updated_at = NOW()\n            WHERE id = $1 AND property_definition_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8ed8721a11cfb6a0d5c13ca3fe175eaf40b7c52c8c7bd6c6c2eca226b6126b40"
+}

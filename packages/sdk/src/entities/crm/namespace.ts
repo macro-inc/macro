@@ -1,6 +1,8 @@
 import type {
   CreateCrmCompanyRequest,
+  CrmStagesResponse,
   CrmTeamSettingsResponse,
+  ReplaceCrmStagesRequest,
   UpdateCrmTeamSettingsRequest,
 } from '../../../generated/storage/types.gen';
 import { unwrap } from '../../utils';
@@ -51,6 +53,16 @@ export class CrmNamespace {
     return unwrap(
       await this.client.storage.putCrmTeamSettings({ body: settings }),
     );
+  }
+
+  /** Replace the caller's current team's deal stages, in pipeline order. */
+  async setStages(stages: ReplaceCrmStagesRequest): Promise<CrmStagesResponse> {
+    return unwrap(await this.client.storage.putCrmTeamStages({ body: stages }));
+  }
+
+  /** Reset the caller's current team's deal stages to the defaults. */
+  async resetStages(): Promise<void> {
+    unwrap(await this.client.storage.resetCrmTeamStages());
   }
 
   /** Search CRM companies by name/domain, most relevant first, auto-paginated. */
