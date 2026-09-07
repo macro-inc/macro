@@ -2,10 +2,11 @@
 
 use super::properties_pg_repo::PropertiesPgRepo;
 use super::property_definition_queries;
-use crate::domain::model::PropertyDefinitionOwner;
+use crate::domain::model::{CreatePropertyDefinitionOutcome, PropertyDefinitionOwner};
 use crate::domain::ports::PropertiesRepo;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::{DataType, EntityType};
 use sqlx::{Pool, Postgres};
@@ -29,6 +30,15 @@ fn team_1() -> Uuid {
 
 fn team_2() -> Uuid {
     "0e000000-0000-0000-0000-000000000002".parse().unwrap()
+}
+
+fn created(outcome: CreatePropertyDefinitionOutcome) -> PropertyDefinitionWithOptions {
+    match outcome {
+        CreatePropertyDefinitionOutcome::Created(created) => created,
+        CreatePropertyDefinitionOutcome::DuplicateDisplayName => {
+            panic!("expected the definition to be created")
+        }
+    }
 }
 
 fn new_option(display_order: i32, value: PropertyOptionValue) -> PropertyOption {
@@ -221,8 +231,8 @@ async fn list_property_definitions_with_options(pool: Pool<Postgres>) -> anyhow:
 async fn create_property_definition_simple(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PropertiesPgRepo::new(pool);
 
-    let property = repo
-        .create_property_definition(
+    let property = created(
+        repo.create_property_definition(
             PropertyDefinitionOwner::Team(team_1()),
             "New Test Property",
             DataType::String,
@@ -230,7 +240,9 @@ async fn create_property_definition_simple(pool: Pool<Postgres>) -> anyhow::Resu
             None,
             Vec::new(),
         )
-        .await?;
+        .await?,
+    )
+    .definition;
 
     assert_eq!(property.display_name, "New Test Property");
     assert_eq!(property.data_type, DataType::String);
@@ -247,8 +259,8 @@ async fn create_property_definition_simple(pool: Pool<Postgres>) -> anyhow::Resu
 async fn create_property_definition_user_owned(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PropertiesPgRepo::new(pool);
 
-    let property = repo
-        .create_property_definition(
+    let property = created(
+        repo.create_property_definition(
             PropertyDefinitionOwner::User(&user_1()),
             "My User Property",
             DataType::Number,
@@ -256,7 +268,9 @@ async fn create_property_definition_user_owned(pool: Pool<Postgres>) -> anyhow::
             None,
             Vec::new(),
         )
-        .await?;
+        .await?,
+    )
+    .definition;
 
     assert_eq!(property.display_name, "My User Property");
     assert_eq!(property.data_type, DataType::Number);
@@ -268,13 +282,13 @@ async fn create_property_definition_user_owned(pool: Pool<Postgres>) -> anyhow::
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
-async fn create_property_definition_duplicate_name_fails(
+async fn create_property_definition_duplicate_name_is_reported_as_outcome(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = PropertiesPgRepo::new(pool);
 
     // "Test Priority" already exists for team 1 in the fixture.
-    let result = repo
+    let outcome = repo
         .create_property_definition(
             PropertyDefinitionOwner::Team(team_1()),
             "Test Priority",
@@ -283,9 +297,12 @@ async fn create_property_definition_duplicate_name_fails(
             None,
             Vec::new(),
         )
-        .await;
+        .await?;
 
-    assert!(result.is_err());
+    assert!(matches!(
+        outcome,
+        CreatePropertyDefinitionOutcome::DuplicateDisplayName
+    ));
 
     Ok(())
 }
@@ -302,8 +319,8 @@ async fn create_property_definition_with_options(pool: Pool<Postgres>) -> anyhow
         new_option(1, PropertyOptionValue::String("Beta".to_string())),
     ];
 
-    let property = repo
-        .create_property_definition(
+    let created = created(
+        repo.create_property_definition(
             PropertyDefinitionOwner::Team(team_1()),
             "Select With Options",
             DataType::SelectString,
@@ -311,15 +328,43 @@ async fn create_property_definition_with_options(pool: Pool<Postgres>) -> anyhow
             None,
             options,
         )
-        .await?;
+        .await?,
+    );
 
-    let option_count: i64 = sqlx::query_scalar!(
-        r#"SELECT COUNT(*) as "count!" FROM property_options WHERE property_definition_id = $1"#,
-        property.id
+    // The created options come back with their persisted ids, in display order.
+    let returned: Vec<(i32, String, Uuid)> = created
+        .property_options
+        .iter()
+        .map(|o| {
+            (
+                o.display_order,
+                o.value.to_string(),
+                o.property_definition_id,
+            )
+        })
+        .collect();
+    assert_eq!(
+        returned,
+        vec![
+            (0, "Alpha".to_string(), created.definition.id),
+            (1, "Beta".to_string(), created.definition.id),
+        ]
+    );
+
+    let stored_ids: Vec<Uuid> = sqlx::query_scalar!(
+        r#"SELECT id FROM property_options WHERE property_definition_id = $1 ORDER BY display_order"#,
+        created.definition.id
     )
-    .fetch_one(&pool)
+    .fetch_all(&pool)
     .await?;
-    assert_eq!(option_count, 2);
+    assert_eq!(
+        stored_ids,
+        created
+            .property_options
+            .iter()
+            .map(|o| o.id)
+            .collect::<Vec<_>>()
+    );
 
     Ok(())
 }
@@ -331,8 +376,8 @@ async fn create_property_definition_with_options(pool: Pool<Postgres>) -> anyhow
 async fn create_property_definition_specific_entity(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = PropertiesPgRepo::new(pool);
 
-    let property = repo
-        .create_property_definition(
+    let property = created(
+        repo.create_property_definition(
             PropertyDefinitionOwner::Team(team_1()),
             "Document Only Property",
             DataType::String,
@@ -340,7 +385,9 @@ async fn create_property_definition_specific_entity(pool: Pool<Postgres>) -> any
             Some(EntityType::Document),
             Vec::new(),
         )
-        .await?;
+        .await?,
+    )
+    .definition;
 
     assert_eq!(property.specific_entity_type, Some(EntityType::Document));
 

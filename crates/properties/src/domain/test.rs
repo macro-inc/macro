@@ -3,9 +3,9 @@
 use super::service_impl::PropertiesServiceImpl;
 use crate::domain::error::PropertiesErr;
 use crate::domain::model::{
-    EditReceipt, EntityPropertyMutationSnapshot, GetOrCreateTagDefinitionResult,
-    PropertyAccessReceiptExt, TagScope, UpdatePropertyOptionOutcome, ViewReceipt,
-    canonical_entity_type,
+    CreatePropertyDefinitionOutcome, EditReceipt, EntityPropertyMutationSnapshot,
+    GetOrCreateTagDefinitionResult, PropertyAccessReceiptExt, TagScope,
+    UpdatePropertyOptionOutcome, ViewReceipt, canonical_entity_type,
 };
 use crate::domain::{
     ports::{MockNotificationService, MockPermissionService, MockPropertiesRepo},
@@ -23,12 +23,13 @@ use models_properties::{
     DataType, EntityType, PropertyOwner,
     api::{
         AddNumberOptionRequest, AddPropertyOptionRequest, AddStringOptionRequest,
-        CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType,
-        UpdatePropertyOptionRequest,
+        CreatePropertyDefinitionRequest, CreatePropertyScope, PropertyDataType, SelectNumberOption,
+        SelectStringOption, UpdatePropertyOptionRequest,
     },
     service::{
         entity_property::EntityProperty,
         property_definition::PropertyDefinition,
+        property_definition_with_options::PropertyDefinitionWithOptions,
         property_option::{PropertyOption, PropertyOptionValue},
         property_value::PropertyValue,
     },
@@ -202,6 +203,13 @@ fn property_definition_for_event(
     }
 }
 
+fn created_without_options(definition: PropertyDefinition) -> CreatePropertyDefinitionOutcome {
+    CreatePropertyDefinitionOutcome::Created(PropertyDefinitionWithOptions {
+        definition,
+        property_options: Vec::new(),
+    })
+}
+
 fn create_property_definition_request() -> CreatePropertyDefinitionRequest {
     CreatePropertyDefinitionRequest {
         scope: CreatePropertyScope::User,
@@ -264,7 +272,9 @@ async fn property_definition_event_create_publishes_authoritative_snapshot() {
 
     let mut repo = MockPropertiesRepo::new();
     repo.expect_create_property_definition()
-        .return_once(move |_, _, _, _, _, _| Box::pin(async move { Ok(property) }));
+        .return_once(move |_, _, _, _, _, _| {
+            Box::pin(async move { Ok(created_without_options(property)) })
+        });
     let event_broker = RecordingEventBroker::default();
     let service = service_with_event_broker(repo, event_broker.clone());
 
@@ -277,7 +287,7 @@ async fn property_definition_event_create_publishes_authoritative_snapshot() {
         .await
         .unwrap();
 
-    assert_eq!(result.id, property_definition_id);
+    assert_eq!(result.definition.id, property_definition_id);
     let published = only_published_property_event(&event_broker);
     assert_eq!(published.topic, "macro.properties");
     assert_eq!(published.key, property_definition_id.to_string());
@@ -448,6 +458,60 @@ async fn property_definition_event_create_repository_failure_publishes_nothing()
 }
 
 #[tokio::test]
+async fn property_definition_create_duplicate_name_is_a_conflict_and_publishes_nothing() {
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_create_property_definition()
+        .return_once(|_, _, _, _, _, _| {
+            Box::pin(async { Ok(CreatePropertyDefinitionOutcome::DuplicateDisplayName) })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let result = service
+        .create_property_definition(
+            &caller_user_id(),
+            None,
+            &create_property_definition_request(),
+        )
+        .await;
+
+    assert!(matches!(result, Err(PropertiesErr::DuplicatePropertyName)));
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn property_definition_create_rejects_duplicate_select_options_before_repo() {
+    let repo = MockPropertiesRepo::new();
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    let request = CreatePropertyDefinitionRequest {
+        scope: CreatePropertyScope::User,
+        display_name: "Priority".to_string(),
+        data_type: PropertyDataType::SelectNumber {
+            options: vec![
+                SelectNumberOption {
+                    display_order: 0,
+                    value: 1.0,
+                },
+                SelectNumberOption {
+                    display_order: 1,
+                    value: 1.0,
+                },
+            ],
+            multi: false,
+        },
+    };
+
+    let result = service
+        .create_property_definition(&caller_user_id(), None, &request)
+        .await;
+
+    assert!(matches!(result, Err(PropertiesErr::Validation(_))));
+    assert!(event_broker.events().is_empty());
+}
+
+#[tokio::test]
 async fn property_definition_event_ensure_tag_set_repository_failure_publishes_nothing() {
     let mut repo = MockPropertiesRepo::new();
     repo.expect_get_or_create_tag_definition()
@@ -496,7 +560,9 @@ async fn property_definition_event_broker_scheduling_failure_is_non_fatal() {
 
     let mut repo = MockPropertiesRepo::new();
     repo.expect_create_property_definition()
-        .return_once(move |_, _, _, _, _, _| Box::pin(async move { Ok(property) }));
+        .return_once(move |_, _, _, _, _, _| {
+            Box::pin(async move { Ok(created_without_options(property)) })
+        });
     let service = service_with_event_broker(repo, RecordingEventBroker::failing());
 
     let result = service
@@ -508,7 +574,68 @@ async fn property_definition_event_broker_scheduling_failure_is_non_fatal() {
         .await
         .unwrap();
 
-    assert_eq!(result.id, property_definition_id);
+    assert_eq!(result.definition.id, property_definition_id);
+}
+
+#[tokio::test]
+async fn property_definition_create_returns_options_created_with_it() {
+    let property_definition_id = Uuid::from_u128(0xA7);
+    let definition = property_definition_for_event(
+        property_definition_id,
+        "Department",
+        DataType::SelectString,
+        false,
+    );
+    let created_option = property_option_for_event(
+        Uuid::from_u128(0xA8),
+        property_definition_id,
+        0,
+        PropertyOptionValue::String("Engineering".to_string()),
+        None,
+    );
+    let returned_option = created_option.clone();
+
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_create_property_definition()
+        .withf(|_, display_name, data_type, multi, _, options| {
+            display_name == "Department"
+                && *data_type == DataType::SelectString
+                && !*multi
+                && options.len() == 1
+                && options[0].value == PropertyOptionValue::String("Engineering".to_string())
+        })
+        .return_once(move |_, _, _, _, _, _| {
+            Box::pin(async move {
+                Ok(CreatePropertyDefinitionOutcome::Created(
+                    PropertyDefinitionWithOptions {
+                        definition,
+                        property_options: vec![returned_option],
+                    },
+                ))
+            })
+        });
+    let service = service_with_event_broker(repo, RecordingEventBroker::default());
+
+    let request = CreatePropertyDefinitionRequest {
+        scope: CreatePropertyScope::User,
+        display_name: "Department".to_string(),
+        data_type: PropertyDataType::SelectString {
+            options: vec![SelectStringOption {
+                display_order: 0,
+                value: "Engineering".to_string(),
+            }],
+            multi: false,
+        },
+    };
+
+    let result = service
+        .create_property_definition(&caller_user_id(), None, &request)
+        .await
+        .unwrap();
+
+    assert_eq!(result.definition.id, property_definition_id);
+    assert_eq!(result.property_options.len(), 1);
+    assert_eq!(result.property_options[0].id, created_option.id);
 }
 
 #[tokio::test]

@@ -33,6 +33,10 @@ type ToolParserMap = {
     call: types.CreateChannel;
     response: types.CreateChannelResponse;
   };
+  CreateCustomProperty: {
+    call: types.CreateCustomProperty;
+    response: types.CreateCustomPropertyResponse;
+  };
   CreateDocument: {
     call: types.CreateDocument;
     response: types.CreateDocumentResponse;
@@ -251,6 +255,10 @@ const toolParserMap = {
   CreateChannel: {
     call: schemas.CreateChannel,
     response: schemas.CreateChannelResponse,
+  },
+  CreateCustomProperty: {
+    call: schemas.CreateCustomProperty,
+    response: schemas.CreateCustomPropertyResponse,
   },
   CreateDocument: {
     call: schemas.CreateDocument,
@@ -508,6 +516,10 @@ type ToolDataMap = {
   CreateChannel: {
     call: types.CreateChannel;
     response: types.CreateChannelResponse;
+  };
+  CreateCustomProperty: {
+    call: types.CreateCustomProperty;
+    response: types.CreateCustomPropertyResponse;
   };
   CreateDocument: {
     call: types.CreateDocument;

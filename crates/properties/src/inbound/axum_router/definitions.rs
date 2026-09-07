@@ -194,6 +194,7 @@ impl IntoResponse for CreatePropertyDefinitionErr {
         (status = 201, description = "Property definition created successfully", body = PropertyDefinition),
         (status = 400, description = "Invalid request"),
         (status = 403, description = "Team membership required for team scope"),
+        (status = 409, description = "A property with that name already exists"),
         (status = 500, description = "Internal server error")
     ),
     tags = ["Properties"]
@@ -219,7 +220,8 @@ pub async fn create_property_definition<
         .create_property_definition(&user, team.entity_access_receipt.as_ref(), &request)
         .await?;
 
-    Ok((StatusCode::CREATED, Json(property)))
+    // The response contract predates options being returned from create; keep it.
+    Ok((StatusCode::CREATED, Json(property.definition)))
 }
 
 #[derive(Debug, Error)]

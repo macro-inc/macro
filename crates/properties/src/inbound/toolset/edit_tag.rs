@@ -6,7 +6,6 @@ use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
 use entity_access::domain::ports::EntityAccessService;
 use models_properties::api::UpdatePropertyOptionRequest;
-use models_properties::service::property_option::PropertyOptionValue;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -116,10 +115,7 @@ where
                 internal_error: e.into(),
             })?;
 
-        let label = match option.value {
-            PropertyOptionValue::String(s) => s,
-            PropertyOptionValue::Number(n) => n.to_string(),
-        };
+        let label = option.value.to_string();
         let summary = format!("Updated tag \"{label}\".");
 
         Ok(EditTagResponse {

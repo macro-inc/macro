@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use entity_access::domain::models::ViewAccessLevel;
 use entity_access::domain::ports::EntityAccessService;
 use models_properties::PropertyOwner;
-use models_properties::service::property_option::PropertyOptionValue;
+use models_properties::service::property_option::PropertyOption;
 use models_properties::service::property_value::PropertyValue;
 use models_properties::service::tag_sets::TagScope;
 use models_properties::{DataType, EntityType};
@@ -16,7 +16,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::PropertiesToolContext;
+use super::{PropertiesToolContext, data_type_name};
 
 #[derive(Debug, Clone, Copy, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -210,18 +210,7 @@ where
 }
 
 fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
-    let data_type = match info.data_type {
-        DataType::Boolean => "boolean",
-        DataType::Date => "date",
-        DataType::Number => "number",
-        DataType::String => "string",
-        DataType::SelectNumber => "select_number",
-        DataType::SelectString => "select_string",
-        DataType::Tag => "tag",
-        DataType::Entity => "entity",
-        DataType::Link => "link",
-    }
-    .to_string();
+    let data_type = data_type_name(info.data_type).to_string();
 
     let current_value_labels = info.value.as_ref().and_then(|v| match v {
         PropertyValue::SelectOption(option_ids) => Some(
@@ -231,10 +220,7 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
                     info.options
                         .iter()
                         .find(|o| o.id == *id)
-                        .map(|o| match &o.value {
-                            PropertyOptionValue::String(s) => s.clone(),
-                            PropertyOptionValue::Number(n) => n.to_string(),
-                        })
+                        .map(|o| o.value.to_string())
                 })
                 .collect(),
         ),
@@ -251,7 +237,7 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
 
     let current_value = info.value.map(|v| property_value_to_json(&v));
 
-    let options = info.options.into_iter().map(to_tool_option).collect();
+    let options = info.options.into_iter().map(Into::into).collect();
 
     ToolPropertyItem {
         property_definition_id: info.property_definition_id,
@@ -271,15 +257,22 @@ fn property_value_to_json(value: &PropertyValue) -> serde_json::Value {
     serde_json::to_value(value).unwrap_or(serde_json::Value::Null)
 }
 
-fn to_tool_option(opt: PropertyOptionInfo) -> ToolPropertyOption {
-    let display_value = match &opt.value {
-        PropertyOptionValue::String(s) => s.clone(),
-        PropertyOptionValue::Number(n) => n.to_string(),
-    };
+impl From<PropertyOptionInfo> for ToolPropertyOption {
+    fn from(opt: PropertyOptionInfo) -> Self {
+        ToolPropertyOption {
+            id: opt.id,
+            display_order: opt.display_order,
+            display_value: opt.value.to_string(),
+        }
+    }
+}
 
-    ToolPropertyOption {
-        id: opt.id,
-        display_order: opt.display_order,
-        display_value,
+impl From<PropertyOption> for ToolPropertyOption {
+    fn from(opt: PropertyOption) -> Self {
+        ToolPropertyOption {
+            id: opt.id,
+            display_order: opt.display_order,
+            display_value: opt.value.to_string(),
+        }
     }
 }

@@ -143,9 +143,9 @@ export type CreatePropertyDefinitionRequest = {
 };
 
 /**
- * Ownership scope a client may request when creating a property definition.
- * The owning user or team is derived server-side from the authenticated caller -
- * clients never supply owner ids. System properties are not creatable via the API.
+ * Who owns a new property definition: the requesting user or their team.
+ * The owner is derived from the authenticated caller, never supplied by id;
+ * team scope requires team membership. System properties cannot be created.
  */
 export type CreatePropertyScope = 'user' | 'team';
 
@@ -713,6 +713,10 @@ export type CreatePropertyDefinitionErrors = {
      * Team membership required for team scope
      */
     403: unknown;
+    /**
+     * A property with that name already exists
+     */
+    409: unknown;
     /**
      * Internal server error
      */

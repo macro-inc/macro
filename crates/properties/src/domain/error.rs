@@ -34,6 +34,10 @@ pub enum PropertiesErr {
     #[error("An option with that value already exists")]
     DuplicateOptionValue,
 
+    /// The owner already has a property with the requested display name - maps to 409
+    #[error("A property with that name already exists")]
+    DuplicatePropertyName,
+
     /// Promoting a personal label would collide with an existing team label -
     /// maps to 409. Carries the team label so the caller can offer to merge
     /// into it instead.

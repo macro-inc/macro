@@ -1,5 +1,8 @@
 //! API layer request types.
 
+#[cfg(test)]
+mod test;
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
@@ -96,10 +99,10 @@ impl PropertyDataType {
     }
 }
 
-/// Ownership scope a client may request when creating a property definition.
-/// The owning user or team is derived server-side from the authenticated caller -
-/// clients never supply owner ids. System properties are not creatable via the API.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, PartialEq)]
+/// Who owns a new property definition: the requesting user or their team.
+/// The owner is derived from the authenticated caller, never supplied by id;
+/// team scope requires team membership. System properties cannot be created.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema, schemars::JsonSchema, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum CreatePropertyScope {
     /// Owned by the requesting user.
@@ -141,9 +144,49 @@ impl CreatePropertyDefinitionRequest {
         Ok(())
     }
 
+    /// Validate the select options embedded in the data type: non-empty string
+    /// values, finite numbers, and no duplicate values within the property
+    /// (mirrors the per-property unique index on option values).
+    pub fn validate_options(&self) -> Result<(), PropertyDefinitionValidationError> {
+        match &self.data_type {
+            PropertyDataType::SelectString { options, .. } => {
+                let mut seen = Vec::with_capacity(options.len());
+                for option in options {
+                    let value = option.value.trim();
+                    if value.is_empty() {
+                        return Err(PropertyDefinitionValidationError::EmptyOptionValue);
+                    }
+                    if seen.contains(&value) {
+                        return Err(PropertyDefinitionValidationError::DuplicateOptionValue {
+                            value: value.to_string(),
+                        });
+                    }
+                    seen.push(value);
+                }
+            }
+            PropertyDataType::SelectNumber { options, .. } => {
+                let mut seen = Vec::with_capacity(options.len());
+                for option in options {
+                    if !option.value.is_finite() {
+                        return Err(PropertyDefinitionValidationError::InvalidOptionNumber);
+                    }
+                    if seen.contains(&option.value) {
+                        return Err(PropertyDefinitionValidationError::DuplicateOptionValue {
+                            value: option.value.to_string(),
+                        });
+                    }
+                    seen.push(option.value);
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
     /// Validate all property definition constraints
     pub fn validate(&self) -> Result<(), PropertyDefinitionValidationError> {
         self.validate_display_name()?;
+        self.validate_options()?;
         Ok(())
     }
 }

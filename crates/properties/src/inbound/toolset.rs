@@ -1,6 +1,7 @@
 //! Toolset inbound adapter for the Properties service.
 
 mod bulk_set_entity_property_options;
+mod create_custom_property;
 mod create_tag;
 mod delete_tag;
 mod edit_tag;
@@ -19,11 +20,13 @@ use entity_access::domain::models::{
     AccessError, Entity, EntityAccessReceipt, EntityPermission, EntityType,
 };
 use entity_access::domain::ports::EntityAccessService;
+use models_properties::DataType;
 use std::sync::Arc;
 
 pub use bulk_set_entity_property_options::{
     BulkSetEntityPropertyOptions, BulkSetEntityPropertyOptionsResponse,
 };
+pub use create_custom_property::{CreateCustomProperty, CreateCustomPropertyResponse};
 pub use create_tag::{CreateTag, CreateTagResponse};
 pub use delete_tag::{DeleteTag, DeleteTagResponse};
 pub use edit_tag::{EditTag, EditTagResponse};
@@ -111,6 +114,21 @@ fn team_access_error(err: AccessError) -> ToolCallError {
     }
 }
 
+/// The snake_case data type name the tools expose to the agent.
+pub(crate) fn data_type_name(data_type: DataType) -> &'static str {
+    match data_type {
+        DataType::Boolean => "boolean",
+        DataType::Date => "date",
+        DataType::Number => "number",
+        DataType::String => "string",
+        DataType::SelectNumber => "select_number",
+        DataType::SelectString => "select_string",
+        DataType::Tag => "tag",
+        DataType::Entity => "entity",
+        DataType::Link => "link",
+    }
+}
+
 /// Create a properties toolset.
 pub fn properties_toolset<T, A>() -> AsyncToolCollection<PropertiesToolContext<T, A>>
 where
@@ -120,6 +138,7 @@ where
     AsyncToolCollection::new()
         .add_tool::<GetEntityProperties, PropertiesToolContext<T, A>>()
         .add_tool::<SetEntityProperty, PropertiesToolContext<T, A>>()
+        .add_tool::<CreateCustomProperty, PropertiesToolContext<T, A>>()
         .add_tool::<BulkSetEntityPropertyOptions, PropertiesToolContext<T, A>>()
         .add_tool::<ListTags, PropertiesToolContext<T, A>>()
         .add_tool::<CreateTag, PropertiesToolContext<T, A>>()
