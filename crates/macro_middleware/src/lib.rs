@@ -1,9 +1,10 @@
 use axum::{
     body::Body,
     extract::Request,
-    http::{Method, Response},
+    http::{Method, Response, StatusCode},
     middleware::Next,
 };
+use tracing::Instrument;
 
 #[cfg(feature = "cloud_storage")]
 pub mod cloud_storage;
@@ -19,7 +20,23 @@ mod error_handler;
 pub async fn connection_drop_prevention_handler(req: Request, next: Next) -> Response<Body> {
     match req.method() {
         &Method::PUT | &Method::POST | &Method::PATCH | &Method::DELETE => {
-            tokio::task::spawn(next.run(req)).await.unwrap()
+            let span = tracing::Span::current();
+            let handle = tokio::task::spawn(next.run(req).instrument(span));
+            
+            match handle.await {
+                Ok(response) => response,
+                Err(err) => {
+                    if err.is_panic() {
+                        tracing::error!(error=?err, "request handler panicked");
+                    } else {
+                        tracing::error!(error=?err, "request handler task was cancelled");
+                    }
+                    Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::empty())
+                        .unwrap()
+                }
+            }
         }
         _ => next.run(req).await,
     }
