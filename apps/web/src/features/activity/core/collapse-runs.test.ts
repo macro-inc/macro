@@ -127,13 +127,18 @@ describe('collapseRuns', () => {
     const events = Array.from({ length: 1000 }, (_, index) =>
       event(`evt-${index}`, { entityId: `doc-${Math.floor(index / 5)}` })
     );
-    collapseRuns(events);
+    expect(collapseRuns(events)).toHaveLength(200);
 
-    const started = performance.now();
-    const entries = collapseRuns(events);
-    const elapsed = performance.now() - started;
+    // Shared CI runners inject GC pauses and scheduler hiccups into any single
+    // sample, so the budget applies to the best of several runs: that still
+    // fails on an algorithmic regression without failing on a noisy neighbour.
+    let fastest = Number.POSITIVE_INFINITY;
+    for (let sample = 0; sample < 20; sample++) {
+      const started = performance.now();
+      collapseRuns(events);
+      fastest = Math.min(fastest, performance.now() - started);
+    }
 
-    expect(entries).toHaveLength(200);
-    expect(elapsed).toBeLessThan(2);
+    expect(fastest).toBeLessThan(2);
   });
 });
