@@ -16,6 +16,7 @@ type OutlineHeading = {
 };
 
 const ACTIVE_HEADING_OFFSET = 80;
+const BOTTOM_SCROLL_THRESHOLD = 2;
 const MIN_OUTLINE_HEADINGS = 3;
 export const MARKDOWN_OUTLINE_WIDTH = 40;
 
@@ -26,11 +27,22 @@ export function shouldShowOutline(
   return enabled && headingCount >= MIN_OUTLINE_HEADINGS;
 }
 
+export function isScrolledToBottom(
+  scrollTop: number,
+  clientHeight: number,
+  scrollHeight: number,
+  threshold = BOTTOM_SCROLL_THRESHOLD
+): boolean {
+  return scrollTop + clientHeight >= scrollHeight - threshold;
+}
+
 export function getActiveHeadingIndex(
   headingTops: number[],
-  activeLine: number
+  activeLine: number,
+  atBottom = false
 ): number {
   if (headingTops.length === 0) return -1;
+  if (atBottom) return headingTops.length - 1;
 
   let activeIndex = 0;
   for (const [index, top] of headingTops.entries()) {
@@ -164,7 +176,16 @@ export function MarkdownOutline(props: {
           editor.getElementByKey(heading.key)?.getBoundingClientRect().top ??
           Number.POSITIVE_INFINITY
       );
-      const activeIndex = getActiveHeadingIndex(headingTops, activeLine);
+      const atBottom = isScrolledToBottom(
+        scrollContainer.scrollTop,
+        scrollContainer.clientHeight,
+        scrollContainer.scrollHeight
+      );
+      const activeIndex = getActiveHeadingIndex(
+        headingTops,
+        activeLine,
+        atBottom
+      );
       setActiveHeadingKey(currentHeadings[activeIndex]?.key);
     };
 
