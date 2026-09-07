@@ -38,41 +38,53 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const overview = placeholderOverview(new Date('2026-09-06T12:00:00Z'));
+// Monday 2026-09-07: the window opens on a Tuesday and ends mid-week, so the
+// year spans 53 columns including both partial weeks.
+const overview = placeholderOverview(new Date('2026-09-07T12:00:00Z'));
 const days = (root: ParentNode) =>
   root.querySelectorAll('[data-activity-day]').length;
+const heatmapStyle = (root: ParentNode) =>
+  (root.querySelector('[data-activity-heatmap]') as HTMLElement).style;
 
 describe('ActionGraph', () => {
-  it('shows the trailing weeks that fit the measured week area', () => {
-    // 20 columns of 12px with 3px gaps: 20 * 15 - 3.
-    layout.weekAreaPx = 297;
-    const { container } = render(() => <ActionGraph overview={overview} />);
-    expect(days(container)).toBe(20 * 7);
-    expect(
-      container.querySelector('[data-activity-heatmap-weeks]')?.className
-    ).toContain('h-[102px]');
-  });
-
-  it('shows the whole year when the week area is wide enough', () => {
+  it('renders every week of the year including the partial ones', () => {
     layout.weekAreaPx = 900;
     const { container } = render(() => <ActionGraph overview={overview} />);
-    expect(days(container)).toBeGreaterThan(300);
-    expect(days(container) % 7).toBe(0);
-  });
-
-  it('paints no cells before it has been measured', () => {
-    const { container } = render(() => <ActionGraph overview={overview} />);
-    expect(days(container)).toBe(0);
+    expect(days(container)).toBe(365);
     expect(
-      container.querySelector('[data-activity-heatmap-weeks]')?.className
-    ).toContain('h-[102px]');
+      container.querySelectorAll('[data-activity-heatmap-weeks] > div > div')
+    ).toHaveLength(53);
   });
 
-  it('lets a caller fix the column count, in skeleton mode too', () => {
+  it('takes the full cell size in a wide pane', () => {
+    layout.weekAreaPx = 900;
+    const { container } = render(() => <ActionGraph overview={overview} />);
+    expect(heatmapStyle(container).getPropertyValue('--heatmap-cell')).toBe(
+      '12px'
+    );
+    expect(heatmapStyle(container).getPropertyValue('--heatmap-gap')).toBe(
+      '3px'
+    );
+  });
+
+  it('shrinks the cells in a narrow pane and keeps every week', () => {
+    layout.weekAreaPx = 336;
+    const { container } = render(() => <ActionGraph overview={overview} />);
+    expect(days(container)).toBe(365);
+    expect(heatmapStyle(container).getPropertyValue('--heatmap-cell')).toBe(
+      '8px'
+    );
+    expect(heatmapStyle(container).getPropertyValue('--heatmap-gap')).toBe(
+      '2px'
+    );
+  });
+
+  it('renders the skeleton with the same columns and no numbers', () => {
+    layout.weekAreaPx = 900;
     const { container } = render(() => (
-      <ActionGraph overview={overview} maxWeeks={12} skeleton />
+      <ActionGraph overview={overview} skeleton />
     ));
-    expect(days(container)).toBe(12 * 7);
+    expect(days(container)).toBe(365);
     expect(container.textContent).not.toContain('(');
   });
 });

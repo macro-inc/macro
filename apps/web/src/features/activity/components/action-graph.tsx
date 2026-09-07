@@ -1,7 +1,14 @@
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer, Tooltip } from '@ui';
 import { format } from 'date-fns';
-import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import { OVERVIEW_TZ, parseOverviewDate } from '../core/activity-dates';
 import {
@@ -15,20 +22,20 @@ import {
   buildContributionGrid,
   type ContributionDay,
   type ContributionWeek,
-  weeksThatFit,
+  type HeatmapGeometry,
+  heatmapGeometry,
 } from '../core/contribution-grid';
 import type { ActivityOverview } from '../core/event';
 import type { ActivityIntensity } from '../core/intensity';
 
 const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
 
-// Cell geometry in px, kept in step with HEATMAP_CELL_PX / HEATMAP_GAP_PX /
-// HEATMAP_HEIGHT_PX in core/contribution-grid.ts. Pixels rather than rem so
-// the "how many weeks fit" arithmetic holds when Dynamic Type scales the root
-// font size on touch devices.
-const CELL_CLASS = 'size-[12px]';
-const COLUMN_GAP_CLASS = 'gap-[3px]';
-const HEATMAP_HEIGHT_CLASS = 'h-[102px]';
+// Cell geometry arrives as CSS variables from `heatmapGeometry`, in px rather
+// than rem so the fit holds when Dynamic Type scales the root font size.
+const CELL_CLASS = 'size-(--heatmap-cell)';
+const COLUMN_CLASS = 'w-(--heatmap-cell)';
+const GAP_CLASS = 'gap-(--heatmap-gap)';
+const MONTH_ROW_CLASS = 'mb-1 h-3';
 
 function dateLabel(date: string): string {
   return format(parseOverviewDate(date), 'EEE, MMM d, yyyy', {
@@ -62,21 +69,19 @@ function dayStat(date: string | null): string {
  * the numbers and day cells. Pass a `placeholderOverview` so the geometry
  * matches the card that replaces it.
  *
- * Day cells are a fixed size, so the card is the same height at every width
- * and a narrow card shows the most recent weeks that fit instead of
- * scrolling sideways. The count comes from measuring the week area;
- * `maxWeeks` overrides the measurement.
+ * The whole year is always on the board. Cells shrink with the pane down to
+ * `HEATMAP_MIN_CELL`, and below that the week area scrolls sideways, opened
+ * on the newest week. The geometry comes from measuring the week area.
  */
 export function ActionGraph(props: {
   overview: ActivityOverview;
   skeleton?: boolean;
-  maxWeeks?: number;
 }) {
   const [weekArea, setWeekArea] = createSignal<HTMLDivElement>();
   const weekAreaSize = createElementSize(weekArea);
-  const maxWeeks = () => props.maxWeeks ?? weeksThatFit(weekAreaSize.width);
-  const grid = createMemo(() =>
-    buildContributionGrid(props.overview, { maxWeeks: maxWeeks() })
+  const grid = createMemo(() => buildContributionGrid(props.overview));
+  const geometry = createMemo(() =>
+    heatmapGeometry(weekAreaSize.width, grid().weeks.length)
   );
   const monthLabels = createMemo(
     () =>
@@ -106,6 +111,7 @@ export function ActionGraph(props: {
           <ContributionHeatmap
             weeks={grid().weeks}
             monthLabels={monthLabels()}
+            geometry={geometry()}
             skeleton={skeleton()}
             weekAreaRef={setWeekArea}
           />
@@ -161,31 +167,57 @@ function IntensityLegend() {
   );
 }
 
+/**
+ * Month letters ride inside each week column so they scroll with the weeks.
+ * The week area is measured for the geometry and, when the year still does
+ * not fit at the smallest cell, scrolls sideways from the newest week.
+ */
 function ContributionHeatmap(props: {
   weeks: ContributionWeek[];
   monthLabels: Map<number, string>;
+  geometry: HeatmapGeometry;
   skeleton: boolean;
   weekAreaRef: (element: HTMLDivElement) => void;
 }) {
+  let weekArea: HTMLDivElement | undefined;
+
+  createEffect(() => {
+    if (!props.geometry.overflows || !weekArea) return;
+    const element = weekArea;
+    const frame = requestAnimationFrame(() => {
+      element.scrollLeft = element.scrollWidth;
+    });
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
+
   return (
-    <div class="px-4 py-3">
-      <WeekRow class="mb-1 h-3 pl-5">
-        <For each={props.weeks}>
-          {(_, index) => <MonthLetter label={props.monthLabels.get(index())} />}
-        </For>
-      </WeekRow>
-      <div class="flex items-stretch">
-        <WeekdayGutter />
-        <div
-          ref={props.weekAreaRef}
-          class={cn('min-w-0 flex-1 overflow-hidden', HEATMAP_HEIGHT_CLASS)}
-          data-activity-heatmap-weeks
-        >
-          <WeekRow>
-            <For each={props.weeks}>
-              {(week) => <HeatmapWeek week={week} skeleton={props.skeleton} />}
-            </For>
-          </WeekRow>
+    <div
+      class="flex items-stretch px-4 py-3"
+      style={{
+        '--heatmap-cell': `${props.geometry.cell}px`,
+        '--heatmap-gap': `${props.geometry.gap}px`,
+      }}
+      data-activity-heatmap
+    >
+      <WeekdayGutter />
+      <div
+        ref={(element) => {
+          weekArea = element;
+          props.weekAreaRef(element);
+        }}
+        class="min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        data-activity-heatmap-weeks
+      >
+        <div class={cn('flex w-max', GAP_CLASS)}>
+          <For each={props.weeks}>
+            {(week, index) => (
+              <HeatmapWeek
+                week={week}
+                monthLabel={props.monthLabels.get(index())}
+                skeleton={props.skeleton}
+              />
+            )}
+          </For>
         </div>
       </div>
     </div>
@@ -197,33 +229,42 @@ function WeekdayGutter() {
     <div
       class={cn(
         'mr-1.5 flex w-3.5 shrink-0 flex-col text-ink-extra-muted text-xs',
-        COLUMN_GAP_CLASS
+        GAP_CLASS
       )}
     >
+      <span aria-hidden class={cn('shrink-0', MONTH_ROW_CLASS)} />
       <For each={WEEKDAY_LABELS}>
         {(label) => (
-          <span class="flex h-[12px] items-center leading-none">{label}</span>
+          <span
+            class={cn('flex items-center leading-none', 'h-(--heatmap-cell)')}
+          >
+            {label}
+          </span>
         )}
       </For>
     </div>
   );
 }
 
-function HeatmapWeek(props: { week: ContributionWeek; skeleton: boolean }) {
+function HeatmapWeek(props: {
+  week: ContributionWeek;
+  monthLabel?: string;
+  skeleton: boolean;
+}) {
   return (
-    <WeekColumn class={cn('flex flex-col', COLUMN_GAP_CLASS)}>
+    <div class={cn('flex shrink-0 flex-col', COLUMN_CLASS, GAP_CLASS)}>
+      <span
+        class={cn(
+          'shrink-0 overflow-visible text-center text-ink-extra-muted text-xs leading-none',
+          MONTH_ROW_CLASS
+        )}
+      >
+        {props.monthLabel}
+      </span>
       <For each={props.week}>
         {(day) => <DaySquare day={day} skeleton={props.skeleton} />}
       </For>
-    </WeekColumn>
-  );
-}
-
-function MonthLetter(props: { label?: string }) {
-  return (
-    <WeekColumn class="text-center text-ink-extra-muted text-xs leading-none">
-      {props.label}
-    </WeekColumn>
+    </div>
   );
 }
 
@@ -286,21 +327,6 @@ function IntensitySwatch(props: {
         props.class
       )}
     />
-  );
-}
-
-/** One week column, exactly one cell wide. */
-function WeekColumn(props: { class?: string; children?: JSX.Element }) {
-  return (
-    <div class={cn('w-[12px] shrink-0', props.class)}>{props.children}</div>
-  );
-}
-
-function WeekRow(props: { class?: string; children?: JSX.Element }) {
-  return (
-    <div class={cn('flex', COLUMN_GAP_CLASS, props.class)}>
-      {props.children}
-    </div>
   );
 }
 
