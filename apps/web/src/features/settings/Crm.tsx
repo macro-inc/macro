@@ -1,10 +1,25 @@
-/** CRM settings tab: team admins enable or disable the CRM here. */
+/** CRM settings tab: enablement, deal stages, and the closed-stage set. */
 
+import { type DealStage, useDealStages } from '@companies/crm/deal-stages';
+import {
+  useClosedStageIds,
+  useCrmPermissions,
+  useTeamCrmConfig,
+} from '@companies/crm/team-crm-config';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { throwOnErr } from '@core/util/result';
+import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretUpIcon from '@phosphor/caret-up.svg';
+import CheckIcon from '@phosphor/check.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import TrashIcon from '@phosphor/trash.svg';
 import XIcon from '@phosphor/x.svg';
+import {
+  useReplaceCrmStagesMutation,
+  useResetCrmStagesMutation,
+} from '@queries/crm/stages';
 import {
   invalidateUserTeams,
   useCurrentTeamQuery,
@@ -13,9 +28,12 @@ import {
 import { fetchWithAuth } from '@service-auth/fetch';
 import type { PatchTeamCrmSettingsRequest } from '@service-auth/generated/schemas/patchTeamCrmSettingsRequest';
 import type { PatchTeamCrmSettingsResponse } from '@service-auth/generated/schemas/patchTeamCrmSettingsResponse';
+import type { CrmStageInput } from '@service-storage/generated/schemas/crmStageInput';
+import type { CrmStagesResponse } from '@service-storage/generated/schemas/crmStagesResponse';
 import { useMutation } from '@tanstack/solid-query';
-import { Button, Dialog, Panel, Tooltip } from '@ui';
-import { createSignal, type JSX, Show, Suspense } from 'solid-js';
+import { Button, Checkbox, Dialog, Panel, Tooltip } from '@ui';
+import { createSignal, For, type JSX, Show, Suspense } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import {
   SettingsCard,
   SettingsPage,
@@ -291,6 +309,442 @@ function CrmEnablementSection() {
 }
 
 /* ------------------------------------------------------------------ */
+/* Deal stages                                                        */
+/* ------------------------------------------------------------------ */
+
+function StageDot() {
+  return <span class="size-2 shrink-0 rounded-full bg-accent/70" />;
+}
+
+function StageEditorRow(props: {
+  label: string;
+  draft: string | undefined;
+  index: number;
+  count: number;
+  disabled: boolean;
+  pending: boolean;
+  onDraft: (value: string | undefined) => void;
+  onRename: (value: string) => void;
+  onMove: (direction: -1 | 1) => void;
+  onDelete: () => void;
+}) {
+  const value = () => props.draft ?? props.label;
+  const hasChanged = () => {
+    const edited = props.draft;
+    return (
+      edited !== undefined &&
+      edited.trim() !== '' &&
+      edited.trim() !== props.label
+    );
+  };
+  const commit = () => {
+    if (!hasChanged() || props.pending) return;
+    props.onRename(value().trim());
+  };
+  const cancel = () => props.onDraft(undefined);
+  const isEditing = () => props.draft !== undefined;
+  const isLastStage = () => props.count <= 1;
+
+  return (
+    <div class="flex items-center gap-2 px-6 py-2.5">
+      <StageDot />
+      <input
+        type="text"
+        value={value()}
+        disabled={props.disabled}
+        onInput={(e) => props.onDraft(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commit();
+          } else if (e.key === 'Escape') {
+            cancel();
+            e.currentTarget.blur();
+          }
+        }}
+        placeholder="Stage name"
+        class="settings-input flex-1 min-w-0"
+      />
+      <Show when={isEditing()}>
+        <Tooltip label="Save">
+          <Button
+            aria-label="Save stage name"
+            variant="accent"
+            size="icon-sm"
+            class="rounded-xs shrink-0"
+            disabled={props.pending || !hasChanged()}
+            onClick={commit}
+          >
+            <Show when={props.pending} fallback={<CheckIcon class="size-4" />}>
+              <SpinnerIcon class="size-4 animate-spin" />
+            </Show>
+          </Button>
+        </Tooltip>
+        <Tooltip label="Cancel">
+          <Button
+            aria-label="Cancel rename"
+            variant="ghost"
+            size="icon-sm"
+            class="rounded-xs shrink-0"
+            disabled={props.pending}
+            onClick={cancel}
+          >
+            <XIcon class="size-4" />
+          </Button>
+        </Tooltip>
+      </Show>
+      <div class="flex items-center gap-0.5 shrink-0">
+        <Tooltip label="Move up">
+          <Button
+            aria-label="Move stage up"
+            variant="ghost"
+            size="icon-sm"
+            class="rounded-xs"
+            disabled={props.disabled || props.pending || props.index === 0}
+            onClick={() => props.onMove(-1)}
+          >
+            <CaretUpIcon class="size-4" />
+          </Button>
+        </Tooltip>
+        <Tooltip label="Move down">
+          <Button
+            aria-label="Move stage down"
+            variant="ghost"
+            size="icon-sm"
+            class="rounded-xs"
+            disabled={
+              props.disabled || props.pending || props.index === props.count - 1
+            }
+            onClick={() => props.onMove(1)}
+          >
+            <CaretDownIcon class="size-4" />
+          </Button>
+        </Tooltip>
+        <Tooltip
+          label={
+            isLastStage() ? 'At least one stage is required' : 'Delete stage'
+          }
+        >
+          <Button
+            aria-label="Delete stage"
+            variant="ghost"
+            size="icon-sm"
+            class="rounded-xs"
+            disabled={props.disabled || props.pending || isLastStage()}
+            onClick={() => props.onDelete()}
+          >
+            <TrashIcon class="size-4" />
+          </Button>
+        </Tooltip>
+      </div>
+    </div>
+  );
+}
+
+function toStageInputs(stages: DealStage[]): CrmStageInput[] {
+  return stages.map((stage) => ({ id: stage.id, label: stage.label }));
+}
+
+function DealStagesSection() {
+  const dealStages = useDealStages();
+  const crmPermissions = useCrmPermissions();
+  const teamCrmConfig = useTeamCrmConfig();
+  const closedStageIds = useClosedStageIds(dealStages.stages);
+  const replaceMutation = useReplaceCrmStagesMutation();
+  const resetMutation = useResetCrmStagesMutation();
+
+  const [newStageName, setNewStageName] = createSignal('');
+  const [stageToDelete, setStageToDelete] = createSignal<DealStage | null>(
+    null
+  );
+  const [showResetModal, setShowResetModal] = createSignal(false);
+
+  const canEdit = () => crmPermissions.canEditStages();
+  const pending = () => replaceMutation.isPending || resetMutation.isPending;
+  const loading = () => dealStages.isLoading() || teamCrmConfig.isLoading();
+  const failed = () => dealStages.isError() || teamCrmConfig.isError();
+  const busy = () => pending() || teamCrmConfig.update.isPending;
+  const blocked = () => busy() || loading() || failed();
+  const [drafts, setDrafts] = createStore<Record<string, string | undefined>>(
+    {}
+  );
+
+  const replace = (
+    stages: CrmStageInput[],
+    options?: {
+      onSuccess?: (result: CrmStagesResponse) => void;
+      successMessage?: string;
+    }
+  ) => {
+    if (blocked()) return;
+    replaceMutation.mutate(stages, {
+      onSuccess: (result) => {
+        if (options?.successMessage) toast.success(options.successMessage);
+        options?.onSuccess?.(result);
+      },
+    });
+  };
+
+  const handleCustomize = () => {
+    const seed = dealStages.stages();
+    const closedLabels = new Set(
+      seed
+        .filter((stage) => closedStageIds().has(stage.id))
+        .map((stage) => stage.label)
+    );
+    const explicitClosed = teamCrmConfig.config().closedStageIds !== undefined;
+    replace(
+      seed.map((stage) => ({ label: stage.label })),
+      {
+        successMessage: 'Stages are now customizable',
+        onSuccess: (result) => {
+          if (!explicitClosed) return;
+          teamCrmConfig.update.mutate({
+            closedStageIds: result.stages
+              .filter((stage) => closedLabels.has(stage.label))
+              .map((stage) => stage.id),
+          });
+        },
+      }
+    );
+  };
+
+  const handleRename = (index: number, label: string) => {
+    const stages = toStageInputs(dealStages.stages());
+    const stage = stages[index];
+    if (!stage?.id) return;
+    const id = stage.id;
+    stages[index] = { ...stage, label };
+    replace(stages, { onSuccess: () => setDrafts(id, undefined) });
+  };
+
+  const handleMove = (index: number, direction: -1 | 1) => {
+    const stages = toStageInputs(dealStages.stages());
+    const target = index + direction;
+    const current = stages[index];
+    const neighbor = stages[target];
+    if (!current || !neighbor) return;
+    stages[index] = neighbor;
+    stages[target] = current;
+    replace(stages);
+  };
+
+  const handleAddStage = () => {
+    const label = newStageName().trim();
+    if (label === '') return;
+    replace([...toStageInputs(dealStages.stages()), { label }], {
+      onSuccess: () => setNewStageName(''),
+    });
+  };
+
+  const handleDeleteStage = () => {
+    const stage = stageToDelete();
+    if (!stage) return;
+    replace(
+      toStageInputs(dealStages.stages().filter((s) => s.id !== stage.id)),
+      { onSuccess: () => setStageToDelete(null) }
+    );
+  };
+
+  const handleReset = () => {
+    if (blocked()) return;
+    resetMutation.mutate(undefined, {
+      onSuccess: () => {
+        setShowResetModal(false);
+        toast.success('Stages reset to Macro defaults');
+      },
+    });
+  };
+
+  const toggleClosedStage = (stageId: string) => {
+    if (blocked()) return;
+    const next = new Set(closedStageIds());
+    if (next.has(stageId)) {
+      next.delete(stageId);
+    } else {
+      next.add(stageId);
+    }
+    teamCrmConfig.update.mutate({ closedStageIds: [...next] });
+  };
+
+  return (
+    <SettingsSection
+      title="Deal stages"
+      description="The pipeline stages deals move through on the CRM board."
+      actions={
+        <Show when={dealStages.isCustomized() && canEdit()}>
+          <Button
+            variant="outline"
+            size="sm"
+            class="rounded-xs"
+            disabled={blocked()}
+            onClick={() => setShowResetModal(true)}
+          >
+            Reset to defaults
+          </Button>
+        </Show>
+      }
+    >
+      <Show
+        when={!loading() && !failed()}
+        fallback={
+          <SettingsCard>
+            <Show
+              when={failed()}
+              fallback={
+                <div class="animate-pulse bg-skeleton rounded h-4 w-32 m-6" />
+              }
+            >
+              <div class="px-6 py-4 text-sm text-ink-muted">
+                Deal stages could not be loaded. Reload to try again.
+              </div>
+            </Show>
+          </SettingsCard>
+        }
+      >
+        <Show
+          when={dealStages.isCustomized()}
+          fallback={
+            <SettingsCard>
+              <div class="flex flex-col gap-1 px-6 py-4">
+                <For each={dealStages.stages()}>
+                  {(stage) => (
+                    <div class="flex items-center gap-2 py-1">
+                      <StageDot />
+                      <span class="text-sm text-ink">{stage.label}</span>
+                    </div>
+                  )}
+                </For>
+              </div>
+              <div class="flex items-center justify-between gap-4 px-6 py-3.5">
+                <p class="text-xs text-ink-muted">
+                  Stages are Macro's defaults. Customize them for your team.
+                </p>
+                <Show when={canEdit()}>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="rounded-xs shrink-0"
+                    disabled={busy()}
+                    onClick={handleCustomize}
+                  >
+                    <Show when={pending()} fallback="Customize stages">
+                      <SpinnerIcon class="size-4 animate-spin" />
+                    </Show>
+                  </Button>
+                </Show>
+              </div>
+            </SettingsCard>
+          }
+        >
+          <SettingsCard>
+            <For each={dealStages.stages()}>
+              {(stage, index) => (
+                <StageEditorRow
+                  label={stage.label}
+                  draft={drafts[stage.id]}
+                  index={index()}
+                  count={dealStages.stages().length}
+                  disabled={!canEdit()}
+                  pending={busy()}
+                  onDraft={(value) => setDrafts(stage.id, value)}
+                  onRename={(label) => handleRename(index(), label)}
+                  onMove={(direction) => handleMove(index(), direction)}
+                  onDelete={() => setStageToDelete(stage)}
+                />
+              )}
+            </For>
+            <Show when={canEdit()}>
+              <div class="flex items-center gap-2 px-6 py-2.5">
+                <PlusIcon class="size-4 shrink-0 text-ink-muted" />
+                <input
+                  type="text"
+                  value={newStageName()}
+                  onInput={(e) => setNewStageName(e.currentTarget.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleAddStage();
+                  }}
+                  placeholder="Add stage"
+                  class="settings-input flex-1 min-w-0"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="rounded-xs shrink-0"
+                  disabled={newStageName().trim() === '' || busy()}
+                  onClick={handleAddStage}
+                >
+                  Add
+                </Button>
+              </div>
+            </Show>
+          </SettingsCard>
+        </Show>
+
+        <SettingsCard>
+          <SettingsRow
+            align="start"
+            label="Closed stages"
+            description="Stages that count as closed deals. Moving deals out of a closed stage can be restricted under Permissions."
+          >
+            <div class="flex flex-col items-start gap-1.5">
+              <For each={dealStages.stages()}>
+                {(stage) => (
+                  <Checkbox
+                    checked={closedStageIds().has(stage.id)}
+                    onChange={() => toggleClosedStage(stage.id)}
+                    disabled={!canEdit() || blocked()}
+                    class="cursor-default"
+                  >
+                    <Checkbox.Control>
+                      <Checkbox.Indicator />
+                    </Checkbox.Control>
+                    <span class="text-sm text-ink">{stage.label}</span>
+                  </Checkbox>
+                )}
+              </For>
+            </div>
+          </SettingsRow>
+        </SettingsCard>
+      </Show>
+
+      <ConfirmDialog
+        open={!!stageToDelete()}
+        title="Delete Stage"
+        confirmLabel="Delete Stage"
+        pending={replaceMutation.isPending}
+        onConfirm={handleDeleteStage}
+        onClose={() => setStageToDelete(null)}
+      >
+        <p>
+          Are you sure you want to delete{' '}
+          <span class="font-medium">{stageToDelete()?.label ?? ''}</span>?
+          Companies currently in this stage lose it and show under No stage on
+          the board.
+        </p>
+      </ConfirmDialog>
+
+      <ConfirmDialog
+        open={showResetModal()}
+        title="Reset Stages"
+        confirmLabel="Reset to Defaults"
+        pending={resetMutation.isPending}
+        onConfirm={handleReset}
+        onClose={() => setShowResetModal(false)}
+      >
+        <p>
+          This removes your team's custom stage set and returns everyone to
+          Macro's default stages.
+        </p>
+        <p class="text-sm text-ink-muted">
+          Companies keep their stored stage values, and stages whose names match
+          a default continue to display as before.
+        </p>
+      </ConfirmDialog>
+    </SettingsSection>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Page                                                               */
 /* ------------------------------------------------------------------ */
 
@@ -315,9 +769,12 @@ function CrmContent() {
     <Show when={teamQuery.data} fallback={<NoTeamState />}>
       <SettingsPage
         title="CRM"
-        description="Enable or disable your team's CRM."
+        description="Enable your team's CRM and shape its deal pipeline."
       >
         <CrmEnablementSection />
+        <Show when={teamQuery.data?.team.crm_enabled}>
+          <DealStagesSection />
+        </Show>
       </SettingsPage>
     </Show>
   );

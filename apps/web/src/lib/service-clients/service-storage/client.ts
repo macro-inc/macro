@@ -85,6 +85,7 @@ import type { CrmCommentEntityType } from './generated/schemas/crmCommentEntityT
 import type { CrmCommentThread } from './generated/schemas/crmCommentThread';
 import type { CrmCompanyResponse } from './generated/schemas/crmCompanyResponse';
 import type { CrmContactResponse } from './generated/schemas/crmContactResponse';
+import type { CrmStagesResponse } from './generated/schemas/crmStagesResponse';
 import type { CrmTeamSettingsResponse } from './generated/schemas/crmTeamSettingsResponse';
 import type { DeleteCommentResponse } from './generated/schemas/deleteCommentResponse';
 import type { DeleteCrmCommentResult } from './generated/schemas/deleteCrmCommentResult';
@@ -150,6 +151,7 @@ import type { RemindersList } from './generated/schemas/remindersList';
 import type { RemoveParticipantsRequest } from './generated/schemas/removeParticipantsRequest';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
+import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
@@ -2673,6 +2675,15 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify(body),
     });
+  },
+  async replaceCrmTeamStages(body: ReplaceCrmStagesRequest) {
+    return await dssFetch<CrmStagesResponse>('/crm/stages', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  },
+  async resetCrmTeamStages() {
+    return await dssFetch('/crm/stages', { method: 'DELETE' });
   },
   crmComments: {
     async list({

@@ -21,7 +21,7 @@ import type { UpdateCrmTeamSettingsRequest } from '@service-storage/generated/sc
 import { useMutation, useQuery, useQueryClient } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 
-const CRM_TEAM_SETTINGS_QUERY_KEY = ['crm', 'team-settings'] as const;
+export const CRM_TEAM_SETTINGS_QUERY_KEY = ['crm', 'team-settings'] as const;
 
 /**
  * Minimum team role required for a CRM capability. Team members are
@@ -53,7 +53,8 @@ export type TeamCrmConfig = {
   /**
    * Stage option ids that count as "closed" deals (used by the
    * move-closed-deals permission). When unset, stages labeled like
-   * closed/won/lost states are treated as closed.
+   * closed/won/lost states are treated as closed; an empty list means
+   * none are.
    */
   closedStageIds?: string[];
   /** System stage option id to team stage option id for seeded stages. */
@@ -157,6 +158,7 @@ export function useTeamCrmConfig() {
   return {
     config,
     isLoading: () => settingsQuery.isLoading,
+    isError: () => settingsQuery.isError && settingsQuery.data === undefined,
     update: updateMutation,
   };
 }
@@ -235,7 +237,7 @@ export function useClosedStageIds(
   const { config } = useTeamCrmConfig();
   return createMemo(() => {
     const explicit = config().closedStageIds;
-    if (explicit && explicit.length > 0) return new Set(explicit);
+    if (explicit) return new Set(explicit);
     return new Set(
       stages()
         .filter((stage) => DEFAULT_CLOSED_STAGE_LABEL.test(stage.label))

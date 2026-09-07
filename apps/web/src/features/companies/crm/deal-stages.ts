@@ -3,12 +3,12 @@
  *
  * The builtin Stage property is a system definition whose options cannot be
  * modified through the API, so team customization works by giving the team
- * its own team-scoped `Stage` property definition (created from CRM
- * settings). When that definition exists, every stage surface — kanban
- * columns, list cells, filters, grouping, the company panel — reads and
- * writes it instead of the system property; otherwise the seeded system
- * stages apply. `useDealStages` is the single source of truth for which set
- * is active.
+ * its own team-scoped `Deal Stage` property definition, written only through
+ * `PUT /crm/stages` from CRM settings. When that definition exists, every
+ * stage surface (kanban columns, list cells, filters, grouping, the company
+ * panel) reads and writes it instead of the system property; otherwise the
+ * seeded system stages apply. `useDealStages` is the single source of truth
+ * for which set is active.
  */
 
 // Imports come from the concrete @entity modules, not the barrel: this
@@ -73,6 +73,8 @@ export type DealStages = {
   /** Label for an option id in the active set (legacy system ids included). */
   stageLabel: (optionId: string) => string | undefined;
   isLoading: Accessor<boolean>;
+  /** The definitions failed to load and nothing is cached. */
+  isError: Accessor<boolean>;
 };
 
 /** Minimal company shape needed to read stage values. */
@@ -296,5 +298,7 @@ export function useDealStages(): DealStages {
     stageLabel,
     isLoading: () =>
       teamDefinitionsQuery.isLoading || teamCrmConfig.isLoading(),
+    isError: () =>
+      teamDefinitionsQuery.isError && teamDefinitionsQuery.data === undefined,
   };
 }
