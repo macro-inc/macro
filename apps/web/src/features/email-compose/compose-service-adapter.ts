@@ -64,6 +64,7 @@ import { restoreDraftBodyAfterUndo, runUndoSend } from './undo-send';
 /** Construct under the composing surface's Solid owner to scope request progress. */
 export function createEmailComposeServices(): EmailComposeServices {
   const accounts = useEmailLinksQuery();
+  const headerId = useNonPrimaryEmailLinkIdHeader();
   const user = useUserContext();
   const paywall = usePaywallState();
   const viewerEmail = useEmail();
@@ -129,55 +130,101 @@ export function createEmailComposeServices(): EmailComposeServices {
     accounts: {
       ...inboxSource,
       primaryId: usePrimaryEmailLinkId(),
-      headerId: useNonPrimaryEmailLinkIdHeader(),
     },
     viewerEmail,
     recipients: users,
     signaturesEnabled: () => signatures().enabled,
     hasPaidAccess: useHasPaidAccess(),
-    saveDraft: (input) => save.mutateAsync(input),
-    deleteDraft: (input) => remove.mutateAsync(input),
-    sendMessage: (input) => send.mutateAsync(input),
-    uploadAttachments: (input) => upload.mutateAsync(input),
-    addForwardedAttachments: (input) => forward.mutateAsync(input),
-    removeAttachment: (input) => removeAttachment.mutateAsync(input),
-    removeForwardedAttachment: (input) => removeForwarded.mutateAsync(input),
-    unschedule: (input) => unschedule.mutateAsync(input),
+    async saveDraft({ completingThread, previousThreadId, ...input }) {
+      const result = await save.mutateAsync({
+        ...input,
+        linkId: headerId(input.linkId),
+        skipSoupRefetch: completingThread,
+      });
+      const threadId = result.draft.thread_db_id;
+      if (threadId) markThreadDraftSaved(threadId);
+      if (previousThreadId && previousThreadId !== threadId) {
+        markThreadDraftSaved(previousThreadId);
+        invalidateSoupEntity(previousThreadId);
+        void refetchSoupEntity(previousThreadId, 'emailThread');
+      }
+      return result;
+    },
+    async deleteDraft({ completingThread, ...input }) {
+      await remove.mutateAsync({
+        ...input,
+        linkId: headerId(input.linkId),
+        skipSoupRefetch: completingThread,
+      });
+      if (input.threadId) markThreadDraftSaved(input.threadId);
+    },
+    async sendMessage({ completingThread, ...input }) {
+      const result = await send.mutateAsync({
+        ...input,
+        linkId: headerId(input.linkId),
+        skipSoupRefetch: completingThread,
+      });
+      if (result.message.thread_db_id)
+        markThreadDraftSaved(result.message.thread_db_id);
+      return result;
+    },
+    uploadAttachments: (input) =>
+      upload.mutateAsync({ ...input, linkId: headerId(input.linkId) }),
+    addForwardedAttachments: (input) =>
+      forward.mutateAsync({ ...input, linkId: headerId(input.linkId) }),
+    removeAttachment: (input) =>
+      removeAttachment.mutateAsync({
+        ...input,
+        linkId: headerId(input.linkId),
+      }),
+    removeForwardedAttachment: (input) =>
+      removeForwarded.mutateAsync({ ...input, linkId: headerId(input.linkId) }),
+    async unschedule(input) {
+      await unschedule.mutateAsync({
+        ...input,
+        linkId: headerId(input.linkId),
+      });
+      invalidateSoupEntity(input.draftID);
+    },
     schedule: async (input, linkId) => {
-      await scheduleEmailMessage(input, linkId);
+      await scheduleEmailMessage(input, headerId(linkId));
     },
     archive: async (input, linkId) => {
-      await archiveEmailThread(input, linkId);
+      await archiveEmailThread(input, headerId(linkId));
     },
-    markDraftSaved: markThreadDraftSaved,
-    prepareUndo(threadId, draftId) {
-      if (isFeatureEnabled(enableGraphqlSoup)) return;
-      queryClient.setQueryData<InfiniteData<ApiThread>>(
-        emailKeys.threadMessages(threadId).queryKey,
-        (old) =>
-          old
-            ? {
-                ...old,
-                pages: old.pages.map((page) => ({
-                  ...page,
-                  messages: page.messages.filter(
-                    (message) => message.db_id !== draftId
-                  ),
-                })),
-              }
-            : old
-      );
-      markThreadDraftSaved(threadId);
-    },
-    refreshAfterUndo(threadId) {
-      if (isFeatureEnabled(enableGraphqlSoup))
+    async restoreDraft({ threadId, draftId, draft, html, linkId }) {
+      if (threadId && !isFeatureEnabled(enableGraphqlSoup)) {
+        queryClient.setQueryData<InfiniteData<ApiThread>>(
+          emailKeys.threadMessages(threadId).queryKey,
+          (old) =>
+            old
+              ? {
+                  ...old,
+                  pages: old.pages.map((page) => ({
+                    ...page,
+                    messages: page.messages.filter(
+                      (message) => message.db_id !== draftId
+                    ),
+                  })),
+                }
+              : old
+        );
+        markThreadDraftSaved(threadId);
+      }
+      if (draft && html !== undefined)
+        await restoreDraftBodyAfterUndo(draft, html, headerId(linkId));
+      if (threadId && isFeatureEnabled(enableGraphqlSoup))
         void fetchAndCacheThread(threadId);
     },
-    refreshThreadPreview(threadId) {
-      void refetchSoupEntity(threadId, 'emailThread');
-    },
-    invalidatePreview: invalidateSoupEntity,
-    undoSend: runUndoSend,
-    restoreDraft: restoreDraftBodyAfterUndo,
+    undoSend: (input) =>
+      runUndoSend({
+        draftId: input.draftId,
+        linkId: headerId(input.linkId),
+        onUndone: async () => {
+          await input.onUndone();
+          if (input.threadId)
+            void refetchSoupEntity(input.threadId, 'emailThread');
+        },
+      }),
   };
 }

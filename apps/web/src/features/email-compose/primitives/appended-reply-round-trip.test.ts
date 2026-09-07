@@ -111,7 +111,7 @@ describe('appended reply draft round trip', () => {
     expect(quote!.getAttribute('data-classed-block')).toBe('true');
   });
 
-  it('reloading the saved draft keeps the quote removable (reload case)', () => {
+  it('reloading and showing a saved quote again keeps one removable quote', () => {
     const editorA = makeEditor();
     appendQuote(editorA);
     const prepared = prepareEmailBody(editorA);
@@ -127,6 +127,11 @@ describe('appended reply draft round trip', () => {
       root.append(...nodes);
     });
 
+    editorB.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
+      replyingTo,
+      replyType: 'forward',
+      visible: true,
+    });
     editorB.read(() => {
       expect($collectMacroQuotes()).toHaveLength(1);
     });

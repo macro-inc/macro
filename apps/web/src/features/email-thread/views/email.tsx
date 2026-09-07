@@ -1,13 +1,9 @@
 import { EmailComposeView } from '@app/features/email-compose/views/email-compose';
 import { EmailFormContextProvider } from '@app/features/email-compose/views/email-form-context';
-import { isPersonalMessage } from '@app/features/email-message/core/is-personal-message';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import type { JSX } from 'solid-js';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
-import type {
-  EmailThreadDependencies,
-  EmailThreadHost,
-} from '../context/email-thread-dependencies';
+import type { EmailThreadHost } from '../context/email-thread-dependencies';
 import { createThreadNavigation } from '../primitives/thread-navigation';
 import { createThreadReplyArea } from '../primitives/thread-reply-area';
 import { BottomReplyButtons } from './bottom-reply-buttons';
@@ -18,7 +14,6 @@ import { useEmailThreadEnvironment } from './thread-environment';
 export type EmailThreadViewProps = {
   title: string;
   threadId: Accessor<string>;
-  dependencies: EmailThreadDependencies;
   host?: EmailThreadHost;
   header?: JSX.Element;
   actions?: JSX.Element;
@@ -26,7 +21,7 @@ export type EmailThreadViewProps = {
 export function EmailThreadView(props: EmailThreadViewProps) {
   const context = useEmailContext();
   const environment = useEmailThreadEnvironment();
-  const deps = props.dependencies;
+  const deps = environment.dependencies;
   const isTouchDevice = deps.isTouch;
   const navigation = createThreadNavigation(props, context, deps, props.host);
   const {
@@ -70,8 +65,9 @@ export function EmailThreadView(props: EmailThreadViewProps) {
               <EmailComposeView
                 services={environment.compose}
                 host={environment.composeHost}
-                session={context}
-                draftID={draft().db_id!}
+                draft={draft()}
+                recipientOptions={context.recipientOptions}
+                onRecipientsChange={context.onRecipientsChange}
               />
             </div>
           )}
@@ -88,12 +84,6 @@ export function EmailThreadView(props: EmailThreadViewProps) {
                 context.messages.unfiltered().find((m) => m.db_id === id),
               getDraftForMessageReply: context.drafts.getDraftForMessage,
               onRecipientsChange: context.onRecipientsChange,
-              isPersonalMessage: (message) =>
-                isPersonalMessage(
-                  message,
-                  deps.viewerEmail(),
-                  context.messages.personalSenders()
-                ),
             }}
           >
             {/* Edge-to-edge on mobile/tablet: the message list carries its own

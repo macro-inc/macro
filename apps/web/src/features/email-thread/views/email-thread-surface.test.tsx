@@ -36,7 +36,6 @@ describe('thread composition ownership', () => {
       <EmailThreadSurface
         title="Review"
         threadId={() => 'thread'}
-        dependencies={deps}
         environment={{
           dependencies: deps,
           compose: composeServices(),

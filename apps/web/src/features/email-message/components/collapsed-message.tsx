@@ -1,13 +1,13 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
-import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { Tooltip } from '@ui';
-import { createMemo, Show } from 'solid-js';
-import { getSenderDisplayName, getSenderMacroId } from '../core/email-user';
+import { createMemo, type JSX, Show } from 'solid-js';
+import { getSenderDisplayName } from '../core/email-user';
 import { formatFullDate, formatShortDate } from '../core/format-email-date';
 import { EmailUserTooltip } from './email-user-tooltip';
 
 interface CollapsedMessageProps {
   message: EmailMessage;
+  avatar?: JSX.Element;
   currentUserEmail?: string;
 }
 
@@ -18,14 +18,6 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
   const senderDisplay = createMemo(() =>
     getSenderDisplayName(props.message, currentUserEmail())
   );
-  const senderMacroId = createMemo(() => getSenderMacroId(props.message));
-  const senderIconProps = createMemo<UserIconProps>(() => {
-    const senderId = senderMacroId();
-    const photoUrl = props.message.from?.photo_url ?? undefined;
-    if (senderId) return { id: senderId, photoUrl };
-    return { email: props.message.from?.email ?? '', photoUrl };
-  });
-
   const snippet = createMemo(() => {
     if (props.message.body_text) {
       return props.message.body_text.replace(/\s+/g, ' ').trim();
@@ -45,12 +37,7 @@ export function CollapsedMessage(props: CollapsedMessageProps) {
     <div class="min-w-0 grid grid-cols-[7rem_minmax(0,1fr)_4.5rem] items-center gap-x-2 @max-[480px]/message:grid-cols-[minmax(0,1fr)_auto] @max-[480px]/message:gap-y-2">
       <div class="flex items-center min-h-6 gap-2 min-w-0 text-sm @max-[480px]/message:col-start-1 @max-[480px]/message:row-start-1">
         <div class="shrink-0 flex justify-center items-center size-6">
-          <UserIcon
-            {...senderIconProps()}
-            isDeleted={false}
-            size="fill"
-            suppressClick={true}
-          />
+          {props.avatar}
         </div>
         <div class="min-w-0">
           <EmailUserTooltip recipient={props.message.from}>

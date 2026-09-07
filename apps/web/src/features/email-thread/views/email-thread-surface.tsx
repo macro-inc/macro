@@ -19,7 +19,10 @@ export interface EmailThreadSurfaceProps extends EmailThreadViewProps {
 
 /** Reusable composition: all application dependencies are supplied by the caller. */
 export function EmailThreadSurface(props: EmailThreadSurfaceProps) {
-  const state = createEmailThreadState(props.dependencies, props.host);
+  const state = createEmailThreadState(
+    props.environment.dependencies,
+    props.host
+  );
   const content = () => <EmailThreadView {...props} />;
   return (
     <ThreadEnvironmentProvider value={props.environment}>

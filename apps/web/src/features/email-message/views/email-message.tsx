@@ -3,10 +3,8 @@ import { CollapsedMessage } from '@app/features/email-message/components/collaps
 import { EmailMessageTopBar } from '@app/features/email-message/components/email-message-top-bar';
 import { MessageCard } from '@app/features/email-message/components/message-card';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
-import { getSenderMacroId } from '@app/features/email-message/core/email-user';
 import { EmailMessageBody } from '@app/features/email-message/views/email-message-body';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
-import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { VideoPreview } from '@core/component/VideoPreview';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -14,6 +12,7 @@ import type { EmailMessageAction } from '../components/message-actions';
 import type { EmailAttachment } from '../core/email-message';
 export interface EmailMessageViewProps {
   message: EmailMessage;
+  renderAvatar?: (message: EmailMessage) => JSX.Element;
   viewerEmail?: string;
   isTouch: boolean;
   isPersonal: boolean;
@@ -34,15 +33,6 @@ export interface EmailMessageViewProps {
 
 export function EmailMessageView(props: EmailMessageViewProps) {
   const [expandedHeader, setExpandedHeader] = createSignal(false);
-  const senderMacroId = createMemo(() => getSenderMacroId(props.message));
-
-  const senderIconProps = createMemo<UserIconProps>(() => {
-    const senderId = senderMacroId();
-    const photoUrl = props.message.from?.photo_url ?? undefined;
-    if (senderId) return { id: senderId, photoUrl };
-    return { email: props.message.from?.email ?? '', photoUrl };
-  });
-
   const isBodyExpanded = createMemo(() => {
     return props.isExpanded;
   });
@@ -120,6 +110,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
           <CollapsedMessage
             message={props.message}
             currentUserEmail={props.viewerEmail}
+            avatar={props.renderAvatar?.(props.message)}
           />
         }
       >
@@ -142,12 +133,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
             }
             avatar={
               <div class="shrink-0 flex justify-center items-center size-6">
-                <UserIcon
-                  {...senderIconProps()}
-                  isDeleted={false}
-                  size="fill"
-                  suppressClick={true}
-                />
+                {props.renderAvatar?.(props.message)}
               </div>
             }
           />

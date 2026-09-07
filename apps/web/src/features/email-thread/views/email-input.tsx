@@ -10,6 +10,7 @@ import {
   type Setter,
   Show,
 } from 'solid-js';
+import { isPersonalMessage } from '../../email-message/core/is-personal-message';
 import { revealMessageAfterLayout } from '../primitives/scroll-to-message';
 import { useEmailContext } from './email-thread-context';
 import { useEmailThreadEnvironment } from './thread-environment';
@@ -88,7 +89,50 @@ function EmailInputSession(props: EmailInputProps) {
           <Layer depth={props.mobileDrawer ? 0 : 2}>
             <ReplyInputView
               services={environment.compose}
-              session={ctx}
+              session={{
+                thread: ctx.thread,
+                recipientOptions: ctx.recipientOptions,
+                isPersonalReply: () => {
+                  const message = props.replyingTo();
+                  return (
+                    !!message &&
+                    isPersonalMessage(
+                      message,
+                      environment.dependencies.viewerEmail(),
+                      ctx.messages.personalSenders()
+                    )
+                  );
+                },
+                onDraftRemoved: () => {
+                  const id = props.replyingTo()?.db_id;
+                  if (id) ctx.drafts.deleteDraftForMessage(id);
+                },
+                replyRequest: {
+                  replyType: () =>
+                    ctx.replyRequest.messageId() === props.replyingTo()?.db_id
+                      ? ctx.replyRequest.replyType()
+                      : undefined,
+                  clear: ctx.replyRequest.clear,
+                },
+                getMarkDoneNavigationTargetId:
+                  ctx.getMarkDoneNavigationTargetId,
+                exitToThread: (target) => {
+                  const id =
+                    target === 'last'
+                      ? ctx.messages.list().at(-1)?.db_id
+                      : ctx.messages.focusedID();
+                  if (!id) return false;
+                  ctx.messages.setFocused(id);
+                  const message = ctx
+                    .messagesContainerRef()
+                    ?.querySelector<HTMLElement>(
+                      `[data-message-body-id="${CSS.escape(id)}"]`
+                    );
+                  const card = message?.closest<HTMLElement>('[tabindex="0"]');
+                  card?.focus();
+                  return !!card;
+                },
+              }}
               sourceEntityId={
                 ctx.thread()?.db_id ??
                 props.replyingTo()?.thread_db_id ??

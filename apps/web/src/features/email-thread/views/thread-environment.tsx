@@ -1,9 +1,12 @@
-import { createContext, useContext } from 'solid-js';
+import { createContext, type JSX, useContext } from 'solid-js';
 import type {
   EmailComposeHost,
   EmailComposeServices,
 } from '../../email-compose/context/compose-services';
-import type { EmailAttachment } from '../../email-message/core/email-message';
+import type {
+  EmailAttachment,
+  EmailMessage,
+} from '../../email-message/core/email-message';
 import type { EmailThreadDependencies } from '../context/email-thread-dependencies';
 
 export interface ThreadViewEnvironment {
@@ -11,7 +14,10 @@ export interface ThreadViewEnvironment {
   copySubject?: (subject: string) => void;
   compose: EmailComposeServices;
   composeHost?: EmailComposeHost;
-  rendering: { openAttachment?: (attachment: EmailAttachment) => void };
+  rendering: {
+    renderAvatar?: (message: EmailMessage) => JSX.Element;
+    openAttachment?: (attachment: EmailAttachment) => void;
+  };
 }
 
 const ThreadEnvironment = createContext<ThreadViewEnvironment>();

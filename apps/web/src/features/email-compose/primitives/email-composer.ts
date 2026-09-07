@@ -4,17 +4,18 @@ import {
   $appendWatermarkNodeToLast,
   $removeAllWatermarkNodes,
 } from '@macro-inc/lexical-core';
-import { debounce } from '@solid-primitives/scheduled';
 import * as EmailValidator from 'email-validator';
 import type { LexicalEditor } from 'lexical';
-import { createMemo, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { unwrap } from 'solid-js/store';
-import type { EmailContact } from '../../email-message/core/email-message';
+import type {
+  EmailContact,
+  EmailMessage,
+} from '../../email-message/core/email-message';
 import type {
   EmailComposeHost,
   EmailComposeServices,
 } from '../context/compose-services';
-import type { EmailReplySession } from '../context/email-form-dependencies';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import type { EmailRecipient } from '../core/email-recipient';
 import { plainTextToHtml } from '../core/plain-text-to-html';
@@ -36,13 +37,13 @@ import {
 } from '../primitives/prepare-email-body';
 import { endUndoSend } from '../primitives/undo-send-claim';
 import { createAttachmentPersistence } from './attachment-persistence';
+import { createDraftAutosave } from './draft-autosave';
 import { createEmailSendSchedule } from './email-send-schedule';
 import { createEmailUndoStore } from './undo-store';
 
-const DRAFT_DEBOUNCE_MS = 500;
-
 type UndoComposeSnapshot = {
   draftId: string;
+  linkId?: string;
   recipients: EmailFormRecipients;
   subject: string;
   bodyHtml: string;
@@ -55,38 +56,38 @@ const composeUndo = createEmailUndoStore<UndoComposeSnapshot>();
 export type EmailComposeInput = {
   services: EmailComposeServices;
   host?: EmailComposeHost;
-  session?: EmailReplySession;
+  draft?: EmailMessage;
+  /** Identity for a composer reopened from a local undo snapshot. */
   draftID?: string;
+  recipientOptions?: Accessor<EmailRecipient[]>;
+  onRecipientsChange?: (recipients: EmailRecipient[]) => void;
   /** Prefill for the To field (e.g. from an intercepted mailto: link). Ignored when editing an existing draft. */
   initialTo?: string[];
 };
 
 export function createEmailComposer(props: EmailComposeInput) {
   const services = props.services;
+  const initialDraftID = props.draft?.db_id ?? props.draftID;
   const hasPaidAccess = services.hasPaidAccess;
   const saveDraftMutation = createComposeOperation(services.saveDraft);
   const deleteDraftMutation = createComposeOperation(services.deleteDraft);
-  const emailContext = props.session;
 
   const form = createEmailFormState(
     {
       viewerEmail: services.viewerEmail,
       inboxes: services.accounts.inboxes,
     },
-    props.draftID
+    initialDraftID
       ? {
           type: 'draft',
-          messageID: props.draftID,
+          messageID: initialDraftID,
         }
       : undefined,
-    emailContext
-      ? {
-          getMessageByID: (id) =>
-            emailContext.messages.unfiltered().find((m) => m.db_id === id),
-          getDraftForMessageReply: emailContext.drafts.getDraftForMessage,
-          onRecipientsChange: emailContext.onRecipientsChange,
-        }
-      : undefined
+    {
+      getMessageByID: () => props.draft,
+      getDraftForMessageReply: () => undefined,
+      onRecipientsChange: props.onRecipientsChange,
+    }
   );
 
   const primaryLinkId = services.accounts.primaryId;
@@ -95,19 +96,12 @@ export function createEmailComposer(props: EmailComposeInput) {
     if (inboxes.length === 0) return undefined;
     // Send from the inbox the user picked, else the inbox that owns the draft
     // being edited, else the primary inbox — not whichever inbox sorts first.
-    const draftLinkId = props.draftID
-      ? emailContext?.messages
-          .unfiltered()
-          .find((m) => m.db_id === props.draftID)?.link_id
-      : undefined;
-    const targetId = form.selectedLinkId() ?? draftLinkId ?? primaryLinkId();
+    const targetId =
+      form.selectedLinkId() ?? props.draft?.link_id ?? primaryLinkId();
     return inboxes.find((inbox) => inbox.id === targetId) ?? inboxes[0];
   });
 
-  const toHeaderLinkId = services.accounts.headerId;
-  // Scope writes to the inbox this compose sends from (its X-Email-Link-Id
-  // header), so a non-primary "from" inbox drafts/sends from the right account.
-  const headerLinkId = () => toHeaderLinkId(link()?.id);
+  const activeLinkId = () => link()?.id;
 
   // The sending inbox's saved signature (empty for inboxes without one). New
   // emails include it by default; the preview's dismiss drops it for this one
@@ -128,7 +122,7 @@ export function createEmailComposer(props: EmailComposeInput) {
   const [editor, setEditor] = createSignal<LexicalEditor | undefined>();
   const [content, setContent] = createSignal('');
   const [currentDraftID, setCurrentDraftID] = createSignal<string | undefined>(
-    props.draftID
+    initialDraftID
   );
 
   // Thread the draft currently lives under; switching the sending inbox
@@ -136,27 +130,22 @@ export function createEmailComposer(props: EmailComposeInput) {
   // be dropped after the save.
   const [currentThreadID, setCurrentThreadID] = createSignal<
     string | undefined
-  >(
-    props.draftID
-      ? emailContext?.messages
-          .unfiltered()
-          .find((m) => m.db_id === props.draftID)?.thread_db_id
-      : undefined
-  );
+  >(props.draft?.thread_db_id);
 
   const attachmentPersistence = createAttachmentPersistence({
     services,
     attachments: () => form.attachments,
     draftId: currentDraftID,
-    linkId: headerLinkId,
+    linkId: activeLinkId,
   });
 
   // Restore form state from undo-send snapshot if available
-  const restoredSnapshot = props.draftID
-    ? composeUndo.take(props.draftID)
+  const restoredSnapshot = initialDraftID
+    ? composeUndo.take(initialDraftID)
     : undefined;
 
   if (restoredSnapshot) {
+    form.setSelectedFromLink(restoredSnapshot.linkId);
     form.setRecipients('to', restoredSnapshot.recipients.to);
     form.setRecipients('cc', restoredSnapshot.recipients.cc);
     form.setRecipients('bcc', restoredSnapshot.recipients.bcc);
@@ -167,7 +156,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     setIncludeSignature(restoredSnapshot.includeSignature);
   }
 
-  if (!props.draftID && props.initialTo?.length) {
+  if (!initialDraftID && props.initialTo?.length) {
     form.setRecipients(
       'to',
       props.initialTo.map((email) => ({
@@ -238,13 +227,10 @@ export function createEmailComposer(props: EmailComposeInput) {
         db_id: currentDraftID(),
       },
       linkId: saveLinkId,
+      previousThreadId: previousThreadID,
     });
 
     const newThreadID = draftResponse.draft.thread_db_id ?? undefined;
-    if (previousThreadID && previousThreadID !== newThreadID) {
-      services.invalidatePreview(previousThreadID);
-      services.refreshThreadPreview(previousThreadID);
-    }
     setCurrentThreadID(newThreadID);
 
     const draftId = draftResponse.draft.db_id;
@@ -259,43 +245,21 @@ export function createEmailComposer(props: EmailComposeInput) {
   // left without the keep-or-delete prompt.
   const [draftDirty, setDraftDirty] = createSignal(false);
 
-  let pendingAutosave = false;
-  let saveQueue: Promise<string | undefined> = Promise.resolve(undefined);
   const [submitting, setSubmitting] = createSignal(false);
   const [discarding, setDiscarding] = createSignal(false);
   let completed = false;
   const persistencePaused = () => submitting() || discarding() || completed;
 
-  function executeSaveDraft() {
-    scheduleDraftSave.clear();
-    pendingAutosave = false;
-    // Capture before disposal can remove the editor. Serialize writes so a
-    // first save supplies the ID used by any newer edits queued behind it.
-    const draft = collectDraft();
-    const linkId = headerLinkId();
-    const save = () => persistDraft(draft, linkId);
-    saveQueue = saveQueue.then(save, save);
-    return saveQueue;
-  }
-
-  const scheduleDraftSave = debounce(() => {
-    void executeSaveDraft().catch(() => {});
-  }, DRAFT_DEBOUNCE_MS);
-
-  onCleanup(() => {
-    scheduleDraftSave.clear();
-    if (pendingAutosave && !persistencePaused()) {
-      // Production save capabilities report the failure; consume the rejection
-      // because the disposed view cannot await this final write.
-      void executeSaveDraft().catch(() => {});
-    }
+  const autosave = createDraftAutosave({
+    capture: () => ({ draft: collectDraft(), linkId: activeLinkId() }),
+    persist: ({ draft, linkId }) => persistDraft(draft, linkId),
+    paused: persistencePaused,
   });
-
+  const executeSaveDraft = () => autosave.save();
   const markDirtyAndScheduleSave = () => {
     if (persistencePaused()) return;
-    pendingAutosave = true;
     setDraftDirty(true);
-    scheduleDraftSave();
+    autosave.schedule();
   };
 
   // --- Attachment handling ---
@@ -337,45 +301,36 @@ export function createEmailComposer(props: EmailComposeInput) {
     threadId: string | undefined,
     linkId: string | undefined
   ) => {
-    // Wipe the new thread's cache when its view unmounts (replaceSplit
-    // below) so the next visit fetches fresh data without the sent message.
-    if (threadId) services.prepareUndo(threadId, draftId);
-
-    // Overwrite the server-side draft with the pre-send content. The
-    // snapshot itself stays for the compose remount below to restore the
-    // form from.
     const snapshot = composeUndo.peek(draftId);
-    if (snapshot) {
-      await services.restoreDraft(
-        {
-          bcc: snapshot.recipients.bcc.map(convertEmailRecipientToContactInfo),
-          cc: snapshot.recipients.cc.map(convertEmailRecipientToContactInfo),
-          db_id: draftId,
-          subject: snapshot.subject,
-          to: snapshot.recipients.to.map(convertEmailRecipientToContactInfo),
-        },
-        snapshot.bodyHtml,
-        linkId
-      );
-    }
-
-    // GraphQL mode renders threads from the normalized cache, which
-    // markThreadDraftSaved's TanStack cleanup can't reach — refetch through
-    // it (after the draft-body restore) so a revisit doesn't replay the
-    // undone message from cache.
-    if (threadId) services.refreshAfterUndo(threadId);
+    await services.restoreDraft({
+      draftId,
+      threadId,
+      draft: snapshot
+        ? {
+            bcc: snapshot.recipients.bcc.map(
+              convertEmailRecipientToContactInfo
+            ),
+            cc: snapshot.recipients.cc.map(convertEmailRecipientToContactInfo),
+            db_id: draftId,
+            subject: snapshot.subject,
+            to: snapshot.recipients.to.map(convertEmailRecipientToContactInfo),
+          }
+        : undefined,
+      html: snapshot?.bodyHtml,
+      linkId,
+    });
 
     props.host?.showDraft?.(draftId);
   };
 
-  // `linkId` is the X-Email-Link-Id header value the send itself used, resolved
-  // at send time.
+  // Undo retains the inbox used by the send even after navigation.
   const undoSend = (
     draftId: string,
     threadId: string | undefined,
     linkId: string | undefined
   ) =>
     services.undoSend({
+      threadId,
       draftId,
       linkId,
       onUndone: () => restoreAfterUndoSend(draftId, threadId, linkId),
@@ -460,7 +415,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     try {
       // Ensure the draft is saved before sending so undo-send always has a
       // draft id to snapshot and restore (the send reuses the draft's db_id).
-      scheduleDraftSave.clear();
+      autosave.cancel();
       try {
         await executeSaveDraft();
       } catch {
@@ -478,6 +433,7 @@ export function createEmailComposer(props: EmailComposeInput) {
         const draftId = currentDraftID();
         if (draftId) {
           composeUndo.remember({
+            linkId: currentLink.id,
             draftId,
             recipients: structuredClone(unwrap(form.recipients())),
             subject: form.subject(),
@@ -524,7 +480,7 @@ export function createEmailComposer(props: EmailComposeInput) {
             // an explicit dismiss. Omitting it falls through to the backend default.
             include_signature: includeSignature() ? undefined : false,
           },
-          linkId: headerLinkId(),
+          linkId: activeLinkId(),
         });
 
         completed = true;
@@ -549,14 +505,13 @@ export function createEmailComposer(props: EmailComposeInput) {
     draftId: currentDraftID,
     saveDraft: executeSaveDraft,
     threadId: () => saveDraftMutation.result()?.draft.thread_db_id,
-    linkId: headerLinkId,
+    linkId: activeLinkId,
     sendTime: form.sendTime,
     setSendTime: (date) => {
       form.setSendTime(date);
       setDraftDirty(true);
     },
     recipientCount: totalRecipientCount,
-    onUnscheduled: services.invalidatePreview,
   });
   const scheduling = schedule.pending;
   const scheduleBlocked = () =>
@@ -578,18 +533,17 @@ export function createEmailComposer(props: EmailComposeInput) {
   const deleteDraftAndReset = async () => {
     if (persistencePaused() || scheduling()) return false;
     setDiscarding(true);
-    scheduleDraftSave.clear();
-    pendingAutosave = false;
+    autosave.cancel();
     try {
       // A first save may still be creating the draft. Delete its returned ID
       // after it settles so discard cannot leave an orphan behind.
-      await saveQueue.catch(() => {});
+      await autosave.settled().catch(() => {});
       const draftId = currentDraftID();
       if (draftId) {
         await deleteDraftMutation.run({
           draftId,
           threadId: currentThreadID(),
-          linkId: headerLinkId(),
+          linkId: activeLinkId(),
         });
       }
       resetState();
@@ -619,7 +573,7 @@ export function createEmailComposer(props: EmailComposeInput) {
   };
 
   const getRecipientOptions = () => {
-    const fromDraft = emailContext?.recipientOptions();
+    const fromDraft = props.recipientOptions?.();
     return fromDraft ?? destinationOptions();
   };
 
@@ -736,7 +690,7 @@ export function createEmailComposer(props: EmailComposeInput) {
       if (persistencePaused() || scheduling()) return;
       form.setSelectedFromLink(linkId);
       setDraftDirty(true);
-      scheduleDraftSave.clear();
+      autosave.cancel();
       void executeSaveDraft().catch(() => {});
     },
     hasPaidAccess,

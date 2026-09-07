@@ -172,20 +172,7 @@ export function ReplyInputView(props: ReplyInputProps) {
           });
         },
         keyDownHandler: () => {
-          const messages = ctx.messages.list();
-          if (!messages?.length) return false;
-          const lastMsg = messages[messages.length - 1];
-          if (!lastMsg?.db_id) return false;
-          editor()?.blur();
-          ctx.messages.setFocused(lastMsg.db_id);
-          const msgEl = document.querySelector(
-            `[data-message-body-id="${lastMsg.db_id}"]`
-          ) as HTMLElement | null;
-          const focusable = msgEl?.closest(
-            '[tabindex="0"]'
-          ) as HTMLElement | null;
-          focusable?.focus();
-          return true;
+          return ctx.exitToThread('last');
         },
         hotkeyToken: TOKENS.email.previousMessage,
       });
@@ -203,13 +190,7 @@ export function ReplyInputView(props: ReplyInputProps) {
             deleteDraftAndReset();
           } else {
             // Move focus back to the message
-            const focusedId = ctx.messages.focusedID();
-            if (focusedId) {
-              const messageEl = document.querySelector(
-                `[data-message-body-id="${focusedId}"]`
-              ) as HTMLElement | null;
-              messageEl?.focus();
-            }
+            ctx.exitToThread('selected');
           }
           return true;
         },

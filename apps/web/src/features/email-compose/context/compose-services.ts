@@ -24,19 +24,20 @@ export interface SavedEmailDraft {
 export interface SaveEmailDraft {
   draft: EmailDraft;
   sendTime?: Date | null;
+  previousThreadId?: string;
   linkId?: string;
-  skipSoupRefetch?: boolean;
+  completingThread?: boolean;
 }
 export interface DeleteEmailDraft {
   draftId: string;
   threadId?: string;
   linkId?: string;
-  skipSoupRefetch?: boolean;
+  completingThread?: boolean;
 }
 export interface SendEmailDraft {
   message: EmailDraft;
   linkId?: string;
-  skipSoupRefetch?: boolean;
+  completingThread?: boolean;
 }
 export interface UploadEmailAttachments {
   draftID: string;
@@ -51,12 +52,49 @@ export interface EmailAttachmentChange {
   linkId?: string;
 }
 
-/** A compose session needs these operations, never a client, query key, or mutation result. */
-export interface EmailComposeServices {
-  viewerLoading: Accessor<boolean>;
-  onUpgrade(): void;
-  prepareSignatureLinks(root: ShadowRoot): void;
-  readDroppedFiles: import('./editor-capabilities').ComposeBodyActions['readDroppedFiles'];
+export interface EmailDraftStorage {
+  saveDraft(input: SaveEmailDraft): Promise<{ draft: SavedEmailDraft }>;
+  deleteDraft(input: DeleteEmailDraft): Promise<void>;
+  restoreDraft(input: {
+    draftId: string;
+    threadId?: string;
+    draft?: Omit<EmailDraft, 'body_html'>;
+    html?: string;
+    linkId?: string;
+  }): Promise<void>;
+}
+
+export interface EmailAttachmentStorage {
+  uploadAttachments(input: UploadEmailAttachments): Promise<void>;
+  addForwardedAttachments(input: {
+    draftID: string;
+    attachments: { attachmentID: string }[];
+    linkId?: string;
+  }): Promise<void>;
+  removeAttachment(input: EmailAttachmentChange): Promise<void>;
+  removeForwardedAttachment(input: EmailAttachmentChange): Promise<void>;
+}
+
+export interface EmailDelivery {
+  sendMessage(input: SendEmailDraft): Promise<{ message: SavedEmailDraft }>;
+  unschedule(input: { draftID: string; linkId?: string }): Promise<void>;
+  schedule(
+    input: { draftID: string; send_time: string },
+    linkId?: string
+  ): Promise<void>;
+  archive(
+    input: { id: string; value: boolean },
+    linkId?: string
+  ): Promise<void>;
+  undoSend(input: {
+    threadId?: string;
+    draftId: string;
+    linkId: string | undefined;
+    onUndone: () => Promise<void> | void;
+  }): Promise<void>;
+}
+
+export interface EmailComposeFeedback {
   feedback: {
     success(
       message: string,
@@ -67,6 +105,18 @@ export interface EmailComposeServices {
     dismiss(id: number): void;
   };
   reportError(error: unknown): void;
+}
+
+/** Composition supplies the complete surface; persistence and delivery consume their own contracts. */
+export interface EmailComposeServices
+  extends EmailDraftStorage,
+    EmailAttachmentStorage,
+    EmailDelivery,
+    EmailComposeFeedback {
+  viewerLoading: Accessor<boolean>;
+  onUpgrade(): void;
+  prepareSignatureLinks(root: ShadowRoot): void;
+  readDroppedFiles: import('./editor-capabilities').ComposeBodyActions['readDroppedFiles'];
   isTouch: Accessor<boolean>;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
@@ -87,47 +137,11 @@ export interface EmailComposeServices {
     loading: Accessor<boolean>;
     failed: Accessor<boolean>;
     primaryId: Accessor<string | undefined>;
-    headerId(id: string | undefined): string | undefined;
   };
   viewerEmail: Accessor<string | undefined>;
   recipients: Accessor<EmailRecipient[]>;
   signaturesEnabled: Accessor<boolean>;
   hasPaidAccess: Accessor<boolean>;
-  saveDraft(input: SaveEmailDraft): Promise<{ draft: SavedEmailDraft }>;
-  deleteDraft(input: DeleteEmailDraft): Promise<void>;
-  sendMessage(input: SendEmailDraft): Promise<{ message: SavedEmailDraft }>;
-  uploadAttachments(input: UploadEmailAttachments): Promise<void>;
-  addForwardedAttachments(input: {
-    draftID: string;
-    attachments: { attachmentID: string }[];
-    linkId?: string;
-  }): Promise<void>;
-  removeAttachment(input: EmailAttachmentChange): Promise<void>;
-  removeForwardedAttachment(input: EmailAttachmentChange): Promise<void>;
-  unschedule(input: { draftID: string; linkId?: string }): Promise<void>;
-  schedule(
-    input: { draftID: string; send_time: string },
-    linkId?: string
-  ): Promise<void>;
-  archive(
-    input: { id: string; value: boolean },
-    linkId?: string
-  ): Promise<void>;
-  markDraftSaved(threadId: string): void;
-  prepareUndo(threadId: string, draftId: string): void;
-  refreshAfterUndo(threadId: string): void;
-  refreshThreadPreview(threadId: string): void;
-  invalidatePreview(id: string): void;
-  undoSend(input: {
-    draftId: string;
-    linkId: string | undefined;
-    onUndone: () => Promise<void> | void;
-  }): Promise<void>;
-  restoreDraft(
-    draft: Omit<EmailDraft, 'body_html'>,
-    html: string,
-    linkId?: string
-  ): Promise<void>;
 }
 
 export interface ComposeNoticeOptions {

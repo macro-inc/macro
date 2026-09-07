@@ -11,9 +11,10 @@ import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
 import { createEmailComposeServices } from '../email-compose/compose-service-adapter';
 import { convertContactInfoToEmailRecipient } from '../email-compose/core/recipient-conversion';
 import { createEmailAttachmentOpener } from '../email-message/attachment-action-adapter';
+import type { EmailMessage } from '../email-message/core/email-message';
 import { createEmailRenderingDependencies } from '../email-message/rendering-adapter';
+import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
 import type { EmailThreadDependencies } from './context/email-thread-dependencies';
-import { createThreadSnapshot } from './primitives/thread-snapshot';
 import { createEmailThreadSource } from './queries/thread-source';
 import { createThreadActionAdapter } from './thread-action-adapter';
 import {
@@ -23,7 +24,7 @@ import {
 
 export type EmailThreadProps = Omit<
   EmailThreadSurfaceProps,
-  'dependencies' | 'environment' | 'emailRendering'
+  'environment' | 'emailRendering'
 >;
 
 /** App-facing composition. Import the surface or primitives for isolated tests. */
@@ -32,7 +33,6 @@ export function EmailThread(props: EmailThreadProps) {
     enabled: !!props.threadId(),
   }));
   const source = createEmailThreadSource(props.threadId, query);
-  const snapshot = createThreadSnapshot(source);
   const contacts = useContacts();
   const viewerEmail = useEmail();
   const user = useUserContext();
@@ -46,7 +46,8 @@ export function EmailThread(props: EmailThreadProps) {
     recipients: createMemo(() =>
       contacts().map((contact) => convertContactInfoToEmailRecipient(contact))
     ),
-    commands: createThreadActionAdapter(props.threadId, snapshot),
+    createCommands: (snapshot) =>
+      createThreadActionAdapter(props.threadId, snapshot),
   };
   const environment = {
     copySubject: (subject: string) => {
@@ -58,7 +59,12 @@ export function EmailThread(props: EmailThreadProps) {
     dependencies,
     compose,
     composeHost: createEmailComposeHost(),
-    rendering: { openAttachment: createEmailAttachmentOpener() },
+    rendering: {
+      openAttachment: createEmailAttachmentOpener(),
+      renderAvatar: (message: EmailMessage) => (
+        <EmailSenderIcon message={message} />
+      ),
+    },
   };
   const rendering = createEmailRenderingDependencies();
   createEffectOnEntityTypeNotification(
@@ -80,7 +86,6 @@ export function EmailThread(props: EmailThreadProps) {
   return (
     <EmailThreadSurface
       {...props}
-      dependencies={dependencies}
       environment={environment}
       emailRendering={rendering}
     />

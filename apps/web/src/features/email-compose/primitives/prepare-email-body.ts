@@ -249,13 +249,18 @@ export function registerToggleAppendedThread(editor: LexicalEditor) {
       // Programmatic content change: don't let selection reconciliation
       // move DOM focus into the editor
       $addUpdateTag('skip-dom-selection');
-      const replyingToID = replyingTo?.replying_to_id ?? undefined;
+      const replyingToID =
+        replyingTo?.db_id ?? replyingTo?.replying_to_id ?? undefined;
 
       if (!visible) {
         removeAppendedThread(editor, replyingToID);
         return true;
       }
 
+      // Restoring a draft or remounting a forward may request visibility again.
+      for (const node of $findPreviousEmailNode(replyingToID)) {
+        if (node) return true;
+      }
       $appendPreviousEmail(editor, replyingTo, replyType, isPersonal);
       // Appending leaves a dirty selection inside the quote; any later
       // update would flush it to the DOM and steal focus into the editor

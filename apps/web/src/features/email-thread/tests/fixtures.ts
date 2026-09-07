@@ -39,7 +39,7 @@ export function dependencies(
     viewerLoading: () => false,
     isTouch: () => false,
     isMobile: () => false,
-    commands: {
+    createCommands: () => ({
       archiveThread: () => false,
       isThreadDone: () => false,
       canMarkThreadNotDone: () => false,
@@ -51,6 +51,6 @@ export function dependencies(
       blockSender: () => false,
       markSenderSignal: () => false,
       markSenderNoise: () => false,
-    },
+    }),
   };
 }

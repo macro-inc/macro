@@ -93,6 +93,7 @@ export function MessageContainer(props: MessageContainerProps) {
   return (
     <EmailMessageView
       message={props.message}
+      renderAvatar={rendering.renderAvatar}
       viewerEmail={deps.viewerEmail()}
       isTouch={deps.isTouch()}
       isPersonal={isPersonalMessage(

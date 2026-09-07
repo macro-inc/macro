@@ -86,8 +86,12 @@ test exercises this ordering.
 | `EmailThreadHost` | Optional location target, focus, activation status, and keyboard registration |
 | `EmailRenderingDependencies` | Theme values, explicit image policy, link preparation, and image resolution with an abortable resource lifetime |
 | `EmailFormDependencies` | Viewer address and available inbox identities for recipient selection |
-| `EmailReplySession` | Relevant messages/drafts, recipient options, reply request, and selection callbacks |
-| `EmailComposeServices` | Account metadata and named draft, attachment, send, schedule, undo, and feedback operations |
+| `EmailReplySession` | Thread identity, recipient options, personal-reply classification, a targeted reply request, and host intents for leaving the composer or removing its draft |
+| `EmailDraftStorage` | Save/delete and restore an undone draft; inputs use domain inbox IDs and completion intent |
+| `EmailAttachmentStorage` | Upload, forward, and remove draft attachments |
+| `EmailDelivery` | Send, undo, schedule, unschedule, and archive operations |
+| `EmailComposeFeedback` | User notices and error reporting |
+| `EmailComposeServices` | Composition of those contracts with account, editor, and presentation capabilities for the complete surface |
 | `EmailComposeHost` | Optional navigation, back handling, and focus movement supplied by the host |
 
 Core types are owned by the features. Generated email service schemas and concrete
@@ -120,10 +124,19 @@ The compose controllers now assemble these smaller responsibilities:
 | Module | Responsibility and boundary |
 | --- | --- |
 | `attachment-persistence.ts` | Upload/remove operations and completion tracking. Receives attachment state and three transport capabilities. A saved attachment ID does not mean its content upload has finished; every save waits for outstanding uploads. |
-| `email-send-schedule.ts` | Confirmed send time, pending schedule changes, unscheduling and archive feedback. Reply and standalone compose supply their own draft/thread identity and post-unschedule callback. |
+| `email-send-schedule.ts` | Confirmed send time, pending changes, unscheduling and archive feedback. Scheduling saves the current draft and waits for its attachments even when a draft ID already exists; each operation retains its selected inbox. |
+| `draft-autosave.ts` | One debounce and serialized write queue used by reply and standalone compose. Captures editor values before queueing, flushes pending edits on disposal, and exposes cancellation and completion for send/discard. |
 | `reply-recipient-fields.ts` | Recipient field expansion, drag/drop and outside interaction. Receives values, a setter and a change callback; it knows nothing about saving or sending. |
 | `reply-composer-focus.ts` | Deferred editor/recipient focus and the forward focus guard. Receives DOM accessors and an editor `focus()` capability. Its timers, animation frames and event listeners end with its owner. |
 | `views/reply-envelope.tsx` | Sender, recipients and subject presentation. One recipient input implementation supplies the desktop/mobile layouts while the parent keeps a single editor mounted. |
+
+A reply retains the draft ID and the thread returned by persistence together.
+Changing the sender can move the draft to another inbox's thread; the displayed
+conversation still owns focus, completion and local undo recovery. Each serialized
+save reports its previous persisted thread to the production adapter, which marks
+both affected message caches for cleanup on disposal. Undo retains the selected
+inbox and envelope and reconciles the actual sent thread, even after navigation.
+Discard and scheduling also address the persisted thread.
 
 The reply controller still owns draft collection, sending, reset and undo as one
 coordinated workflow: they share editor snapshots, draft identity and pending
@@ -131,12 +144,52 @@ operation guards. Breaking that sequence into mutually dependent controllers
 would make ordering harder to inspect. Its view receives named actions and
 pending accessors instead of mutation objects, and derives layout details itself.
 
-The reply autosave timer intentionally remains explicit. Cleanup flushes an
-engaged draft only when its save/send/delete guards permit it. The installed
-`@solid-primitives/scheduled` debounce cancels on cleanup; substituting it would
-change persistence behavior. DOM listeners use the installed
-`@solid-primitives/event-listener` cleanup instead of duplicating registration
-and removal. Choose a primitive by its lifetime semantics, not its name.
+The shared autosave primitive wraps `@solid-primitives/scheduled` with explicit
+pending-edit tracking and a disposal flush. Debounce cancellation alone would
+lose the last edit. The queue captures body/envelope/inbox values before waiting;
+each write uses the draft ID allocated by the preceding write. An ID is retained
+before uploads finish so a failed upload can still be retried or discarded.
+Attachment membership is reconciled after the save, so a forwarded file removed
+while saving is not added back from an old snapshot.
+
+Cached forms contain values and an edit revision. They retain no editor,
+controller callback, focus flag, or timer. Reset/clear restore values without
+emitting a user edit. The mounted reply controller observes edits and owns focus
+and quote commands, including cancellation of deferred work. Showing an existing
+quote is idempotent across editor remounts. DOM listeners use the installed
+`@solid-primitives/event-listener` cleanup.
+
+```mermaid
+flowchart TD
+  View[Mounted compose view] --> Controller[Reply or standalone controller]
+  Controller --> Form[Form values and edit revision]
+  Controller --> Editor[Mounted Lexical editor and focus lifetime]
+  Controller --> Save[Shared draft autosave queue]
+  Controller --> Schedule[Schedule workflow]
+  Schedule --> Save
+  Save --> DraftContract[Draft storage contract]
+  Controller --> Attachment[Attachment persistence]
+  Attachment --> AttachmentContract[Attachment storage contract]
+  Schedule --> DeliveryContract[Delivery contract]
+  Controller --> Host[Host intent callbacks]
+  Production[Production adapter] --> DraftContract
+  Production --> AttachmentContract
+  Production --> DeliveryContract
+  Production --> Queries[Shared queries, inbox headers and cache reconciliation]
+```
+
+These are dependency edges, not event flow. Cached form values do not point back
+to the editor or controller. A reply's host owns message selection and DOM focus;
+the composer requests `exitToThread('last' | 'selected')`. The thread resolves
+that request inside its own container, including when two split panes contain
+the same message. Standalone compose receives a draft seed directly, rather than
+receiving an entire thread session to look it up.
+
+Production adapters translate domain inbox IDs to transport headers. They also
+own preview invalidation, old-thread reconciliation when a draft changes inbox,
+and restoring sent-message caches during undo. A composer supplies the saved
+content and intended thread completion; it does not name query keys, choose
+between cache implementations, or sequence cache repair calls.
 
 Thread state composes `thread-drafts.ts` for stale-response reconciliation and
 `thread-recipients.ts` for contact aggregation. `thread-navigation.ts` owns reading
@@ -144,7 +197,10 @@ stops, focus and scrolling; `thread-reply-area.ts` owns bottom/drawer reply
 placement. Thread reset and cached-draft auto-open remain in one effect so reset
 cannot overwrite an immediately available draft. Production read/unread and
 completion/undo wiring live in separate adapters, with one shared link-header
-converter created by `thread-action-adapter.tsx`.
+converter created by `thread-action-adapter.tsx`. `ThreadViewEnvironment` is the
+single source of thread dependencies. State creates one retained thread snapshot
+and passes that accessor to the injected command factory, so commands and reading
+state cannot disagree because they retained separate snapshots.
 
 ## State and lifetime rules
 
@@ -184,7 +240,9 @@ sanitization/color helpers delegate to the package through `@core/email`.
    resurrected by delayed responses.
 5. An engaged reply editor latches its seed while the same message is being
    edited. Server echoes must not remount it and lose focus. A different reply
-   target owns a new composer lifetime, including on mobile.
+   target owns a new composer lifetime, including on mobile. That lifetime binds
+   its target, draft seed, form, and thread identity before disposal can observe
+   the next target. Flushing an old editor must never retarget its body.
 6. Undo recovery survives navigation but is keyed by draft and reply identity.
    One composer cannot overwrite another's snapshot or restoration callback, and
    an older owner's cleanup cannot unregister a newer owner. Recovery history is
@@ -193,6 +251,9 @@ sanitization/color helpers delegate to the package through `@core/email`.
    operation is pending. A rejected schedule keeps the previous confirmed time.
    If scheduling succeeds and archiving fails, the confirmed time remains and the
    user receives accurate feedback. A failed unschedule also retains that time.
+   Scheduling may take precedence while an immediate send is saving its draft;
+   it cannot start during the actual send or discard. Sender changes are also
+   blocked while those operations own the composer.
 8. Renderer resources follow their Solid owner. Source changes or disposal release
    image blob URLs, resize observers and image listeners, and abort pending adapter
    work.
@@ -201,9 +262,12 @@ sanitization/color helpers delegate to the package through `@core/email`.
 
 Isolation of state and contracts does not mean every existing shared widget is
 application-free. Message views still compose the shared Markdown renderer,
-`UserIcon`, user tooltips, image galleries, and UI controls; compose views use the
+user tooltips, image galleries, and UI controls; compose views use the
 shared rich editor, recipient selector, and mobile chrome. Their application
-integration remains outside the controllers. Tests of a feature provider or
+integration remains outside the controllers. Sender avatars are slots in both
+expanded and collapsed message presentation. `sender-icon-adapter.tsx` supplies
+the app's profile lookup and user card through `UserIcon`; the reusable message
+view does not import that navigation/DM integration. Tests of a feature provider or
 lifetime may replace the large rendering subtree while exercising the real state
 and provider composition.
 

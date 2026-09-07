@@ -1,11 +1,15 @@
 import { type Accessor, createEffect, createSignal, on } from 'solid-js';
-import type { EmailComposeServices } from '../context/compose-services';
+import type {
+  EmailComposeFeedback,
+  EmailDelivery,
+} from '../context/compose-services';
 import { createComposeOperation } from './compose-operation';
 
 type ScheduleServices = Pick<
-  EmailComposeServices,
-  'schedule' | 'unschedule' | 'archive' | 'feedback' | 'reportError'
->;
+  EmailDelivery,
+  'schedule' | 'unschedule' | 'archive'
+> &
+  EmailComposeFeedback;
 
 export function createEmailSendSchedule(options: {
   services: ScheduleServices;
@@ -16,20 +20,19 @@ export function createEmailSendSchedule(options: {
   sendTime: Accessor<Date | null | undefined>;
   setSendTime: (date: Date | null) => void;
   recipientCount: Accessor<number>;
-  onUnscheduled?: (draftId: string) => void;
 }) {
   const { services } = options;
   const [pending, setPending] = createSignal(false);
   const unschedule = createComposeOperation(services.unschedule, {
-    onSuccess: (_data, vars) => {
+    onSuccess: () => {
       services.feedback.success('Email unscheduled');
-      options.onUnscheduled?.(vars.draftID);
     },
     onError: () => services.feedback.failure('Failed to unschedule email'),
   });
 
   const change = async (date: Date | null) => {
     if (pending()) return;
+    const linkId = options.linkId();
     setPending(true);
     try {
       const previous = options.sendTime();
@@ -38,7 +41,7 @@ export function createEmailSendSchedule(options: {
         try {
           await unschedule.run({
             draftID: currentDraft,
-            linkId: options.linkId(),
+            linkId,
           });
           options.setSendTime(null);
         } catch {
@@ -51,11 +54,12 @@ export function createEmailSendSchedule(options: {
         return;
       }
       try {
-        const draftID = currentDraft ?? (await options.saveDraft());
+        // An allocated ID does not mean the latest body and attachments are saved.
+        const draftID = await options.saveDraft();
         if (!draftID) throw new Error('Draft required');
         await services.schedule(
           { draftID, send_time: date.toISOString() },
-          options.linkId()
+          linkId
         );
         options.setSendTime(date);
       } catch (error) {
@@ -66,10 +70,7 @@ export function createEmailSendSchedule(options: {
       const threadID = options.threadId();
       if (threadID) {
         try {
-          await services.archive(
-            { id: threadID, value: true },
-            options.linkId()
-          );
+          await services.archive({ id: threadID, value: true }, linkId);
         } catch (error) {
           services.reportError(error);
           services.feedback.failure(

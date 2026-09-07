@@ -247,7 +247,6 @@ it('uses the captured inbox for attachment upload when a sender switch queues be
       { id: 'inbox', email_address: 'me@example.com', settings: {} },
       { id: 'other', email_address: 'other@example.com', settings: {} },
     ],
-    headerId: (id) => id,
   };
   vi.mocked(services.saveDraft).mockReturnValueOnce(pending.promise);
   const root = mount(services);

@@ -54,7 +54,9 @@ export interface EmailThreadDependencies {
   viewerLoading: Accessor<boolean>;
   isTouch: Accessor<boolean>;
   isMobile: Accessor<boolean>;
-  commands: EmailThreadCommands;
+  createCommands(
+    thread: Accessor<EmailThread | undefined>
+  ): EmailThreadCommands;
 }
 
 /** Host behavior is optional. A thread can render without a block or router. */

@@ -1,5 +1,5 @@
 import type { Accessor } from 'solid-js';
-import type { EmailComposeServices } from '../context/compose-services';
+import type { EmailAttachmentStorage } from '../context/compose-services';
 import { createComposeOperation } from './compose-operation';
 import type { DraftFormAttachment } from './email-form-state';
 import type { EmailFormContextValue } from './email-form-types';
@@ -20,7 +20,7 @@ export function createAttachmentPersistence(options: {
   draftId: Accessor<string | null | undefined>;
   linkId: Accessor<string | undefined>;
   services: Pick<
-    EmailComposeServices,
+    EmailAttachmentStorage,
     'uploadAttachments' | 'removeAttachment' | 'removeForwardedAttachment'
   >;
 }) {

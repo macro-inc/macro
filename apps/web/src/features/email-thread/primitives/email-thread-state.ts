@@ -212,7 +212,7 @@ export function createEmailThreadState(
     thread: createMemo(() => selected()),
     recipientOptions: recipients.options,
     onRecipientsChange: recipients.add,
-    ...deps.commands,
+    ...deps.createCommands(threadSnapshot),
     messagesContainerRef,
     messagesListRef,
     query: {

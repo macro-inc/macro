@@ -1,5 +1,4 @@
 import type { Accessor } from 'solid-js';
-import type { EmailMessage } from '../../email-message/core/email-message';
 import type { EmailRecipient } from '../core/email-recipient';
 import type { ReplyType } from '../core/reply-type';
 
@@ -20,20 +19,10 @@ export interface EmailReplySession {
     | undefined
   >;
   recipientOptions: Accessor<EmailRecipient[]>;
-  onRecipientsChange(items: EmailRecipient[]): void;
-  drafts: {
-    getDraftForMessage(id: string): EmailMessage | undefined;
-    deleteDraftForMessage(id: string): void;
-  };
-  messages: {
-    list: Accessor<EmailMessage[]>;
-    unfiltered: Accessor<EmailMessage[]>;
-    personalSenders: Accessor<Set<string>>;
-    focusedID: Accessor<string | undefined>;
-    setFocused(id: string | undefined): void;
-  };
+  isPersonalReply: Accessor<boolean>;
+  onDraftRemoved(): void;
+  exitToThread(target: 'last' | 'selected'): boolean;
   replyRequest: {
-    messageId: Accessor<string | undefined>;
     replyType: Accessor<ReplyType | undefined>;
     clear(): void;
   };

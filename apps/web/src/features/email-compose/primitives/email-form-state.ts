@@ -7,7 +7,6 @@ export type {
 
 import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
-import type { LexicalEditor } from 'lexical';
 import { createSignal, type Setter } from 'solid-js';
 import { createStore, reconcile, unwrap } from 'solid-js/store';
 import type { EmailFormDependencies } from '../context/email-form-dependencies';
@@ -19,7 +18,6 @@ import {
 } from '../core/recipient-conversion';
 import type { ReplyType } from '../core/reply-type';
 import { getSubjectText } from '../core/subject-text';
-import { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from './email-editor-commands';
 
 export type DraftFormAttachment =
   | {
@@ -47,9 +45,6 @@ export interface EmailFormStateOptions {
   getMessageByID: (id: string) => EmailMessage | undefined;
   getDraftForMessageReply: (id: string) => EmailMessage | undefined;
   onRecipientsChange?: (next: EmailRecipient[]) => void;
-  /** Whether a message is personal (see isPersonalMessage); drives
-   * theme-adapted rendering of quoted html in the composer */
-  isPersonalMessage?: (message: EmailMessage) => boolean;
 }
 
 type EmailFormState = {
@@ -177,24 +172,8 @@ export function createEmailFormState(
     ...getInitialState(),
   });
 
-  const [onDirtyCb, setOnDirtyCb] = createSignal<(() => void) | undefined>();
-
-  const [onReplyTypeAppliedCb, setOnReplyTypeAppliedCb] = createSignal<
-    ((rt: ReplyType | undefined) => void) | undefined
-  >();
-
-  const [capturedEditor, setCapturedEditor] = createSignal<LexicalEditor>();
-  // If setReplyType('forward') is called before the Lexical editor mounts
-  // (e.g. user clicks Forward while the bottom reply input is collapsed),
-  // we stash the dispatch and replay it once the editor is captured.
-  let pendingForwardAppend = false;
-
-  // We track the last reply type applied to replay against the current state when setOnReplyTypeApplied is attached
-  const [lastReplyTypeApplied, setLastReplyTypeApplied] = createSignal<
-    ReplyType | undefined
-  >(undefined);
-
-  const [shouldFocusInput, setShouldFocusInput] = createSignal(false);
+  // Values and edit revisions may outlive a mounted composer; effects do not.
+  const [editRevision, setEditRevision] = createSignal(0);
 
   // TODO: Replace this signal with a memo deriving the attachments from the draft data
   // and a temporary queue to track attachments to be uploaded on draft save
@@ -262,21 +241,6 @@ export function createEmailFormState(
 
       if (rt === 'forward') {
         setState('withQuotedText', true);
-        const editor = capturedEditor();
-        // The captured editor can be a stale one from an unmounted composer
-        // (this state outlives the component); dispatching into it is a no-op,
-        // so defer the append to the next editor capture instead.
-        if (editor?.getRootElement()?.isConnected) {
-          editor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
-            replyingTo: replyingTo,
-            replyType: rt,
-            visible: true,
-            isPersonal: options?.isPersonalMessage?.(msg),
-          });
-        } else {
-          pendingForwardAppend = true;
-        }
-
         // Populate forwarded attachments from original message (skip inline images)
         const fwdAttachments: DraftFormAttachment[] = (msg.attachments ?? [])
           .filter((a) => !a.content_id)
@@ -292,8 +256,6 @@ export function createEmailFormState(
     }
 
     callDirty();
-    setLastReplyTypeApplied(rt);
-    onReplyTypeAppliedCb()?.(rt);
     return rt;
   };
 
@@ -316,7 +278,7 @@ export function createEmailFormState(
   };
 
   const callDirty = () => {
-    onDirtyCb()?.();
+    setEditRevision((revision) => revision + 1);
   };
 
   const reset = () => {
@@ -327,12 +289,7 @@ export function createEmailFormState(
     const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
     options?.onRecipientsChange?.(unwrap(all));
 
-    setShouldFocusInput(false);
-
     setAttachments([]);
-
-    // Mark as dirty to propagate change
-    callDirty();
   };
 
   const clear = () => {
@@ -343,12 +300,7 @@ export function createEmailFormState(
     const all = [...recipients.to, ...recipients.cc, ...recipients.bcc];
     options?.onRecipientsChange?.(unwrap(all));
 
-    setShouldFocusInput(false);
-
     setAttachments([]);
-
-    // Mark as dirty to propagate change
-    callDirty();
   };
 
   const value = {
@@ -363,40 +315,11 @@ export function createEmailFormState(
     setReplyType,
     selectedLinkId: () => selectedLinkId(),
     setSelectedFromLink,
-    shouldFocusInput,
-    setShouldFocusInput,
+    editRevision,
     sendTime: () => state.sendTime,
     setSendTime,
     reset,
     clear,
-    setOnDirty: (cb?: () => void) => {
-      setOnDirtyCb(() => cb);
-    },
-    setOnReplyTypeApplied: (cb?: (rt: ReplyType | undefined) => void) => {
-      setOnReplyTypeAppliedCb(() => cb);
-      const rt = lastReplyTypeApplied() ?? state.replyType;
-      if (cb && rt !== undefined) queueMicrotask(() => cb(rt));
-    },
-    setCapturedEditor: (editor: LexicalEditor) => {
-      setCapturedEditor(editor);
-      if (pendingForwardAppend && replyingTo) {
-        pendingForwardAppend = false;
-        // Defer past the current Solid batch / microtask queue so that
-        // registerToggleAppendedThread (registered via lazyRegister, which
-        // uses createEffect) has actually attached the command handler
-        // before we dispatch. queueMicrotask runs too early.
-        setTimeout(() => {
-          editor.dispatchCommand(TOGGLE_APPEND_EMAIL_THREAD_COMMAND, {
-            replyingTo,
-            replyType: 'forward',
-            visible: true,
-            isPersonal: replyingTo
-              ? options?.isPersonalMessage?.(replyingTo)
-              : undefined,
-          });
-        }, 0);
-      }
-    },
     attachments: {
       list: attachments,
       add: (attachment: DraftFormAttachment) => {
