@@ -99,7 +99,13 @@ describe('createMyActivityState', () => {
       'entry',
       'entry',
     ]);
-    expect(state.rows()[2]).toBe(ready[2]);
+    // The same day grew, so the first entry now draws a rail below it and
+    // is a new row; the header keeps its identity.
+    expect(state.rows()[1]).toBe(ready[1]);
+    expect(state.rows()[2]).not.toBe(ready[2]);
+    expect(state.rows()[2]).toEqual(
+      expect.objectContaining({ rail: { above: false, below: true } })
+    );
   });
 
   it('ignores loadMore while a page is in flight or none remain', () => {
