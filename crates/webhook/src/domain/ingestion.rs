@@ -394,11 +394,8 @@ pub(crate) struct TriggerAudience {
 /// is the bot: a subscriber consumes a bot's whole trigger stream, in order.
 /// Returned alongside is whose access gates it, which differs by shape.
 ///
-/// A mention that opens a session has no session yet, so the channel it was
-/// posted in is the only thing to ask. Once a session exists it carries its
-/// own grants - its owner, and the channel it came from - so the session is
-/// the authoritative audience, and whatever channel a later message happened
-/// to land in is incidental to it.
+/// Every message trigger includes parent content, so delivery rechecks access to
+/// that parent, including follow-ups to a session with independently shared access.
 pub(crate) fn normalized_agent_trigger_event(
     event: &Event<AgentTriggerTopicEvent>,
 ) -> Result<(NormalizedWebhookEvent, TriggerAudience), WebhookEventIngestionError> {
@@ -410,15 +407,23 @@ pub(crate) fn normalized_agent_trigger_event(
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => (
             mentioned.bot_id,
             TriggerAudience {
-                entity_id: mentioned.message.channel_id.to_string(),
-                entity_type: EntityType::Channel,
+                entity_id: mentioned.message.parent.entity_id(),
+                entity_type: if mentioned.message.parent.is_discussion() {
+                    EntityType::Document
+                } else {
+                    EntityType::Channel
+                },
             },
         ),
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => (
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(metadata)) => (
             metadata.bot_id,
             TriggerAudience {
-                entity_id: metadata.session_id.to_string(),
-                entity_type: EntityType::AgentSession,
+                entity_id: metadata.message.parent.entity_id(),
+                entity_type: if metadata.message.parent.is_discussion() {
+                    EntityType::Document
+                } else {
+                    EntityType::Channel
+                },
             },
         ),
         // Both trigger enums are non-exhaustive on purpose; an unknown shape

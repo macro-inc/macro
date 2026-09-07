@@ -23,14 +23,7 @@ pub use bot_id::BotId;
 /// Actor identity for channel mutations.
 pub type Sender = ChannelSender<'static>;
 
-/// Public bot profile attached to bot-authored messages.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-pub struct BotSenderProfile {
-    /// Bot display name.
-    pub name: String,
-    /// Bot avatar URL.
-    pub avatar_url: Option<String>,
-}
+pub use messages::domain::models::BotSenderProfile;
 
 /// Request to fetch a page of channel messages.
 #[derive(Debug)]
@@ -844,27 +837,7 @@ impl ReferencedShareItem {
     }
 }
 
-/// Internal notification behavior for a posted channel message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PostMessageNotificationPolicy {
-    /// Apply the normal channel notification rules.
-    #[default]
-    Default,
-    /// Notify tracked mentions without reply, channel-message, or channel-invite notifications.
-    MentionsOnly,
-    /// Do not send notifications for this post. Realtime/search side effects still run.
-    Silent,
-}
-
-/// Internal notification behavior for a patched channel message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PatchMessageNotificationPolicy {
-    /// Apply the normal edit behavior: realtime/search only, no notifications.
-    #[default]
-    Default,
-    /// Notify as though the patched message content had just been posted.
-    NotifyAsPostedMessage,
-}
+pub use messages::domain::models::{PatchMessageNotificationPolicy, PostMessageNotificationPolicy};
 
 /// Request to send a channel message.
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -9,6 +9,8 @@ name = "agent_trigger_service"
 path = "src/main.rs"
 
 [dependencies]
+messages = { path = "../../crates/messages", features = ["broker", "outbound"] }
+entity_access = { path = "../../crates/entity_access" }
 agent_session = { path = "../../crates/agent_session" }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }

@@ -16,6 +16,7 @@ agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
 dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
+messages = { path = "../messages", features = ["ports", "schema"] }
 mockall = { workspace = true, optional = true }
 agent_fold = { path = "../agent_fold" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", features = ["utoipa"] }
@@ -49,6 +50,8 @@ tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+messages = { path = "../messages", features = ["outbound"] }
+entity_access = { path = "../entity_access", features = ["outbound"] }
 agent-client-protocol = { workspace = true }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }

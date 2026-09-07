@@ -9,6 +9,7 @@ name = "macrod"
 path = "src/main.rs"
 
 [dependencies]
+messages = { path = "../messages", features = ["broker"] }
 # Direct crate imports are the whole typegen story: the protocol envelope,
 # the trigger event vocabulary, and the delivery signature all come from the
 # owning crates, compiler-checked.

@@ -1,619 +1,218 @@
-use std::sync::{Arc, Mutex};
-
-use async_trait::async_trait;
-use channels::domain::models::{
-    AttachmentEntityReference, ChannelAttachmentType, ChannelContextMessage, ChannelMessageFilters,
-    ChannelParticipant, MessagePageDirection, MutatedMessage, PatchMessageNotificationPolicy,
-    PatchMessageRequest, PostMessageNotificationPolicy, PostMessageRequest, PostMessageResponse,
-    ResolvedChannelMessage, Sender, ThreadReply,
-};
-use channels::domain::ports::{
-    ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelService,
-};
-use chrono::Utc;
-use macro_user_id::user_id::MacroUserIdStr;
-use models_pagination::{CreatedAt, Query};
-use uuid::Uuid;
-
+use super::super::test::*;
 use super::*;
-use crate::domain::{
-    models::{BotEvent, BotTrigger},
-    ports::AgentResponder,
-};
+use messages::domain::api::MockMessageServiceApi;
+use std::sync::Mutex;
 
-struct TestChannelService {
-    around_args: Mutex<Option<(Uuid, Uuid, i64, i64)>>,
-    around_messages: Vec<ChannelContextMessage>,
-    thread_replies: Vec<ThreadReply>,
+struct Responder {
+    prompts: Mutex<Vec<String>>,
+    revoke: Option<Arc<Access>>,
+    result: &'static str,
 }
-
-impl ChannelService for TestChannelService {
-    fn get_channel_messages(
-        &self,
-        _channel_id: Uuid,
-        _query: Query<Uuid, CreatedAt, ()>,
-        _direction: MessagePageDirection,
-        _limit: u16,
-        _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for prompt tests") }
-    }
-
-    fn get_channel_attachments(
-        &self,
-        _channel_id: Uuid,
-        _query: Query<Uuid, CreatedAt, ()>,
-        _limit: u16,
-        _attachment_type: Option<ChannelAttachmentType>,
-    ) -> impl Future<Output = Result<ChannelAttachmentsPage, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for prompt tests") }
-    }
-
-    fn get_channel_participants(
-        &self,
-        _channel_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for prompt tests") }
-    }
-
-    fn get_message_context(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        before: i64,
-        after: i64,
-    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, ChannelMessagesErr>> + Send {
-        // Record only the wide context fetch; the thread-parent lookup uses
-        // a zero-width window.
-        if before > 0 || after > 0 {
-            *self.around_args.lock().unwrap() = Some((channel_id, message_id, before, after));
+#[async_trait::async_trait]
+impl AgentResponder for Responder {
+    async fn respond(&self, user_id: &str, prompt: String) -> anyhow::Result<String> {
+        assert_eq!(user_id, user().as_ref());
+        self.prompts.lock().unwrap().push(prompt);
+        if let Some(access) = &self.revoke {
+            access.revoke();
         }
-        let messages = self.around_messages.clone();
-        async move { Ok(messages) }
-    }
-
-    fn get_attachment_references(
-        &self,
-        _entity_type: String,
-        _entity_id: String,
-        _user_id: String,
-    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send
-    {
-        async move { unimplemented!("not needed for prompt tests") }
-    }
-
-    fn get_channel_messages_around(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _limit: u16,
-    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for prompt tests") }
-    }
-
-    fn get_thread_replies(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send {
-        let replies = self.thread_replies.clone();
-        async move { Ok(replies) }
-    }
-
-    fn resolve_message(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-    ) -> impl Future<Output = Result<ResolvedChannelMessage, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for prompt tests") }
-    }
-}
-
-struct TestResponder;
-
-#[async_trait]
-impl AgentResponder for TestResponder {
-    async fn respond(&self, _user_id: &str, _prompt: String) -> anyhow::Result<String> {
-        unimplemented!("not needed for prompt tests")
-    }
-}
-
-/// Channel service fake for the post-thinking-then-patch flow. Posting always
-/// succeeds; patching either records the content or reports the message as
-/// missing (deleted while the agent ran).
-struct MutationChannelService {
-    thinking_deleted: bool,
-    posted_policies: Mutex<Vec<PostMessageNotificationPolicy>>,
-    patched: Mutex<Vec<String>>,
-    patched_policies: Mutex<Vec<PatchMessageNotificationPolicy>>,
-}
-
-impl MutationChannelService {
-    fn new(thinking_deleted: bool) -> Self {
-        Self {
-            thinking_deleted,
-            posted_policies: Mutex::new(Vec::new()),
-            patched: Mutex::new(Vec::new()),
-            patched_policies: Mutex::new(Vec::new()),
+        if self.result == "error" {
+            anyhow::bail!("model error");
         }
+        Ok(self.result.into())
     }
 }
-
-impl ChannelService for MutationChannelService {
-    fn get_channel_messages(
-        &self,
-        _channel_id: Uuid,
-        _query: Query<Uuid, CreatedAt, ()>,
-        _direction: MessagePageDirection,
-        _limit: u16,
-        _filters: &ChannelMessageFilters,
-        _notification_user_id: Option<MacroUserIdStr<'static>>,
-    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for mutation tests") }
-    }
-
-    fn get_channel_attachments(
-        &self,
-        _channel_id: Uuid,
-        _query: Query<Uuid, CreatedAt, ()>,
-        _limit: u16,
-        _attachment_type: Option<ChannelAttachmentType>,
-    ) -> impl Future<Output = Result<ChannelAttachmentsPage, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for mutation tests") }
-    }
-
-    fn get_channel_participants(
-        &self,
-        _channel_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<ChannelParticipant>, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for mutation tests") }
-    }
-
-    fn get_message_context(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _before: i64,
-        _after: i64,
-    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>, ChannelMessagesErr>> + Send {
-        async move { Ok(Vec::new()) }
-    }
-
-    fn get_attachment_references(
-        &self,
-        _entity_type: String,
-        _entity_id: String,
-        _user_id: String,
-    ) -> impl Future<Output = Result<Vec<AttachmentEntityReference>, ChannelMessagesErr>> + Send
-    {
-        async move { unimplemented!("not needed for mutation tests") }
-    }
-
-    fn get_channel_messages_around(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _limit: u16,
-    ) -> impl Future<Output = Result<ChannelMessagesQueryResult, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for mutation tests") }
-    }
-
-    fn get_thread_replies(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-    ) -> impl Future<Output = Result<Vec<ThreadReply>, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for mutation tests") }
-    }
-
-    fn resolve_message(
-        &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-    ) -> impl Future<Output = Result<ResolvedChannelMessage, ChannelMessagesErr>> + Send {
-        async move { unimplemented!("not needed for mutation tests") }
-    }
-
-    fn post_message(
-        &self,
-        _actor: Sender,
-        _channel_id: Uuid,
-        req: PostMessageRequest,
-    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
-        self.posted_policies
-            .lock()
-            .unwrap()
-            .push(req.notification_policy);
-        async move {
-            Ok(PostMessageResponse {
-                id: Uuid::new_v4().to_string(),
-                nonce: None,
-            })
-        }
-    }
-
-    fn patch_message(
-        &self,
-        _actor: Sender,
-        _actor_role: ParticipantRole,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        req: PatchMessageRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
-        self.patched_policies
-            .lock()
-            .unwrap()
-            .push(req.notification_policy);
-        if !self.thinking_deleted {
-            self.patched
-                .lock()
-                .unwrap()
-                .extend(req.content.clone().into_iter());
-        }
-        let thinking_deleted = self.thinking_deleted;
-        async move {
-            if thinking_deleted {
-                return Err(ChannelMutationErr::NotFound(
-                    "message not found".to_string(),
-                ));
-            }
-            Ok(())
-        }
-    }
-}
-
-struct FixedResponder(&'static str);
-
-#[async_trait]
-impl AgentResponder for FixedResponder {
-    async fn respond(&self, _user_id: &str, _prompt: String) -> anyhow::Result<String> {
-        Ok(self.0.to_string())
-    }
-}
-
-fn user_id(email: &str) -> MacroUserIdStr<'static> {
-    MacroUserIdStr::try_from(format!("macro|{email}")).unwrap()
-}
-
-fn context_message(
-    channel_id: Uuid,
-    id: Uuid,
-    sender_id: &str,
-    content: &str,
-) -> ChannelContextMessage {
-    let now = Utc::now();
-    ChannelContextMessage {
-        id,
-        channel_id,
-        thread_id: None,
-        sender_id: sender_id.to_string(),
-        content: content.to_string(),
-        created_at: now,
-        updated_at: now,
-        edited_at: None,
-        deleted_at: None,
-        bot_profile: None,
-        triggered_by: None,
-    }
-}
-
-fn thread_reply(id: Uuid, sender_id: &str, content: &str) -> ThreadReply {
-    let now = Utc::now();
-    ThreadReply {
-        id,
-        sender_id: sender_id.to_string(),
-        bot_profile: None,
-        content: content.to_string(),
-        created_at: now,
-        updated_at: now,
-        edited_at: None,
-        triggered_by: None,
-        reactions: Vec::new(),
-        attachments: Vec::new(),
-    }
-}
-
-fn mention_event(
-    channel_id: Uuid,
-    trigger_id: Uuid,
-    thread_id: Option<Uuid>,
-    sender_email: &str,
-    content: &str,
-) -> BotEvent {
-    bot_event(
-        BotTrigger::Mention,
-        channel_id,
-        trigger_id,
-        thread_id,
-        sender_email,
-        content,
-    )
-}
-
-fn bot_event(
-    trigger: BotTrigger,
-    channel_id: Uuid,
-    trigger_id: Uuid,
-    thread_id: Option<Uuid>,
-    sender_email: &str,
-    content: &str,
-) -> BotEvent {
+fn invocation(trigger: &messages::domain::models::Message) -> BotEvent {
     BotEvent {
-        trigger,
-        channel_id,
-        message: MutatedMessage {
-            id: trigger_id,
-            channel_id,
-            thread_id,
-            sender_id: Sender::new_from_user(user_id(sender_email)),
-            content: content.to_string(),
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            edited_at: None,
-            deleted_at: None,
-            triggered_by: None,
-        },
-        reply_thread_id: thread_id.unwrap_or(trigger_id),
-        requesting_user: user_id(sender_email),
+        trigger: BotTrigger::Mention,
+        message: event(trigger),
+        reply_thread_id: trigger.root_id(),
+        requesting_user: user(),
     }
 }
-
+fn expect_placeholder(api: &mut MockMessageServiceApi) {
+    api.expect_post().once().returning(|access, input| {
+        assert_eq!(
+            access.get_authenticated_bot_auth().unwrap().bot_id(),
+            bot_id::MACRO_AI_BOT_ID
+        );
+        assert_eq!(access.acting_user_id(), Some(&user()));
+        assert_eq!(input.thread_id, Some(Uuid::from_u128(1)));
+        assert_eq!(
+            input.notification_policy,
+            PostMessageNotificationPolicy::Silent
+        );
+        assert_eq!(input.content, THINKING_MESSAGE);
+        Ok(message(3, input.thread_id, &input.content))
+    });
+}
 #[tokio::test]
-async fn handle_patches_thinking_message_with_reply() {
-    let channel_id = Uuid::new_v4();
-    let channels = Arc::new(MutationChannelService::new(false));
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(FixedResponder("the answer")));
-
-    handler
-        .handle(&mention_event(
-            channel_id,
-            Uuid::new_v4(),
-            None,
-            "teo@example.com",
-            "@macro help",
-        ))
+async fn document_invocation_reads_its_thread_and_delivers_a_bot_reply_with_comment_policy() {
+    let root = message(1, None, "Selected paragraph discussion");
+    let trigger = message(2, Some(root.id), "@macro explain this");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, thread(root, vec![trigger.clone()]));
+    expect_placeholder(&mut api);
+    api.expect_edit().once().returning(|access, id, input| {
+        assert_eq!(access.entity().entity_id, parent().entity_id());
+        assert_eq!(id, Uuid::from_u128(3));
+        assert_eq!(input.content, "the answer");
+        assert_eq!(
+            input.notification_policy,
+            PatchMessageNotificationPolicy::NotifyAsPostedMessage
+        );
+        Ok(message(3, Some(Uuid::from_u128(1)), &input.content))
+    });
+    let responder = Arc::new(Responder {
+        prompts: Mutex::new(vec![]),
+        revoke: None,
+        result: "the answer",
+    });
+    let handler = MacroAiHandler::new(
+        Arc::new(api),
+        Arc::new(Access::default()),
+        responder.clone(),
+    );
+    handler.handle(&invocation(&trigger)).await.unwrap();
+    let prompts = responder.prompts.lock().unwrap();
+    assert!(prompts[0].contains("discussion-document"));
+    assert!(prompts[0].contains("Selected paragraph discussion"));
+    assert!(prompts[0].contains(MENTION_TRIGGER_MARKER));
+    assert!(!prompts[0].contains("<channel_background>"));
+}
+#[tokio::test]
+async fn root_comment_is_valid_agent_context_before_any_replies_exist() {
+    let trigger = message(1, None, "@macro help with this document");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+    let responder = Arc::new(Responder {
+        prompts: Mutex::new(vec![]),
+        revoke: None,
+        result: "reply",
+    });
+    let handler = MacroAiHandler::new(Arc::new(api), Arc::new(Access::default()), responder);
+    let prompt = handler.build_prompt(&invocation(&trigger)).await.unwrap();
+    assert_eq!(prompt.matches("@macro help with this document").count(), 1);
+    assert!(prompt.contains("<thread>"));
+}
+#[tokio::test]
+async fn revoked_document_access_prevents_context_reads_and_agent_work() {
+    let trigger = message(1, None, "@macro help");
+    let access = Arc::new(Access::default());
+    access.revoke();
+    let responder = Arc::new(Responder {
+        prompts: Mutex::new(vec![]),
+        revoke: None,
+        result: "reply",
+    });
+    let handler = MacroAiHandler::new(
+        Arc::new(MockMessageServiceApi::new()),
+        access,
+        responder.clone(),
+    );
+    assert!(handler.handle(&invocation(&trigger)).await.is_err());
+    assert!(responder.prompts.lock().unwrap().is_empty());
+}
+#[tokio::test]
+async fn revocation_while_model_runs_prevents_answer_delivery() {
+    let trigger = message(1, None, "@macro help");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+    expect_placeholder(&mut api);
+    let access = Arc::new(Access::default());
+    let responder = Arc::new(Responder {
+        prompts: Mutex::new(vec![]),
+        revoke: Some(access.clone()),
+        result: "private answer",
+    });
+    let handler = MacroAiHandler::new(Arc::new(api), access, responder);
+    assert!(handler.handle(&invocation(&trigger)).await.is_err());
+}
+#[tokio::test]
+async fn deleted_placeholder_does_not_recreate_a_response() {
+    let trigger = message(1, None, "@macro help");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, thread(trigger.clone(), vec![]));
+    expect_placeholder(&mut api);
+    api.expect_edit()
+        .once()
+        .returning(|_, _, _| Err(MessageError::NotFound));
+    let responder = Arc::new(Responder {
+        prompts: Mutex::new(vec![]),
+        revoke: None,
+        result: "answer",
+    });
+    MacroAiHandler::new(Arc::new(api), Arc::new(Access::default()), responder)
+        .handle(&invocation(&trigger))
         .await
         .unwrap();
-
-    assert_eq!(
-        channels.posted_policies.lock().unwrap().clone(),
-        vec![PostMessageNotificationPolicy::Silent]
-    );
-    assert_eq!(
-        channels.patched.lock().unwrap().clone(),
-        vec!["the answer".to_string()]
-    );
-    assert_eq!(
-        channels.patched_policies.lock().unwrap().clone(),
-        vec![PatchMessageNotificationPolicy::NotifyAsPostedMessage]
-    );
 }
-
 #[tokio::test]
-async fn handle_drops_reply_when_thinking_message_was_deleted() {
-    let channel_id = Uuid::new_v4();
-    let channels = Arc::new(MutationChannelService::new(true));
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(FixedResponder("the answer")));
-
-    handler
-        .handle(&mention_event(
-            channel_id,
-            Uuid::new_v4(),
-            None,
-            "teo@example.com",
-            "@macro help",
-        ))
+async fn inference_prompt_describes_a_follow_up_without_claiming_a_mention() {
+    let root = message(1, None, "initial question");
+    let trigger = message(2, Some(root.id), "what about tomorrow?");
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, thread(root, vec![trigger.clone()]));
+    let mut event = invocation(&trigger);
+    event.trigger = BotTrigger::Inferred;
+    let responder = Arc::new(Responder {
+        prompts: Mutex::new(vec![]),
+        revoke: None,
+        result: "reply",
+    });
+    let prompt = MacroAiHandler::new(Arc::new(api), Arc::new(Access::default()), responder)
+        .build_prompt(&event)
         .await
         .unwrap();
-
-    assert!(channels.patched.lock().unwrap().is_empty());
+    assert!(prompt.contains(INFERRED_TRIGGER_MARKER));
+    assert!(!prompt.contains(MENTION_TRIGGER_MARKER));
 }
-
 #[tokio::test]
-async fn top_level_prompt_marks_trigger_inline_in_channel_context() {
-    let channel_id = Uuid::new_v4();
-    let trigger_id = Uuid::new_v4();
-    let before_id = Uuid::new_v4();
-    let after_id = Uuid::new_v4();
-    let channels = Arc::new(TestChannelService {
-        around_args: Mutex::new(None),
-        around_messages: vec![
-            context_message(channel_id, before_id, "macro|alice@example.com", "before"),
-            context_message(
-                channel_id,
-                trigger_id,
-                "macro|teo@example.com",
-                "@macro help",
-            ),
-            context_message(channel_id, after_id, "macro|bob@example.com", "after"),
-        ],
-        thread_replies: Vec::new(),
+async fn channel_context_keeps_other_threads_as_background() {
+    let parent = MessageParent::Channel(Uuid::from_u128(900));
+    let mut root = message(1, None, "thread subject");
+    root.parent = parent.clone();
+    let mut trigger = message(2, Some(root.id), "@macro explain this");
+    trigger.parent = parent.clone();
+    let mut nearby = message(4, None, "unrelated channel background");
+    nearby.parent = parent;
+    let mut api = MockMessageServiceApi::new();
+    configure_reads(&mut api, &trigger, thread(root, vec![trigger.clone()]));
+    api.expect_preceding()
+        .once()
+        .returning(move |_, _, _| Ok(vec![nearby.clone()]));
+    let responder = Arc::new(Responder {
+        prompts: Mutex::new(vec![]),
+        revoke: None,
+        result: "reply",
     });
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(TestResponder));
-    let event = mention_event(
-        channel_id,
-        trigger_id,
-        None,
-        "teo@example.com",
-        "@macro help",
-    );
-
-    let prompt = handler.build_prompt(&event).await;
-
-    assert_eq!(
-        *channels.around_args.lock().unwrap(),
-        Some((
-            channel_id,
-            trigger_id,
-            CONTEXT_MESSAGES_BEFORE,
-            CONTEXT_MESSAGES_AFTER
-        ))
-    );
-    assert!(prompt.contains("mentioned you (@macro) in a channel."));
-    assert!(prompt.contains("<channel_context>"));
-    assert!(prompt.contains("</channel_context>"));
-    assert!(prompt.contains("alice: before"));
-    assert!(prompt.contains("bob: after"));
-    assert!(prompt.contains("teo [this message mentioned you]: @macro help"));
-    // The trigger appears once, inline, not repeated at the end.
-    assert_eq!(prompt.matches("@macro help").count(), 1);
-    assert!(!prompt.contains("<thread>"));
-    assert!(prompt.ends_with("Reply to teo."));
-}
-
-#[tokio::test]
-async fn thread_prompt_puts_thread_first_and_demotes_channel_noise() {
-    let channel_id = Uuid::new_v4();
-    let parent_id = Uuid::new_v4();
-    let trigger_id = Uuid::new_v4();
-    let unrelated_id = Uuid::new_v4();
-
-    let mut trigger_context = context_message(
-        channel_id,
-        trigger_id,
-        "macro|austin@example.com",
-        "@macro can you make a task out of this?",
-    );
-    trigger_context.thread_id = Some(parent_id);
-
-    let channels = Arc::new(TestChannelService {
-        around_args: Mutex::new(None),
-        around_messages: vec![
-            context_message(
-                channel_id,
-                parent_id,
-                "macro|peter@example.com",
-                "We stopped persisting filter/sort across refresh",
-            ),
-            context_message(
-                channel_id,
-                unrelated_id,
-                "macro|carol@example.com",
-                "unrelated tasks view chatter",
-            ),
-            trigger_context,
-        ],
-        thread_replies: vec![thread_reply(
-            trigger_id,
-            "macro|austin@example.com",
-            "@macro can you make a task out of this?",
-        )],
-    });
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(TestResponder));
-    let event = mention_event(
-        channel_id,
-        trigger_id,
-        Some(parent_id),
-        "austin@example.com",
-        "@macro can you make a task out of this?",
-    );
-
-    let prompt = handler.build_prompt(&event).await;
-
-    assert!(prompt.contains("austin mentioned you (@macro) in a channel thread."));
-
-    // Thread block comes first and contains parent + marked trigger.
-    let thread_start = prompt.find("<thread>").expect("thread block");
-    let thread_end = prompt.find("</thread>").expect("thread block end");
-    let thread_block = &prompt[thread_start..thread_end];
-    assert!(thread_block.contains("peter: We stopped persisting filter/sort across refresh"));
+    let prompt = MacroAiHandler::new(Arc::new(api), Arc::new(Access::default()), responder)
+        .build_prompt(&invocation(&trigger))
+        .await
+        .unwrap();
     assert!(
-        thread_block.contains(
-            "austin [this message mentioned you]: @macro can you make a task out of this?"
-        )
+        prompt.find("thread subject").unwrap()
+            < prompt.find("unrelated channel background").unwrap()
     );
-    assert!(!thread_block.contains("carol"));
-
-    // Channel noise is demoted to the background block, with thread messages excluded.
-    let background_start = prompt
-        .find("<channel_background>")
-        .expect("background block");
-    assert!(background_start > thread_end);
-    let background_end = prompt
-        .find("</channel_background>")
-        .expect("background end");
-    let background_block = &prompt[background_start..background_end];
-    assert!(background_block.contains("carol: unrelated tasks view chatter"));
-    assert!(!background_block.contains("peter:"));
-    assert!(!background_block.contains("austin"));
-
-    // The trigger appears exactly once across the whole prompt.
-    assert_eq!(
-        prompt
-            .matches("@macro can you make a task out of this?")
-            .count(),
-        1
-    );
-    assert!(prompt.ends_with("Reply to austin."));
+    assert!(prompt.contains("<channel_background>"));
 }
-
 #[tokio::test]
-async fn inferred_thread_prompt_does_not_claim_a_mention() {
-    let channel_id = Uuid::new_v4();
-    let parent_id = Uuid::new_v4();
-    let trigger_id = Uuid::new_v4();
-    let macro_ai = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
-
-    let channels = Arc::new(TestChannelService {
-        around_args: Mutex::new(None),
-        around_messages: vec![context_message(
-            channel_id,
-            parent_id,
-            "macro|alice@example.com",
-            "notifications are broken",
-        )],
-        thread_replies: vec![
-            thread_reply(Uuid::new_v4(), &macro_ai, "what is broken exactly?"),
-            thread_reply(trigger_id, "macro|alice@example.com", "it fires twice"),
-        ],
+async fn unavailable_context_blocks_instead_of_prompting_from_an_unverified_event() {
+    let trigger = message(1, None, "@macro help");
+    let mut api = MockMessageServiceApi::new();
+    api.expect_get()
+        .once()
+        .returning(|_, _| Err(MessageError::NotFound));
+    let responder = Arc::new(Responder {
+        prompts: Mutex::new(vec![]),
+        revoke: None,
+        result: "reply",
     });
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(TestResponder));
-    let event = bot_event(
-        BotTrigger::Inferred,
-        channel_id,
-        trigger_id,
-        Some(parent_id),
-        "alice@example.com",
-        "it fires twice",
+    let handler = MacroAiHandler::new(
+        Arc::new(api),
+        Arc::new(Access::default()),
+        responder.clone(),
     );
-
-    let prompt = handler.build_prompt(&event).await;
-
-    assert!(prompt.contains("alice replied in a channel thread you are part of."));
-    assert!(!prompt.contains("mentioned you (@macro)"));
-    assert!(prompt.contains("alice [respond to this message]: it fires twice"));
-    assert!(!prompt.contains("[this message mentioned you]"));
-    assert!(prompt.ends_with("Reply to alice."));
-}
-
-#[tokio::test]
-async fn thread_prompt_includes_trigger_when_reply_fetch_fails_to_return_it() {
-    let channel_id = Uuid::new_v4();
-    let parent_id = Uuid::new_v4();
-    let trigger_id = Uuid::new_v4();
-
-    let channels = Arc::new(TestChannelService {
-        around_args: Mutex::new(None),
-        around_messages: vec![context_message(
-            channel_id,
-            parent_id,
-            "macro|peter@example.com",
-            "parent message",
-        )],
-        thread_replies: Vec::new(),
-    });
-    let handler = MacroAiHandler::new(channels.clone(), Arc::new(TestResponder));
-    let event = mention_event(
-        channel_id,
-        trigger_id,
-        Some(parent_id),
-        "austin@example.com",
-        "@macro help with this",
-    );
-
-    let prompt = handler.build_prompt(&event).await;
-
-    assert!(prompt.contains("peter: parent message"));
-    assert!(prompt.contains("austin [this message mentioned you]: @macro help with this"));
+    assert!(handler.handle(&invocation(&trigger)).await.is_err());
+    assert!(responder.prompts.lock().unwrap().is_empty());
 }

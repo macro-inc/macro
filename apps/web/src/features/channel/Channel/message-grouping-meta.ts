@@ -1,4 +1,4 @@
-import type { MessageData } from '../Message/types';
+import type { MessageData } from '@core/messages/types';
 
 export type GroupableMessage = Pick<
   MessageData,

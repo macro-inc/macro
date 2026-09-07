@@ -17,9 +17,9 @@ agent_session = { path = "../agent_session" }
 ai_usage = { path = "../ai_usage", optional = true }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 bots = { path = "../bots", default-features = false, features = ["ports"] }
 lexical_client = { path = "../lexical_client", optional = true }
-channels = { path = "../channels", features = ["ports"] }
 chrono = { workspace = true }
 # Only the domain vocabulary (`Event`, `MacroEvent`, `TopicEvent`). Asking for
 # `outbound` here would pull rdkafka — and so librdkafka and openssl — into
@@ -30,6 +30,7 @@ macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 channel_sender = { path = "../channel_sender" }
 macro_uuid = { path = "../macro_uuid" }
+messages = { path = "../messages", features = ["ports"] }
 serde = { workspace = true }
 strum = { workspace = true }
 serde_json = { workspace = true }
@@ -39,6 +40,7 @@ tokio = { workspace = true, features = ["rt"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+messages = { path = "../messages", features = ["test-utils"] }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 mockall = { workspace = true }

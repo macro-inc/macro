@@ -1,4 +1,4 @@
-use super::{models::*, ports::*};
+use super::{mentions::MessageReferenceKind, models::*, ports::*};
 use channel_sender::ChannelSender;
 use entity_access::domain::models::{
     AdminParticipantRole, CommentAccessLevel, EntityAccessAuth, EntityAccessReceipt,
@@ -20,7 +20,7 @@ impl RequiredPermission for MessageView {
     }
 }
 
-/// Minimum posting permission: channel member or document/email commenter.
+/// Minimum posting permission: channel member or document commenter.
 #[derive(Debug, Clone, Copy)]
 pub struct MessageWrite;
 
@@ -37,6 +37,8 @@ pub struct MessageService<R, E> {
     repo: R,
     events: E,
     references: std::sync::Arc<dyn MessageReferenceAccess>,
+    mentions: std::sync::Arc<dyn MessageMentionExtractor>,
+    groups: std::sync::Arc<dyn MessageGroupRecipients>,
 }
 
 impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
@@ -46,13 +48,104 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             repo,
             events,
             references: std::sync::Arc::new(DenyMessageReferences),
+            mentions: std::sync::Arc::new(NoMessageMentionExtractor),
+            groups: std::sync::Arc::new(NoMessageGroups),
         }
+    }
+
+    /// Supply current channel membership for authored group mentions.
+    pub fn with_group_recipients(mut self, groups: impl MessageGroupRecipients) -> Self {
+        self.groups = std::sync::Arc::new(groups);
+        self
     }
 
     /// Supply the reference access boundary for attachments and entity mentions.
     pub fn with_references(mut self, references: impl MessageReferenceAccess) -> Self {
         self.references = std::sync::Arc::new(references);
         self
+    }
+
+    /// Parse raw bot Markdown through the same reference boundary as editor messages.
+    pub fn with_mention_extractor(mut self, mentions: impl MessageMentionExtractor) -> Self {
+        self.mentions = std::sync::Arc::new(mentions);
+        self
+    }
+
+    /// Join accessible source discussions without copying or reparenting their messages.
+    #[tracing::instrument(err, skip(self, access))]
+    pub async fn referenced_threads(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        mut cursor: Option<MessageCursor>,
+        limit: u16,
+    ) -> Result<ReferencedThreadPage, MessageError> {
+        let document = parent_from_receipt(&access)?;
+        if !matches!(document, MessageParent::Document(_)) {
+            return Err(MessageError::Invalid(
+                "channel references require a document",
+            ));
+        }
+        self.ensure_parent(&document).await?;
+        let limit = usize::from(limit.clamp(1, 100));
+        let mut threads = Vec::new();
+        let mut visible_cursor = None;
+        loop {
+            let candidates = self
+                .repo
+                .referenced_threads(&document.entity_id(), cursor.clone(), 100)
+                .await?;
+            let exhausted = candidates.len() < 100;
+            for candidate in candidates {
+                cursor = Some(MessageCursor {
+                    created_at: candidate.created_at,
+                    id: candidate.root_id,
+                });
+                let parent = MessageParent::Channel(candidate.channel_id);
+                let id = parent.entity_id();
+                if !self
+                    .references
+                    .can_view(access.auth(), EntityType::Channel, &id)
+                    .await?
+                {
+                    continue;
+                }
+                if threads.len() == limit {
+                    return Ok(ReferencedThreadPage {
+                        threads,
+                        next_cursor: visible_cursor,
+                    });
+                }
+                let state = match self.active_thread(&parent, candidate.root_id).await {
+                    Ok(state) => state,
+                    Err(MessageError::NotFound) => continue,
+                    Err(error) => return Err(error),
+                };
+                let root = self
+                    .active_message(&parent, candidate.root_id, true)
+                    .await?;
+                let replies = self.repo.replies(&parent, candidate.root_id).await?;
+                let can_reply = self
+                    .references
+                    .can_write(access.auth(), EntityType::Channel, &id)
+                    .await?;
+                threads.push(ReferencedThread {
+                    channel_name: candidate.channel_name,
+                    can_reply,
+                    thread: MessageThread {
+                        state,
+                        root,
+                        replies,
+                    },
+                });
+                visible_cursor = cursor.clone();
+            }
+            if exhausted {
+                return Ok(ReferencedThreadPage {
+                    threads,
+                    next_cursor: None,
+                });
+            }
+        }
     }
 
     /// Read a parent timeline after verifying its continued existence.
@@ -99,6 +192,20 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         })
     }
 
+    /// Load authorized history preceding a live prompt in this conversation.
+    #[tracing::instrument(err, skip(self, access))]
+    pub async fn preceding(
+        &self,
+        access: EntityAccessReceipt<MessageView>,
+        id: Uuid,
+        limit: u16,
+    ) -> Result<Vec<Message>, MessageError> {
+        let parent = parent_from_receipt(&access)?;
+        self.ensure_parent(&parent).await?;
+        self.active_message(&parent, id, false).await?;
+        self.repo.preceding(&parent, id, limit.clamp(1, 100)).await
+    }
+
     /// Publish transient typing for an existing discussion.
     #[tracing::instrument(err, skip(self, access))]
     pub async fn typing(
@@ -128,19 +235,23 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
     pub async fn post(
         &self,
         access: EntityAccessReceipt<MessageWrite>,
-        input: PostMessage,
+        mut input: PostMessage,
     ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
+        if actor.as_bot().is_some() && input.mentions.is_empty() {
+            input.mentions = self.mentions.extract(&input.content).await?;
+        }
         validate_post(&parent, &input)?;
         self.validate_references(&access, &input.mentions, &input.attachments)
             .await?;
         if let Some(root) = input.thread_id {
             self.active_thread(&parent, root).await?;
         }
+        let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
-        let mentions = input.mentions.clone();
+        let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
         let message = self
             .repo
             .create(CreateMessage {
@@ -148,7 +259,10 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 actor: actor.clone(),
                 triggered_by: access
                     .acting_user_id()
-                    .filter(|_| actor.as_bot().is_some())
+                    .filter(|_| {
+                        actor.as_bot().is_some()
+                            && input.attribution == MessageAttribution::ActingUser
+                    })
                     .map(ToString::to_string),
                 input,
             })
@@ -159,6 +273,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             actor: actor.as_ref().to_owned(),
             nonce,
             change: MessageChange::Posted {
+                notification_policy,
                 message: message.clone(),
                 mentions,
             },
@@ -175,12 +290,62 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         id: Uuid,
         input: EditMessage,
     ) -> Result<Message, MessageError> {
+        self.patch(access, id, input.into()).await
+    }
+
+    /// Apply partial updates without requiring callers to reconstruct a message.
+    #[tracing::instrument(err, skip(self, access, patch))]
+    pub async fn patch(
+        &self,
+        access: EntityAccessReceipt<MessageWrite>,
+        id: Uuid,
+        patch: MessagePatch,
+    ) -> Result<Message, MessageError> {
         let parent = parent_from_receipt(&access)?;
         let actor = actor_from_receipt(&access, &parent)?;
         self.ensure_parent(&parent).await?;
         let current = self.active_message(&parent, id, false).await?;
-        if current.sender_id != actor {
+        if current.sender_id != actor
+            && !(matches!(parent, MessageParent::Channel(_))
+                && can_moderate(access.entity_permission()))
+        {
             return Err(MessageError::Forbidden);
+        }
+        let attachments = match patch.attachments {
+            AttachmentChange::Preserve => None,
+            AttachmentChange::Replace(attachments) => Some(attachments),
+            AttachmentChange::Delta { remove, add } => {
+                let mut retained: Vec<_> = current
+                    .attachments
+                    .iter()
+                    .filter(|attachment| !remove.contains(&attachment.id))
+                    .map(|attachment| NewAttachment {
+                        entity_type: attachment.entity_type.clone(),
+                        entity_id: attachment.entity_id.clone(),
+                        width: attachment.width,
+                        height: attachment.height,
+                    })
+                    .collect();
+                retained.extend(add);
+                Some(retained)
+            }
+        };
+        let mentions = patch.mentions.unwrap_or_else(|| {
+            if patch.content.is_some() && actor.as_bot().is_some() {
+                Vec::new()
+            } else {
+                current.mentions.clone()
+            }
+        });
+        let mut input = EditMessage {
+            content: patch.content.unwrap_or_else(|| current.content.clone()),
+            mentions,
+            attachments,
+            nonce: patch.nonce,
+            notification_policy: patch.notification_policy,
+        };
+        if actor.as_bot().is_some() && input.mentions.is_empty() {
+            input.mentions = self.mentions.extract(&input.content).await?;
         }
         let has_attachments = input
             .attachments
@@ -197,8 +362,9 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             input.attachments.as_deref().unwrap_or_default(),
         )
         .await?;
+        let notification_policy = input.notification_policy;
         let nonce = input.nonce.clone();
-        let mentions = input.mentions.clone();
+        let mentions = self.resolve_mentions(&parent, &input.mentions).await?;
         let message = self.repo.edit(&parent, id, input).await?;
         self.publish(MessageEvent {
             parent,
@@ -206,6 +372,7 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             actor: actor.as_ref().to_owned(),
             nonce,
             change: MessageChange::Edited {
+                notification_policy,
                 message: message.clone(),
                 mentions,
                 previous_attachments: current.attachments,
@@ -233,7 +400,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             return Err(MessageError::Forbidden);
         }
         let message = self.repo.delete(&parent, id).await?;
-        self.publish_message(actor, nonce, &message).await;
+        self.publish_message(
+            actor,
+            nonce,
+            &message,
+            MessageChange::MessageDeleted {
+                message: message.clone(),
+            },
+        )
+        .await;
         Ok(message)
     }
 
@@ -258,7 +433,15 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             .repo
             .react(&parent, id, actor.as_ref(), &emoji, add)
             .await?;
-        self.publish_message(actor, nonce, &message).await;
+        self.publish_message(
+            actor,
+            nonce,
+            &message,
+            MessageChange::ReactionChanged {
+                message: message.clone(),
+            },
+        )
+        .await;
         Ok(message)
     }
 
@@ -346,6 +529,37 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         self.active_message(&parent, id, true).await
     }
 
+    async fn resolve_mentions(
+        &self,
+        parent: &MessageParent,
+        authored: &[SimpleMention],
+    ) -> Result<Vec<SimpleMention>, MessageError> {
+        let mut seen = std::collections::HashSet::new();
+        let mut resolved = Vec::new();
+        let mut group_members = None;
+        for mention in authored {
+            if MessageReferenceKind::parse(&mention.entity_type)
+                == Some(MessageReferenceKind::Group)
+            {
+                let MessageParent::Channel(channel) = parent else {
+                    return Err(MessageError::Invalid("group mentions require a channel"));
+                };
+                if group_members.is_none() {
+                    group_members = Some(self.groups.channel_members(*channel).await?);
+                }
+                for user in group_members.as_ref().unwrap() {
+                    let user = SimpleMention::user(user);
+                    if seen.insert((user.entity_type.clone(), user.entity_id.clone())) {
+                        resolved.push(user);
+                    }
+                }
+            } else if seen.insert((mention.entity_type.clone(), mention.entity_id.clone())) {
+                resolved.push(mention.clone());
+            }
+        }
+        Ok(resolved)
+    }
+
     async fn validate_references(
         &self,
         access: &EntityAccessReceipt<MessageWrite>,
@@ -374,24 +588,52 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             if !checked.insert((kind, id, mention)) {
                 continue;
             }
+            let kind = MessageReferenceKind::parse(kind)
+                .ok_or(MessageError::Invalid("unsupported message reference"))?;
             let entity_type = match kind {
-                "user" if mention => {
-                    macro_user_id::user_id::MacroUserIdStr::try_from(id)
+                MessageReferenceKind::User if mention => {
+                    // Macro AI is surfaced through the user mention UI. Other bots
+                    // use the explicit bot tag, which the trigger service authorizes.
+                    let sender = ChannelSender::try_from(id)
                         .map_err(|_| MessageError::Invalid("invalid mentioned user"))?;
+                    if sender
+                        .as_bot()
+                        .is_some_and(|bot| bot.bot_id() != bot_id::MACRO_AI_BOT_ID)
+                    {
+                        return Err(MessageError::Invalid("bot mentions require the bot tag"));
+                    }
+                    continue;
+                }
+                MessageReferenceKind::Bot if mention => {
+                    bot_id::BotIdStr::try_from(id)
+                        .map_err(|_| MessageError::Invalid("invalid mentioned bot"))?;
                     continue;
                 }
                 // Static media is already readable by any authenticated user who
                 // has its UUID, matching static_file_service's read policy.
-                "static/image" | "static/video" if !mention => {
+                MessageReferenceKind::StaticImage | MessageReferenceKind::StaticVideo
+                    if !mention =>
+                {
                     Uuid::parse_str(id)
                         .map_err(|_| MessageError::Invalid("invalid media identifier"))?;
                     continue;
                 }
-                "document" => EntityType::Document,
-                "channel" => EntityType::Channel,
-                "email_thread" | "email" => EntityType::EmailThread,
-                "chat" => EntityType::Chat,
-                "project" => EntityType::Project,
+                MessageReferenceKind::Group
+                    if mention
+                        && id == "here"
+                        && access.entity().entity_type == EntityType::Channel =>
+                {
+                    continue;
+                }
+                MessageReferenceKind::Document => EntityType::Document,
+                MessageReferenceKind::Channel => EntityType::Channel,
+                MessageReferenceKind::EmailThread => EntityType::EmailThread,
+                MessageReferenceKind::Call => EntityType::Call,
+                MessageReferenceKind::CalendarEvent => EntityType::CalendarEvent,
+                MessageReferenceKind::Chat => EntityType::Chat,
+                MessageReferenceKind::Project => EntityType::Project,
+                MessageReferenceKind::CrmCompany => EntityType::CrmCompany,
+                MessageReferenceKind::CrmContact => EntityType::CrmContact,
                 _ => return Err(MessageError::Invalid("unsupported message reference")),
             };
             if !self
@@ -451,15 +693,14 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         actor: ChannelSender<'static>,
         nonce: Option<String>,
         message: &Message,
+        change: MessageChange,
     ) {
         self.publish(MessageEvent {
             parent: message.parent.clone(),
             root_id: message.root_id(),
             actor: actor.as_ref().to_owned(),
             nonce,
-            change: MessageChange::Updated {
-                message: message.clone(),
-            },
+            change,
         })
         .await;
     }
@@ -484,7 +725,6 @@ fn parent_from_receipt<P: RequiredPermission>(
     let kind = match entity.entity_type {
         EntityType::Channel => "channel",
         EntityType::Document => "document",
-        EntityType::EmailThread => "email_thread",
         _ => return Err(MessageError::Forbidden),
     };
     MessageParent::parse(kind, &entity.entity_id)
@@ -493,13 +733,11 @@ fn parent_from_receipt<P: RequiredPermission>(
 
 fn actor_from_receipt<P: RequiredPermission>(
     access: &EntityAccessReceipt<P>,
-    parent: &MessageParent,
+    _parent: &MessageParent,
 ) -> Result<ChannelSender<'static>, MessageError> {
     let id = match access.auth() {
         EntityAccessAuth::Authenticated(user) => user.as_ref(),
-        EntityAccessAuth::Bot(bot) if matches!(parent, MessageParent::Channel(_)) => {
-            bot.bot_id_str().as_ref()
-        }
+        EntityAccessAuth::Bot(bot) => bot.bot_id_str().as_ref(),
         _ => return Err(MessageError::Forbidden),
     };
     ChannelSender::try_from(id.to_owned()).map_err(|_| MessageError::Forbidden)

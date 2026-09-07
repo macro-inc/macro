@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { MentionedInDocumentCommentMetadataFileType } from './mentionedInDocumentCommentMetadataFileType';
+import type { MentionedInDocumentCommentMetadataSenderDisplayName } from './mentionedInDocumentCommentMetadataSenderDisplayName';
 import type { MentionedInDocumentCommentMetadataSenderProfilePictureUrl } from './mentionedInDocumentCommentMetadataSenderProfilePictureUrl';
 import type { MentionedInDocumentCommentMetadataSubType } from './mentionedInDocumentCommentMetadataSubType';
 
@@ -22,6 +23,8 @@ export interface MentionedInDocumentCommentMetadata {
   mentionId: string;
   /** The owner of the document. */
   owner: string;
+  /** Public bot name when the author is an agent rather than a Macro user. */
+  senderDisplayName?: MentionedInDocumentCommentMetadataSenderDisplayName;
   senderProfilePictureUrl?: MentionedInDocumentCommentMetadataSenderProfilePictureUrl;
   subType?: MentionedInDocumentCommentMetadataSubType;
   /** the text of the comment */

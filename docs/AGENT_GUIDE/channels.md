@@ -19,6 +19,8 @@ channel between two users.
 Placeholder `Type @ to share with #<name>`. Click it, `type_text`, press Enter to send.
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
 files`, `Format`, a `Task` switch (turns the message into a task), `Send message` button.
+`@here` mentions the channel's current human participants, including in large channels.
+A failed send keeps the complete draft; retrying sends it once and clears the composer.
 
 Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
@@ -26,8 +28,8 @@ clicking the reference navigates back to that reply. If text in the message is
 browser-selected before `Reply` is clicked, the reference previews only the selected text.
 For agent-session messages, the reference previews the resolved answer or current activity
 rather than the internal Magic Chip marker.
-Agent-session announcements use the same ReplyTarget reference for the prompting channel
-message; ordinary Markdown blockquotes remain presentation-only and do not count as replies.
+Agent-session announcements use the same ReplyTarget reference for the prompting
+message on either a channel or document; ordinary Markdown blockquotes remain presentation-only and do not count as replies.
 The composer always keeps an editable empty line after a block reference, including after
 the user deletes that line, so clicking below the reference can restore the text caret.
 
@@ -61,3 +63,7 @@ instead.
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —
 useful as a guaranteed-existing channel in tests.
+
+A channel thread mentioning a document may also appear in that document's Discussion
+when `Include channel mentions` is enabled. It remains one channel thread: replies,
+reactions, edits, and copied links preserve the channel, and channel permissions apply.

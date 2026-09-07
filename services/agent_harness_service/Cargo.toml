@@ -17,6 +17,8 @@ name = "agent_harness_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
+messages = { path = "../../crates/messages", features = ["broker", "delivery"] }
 agent_egress = { path = "../../crates/agent_egress" }
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }

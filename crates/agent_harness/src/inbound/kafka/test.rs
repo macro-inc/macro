@@ -1,16 +1,15 @@
 use agent_runtime_protocol::domain::action::AgentAction;
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentBotMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata, ChannelKind,
-    ExistingAgentSessionEvent, NewAgentSessionEvent,
+    AgentBotMentionedEvent, AgentTriggerTopicEvent, ExistingAgentSessionEvent,
+    NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
 };
 use bot_id::{BotId, MACRO_CODER_BOT_ID};
 use channel_sender::ChannelSender;
-use channels::domain::broker_events::ChannelMessagePostedMetadata;
-use channels::domain::models::ChannelType;
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use messages::domain::events::MessagePostedMetadata;
 
 use super::*;
 use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand};
@@ -34,14 +33,13 @@ fn user() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@macro.com").expect("a valid user id")
 }
 
-fn message(sender: ChannelSender<'static>) -> ChannelMessagePostedMetadata {
-    ChannelMessagePostedMetadata {
-        channel_id: Uuid::from_u128(1),
+fn message(sender: ChannelSender<'static>) -> MessagePostedMetadata {
+    MessagePostedMetadata {
+        parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(1)),
         message_id: Uuid::from_u128(2),
         thread_id: None,
         sender,
         triggered_by: None,
-        channel_type: ChannelType::Public,
         content: "@claude fix the tests".to_owned(),
         mentions: vec![],
         attachments: vec![],
@@ -59,10 +57,10 @@ fn mentioned(bot: BotId, sender: ChannelSender<'static>) -> AgentTriggerTopicEve
 }
 
 fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
-    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
+    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
         bot_id: bot,
         session_id: AgentSessionId::TEST_A,
-        kind: ChannelKind::MentionThread,
+        kind: ThreadMessageKind::MentionThread,
         message: message(ChannelSender::new_from_user(user())),
     }))
 }
@@ -176,7 +174,10 @@ fn a_managed_channel_message_forwards_to_its_session() {
     // Offered rather than decided here: whether this is the session's own
     // channel is not knowable from the event alone.
     let announce = deliver.announce.expect("a channel prompt offers an origin");
-    assert_eq!(announce.channel_id, Uuid::from_u128(1));
+    assert_eq!(
+        announce.parent,
+        messages::domain::models::MessageParent::Channel(Uuid::from_u128(1))
+    );
     assert_eq!(announce.thread_id, Uuid::from_u128(2));
     assert_eq!(announce.message_id, Uuid::from_u128(2));
 }
@@ -195,20 +196,22 @@ fn an_external_channel_message_announces_only() {
     assert_eq!(prompt.bot_id, BotId::TEST_A);
     assert_eq!(prompt.sender, user());
     assert_eq!(prompt.content, "@claude fix the tests");
-    assert_eq!(prompt.origin.channel_id, Uuid::from_u128(1));
+    assert_eq!(
+        prompt.origin.parent,
+        messages::domain::models::MessageParent::Channel(Uuid::from_u128(1))
+    );
     assert_eq!(prompt.origin.thread_id, Uuid::from_u128(2));
 }
 
 #[test]
 fn a_bot_authored_external_channel_message_is_skipped() {
-    let event = AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
-        ChannelEventMetadata {
+    let event =
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
             bot_id: BotId::TEST_A,
             session_id: AgentSessionId::TEST_A,
-            kind: ChannelKind::MentionThread,
+            kind: ThreadMessageKind::MentionThread,
             message: message(ChannelSender::new_from_bot(BotId::TEST_B)),
-        },
-    ));
+        }));
     assert_eq!(
         route_agent_trigger(event, runtime(AgentKind::External)).unwrap_err(),
         Skipped::NotFromUser
@@ -216,10 +219,10 @@ fn a_bot_authored_external_channel_message_is_skipped() {
 }
 
 fn channel_message_from(bot: BotId, sender: ChannelSender<'static>) -> AgentTriggerTopicEvent {
-    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
+    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
         bot_id: bot,
         session_id: AgentSessionId::TEST_A,
-        kind: ChannelKind::MentionThread,
+        kind: ThreadMessageKind::MentionThread,
         message: message(sender),
     }))
 }

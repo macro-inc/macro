@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use channels::domain::models::{ChannelParticipant, ChannelSender};
-use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::Transaction;
 use sqlx::{Pool, Postgres};
@@ -128,37 +127,10 @@ pub async fn get_channel_participants_for_thread_id(
     db: &Pool<Postgres>,
     thread_id: &Uuid,
 ) -> Result<Vec<MacroUserIdStr<'static>>> {
-    let participants: Vec<_> = sqlx::query!(
-        r#"
-        SELECT DISTINCT id as "id!" FROM (
-            SELECT m.sender_id AS id
-            FROM comms_channel_participants cp
-            JOIN comms_channels c ON c.id = cp.channel_id
-            JOIN comms_channel_messages m ON m.channel_id = c.id
-            WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
-            UNION
-            SELECT em.entity_id AS id
-            FROM comms_entity_mentions em
-            JOIN comms_channel_messages m ON m.id::text = em.source_entity_id
-            JOIN comms_channel_participants cp
-              ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
-            WHERE (m.id = $1 OR m.thread_id = $1)
-              AND em.source_entity_type = 'message'
-              AND em.entity_type = 'user'
-              AND cp.left_at IS NULL
-        ) AS combined
-        "#,
-        thread_id
-    )
-    .try_map(|participant| {
-        Ok(MacroUserIdStr::parse_from_str(&participant.id)
-            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-            .into_owned())
-    })
-    .fetch_all(db)
-    .await?;
-
-    Ok(participants)
+    use channels::domain::ports::ChannelRepo;
+    channels::outbound::pg_channels_repo::PgChannelsRepo::new(db.clone())
+        .get_thread_participants(*thread_id)
+        .await
 }
 
 #[cfg(test)]

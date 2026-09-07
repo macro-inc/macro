@@ -33,7 +33,7 @@ pub enum TriggerWork {
         /// Who asked; owns the session and authors the prompt.
         sender: MacroUserIdStr<'static>,
         /// Channel the mention was posted in.
-        channel_id: Uuid,
+        parent: messages::domain::models::MessageParent,
         /// Thread the mention roots.
         thread_id: Uuid,
         /// The mentioning message.
@@ -79,7 +79,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
             Ok(TriggerWork::OpenAndPrompt {
                 bot: mentioned.bot_id,
                 sender,
-                channel_id: message.channel_id,
+                parent: message.parent,
                 // A top-level mention roots its own thread; a mention inside
                 // a thread answers into that thread.
                 thread_id: message.thread_id.unwrap_or(message.message_id),
@@ -87,7 +87,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 content: message.content,
             })
         }
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => {
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(metadata)) => {
             let sender = metadata
                 .message
                 .sender

@@ -3,7 +3,6 @@ import {
   shouldGroupWithPreviousMessage,
 } from '@channel/Channel/message-grouping-meta';
 import { Message } from '@channel/Message/Message';
-import type { MessageData } from '@channel/Message/types';
 import { Thread } from '@channel/Thread/Thread';
 import { ThreadRail } from '@channel/Thread/ThreadRail';
 import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
@@ -14,6 +13,7 @@ import {
   getUniqueReplyUserIds,
 } from '@channel/Thread/utils/thread-reply-indicator-helpers';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import type { MessageData } from '@core/messages/types';
 import { senderFromStorageId } from '@queries/channel/message-sender';
 import { cn } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';

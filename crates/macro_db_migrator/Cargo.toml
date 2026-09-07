@@ -4,6 +4,21 @@ name = "macro_db_migrator"
 publish = false
 version = "0.1.0"
 
+[features]
+message-cutover = ["dep:clap", "dep:database_env_vars", "dep:macro_uuid", "dep:rootcause", "dep:tokio"]
+
+[[bin]]
+name = "message_cutover"
+required-features = ["message-cutover"]
+
 [dependencies]
+clap = { workspace = true, optional = true }
+database_env_vars = { path = "../database_env_vars", optional = true }
+macro_uuid = { path = "../macro_uuid", optional = true }
+rootcause = { workspace = true, optional = true }
 sqlx = { workspace = true, features = ["migrate"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"], optional = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+serde_json = { workspace = true }

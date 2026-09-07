@@ -12,14 +12,14 @@ pub use device::DeviceType;
 pub use metadata::{
     AiResponseMetadata, CalendarEventReminderMetadata, CallStartedMetadata, ChannelInviteMetadata,
     ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    CommentedOnDocumentMetadata, CommonChannelMetadata, DocumentMentionMetadata,
-    EmailCommentReason, EmailThreadCommentMetadata, GithubPrCheckRun, GithubPrCheckRunState,
-    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
-    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
-    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
-    InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
-    NotificationDocumentSubType, NotificationTitle, ReminderMetadata,
-    RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+    CommentedOnDocumentMetadata, CommonChannelMetadata, DocumentMentionMetadata, GithubPrCheckRun,
+    GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
+    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
+    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
+    InboxReauthRequiredMetadata, InviteToTeamMetadata, ItemSharedMetadata,
+    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
+    NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
+    TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -185,9 +185,6 @@ define_notif_event!(
         /// Someone commented on a document the user owns.
         CommentedOnDocument(CommentedOnDocumentMetadata),
 
-        /// Internal discussion on an email thread.
-        EmailThreadComment(EmailThreadCommentMetadata),
-
         /// The user was invited to a channel.
         ChannelInvite(ChannelInviteMetadata),
 
@@ -266,7 +263,6 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::RepliedToDocumentCommentThread(m) => m.format_title(sender_id),
             NotifEvent::CommentedOnDocument(m) => m.format_title(sender_id),
-            NotifEvent::EmailThreadComment(m) => m.format_title(sender_id),
             NotifEvent::ChannelInvite(m) => m.format_title(sender_id),
             NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
                 channel_message_send_metadata.format_title(sender_id)
@@ -327,7 +323,6 @@ impl NotificationTitle for NotifEvent {
             }
             NotifEvent::RepliedToDocumentCommentThread(m) => m.format_body(sender_id),
             NotifEvent::CommentedOnDocument(m) => m.format_body(sender_id),
-            NotifEvent::EmailThreadComment(m) => m.format_body(sender_id),
             NotifEvent::ChannelInvite(m) => m.format_body(sender_id),
             NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
                 channel_message_send_metadata.format_body(sender_id)

@@ -1219,6 +1219,7 @@ enum GraphqlChatRole {
 Metadata for a comment on a document.
 """
 type GraphqlCommentedOnDocumentMetadata {
+	senderDisplayName: String
 	"""
 	Document name.
 	"""
@@ -1530,24 +1531,6 @@ input GraphqlEmailBinaryExpr {
 }
 
 """
-GraphQL reason for an internal email comment notification.
-"""
-enum GraphqlEmailCommentReason {
-	"""
-	Explicit mention.
-	"""
-	MENTION
-	"""
-	Reply to a participated discussion.
-	"""
-	REPLY
-	"""
-	Comment on an owned email thread.
-	"""
-	COMMENT
-}
-
-"""
 A recursive `EmailFilterExpr` filter expression.
 """
 input GraphqlEmailExpr @oneOf {
@@ -1751,32 +1734,6 @@ enum GraphqlEmailSyncStatus {
 	Synchronization is disabled.
 	"""
 	INACTIVE
-}
-
-"""
-An internal comment, with navigation to its parent and root message.
-"""
-type GraphqlEmailThreadCommentMetadata {
-	"""
-	Email subject.
-	"""
-	subject: String!
-	"""
-	Shared message identifier.
-	"""
-	messageId: ID!
-	"""
-	Shared root message identifier.
-	"""
-	threadId: ID!
-	"""
-	Internal comment body.
-	"""
-	text: String!
-	"""
-	Why this recipient was notified.
-	"""
-	reason: GraphqlEmailCommentReason!
 }
 
 """
@@ -2888,6 +2845,7 @@ enum GraphqlLinkShare {
 Metadata for a mention in a document comment.
 """
 type GraphqlMentionedInDocumentCommentMetadata {
+	senderDisplayName: String
 	"""
 	Document name.
 	"""
@@ -2989,7 +2947,7 @@ type GraphqlNewNotification {
 """
 Typed GraphQL union containing every supported notification event payload.
 """
-union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlEmailThreadCommentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata
+union GraphqlNotifEvent = GraphqlChannelMentionMetadata | GraphqlDocumentMentionMetadata | GraphqlMentionedInDocumentCommentMetadata | GraphqlRepliedToDocumentCommentThreadMetadata | GraphqlCommentedOnDocumentMetadata | GraphqlChannelInviteMetadata | GraphqlChannelMessageSendMetadata | GraphqlChannelReplyMetadata | GraphqlCallStartedMetadata | GraphqlNewEmailMetadata | GraphqlInboxReauthRequiredMetadata | GraphqlInviteToTeamMetadata | GraphqlTaskAssignedMetadata | GraphqlReminderMetadata | GraphqlCalendarEventReminderMetadata | GraphqlAiResponseMetadata | GraphqlGithubPrStatusChangedMetadata | GraphqlGithubPrCheckRunMetadata | GraphqlGithubReviewRequestedMetadata | GraphqlGithubPrCommentMetadata | GraphqlGithubPrMentionMetadata | GraphqlGithubPrReviewMetadata
 
 """
 A notification associated with a Soup entity.
@@ -3470,6 +3428,7 @@ enum GraphqlReminderScheduleType {
 Metadata for a reply to a document comment thread.
 """
 type GraphqlRepliedToDocumentCommentThreadMetadata {
+	senderDisplayName: String
 	"""
 	Document name.
 	"""

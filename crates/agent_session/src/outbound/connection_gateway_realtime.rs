@@ -40,7 +40,6 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{AgentSessionQueueChanged, AgentSessionRealtime};
 use connection_gateway_client::ConnectionGatewayClient;
-use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::EntityType as GatewayEntityType;
 use serde::Serialize;
@@ -167,22 +166,40 @@ impl<Participants> ConnectionGatewayAgentSessionRealtime<Participants> {
     }
 }
 
-/// Who should receive a session's frames.
-///
-/// The gateway addresses users, so publishing needs a list of them. Named as
-/// its own capability rather than reaching for a repository, because this is
-/// the only thing the adapter wants from one.
-///
-/// Asked by session rather than by channel: a session created since they
-/// stopped owning a channel has no membership list to consult. The answer is
-/// the same either way for older sessions, whose channel only ever had one
-/// participant - the owner, written by `create`.
-pub trait SessionAudience: Send + Sync + 'static {
-    /// The users who should see this session's frames.
-    fn viewers(
+pub use crate::domain::audience::SessionAudience;
+
+/// Reads subscriptions without treating a tracked entity as a permission grant.
+#[derive(Clone)]
+pub struct ConnectionGatewaySessionSubscriptions(pub Arc<ConnectionGatewayClient>);
+
+impl crate::domain::audience::SessionSubscriptions for ConnectionGatewaySessionSubscriptions {
+    async fn candidates(
         &self,
-        agent_session_id: AgentSessionId,
-    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>, rootcause::Report>> + Send;
+        id: AgentSessionId,
+        parent: Option<&messages::domain::models::MessageParent>,
+    ) -> Result<std::collections::HashSet<String>, rootcause::Report> {
+        let mut users: std::collections::HashSet<_> = self
+            .0
+            .track_entity_users(GatewayEntityType::AgentSession.with_entity_string(id.to_string()))
+            .await
+            .map_err(|error| rootcause::report!(error))?
+            .into_iter()
+            .collect();
+        if let Some(parent) = parent {
+            let kind = if parent.is_discussion() {
+                GatewayEntityType::Document
+            } else {
+                GatewayEntityType::Channel
+            };
+            users.extend(
+                self.0
+                    .track_entity_users(kind.with_entity_string(parent.entity_id()))
+                    .await
+                    .map_err(|error| rootcause::report!(error))?,
+            );
+        }
+        Ok(users)
+    }
 }
 
 impl<Participants> AgentSessionRealtime for ConnectionGatewayAgentSessionRealtime<Participants>

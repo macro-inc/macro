@@ -64,6 +64,8 @@ fn message() -> Message {
         thread_id: None,
         sender_id: "macro|sender@example.com".to_owned().try_into().unwrap(),
         triggered_by: None,
+        bot_profile: None,
+        mentions: vec![],
         imported_author: None,
         content: "Message".into(),
         created_at: Utc::now(),
@@ -97,6 +99,7 @@ async fn sharing_failure_does_not_suppress_committed_post_delivery() {
     assert!(
         delivery
             .publish(event(MessageChange::Posted {
+                notification_policy: Default::default(),
                 message: message(),
                 mentions: mentions()
             }))
@@ -126,6 +129,7 @@ async fn edits_share_new_mentions_and_emit_attachment_removals() {
     assert!(
         delivery
             .publish(event(MessageChange::Edited {
+                notification_policy: Default::default(),
                 message: message(),
                 mentions: mentions(),
                 previous_attachments: vec![previous]
@@ -154,4 +158,82 @@ async fn edits_share_new_mentions_and_emit_attachment_removals() {
     assert!(added.is_empty() && attachments.is_empty());
     assert_eq!(removed.len(), 1);
     assert_eq!(removed[0].id, Uuid::from_u128(4));
+}
+
+#[tokio::test]
+async fn reaction_add_and_remove_record_the_human_actor_activity() {
+    let actor = "macro|reactor@example.com";
+    let mut repo = MockChannelRepo::new();
+    repo.expect_get_participants()
+        .returning(|_| Box::pin(async { Ok(vec![]) }));
+    repo.expect_upsert_activity()
+        .withf(move |sender, channel| sender.as_ref() == actor && *channel == Uuid::from_u128(2))
+        .times(2)
+        .returning(|_, _| Box::pin(async { Ok(()) }));
+    let log = Log::default();
+    let delivery = ChannelMessageDelivery::new(repo, log.clone(), log.clone(), log.clone());
+    for reactions in [
+        vec![CountedReaction {
+            emoji: "👍".into(),
+            users: vec![actor.into()],
+        }],
+        vec![],
+    ] {
+        let mut message = message();
+        message.reactions = reactions;
+        let mut event = event(MessageChange::ReactionChanged { message });
+        event.actor = actor.into();
+        delivery.publish(event).await.unwrap();
+    }
+    assert_eq!(*log.live.lock().unwrap(), 2);
+    let events = log.events.lock().unwrap();
+    assert!(
+        matches!(&events[0], ChannelEvent::ReactionChanged { reactions, .. } if reactions.len() == 1)
+    );
+    assert!(
+        matches!(&events[1], ChannelEvent::ReactionChanged { reactions, .. } if reactions.is_empty())
+    );
+}
+
+#[tokio::test]
+async fn reaction_activity_failure_does_not_suppress_delivery() {
+    let mut repo = MockChannelRepo::new();
+    repo.expect_get_participants()
+        .returning(|_| Box::pin(async { Ok(vec![]) }));
+    repo.expect_upsert_activity()
+        .times(1)
+        .returning(|_, _| Box::pin(async { anyhow::bail!("activity unavailable") }));
+    let log = Log::default();
+    let delivery = ChannelMessageDelivery::new(repo, log.clone(), log.clone(), log.clone());
+    assert!(
+        delivery
+            .publish(event(MessageChange::ReactionChanged { message: message() }))
+            .await
+            .is_err()
+    );
+    assert_eq!(*log.live.lock().unwrap(), 1);
+    assert!(matches!(
+        log.events.lock().unwrap().as_slice(),
+        [ChannelEvent::ReactionChanged { .. }]
+    ));
+}
+
+#[tokio::test]
+async fn bot_reactions_and_deletions_do_not_record_human_activity() {
+    let mut repo = MockChannelRepo::new();
+    repo.expect_get_participants()
+        .returning(|_| Box::pin(async { Ok(vec![]) }));
+    repo.expect_upsert_activity().never();
+    let log = Log::default();
+    let delivery = ChannelMessageDelivery::new(repo, log.clone(), log.clone(), log.clone());
+    let mut bot_event = event(MessageChange::ReactionChanged { message: message() });
+    bot_event.actor = bot_id::MACRO_AI_BOT_ID.into_storage_id().to_string();
+    delivery.publish(bot_event).await.unwrap();
+    let mut deleted = message();
+    deleted.deleted_at = Some(Utc::now());
+    delivery
+        .publish(event(MessageChange::MessageDeleted { message: deleted }))
+        .await
+        .unwrap();
+    assert_eq!(*log.live.lock().unwrap(), 2);
 }

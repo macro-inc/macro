@@ -1,6 +1,7 @@
 import type { InputSnapshot } from '@channel/Input/types';
-import type { MessageData } from '@channel/Message/types';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import type { MessageData } from '@core/messages/types';
+import type { MessageParent } from '@service-storage/messages';
 import type { Accessor } from 'solid-js';
 
 /**
@@ -14,12 +15,16 @@ export interface DiscussionComment {
   threadId: string;
   /** Resolved author id (`sender ?? owner`). */
   authorId: string;
+  parent?: MessageParent;
+  sender?: MessageData['sender'];
   /** Comment body (markdown). */
   text: string;
   /** ISO creation timestamp. */
   createdAt: string;
   /** ISO last-updated timestamp. */
   updatedAt: string;
+  /** Actual message edit time; undefined for external records without this field. */
+  editedAt?: string | null;
   /** ISO soft-delete timestamp, or null. */
   deletedAt: string | null;
   /** Imported author attribution, separate from the authenticated owner. */
@@ -30,6 +35,9 @@ export interface DiscussionComment {
 
 /** A discussion thread with its comments, oldest-first. */
 export interface DiscussionThread {
+  sourceLabel?: string;
+  sourceHref?: string;
+  parent?: MessageParent;
   /** Stable string thread id. */
   id: string;
   /** Whether the thread is resolved. */
@@ -46,6 +54,12 @@ export interface DiscussionThread {
  * discussion UI render document and CRM comments.
  */
 export interface DiscussionSource {
+  channelReferences?: {
+    enabled: Accessor<boolean>;
+    setEnabled: (enabled: boolean) => void;
+  };
+  canReply?: (thread: DiscussionThread) => boolean;
+  messageParent?: Accessor<MessageParent>;
   /** Threads to render, oldest-first; each thread's comments pre-sorted. */
   threads: Accessor<DiscussionThread[]>;
   attachmentMode?: 'files' | 'inline-images';
@@ -95,5 +109,5 @@ export interface DiscussionSource {
    * Build a shareable deep link to a comment. Omit it when the source has no
    * deep-linking yet — the copy-link affordance is then hidden.
    */
-  buildCommentLink?(comment: DiscussionComment): string;
+  buildCommentLink?(comment: DiscussionComment): string | undefined;
 }

@@ -104,11 +104,6 @@ export const NOTIFICATION_EVENT_GROUPS: readonly NotificationEventGroup[] = [
     label: 'Email',
     events: [
       {
-        type: 'email_thread_comment',
-        label: 'Internal comments',
-        description: 'Comments and mentions on email threads shared with you',
-      },
-      {
         type: 'new_email',
         label: 'New email',
         description: 'When a new email arrives',

@@ -568,34 +568,15 @@ describe('stackNotifications — entity discussions', () => {
     ]);
   });
 
-  it('groups internal email comments by discussion without mixing channel events', () => {
-    const email = (id: string, threadId: string, createdAt: number) =>
-      createBaseNotification(id, createdAt, {
-        tag: 'email_thread_comment',
-        content: {
-          messageId: id,
-          threadId,
-          subject: 'Subject',
-          text: 'Comment',
-          reason: 'comment',
-        },
-      });
+  it('keeps channel and document notifications separate', () => {
     const result = stackNotifications([
-      email('one', rootId, 1000),
-      email('two', rootId, 2000),
-      email('other', anotherRootId, 3000),
-      createNewMessageNotification('channel', 'msg', 4000),
-      createDocCommentNotification('document', rootId, rootId, 5000),
+      createNewMessageNotification('channel', 'msg', 1000),
+      createDocCommentNotification('document', rootId, rootId, 2000),
     ]);
-    expect(result).toHaveLength(4);
-    const emailStacks = result.filter(
-      (stack) => stack.type === 'email_thread_comment'
-    );
-    expect(emailStacks).toHaveLength(2);
-    expect(getThreadId(emailStacks[1])).toBe(rootId);
-    expect(emailStacks[1].notifications.map((n) => n.id)).toEqual([
-      'two',
-      'one',
+    expect(result).toHaveLength(2);
+    expect(result.map((stack) => stack.type)).toEqual([
+      'commented_on_document',
+      'channel_message_send',
     ]);
   });
 });

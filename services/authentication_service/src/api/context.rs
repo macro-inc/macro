@@ -10,9 +10,8 @@ use channels::{
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::NotificationChannelSender,
-        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        notification_sender::NotificationChannelSender, pg_channels_repo::PgChannelsRepo,
+        pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
@@ -69,7 +68,6 @@ pub(crate) type ChannelServiceType = ChannelServiceImpl<
             AuthenticationEventBroker,
         >,
     >,
-    PgChannelReferenceSharePermissions<EntityAccessServiceType>,
 >;
 
 pub(crate) type TeamsServiceType = teams::domain::team_service::TeamServiceImpl<
@@ -137,6 +135,7 @@ pub(crate) struct ApiContext {
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
+    pub channel_messages: Arc<channels::domain::message_commands::ChannelMessageAdapter>,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub entity_access_service: Arc<EntityAccessServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,

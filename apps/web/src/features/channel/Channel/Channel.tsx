@@ -319,7 +319,7 @@ export function Channel(props: ChannelProps) {
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
     channelId: () => props.channelId,
-    participantIds: () => participants.ids(),
+
     patchMessage: patchMessageMutation.mutate,
     onEditEnded: (message) => {
       // Clear any highlight left by tapping the edit flag's navigate action
@@ -626,7 +626,6 @@ export function Channel(props: ChannelProps) {
     if (!senderId) return;
     const payload = buildPostMessageSendPayload({
       snapshot,
-      participantIds: participants.ids(),
     });
 
     sendMessageMutation.mutate(

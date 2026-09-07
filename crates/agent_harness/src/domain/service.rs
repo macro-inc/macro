@@ -29,7 +29,7 @@ use crate::domain::model::{
     HarnessDefaults, OpenSession, SessionAnnouncement, SpawnContainer, is_macro_staff,
 };
 use crate::domain::ports::{
-    AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
+    AgentPromptComposer, CommandForwarder, ContainerManager, MessagePromptContext,
     RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{QueueError, QueuedEntry, SessionQueues};
@@ -166,7 +166,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {
@@ -304,6 +304,10 @@ where
         session_id: AgentSessionId,
         prompt: AnnouncePrompt,
     ) -> Result<()> {
+        self.inner
+            .prompt_context
+            .authorize_origin(&prompt.sender, &prompt.origin)
+            .await?;
         // Re-read rather than trusted: the row is what vouches that the
         // trigger's session and bot actually belong together.
         let session = self.inner.sessions.get_session(session_id).await?;
@@ -322,7 +326,7 @@ where
             .announce(SessionAnnouncement {
                 session_id,
                 bot_id: session.bot_id,
-                origin_channel_id: prompt.origin.channel_id,
+                origin_parent: prompt.origin.parent,
                 origin_thread_id: prompt.origin.thread_id,
                 origin_message_id: prompt.origin.message_id,
                 prompted_message_id: self
@@ -364,7 +368,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {
@@ -397,7 +401,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {
@@ -522,7 +526,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {
@@ -558,7 +562,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {
@@ -566,6 +570,20 @@ where
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
+        if let Some(thread) = &request.thread {
+            self.inner
+                .prompt_context
+                .authorize_origin(
+                    &request.owner,
+                    &AnnounceOrigin {
+                        parent: thread.parent.clone(),
+                        thread_id: thread.thread_id,
+                        message_id: thread.message_id,
+                    },
+                )
+                .await
+                .map_err(into_session_error)?;
+        }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
         let session = self
             .inner
@@ -594,7 +612,7 @@ where
             let announcement = SessionAnnouncement {
                 session_id: session.id,
                 bot_id: request.bot_id,
-                origin_channel_id: thread.channel_id,
+                origin_parent: thread.parent,
                 origin_thread_id: thread.thread_id,
                 origin_message_id: thread.message_id,
                 prompted_message_id: MessageId::first(AuthorKind::User),
@@ -728,13 +746,13 @@ where
         match self
             .inner
             .sessions
-            .find_for_channel(Some(thread_id), Some(bot_id))
+            .find_for_thread(Some(thread_id), Some(bot_id))
             .await?
         {
-            agent_session::domain::model::ChannelSession::CreatedFromThread(session) => {
+            agent_session::domain::model::ThreadSession::CreatedFromThread(session) => {
                 Ok(Some(session.id))
             }
-            agent_session::domain::model::ChannelSession::None => Ok(None),
+            agent_session::domain::model::ThreadSession::None => Ok(None),
         }
     }
 }
@@ -781,7 +799,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {
@@ -1191,7 +1209,7 @@ where
         %session_id,
         bot_id = %command.bot_id,
         message_id = %command.origin.message_id,
-        channel_id = %command.origin.channel_id,
+        parent = ?command.origin.parent,
         thread_id = %command.origin.thread_id,
         agent.trigger.kind = "mention",
         agent.session.id = tracing::field::Empty,
@@ -1203,6 +1221,16 @@ where
             origin,
         } = command;
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
+        self.prompt_context
+            .authorize_origin(
+                &origin.sender,
+                &AnnounceOrigin {
+                    parent: origin.parent.clone(),
+                    thread_id: origin.thread_id,
+                    message_id: origin.message_id,
+                },
+            )
+            .await?;
         let defaults = self.defaults.for_bot(bot_id);
         let repo_url = defaults.repo_url.clone();
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
@@ -1284,7 +1312,7 @@ where
                 action: AgentAction::prompt(origin.content),
                 actor: Some(origin.sender),
                 announce: Some(AnnounceOrigin {
-                    channel_id: origin.channel_id,
+                    parent: origin.parent,
                     thread_id: origin.thread_id,
                     message_id: origin.message_id,
                 }),
@@ -1359,9 +1387,8 @@ where
 
     /// Compose a prompt in place. Compact and other actions are left as-is.
     ///
-    /// Channel context is loaded when the prompt named an origin; a lookup
-    /// failure still composes, with empty history, so a transient context
-    /// outage cannot eat the prompt.
+    /// Message context is loaded when the prompt names an origin. Authorization
+    /// and context errors block dispatch instead of bypassing the access check.
     async fn compose_action(
         &self,
         action: &mut AgentAction,
@@ -1373,16 +1400,17 @@ where
         };
         let raw_prompt = prompt.prompt.clone();
         let prior_messages = if let Some(origin) = announce {
-            Some(
-                self.load_prompt_context(origin.channel_id, origin.message_id, actor)
-                    .await,
-            )
+            Some(self.load_prompt_context(origin, actor).await?)
         } else {
             None
         };
         prompt.prompt = self
             .prompt_composer
-            .compose(&raw_prompt, prior_messages.as_deref())
+            .compose(
+                &raw_prompt,
+                announce.map(|origin| &origin.parent),
+                prior_messages.as_deref(),
+            )
             .await?;
         prompt.set_name_source(raw_prompt);
         Ok(())
@@ -1390,32 +1418,16 @@ where
 
     async fn load_prompt_context(
         &self,
-        channel_id: macro_uuid::Uuid,
-        message_id: macro_uuid::Uuid,
+        origin: &AnnounceOrigin,
         actor: Option<&MacroUserIdStr<'static>>,
-    ) -> Vec<crate::domain::model::PriorChannelMessage> {
-        async {
-            if let Some(actor) = actor {
-                self.prompt_context
-                    .authorize_member(actor, channel_id)
-                    .await?;
-            }
-            self.prompt_context
-                .preceding_messages(channel_id, message_id)
-                .await
-        }
-        .await
-        .inspect_err(|error| {
-            // Trigger events are admitted at-most-once. Context is useful,
-            // but a transient lookup failure must not discard the prompt.
-            tracing::warn!(
-                error = ?error,
-                %channel_id,
-                %message_id,
-                "sending agent prompt without channel history"
-            );
-        })
-        .unwrap_or_default()
+    ) -> Result<Vec<crate::domain::model::PriorMessage>> {
+        let actor = actor.ok_or_else(|| {
+            HarnessError::PromptContext(rootcause::report!(
+                "message prompts require an acting user"
+            ))
+        })?;
+        self.prompt_context.authorize_origin(actor, origin).await?;
+        self.prompt_context.preceding_messages(actor, origin).await
     }
 
     /// Who, if anyone, should be told that this landed.
@@ -1443,7 +1455,7 @@ where
         Ok(Some(SessionAnnouncement {
             session_id,
             bot_id: session.bot_id,
-            origin_channel_id: origin.channel_id,
+            origin_parent: origin.parent,
             origin_thread_id: origin.thread_id,
             origin_message_id: origin.message_id,
             prompted_message_id: self.sessions.next_prompt_message_id(session_id).await?,
@@ -1480,7 +1492,7 @@ async fn run_session_worker<
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
 {

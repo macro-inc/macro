@@ -7,12 +7,14 @@
 
 import type { CountedReaction } from './countedReaction';
 import type { MessageAttachment } from './messageAttachment';
+import type { MessageBotProfile } from './messageBotProfile';
 import type { MessageDeletedAt } from './messageDeletedAt';
 import type { MessageEditedAt } from './messageEditedAt';
 import type { MessageImportedAuthor } from './messageImportedAuthor';
 import type { MessageParent } from './messageParent';
 import type { MessageThreadId } from './messageThreadId';
 import type { MessageTriggeredBy } from './messageTriggeredBy';
+import type { SimpleMention } from './simpleMention';
 
 /**
  * Shared message representation for channel timelines and entity discussions.
@@ -20,6 +22,7 @@ import type { MessageTriggeredBy } from './messageTriggeredBy';
 export interface Message {
   /** Attached entities. */
   attachments: MessageAttachment[];
+  bot_profile?: MessageBotProfile;
   /** Macro Markdown body. */
   content: string;
   /** Creation time. */
@@ -31,6 +34,8 @@ export interface Message {
   /** Message UUID. */
   id: string;
   imported_author?: MessageImportedAuthor;
+  /** Tracked mentions, retained when a caller changes attachments only. */
+  mentions: SimpleMention[];
   /** Entity that owns this conversation. */
   parent: MessageParent;
   /** Aggregated reactions. */

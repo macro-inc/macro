@@ -121,25 +121,16 @@ pub async fn get_document_access(
             SELECT 'view' AS access_level
             FROM comms_attachments a JOIN comms_messages m ON m.id = a.message_id
             JOIN comms_message_threads mt ON mt.root_id = COALESCE(m.thread_id, m.id)
-            LEFT JOIN "Document" parent_doc ON m.parent_entity_type = 'document' AND parent_doc.id = m.parent_entity_id
+            JOIN "Document" parent_doc ON m.parent_entity_type = 'document' AND parent_doc.id = m.parent_entity_id
             LEFT JOIN "DocumentPermission" dp ON dp."documentId" = parent_doc.id
             LEFT JOIN "SharePermission" sp ON sp.id = dp."sharePermissionId"
-            LEFT JOIN email_threads et ON et.id = CASE WHEN m.parent_entity_type = 'email_thread' THEN m.parent_entity_id::uuid END
-            LEFT JOIN email_links el ON el.id = et.link_id
             WHERE a.entity_type = 'document' AND a.entity_id = $3 AND m.deleted_at IS NULL AND mt.deleted_at IS NULL
-                AND (
-                    (parent_doc.id IS NOT NULL AND parent_doc."deletedAt" IS NULL AND (
+                AND parent_doc."deletedAt" IS NULL AND (
                         parent_doc.owner = $4
                         OR EXISTS (SELECT 1 FROM entity_access pa WHERE pa.entity_type = 'document'
                             AND pa.entity_id::text = parent_doc.id AND pa.source_id = ANY($2))
                         OR (sp."linkShareAccessLevel" IS NOT NULL AND (sp."linkShare" = 'PUBLIC'
                             OR (sp."linkShare" = 'TEAM' AND EXISTS (SELECT 1 FROM team_user tu WHERE tu.user_id = parent_doc.owner AND tu.team_id::text = ANY($2)))))
-                    ))
-                    OR (et.id IS NOT NULL AND (
-                        el.macro_id = $4
-                        OR EXISTS (SELECT 1 FROM macro_user_links mul WHERE mul.link_id = el.id AND mul.primary_macro_id = $4)
-                        OR EXISTS (SELECT 1 FROM entity_access ea WHERE ea.entity_type = 'email_thread' AND ea.entity_id = et.id AND ea.source_id = ANY($2))
-                    ))
                 )
         ) AS combined_access
         "#,

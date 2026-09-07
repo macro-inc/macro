@@ -364,12 +364,12 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.find_by_egress_token_hash(egress_token_hash).await
     }
 
-    async fn find_for_channel(
+    async fn find_for_thread(
         &self,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
-    ) -> Result<ChannelSession> {
-        self.repo.find_for_channel(thread_id, bot_id).await
+    ) -> Result<ThreadSession> {
+        self.repo.find_for_thread(thread_id, bot_id).await
     }
 
     async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {

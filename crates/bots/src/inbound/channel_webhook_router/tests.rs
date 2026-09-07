@@ -9,7 +9,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode, header},
 };
-use channels::domain::models::PostMessageResponse;
+use channels::domain::models::{PostMessageResponse, Sender};
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
@@ -210,8 +210,8 @@ impl BotService for TestBotService {
         unimplemented!()
     }
 
-    async fn get_self(&self, _bot_id: BotId) -> Result<Bot, BotError> {
-        unimplemented!()
+    async fn get_self(&self, bot_id: BotId) -> Result<Bot, BotError> {
+        Ok(scoped_bot_response(bot_id).bot)
     }
 
     async fn patch_bot(
@@ -359,12 +359,20 @@ impl EntityAccessService for TestAccessService {
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _bot_id: BotId,
-        _scope: BotAccessScope,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        bot_id: BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        unimplemented!()
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            (&scope).into(),
+            entity_access::domain::models::Entity {
+                entity_id: entity_id.into(),
+                entity_type,
+            },
+            EntityPermission::ChannelRole { role: self.role },
+        )
     }
 
     async fn get_access_level(
@@ -474,10 +482,11 @@ impl TestChannelPoster {
 impl ChannelMessagePoster for TestChannelPoster {
     fn post_message(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
         req: PostMessageRequest,
     ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
+        let actor = Sender::new_from_bot(access.get_authenticated_bot_auth().unwrap().bot_id());
+        let channel_id = access.entity().entity_id.parse().unwrap();
         let calls = self.calls.clone();
         let mode = self.mode;
         async move {

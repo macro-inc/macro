@@ -45,8 +45,6 @@ pub enum MessageParent {
     Channel(Uuid),
     /// A document, including tasks and PDFs.
     Document(DocumentId),
-    /// An internal discussion on a Macro email thread.
-    EmailThread(Uuid),
 }
 
 impl MessageParent {
@@ -55,9 +53,6 @@ impl MessageParent {
         match entity_type {
             "channel" => Ok(Self::Channel(entity_id.parse().map_err(|_| InvalidParent)?)),
             "document" => Ok(Self::Document(entity_id.to_owned().try_into()?)),
-            "email_thread" => Ok(Self::EmailThread(
-                entity_id.parse().map_err(|_| InvalidParent)?,
-            )),
             _ => Err(InvalidParent),
         }
     }
@@ -67,14 +62,13 @@ impl MessageParent {
         match self {
             Self::Channel(_) => "channel",
             Self::Document(_) => "document",
-            Self::EmailThread(_) => "email_thread",
         }
     }
 
     /// Canonical parent identifier.
     pub fn entity_id(&self) -> String {
         match self {
-            Self::Channel(id) | Self::EmailThread(id) => id.to_string(),
+            Self::Channel(id) => id.to_string(),
             Self::Document(id) => id.0.clone(),
         }
     }
@@ -171,6 +165,17 @@ pub struct ThreadState {
     pub updated_at: DateTime<Utc>,
     /// Explicit deletion of the entire thread, distinct from root deletion.
     pub deleted_at: Option<DateTime<Utc>>,
+}
+
+/// Public bot profile attached to bot-authored messages.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub struct BotSenderProfile {
+    /// Bot display name.
+    pub name: String,
+    /// Bot avatar URL.
+    pub avatar_url: Option<String>,
 }
 
 /// Display attribution for a comment imported from an external document.
@@ -271,6 +276,10 @@ pub struct Message {
     pub sender_id: ChannelSender<'static>,
     /// Original external author, when imported.
     pub imported_author: Option<ImportedAuthor>,
+    /// Public bot name and avatar for rendering shared message authors.
+    pub bot_profile: Option<BotSenderProfile>,
+    /// Tracked mentions, retained when a caller changes attachments only.
+    pub mentions: Vec<SimpleMention>,
     /// User who triggered a bot-authored message.
     pub triggered_by: Option<String>,
     /// Macro Markdown body.
@@ -309,11 +318,55 @@ pub struct MessageThread {
     pub replies: Vec<Message>,
 }
 
+/// Internal notification behavior for a posted channel message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub enum PostMessageNotificationPolicy {
+    /// Apply the normal channel notification rules.
+    #[default]
+    Default,
+    /// Notify tracked mentions without reply, channel-message, or channel-invite notifications.
+    MentionsOnly,
+    /// Do not send notifications for this post. Realtime/search side effects still run.
+    Silent,
+}
+
+/// Internal notification behavior for a patched channel message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
+pub enum PatchMessageNotificationPolicy {
+    /// Apply the normal edit behavior: realtime/search only, no notifications.
+    #[default]
+    Default,
+    /// Notify as though the patched message content had just been posted.
+    NotifyAsPostedMessage,
+}
+
+/// Attribution of a trusted bot post, distinct from the scope used to authorize it.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MessageAttribution {
+    /// A user invoked the agent; use the verified acting user from its capability.
+    #[default]
+    ActingUser,
+    /// Autonomous webhook delivery has no invoking user.
+    Unprompted,
+}
+
 /// Create a root or reply. Thread state may only be supplied on a root.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "json-schema", derive(schemars::JsonSchema))]
 pub struct PostMessage {
+    /// Internal authorship context; clients cannot override attribution.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub attribution: MessageAttribution,
+    /// Notification behavior chosen by a trusted server caller.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub notification_policy: PostMessageNotificationPolicy,
     /// Macro Markdown body.
     pub content: String,
     /// Root to reply to, if this is a reply.

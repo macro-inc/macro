@@ -15,7 +15,7 @@ ALTER TABLE comms_messages
     ALTER COLUMN parent_entity_type SET NOT NULL,
     ALTER COLUMN parent_entity_id SET NOT NULL,
     ADD CONSTRAINT comms_messages_parent_type_check
-        CHECK (parent_entity_type IN ('channel', 'document', 'email_thread')),
+        CHECK (parent_entity_type IN ('channel', 'document')),
     ADD CONSTRAINT comms_messages_parent_id_check CHECK (length(parent_entity_id) > 0),
     ADD CONSTRAINT comms_messages_parent_identity UNIQUE (id, parent_entity_type, parent_entity_id);
 

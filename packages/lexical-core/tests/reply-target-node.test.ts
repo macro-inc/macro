@@ -14,7 +14,7 @@ import {
 import { markdownToEmbeddingText, markdownToPlainText } from '../utils/parsers';
 
 const data = {
-  channelId: 'channel-1',
+  parent: { type: 'channel' as const, id: 'channel-1' },
   targetMessageId: 'reply-1',
   targetThreadId: 'thread-1',
   displayText: 'A one-line preview',
@@ -30,6 +30,21 @@ describe('ReplyTargetNode', () => {
       type: 'reply-target',
       ...data,
     });
+    expect(serializedEditorStateToMarkdown(state)).toBe(markdown);
+  });
+
+  it('reads saved channel references without a snapshot migration', () => {
+    const { parent, ...rest } = data;
+    const legacy = `<m-reply-target>${JSON.stringify({ channelId: parent.id, ...rest })}</m-reply-target>`;
+    const state = markdownToSerializedEditorStateWithIds(legacy);
+    expect(state.root.children[0]).toMatchObject({ type: 'reply-target', ...data });
+  });
+
+  it('round-trips a document reply target', () => {
+    const target = { ...data, parent: { type: 'document' as const, id: 'document-1' } };
+    const markdown = buildReplyTargetMarkdown(target);
+    const state = markdownToSerializedEditorStateWithIds(markdown);
+    expect(state.root.children[0]).toMatchObject(target);
     expect(serializedEditorStateToMarkdown(state)).toBe(markdown);
   });
 

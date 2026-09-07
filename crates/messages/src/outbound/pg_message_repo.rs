@@ -96,6 +96,46 @@ impl PgMessageRepository {
                     users: r.users,
                 });
         }
+        let string_ids: Vec<String> = ids.iter().map(ToString::to_string).collect();
+        let mention_rows = sqlx::query!("SELECT source_entity_id, entity_type, entity_id FROM comms_entity_mentions WHERE source_entity_type = 'message' AND source_entity_id = ANY($1) ORDER BY entity_type, entity_id", &string_ids)
+            .fetch_all(&mut *connection).await.map_err(database_error)?;
+        let mut mention_map: HashMap<String, Vec<SimpleMention>> = HashMap::new();
+        for mention in mention_rows {
+            mention_map
+                .entry(mention.source_entity_id)
+                .or_default()
+                .push(SimpleMention {
+                    entity_type: mention.entity_type,
+                    entity_id: mention.entity_id,
+                });
+        }
+        let bot_ids: Vec<Uuid> = rows
+            .iter()
+            .filter_map(|r| {
+                r.sender_id
+                    .strip_prefix("bot|")
+                    .and_then(|id| id.parse().ok())
+            })
+            .collect();
+        let bot_rows = sqlx::query!(
+            "SELECT id, name, avatar_url FROM bots WHERE id = ANY($1)",
+            &bot_ids
+        )
+        .fetch_all(&mut *connection)
+        .await
+        .map_err(database_error)?;
+        let bots: HashMap<_, _> = bot_rows
+            .into_iter()
+            .map(|bot| {
+                (
+                    format!("bot|{}", bot.id),
+                    BotSenderProfile {
+                        name: bot.name,
+                        avatar_url: bot.avatar_url,
+                    },
+                )
+            })
+            .collect();
         rows.into_iter()
             .map(|Json(r)| {
                 let deleted = r.deleted_at.is_some();
@@ -104,6 +144,12 @@ impl PgMessageRepository {
                     parent: MessageParent::parse(&r.parent_entity_type, &r.parent_entity_id)
                         .map_err(|e| MessageError::Repository(rootcause::Report::new(e).into()))?,
                     thread_id: r.thread_id,
+                    bot_profile: bots.get(&r.sender_id).cloned(),
+                    mentions: if deleted {
+                        vec![]
+                    } else {
+                        mention_map.remove(&r.id.to_string()).unwrap_or_default()
+                    },
                     sender_id: r
                         .sender_id
                         .try_into()
@@ -169,11 +215,35 @@ impl PgMessageRepository {
             .map_err(database_error)?;
         }
         if let Some(attachments) = attachments {
-            sqlx::query!("DELETE FROM comms_attachments WHERE message_id = $1", id)
-                .execute(&mut **tx)
-                .await
-                .map_err(database_error)?;
+            // Preserve stable attachment identities when an editor submits a full
+            // replacement set. Delivery compares these IDs to detect additions/removals.
+            let existing = sqlx::query!(
+                "SELECT id, entity_type, entity_id, width, height FROM comms_attachments WHERE message_id = $1", id
+            ).fetch_all(&mut **tx).await.map_err(database_error)?;
+            let mut retained = Vec::new();
+            let mut added = Vec::new();
             for attachment in attachments {
+                if let Some(current) = existing.iter().find(|current| {
+                    !retained.contains(&current.id)
+                        && current.entity_type == attachment.entity_type
+                        && current.entity_id == attachment.entity_id
+                        && current.width == attachment.width
+                        && current.height == attachment.height
+                }) {
+                    retained.push(current.id);
+                } else {
+                    added.push(attachment);
+                }
+            }
+            sqlx::query!(
+                "DELETE FROM comms_attachments WHERE message_id = $1 AND NOT (id = ANY($2))",
+                id,
+                &retained
+            )
+            .execute(&mut **tx)
+            .await
+            .map_err(database_error)?;
+            for attachment in added {
                 sqlx::query!(
                     r#"INSERT INTO comms_attachments (id, message_id, entity_type, entity_id, width, height)
                        VALUES ($1, $2, $3, $4, $5, $6)"#,
@@ -283,6 +353,38 @@ impl PgMessageRepository {
 }
 
 impl MessageRepository for PgMessageRepository {
+    async fn referenced_threads(
+        &self,
+        document_id: &str,
+        cursor: Option<MessageCursor>,
+        limit: u16,
+    ) -> Result<Vec<ReferencedThreadCandidate>, MessageError> {
+        let rows = sqlx::query!(r#"
+            SELECT DISTINCT c.id AS channel_id, c.name AS channel_name, root.id AS root_id, root.created_at
+            FROM comms_entity_mentions mention
+            JOIN comms_messages source ON source.id::text = mention.source_entity_id
+            JOIN comms_messages root ON root.id = COALESCE(source.thread_id, source.id)
+            JOIN comms_message_threads state ON state.root_id = root.id
+            JOIN comms_channels c ON c.id::text = root.parent_entity_id
+            WHERE mention.source_entity_type = 'message'
+                AND mention.entity_type IN ('doc', 'document') AND mention.entity_id = $1
+                AND source.parent_entity_type = 'channel' AND root.parent_entity_type = 'channel'
+                AND source.deleted_at IS NULL AND state.deleted_at IS NULL
+                AND ($2::timestamptz IS NULL OR (root.created_at, root.id) > ($2, $3::uuid))
+            ORDER BY root.created_at, root.id LIMIT $4
+        "#, document_id, cursor.as_ref().map(|c| c.created_at), cursor.as_ref().map(|c| c.id), i64::from(limit))
+        .fetch_all(&self.pool).await.map_err(database_error)?;
+        Ok(rows
+            .into_iter()
+            .map(|row| ReferencedThreadCandidate {
+                channel_id: row.channel_id,
+                root_id: row.root_id,
+                channel_name: row.channel_name,
+                created_at: row.created_at,
+            })
+            .collect())
+    }
+
     async fn replies(
         &self,
         parent: &MessageParent,
@@ -307,8 +409,6 @@ impl MessageRepository for PgMessageRepository {
             MessageParent::Document(_) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1 AND "deletedAt" IS NULL) AS "exists!""#, parent.entity_id())
                 .fetch_one(&self.pool).await,
             MessageParent::Channel(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM comms_channels WHERE id = $1) AS "exists!""#, id)
-                .fetch_one(&self.pool).await,
-            MessageParent::EmailThread(id) => sqlx::query_scalar!(r#"SELECT EXISTS(SELECT 1 FROM email_threads WHERE id = $1) AS "exists!""#, id)
                 .fetch_one(&self.pool).await,
         };
         exists.map_err(database_error)
@@ -345,6 +445,33 @@ impl MessageRepository for PgMessageRepository {
         .await
         .map_err(database_error)?
         .map(|state| state.0))
+    }
+
+    async fn preceding(
+        &self,
+        parent: &MessageParent,
+        message_id: Uuid,
+        limit: u16,
+    ) -> Result<Vec<Message>, MessageError> {
+        let rows = sqlx::query_scalar!(
+            r#"SELECT to_jsonb(m) AS "message!: Json<StoredMessage>"
+               FROM comms_messages m
+               JOIN comms_message_threads t ON t.root_id = COALESCE(m.thread_id, m.id)
+               JOIN comms_messages target ON target.id = $3
+                 AND target.parent_entity_type = $1 AND target.parent_entity_id = $2
+               WHERE m.parent_entity_type = $1 AND m.parent_entity_id = $2
+                 AND m.deleted_at IS NULL AND t.deleted_at IS NULL
+                 AND (m.created_at, m.id) < (target.created_at, target.id)
+                 AND ($1 = 'channel' OR COALESCE(m.thread_id, m.id) = COALESCE(target.thread_id, target.id))
+               ORDER BY m.created_at DESC, m.id DESC LIMIT $4"#,
+            parent.entity_type(),
+            parent.entity_id(),
+            message_id,
+            i64::from(limit.clamp(1, 100)),
+        ).fetch_all(&self.pool).await.map_err(database_error)?;
+        let mut messages = self.hydrate(rows).await?;
+        messages.reverse();
+        Ok(messages)
     }
 
     async fn list(

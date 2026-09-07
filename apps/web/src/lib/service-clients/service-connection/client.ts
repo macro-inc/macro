@@ -1,13 +1,21 @@
+import { isTabFocused } from '@core/signal/tabFocus';
 import type { EntityId } from '@core/types';
 import { createReconnectEffect } from '@macro-inc/collaboration/websocket';
 import { ok } from 'neverthrow';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  on,
+  onCleanup,
+} from 'solid-js';
 
 import type { TrackEntityMessage } from './generated/schemas/trackEntityMessage';
 import { clearStream } from './stream';
 import { ws } from './websocket';
 
 // ref counting on connection_gateway open/close events is needed to avoid breaking
-// events if more than one incstance of a block is opened. We also retain the entity_type
+// events if more than one instance of a block is opened. We also retain the entity_type
 // so that `open` can be replayed on the new connection_id after a websocket reconnect.
 interface TrackedEntity {
   entityType: TrackEntityMessage['entity_type'];
@@ -45,6 +53,34 @@ export const connectionGatewayClient = {
     return ok({});
   },
 };
+
+/** Keep an entity subscribed for this view's lifetime, sharing ownership with other views. */
+export function useEntitySubscription(
+  entity: Accessor<
+    Pick<TrackEntityMessage, 'entity_id' | 'entity_type'> | undefined
+  >
+): void {
+  const target = createMemo(entity, undefined, {
+    equals: (previous, next) =>
+      previous?.entity_type === next?.entity_type &&
+      previous?.entity_id === next?.entity_id,
+  });
+  createEffect(
+    on(target, (value) => {
+      if (!value) return;
+      const track = (action: TrackEntityMessage['action']) =>
+        void connectionGatewayClient.trackEntity({ ...value, action });
+      track('open');
+      const heartbeat = setInterval(() => {
+        if (isTabFocused()) track('ping');
+      }, 20_000);
+      onCleanup(() => {
+        clearInterval(heartbeat);
+        track('close');
+      });
+    })
+  );
+}
 
 /**
  * Re-sends `open` for every tracked entity when the socket reconnects. A reconnect gets a new

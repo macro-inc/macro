@@ -14,7 +14,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{HarnessError, Result};
 use super::model::{
-    AgentRuntimeConfig, CommandOutcome, HarnessCommand, PriorChannelMessage, ProvisionedEgress,
+    AgentRuntimeConfig, CommandOutcome, HarnessCommand, PriorMessage, ProvisionedEgress,
     SandboxEgress, SessionAnnouncement, SpawnContainer,
 };
 use super::sandbox::SandboxResizeEffect;
@@ -99,22 +99,22 @@ pub trait AgentRuntimeDirectory: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AgentRuntimeConfig>>> + Send;
 }
 
-/// Loads messages preceding a channel-originated agent prompt.
-pub trait ChannelPromptContext: Send + Sync + 'static {
-    /// Verify that a user who triggered a prompt remains a channel member.
-    fn authorize_member(
+/// Authorizes message origins and loads conversation context for agent prompts.
+pub trait MessagePromptContext: Send + Sync + 'static {
+    /// Recheck the actor's posting permission and verify the live message belongs
+    /// to exactly this parent and root before provisioning or dispatching work.
+    fn authorize_origin(
         &self,
-        actor: &macro_user_id::user_id::MacroUserIdStr<'static>,
-        channel_id: macro_uuid::Uuid,
+        actor: &MacroUserIdStr<'static>,
+        origin: &super::model::AnnounceOrigin,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Return up to ten non-deleted messages immediately before `message_id`
-    /// in chronological order.
+    /// Read up to ten preceding live messages with a fresh access check.
     fn preceding_messages(
         &self,
-        channel_id: macro_uuid::Uuid,
-        message_id: macro_uuid::Uuid,
-    ) -> impl Future<Output = Result<Vec<PriorChannelMessage>>> + Send;
+        actor: &MacroUserIdStr<'static>,
+        origin: &super::model::AnnounceOrigin,
+    ) -> impl Future<Output = Result<Vec<PriorMessage>>> + Send;
 }
 
 /// Composes an agent prompt from raw markdown and optional channel history.
@@ -124,7 +124,8 @@ pub trait AgentPromptComposer: Send + Sync + 'static {
     fn compose(
         &self,
         prompt_markdown: &str,
-        messages: Option<&[PriorChannelMessage]>,
+        parent: Option<&messages::domain::models::MessageParent>,
+        messages: Option<&[PriorMessage]>,
     ) -> impl Future<Output = Result<String>> + Send;
 }
 

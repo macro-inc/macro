@@ -2,9 +2,9 @@
 
 use agent_session::domain::model::AgentSessionId;
 use bot_id::BotId;
-use channels::domain::broker_events::ChannelMessagePostedMetadata;
 use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroAgentSessionsTopic;
+use messages::domain::events::MessagePostedMetadata;
 use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
@@ -13,7 +13,7 @@ mod test;
 /// How a message was attributed to the session it feeds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ChannelKind {
+pub enum ThreadMessageKind {
     /// The thread the session was created from, where the bot was pinged.
     MentionThread,
     /// The session's thread, where the message explicitly targeted another
@@ -30,7 +30,7 @@ pub struct AgentBotMentionedEvent {
     /// The bot that was mentioned.
     pub bot_id: BotId,
     /// The message that triggered this, verbatim.
-    pub message: ChannelMessagePostedMetadata,
+    pub message: MessagePostedMetadata,
 }
 
 /// Events that open a new session.
@@ -44,15 +44,15 @@ pub enum NewAgentSessionEvent {
 
 /// A message for a session that already exists.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ChannelEventMetadata {
+pub struct ThreadEventMetadata {
     /// Whose session this is, so foreign traffic is dropped before any read.
     pub bot_id: BotId,
     /// The session to feed.
     pub session_id: AgentSessionId,
     /// How the message was attributed to the session.
-    pub kind: ChannelKind,
+    pub kind: ThreadMessageKind,
     /// The message, verbatim.
-    pub message: ChannelMessagePostedMetadata,
+    pub message: MessagePostedMetadata,
 }
 
 /// Events for a session that already exists.
@@ -61,7 +61,7 @@ pub struct ChannelEventMetadata {
 #[serde(tag = "source", rename_all = "snake_case")]
 pub enum ExistingAgentSessionEvent {
     /// A mentioned message arrived in the session's originating thread.
-    Channel(ChannelEventMetadata),
+    Thread(ThreadEventMetadata),
 }
 
 /// Events publishable to [`MacroAgentSessionsTopic`].
@@ -90,7 +90,7 @@ pub enum AgentTriggerTopicEvent {
 impl TopicEvent for AgentTriggerTopicEvent {
     type Topic = MacroAgentSessionsTopic;
 
-    const SCHEMA_VERSION: u8 = 1;
+    const SCHEMA_VERSION: u8 = 2;
 }
 
 /// Publishable event for [`MacroAgentSessionsTopic`].
@@ -117,9 +117,9 @@ impl AgentSessionMacroEvent {
 
     /// Feed one of a bot's existing sessions.
     #[must_use]
-    pub fn channel_event(metadata: ChannelEventMetadata) -> Self {
+    pub fn thread_event(metadata: ThreadEventMetadata) -> Self {
         let bot_id = metadata.bot_id;
-        Self::existing_event(ExistingAgentSessionEvent::Channel(metadata), bot_id)
+        Self::existing_event(ExistingAgentSessionEvent::Thread(metadata), bot_id)
     }
 
     /// Feed one of a bot's existing sessions, however the message arrived.

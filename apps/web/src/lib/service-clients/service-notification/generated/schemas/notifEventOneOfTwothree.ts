@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { InboxReauthRequiredMetadata } from './inboxReauthRequiredMetadata';
+import type { InviteToTeamMetadata } from './inviteToTeamMetadata';
 import type { NotifEventOneOfTwothreeTag } from './notifEventOneOfTwothreeTag';
 
 /**
- * A linked inbox's grant died and must be reconnected.
+ * A user was invited to a team.
  */
 export type NotifEventOneOfTwothree = {
-  /** A linked inbox's grant died and must be reconnected. */
-  content: InboxReauthRequiredMetadata;
+  /** A user was invited to a team. */
+  content: InviteToTeamMetadata;
   tag: NotifEventOneOfTwothreeTag;
 };

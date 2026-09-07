@@ -7,6 +7,7 @@ import { standardErrorResponses } from "../lib/schemas";
 
 const agentContextRequest = z.object({
 	promptMarkdown: z.string(),
+    parent: z.object({ type: z.enum(["channel", "document"]), id: z.string().min(1) }).optional(),
 	messages: z
 		.array(
 			z.object({

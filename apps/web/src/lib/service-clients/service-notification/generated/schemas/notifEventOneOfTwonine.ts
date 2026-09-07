@@ -4,15 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { CalendarEventReminderMetadata } from './calendarEventReminderMetadata';
 import type { NotifEventOneOfTwonineTag } from './notifEventOneOfTwonineTag';
-import type { ReminderMetadata } from './reminderMetadata';
 
 /**
- * A reminder the user set for themselves came due.
+ * A calendar event alarm came due.
  */
 export type NotifEventOneOfTwonine = {
-  /** A reminder the user set for themselves came due. */
-  content: ReminderMetadata;
+  /** A calendar event alarm came due. */
+  content: CalendarEventReminderMetadata;
   tag: NotifEventOneOfTwonineTag;
 };

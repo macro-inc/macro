@@ -12,7 +12,7 @@ use macro_uuid::Uuid;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MentionOrigin {
     /// Channel the mentioning message was posted in.
-    pub channel_id: Uuid,
+    pub parent: messages::domain::models::MessageParent,
     /// Thread the announcement replies into: the mention's thread root.
     pub thread_id: Uuid,
     /// The mentioning message itself.
@@ -142,7 +142,7 @@ pub(crate) use agent_egress::domain::model::is_macro_staff;
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AnnounceOrigin {
     /// Channel the prompt was posted in.
-    pub channel_id: Uuid,
+    pub parent: messages::domain::models::MessageParent,
     /// Thread the announcement replies into.
     pub thread_id: Uuid,
     /// The channel message that triggered the prompt.
@@ -151,7 +151,7 @@ pub struct AnnounceOrigin {
 
 /// One channel message supplied as untrusted prompt context.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PriorChannelMessage {
+pub struct PriorMessage {
     /// Sender identifier as represented by the channels service.
     pub sender: String,
     /// Message body.
@@ -291,7 +291,7 @@ pub struct SessionAnnouncement {
     /// The bot the session runs for; the announcement posts as it.
     pub bot_id: BotId,
     /// Channel containing the mention that opened the session.
-    pub origin_channel_id: Uuid,
+    pub origin_parent: messages::domain::models::MessageParent,
     /// Thread where the announcement should be posted.
     pub origin_thread_id: Uuid,
     /// Channel message targeted by the announcement.

@@ -799,66 +799,6 @@ pub trait ChannelService: Send + Sync + 'static {
         }
     }
 
-    /// Send a message.
-    fn post_message(
-        &self,
-        _actor: Sender,
-        _channel_id: Uuid,
-        _req: PostMessageRequest,
-    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
-        async move {
-            Err(ChannelMutationErr::NotFound(
-                "channel mutations are not configured".to_string(),
-            ))
-        }
-    }
-
-    /// Patch a message.
-    fn patch_message(
-        &self,
-        _actor: Sender,
-        _actor_role: super::models::ParticipantRole,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _req: PatchMessageRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
-        async move {
-            Err(ChannelMutationErr::NotFound(
-                "channel mutations are not configured".to_string(),
-            ))
-        }
-    }
-
-    /// Delete a message.
-    fn delete_message(
-        &self,
-        _actor: Sender,
-        _actor_role: super::models::ParticipantRole,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-        _query: DeleteMessageQuery,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
-        async move {
-            Err(ChannelMutationErr::NotFound(
-                "channel mutations are not configured".to_string(),
-            ))
-        }
-    }
-
-    /// Mutate a reaction.
-    fn post_reaction(
-        &self,
-        _actor: Sender,
-        _channel_id: Uuid,
-        _req: PostReactionRequest,
-    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
-        async move {
-            Err(ChannelMutationErr::NotFound(
-                "channel mutations are not configured".to_string(),
-            ))
-        }
-    }
-
     /// Emit a typing update.
     fn post_typing(
         &self,
@@ -1153,22 +1093,6 @@ pub trait ChannelReferenceSharePermissions: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
-/// Extractor of the mentions embedded in message content.
-///
-/// The web editor tracks mentions while a user composes a message and sends
-/// them alongside it; bot-authored content arrives as raw macro markdown, so
-/// the service uses this port to derive the equivalent mention list.
-pub trait ChannelMentionExtractor: Send + Sync + 'static {
-    /// Error type for mention extraction.
-    type Err: Into<anyhow::Error> + Send;
-
-    /// Extract the entity mentions embedded in `content`.
-    fn extract_mentions(
-        &self,
-        content: &str,
-    ) -> impl Future<Output = Result<Vec<SimpleMention>, Self::Err>> + Send;
-}
-
 /// Errors that can occur while mutating channels.
 #[derive(Debug, thiserror::Error)]
 pub enum ChannelMutationErr {
@@ -1196,4 +1120,35 @@ pub enum ChannelMutationErr {
     /// Contacts dispatch error.
     #[error(transparent)]
     Contacts(anyhow::Error),
+}
+
+/// Message writes available independently of channel management and timelines.
+#[async_trait::async_trait]
+pub trait ChannelMessageCommands: Send + Sync + 'static {
+    /// Post through the common message policy.
+    async fn post_message(
+        &self,
+        _access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr>;
+    /// Apply partial message changes.
+    async fn patch_message(
+        &self,
+        _access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _message_id: Uuid,
+        _req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Delete under common authorship rules.
+    async fn delete_message(
+        &self,
+        _access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _message_id: Uuid,
+        _query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Change the verified actor's reaction.
+    async fn post_reaction(
+        &self,
+        _access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr>;
 }

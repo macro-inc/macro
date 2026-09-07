@@ -33,6 +33,8 @@ fn command(document: &str, root: Option<Uuid>, content: &str) -> CreateMessage {
         actor: USER.to_owned().try_into().unwrap(),
         triggered_by: None,
         input: PostMessage {
+            attribution: Default::default(),
+            notification_policy: Default::default(),
             content: content.into(),
             thread_id: root,
             anchor: None,
@@ -131,6 +133,7 @@ async fn reactions_attachments_and_resolution_use_shared_message_data(pool: PgPo
             .resolved
     );
     let edit = EditMessage {
+        notification_policy: Default::default(),
         content: "edited".into(),
         mentions: vec![],
         attachments: Some(vec![]),
@@ -294,4 +297,177 @@ async fn a_mark_identifies_one_live_discussion_per_document(pool: PgPool) {
     // Copying text to another document retains mark IDs without sharing its thread.
     let other = repo.create(marked("message-doc-b")).await.unwrap();
     assert_ne!(other.id, first.id);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn agent_context_stays_in_the_document_thread_and_omits_tombstones(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool);
+    let root = repo
+        .create(command("message-doc-a", None, "this thread"))
+        .await
+        .unwrap();
+    let deleted = repo
+        .create(command("message-doc-a", Some(root.id), "removed"))
+        .await
+        .unwrap();
+    repo.delete(&root.parent, deleted.id).await.unwrap();
+    repo.create(command("message-doc-a", None, "unrelated discussion"))
+        .await
+        .unwrap();
+    repo.create(command("message-doc-b", None, "other document"))
+        .await
+        .unwrap();
+    let reply = repo
+        .create(command("message-doc-a", Some(root.id), "@agent explain"))
+        .await
+        .unwrap();
+    repo.create(command("message-doc-a", Some(root.id), "later response"))
+        .await
+        .unwrap();
+    let history = repo.preceding(&root.parent, reply.id, 10).await.unwrap();
+    assert_eq!(
+        history
+            .iter()
+            .map(|m| m.content.as_str())
+            .collect::<Vec<_>>(),
+        ["this thread"]
+    );
+    assert!(
+        repo.preceding(
+            &MessageParent::parse("document", "message-doc-b").unwrap(),
+            reply.id,
+            10
+        )
+        .await
+        .unwrap()
+        .is_empty()
+    );
+    repo.delete_thread(&root.parent, root.id).await.unwrap();
+    assert!(
+        repo.preceding(&root.parent, reply.id, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn channel_references_deduplicate_roots_and_exclude_removed_mentions_and_threads(
+    pool: PgPool,
+) {
+    setup(&pool).await;
+    let channel = macro_uuid::generate_uuid_v7();
+    sqlx::query!("INSERT INTO comms_channels (id, name, channel_type, owner_id) VALUES ($1, 'Source', 'private', $2)", channel, USER).execute(&pool).await.unwrap();
+    let repo = PgMessageRepository::new(pool.clone());
+    let parent = MessageParent::Channel(channel);
+    let create = |root, doc: &str| {
+        let mut cmd = command("message-doc-a", root, "source message");
+        cmd.parent = parent.clone();
+        cmd.input.mentions = vec![SimpleMention {
+            entity_type: "document".into(),
+            entity_id: doc.into(),
+        }];
+        cmd
+    };
+    let root = repo.create(create(None, "message-doc-a")).await.unwrap();
+    let reply = repo
+        .create(create(Some(root.id), "message-doc-a"))
+        .await
+        .unwrap();
+    let other = repo.create(create(None, "message-doc-b")).await.unwrap();
+    let candidates = repo
+        .referenced_threads("message-doc-a", None, 10)
+        .await
+        .unwrap();
+    assert_eq!(candidates.len(), 1);
+    assert_eq!(candidates[0].root_id, root.id);
+    repo.delete(&parent, root.id).await.unwrap();
+    assert_eq!(
+        repo.referenced_threads("message-doc-a", None, 10)
+            .await
+            .unwrap()
+            .len(),
+        1,
+        "a live mentioning reply retains the source thread"
+    );
+    repo.edit(
+        &parent,
+        reply.id,
+        EditMessage {
+            notification_policy: Default::default(),
+            content: "reference removed".into(),
+            mentions: vec![],
+            attachments: None,
+            nonce: None,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.referenced_threads("message-doc-a", None, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        repo.referenced_threads("message-doc-b", None, 10)
+            .await
+            .unwrap()[0]
+            .root_id,
+        other.id
+    );
+    repo.delete_thread(&parent, other.id).await.unwrap();
+    assert!(
+        repo.referenced_threads("message-doc-b", None, 10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn replacement_attachments_preserve_retained_ids_and_remove_only_missing_items(pool: PgPool) {
+    setup(&pool).await;
+    let repo = PgMessageRepository::new(pool);
+    let attachment = NewAttachment {
+        entity_type: "document".into(),
+        entity_id: "message-doc-b".into(),
+        width: Some(100),
+        height: Some(50),
+    };
+    let mut create = command("message-doc-a", None, "with attachment");
+    create.input.attachments.push(attachment.clone());
+    let message = repo.create(create).await.unwrap();
+    let edited = repo
+        .edit(
+            &message.parent,
+            message.id,
+            EditMessage {
+                notification_policy: Default::default(),
+                content: "same attachment".into(),
+                mentions: vec![],
+                attachments: Some(vec![attachment]),
+                nonce: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(edited.attachments[0].id, message.attachments[0].id);
+    assert_eq!(edited.attachments[0].width, Some(100));
+    let removed = repo
+        .edit(
+            &message.parent,
+            message.id,
+            EditMessage {
+                notification_policy: Default::default(),
+                content: "removed attachment".into(),
+                mentions: vec![],
+                attachments: Some(vec![]),
+                nonce: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(removed.attachments.is_empty());
 }

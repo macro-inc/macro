@@ -3074,3 +3074,52 @@ async fn delete_channel_cascades_contacts_backfill_outbox_rows(pool: Pool<Postgr
     .unwrap();
     assert_eq!(outbox_count, 0);
 }
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn authored_here_references_drive_thread_audiences_and_participant_filters(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // USER_C is a channel member but has neither posted nor been individually mentioned in MSG3.
+    assert!(
+        !repo(pool.clone())
+            .get_thread_participants(MSG3)
+            .await?
+            .iter()
+            .any(|user| user.as_ref() == USER_C)
+    );
+    assert!(
+        !threads_matching_participant(pool.clone(), USER_A, USER_C)
+            .await?
+            .contains(&MSG3)
+    );
+    sqlx::query!("INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id) VALUES ($1, 'message', $2, 'group', 'here', $3)", Uuid::new_v4(), MSG3.to_string(), USER_A).execute(&pool).await?;
+    assert!(
+        repo(pool.clone())
+            .get_thread_participants(MSG3)
+            .await?
+            .iter()
+            .any(|user| user.as_ref() == USER_C)
+    );
+    assert!(
+        threads_matching_participant(pool.clone(), USER_A, USER_C)
+            .await?
+            .contains(&MSG3)
+    );
+    sqlx::query!("UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1 AND user_id = $2", CH1, USER_C).execute(&pool).await?;
+    assert!(
+        !repo(pool.clone())
+            .get_thread_participants(MSG3)
+            .await?
+            .iter()
+            .any(|user| user.as_ref() == USER_C)
+    );
+    assert!(
+        !threads_matching_participant(pool, USER_A, USER_C)
+            .await?
+            .contains(&MSG3)
+    );
+    Ok(())
+}

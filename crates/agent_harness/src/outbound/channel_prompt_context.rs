@@ -1,131 +1,113 @@
-//! Loads authorized channel history for managed agent prompts.
+//! Authorized conversation context through the common message application port.
 
 #[cfg(test)]
 mod test;
 
+use crate::domain::{
+    error::{HarnessError, Result},
+    model::{AnnounceOrigin, PriorMessage},
+    ports::MessagePromptContext,
+};
+use entity_access::domain::{
+    models::{EntityAccessReceipt, EntityType},
+    ports::EntityAccessService,
+};
+use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::{api::MessageReader, models::MessageParent, service::MessageWrite};
 use std::sync::Arc;
 
-use channels::domain::models::ChannelContextMessage;
-use channels::domain::ports::ChannelService;
-use entity_access::domain::models::{EntityType, MemberParticipantRole};
-use entity_access::domain::ports::EntityAccessService;
-use macro_user_id::user_id::MacroUserIdStr;
-use macro_uuid::Uuid;
-
-use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::PriorChannelMessage;
-use crate::domain::ports::ChannelPromptContext;
-
-const CONTEXT_MESSAGE_LIMIT: usize = 10;
-
-trait ChannelContextSource: Send + Sync + 'static {
-    fn message_context(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        before: i64,
-    ) -> impl Future<Output = Result<Vec<ChannelContextMessage>>> + Send;
-}
-
-impl<Channels> ChannelContextSource for Channels
-where
-    Channels: ChannelService + Send + Sync + 'static,
-{
-    async fn message_context(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        before: i64,
-    ) -> Result<Vec<ChannelContextMessage>> {
-        self.get_message_context(channel_id, message_id, before, 0)
-            .await
-            .map_err(|error| HarnessError::PromptContext(rootcause::report!(error).into()))
-    }
-}
-
-trait ChannelContextAuthorizer: Send + Sync + 'static {
-    fn authorize_member(
+trait ContextAuthorizer: Send + Sync + 'static {
+    fn capability(
         &self,
         actor: &MacroUserIdStr<'static>,
-        channel_id: Uuid,
-    ) -> impl Future<Output = Result<()>> + Send;
+        parent: &MessageParent,
+    ) -> impl Future<Output = Result<EntityAccessReceipt<MessageWrite>>> + Send;
 }
 
-impl<Access> ChannelContextAuthorizer for Access
-where
-    Access: EntityAccessService,
-{
-    async fn authorize_member(
+impl<Access: EntityAccessService> ContextAuthorizer for Access {
+    async fn capability(
         &self,
         actor: &MacroUserIdStr<'static>,
-        channel_id: Uuid,
-    ) -> Result<()> {
-        self.generate_entity_access_receipt::<MemberParticipantRole>(
+        parent: &MessageParent,
+    ) -> Result<EntityAccessReceipt<MessageWrite>> {
+        self.generate_entity_access_receipt::<MessageWrite>(
             actor,
             None,
-            &channel_id.to_string(),
-            EntityType::Channel,
+            &parent.entity_id(),
+            match parent {
+                MessageParent::Channel(_) => EntityType::Channel,
+                MessageParent::Document(_) => EntityType::Document,
+            },
         )
         .await
-        .map(|_| ())
         .map_err(|error| HarnessError::PromptContext(rootcause::report!(error).into()))
     }
 }
 
-/// Channel context adapter that rechecks the triggering user's membership.
-pub struct ChannelPromptContextAdapter<Channels, Access> {
-    channels: Arc<Channels>,
+/// Reads channel and document conversation history with the same access boundary.
+pub struct MessagePromptContextAdapter<Access> {
+    messages: Arc<dyn MessageReader>,
     access: Arc<Access>,
 }
 
-impl<Channels, Access> ChannelPromptContextAdapter<Channels, Access> {
-    /// Build an adapter from the channels and entity-access services.
-    pub fn new(channels: Arc<Channels>, access: Arc<Access>) -> Self {
-        Self { channels, access }
+impl<Access> MessagePromptContextAdapter<Access> {
+    /// Compose with the shared message service and current entity permissions.
+    pub fn new(messages: Arc<dyn MessageReader>, access: Arc<Access>) -> Self {
+        Self { messages, access }
     }
 }
 
-impl<Channels, Access> ChannelPromptContext for ChannelPromptContextAdapter<Channels, Access>
-where
-    Channels: ChannelContextSource,
-    Access: ChannelContextAuthorizer,
-{
-    async fn authorize_member(
+impl<Access: ContextAuthorizer> MessagePromptContext for MessagePromptContextAdapter<Access> {
+    async fn authorize_origin(
         &self,
         actor: &MacroUserIdStr<'static>,
-        channel_id: Uuid,
+        origin: &AnnounceOrigin,
     ) -> Result<()> {
-        self.access.authorize_member(actor, channel_id).await
+        let access = self
+            .access
+            .capability(actor, &origin.parent)
+            .await?
+            .try_into_requirement()
+            .map_err(|error| HarnessError::PromptContext(rootcause::report!(error).into()))?;
+        let message = self
+            .messages
+            .get(access, origin.message_id)
+            .await
+            .map_err(|error| HarnessError::PromptContext(rootcause::report!(error).into()))?;
+        if message.root_id() != origin.thread_id
+            || message.parent != origin.parent
+            || message.deleted_at.is_some()
+        {
+            return Err(HarnessError::PromptContext(rootcause::report!(
+                "invalid agent message origin"
+            )));
+        }
+        Ok(())
     }
 
     async fn preceding_messages(
         &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-    ) -> Result<Vec<PriorChannelMessage>> {
-        let mut before = CONTEXT_MESSAGE_LIMIT;
-        loop {
-            let messages = self
-                .channels
-                .message_context(channel_id, message_id, before as i64)
-                .await?;
-            let reached_channel_start = messages.len() < before + 1;
-            let mut live = messages
-                .into_iter()
-                .filter(|message| message.id != message_id && message.deleted_at.is_none())
-                .map(|message| PriorChannelMessage {
-                    sender: message.sender_id,
-                    content: message.content,
-                })
-                .collect::<Vec<_>>();
-
-            if live.len() >= CONTEXT_MESSAGE_LIMIT {
-                return Ok(live.split_off(live.len() - CONTEXT_MESSAGE_LIMIT));
-            }
-            if reached_channel_start {
-                return Ok(live);
-            }
-            before = before.saturating_mul(2).min(i64::MAX as usize);
-        }
+        actor: &MacroUserIdStr<'static>,
+        origin: &AnnounceOrigin,
+    ) -> Result<Vec<PriorMessage>> {
+        let access = self
+            .access
+            .capability(actor, &origin.parent)
+            .await?
+            .try_into_requirement()
+            .map_err(|error| HarnessError::PromptContext(rootcause::report!(error).into()))?;
+        self.messages
+            .preceding(access, origin.message_id, 10)
+            .await
+            .map(|messages| {
+                messages
+                    .into_iter()
+                    .map(|m| PriorMessage {
+                        sender: m.sender_id.as_ref().to_owned(),
+                        content: m.content,
+                    })
+                    .collect()
+            })
+            .map_err(|error| HarnessError::PromptContext(rootcause::report!(error).into()))
     }
 }

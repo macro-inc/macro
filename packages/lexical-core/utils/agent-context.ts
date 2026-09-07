@@ -17,6 +17,8 @@ export type AgentContextMessage = {
 /** Input used to compose an agent prompt with private channel context. */
 export type AgentContextPrompt = {
   promptMarkdown: string;
+  /** Authorized conversation location, supplied by the message service. */
+  parent?: { type: 'channel' | 'document'; id: string };
   messages?: AgentContextMessage[];
 };
 
@@ -49,9 +51,9 @@ export function composeAgentContextPrompt(input: AgentContextPrompt): string {
 
   editor.update(
     () => {
-      if (!input.messages?.length) return;
+      if (!input.messages?.length && !input.parent) return;
 
-      const contextText = input.messages
+      const history = (input.messages ?? [])
         .map(
           (message, index) =>
             `Prior message ${index + 1}:\nSender: ${message.sender}\nContent: ${message.content}`
@@ -59,7 +61,7 @@ export function composeAgentContextPrompt(input: AgentContextPrompt): string {
         .join('\n\n');
       const context = $createAgentContextNode({
         version: 1,
-        text: contextText,
+        text: [input.parent ? `Conversation parent: ${JSON.stringify(input.parent)}` : '', history].filter(Boolean).join('\n\n'),
       });
       const firstChild = $getRoot().getFirstChild();
       if (firstChild) firstChild.insertBefore(context);

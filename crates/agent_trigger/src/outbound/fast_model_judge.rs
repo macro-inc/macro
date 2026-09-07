@@ -6,7 +6,7 @@ use agent::structured_output::{DynamicSchema, dynamic_structured_completion};
 use agent::{Message, PredefinedModel};
 use agent_session::domain::error::Result;
 use ai_usage::{AiFeature, UsageContext, UsageRecorder};
-use channels::domain::broker_events::ChannelMessagePostedMetadata;
+use messages::domain::events::MessagePostedMetadata;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -57,7 +57,7 @@ impl FastModelTriggerJudge {
 impl ImplicitTriggerJudge for FastModelTriggerJudge {
     async fn is_addressed_to_agent(
         &self,
-        posted: &ChannelMessagePostedMetadata,
+        posted: &MessagePostedMetadata,
         transcript: &str,
     ) -> Result<bool> {
         let schema = DynamicSchema {

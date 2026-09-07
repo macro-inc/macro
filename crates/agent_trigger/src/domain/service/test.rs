@@ -1,16 +1,16 @@
 use super::*;
 
 use agent_session::domain::error::AgentSessionError;
-use agent_session::domain::model::{AgentSession, AgentSessionId, ChannelSession, SessionStatus};
+use agent_session::domain::model::{AgentSession, AgentSessionId, SessionStatus, ThreadSession};
 use agent_session::domain::ports::MockAgentSessionRepo;
 use bots::domain::models::{Agent, AgentChannelScope, Bot, BotKind, BotOwner};
 use channel_sender::ChannelSender;
-use channels::domain::models::{ChannelType, SimpleMention};
 use chrono::Utc;
 use macro_event_broker::MacroEvent;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use messages::domain::models::SimpleMention;
 
 use crate::domain::broker_events::{
     AgentTriggerTopicEvent, ExistingAgentSessionEvent, NewAgentSessionEvent,
@@ -85,14 +85,13 @@ fn system_bot(bot_id: BotId) -> Bot {
     }
 }
 
-fn message(mentions: Vec<SimpleMention>) -> ChannelMessagePostedMetadata {
-    ChannelMessagePostedMetadata {
-        channel_id: Uuid::from_u128(1),
+fn message(mentions: Vec<SimpleMention>) -> MessagePostedMetadata {
+    MessagePostedMetadata {
+        parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(1)),
         message_id: Uuid::from_u128(2),
         thread_id: Some(Uuid::from_u128(3)),
         sender: ChannelSender::new_from_user(user()),
         triggered_by: None,
-        channel_type: ChannelType::Public,
         content: "hello".to_owned(),
         mentions,
         attachments: vec![],
@@ -105,8 +104,8 @@ fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
         id,
         name: agent_session::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
         owner_id: MacroUserIdStr::try_from_email("owner@example.com").expect("valid macro user id"),
-        thread_id: None,
-        thread_channel_id: None,
+        thread_id: Some(Uuid::from_u128(3)),
+        thread_parent: Some(MessageParent::Channel(Uuid::from_u128(1))),
         originating_message_id: None,
         bot_id,
         model: "model".to_owned(),
@@ -190,10 +189,43 @@ fn service_reading(
     )
 }
 
+fn allow_invocation(
+    user: &MacroUserIdStr<'static>,
+    parent: &MessageParent,
+    root_id: Uuid,
+) -> std::pin::Pin<Box<dyn Future<Output = Result<Option<AuthorizedInvocation>>> + Send>> {
+    use entity_access::domain::models::{
+        AccessLevel, Entity, EntityPermission, EntityType, ParticipantRole,
+    };
+    let access = EntityAccessReceipt::try_new_authenticated_user(
+        user.clone(),
+        Entity {
+            entity_type: match parent {
+                MessageParent::Channel(_) => EntityType::Channel,
+                MessageParent::Document(_) => EntityType::Document,
+            },
+            entity_id: parent.entity_id(),
+        },
+        match parent {
+            MessageParent::Channel(_) => EntityPermission::ChannelRole {
+                role: ParticipantRole::Member,
+            },
+            MessageParent::Document(_) => EntityPermission::AccessLevel {
+                access_level: AccessLevel::Comment,
+            },
+        },
+    )
+    .unwrap();
+    Box::pin(async move { Ok(Some(AuthorizedInvocation { access, root_id })) })
+}
+
 /// A history that reads the given messages for any thread.
 fn thread_of(messages: Vec<ThreadMessage>) -> MockThreadHistory {
     let mut history = MockThreadHistory::new();
-    history.expect_thread_messages().returning(move |_, _| {
+    history
+        .expect_authorize_invocation()
+        .returning(allow_invocation);
+    history.expect_thread_messages().returning(move |_| {
         let messages = messages.clone();
         Box::pin(async move { Ok(messages) })
     });
@@ -211,9 +243,9 @@ fn no_implicit() -> (MockExplicitReplyExtractor, MockImplicitTriggerJudge) {
 
 fn existing_channel_metadata(
     events: &[AgentSessionMacroEvent],
-) -> &crate::domain::broker_events::ChannelEventMetadata {
+) -> &crate::domain::broker_events::ThreadEventMetadata {
     assert_eq!(events.len(), 1);
-    let AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) =
+    let AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(metadata)) =
         &events[0].event().event
     else {
         panic!("expected a channel event");
@@ -224,16 +256,13 @@ fn existing_channel_metadata(
 fn sessions_without_existing() -> MockAgentSessionRepo {
     let mut sessions = MockAgentSessionRepo::new();
     sessions
-        .expect_find_for_channel()
+        .expect_find_for_thread()
         .once()
-        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
+        .return_once(|_, _| Box::pin(async { Ok(ThreadSession::None) }));
     sessions
 }
 
-async fn mention_yields_event(
-    posted: &ChannelMessagePostedMetadata,
-    facts: impl Into<FactMocks>,
-) -> bool {
+async fn mention_yields_event(posted: &MessagePostedMetadata, facts: impl Into<FactMocks>) -> bool {
     let (replies, judge) = no_implicit();
     !service(sessions_without_existing(), facts, replies, judge)
         .evaluate(posted)
@@ -260,9 +289,14 @@ async fn a_private_global_agent_is_unavailable_to_another_user() {
 async fn a_bot_authored_mention_cannot_trigger_an_agent() {
     let mut posted = message(vec![mention_of(BotId::TEST_A)]);
     posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
-    let bots = MockAgentBotLookup::new();
-
-    assert!(!mention_yields_event(&posted, bots).await);
+    let (replies, judge) = no_implicit();
+    let service = service(
+        MockAgentSessionRepo::new(),
+        MockAgentBotLookup::new(),
+        replies,
+        judge,
+    );
+    assert!(service.evaluate(&posted).await.unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -337,7 +371,7 @@ async fn a_selected_agent_requires_active_channel_membership() {
         .channels
         .expect_bot_active_in_channel()
         .with(
-            mockall::predicate::eq(posted.channel_id),
+            mockall::predicate::eq(Uuid::from_u128(1)),
             mockall::predicate::eq(BotId::TEST_A),
         )
         .once()
@@ -366,7 +400,7 @@ async fn an_active_selected_agent_is_available_to_channel_members() {
         .channels
         .expect_bot_active_in_channel()
         .with(
-            mockall::predicate::eq(posted.channel_id),
+            mockall::predicate::eq(Uuid::from_u128(1)),
             mockall::predicate::eq(BotId::TEST_A),
         )
         .once()
@@ -394,7 +428,7 @@ async fn forwards_a_mentioned_thread_reply_to_its_session() {
     let posted = message(vec![mention_of(BotId::TEST_A)]);
     let mut sessions = MockAgentSessionRepo::new();
     sessions
-        .expect_find_for_channel()
+        .expect_find_for_thread()
         .with(
             mockall::predicate::eq(posted.thread_id),
             mockall::predicate::eq(Some(BotId::TEST_A)),
@@ -402,7 +436,7 @@ async fn forwards_a_mentioned_thread_reply_to_its_session() {
         .once()
         .return_once(|_, _| {
             Box::pin(async {
-                Ok(ChannelSession::CreatedFromThread(session(
+                Ok(ThreadSession::CreatedFromThread(session(
                     AgentSessionId::TEST_A,
                     BotId::TEST_A,
                 )))
@@ -446,10 +480,10 @@ async fn evaluates_every_mentioned_agent_bot() {
     let thread_id = posted.thread_id;
     let mut sessions = MockAgentSessionRepo::new();
     sessions
-        .expect_find_for_channel()
+        .expect_find_for_thread()
         .withf(move |actual_thread_id, bot_id| *actual_thread_id == thread_id && bot_id.is_some())
         .times(2)
-        .returning(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
+        .returning(|_, _| Box::pin(async { Ok(ThreadSession::None) }));
     let mut bots = MockAgentBotLookup::new();
     bots.expect_get_agent()
         .times(2)
@@ -477,13 +511,13 @@ async fn evaluates_a_repeated_bot_mention_once() {
     let posted = message(vec![mention_of(BotId::TEST_A), mention_of(BotId::TEST_A)]);
     let mut sessions = MockAgentSessionRepo::new();
     sessions
-        .expect_find_for_channel()
+        .expect_find_for_thread()
         .with(
             mockall::predicate::eq(posted.thread_id),
             mockall::predicate::eq(Some(BotId::TEST_A)),
         )
         .once()
-        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
+        .return_once(|_, _| Box::pin(async { Ok(ThreadSession::None) }));
     let mut bots = MockAgentBotLookup::new();
     bots.expect_get_agent()
         .with(mockall::predicate::eq(BotId::TEST_A))
@@ -507,9 +541,9 @@ async fn ignores_a_mentioned_bot_without_an_agent() {
     let posted = message(vec![mention_of(BotId::TEST_A)]);
     let mut sessions = MockAgentSessionRepo::new();
     sessions
-        .expect_find_for_channel()
+        .expect_find_for_thread()
         .once()
-        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
+        .return_once(|_, _| Box::pin(async { Ok(ThreadSession::None) }));
     let mut bots = MockAgentBotLookup::new();
     bots.expect_get_agent()
         .with(mockall::predicate::eq(BotId::TEST_A))
@@ -536,11 +570,11 @@ async fn deduplicates_a_session_found_for_multiple_mentions() {
     let posted = message(vec![mention_of(BotId::TEST_A), mention_of(BotId::TEST_B)]);
     let mut sessions = MockAgentSessionRepo::new();
     sessions
-        .expect_find_for_channel()
+        .expect_find_for_thread()
         .times(2)
         .returning(|_, _| {
             Box::pin(async {
-                Ok(ChannelSession::CreatedFromThread(session(
+                Ok(ThreadSession::CreatedFromThread(session(
                     AgentSessionId::TEST_A,
                     BotId::TEST_A,
                 )))
@@ -564,9 +598,9 @@ async fn deduplicates_a_session_found_for_multiple_mentions() {
 fn implicit_sessions(found: Vec<AgentSession>) -> MockAgentSessionRepo {
     let mut sessions = MockAgentSessionRepo::new();
     sessions
-        .expect_find_for_channel()
+        .expect_find_for_thread()
         .once()
-        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
+        .return_once(|_, _| Box::pin(async { Ok(ThreadSession::None) }));
     sessions
         .expect_find_all_for_thread()
         .with(mockall::predicate::eq(Uuid::from_u128(3)))
@@ -593,7 +627,7 @@ fn extractor(result: Result<Option<ExtractedExplicitReply>>) -> MockExplicitRepl
 
 fn reply_to_bot(bot_id: BotId) -> ExtractedExplicitReply {
     ExtractedExplicitReply {
-        channel_id: Uuid::from_u128(1).to_string(),
+        parent: MessageParent::Channel(Uuid::from_u128(1)),
         target_message_id: Uuid::from_u128(10).to_string(),
         target_thread_id: Uuid::from_u128(3).to_string(),
         display_text: "please fix this".to_owned(),
@@ -607,7 +641,7 @@ fn reply_to_user() -> ExtractedExplicitReply {
 
 fn reply_to_user_message(target_message_id: Uuid) -> ExtractedExplicitReply {
     ExtractedExplicitReply {
-        channel_id: Uuid::from_u128(1).to_string(),
+        parent: MessageParent::Channel(Uuid::from_u128(1)),
         target_message_id: target_message_id.to_string(),
         target_thread_id: Uuid::from_u128(3).to_string(),
         display_text: "please fix this".to_owned(),
@@ -661,7 +695,7 @@ async fn an_explicit_reply_in_a_session_thread_triggers_without_a_mention() {
     let metadata = existing_channel_metadata(&events);
     assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
     assert_eq!(metadata.bot_id, BotId::TEST_A);
-    assert_eq!(metadata.kind, ChannelKind::ExplicitReply);
+    assert_eq!(metadata.kind, ThreadMessageKind::ExplicitReply);
 }
 
 #[tokio::test]
@@ -677,7 +711,7 @@ async fn a_message_the_judge_reads_as_addressed_triggers_as_inferred() {
 
     let events = service.evaluate(&posted).await.expect("evaluate message");
     let metadata = existing_channel_metadata(&events);
-    assert_eq!(metadata.kind, ChannelKind::Inferred);
+    assert_eq!(metadata.kind, ThreadMessageKind::Inferred);
 }
 
 #[tokio::test]
@@ -720,11 +754,7 @@ async fn a_thread_without_sessions_never_consults_the_judge() {
 async fn a_bot_sender_never_triggers_implicitly() {
     let mut posted = message(vec![]);
     posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
-    let mut sessions = MockAgentSessionRepo::new();
-    sessions
-        .expect_find_for_channel()
-        .once()
-        .return_once(|_, _| Box::pin(async { Ok(ChannelSession::None) }));
+    let sessions = MockAgentSessionRepo::new();
     let (replies, judge) = no_implicit();
     let service = service(sessions, MockAgentBotLookup::new(), replies, judge);
 
@@ -809,7 +839,7 @@ async fn a_failing_extractor_falls_through_to_the_judge() {
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(
         existing_channel_metadata(&events).kind,
-        ChannelKind::Inferred
+        ThreadMessageKind::Inferred
     );
 }
 
@@ -861,7 +891,7 @@ async fn the_judge_reads_the_thread_around_the_agent() {
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(
         existing_channel_metadata(&events).kind,
-        ChannelKind::Inferred
+        ThreadMessageKind::Inferred
     );
 }
 
@@ -870,6 +900,9 @@ async fn an_explicit_reply_never_reads_the_thread() {
     let posted = message(vec![]);
     let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
     let mut history = MockThreadHistory::new();
+    history
+        .expect_authorize_invocation()
+        .returning(allow_invocation);
     history.expect_thread_messages().never();
     let service = service_reading(
         sessions,
@@ -882,7 +915,7 @@ async fn an_explicit_reply_never_reads_the_thread() {
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(
         existing_channel_metadata(&events).kind,
-        ChannelKind::ExplicitReply
+        ThreadMessageKind::ExplicitReply
     );
 }
 
@@ -891,7 +924,10 @@ async fn an_unreadable_thread_still_judges_the_message_alone() {
     let posted = message(vec![]);
     let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
     let mut history = MockThreadHistory::new();
-    history.expect_thread_messages().once().return_once(|_, _| {
+    history
+        .expect_authorize_invocation()
+        .returning(allow_invocation);
+    history.expect_thread_messages().once().return_once(|_| {
         Box::pin(async {
             Err(AgentSessionError::Unknown(anyhow::anyhow!(
                 "channels database unavailable"
@@ -909,7 +945,7 @@ async fn an_unreadable_thread_still_judges_the_message_alone() {
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(
         existing_channel_metadata(&events).kind,
-        ChannelKind::Inferred
+        ThreadMessageKind::Inferred
     );
 }
 
@@ -928,7 +964,7 @@ async fn an_explicit_reply_to_the_originating_message_triggers_without_a_mention
     let metadata = existing_channel_metadata(&events);
     assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
     assert_eq!(metadata.bot_id, BotId::TEST_A);
-    assert_eq!(metadata.kind, ChannelKind::ExplicitReply);
+    assert_eq!(metadata.kind, ThreadMessageKind::ExplicitReply);
 }
 
 #[tokio::test]
@@ -945,7 +981,7 @@ async fn an_explicit_reply_to_another_user_falls_through_to_the_judge() {
     let events = service.evaluate(&posted).await.expect("evaluate message");
     assert_eq!(
         existing_channel_metadata(&events).kind,
-        ChannelKind::Inferred
+        ThreadMessageKind::Inferred
     );
 }
 
@@ -967,7 +1003,7 @@ async fn an_explicit_reply_to_one_of_two_live_agents_routes_to_that_agent() {
     let metadata = existing_channel_metadata(&events);
     assert_eq!(metadata.session_id, AgentSessionId::TEST_B);
     assert_eq!(metadata.bot_id, BotId::TEST_B);
-    assert_eq!(metadata.kind, ChannelKind::ExplicitReply);
+    assert_eq!(metadata.kind, ThreadMessageKind::ExplicitReply);
 }
 
 #[tokio::test]
@@ -1014,4 +1050,146 @@ async fn an_explicit_reply_to_a_shared_originating_message_yields_nothing() {
             .expect("evaluate message")
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn document_mentions_use_owned_agents_without_channel_participation() {
+    for scope in [AgentChannelScope::All, AgentChannelScope::Selected] {
+        let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+        posted.parent = MessageParent::parse("document", "doc").unwrap();
+        let mut bots = MockAgentBotLookup::new();
+        bots.expect_get_agent().once().return_once(move |id| {
+            Box::pin(async move {
+                let mut agent = private_agent(id);
+                agent.channel_scope = scope;
+                Ok(Some(agent))
+            })
+        });
+        assert!(mention_yields_event(&posted, bots).await);
+    }
+}
+
+#[tokio::test]
+async fn document_agents_respect_team_membership() {
+    for allowed in [true, false] {
+        let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+        posted.parent = MessageParent::parse("document", "doc").unwrap();
+        let team_id = Uuid::from_u128(99);
+        let mut facts = FactMocks::from(MockAgentBotLookup::new());
+        facts.bots.expect_get_agent().once().return_once(move |id| {
+            Box::pin(async move {
+                Ok(Some(agent_with(
+                    id,
+                    BotOwner::Team { team_id },
+                    AgentChannelScope::Selected,
+                )))
+            })
+        });
+        facts
+            .teams
+            .expect_user_has_team()
+            .once()
+            .return_once(move |_, _| Box::pin(async move { Ok(allowed) }));
+        assert_eq!(mention_yields_event(&posted, facts).await, allowed);
+    }
+}
+
+#[tokio::test]
+async fn a_document_cannot_invoke_another_users_private_agent() {
+    let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+    posted.parent = MessageParent::parse("document", "doc").unwrap();
+    posted.sender =
+        ChannelSender::new_from_user(MacroUserIdStr::try_from_email("other@example.com").unwrap());
+    let mut bots = MockAgentBotLookup::new();
+    bots.expect_get_agent()
+        .once()
+        .return_once(|id| Box::pin(async move { Ok(Some(private_agent(id))) }));
+    assert!(!mention_yields_event(&posted, bots).await);
+}
+
+#[tokio::test]
+async fn a_queued_document_mention_cannot_invoke_after_access_is_revoked() {
+    let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+    posted.parent = MessageParent::parse("document", "doc").unwrap();
+    let mut history = MockThreadHistory::new();
+    history
+        .expect_authorize_invocation()
+        .once()
+        .return_once(|_, _, _| Box::pin(async { Ok(None) }));
+    let (replies, judge) = no_implicit();
+    let service = service_reading(
+        MockAgentSessionRepo::new(),
+        MockAgentBotLookup::new(),
+        replies,
+        judge,
+        history,
+    );
+    assert!(service.evaluate(&posted).await.unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn document_explicit_followups_route_to_the_existing_agent() {
+    let mut posted = message(vec![]);
+    posted.parent = MessageParent::parse("document", "doc").unwrap();
+    let mut reply = reply_to_bot(BotId::TEST_A);
+    reply.parent = posted.parent.clone();
+    let mut session = thread_session(AgentSessionId::TEST_A, BotId::TEST_A);
+    session.thread_parent = Some(posted.parent.clone());
+    let sessions = implicit_sessions(vec![session]);
+    let mut bots = MockAgentBotLookup::new();
+    bots.expect_get_agent()
+        .returning(|id| Box::pin(async move { Ok(Some(private_agent(id))) }));
+    let service = service(
+        sessions,
+        bots,
+        extractor(Ok(Some(reply))),
+        MockImplicitTriggerJudge::new(),
+    );
+    let events = service.evaluate(&posted).await.unwrap();
+    assert_eq!(
+        existing_channel_metadata(&events).message.parent,
+        posted.parent
+    );
+}
+
+#[tokio::test]
+async fn explicit_reply_cannot_select_a_session_from_a_different_parent_or_root() {
+    for wrong_parent in [true, false] {
+        let posted = message(vec![]);
+        let mut reply = reply_to_bot(BotId::TEST_A);
+        if wrong_parent {
+            reply.parent = MessageParent::parse("document", "another-document").unwrap();
+        } else {
+            reply.target_thread_id = Uuid::from_u128(999).to_string();
+        }
+        let service = service(
+            MockAgentSessionRepo::new(),
+            MockAgentBotLookup::new(),
+            extractor(Ok(Some(reply))),
+            MockImplicitTriggerJudge::new(),
+        );
+        assert!(
+            service
+                .explicit_reply_session(
+                    &posted,
+                    &[thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]
+                )
+                .await
+                .is_none()
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_session_from_another_parent_cannot_receive_a_document_followup() {
+    let mut posted = message(vec![]);
+    posted.parent = MessageParent::parse("document", "doc").unwrap();
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let service = service(
+        sessions,
+        MockAgentBotLookup::new(),
+        MockExplicitReplyExtractor::new(),
+        MockImplicitTriggerJudge::new(),
+    );
+    assert!(service.evaluate(&posted).await.unwrap().is_empty());
 }

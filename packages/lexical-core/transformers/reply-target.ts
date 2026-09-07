@@ -4,7 +4,7 @@ import {
   $createReplyTargetNode,
   $isReplyTargetNode,
   buildReplyTargetMarkdown,
-  isReplyTargetData,
+  readReplyTargetData,
   ReplyTargetNode,
 } from '../nodes/ReplyTargetNode';
 import {
@@ -23,8 +23,8 @@ export const I_REPLY_TARGET_NODE: ElementTransformer = {
   },
   replace: (parent: ElementNode, _, match: string[]) => {
     try {
-      const data: unknown = JSON.parse(match[1] ?? '');
-      if (!isReplyTargetData(data)) {
+      const data = readReplyTargetData(JSON.parse(match[1] ?? ''));
+      if (!data) {
         throw new Error('invalid reply-target data');
       }
       parent.replace($createReplyTargetNode(data));

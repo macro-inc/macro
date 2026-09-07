@@ -28,9 +28,17 @@ fn priority_deduplicates_and_excludes_actor_and_revoked_users() {
 }
 
 #[test]
-fn roots_do_not_notify_participants_and_email_has_no_task_assignees() {
-    let parent = MessageParent::EmailThread(Uuid::from_u128(1));
-    let recipients = comment_recipients(&parent, "actor", false, &audience());
+fn roots_do_not_notify_participants() {
+    let parent = MessageParent::parse("document", "doc").unwrap();
+    let recipients = comment_recipients(
+        &parent,
+        "actor",
+        false,
+        &CommentAudience {
+            assignees: vec![],
+            ..audience()
+        },
+    );
     assert_eq!(recipients.len(), 2);
     assert_eq!(recipients["mentioned"], CommentNotificationReason::Mention);
     assert_eq!(recipients["owner"], CommentNotificationReason::Owner);

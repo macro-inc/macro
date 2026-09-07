@@ -237,7 +237,6 @@ export function getNotificationActionText(n: Notification): string {
     .with('mentioned_in_document_comment', () => 'mentioned')
     .with('replied_to_document_comment_thread', () => 'replied')
     .with('commented_on_document', () => 'commented')
-    .with('email_thread_comment', () => 'commented')
     .with('channel_invite', () => 'invited')
     .with('new_email', () => 'emailed')
     .with('invite_to_team', () => 'invited')
@@ -287,7 +286,6 @@ export function extractMessageContent(notification: Notification): string {
       (m) => m.content.text || ''
     )
     .with({ tag: 'commented_on_document' }, (m) => m.content.text || '')
-    .with({ tag: 'email_thread_comment' }, (m) => m.content.text || '')
     .with({ tag: 'new_email' }, (m) => m.content.subject || '')
     .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? '')
     .with({ tag: 'ai_response' }, (m) => m.content.summary || '')

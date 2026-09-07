@@ -46,6 +46,8 @@ where
 {
     /// Channel message service used to read timelines, resolve messages, and fetch threads.
     pub service: Arc<Svc>,
+    /// Required message command adapter, separate from channel management.
+    pub messages: Arc<dyn crate::domain::ports::ChannelMessageCommands>,
     /// Entity access service used to ensure the caller is a channel member.
     pub entity_access_service: Arc<AccessSvc>,
     /// The bot these tools act as, on behalf of the requesting user. Defaults
@@ -61,6 +63,7 @@ where
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            messages: self.messages.clone(),
             entity_access_service: self.entity_access_service.clone(),
             actor: self.actor,
         }
@@ -73,9 +76,14 @@ where
     AccessSvc: EntityAccessService,
 {
     /// Create a new channel tool context.
-    pub fn new(service: Svc, entity_access_service: AccessSvc) -> Self {
+    pub fn new(
+        messages: Arc<dyn crate::domain::ports::ChannelMessageCommands>,
+        service: Svc,
+        entity_access_service: AccessSvc,
+    ) -> Self {
         Self {
             service: Arc::new(service),
+            messages,
             entity_access_service: Arc::new(entity_access_service),
             actor: bot_id::MACRO_AI_BOT_ID,
         }

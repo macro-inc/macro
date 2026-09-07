@@ -1,14 +1,11 @@
 import { InputActionButton } from '@channel/Input/ActionButton';
-import { createInputAttachmentTracker } from '@channel/Input/attachment-tracker';
 import { useInputCommands } from '@channel/Input/context';
-import { createTypingTracker } from '@channel/Input/create-typing-tracker';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { Input } from '@channel/Input/Input';
 import type {
   InputCallbacks,
   InputData,
   InputHandle,
-  InputSnapshot,
 } from '@channel/Input/types';
 import { isReplyInput } from '@channel/Input/types';
 import { uploadInputAttachments } from '@channel/Input/upload-attachments';
@@ -16,14 +13,21 @@ import {
   applyInlineFormat,
   applyNodeFormat,
 } from '@channel/Input/utils/formatting';
+import { useAgentMentionUsers } from '@channel/use-agent-mention-users';
+import {
+  useChannelBotMentionUsers,
+  useDocumentBotMentionUsers,
+} from '@channel/use-channel-bot-mention-users';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import { toast } from '@core/component/Toast/Toast';
+import { createConfiguredMessageEditor } from '@core/messages/configured-message-editor';
+import { createMessageComposer } from '@core/messages/create-message-composer';
 import { isMobile } from '@core/mobile/isMobile';
 import type { IUser } from '@core/user/types';
 import { chatRuleset, uploadFile } from '@core/util/upload';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import type { MessageParent } from '@service-storage/messages';
 import { isIOS } from '@solid-primitives/platform';
 import { Surface } from '@ui';
 import {
@@ -34,10 +38,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { createConfiguredDiscussionMarkdownEditor } from './configured-discussion-markdown-editor';
 
 export type DiscussionInputProps = InputCallbacks & {
   input: InputData;
+  parent?: MessageParent;
   attachmentMode?: 'files' | 'inline-images';
   markdownNamespace?: string;
   participants?: Accessor<IUser[]>;
@@ -105,96 +109,19 @@ function DefaultActions(props: {
 
 export function DiscussionInput(props: DiscussionInputProps) {
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
-  const [value, setValue] = createSignal(props.input.value ?? '');
-  const [mentions, setMentions] = createSignal<ItemMention[]>([]);
-  const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
-  const [isSending, setIsSending] = createSignal(false);
   const [isFocused, setIsFocused] = createSignal(false);
-  const attachments = createInputAttachmentTracker({
-    initialAttachments: props.input.attachments,
-  });
-  const typing = createTypingTracker({
-    onStartTyping: () => props.onStartTyping?.(),
-    onStopTyping: () => props.onStopTyping?.(),
-  });
-
-  const inputView = () => ({
-    ...props.input,
-    value: value(),
-    isEmpty: !value().trim() && !attachments.attachments().length,
-    hasPendingAttachments: attachments.hasPending(),
-    attachments: attachments.attachments(),
-    showFormatRibbon: showFormatRibbon(),
-  });
-
-  const createSnapshot = (): InputSnapshot => ({
-    value: value(),
-    attachments: attachments.attachments(),
-    mentions: mentions(),
-  });
-
-  const markdownEditor = createConfiguredDiscussionMarkdownEditor({
-    type: 'markdown',
-    namespace: props.markdownNamespace ?? 'discussion-input-markdown',
-    enableMentions: true,
-    users: props.participants,
-    scrollContainer,
-    onMentionCreate: (mention) => {
-      setMentions((prev) => [...prev, mention]);
-    },
-    onMentionRemove: (mention) => {
-      setMentions((prev) =>
-        prev.filter(
-          (m) =>
-            !(m.itemId === mention.itemId && m.itemType === mention.itemType)
-        )
-      );
-    },
-    onChange: (markdown) => {
-      setValue(markdown);
-      typing.keystroke();
-      props.onChange?.(createSnapshot());
-    },
-    onEnter: () => {
-      if (isMobile()) return false;
-      void commands.send();
-      return true;
-    },
-  });
-
-  // Build the editor handle immediately to ensure lexical is available for commands
-  markdownEditor.buildHandle();
-
-  const commands = {
-    send: async () => {
-      if (isSending()) return false;
-      const snapshot = createSnapshot();
-      if (
-        attachments.hasPending() ||
-        (!snapshot.value.trim() && !snapshot.attachments.length)
-      )
-        return false;
-      typing.stop();
-      setIsSending(true);
-      try {
-        await props.onSend?.(snapshot);
-        return true;
-      } catch {
-        toast.failure('Could not send comment. Your draft is still here.');
-        return false;
-      } finally {
-        setIsSending(false);
-      }
-    },
-    close: () => {
-      props.onClose?.(createSnapshot());
-    },
-    toggleFormatRibbon: () => {
-      const show = !showFormatRibbon();
-      setShowFormatRibbon(show);
-      props.onToggleFormatRibbon?.(show);
-    },
-    attachFiles: async (files: File[]) => {
+  const {
+    inputState,
+    mentionsTracker,
+    attachmentTracker: attachments,
+    onChange,
+  } = createMessageComposer({
+    input: props.input,
+    callbacks: props,
+    clearEditor: () => clearEditor(),
+    onSendError: () =>
+      toast.failure('Could not send comment. Your draft is still here.'),
+    attachFiles: async (files) => {
       if (props.attachmentMode === 'inline-images') {
         for (const file of files)
           await addMediaFromFile(markdownEditor.lexical, file, 'image');
@@ -207,31 +134,68 @@ export function DiscussionInput(props: DiscussionInputProps) {
           uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
       });
     },
-    removeAttachment: (attachment: InputSnapshot['attachments'][number]) =>
-      attachments.removeAttachment(attachment.id),
+  });
+  const inputView = inputState.view;
+  const commands = inputState.commands;
+
+  const documentAgents = props.parent ? useDocumentBotMentionUsers() : () => [];
+  const channelAgents = props.parent
+    ? useChannelBotMentionUsers(() =>
+        props.parent?.type === 'channel' ? props.parent.id : ''
+      )
+    : () => [];
+  const agents = () =>
+    props.parent?.type === 'channel' ? channelAgents() : documentAgents();
+  const mentionUsers = useAgentMentionUsers(
+    () => [...(props.participants?.() ?? []), ...agents()],
+    () => !!props.parent
+  );
+  const markdownEditor = createConfiguredMessageEditor({
+    groupMentions: props.parent?.type === 'channel',
+    inlineMedia: true,
+    disableMentionTracking: true,
+    type: 'markdown',
+    namespace: props.markdownNamespace ?? 'discussion-input-markdown',
+    enableMentions: true,
+    users: mentionUsers,
+    scrollContainer,
+    onMentionCreate: mentionsTracker.onMentionCreate,
+    onMentionRemove: mentionsTracker.onMentionRemove,
+    onChange,
+    onEnter: () => {
+      if (isMobile()) return false;
+      void commands.send();
+      return true;
+    },
+  });
+
+  // Build the editor handle immediately to ensure lexical is available for commands
+  markdownEditor.buildHandle();
+
+  const clearEditor = () => {
+    // Blur before clearing on iOS so dictation finalizes its buffer.
+    if (isIOS) {
+      markdownEditor.controls.blur();
+      markdownEditor.controls.clear();
+      requestAnimationFrame(() => markdownEditor.controls.focus());
+    } else {
+      markdownEditor.controls.clear();
+    }
   };
 
   props.onReady?.({
     clear: () => {
-      // On iOS, blur before clearing so dictation finalizes and discards its buffer
-      if (isIOS) {
-        markdownEditor.controls.blur();
-        markdownEditor.controls.clear();
-        requestAnimationFrame(() => markdownEditor.controls.focus());
-      } else {
-        markdownEditor.controls.clear();
-      }
-      setValue('');
-      setMentions([]);
-      attachments.clearAttachments();
+      clearEditor();
+      inputState.reset();
+      mentionsTracker.setMentions([]);
     },
     focus: () => markdownEditor.controls.focus(),
     send: () => commands.send(),
     attachFiles: (files: File[]) => commands.attachFiles(files),
     restoreSnapshot: (snapshot) => {
       markdownEditor.controls.setMarkdown(snapshot.value);
-      setMentions(snapshot.mentions);
-      setValue(snapshot.value);
+      mentionsTracker.setMentions(snapshot.mentions);
+      inputState.setValue(snapshot.value);
       attachments.setAttachments(snapshot.attachments);
       markdownEditor.controls.focus();
     },
@@ -289,7 +253,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
               <Match when>
                 <DefaultActions
                   input={inputView()}
-                  isSending={isSending()}
+                  isSending={!!inputView().hasPendingAttachments}
                   inlineImages={props.attachmentMode === 'inline-images'}
                 />
               </Match>

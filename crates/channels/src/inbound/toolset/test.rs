@@ -7,6 +7,7 @@ use super::{
     rename_channel::RenameChannel,
     send_channel_message::SendChannelMessage,
 };
+use crate::domain::models::{DeleteMessageQuery, PatchMessageRequest, PostReactionRequest};
 use crate::domain::{
     models::{
         AddParticipantsRequest, ChannelMetadata, ChannelType, CreateChannelRequest,
@@ -200,22 +201,6 @@ impl ChannelService for ToolTestChannelService {
         Ok(())
     }
 
-    async fn post_message(
-        &self,
-        actor: Sender,
-        channel_id: Uuid,
-        req: PostMessageRequest,
-    ) -> Result<PostMessageResponse, ChannelMutationErr> {
-        self.posts
-            .lock()
-            .expect("post lock")
-            .push((actor, channel_id, req));
-        Ok(PostMessageResponse {
-            id: Uuid::new_v4().to_string(),
-            nonce: None,
-        })
-    }
-
     async fn add_participants(
         &self,
         actor: Sender,
@@ -290,12 +275,25 @@ impl EntityAccessService for ToolTestAccessService {
 
     async fn generate_bot_entity_access_receipt<T: RequiredPermission>(
         &self,
-        _bot_id: entity_access::domain::models::BotId,
-        _scope: BotAccessScope,
-        _entity_id: &str,
-        _entity_type: EntityType,
+        bot_id: entity_access::domain::models::BotId,
+        scope: BotAccessScope,
+        entity_id: &str,
+        entity_type: EntityType,
     ) -> Result<EntityAccessReceipt<T>, AccessError> {
-        Err(AccessError::internal("test access failure"))
+        if self.receipt_error.is_some() {
+            return Err(AccessError::Unauthorized);
+        }
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            (&scope).into(),
+            entity_access::domain::models::Entity {
+                entity_id: entity_id.into(),
+                entity_type,
+            },
+            EntityPermission::ChannelRole {
+                role: entity_access::domain::models::ParticipantRole::Member,
+            },
+        )
     }
 
     async fn get_access_level(
@@ -504,7 +502,11 @@ async fn create_private_channel_does_not_resolve_a_team() {
         ..ToolTestChannelService::default()
     };
     let created = service.created.clone();
-    let context = ChannelToolContext::new(service, NoOpEntityAccessService);
+    let context = ChannelToolContext::new(
+        Arc::new((service).clone()),
+        service,
+        NoOpEntityAccessService,
+    );
 
     let response = CreateChannel {
         name: "  Planning  ".to_string(),
@@ -541,6 +543,7 @@ async fn create_team_channel_injects_the_caller_when_participants_are_empty() {
     let service = ToolTestChannelService::default();
     let created = service.created.clone();
     let context = ChannelToolContext::new(
+        Arc::new((service).clone()),
         service,
         ToolTestAccessService {
             team: Some(UserTeamInfo {
@@ -591,6 +594,7 @@ async fn create_private_channel_uses_the_context_actor_for_the_user() {
 
     tool.call(
         ServiceContext(ChannelToolContext::new(
+            Arc::new((default_service).clone()),
             default_service,
             NoOpEntityAccessService,
         )),
@@ -600,8 +604,12 @@ async fn create_private_channel_uses_the_context_actor_for_the_user() {
     .expect("default actor can create");
     tool.call(
         ServiceContext(
-            ChannelToolContext::new(custom_service, NoOpEntityAccessService)
-                .with_actor(BotId::TEST_A),
+            ChannelToolContext::new(
+                Arc::new((custom_service).clone()),
+                custom_service,
+                NoOpEntityAccessService,
+            )
+            .with_actor(BotId::TEST_A),
         ),
         RequestContext::new(user_id()),
     )
@@ -634,7 +642,11 @@ async fn create_private_channel_uses_the_context_actor_for_the_user() {
 async fn create_team_channel_fails_when_the_user_has_no_team() {
     let service = ToolTestChannelService::default();
     let created = service.created.clone();
-    let context = ChannelToolContext::new(service, ToolTestAccessService::default());
+    let context = ChannelToolContext::new(
+        Arc::new((service).clone()),
+        service,
+        ToolTestAccessService::default(),
+    );
 
     let error = CreateChannel {
         name: "Team Sync".to_string(),
@@ -651,8 +663,11 @@ async fn create_team_channel_fails_when_the_user_has_no_team() {
 
 #[tokio::test]
 async fn create_channel_rejects_an_empty_name() {
-    let context =
-        ChannelToolContext::new(ToolTestChannelService::default(), NoOpEntityAccessService);
+    let context = ChannelToolContext::new(
+        Arc::new((ToolTestChannelService::default()).clone()),
+        ToolTestChannelService::default(),
+        NoOpEntityAccessService,
+    );
 
     let error = CreateChannel {
         name: "   ".to_string(),
@@ -669,6 +684,15 @@ async fn create_channel_rejects_an_empty_name() {
 #[tokio::test]
 async fn create_channel_surfaces_domain_errors() {
     let context = ChannelToolContext::new(
+        Arc::new(
+            (ToolTestChannelService {
+                create_error: Some(
+                    "participants must be a non-empty list of 'macro|<email>'".into(),
+                ),
+                ..ToolTestChannelService::default()
+            })
+            .clone(),
+        ),
         ToolTestChannelService {
             create_error: Some("participants must be a non-empty list of 'macro|<email>'".into()),
             ..ToolTestChannelService::default()
@@ -702,7 +726,7 @@ async fn rename_channel_requires_admin_and_patches_only_the_name() {
     let patches = service.patches.clone();
     let access = ToolTestAccessService::default();
     let receipt_calls = access.receipt_calls.clone();
-    let context = ChannelToolContext::new(service, access);
+    let context = ChannelToolContext::new(Arc::new((service).clone()), service, access);
 
     let response = RenameChannel {
         channel_id,
@@ -726,6 +750,7 @@ async fn rename_channel_requires_admin_and_patches_only_the_name() {
 #[tokio::test]
 async fn rename_channel_rejects_non_admins() {
     let context = ChannelToolContext::new(
+        Arc::new((ToolTestChannelService::default()).clone()),
         ToolTestChannelService::default(),
         ToolTestAccessService {
             receipt_error: Some(ReceiptFail::Unauthorized),
@@ -750,6 +775,13 @@ async fn rename_channel_rejects_non_admins() {
 #[tokio::test]
 async fn rename_channel_surfaces_dm_rename_rejection() {
     let context = ChannelToolContext::new(
+        Arc::new(
+            (ToolTestChannelService {
+                patch_error: Some("cannot change channel_name for direct message channels".into()),
+                ..ToolTestChannelService::default()
+            })
+            .clone(),
+        ),
         ToolTestChannelService {
             patch_error: Some("cannot change channel_name for direct message channels".into()),
             ..ToolTestChannelService::default()
@@ -785,6 +817,7 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
 
     tool.call(
         ServiceContext(ChannelToolContext::new(
+            Arc::new((service.clone()).clone()),
             service.clone(),
             ToolTestAccessService::default(),
         )),
@@ -794,8 +827,12 @@ async fn send_channel_message_posts_as_the_context_actor_for_the_user() {
     .expect("member can post");
     tool.call(
         ServiceContext(
-            ChannelToolContext::new(service, ToolTestAccessService::default())
-                .with_actor(BotId::TEST_A),
+            ChannelToolContext::new(
+                Arc::new((service).clone()),
+                service,
+                ToolTestAccessService::default(),
+            )
+            .with_actor(BotId::TEST_A),
         ),
         RequestContext::new(user_id()),
     )
@@ -822,7 +859,11 @@ async fn manage_participants_adds_canonical_ids() {
     let channel_id = Uuid::new_v4();
     let service = ToolTestChannelService::default();
     let adds = service.adds.clone();
-    let context = ChannelToolContext::new(service, ToolTestAccessService::default());
+    let context = ChannelToolContext::new(
+        Arc::new((service).clone()),
+        service,
+        ToolTestAccessService::default(),
+    );
 
     let response = ManageChannelParticipants {
         channel_id,
@@ -849,7 +890,11 @@ async fn manage_participants_canonicalizes_remove_ids() {
     let channel_id = Uuid::new_v4();
     let service = ToolTestChannelService::default();
     let removes = service.removes.clone();
-    let context = ChannelToolContext::new(service, ToolTestAccessService::default());
+    let context = ChannelToolContext::new(
+        Arc::new((service).clone()),
+        service,
+        ToolTestAccessService::default(),
+    );
 
     ManageChannelParticipants {
         channel_id,
@@ -868,7 +913,11 @@ async fn manage_participants_canonicalizes_remove_ids() {
 async fn manage_participants_rejects_an_empty_list_before_the_service() {
     let service = ToolTestChannelService::default();
     let adds = service.adds.clone();
-    let context = ChannelToolContext::new(service, ToolTestAccessService::default());
+    let context = ChannelToolContext::new(
+        Arc::new((service).clone()),
+        service,
+        ToolTestAccessService::default(),
+    );
 
     let error = ManageChannelParticipants {
         channel_id: Uuid::new_v4(),
@@ -885,8 +934,11 @@ async fn manage_participants_rejects_an_empty_list_before_the_service() {
 
 #[tokio::test]
 async fn manage_participants_requires_membership() {
-    let context =
-        ChannelToolContext::new(ToolTestChannelService::default(), NoOpEntityAccessService);
+    let context = ChannelToolContext::new(
+        Arc::new((ToolTestChannelService::default()).clone()),
+        ToolTestChannelService::default(),
+        NoOpEntityAccessService,
+    );
 
     let error = ManageChannelParticipants {
         channel_id: Uuid::new_v4(),
@@ -903,6 +955,7 @@ async fn manage_participants_requires_membership() {
 #[tokio::test]
 async fn manage_participants_distinguishes_missing_channels() {
     let context = ChannelToolContext::new(
+        Arc::new((ToolTestChannelService::default()).clone()),
         ToolTestChannelService::default(),
         ToolTestAccessService {
             receipt_error: Some(ReceiptFail::NotFound),
@@ -920,4 +973,55 @@ async fn manage_participants_distinguishes_missing_channels() {
     .expect_err("missing channel");
 
     assert_eq!(error.description, "channel not found");
+}
+
+#[async_trait::async_trait]
+impl crate::domain::ports::ChannelMessageCommands for ToolTestChannelService {
+    async fn post_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        let actor = match access.auth() {
+            entity_access::domain::models::EntityAccessAuth::Bot(bot) => {
+                Sender::new_from_bot(bot.bot_id())
+            }
+            _ => Sender::new_from_user(access.get_authenticated_user().unwrap().clone()),
+        };
+        let channel_id = access.entity().entity_id.parse().unwrap();
+        self.posts
+            .lock()
+            .expect("post lock")
+            .push((actor, channel_id, req));
+        Ok(PostMessageResponse {
+            id: Uuid::new_v4().to_string(),
+            nonce: None,
+        })
+    }
+    /// Apply partial message changes.
+    async fn patch_message(
+        &self,
+        _access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _message_id: Uuid,
+        _req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        panic!("unexpected message command")
+    }
+    /// Delete under common authorship rules.
+    async fn delete_message(
+        &self,
+        _access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _message_id: Uuid,
+        _query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr> {
+        panic!("unexpected message command")
+    }
+    /// Change the verified actor's reaction.
+    async fn post_reaction(
+        &self,
+        _access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        panic!("unexpected message command")
+    }
 }

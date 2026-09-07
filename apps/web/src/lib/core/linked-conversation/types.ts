@@ -1,4 +1,4 @@
-import type { MessageData } from '@channel/Message/types';
+import type { MessageData } from '@core/messages/types';
 import type { Accessor } from 'solid-js';
 
 /**

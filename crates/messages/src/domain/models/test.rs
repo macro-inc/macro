@@ -4,7 +4,6 @@ use super::*;
 fn parent_identifiers_are_validated_and_round_trip() {
     for (kind, id) in [
         ("channel", "0194e3b0-121a-7000-8000-000000000001"),
-        ("email_thread", "0194e3b0-121a-7000-8000-000000000002"),
         ("document", "legacy-document-id"),
     ] {
         let parent = MessageParent::parse(kind, id).unwrap();
@@ -27,6 +26,21 @@ fn parent_identifiers_are_validated_and_round_trip() {
         assert!(MessageParent::parse(kind, id).is_err());
     }
     assert!(serde_json::from_str::<MessageParent>(r#"{"type":"document","id":""}"#).is_err());
+}
+
+#[test]
+fn email_threads_are_not_message_parents() {
+    let id = "0194e3b0-121a-7000-8000-000000000002";
+    for kind in ["email_thread", "email"] {
+        assert!(MessageParent::parse(kind, id).is_err());
+        assert!(
+            serde_json::from_value::<MessageParent>(serde_json::json!({
+                "type": kind,
+                "id": id,
+            }))
+            .is_err()
+        );
+    }
 }
 
 #[test]

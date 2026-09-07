@@ -5,3 +5,5 @@ mod fast_model_trigger_classifier;
 
 pub use agent_loop_responder::AgentLoopResponder;
 pub use fast_model_trigger_classifier::FastModelTriggerClassifier;
+
+pub mod conversation;

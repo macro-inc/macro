@@ -63,6 +63,8 @@ topics! {
     MacroTeamsTopic => "macro.teams",
     /// Channel lifecycle, message, participant, and attachment events.
     MacroChannelsTopic => "macro.channels",
+    /// Shared channel and document message events.
+    MacroMessagesTopic => "macro.messages",
     /// Signals telling the agent harness to open or feed an agent session.
     MacroAgentSessionsTopic => "macro.agent_sessions",
     /// Email lifecycle events (links, messages, threads, labels).

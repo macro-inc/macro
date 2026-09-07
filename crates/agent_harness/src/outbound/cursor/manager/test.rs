@@ -7,8 +7,8 @@ use agent_runtime_protocol::domain::ports::{Transport as _, TransportSender as _
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
-    AgentSession, ChannelSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME,
-    SandboxSize, SessionBot, SessionStatus,
+    AgentSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot,
+    SessionStatus, ThreadSession,
 };
 use bot_id::BotId;
 use cursor_api_key::cipher::CursorApiKey;
@@ -67,7 +67,7 @@ impl AgentSessionRepo for StubSessions {
             owner_id: MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
                 .expect("valid user id"),
             thread_id: None,
-            thread_channel_id: None,
+            thread_parent: None,
             originating_message_id: None,
             bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
             model: "auto".to_owned(),
@@ -90,11 +90,11 @@ impl AgentSessionRepo for StubSessions {
         })
     }
 
-    async fn find_for_channel(
+    async fn find_for_thread(
         &self,
         _thread_id: Option<macro_uuid::Uuid>,
         _bot_id: Option<BotId>,
-    ) -> SessionResult<ChannelSession> {
+    ) -> SessionResult<ThreadSession> {
         unimplemented!("the manager never routes channel events")
     }
 

@@ -211,6 +211,24 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
     }
 
+    async fn get_agent_session_document(
+        &self,
+        agent_session_id: &str,
+    ) -> Result<Option<String>, AccessError> {
+        let session = agent_session_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
+        Ok(sqlx::query_scalar!(
+            r#"SELECT m.parent_entity_id FROM agent_session s
+               JOIN comms_messages m ON m.id = s.thread_id
+               JOIN comms_message_threads t ON t.root_id = m.id
+               WHERE s.id = $1 AND m.parent_entity_type = 'document' AND t.deleted_at IS NULL"#,
+            session,
+        )
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
     async fn get_agent_session_access(
         &self,
         agent_session_id: &str,

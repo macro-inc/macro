@@ -5,6 +5,10 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+channel_sender = { path = "../channel_sender" }
+messages = { path = "../messages", features = ["ports"] }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+rootcause = { workspace = true }
 agent = { path = "../agent" }
 ai_usage = { path = "../ai_usage" }
 ai_tools = { path = "../ai_tools" }
@@ -12,7 +16,6 @@ ai_toolset = { path = "../ai_toolset" }
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 bot_id = { path = "../bot_id" }
-channels = { path = "../channels", features = ["inbound", "outbound"] }
 futures = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 prompt = { path = "../prompt" }
@@ -24,5 +27,6 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+messages = { path = "../messages", features = ["test-utils"] }
 chrono = { workspace = true }
 models_pagination = { path = "../models_pagination" }

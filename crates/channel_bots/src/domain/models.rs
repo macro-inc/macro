@@ -1,8 +1,8 @@
 //! Domain models for channel bot triggers.
 
 use bot_id::BotId;
-use channels::domain::models::MutatedMessage;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::events::MessagePostedMetadata;
 use uuid::Uuid;
 
 /// The kind of event that triggered a bot.
@@ -29,10 +29,8 @@ pub struct BotInvocation {
 pub struct BotEvent {
     /// What triggered the bot.
     pub trigger: BotTrigger,
-    /// Channel the trigger occurred in.
-    pub channel_id: Uuid,
     /// The user-authored message that triggered the bot.
-    pub message: MutatedMessage,
+    pub message: MessagePostedMetadata,
     /// Thread the bot should reply in. For a top-level message this is the
     /// message id; for a reply it is the existing thread id.
     pub reply_thread_id: Uuid,

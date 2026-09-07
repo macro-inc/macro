@@ -3,7 +3,7 @@ import { buildReplyTargetMarkdown } from '../nodes/ReplyTargetNode';
 import { extractExplicitReply } from '../utils/explicit-reply';
 
 const target = {
-  channelId: 'channel-1',
+  parent: { type: 'channel' as const, id: 'channel-1' },
   targetMessageId: 'reply-1',
   targetThreadId: 'thread-1',
   displayText: 'please fix this',

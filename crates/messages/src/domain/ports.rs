@@ -41,6 +41,41 @@ pub struct ThreadPage {
     pub next_cursor: Option<MessageCursor>,
 }
 
+/// A source channel thread that mentions the requested document.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ReferencedThread {
+    /// Source channel's current display name, returned only after access checks.
+    pub channel_name: Option<String>,
+    /// Whether this viewer currently has permission to reply in the source channel.
+    pub can_reply: bool,
+    /// Canonical source messages: replies must retain this parent.
+    pub thread: MessageThread,
+}
+
+/// Authorized source threads, deduplicated by root.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct ReferencedThreadPage {
+    /// Accessible channel discussions mentioning the document.
+    pub threads: Vec<ReferencedThread>,
+    /// Last visible root; no private thread identifiers are exposed through cursors.
+    pub next_cursor: Option<MessageCursor>,
+}
+
+/// Repository fact used to authorize a source before loading its messages.
+#[derive(Debug, Clone)]
+pub struct ReferencedThreadCandidate {
+    /// Channel that owns the source discussion.
+    pub channel_id: Uuid,
+    /// Canonical thread root.
+    pub root_id: Uuid,
+    /// Source display name.
+    pub channel_name: Option<String>,
+    /// Root's stable ordering timestamp.
+    pub created_at: DateTime<Utc>,
+}
+
 /// Authenticated create command; attribution fields are never client controlled.
 #[derive(Debug, Clone)]
 pub struct CreateMessage {
@@ -58,6 +93,10 @@ pub struct CreateMessage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct EditMessage {
+    /// A bot may publish its final answer by editing a silent placeholder.
+    #[serde(skip)]
+    #[cfg_attr(feature = "schema", schema(ignore))]
+    pub notification_policy: PatchMessageNotificationPolicy,
     /// Replacement body.
     pub content: String,
     /// Complete replacement mention set.
@@ -67,6 +106,51 @@ pub struct EditMessage {
     pub attachments: Option<Vec<NewAttachment>>,
     /// Client mutation nonce.
     pub nonce: Option<String>,
+}
+
+/// Attachment changes interpreted by the common command boundary.
+#[derive(Debug, Clone, Default)]
+pub enum AttachmentChange {
+    /// Keep current attachments.
+    #[default]
+    Preserve,
+    /// Replace all attachments.
+    Replace(Vec<NewAttachment>),
+    /// Remove stored attachment identities and append new references.
+    Delta {
+        /// Existing attachment UUIDs to remove.
+        remove: Vec<Uuid>,
+        /// New attachments to append.
+        add: Vec<NewAttachment>,
+    },
+}
+
+/// Partial updates share the same authorship, reference, and delivery rules as edits.
+#[derive(Debug, Clone, Default)]
+pub struct MessagePatch {
+    /// Replacement body; absent preserves current content.
+    pub content: Option<String>,
+    /// Replacement authored mentions; absent preserves current mentions.
+    pub mentions: Option<Vec<SimpleMention>>,
+    /// Attachment change, without adapter-side message reads.
+    pub attachments: AttachmentChange,
+    /// Client mutation nonce.
+    pub nonce: Option<String>,
+    /// Trusted notification behavior.
+    pub notification_policy: PatchMessageNotificationPolicy,
+}
+impl From<EditMessage> for MessagePatch {
+    fn from(edit: EditMessage) -> Self {
+        Self {
+            content: Some(edit.content),
+            mentions: Some(edit.mentions),
+            attachments: edit
+                .attachments
+                .map_or(AttachmentChange::Preserve, AttachmentChange::Replace),
+            nonce: edit.nonce,
+            notification_policy: edit.notification_policy,
+        }
+    }
 }
 
 /// A committed message or thread change sent to delivery adapters.
@@ -92,6 +176,8 @@ pub struct MessageEvent {
 pub enum MessageChange {
     /// A message was posted.
     Posted {
+        /// Trusted notification policy carried with the committed change.
+        notification_policy: PostMessageNotificationPolicy,
         /// Persisted message.
         message: Message,
         /// Mentions included in this post.
@@ -99,6 +185,8 @@ pub enum MessageChange {
     },
     /// Message content and references were edited.
     Edited {
+        /// Trusted notification policy for the edited content.
+        notification_policy: PatchMessageNotificationPolicy,
         /// Persisted replacement message.
         message: Message,
         /// Complete replacement mention set.
@@ -106,8 +194,13 @@ pub enum MessageChange {
         /// Attachment identities before the edit, for channel change delivery.
         previous_attachments: Vec<MessageAttachment>,
     },
-    /// Message content, attachments, reactions, or tombstone changed.
-    Updated {
+    /// One message was tombstoned; its thread may remain live.
+    MessageDeleted {
+        /// Persisted tombstone.
+        message: Message,
+    },
+    /// The authenticated actor added or removed a reaction.
+    ReactionChanged {
         /// Persisted message.
         message: Message,
     },
@@ -125,6 +218,13 @@ pub enum MessageChange {
 
 /// Persistence boundary. Implementations enforce parent/thread integrity atomically.
 pub trait MessageRepository: Send + Sync + 'static {
+    /// Discover source identities without treating a mention as a grant of access.
+    fn referenced_threads(
+        &self,
+        document_id: &str,
+        cursor: Option<MessageCursor>,
+        limit: u16,
+    ) -> impl Future<Output = Result<Vec<ReferencedThreadCandidate>, MessageError>> + Send;
     /// Whether the parent still exists and permits messaging lifecycle-wise.
     fn parent_exists(
         &self,
@@ -147,6 +247,14 @@ pub trait MessageRepository: Send + Sync + 'static {
         &self,
         parent: &MessageParent,
         root_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
+    /// Live messages before a prompt, in chronological order. Document context
+    /// stays within the prompt's thread; channel context includes the timeline.
+    fn preceding(
+        &self,
+        parent: &MessageParent,
+        message_id: Uuid,
+        limit: u16,
     ) -> impl Future<Output = Result<Vec<Message>, MessageError>> + Send;
     /// List roots and ordered replies. Explicitly deleted threads are excluded.
     fn list(
@@ -216,6 +324,15 @@ pub trait MessageEventPublisher: Send + Sync + 'static {
 /// Resolves access to referenced entities before a message transaction begins.
 /// Implementations must never grant access as a side effect of this check.
 pub trait MessageReferenceAccess: Send + Sync + 'static {
+    /// Whether this principal currently has write access to a referenced conversation.
+    fn can_write<'a>(
+        &'a self,
+        _auth: &'a entity_access::domain::models::EntityAccessAuth,
+        _entity_type: entity_access::domain::models::EntityType,
+        _entity_id: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<bool, MessageError>> + Send + 'a>> {
+        Box::pin(async { Ok(false) })
+    }
     /// Whether this principal can view the referenced entity now.
     fn can_view<'a>(
         &'a self,
@@ -235,5 +352,57 @@ impl MessageReferenceAccess for DenyMessageReferences {
         _: &'a str,
     ) -> std::pin::Pin<Box<dyn Future<Output = Result<bool, MessageError>> + Send + 'a>> {
         Box::pin(async { Ok(false) })
+    }
+}
+
+/// Parses the tracked references in raw bot-authored Markdown.
+pub trait MessageMentionExtractor: Send + Sync + 'static {
+    /// Extract canonical entity and user/bot mentions from a message body.
+    fn extract<'a>(
+        &'a self,
+        content: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<SimpleMention>, MessageError>> + Send + 'a>>;
+}
+/// Message compositions that do not create raw bot Markdown.
+pub struct NoMessageMentionExtractor;
+impl MessageMentionExtractor for NoMessageMentionExtractor {
+    fn extract<'a>(
+        &'a self,
+        _: &'a str,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<Vec<SimpleMention>, MessageError>> + Send + 'a>>
+    {
+        Box::pin(async { Ok(vec![]) })
+    }
+}
+
+/// Delivery disabled explicitly for tests and isolated callers.
+#[derive(Clone, Copy)]
+pub struct NoMessageEventPublisher;
+impl MessageEventPublisher for NoMessageEventPublisher {
+    async fn publish(&self, _event: MessageEvent) -> Result<(), rootcause::Report> {
+        Ok(())
+    }
+}
+
+/// Current human membership used to resolve authored channel group mentions.
+#[async_trait::async_trait]
+pub trait MessageGroupRecipients: Send + Sync + 'static {
+    /// Read active human members; callers have already verified the posting capability.
+    async fn channel_members(
+        &self,
+        channel: Uuid,
+    ) -> Result<Vec<macro_user_id::user_id::MacroUserIdStr<'static>>, MessageError>;
+}
+/// Reject group mentions in contexts that do not supply channel membership.
+pub struct NoMessageGroups;
+#[async_trait::async_trait]
+impl MessageGroupRecipients for NoMessageGroups {
+    async fn channel_members(
+        &self,
+        _: Uuid,
+    ) -> Result<Vec<macro_user_id::user_id::MacroUserIdStr<'static>>, MessageError> {
+        Err(MessageError::Invalid(
+            "channel group mentions are unavailable",
+        ))
     }
 }

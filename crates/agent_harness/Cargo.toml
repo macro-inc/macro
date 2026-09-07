@@ -22,7 +22,6 @@ bot_id = { path = "../bot_id" }
 harness_id = { path = "../harness_id" }
 channel_sender = { path = "../channel_sender" }
 chrono = { workspace = true }
-channels = { path = "../channels", features = ["ports"] }
 lexical_client = { path = "../lexical_client" }
 dashmap = { workspace = true }
 futures = { workspace = true }
@@ -34,6 +33,7 @@ macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 macro_tower_layers = { path = "../macro_tower_layers" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
+messages = { path = "../messages", features = ["broker", "ports"] }
 opentelemetry = { workspace = true, features = ["trace"] }
 reqwest = { workspace = true }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
@@ -58,6 +58,7 @@ url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+messages = { path = "../messages", features = ["test-utils"] }
 agent_fold = { path = "../agent_fold", features = ["test-utils"] }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }

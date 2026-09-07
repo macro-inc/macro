@@ -1,4 +1,4 @@
-//! Orchestration for evaluating one posted channel message.
+//! Orchestration for evaluating one posted message.
 
 use std::collections::HashSet;
 
@@ -6,19 +6,23 @@ use std::collections::HashSet;
 mod test;
 
 use agent_session::domain::error::Result;
-use agent_session::domain::model::{AgentSession, AgentSessionId, ChannelSession};
+use agent_session::domain::model::{AgentSession, AgentSessionId, ThreadSession};
 use agent_session::domain::ports::AgentSessionRepo;
 use bot_id::BotId;
 use bots::domain::models::{Agent, AgentChannelScope, Bot, BotKind, BotOwner};
-use channels::domain::broker_events::ChannelMessagePostedMetadata;
-use channels::domain::side_effects::bot_mention_ids;
+use entity_access::domain::models::EntityAccessReceipt;
+use messages::domain::mentions::bot_mention_ids;
+use messages::domain::service::MessageWrite;
+use messages::domain::{events::MessagePostedMetadata, models::MessageParent};
 
 use channel_sender::ChannelSender;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
-use crate::domain::broker_events::{AgentSessionMacroEvent, ChannelEventMetadata, ChannelKind};
+use crate::domain::broker_events::{
+    AgentSessionMacroEvent, ThreadEventMetadata, ThreadMessageKind,
+};
 use crate::domain::thread_window::{ThreadMessage, render_transcript, thread_window};
 use crate::domain::yield_event::{
     AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, yield_event,
@@ -76,9 +80,9 @@ pub trait ChannelParticipationLookup: Send + Sync + 'static {
 /// and which message they pointed at.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExtractedExplicitReply {
-    /// Channel containing the targeted message.
-    pub channel_id: String,
-    /// Targeted channel message.
+    /// Entity containing the targeted message.
+    pub parent: MessageParent,
+    /// Targeted message.
     pub target_message_id: String,
     /// Thread containing the targeted message.
     pub target_thread_id: String,
@@ -99,15 +103,29 @@ pub trait ExplicitReplyExtractor: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<ExtractedExplicitReply>>> + Send;
 }
 
+/// A current invocation capability binding the actor, parent, and thread root.
+/// It is minted again when evaluating queued work, rather than persisted in events.
+#[derive(Debug, Clone)]
+pub struct AuthorizedInvocation {
+    pub(crate) access: EntityAccessReceipt<MessageWrite>,
+    pub(crate) root_id: Uuid,
+}
+
 /// Reads whole threads, so an unmentioned message can be judged against the
 /// conversation it landed in.
 #[cfg_attr(test, mockall::automock)]
 pub trait ThreadHistory: Send + Sync + 'static {
-    /// Every message of the thread rooted at `thread_id`, oldest first.
+    /// Recheck that the invoking user may still write to this conversation.
+    fn authorize_invocation(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        parent: &MessageParent,
+        root_id: Uuid,
+    ) -> impl Future<Output = Result<Option<AuthorizedInvocation>>> + Send;
+    /// Live history from the exact origin covered by the invocation capability.
     fn thread_messages(
         &self,
-        channel_id: Uuid,
-        thread_id: Uuid,
+        invocation: &AuthorizedInvocation,
     ) -> impl Future<Output = Result<Vec<ThreadMessage>>> + Send;
 }
 
@@ -120,12 +138,12 @@ pub trait ImplicitTriggerJudge: Send + Sync + 'static {
     /// it, empty when the thread could not be read.
     fn is_addressed_to_agent(
         &self,
-        posted: &ChannelMessagePostedMetadata,
+        posted: &MessagePostedMetadata,
         transcript: &str,
     ) -> impl Future<Output = Result<bool>> + Send;
 }
 
-/// Looks up the session context for a channel message and evaluates its trigger rule.
+/// Looks up the session context for a message and evaluates its trigger rule.
 pub struct AgentTriggerService<Repo, Bots, Teams, Channels, Replies, Judge, History> {
     sessions: Repo,
     bots: Bots,
@@ -176,7 +194,7 @@ where
     /// legacy agent-backed bots use explicit channel participation.
     async fn agent_is_available(
         &self,
-        posted: &ChannelMessagePostedMetadata,
+        posted: &MessagePostedMetadata,
         bot_id: BotId,
     ) -> Result<bool> {
         let Some(caller) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
@@ -187,6 +205,15 @@ where
             if !agent.bot.has_agent {
                 return Ok(false);
             }
+            // Channel selection restricts channel placement. Document invocation
+            // requires ownership or team membership and is independently bounded
+            // by the invoking user's document access at execution time.
+            if matches!(posted.parent, MessageParent::Document(_)) {
+                return self.owner_allows(&caller, agent.bot.owner.as_ref()).await;
+            }
+            let MessageParent::Channel(channel_id) = posted.parent else {
+                unreachable!()
+            };
             return match agent.channel_scope {
                 AgentChannelScope::All => match agent.bot.owner {
                     Some(BotOwner::User { user_id }) => Ok(user_id == caller.as_ref()),
@@ -197,7 +224,7 @@ where
                 },
                 AgentChannelScope::Selected => {
                     self.channels
-                        .bot_active_in_channel(posted.channel_id, bot_id)
+                        .bot_active_in_channel(channel_id, bot_id)
                         .await
                 }
             };
@@ -211,34 +238,61 @@ where
         }
         match bot.kind {
             BotKind::System => Ok(true),
-            BotKind::Owned => {
-                self.channels
-                    .bot_active_in_channel(posted.channel_id, bot_id)
-                    .await
-            }
+            BotKind::Owned => match &posted.parent {
+                MessageParent::Channel(channel_id) => {
+                    self.channels
+                        .bot_active_in_channel(*channel_id, bot_id)
+                        .await
+                }
+                MessageParent::Document(_) => self.owner_allows(&caller, bot.owner.as_ref()).await,
+            },
         }
     }
 
-    /// Evaluates one channel message for every mentioned bot.
+    async fn owner_allows(
+        &self,
+        caller: &MacroUserIdStr<'static>,
+        owner: Option<&BotOwner>,
+    ) -> Result<bool> {
+        match owner {
+            Some(BotOwner::User { user_id }) => Ok(user_id == caller.as_ref()),
+            Some(BotOwner::Team { team_id }) => {
+                self.teams.user_has_team(caller.clone(), *team_id).await
+            }
+            None => Ok(false),
+        }
+    }
+
+    /// Evaluates a posted message for every mentioned bot.
     #[tracing::instrument(err, skip(self, posted), fields(
-        channel_id = %posted.channel_id,
+        parent = ?posted.parent,
         message_id = %posted.message_id,
         thread_id = ?posted.thread_id,
-        channel.message.scope = tracing::field::Empty,
+        message.scope = tracing::field::Empty,
         agent.mention.bot_count = tracing::field::Empty,
     ))]
     pub async fn evaluate(
         &self,
-        posted: &ChannelMessagePostedMetadata,
+        posted: &MessagePostedMetadata,
     ) -> Result<Vec<AgentSessionMacroEvent>> {
+        let Some(user) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+            return Ok(Vec::new());
+        };
+        let Some(invocation) = self
+            .history
+            .authorize_invocation(&user, &posted.parent, posted.root_id())
+            .await?
+        else {
+            return Ok(Vec::new());
+        };
         let mut mentioned = bot_mention_ids(&posted.mentions);
         mentioned.sort_by_key(ToString::to_string);
         tracing::Span::current().record(
-            "channel.message.scope",
+            "message.scope",
             if posted.thread_id.is_some() {
                 "thread"
             } else {
-                "channel_top_level"
+                "root"
             },
         );
         tracing::Span::current().record("agent.mention.bot_count", mentioned.len());
@@ -248,7 +302,7 @@ where
         if mentioned.is_empty() {
             if let Some(event) = self.evaluate_bot(posted, None, &mut seen_sessions).await? {
                 events.push(event);
-            } else if let Some(event) = self.evaluate_implicit(posted).await? {
+            } else if let Some(event) = self.evaluate_implicit(posted, &invocation).await? {
                 events.push(event);
             }
             return Ok(events);
@@ -270,7 +324,7 @@ where
         err,
         skip(self, posted, seen_sessions),
         fields(
-            channel_id = %posted.channel_id,
+            parent = ?posted.parent,
             message_id = %posted.message_id,
             bot_id = ?mentioned_bot,
             agent.trigger.outcome = tracing::field::Empty,
@@ -278,14 +332,20 @@ where
     )]
     async fn evaluate_bot(
         &self,
-        posted: &ChannelMessagePostedMetadata,
+        posted: &MessagePostedMetadata,
         mentioned_bot: Option<BotId>,
         seen_sessions: &mut HashSet<AgentSessionId>,
     ) -> Result<Option<AgentSessionMacroEvent>> {
         let existing = self
             .sessions
-            .find_for_channel(posted.thread_id, mentioned_bot)
+            .find_for_thread(posted.thread_id, mentioned_bot)
             .await?;
+        if let ThreadSession::CreatedFromThread(session) = &existing
+            && (session.thread_parent.as_ref() != Some(&posted.parent)
+                || session.thread_id != posted.thread_id)
+        {
+            return Ok(None);
+        }
         if let Some(session_id) = session_id(&existing)
             && !seen_sessions.insert(session_id)
         {
@@ -295,15 +355,15 @@ where
             return Ok(None);
         }
         let bot = match &existing {
-            ChannelSession::CreatedFromThread(session) => Some(session.bot_id),
-            ChannelSession::None => mentioned_bot,
+            ThreadSession::CreatedFromThread(session) => Some(session.bot_id),
+            ThreadSession::None => mentioned_bot,
         };
         let available = match bot {
             Some(bot_id) => self.agent_is_available(posted, bot_id).await?,
             None => false,
         };
 
-        let message = PotentialTriggerEvent::Channel {
+        let message = PotentialTriggerEvent::Thread {
             posted,
             existing: &existing,
             mentioned_bot,
@@ -311,8 +371,8 @@ where
         match yield_event(&message, available) {
             AgentSessionEventDecision::Event(event) => {
                 let outcome = match existing {
-                    ChannelSession::None => "top_level_mentioned",
-                    ChannelSession::CreatedFromThread(_) => "mention_thread",
+                    ThreadSession::None => "top_level_mentioned",
+                    ThreadSession::CreatedFromThread(_) => "mention_thread",
                 };
                 tracing::Span::current().record("agent.trigger.outcome", outcome);
                 Ok(Some(event))
@@ -337,10 +397,11 @@ where
     ///
     /// Extractor and judge failures are treated as "no" rather than propagated:
     /// implicit triggering is best-effort, and an outage must not wedge the
-    /// channel firehose or fabricate forwards.
+    /// message stream or fabricate forwards.
     async fn evaluate_implicit(
         &self,
-        posted: &ChannelMessagePostedMetadata,
+        posted: &MessagePostedMetadata,
+        invocation: &AuthorizedInvocation,
     ) -> Result<Option<AgentSessionMacroEvent>> {
         let Some(thread_id) = posted.thread_id else {
             return Ok(None);
@@ -352,7 +413,10 @@ where
         }
         let mut candidates = Vec::new();
         for session in self.sessions.find_all_for_thread(thread_id).await? {
-            if self.agent_is_available(posted, session.bot_id).await? {
+            if session.thread_parent.as_ref() == Some(&posted.parent)
+                && session.thread_id == Some(thread_id)
+                && self.agent_is_available(posted, session.bot_id).await?
+            {
                 candidates.push(session);
             }
         }
@@ -362,9 +426,9 @@ where
         {
             // The reply-target says who it answers on its face, so it needs no
             // thread read at all.
-            return Ok(Some(channel_event(
+            return Ok(Some(thread_event(
                 session,
-                ChannelKind::ExplicitReply,
+                ThreadMessageKind::ExplicitReply,
                 posted,
             )));
         }
@@ -385,10 +449,14 @@ where
         };
 
         if self
-            .is_addressed_to_agent(posted, &self.transcript(posted, thread_id, &session).await)
+            .is_addressed_to_agent(posted, &self.transcript(posted, invocation, &session).await)
             .await
         {
-            return Ok(Some(channel_event(session, ChannelKind::Inferred, posted)));
+            return Ok(Some(thread_event(
+                session,
+                ThreadMessageKind::Inferred,
+                posted,
+            )));
         }
 
         log_no_event(
@@ -405,7 +473,7 @@ where
     /// uniquely its originating message.
     async fn explicit_reply_session(
         &self,
-        posted: &ChannelMessagePostedMetadata,
+        posted: &MessagePostedMetadata,
         candidates: &[AgentSession],
     ) -> Option<AgentSession> {
         let reply = self
@@ -420,6 +488,9 @@ where
             })
             .ok()
             .flatten()?;
+        if reply.parent != posted.parent || reply.target_thread_id != posted.root_id().to_string() {
+            return None;
+        }
         session_targeted_by_reply(candidates, &reply).cloned()
     }
 
@@ -432,15 +503,11 @@ where
     /// wedging on a thread read.
     async fn transcript(
         &self,
-        posted: &ChannelMessagePostedMetadata,
-        thread_id: Uuid,
+        posted: &MessagePostedMetadata,
+        invocation: &AuthorizedInvocation,
         session: &AgentSession,
     ) -> String {
-        let messages = match self
-            .history
-            .thread_messages(posted.channel_id, thread_id)
-            .await
-        {
+        let messages = match self.history.thread_messages(invocation).await {
             Ok(messages) => messages,
             Err(error) => {
                 tracing::warn!(error = ?error, "thread read failed; judging without thread context");
@@ -468,7 +535,7 @@ where
 
     async fn is_addressed_to_agent(
         &self,
-        posted: &ChannelMessagePostedMetadata,
+        posted: &MessagePostedMetadata,
         transcript: &str,
     ) -> bool {
         self.judge
@@ -482,7 +549,7 @@ where
 }
 
 fn log_no_event(
-    posted: &ChannelMessagePostedMetadata,
+    posted: &MessagePostedMetadata,
     mentioned_bot: Option<BotId>,
     reason: NoEventReason,
 ) {
@@ -494,19 +561,19 @@ fn log_no_event(
     );
 }
 
-fn session_id(session: &ChannelSession) -> Option<AgentSessionId> {
+fn session_id(session: &ThreadSession) -> Option<AgentSessionId> {
     match session {
-        ChannelSession::CreatedFromThread(session) => Some(session.id),
-        ChannelSession::None => None,
+        ThreadSession::CreatedFromThread(session) => Some(session.id),
+        ThreadSession::None => None,
     }
 }
 
-fn channel_event(
+fn thread_event(
     session: AgentSession,
-    kind: ChannelKind,
-    posted: &ChannelMessagePostedMetadata,
+    kind: ThreadMessageKind,
+    posted: &MessagePostedMetadata,
 ) -> AgentSessionMacroEvent {
-    AgentSessionMacroEvent::channel_event(ChannelEventMetadata {
+    AgentSessionMacroEvent::thread_event(ThreadEventMetadata {
         bot_id: session.bot_id,
         session_id: session.id,
         kind,

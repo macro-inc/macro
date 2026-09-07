@@ -4,29 +4,56 @@ import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { ReplyTargetDecoratorProps } from '@macro-inc/lexical-core';
+import { useBotsQuery } from '@queries/bots/bots';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
 import { getBotDisplayName } from '@queries/channel/message-sender';
+import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
 import { createCallback } from '@solid-primitives/rootless';
 import { openDocument } from '../core/BlockLink';
 
 /** Single-line channel reply reference rendered by a ReplyTargetNode. */
 export function ReplyTarget(props: ReplyTargetDecoratorProps) {
-  const channelBots = useChannelBotsQuery(() => props.channelId);
+  const channelBots = useChannelBotsQuery(() =>
+    props.parent.type === 'channel' ? props.parent.id : ''
+  );
+  const bots = useBotsQuery();
+  const document = useDocumentMetadataQuery(() =>
+    props.parent.type === 'document' ? props.parent.id : ''
+  );
   const senderName = () =>
-    getBotDisplayName(props.senderId, undefined, channelBots.data) ||
+    getBotDisplayName(
+      props.senderId,
+      undefined,
+      props.parent.type === 'channel'
+        ? channelBots.isSuccess
+          ? channelBots.data
+          : []
+        : bots.isSuccess
+          ? bots.data
+          : []
+    ) ||
     getDisplayName(tryMacroId(props.senderId), {}) ||
     props.senderId;
 
   const openTarget = createCallback((event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
+    const channel = props.parent.type === 'channel';
+    const fileType = channel
+      ? 'channel'
+      : document.isSuccess
+        ? document.data.fileType
+        : undefined;
+    if (!fileType) return;
     openDocument(
-      'channel',
-      props.channelId,
-      {
-        [CHANNEL_PARAMS.message]: props.targetMessageId,
-        [CHANNEL_PARAMS.thread]: props.targetThreadId,
-      },
+      fileType,
+      props.parent.id,
+      channel
+        ? {
+            [CHANNEL_PARAMS.message]: props.targetMessageId,
+            [CHANNEL_PARAMS.thread]: props.targetThreadId,
+          }
+        : { comment_id: props.targetMessageId },
       openInNewSplitForMention(event.shiftKey, true)
     );
   });

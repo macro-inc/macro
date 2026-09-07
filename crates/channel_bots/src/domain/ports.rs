@@ -1,8 +1,8 @@
 //! Port definitions for channel bot domain dependencies.
 
 use async_trait::async_trait;
-use channels::domain::side_effects::ChannelBotTrigger;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::events::MessagePostedMetadata;
 
 use super::models::{BotInvocation, TranscriptMessage};
 
@@ -18,7 +18,7 @@ pub trait AgentResponder: Send + Sync {
 pub trait TriggerDetector: Send + Sync {
     /// Resolve the bot invocations for a candidate message. An empty result
     /// means the message triggers nothing.
-    async fn detect(&self, candidate: &ChannelBotTrigger) -> Vec<BotInvocation>;
+    async fn detect(&self, candidate: &MessagePostedMetadata) -> Vec<BotInvocation>;
 }
 
 /// Classifies whether a thread message expects an agent response without an
@@ -32,4 +32,27 @@ pub trait InferredTriggerClassifier: Send + Sync {
         requesting_user: &MacroUserIdStr<'static>,
         thread: &[TranscriptMessage],
     ) -> anyhow::Result<bool>;
+}
+
+/// Current parent capabilities for built-in agent reads and replies.
+#[async_trait]
+pub trait ConversationAccess: Send + Sync {
+    /// Verify the invoking user can still comment or send to the parent.
+    async fn user_write(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        parent: &messages::domain::models::MessageParent,
+    ) -> Result<
+        entity_access::domain::models::EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        rootcause::Report,
+    >;
+    /// Recheck the invoking user's scope immediately before delivering an agent reply.
+    async fn bot_write(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        parent: &messages::domain::models::MessageParent,
+    ) -> Result<
+        entity_access::domain::models::EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        rootcause::Report,
+    >;
 }

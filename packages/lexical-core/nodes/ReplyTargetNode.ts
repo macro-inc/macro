@@ -13,14 +13,16 @@ import {
 import { type DecoratorComponent, getDecorator } from '../decoratorRegistry';
 import { $applyIdFromSerialized } from '../plugins/nodeIdPlugin';
 
-const VERSION = 1;
+const VERSION = 2;
 
 export const REPLY_TARGET_NODE_TYPE = 'reply-target';
 export const REPLY_TARGET_NODE_TAG = 'm-reply-target';
 
 /** The message reference and preview persisted by a reply-target node. */
+export type ReplyTargetParent = { type: 'channel' | 'document'; id: string };
+
 export type ReplyTargetData = {
-  channelId: string;
+  parent: ReplyTargetParent;
   targetMessageId: string;
   targetThreadId: string;
   displayText: string;
@@ -32,12 +34,26 @@ export function isReplyTargetData(value: unknown): value is ReplyTargetData {
   if (!value || typeof value !== 'object') return false;
   const data = value as Record<string, unknown>;
   return (
-    typeof data.channelId === 'string' &&
+    !!data.parent && typeof data.parent === 'object' &&
+    ['channel', 'document'].includes((data.parent as ReplyTargetParent).type) &&
+    typeof (data.parent as ReplyTargetParent).id === 'string' &&
+    (data.parent as ReplyTargetParent).id.length > 0 &&
     typeof data.targetMessageId === 'string' &&
     typeof data.targetThreadId === 'string' &&
     typeof data.displayText === 'string' &&
     typeof data.senderId === 'string'
   );
+}
+
+/** Read historic channel references without rewriting saved editor documents. */
+export function readReplyTargetData(value: unknown): ReplyTargetData | undefined {
+  if (isReplyTargetData(value)) return value;
+  if (!value || typeof value !== 'object') return undefined;
+  const data = value as Record<string, unknown>;
+  if ('parent' in data || typeof data.channelId !== 'string') return undefined;
+  const { channelId, ...rest } = data;
+  const normalized = { ...rest, parent: { type: 'channel', id: channelId } };
+  return isReplyTargetData(normalized) ? normalized : undefined;
 }
 
 /** Serialize reply-target data into the internal Markdown representation. */
@@ -71,7 +87,7 @@ export type ReplyTargetDecoratorProps = ReplyTargetData & {
 export class ReplyTargetNode extends DecoratorNode<
   DecoratorComponent<ReplyTargetDecoratorProps> | undefined
 > {
-  __channelId: string;
+  __messageParent: ReplyTargetParent;
   __targetMessageId: string;
   __targetThreadId: string;
   __displayText: string;
@@ -83,7 +99,7 @@ export class ReplyTargetNode extends DecoratorNode<
 
   static clone(node: ReplyTargetNode): ReplyTargetNode {
     return new ReplyTargetNode(
-      node.__channelId,
+      node.__messageParent,
       node.__targetMessageId,
       node.__targetThreadId,
       node.__displayText,
@@ -93,7 +109,7 @@ export class ReplyTargetNode extends DecoratorNode<
   }
 
   constructor(
-    channelId: string,
+    parent: ReplyTargetParent,
     targetMessageId: string,
     targetThreadId: string,
     displayText: string,
@@ -101,7 +117,7 @@ export class ReplyTargetNode extends DecoratorNode<
     key?: NodeKey
   ) {
     super(key);
-    this.__channelId = channelId;
+    this.__messageParent = { ...parent };
     this.__targetMessageId = targetMessageId;
     this.__targetThreadId = targetThreadId;
     this.__displayText = displayText;
@@ -111,10 +127,11 @@ export class ReplyTargetNode extends DecoratorNode<
   static importJSON(
     serializedNode: SerializedReplyTargetNode
   ): ReplyTargetNode {
-    if (!isReplyTargetData(serializedNode)) {
+    const data = readReplyTargetData(serializedNode);
+    if (!data) {
       throw new Error('invalid reply-target data');
     }
-    const node = $createReplyTargetNode(serializedNode);
+    const node = $createReplyTargetNode(data);
     $applyIdFromSerialized(node, serializedNode);
     return node;
   }
@@ -130,7 +147,7 @@ export class ReplyTargetNode extends DecoratorNode<
 
   exportComponentProps(): ReplyTargetData {
     return {
-      channelId: this.__channelId,
+      parent: { ...this.__messageParent },
       targetMessageId: this.__targetMessageId,
       targetThreadId: this.__targetThreadId,
       displayText: this.__displayText,
@@ -191,7 +208,7 @@ export class ReplyTargetNode extends DecoratorNode<
 export function $createReplyTargetNode(data: ReplyTargetData): ReplyTargetNode {
   return $applyNodeReplacement(
     new ReplyTargetNode(
-      data.channelId,
+      data.parent,
       data.targetMessageId,
       data.targetThreadId,
       data.displayText,

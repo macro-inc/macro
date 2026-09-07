@@ -81,7 +81,7 @@ export function buildReplyTargetValue(input: {
     input.selectedText || input.renderedText || messageText
   );
   const replyTarget = buildReplyTargetMarkdown({
-    channelId: input.channelId,
+    parent: { type: 'channel', id: input.channelId },
     targetMessageId: input.message.id,
     targetThreadId: input.message.thread_id,
     displayText,

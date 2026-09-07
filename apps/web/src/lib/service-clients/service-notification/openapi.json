@@ -1314,6 +1314,10 @@
             "type": "string",
             "description": "The owner of the document."
           },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public bot name when the author is an agent rather than a Macro user."
+          },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
           },
@@ -1436,40 +1440,6 @@
           }
         ],
         "description": "Someone mentioned a document in a channel"
-      },
-      "EmailCommentReason": {
-        "type": "string",
-        "description": "Reason for an internal email discussion notification.",
-        "enum": ["mention", "reply", "comment"]
-      },
-      "EmailThreadCommentMetadata": {
-        "type": "object",
-        "description": "An internal comment on an email thread, distinct from an incoming email.",
-        "required": ["subject", "messageId", "threadId", "text", "reason"],
-        "properties": {
-          "messageId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Shared message UUID."
-          },
-          "reason": {
-            "$ref": "#/components/schemas/EmailCommentReason",
-            "description": "Context used to word the notification."
-          },
-          "subject": {
-            "type": "string",
-            "description": "Subject of the parent email thread."
-          },
-          "text": {
-            "type": "string",
-            "description": "Body of the internal comment."
-          },
-          "threadId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Root message UUID, distinct from the parent email thread ID."
-          }
-        }
       },
       "EmptyResponse": {
         "type": "object",
@@ -1984,6 +1954,10 @@
             "type": "string",
             "description": "The owner of the document."
           },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public bot name when the author is an agent rather than a Macro user."
+          },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
           },
@@ -2104,21 +2078,6 @@
               "tag": {
                 "type": "string",
                 "enum": ["commented_on_document"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "Internal discussion on an email thread.",
-            "required": ["content", "tag"],
-            "properties": {
-              "content": {
-                "$ref": "#/components/schemas/EmailThreadCommentMetadata",
-                "description": "Internal discussion on an email thread."
-              },
-              "tag": {
-                "type": "string",
-                "enum": ["email_thread_comment"]
               }
             }
           },
@@ -2577,6 +2536,10 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public bot name when the author is an agent rather than a Macro user."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]

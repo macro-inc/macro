@@ -9,6 +9,7 @@
   "macro.email",
   "macro.example",
   "macro.mentions",
+  "macro.messages",
   "macro.notifications",
   "macro.projects",
   "macro.properties",

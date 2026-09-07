@@ -1,11 +1,8 @@
 #![deny(missing_docs)]
-//! Lexical-service adapter for extracting the mentions embedded in channel
-//! message content, implementing the `channels` domain's
-//! [`ChannelMentionExtractor`] port.
+//! Lexical-service adapter for raw Markdown mentions on every message parent.
 
-use channels::domain::models::SimpleMention;
-use channels::domain::ports::ChannelMentionExtractor;
 use lexical_client::LexicalClient;
+use messages::domain::models::SimpleMention;
 use std::sync::Arc;
 
 /// Mention extractor backed by the lexical service `/mentions` endpoint.
@@ -21,19 +18,35 @@ impl LexicalMentionExtractor {
     }
 }
 
-impl ChannelMentionExtractor for LexicalMentionExtractor {
-    type Err = anyhow::Error;
-
-    async fn extract_mentions(&self, content: &str) -> Result<Vec<SimpleMention>, Self::Err> {
-        Ok(self
-            .client
-            .extract_mentions(content)
-            .await?
-            .into_iter()
-            .map(|mention| SimpleMention {
-                entity_type: mention.entity_type,
-                entity_id: mention.entity_id,
-            })
-            .collect())
+impl messages::domain::ports::MessageMentionExtractor for LexicalMentionExtractor {
+    fn extract<'a>(
+        &'a self,
+        content: &'a str,
+    ) -> std::pin::Pin<
+        Box<
+            dyn Future<Output = Result<Vec<SimpleMention>, messages::domain::ports::MessageError>>
+                + Send
+                + 'a,
+        >,
+    > {
+        Box::pin(async move {
+            self.client
+                .extract_mentions(content)
+                .await
+                .map(|mentions| {
+                    mentions
+                        .into_iter()
+                        .map(|mention| SimpleMention {
+                            entity_type: mention.entity_type,
+                            entity_id: mention.entity_id,
+                        })
+                        .collect()
+                })
+                .map_err(|error| {
+                    messages::domain::ports::MessageError::Repository(
+                        rootcause::report!(error).into(),
+                    )
+                })
+        })
     }
 }

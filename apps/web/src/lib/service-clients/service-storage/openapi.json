@@ -192,7 +192,7 @@
     "/annotations/anchors": {
       "delete": {
         "tags": ["annotations::delete_anchor"],
-        "summary": "Deletes a single unthreaded anchor for a document\nIf you need to delete a threaded anchor, see the delete comment handler",
+        "summary": "Deletes a highlight and any attached discussion under the annotation policy.",
         "operationId": "delete_anchor",
         "requestBody": {
           "content": {
@@ -366,7 +366,7 @@
       },
       "post": {
         "tags": ["annotations::create_anchor"],
-        "summary": "Creates an unthreaded anchor for a document\nIf you need to create a threaded anchor, see the create comment handler",
+        "summary": "Creates an unthreaded anchor for a document\nAttach a discussion through the shared message API.",
         "operationId": "create_anchor",
         "parameters": [
           {
@@ -9974,6 +9974,74 @@
         }
       }
     },
+    "/messages/{parent_type}/{parent_id}/references": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Read source channel threads mentioning this document under both parents' permissions.",
+        "operationId": "entity_message_references",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of roots.",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "created_at",
+            "in": "query",
+            "description": "Last root's creation timestamp.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor_id",
+            "in": "query",
+            "description": "Last root's UUID.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferencedThreadPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/messages/{parent_type}/{parent_id}/threads/{id}": {
       "get": {
         "tags": ["messages::inbound::axum_router"],
@@ -14514,6 +14582,21 @@
           }
         ],
         "description": "Bot owner."
+      },
+      "BotSenderProfile": {
+        "type": "object",
+        "description": "Public bot profile attached to bot-authored messages.",
+        "required": ["name"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Bot avatar URL."
+          },
+          "name": {
+            "type": "string",
+            "description": "Bot display name."
+          }
+        }
       },
       "BotToken": {
         "type": "object",
@@ -22029,6 +22112,7 @@
           "id",
           "parent",
           "sender_id",
+          "mentions",
           "content",
           "created_at",
           "updated_at",
@@ -22042,6 +22126,17 @@
               "$ref": "#/components/schemas/MessageAttachment"
             },
             "description": "Attached entities."
+          },
+          "bot_profile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BotSenderProfile",
+                "description": "Public bot name and avatar for rendering shared message authors."
+              }
+            ]
           },
           "content": {
             "type": "string",
@@ -22077,6 +22172,13 @@
                 "description": "Original external author, when imported."
               }
             ]
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            },
+            "description": "Tracked mentions, retained when a caller changes attachments only."
           },
           "parent": {
             "$ref": "#/components/schemas/MessageParent",
@@ -22191,22 +22293,6 @@
               "type": {
                 "type": "string",
                 "enum": ["document"]
-              }
-            }
-          },
-          {
-            "type": "object",
-            "description": "An internal discussion on a Macro email thread.",
-            "required": ["id", "type"],
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid",
-                "description": "An internal discussion on a Macro email thread."
-              },
-              "type": {
-                "type": "string",
-                "enum": ["email_thread"]
               }
             }
           }
@@ -23802,6 +23888,50 @@
               "$ref": "#/components/schemas/Item"
             },
             "description": "The items returned from the call"
+          }
+        }
+      },
+      "ReferencedThread": {
+        "type": "object",
+        "description": "A source channel thread that mentions the requested document.",
+        "required": ["can_reply", "thread"],
+        "properties": {
+          "can_reply": {
+            "type": "boolean",
+            "description": "Whether this viewer currently has permission to reply in the source channel."
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "Source channel's current display name, returned only after access checks."
+          },
+          "thread": {
+            "$ref": "#/components/schemas/MessageThread",
+            "description": "Canonical source messages: replies must retain this parent."
+          }
+        }
+      },
+      "ReferencedThreadPage": {
+        "type": "object",
+        "description": "Authorized source threads, deduplicated by root.",
+        "required": ["threads"],
+        "properties": {
+          "next_cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Last visible root; no private thread identifiers are exposed through cursors."
+              }
+            ]
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReferencedThread"
+            },
+            "description": "Accessible channel discussions mentioning the document."
           }
         }
       },

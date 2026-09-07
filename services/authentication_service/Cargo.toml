@@ -28,6 +28,7 @@ rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+messages = { path = "../../crates/messages", features = ["delivery", "broker"] }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 aes-gcm = { workspace = true }

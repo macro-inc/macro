@@ -50,9 +50,28 @@ PDFs expose a `Comments` section in the side panel as well as anchored margin th
 Deleting a comment placeable removes its discussion; deleting a discussion attached
 to a regular highlight leaves the independent highlight in place.
 
-Email views expose `Internal comments` separately from the email reply composer.
-These comments stay inside Macro and require the thread's sharing permissions.
-Mentioning someone does not share the email with them or send an external email.
+### Agents and channel context
+
+The comment composer supports the same agent mentions as channels. `@Macro` answers
+in the discussion; available `@macro-new`, `@coder`, `@cursor`, and owned/team agents
+open a linked session. Follow-up mentions in that thread can continue the session.
+The session's conversation drawer opens the document discussion and receives live
+replies, edits, and reactions while the source document is closed. Closing the drawer
+keeps any open document view subscribed. Access follows the
+current document permissions, so revoking a collaborator prevents further prompts
+and inherited session access.
+
+For isolated drawer checks, `/app/component/linked-conversation` accepts a parent
+type (`Document` or `Channel`), parent ID, and root message ID. Click `Load conversation`
+then `Open in drawer`. `Show inline preview` adds a second subscription owner, so you
+can verify that closing either view preserves updates in the other.
+
+Enable `Include channel mentions` to add accessible channel threads that reference
+the document. Each has a `From …` link to its source. Replying there sends to that
+channel; resolving/deleting whole document discussions is unavailable on these
+source threads. Their reply composer supports channel `@here`; document discussions
+do not offer group mentions. The bottom composer still creates a document discussion. The option
+starts off and never grants access to a private channel.
 
 ## Side panel
 

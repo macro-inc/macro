@@ -119,6 +119,7 @@ export function ThreadBody(props: {
         when={!props.comment.isNew}
         fallback={
           <DiscussionInput
+            parent={context.discussionSource?.messageParent?.()}
             input={{ mode: 'reply', placeholder: 'Leave a comment...' }}
             onClose={() => context.setActiveThread(null)}
             onSend={async (snapshot) => {

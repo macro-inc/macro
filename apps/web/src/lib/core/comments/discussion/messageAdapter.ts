@@ -1,14 +1,15 @@
 import {
   attachmentEntityType,
-  expandMentions,
+  authoredMentions,
 } from '@channel/Input/message-payload';
 import type { InputSnapshot } from '@channel/Input/types';
-import type { MessageData } from '@channel/Message/types';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
+import { messageToMessageData } from '@core/messages/message-data';
+import type { MessageData } from '@core/messages/types';
 import type { Message, MessageThread } from '@service-storage/messages';
 import type { DiscussionComment, DiscussionThread } from './types';
 
-/** Maps a normalized discussion comment to the channel `Message` shape. */
+/** Adapts CRM/PR and document discussion records to shared message presentation. */
 export function discussionCommentToMessageData(
   comment: DiscussionComment
 ): MessageData {
@@ -16,13 +17,16 @@ export function discussionCommentToMessageData(
     id: comment.id,
     content: comment.text,
     sender_id: comment.authorId,
+    sender: comment.sender,
     created_at: comment.createdAt,
     updated_at: comment.updatedAt,
     deleted_at: comment.deletedAt,
     edited_at:
-      comment.updatedAt && comment.updatedAt !== comment.createdAt
-        ? comment.updatedAt
-        : null,
+      comment.editedAt === undefined
+        ? comment.updatedAt !== comment.createdAt
+          ? comment.updatedAt
+          : null
+        : comment.editedAt,
     attachments: comment.attachments ?? [],
     reactions: comment.reactions ?? [],
   };
@@ -35,10 +39,13 @@ export function messageToDiscussionComment(
     id: message.id,
     threadId: message.thread_id ?? message.id,
     authorId: message.sender_id,
+    parent: message.parent,
+    sender: messageToMessageData(message).sender,
     importedAuthor: message.imported_author?.name,
     text: message.content,
     createdAt: message.created_at,
     updatedAt: message.updated_at,
+    editedAt: message.edited_at,
     deletedAt: message.deleted_at ?? null,
     attachments: message.attachments,
     reactions: message.reactions,
@@ -50,6 +57,7 @@ export function messageToDiscussionThread(
 ): DiscussionThread {
   return {
     id: thread.state.root_id,
+    parent: thread.root.parent,
     ownerId: thread.state.user_id,
     resolved: thread.state.resolved,
     comments: [thread.root, ...thread.replies].map(messageToDiscussionComment),
@@ -57,7 +65,7 @@ export function messageToDiscussionThread(
 }
 
 export function messageMentions(mentions: ItemMention[]) {
-  return expandMentions(mentions, []);
+  return authoredMentions(mentions);
 }
 
 export function messageAttachments(

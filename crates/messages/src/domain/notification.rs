@@ -17,16 +17,16 @@ pub enum CommentNotificationReason {
     Owner,
 }
 
-/// Facts used to select a document/email discussion's notification audience.
+/// Facts used to select a document discussion's notification audience.
 #[derive(Debug, Default)]
 pub struct CommentAudience {
     /// Explicitly mentioned users.
     pub mentioned: Vec<String>,
     /// Authors who have contributed to this thread.
     pub participants: Vec<String>,
-    /// Task assignees; empty for email and non-task documents.
+    /// Task assignees; empty for non-task documents.
     pub assignees: Vec<String>,
-    /// Parent owners (including the email mailbox owner).
+    /// Document owners.
     pub owners: Vec<String>,
     /// Candidate users whose current parent view access was verified.
     pub authorized: HashSet<String>,

@@ -1,4 +1,4 @@
-use crate::domain::{models::*, ports::*, service::*};
+use crate::domain::{api::MessageServiceApi, models::*, ports::*};
 use axum::{
     Json, Router,
     extract::{FromRef, Path, Query, State},
@@ -11,23 +11,23 @@ use entity_access::domain::{
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    AnyPrincipal, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use uuid::Uuid;
 
 /// Composition state for shared messages.
-pub struct MessagesRouterState<R, E, A, Auth> {
+pub struct MessagesRouterState<A, Auth> {
     /// Shared message domain service.
-    pub service: Arc<MessageService<R, E>>,
+    pub service: Arc<dyn MessageServiceApi>,
     /// Existing parent access boundary.
     pub access: Arc<A>,
     /// Authentication state.
     pub authorization: MacroAuthorizationState<Auth>,
 }
 
-impl<R, E, A, Auth> Clone for MessagesRouterState<R, E, A, Auth> {
+impl<A, Auth> Clone for MessagesRouterState<A, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
@@ -37,17 +37,15 @@ impl<R, E, A, Auth> Clone for MessagesRouterState<R, E, A, Auth> {
     }
 }
 
-impl<R, E, A, Auth> FromRef<MessagesRouterState<R, E, A, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &MessagesRouterState<R, E, A, Auth>) -> Self {
+impl<A, Auth> FromRef<MessagesRouterState<A, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &MessagesRouterState<A, Auth>) -> Self {
         state.authorization.clone()
     }
 }
 
 /// Routes mounted at `/messages` by the service composition root.
-pub fn router<R, E, A, Auth, S>(state: MessagesRouterState<R, E, A, Auth>) -> Router<S>
+pub fn router<A, Auth, S>(state: MessagesRouterState<A, Auth>) -> Router<S>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService + Send + Sync + 'static,
     S: Clone + Send + Sync + 'static,
@@ -55,31 +53,35 @@ where
     Router::new()
         .route(
             "/{parent_type}/{parent_id}",
-            get(list::<R, E, A, Auth>).post(create::<R, E, A, Auth>),
+            get(list::<A, Auth>).post(create::<A, Auth>),
         )
         .route(
             "/{parent_type}/{parent_id}/items/{id}",
-            get(get_message::<R, E, A, Auth>)
-                .patch(edit::<R, E, A, Auth>)
-                .delete(delete_message::<R, E, A, Auth>),
+            get(get_message::<A, Auth>)
+                .patch(edit::<A, Auth>)
+                .delete(delete_message::<A, Auth>),
         )
         .route(
             "/{parent_type}/{parent_id}/items/{id}/reactions",
-            post(react::<R, E, A, Auth>),
+            post(react::<A, Auth>),
         )
         .route(
             "/{parent_type}/{parent_id}/threads/{id}",
-            get(get_thread::<R, E, A, Auth>)
-                .patch(resolve::<R, E, A, Auth>)
-                .delete(delete_thread::<R, E, A, Auth>),
+            get(get_thread::<A, Auth>)
+                .patch(resolve::<A, Auth>)
+                .delete(delete_thread::<A, Auth>),
         )
         .route(
             "/{parent_type}/{parent_id}/threads/{id}/typing",
-            post(typing::<R, E, A, Auth>),
+            post(typing::<A, Auth>),
         )
         .route(
             "/{parent_type}/{parent_id}/legacy/{legacy_id}",
-            get(legacy::<R, E, A, Auth>),
+            get(legacy::<A, Auth>),
+        )
+        .route(
+            "/{parent_type}/{parent_id}/references",
+            get(referenced_threads::<A, Auth>),
         )
         .with_state(state)
 }
@@ -124,7 +126,7 @@ impl IntoResponse for MessageHttpError {
 
 async fn receipt<P: RequiredPermission, A: EntityAccessService, Auth: MacroAuthorizationService>(
     access: &A,
-    user: &MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    user: &MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     path: &ParentPath,
 ) -> Result<EntityAccessReceipt<P>, MessageHttpError> {
     let parent = MessageParent::parse(&path.parent_type, &path.parent_id)
@@ -132,27 +134,21 @@ async fn receipt<P: RequiredPermission, A: EntityAccessService, Auth: MacroAutho
     let kind = match parent {
         MessageParent::Channel(_) => EntityType::Channel,
         MessageParent::Document(_) => EntityType::Document,
-        MessageParent::EmailThread(_) => EntityType::EmailThread,
     };
-    access
-        .generate_entity_access_receipt::<P>(
-            &user.authorization.user.macro_user_id,
-            user.authorization
-                .user
-                .user_context
-                .organization_id
-                .map(i64::from),
-            &path.parent_id,
-            kind,
-        )
-        .await
-        .map_err(|error| match error {
-            entity_access::domain::models::AccessError::Unavailable(error)
-            | entity_access::domain::models::AccessError::Internal(error) => {
-                MessageError::Repository(error).into()
-            }
-            _ => MessageError::Forbidden.into(),
-        })
+    entity_access::inbound::axum_extractors::principal_entity_access_receipt::<P>(
+        access,
+        &user.authorization,
+        &path.parent_id,
+        kind,
+    )
+    .await
+    .map_err(|error| match error {
+        entity_access::domain::models::AccessError::Unavailable(error)
+        | entity_access::domain::models::AccessError::Internal(error) => {
+            MessageError::Repository(error).into()
+        }
+        _ => MessageError::Forbidden.into(),
+    })
 }
 
 fn path_id(path: &ParentPath) -> Result<Uuid, MessageHttpError> {
@@ -173,15 +169,13 @@ pub struct PageQuery {
 
 #[utoipa::path(operation_id = "entity_message_list", get, path = "/messages/{parent_type}/{parent_id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), PageQuery), responses((status = 200, body = ThreadPage)))]
 /// List a parent's discussions.
-pub async fn list<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn list<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
     Query(query): Query<PageQuery>,
 ) -> Result<Json<ThreadPage>, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -204,15 +198,13 @@ where
 
 #[utoipa::path(operation_id = "entity_message_create", post, path = "/messages/{parent_type}/{parent_id}", params(("parent_type" = String, Path), ("parent_id" = String, Path)), request_body = PostMessage, responses((status = 200, body = Message)))]
 /// Create a root message or reply.
-pub async fn create<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn create<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
     Json(input): Json<PostMessage>,
 ) -> Result<Json<Message>, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -226,14 +218,12 @@ where
 
 #[utoipa::path(operation_id = "entity_message_get_message", get, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), responses((status = 200, body = Message)))]
 /// Resolve a message within its parent.
-pub async fn get_message<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn get_message<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
 ) -> Result<Json<Message>, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -250,15 +240,13 @@ where
 
 #[utoipa::path(operation_id = "entity_message_edit", patch, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = EditMessage, responses((status = 200, body = Message)))]
 /// Edit an owned message.
-pub async fn edit<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn edit<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
     Json(input): Json<EditMessage>,
 ) -> Result<Json<Message>, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -283,15 +271,13 @@ pub struct NonceQuery {
 
 #[utoipa::path(operation_id = "entity_message_delete_message", delete, path = "/messages/{parent_type}/{parent_id}/items/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path), NonceQuery), responses((status = 200, body = Message)))]
 /// Tombstone one message while preserving replies.
-pub async fn delete_message<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn delete_message<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
     Query(query): Query<NonceQuery>,
 ) -> Result<Json<Message>, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -320,15 +306,13 @@ pub struct ReactionInput {
 
 #[utoipa::path(operation_id = "entity_message_react", post, path = "/messages/{parent_type}/{parent_id}/items/{id}/reactions", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = ReactionInput, responses((status = 200, body = Message)))]
 /// Change the caller's reaction.
-pub async fn react<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn react<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
     Json(input): Json<ReactionInput>,
 ) -> Result<Json<Message>, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -348,14 +332,12 @@ where
 
 #[utoipa::path(operation_id = "entity_message_get_thread", get, path = "/messages/{parent_type}/{parent_id}/threads/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), responses((status = 200, body = MessageThread)))]
 /// Open a specific discussion from a link or annotation.
-pub async fn get_thread<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn get_thread<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
 ) -> Result<Json<MessageThread>, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -381,15 +363,13 @@ pub struct TypingInput {
 
 #[utoipa::path(operation_id = "entity_message_typing", post, path = "/messages/{parent_type}/{parent_id}/threads/{id}/typing", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = TypingInput, responses((status = 204)))]
 /// Broadcast typing within an authorized discussion.
-pub async fn typing<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn typing<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
     Json(input): Json<TypingInput>,
 ) -> Result<StatusCode, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -416,15 +396,13 @@ pub struct ResolveInput {
 
 #[utoipa::path(operation_id = "entity_message_resolve", patch, path = "/messages/{parent_type}/{parent_id}/threads/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path)), request_body = ResolveInput, responses((status = 200, body = ThreadState)))]
 /// Resolve or reopen a discussion.
-pub async fn resolve<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn resolve<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
     Json(input): Json<ResolveInput>,
 ) -> Result<Json<ThreadState>, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -443,15 +421,13 @@ where
 
 #[utoipa::path(operation_id = "entity_message_delete_thread", delete, path = "/messages/{parent_type}/{parent_id}/threads/{id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("id" = Uuid, Path), NonceQuery), responses((status = 200, body = ThreadState)))]
 /// Explicitly remove a discussion.
-pub async fn delete_thread<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn delete_thread<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
     Query(query): Query<NonceQuery>,
 ) -> Result<Json<ThreadState>, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -477,15 +453,13 @@ pub struct LegacyQuery {
 
 #[utoipa::path(operation_id = "entity_message_legacy", get, path = "/messages/{parent_type}/{parent_id}/legacy/{legacy_id}", params(("parent_type" = String, Path), ("parent_id" = String, Path), ("legacy_id" = i64, Path), LegacyQuery), responses((status = 200, body = Message)))]
 /// Resolve an old link under current parent permissions.
-pub async fn legacy<R, E, A, Auth>(
-    State(state): State<MessagesRouterState<R, E, A, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn legacy<A, Auth>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
     Path(path): Path<ParentPath>,
     Query(query): Query<LegacyQuery>,
 ) -> Result<Json<Message>, MessageHttpError>
 where
-    R: MessageRepository,
-    E: MessageEventPublisher,
     A: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -499,6 +473,31 @@ where
                 receipt(state.access.as_ref(), &user, &path).await?,
                 id,
                 query.thread,
+            )
+            .await?,
+    ))
+}
+
+/// Read source channel threads mentioning this document under both parents' permissions.
+#[utoipa::path(operation_id = "entity_message_references", get, path = "/messages/{parent_type}/{parent_id}/references", params(("parent_type" = String, Path), ("parent_id" = String, Path), PageQuery), responses((status = 200, body = ReferencedThreadPage)))]
+pub async fn referenced_threads<A: EntityAccessService, Auth: MacroAuthorizationService>(
+    State(state): State<MessagesRouterState<A, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, AnyPrincipal>,
+    Path(path): Path<ParentPath>,
+    Query(query): Query<PageQuery>,
+) -> Result<Json<ReferencedThreadPage>, MessageHttpError> {
+    let cursor = match (query.created_at, query.cursor_id) {
+        (Some(created_at), Some(id)) => Some(MessageCursor { created_at, id }),
+        (None, None) => None,
+        _ => return Err(MessageError::Invalid("both cursor fields are required").into()),
+    };
+    Ok(Json(
+        state
+            .service
+            .referenced_threads(
+                receipt(state.access.as_ref(), &user, &path).await?,
+                cursor,
+                query.limit.unwrap_or(50),
             )
             .await?,
     ))

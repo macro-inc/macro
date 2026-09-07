@@ -196,6 +196,19 @@ CREATE INDEX comms_messages_parent_timeline
 CREATE INDEX comms_messages_parent_activity
     ON comms_messages(parent_entity_type, parent_entity_id, created_at DESC)
     WHERE deleted_at IS NULL;
+-- Existing channel readers filter the UUID projection below. Its guarded cast
+-- must match these expressions exactly: the text parent indexes cannot serve
+-- channel_id predicates, and document IDs need not be UUIDs. Preserve both
+-- tombstone-inclusive timelines and live-message latest/activity lookups.
+CREATE INDEX comms_messages_channel_timeline
+    ON comms_messages((CASE WHEN parent_entity_type = 'channel' THEN parent_entity_id::uuid END), created_at DESC, id DESC)
+    WHERE parent_entity_type = 'channel';
+CREATE INDEX comms_messages_channel_toplevel_cursor
+    ON comms_messages((CASE WHEN parent_entity_type = 'channel' THEN parent_entity_id::uuid END), created_at DESC, id DESC)
+    WHERE parent_entity_type = 'channel' AND thread_id IS NULL;
+CREATE INDEX comms_messages_channel_activity
+    ON comms_messages((CASE WHEN parent_entity_type = 'channel' THEN parent_entity_id::uuid END), created_at DESC)
+    WHERE parent_entity_type = 'channel' AND deleted_at IS NULL;
 CREATE INDEX comms_messages_thread_order
     ON comms_messages(thread_id, import_order, created_at, id) WHERE thread_id IS NOT NULL;
 CREATE INDEX comms_attachments_entity_created
@@ -230,9 +243,6 @@ BEGIN
         WHEN 'document' THEN
             SELECT true INTO parent_found FROM "Document"
             WHERE id = NEW.parent_entity_id AND "deletedAt" IS NULL FOR SHARE;
-        WHEN 'email_thread' THEN
-            SELECT true INTO parent_found FROM email_threads
-            WHERE id = NEW.parent_entity_id::uuid FOR SHARE;
         ELSE RAISE EXCEPTION 'unsupported message parent' USING ERRCODE = '23514';
     END CASE;
     IF parent_found IS DISTINCT FROM true THEN
@@ -317,5 +327,3 @@ CREATE TRIGGER delete_document_messages AFTER DELETE ON "Document"
     FOR EACH ROW EXECUTE FUNCTION delete_parent_messages('document');
 CREATE TRIGGER delete_channel_messages AFTER DELETE ON comms_channels
     FOR EACH ROW EXECUTE FUNCTION delete_parent_messages('channel');
-CREATE TRIGGER delete_email_messages AFTER DELETE ON email_threads
-    FOR EACH ROW EXECUTE FUNCTION delete_parent_messages('email_thread');

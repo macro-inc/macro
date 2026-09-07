@@ -104,7 +104,6 @@ export function getActionVerb(type: NotificationType): string {
       .with('mentioned_in_document_comment', () => 'mentioned you')
       .with('replied_to_document_comment_thread', () => 'replied')
       .with('commented_on_document', () => 'commented')
-      .with('email_thread_comment', () => 'commented on an email')
       .with('channel_message_reply', () => 'replied')
       .with('channel_message_send', () => 'sent a message')
       .with('ai_response', () => 'AI responded')
@@ -147,7 +146,6 @@ export function getTypeNoun(type: NotificationType, count: number): string {
       count === 1 ? 'reply' : 'replies'
     )
     .with('commented_on_document', () => (count === 1 ? 'comment' : 'comments'))
-    .with('email_thread_comment', () => (count === 1 ? 'comment' : 'comments'))
     .with('new_email', () => (count === 1 ? 'email' : 'emails'))
     .with('channel_invite', () => (count === 1 ? 'invite' : 'invites'))
     .with('invite_to_team', () => (count === 1 ? 'invite' : 'invites'))
@@ -173,4 +171,25 @@ export function getTypePreposition(type: NotificationType): string {
   return match(type)
     .with('document_mention', () => 'by')
     .otherwise(() => 'from');
+}
+
+/** Display identity carried by a bot-authored message notification. */
+export function getMessageSender(
+  notification: Notification | undefined
+): { name: string; avatar?: string } | undefined {
+  if (!notification || notification.sender_id) return undefined;
+  const content = notification.notification_metadata.content;
+  if (
+    !content ||
+    typeof content !== 'object' ||
+    !('senderDisplayName' in content) ||
+    typeof content.senderDisplayName !== 'string'
+  )
+    return undefined;
+  const avatar =
+    'senderProfilePictureUrl' in content &&
+    typeof content.senderProfilePictureUrl === 'string'
+      ? content.senderProfilePictureUrl
+      : undefined;
+  return { name: content.senderDisplayName, avatar };
 }

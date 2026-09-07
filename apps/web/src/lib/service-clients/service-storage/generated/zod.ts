@@ -239,8 +239,7 @@ export const updateAgentResponse = zod
   .describe('A persisted user- or team-owned AI agent.');
 
 /**
- * @summary Deletes a single unthreaded anchor for a document
-If you need to delete a threaded anchor, see the delete comment handler
+ * @summary Deletes a highlight and any attached discussion under the annotation policy.
  */
 export const deleteAnchorBody = zod
   .object({
@@ -453,7 +452,7 @@ export const getDocumentAnchorsResponse = zod.object({
 
 /**
  * @summary Creates an unthreaded anchor for a document
-If you need to create a threaded anchor, see the create comment handler
+Attach a discussion through the shared message API.
  */
 export const createAnchorParams = zod.object({
   document_id: zod.string().describe('The document id'),
@@ -24903,6 +24902,22 @@ export const entityMessageListResponse = zod
                           .describe('An entity attached to a message.')
                       )
                       .describe('Attached entities.'),
+                    bot_profile: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Bot avatar URL.'),
+                            name: zod.string().describe('Bot display name.'),
+                          })
+                          .describe(
+                            'Public bot profile attached to bot-authored messages.'
+                          ),
+                      ])
+                      .optional(),
                     content: zod.string().describe('Macro Markdown body.'),
                     created_at: zod.iso.datetime({}).describe('Creation time.'),
                     deleted_at: zod.iso
@@ -24932,6 +24947,22 @@ export const entityMessageListResponse = zod
                           ),
                       ])
                       .optional(),
+                    mentions: zod
+                      .array(
+                        zod
+                          .object({
+                            entity_id: zod
+                              .string()
+                              .describe('Mentioned entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Mentioned entity type.'),
+                          })
+                          .describe('A mention tracked in a message body.')
+                      )
+                      .describe(
+                        'Tracked mentions, retained when a caller changes attachments only.'
+                      ),
                     parent: zod
                       .union([
                         zod
@@ -24954,18 +24985,6 @@ export const entityMessageListResponse = zod
                             type: zod.enum(['document']),
                           })
                           .describe('A document, including tasks and PDFs.'),
-                        zod
-                          .object({
-                            id: zod
-                              .uuid()
-                              .describe(
-                                'An internal discussion on a Macro email thread.'
-                              ),
-                            type: zod.enum(['email_thread']),
-                          })
-                          .describe(
-                            'An internal discussion on a Macro email thread.'
-                          ),
                       ])
                       .describe(
                         'The entity whose permissions and lifecycle govern a message.'
@@ -25038,6 +25057,22 @@ export const entityMessageListResponse = zod
                       .describe('An entity attached to a message.')
                   )
                   .describe('Attached entities.'),
+                bot_profile: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .object({
+                        avatar_url: zod
+                          .string()
+                          .nullish()
+                          .describe('Bot avatar URL.'),
+                        name: zod.string().describe('Bot display name.'),
+                      })
+                      .describe(
+                        'Public bot profile attached to bot-authored messages.'
+                      ),
+                  ])
+                  .optional(),
                 content: zod.string().describe('Macro Markdown body.'),
                 created_at: zod.iso.datetime({}).describe('Creation time.'),
                 deleted_at: zod.iso
@@ -25067,6 +25102,22 @@ export const entityMessageListResponse = zod
                       ),
                   ])
                   .optional(),
+                mentions: zod
+                  .array(
+                    zod
+                      .object({
+                        entity_id: zod
+                          .string()
+                          .describe('Mentioned entity identifier.'),
+                        entity_type: zod
+                          .string()
+                          .describe('Mentioned entity type.'),
+                      })
+                      .describe('A mention tracked in a message body.')
+                  )
+                  .describe(
+                    'Tracked mentions, retained when a caller changes attachments only.'
+                  ),
                 parent: zod
                   .union([
                     zod
@@ -25087,18 +25138,6 @@ export const entityMessageListResponse = zod
                         type: zod.enum(['document']),
                       })
                       .describe('A document, including tasks and PDFs.'),
-                    zod
-                      .object({
-                        id: zod
-                          .uuid()
-                          .describe(
-                            'An internal discussion on a Macro email thread.'
-                          ),
-                        type: zod.enum(['email_thread']),
-                      })
-                      .describe(
-                        'An internal discussion on a Macro email thread.'
-                      ),
                   ])
                   .describe(
                     'The entity whose permissions and lifecycle govern a message.'
@@ -25334,6 +25373,17 @@ export const entityMessageCreateResponse = zod
           .describe('An entity attached to a message.')
       )
       .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
     content: zod.string().describe('Macro Markdown body.'),
     created_at: zod.iso.datetime({}).describe('Creation time.'),
     deleted_at: zod.iso
@@ -25361,6 +25411,18 @@ export const entityMessageCreateResponse = zod
           ),
       ])
       .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
     parent: zod
       .union([
         zod
@@ -25379,14 +25441,6 @@ export const entityMessageCreateResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
-        zod
-          .object({
-            id: zod
-              .uuid()
-              .describe('An internal discussion on a Macro email thread.'),
-            type: zod.enum(['email_thread']),
-          })
-          .describe('An internal discussion on a Macro email thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -25443,6 +25497,17 @@ export const entityMessageGetMessageResponse = zod
           .describe('An entity attached to a message.')
       )
       .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
     content: zod.string().describe('Macro Markdown body.'),
     created_at: zod.iso.datetime({}).describe('Creation time.'),
     deleted_at: zod.iso
@@ -25470,6 +25535,18 @@ export const entityMessageGetMessageResponse = zod
           ),
       ])
       .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
     parent: zod
       .union([
         zod
@@ -25488,14 +25565,6 @@ export const entityMessageGetMessageResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
-        zod
-          .object({
-            id: zod
-              .uuid()
-              .describe('An internal discussion on a Macro email thread.'),
-            type: zod.enum(['email_thread']),
-          })
-          .describe('An internal discussion on a Macro email thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -25556,6 +25625,17 @@ export const entityMessageDeleteMessageResponse = zod
           .describe('An entity attached to a message.')
       )
       .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
     content: zod.string().describe('Macro Markdown body.'),
     created_at: zod.iso.datetime({}).describe('Creation time.'),
     deleted_at: zod.iso
@@ -25583,6 +25663,18 @@ export const entityMessageDeleteMessageResponse = zod
           ),
       ])
       .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
     parent: zod
       .union([
         zod
@@ -25601,14 +25693,6 @@ export const entityMessageDeleteMessageResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
-        zod
-          .object({
-            id: zod
-              .uuid()
-              .describe('An internal discussion on a Macro email thread.'),
-            type: zod.enum(['email_thread']),
-          })
-          .describe('An internal discussion on a Macro email thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -25698,6 +25782,17 @@ export const entityMessageEditResponse = zod
           .describe('An entity attached to a message.')
       )
       .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
     content: zod.string().describe('Macro Markdown body.'),
     created_at: zod.iso.datetime({}).describe('Creation time.'),
     deleted_at: zod.iso
@@ -25725,6 +25820,18 @@ export const entityMessageEditResponse = zod
           ),
       ])
       .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
     parent: zod
       .union([
         zod
@@ -25743,14 +25850,6 @@ export const entityMessageEditResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
-        zod
-          .object({
-            id: zod
-              .uuid()
-              .describe('An internal discussion on a Macro email thread.'),
-            type: zod.enum(['email_thread']),
-          })
-          .describe('An internal discussion on a Macro email thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -25815,6 +25914,17 @@ export const entityMessageReactResponse = zod
           .describe('An entity attached to a message.')
       )
       .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
     content: zod.string().describe('Macro Markdown body.'),
     created_at: zod.iso.datetime({}).describe('Creation time.'),
     deleted_at: zod.iso
@@ -25842,6 +25952,18 @@ export const entityMessageReactResponse = zod
           ),
       ])
       .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
     parent: zod
       .union([
         zod
@@ -25860,14 +25982,6 @@ export const entityMessageReactResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
-        zod
-          .object({
-            id: zod
-              .uuid()
-              .describe('An internal discussion on a Macro email thread.'),
-            type: zod.enum(['email_thread']),
-          })
-          .describe('An internal discussion on a Macro email thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -25931,6 +26045,17 @@ export const entityMessageLegacyResponse = zod
           .describe('An entity attached to a message.')
       )
       .describe('Attached entities.'),
+    bot_profile: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+            name: zod.string().describe('Bot display name.'),
+          })
+          .describe('Public bot profile attached to bot-authored messages.'),
+      ])
+      .optional(),
     content: zod.string().describe('Macro Markdown body.'),
     created_at: zod.iso.datetime({}).describe('Creation time.'),
     deleted_at: zod.iso
@@ -25958,6 +26083,18 @@ export const entityMessageLegacyResponse = zod
           ),
       ])
       .optional(),
+    mentions: zod
+      .array(
+        zod
+          .object({
+            entity_id: zod.string().describe('Mentioned entity identifier.'),
+            entity_type: zod.string().describe('Mentioned entity type.'),
+          })
+          .describe('A mention tracked in a message body.')
+      )
+      .describe(
+        'Tracked mentions, retained when a caller changes attachments only.'
+      ),
     parent: zod
       .union([
         zod
@@ -25976,14 +26113,6 @@ export const entityMessageLegacyResponse = zod
             type: zod.enum(['document']),
           })
           .describe('A document, including tasks and PDFs.'),
-        zod
-          .object({
-            id: zod
-              .uuid()
-              .describe('An internal discussion on a Macro email thread.'),
-            type: zod.enum(['email_thread']),
-          })
-          .describe('An internal discussion on a Macro email thread.'),
       ])
       .describe('The entity whose permissions and lifecycle govern a message.'),
     reactions: zod
@@ -26012,6 +26141,470 @@ export const entityMessageLegacyResponse = zod
   .describe(
     'Shared message representation for channel timelines and entity discussions.'
   );
+
+/**
+ * @summary Read source channel threads mentioning this document under both parents' permissions.
+ */
+export const entityMessageReferencesParams = zod.object({
+  parent_type: zod.string(),
+  parent_id: zod.string(),
+});
+
+export const entityMessageReferencesQueryLimitMin = 0;
+
+export const entityMessageReferencesQueryParams = zod.object({
+  limit: zod
+    .number()
+    .min(entityMessageReferencesQueryLimitMin)
+    .nullish()
+    .describe('Maximum number of roots.'),
+  created_at: zod.iso
+    .datetime({})
+    .nullish()
+    .describe("Last root's creation timestamp."),
+  cursor_id: zod.uuid().nullish().describe("Last root's UUID."),
+});
+
+export const entityMessageReferencesResponse = zod
+  .object({
+    next_cursor: zod
+      .union([
+        zod.null(),
+        zod
+          .object({
+            created_at: zod.iso
+              .datetime({})
+              .describe('Last root creation time.'),
+            id: zod
+              .uuid()
+              .describe('Last root UUID, used to break timestamp ties.'),
+          })
+          .describe('Cursor for a chronological parent timeline.'),
+      ])
+      .optional(),
+    threads: zod
+      .array(
+        zod
+          .object({
+            can_reply: zod
+              .boolean()
+              .describe(
+                'Whether this viewer currently has permission to reply in the source channel.'
+              ),
+            channel_name: zod
+              .string()
+              .nullish()
+              .describe(
+                "Source channel's current display name, returned only after access checks."
+              ),
+            thread: zod
+              .object({
+                replies: zod
+                  .array(
+                    zod
+                      .object({
+                        attachments: zod
+                          .array(
+                            zod
+                              .object({
+                                created_at: zod.iso
+                                  .datetime({})
+                                  .describe('When the attachment was added.'),
+                                entity_id: zod
+                                  .string()
+                                  .describe('Attached entity identifier.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Attached entity type.'),
+                                height: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Optional media height.'),
+                                id: zod.uuid().describe('Attachment UUID.'),
+                                width: zod
+                                  .number()
+                                  .nullish()
+                                  .describe('Optional media width.'),
+                              })
+                              .describe('An entity attached to a message.')
+                          )
+                          .describe('Attached entities.'),
+                        bot_profile: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .object({
+                                avatar_url: zod
+                                  .string()
+                                  .nullish()
+                                  .describe('Bot avatar URL.'),
+                                name: zod
+                                  .string()
+                                  .describe('Bot display name.'),
+                              })
+                              .describe(
+                                'Public bot profile attached to bot-authored messages.'
+                              ),
+                          ])
+                          .optional(),
+                        content: zod.string().describe('Macro Markdown body.'),
+                        created_at: zod.iso
+                          .datetime({})
+                          .describe('Creation time.'),
+                        deleted_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe(
+                            'Message tombstone, independent of thread deletion.'
+                          ),
+                        edited_at: zod.iso
+                          .datetime({})
+                          .nullish()
+                          .describe('Last content edit, if any.'),
+                        id: zod.uuid().describe('Message UUID.'),
+                        imported_author: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .object({
+                                name: zod
+                                  .string()
+                                  .describe(
+                                    'Original author text; never interpreted as an authenticated principal.'
+                                  ),
+                              })
+                              .describe(
+                                'Display attribution for a comment imported from an external document.'
+                              ),
+                          ])
+                          .optional(),
+                        mentions: zod
+                          .array(
+                            zod
+                              .object({
+                                entity_id: zod
+                                  .string()
+                                  .describe('Mentioned entity identifier.'),
+                                entity_type: zod
+                                  .string()
+                                  .describe('Mentioned entity type.'),
+                              })
+                              .describe('A mention tracked in a message body.')
+                          )
+                          .describe(
+                            'Tracked mentions, retained when a caller changes attachments only.'
+                          ),
+                        parent: zod
+                          .union([
+                            zod
+                              .object({
+                                id: zod
+                                  .uuid()
+                                  .describe(
+                                    'A channel, including direct messages.'
+                                  ),
+                                type: zod.enum(['channel']),
+                              })
+                              .describe(
+                                'A channel, including direct messages.'
+                              ),
+                            zod
+                              .object({
+                                id: zod
+                                  .string()
+                                  .describe(
+                                    'A validated document identifier. Historical document ids need not be UUIDs.'
+                                  ),
+                                type: zod.enum(['document']),
+                              })
+                              .describe(
+                                'A document, including tasks and PDFs.'
+                              ),
+                          ])
+                          .describe(
+                            'The entity whose permissions and lifecycle govern a message.'
+                          ),
+                        reactions: zod
+                          .array(
+                            zod
+                              .object({
+                                emoji: zod
+                                  .string()
+                                  .describe('Emoji being reacted with.'),
+                                users: zod
+                                  .array(zod.string())
+                                  .describe('User identifiers.'),
+                              })
+                              .describe(
+                                'Reaction emoji and the users who added it.'
+                              )
+                          )
+                          .describe('Aggregated reactions.'),
+                        sender_id: zod
+                          .string()
+                          .describe(
+                            'Authenticated actor or owner of imported content.'
+                          ),
+                        thread_id: zod
+                          .uuid()
+                          .nullish()
+                          .describe(
+                            'Root message UUID for replies; absent on roots.'
+                          ),
+                        triggered_by: zod
+                          .string()
+                          .nullish()
+                          .describe(
+                            'User who triggered a bot-authored message.'
+                          ),
+                        updated_at: zod.iso
+                          .datetime({})
+                          .describe('Last persisted update.'),
+                      })
+                      .describe(
+                        'Shared message representation for channel timelines and entity discussions.'
+                      )
+                  )
+                  .describe('Replies in display order.'),
+                root: zod
+                  .object({
+                    attachments: zod
+                      .array(
+                        zod
+                          .object({
+                            created_at: zod.iso
+                              .datetime({})
+                              .describe('When the attachment was added.'),
+                            entity_id: zod
+                              .string()
+                              .describe('Attached entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Attached entity type.'),
+                            height: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media height.'),
+                            id: zod.uuid().describe('Attachment UUID.'),
+                            width: zod
+                              .number()
+                              .nullish()
+                              .describe('Optional media width.'),
+                          })
+                          .describe('An entity attached to a message.')
+                      )
+                      .describe('Attached entities.'),
+                    bot_profile: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            avatar_url: zod
+                              .string()
+                              .nullish()
+                              .describe('Bot avatar URL.'),
+                            name: zod.string().describe('Bot display name.'),
+                          })
+                          .describe(
+                            'Public bot profile attached to bot-authored messages.'
+                          ),
+                      ])
+                      .optional(),
+                    content: zod.string().describe('Macro Markdown body.'),
+                    created_at: zod.iso.datetime({}).describe('Creation time.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Message tombstone, independent of thread deletion.'
+                      ),
+                    edited_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe('Last content edit, if any.'),
+                    id: zod.uuid().describe('Message UUID.'),
+                    imported_author: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .object({
+                            name: zod
+                              .string()
+                              .describe(
+                                'Original author text; never interpreted as an authenticated principal.'
+                              ),
+                          })
+                          .describe(
+                            'Display attribution for a comment imported from an external document.'
+                          ),
+                      ])
+                      .optional(),
+                    mentions: zod
+                      .array(
+                        zod
+                          .object({
+                            entity_id: zod
+                              .string()
+                              .describe('Mentioned entity identifier.'),
+                            entity_type: zod
+                              .string()
+                              .describe('Mentioned entity type.'),
+                          })
+                          .describe('A mention tracked in a message body.')
+                      )
+                      .describe(
+                        'Tracked mentions, retained when a caller changes attachments only.'
+                      ),
+                    parent: zod
+                      .union([
+                        zod
+                          .object({
+                            id: zod
+                              .uuid()
+                              .describe(
+                                'A channel, including direct messages.'
+                              ),
+                            type: zod.enum(['channel']),
+                          })
+                          .describe('A channel, including direct messages.'),
+                        zod
+                          .object({
+                            id: zod
+                              .string()
+                              .describe(
+                                'A validated document identifier. Historical document ids need not be UUIDs.'
+                              ),
+                            type: zod.enum(['document']),
+                          })
+                          .describe('A document, including tasks and PDFs.'),
+                      ])
+                      .describe(
+                        'The entity whose permissions and lifecycle govern a message.'
+                      ),
+                    reactions: zod
+                      .array(
+                        zod
+                          .object({
+                            emoji: zod
+                              .string()
+                              .describe('Emoji being reacted with.'),
+                            users: zod
+                              .array(zod.string())
+                              .describe('User identifiers.'),
+                          })
+                          .describe(
+                            'Reaction emoji and the users who added it.'
+                          )
+                      )
+                      .describe('Aggregated reactions.'),
+                    sender_id: zod
+                      .string()
+                      .describe(
+                        'Authenticated actor or owner of imported content.'
+                      ),
+                    thread_id: zod
+                      .uuid()
+                      .nullish()
+                      .describe(
+                        'Root message UUID for replies; absent on roots.'
+                      ),
+                    triggered_by: zod
+                      .string()
+                      .nullish()
+                      .describe('User who triggered a bot-authored message.'),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Last persisted update.'),
+                  })
+                  .describe(
+                    'Shared message representation for channel timelines and entity discussions.'
+                  ),
+                state: zod
+                  .object({
+                    anchor: zod
+                      .union([
+                        zod.null(),
+                        zod
+                          .union([
+                            zod
+                              .object({
+                                mark_id: zod
+                                  .uuid()
+                                  .describe(
+                                    'Mark UUID serialized in the document.'
+                                  ),
+                                type: zod.enum(['markdown']),
+                              })
+                              .describe(
+                                'Stable Lexical mark identity, independent of transient node keys.'
+                              ),
+                            zod
+                              .object({
+                                anchor_id: zod
+                                  .uuid()
+                                  .describe('Highlight annotation UUID.'),
+                                type: zod.enum(['pdf_highlight']),
+                              })
+                              .describe(
+                                'An independently existing PDF highlight.'
+                              ),
+                            zod
+                              .object({
+                                anchor_id: zod
+                                  .uuid()
+                                  .describe('Placeable annotation UUID.'),
+                                type: zod.enum(['pdf_placeable']),
+                              })
+                              .describe(
+                                'A comment-only placeable PDF annotation.'
+                              ),
+                          ])
+                          .describe(
+                            "A thread's location within its document. Geometry remains annotation-owned."
+                          ),
+                      ])
+                      .optional(),
+                    created_at: zod.iso
+                      .datetime({})
+                      .describe('Creation time of the discussion.'),
+                    deleted_at: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Explicit deletion of the entire thread, distinct from root deletion.'
+                      ),
+                    resolved: zod
+                      .boolean()
+                      .describe('Whether this discussion has been resolved.'),
+                    root_id: zod
+                      .uuid()
+                      .describe(
+                        'Root message UUID; there is no separate thread identity.'
+                      ),
+                    updated_at: zod.iso
+                      .datetime({})
+                      .describe('Last state change.'),
+                    user_id: zod
+                      .string()
+                      .describe(
+                        'User who owns this discussion, including imported discussions.'
+                      ),
+                  })
+                  .describe(
+                    'State belonging to a whole thread, keyed by its root message.'
+                  ),
+              })
+              .describe(
+                'A discussion with its root and ordered replies, including root tombstones.'
+              ),
+          })
+          .describe(
+            'A source channel thread that mentions the requested document.'
+          )
+      )
+      .describe('Accessible channel discussions mentioning the document.'),
+  })
+  .describe('Authorized source threads, deduplicated by root.');
 
 /**
  * @summary Open a specific discussion from a link or annotation.
@@ -26052,6 +26645,22 @@ export const entityMessageGetThreadResponse = zod
                   .describe('An entity attached to a message.')
               )
               .describe('Attached entities.'),
+            bot_profile: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    avatar_url: zod
+                      .string()
+                      .nullish()
+                      .describe('Bot avatar URL.'),
+                    name: zod.string().describe('Bot display name.'),
+                  })
+                  .describe(
+                    'Public bot profile attached to bot-authored messages.'
+                  ),
+              ])
+              .optional(),
             content: zod.string().describe('Macro Markdown body.'),
             created_at: zod.iso.datetime({}).describe('Creation time.'),
             deleted_at: zod.iso
@@ -26079,6 +26688,22 @@ export const entityMessageGetThreadResponse = zod
                   ),
               ])
               .optional(),
+            mentions: zod
+              .array(
+                zod
+                  .object({
+                    entity_id: zod
+                      .string()
+                      .describe('Mentioned entity identifier.'),
+                    entity_type: zod
+                      .string()
+                      .describe('Mentioned entity type.'),
+                  })
+                  .describe('A mention tracked in a message body.')
+              )
+              .describe(
+                'Tracked mentions, retained when a caller changes attachments only.'
+              ),
             parent: zod
               .union([
                 zod
@@ -26099,16 +26724,6 @@ export const entityMessageGetThreadResponse = zod
                     type: zod.enum(['document']),
                   })
                   .describe('A document, including tasks and PDFs.'),
-                zod
-                  .object({
-                    id: zod
-                      .uuid()
-                      .describe(
-                        'An internal discussion on a Macro email thread.'
-                      ),
-                    type: zod.enum(['email_thread']),
-                  })
-                  .describe('An internal discussion on a Macro email thread.'),
               ])
               .describe(
                 'The entity whose permissions and lifecycle govern a message.'
@@ -26164,6 +26779,19 @@ export const entityMessageGetThreadResponse = zod
               .describe('An entity attached to a message.')
           )
           .describe('Attached entities.'),
+        bot_profile: zod
+          .union([
+            zod.null(),
+            zod
+              .object({
+                avatar_url: zod.string().nullish().describe('Bot avatar URL.'),
+                name: zod.string().describe('Bot display name.'),
+              })
+              .describe(
+                'Public bot profile attached to bot-authored messages.'
+              ),
+          ])
+          .optional(),
         content: zod.string().describe('Macro Markdown body.'),
         created_at: zod.iso.datetime({}).describe('Creation time.'),
         deleted_at: zod.iso
@@ -26191,6 +26819,20 @@ export const entityMessageGetThreadResponse = zod
               ),
           ])
           .optional(),
+        mentions: zod
+          .array(
+            zod
+              .object({
+                entity_id: zod
+                  .string()
+                  .describe('Mentioned entity identifier.'),
+                entity_type: zod.string().describe('Mentioned entity type.'),
+              })
+              .describe('A mention tracked in a message body.')
+          )
+          .describe(
+            'Tracked mentions, retained when a caller changes attachments only.'
+          ),
         parent: zod
           .union([
             zod
@@ -26211,14 +26853,6 @@ export const entityMessageGetThreadResponse = zod
                 type: zod.enum(['document']),
               })
               .describe('A document, including tasks and PDFs.'),
-            zod
-              .object({
-                id: zod
-                  .uuid()
-                  .describe('An internal discussion on a Macro email thread.'),
-                type: zod.enum(['email_thread']),
-              })
-              .describe('An internal discussion on a Macro email thread.'),
           ])
           .describe(
             'The entity whose permissions and lifecycle govern a message.'

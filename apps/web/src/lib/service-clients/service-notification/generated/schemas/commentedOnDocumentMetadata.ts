@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { CommentedOnDocumentMetadataFileType } from './commentedOnDocumentMetadataFileType';
+import type { CommentedOnDocumentMetadataSenderDisplayName } from './commentedOnDocumentMetadataSenderDisplayName';
 import type { CommentedOnDocumentMetadataSenderProfilePictureUrl } from './commentedOnDocumentMetadataSenderProfilePictureUrl';
 import type { CommentedOnDocumentMetadataSubType } from './commentedOnDocumentMetadataSubType';
 
@@ -20,6 +21,8 @@ export interface CommentedOnDocumentMetadata {
   fileType?: CommentedOnDocumentMetadataFileType;
   /** The owner of the document. */
   owner: string;
+  /** Public bot name when the author is an agent rather than a Macro user. */
+  senderDisplayName?: CommentedOnDocumentMetadataSenderDisplayName;
   senderProfilePictureUrl?: CommentedOnDocumentMetadataSenderProfilePictureUrl;
   subType?: CommentedOnDocumentMetadataSubType;
   /** the text of the comment */

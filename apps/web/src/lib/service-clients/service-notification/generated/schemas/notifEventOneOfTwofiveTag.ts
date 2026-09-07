@@ -10,5 +10,5 @@ export type NotifEventOneOfTwofiveTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfTwofiveTag = {
-  invite_to_team: 'invite_to_team',
+  task_assigned: 'task_assigned',
 } as const;

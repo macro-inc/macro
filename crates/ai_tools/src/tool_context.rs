@@ -12,7 +12,7 @@ use call::inbound::toolset::CallToolContext;
 use call::outbound::pg_call_repo::PgCallRepo;
 use call::outbound::s3_recording_storage::S3RecordingStorage;
 use channels::domain::ports::ChannelEventDispatcher;
-use channels::domain::service::{NoopChannelEventDispatcher, NoopChannelReferenceSharePermissions};
+use channels::domain::service::NoopChannelEventDispatcher;
 use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
 use channels::domain::{list_service::ChannelListServiceImpl, service::ChannelServiceImpl};
 use channels::inbound::toolset::ChannelToolContext;
@@ -174,12 +174,8 @@ pub type ToolCommsService = ChannelListServiceImpl<
 pub type ToolChannelEventDispatcher = std::sync::Arc<dyn ChannelEventDispatcher>;
 
 /// Type alias for the channel messages service implementation used by AI tools.
-pub type ToolChannelMessagesService = ChannelServiceImpl<
-    PgChannelsRepo,
-    ToolChannelEventDispatcher,
-    NoopChannelReferenceSharePermissions,
-    LexicalMentionExtractor,
->;
+pub type ToolChannelMessagesService =
+    ChannelServiceImpl<PgChannelsRepo, ToolChannelEventDispatcher>;
 
 /// Type alias for the channel AI tool context.
 pub type ToolChannelToolContext =
@@ -196,11 +192,24 @@ pub fn build_channel_tool_context_without_side_effects(
     pool: sqlx::PgPool,
     lexical_client: Arc<lexical_client::LexicalClient>,
 ) -> ToolChannelToolContext {
-    build_channel_tool_context_with_dispatcher(
-        pool,
-        std::sync::Arc::new(NoopChannelEventDispatcher),
-        lexical_client,
-    )
+    let messages = Arc::new(
+        messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+            messages::domain::ports::NoMessageEventPublisher,
+        )
+        .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
+            PgChannelsRepo::new(pool.clone()),
+        ))
+        .with_mention_extractor(LexicalMentionExtractor::new(lexical_client))
+        .with_references(
+            messages::outbound::entity_access_audience::EntityAccessMessageReferences(
+                ToolEntityAccessService::new(entity_access::outbound::PgAccessRepository::new(
+                    pool.clone(),
+                )),
+            ),
+        ),
+    );
+    build_channel_tool_context_with_dispatcher(pool, Arc::new(NoopChannelEventDispatcher), messages)
 }
 
 /// Clients a host provides to wire the real channel side effects for AI
@@ -241,16 +250,27 @@ pub fn build_channel_tool_context_with_side_effects(
     });
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(clients.connection_gateway),
+        ConnectionGatewayChannelRealtimePublisher::new(clients.connection_gateway.clone()),
         NotificationChannelSender::new(notification_ingress),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
-    .with_macro_event_broker(clients.macro_event_broker);
-    build_channel_tool_context_with_dispatcher(
-        pool,
-        Arc::new(SpawnedChannelEventDispatcher::new(side_effects)),
-        lexical_client,
-    )
+    .with_macro_event_broker(clients.macro_event_broker.clone());
+    let dispatcher: ToolChannelEventDispatcher =
+        Arc::new(SpawnedChannelEventDispatcher::new(side_effects));
+    let access = Arc::new(ToolEntityAccessService::new(
+        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+    ));
+    let messages = Arc::new(messages::domain::service::MessageService::new(
+        messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+        messages::domain::effects::MessageEffects::new(messages::outbound::broker::BrokerMessagePublisher::new(clients.macro_event_broker), messages::domain::ports::NoMessageEventPublisher, channels::domain::message_delivery::ChannelMessageDelivery::new(
+                PgChannelsRepo::new(pool.clone()), dispatcher.clone(),
+                channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(pool.clone(), access.clone()),
+                messages::outbound::connection_gateway::ConnectionGatewayMessages(clients.connection_gateway),
+            )),
+    ).with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(PgChannelsRepo::new(pool.clone())))
+     .with_mention_extractor(LexicalMentionExtractor::new(lexical_client))
+     .with_references(messages::outbound::entity_access_audience::EntityAccessMessageReferences((*access).clone())));
+    build_channel_tool_context_with_dispatcher(pool, dispatcher, messages)
 }
 
 /// Build the channel AI tool context wired to `dispatcher`, so messages sent by
@@ -259,15 +279,11 @@ pub fn build_channel_tool_context_with_side_effects(
 pub fn build_channel_tool_context_with_dispatcher(
     pool: sqlx::PgPool,
     dispatcher: ToolChannelEventDispatcher,
-    lexical_client: Arc<lexical_client::LexicalClient>,
+    messages: Arc<dyn messages::domain::api::MessageServiceApi>,
 ) -> ToolChannelToolContext {
     ChannelToolContext::new(
-        ChannelServiceImpl::with_dependencies(
-            PgChannelsRepo::new(pool.clone()),
-            dispatcher,
-            NoopChannelReferenceSharePermissions,
-        )
-        .with_mention_extractor(LexicalMentionExtractor::new(lexical_client)),
+        Arc::new(channels::domain::message_commands::ChannelMessageAdapter::new(messages)),
+        ChannelServiceImpl::with_dependencies(PgChannelsRepo::new(pool.clone()), dispatcher),
         entity_access::domain::service::EntityAccessServiceImpl::new(
             entity_access::outbound::PgAccessRepository::new(pool),
         ),

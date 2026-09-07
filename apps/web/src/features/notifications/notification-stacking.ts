@@ -50,7 +50,6 @@ export function getThreadId(group: NotificationStack): string {
   for (const notification of group.notifications) {
     const threadId = match(notification.notification_metadata)
       .with({ tag: 'channel_message_reply' }, (m) => m.content.threadId ?? '')
-      .with({ tag: 'email_thread_comment' }, (m) => m.content.threadId)
       .with({ tag: 'channel_mention' }, (m) => m.content.threadId ?? '')
       .with({ tag: 'replied_to_document_comment_thread' }, (m) =>
         m.content.threadId.toString()
@@ -80,7 +79,6 @@ export function getThreadId(group: NotificationStack): string {
  *
  * Document comments use the root message UUID as their thread ID. Replies
  * group with their root, and mentions take precedence for the same message.
- * Internal email comments group by their discussion root.
  */
 export function stackNotifications(
   notifications: UnifiedNotification[]
@@ -102,18 +100,6 @@ export function stackNotifications(
   });
 
   const docCommentStacks = stackDocCommentViews(docCommentViews);
-  const emailComments = notifications.filter(
-    (n) => n.notification_metadata.tag === 'email_thread_comment'
-  );
-  const emailGroups = groupBy(emailComments, (n) =>
-    n.notification_metadata.tag === 'email_thread_comment'
-      ? n.notification_metadata.content.threadId
-      : ''
-  );
-  const emailCommentStacks = [...emailGroups.values()].flatMap((group) =>
-    makeStack('email_thread_comment', group)
-  );
-
   const docMentions = notifications.filter(
     (n) => n.notification_metadata.tag === 'document_mention'
   );
@@ -121,14 +107,12 @@ export function stackNotifications(
     (n) =>
       !isChannelNotification(n) &&
       !isDocumentCommentNotification(n) &&
-      n.notification_metadata.tag !== 'document_mention' &&
-      n.notification_metadata.tag !== 'email_thread_comment'
+      n.notification_metadata.tag !== 'document_mention'
   );
 
   const groups: NotificationStack[] = [
     ...channelStacks,
     ...docCommentStacks,
-    ...emailCommentStacks,
     ...makeStack('document_mention', docMentions),
     ...others.flatMap((n) => makeStack(n.notification_metadata.tag, [n])),
   ];

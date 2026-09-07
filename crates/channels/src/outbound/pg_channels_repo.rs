@@ -490,14 +490,15 @@ async fn get_channel_participants_for_thread_id(
               ON cp.channel_id = m.channel_id AND cp.user_id = m.sender_id
             WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL
             UNION
-            SELECT em.entity_id AS id
+            SELECT cp.user_id AS id
             FROM comms_entity_mentions em
             JOIN comms_channel_messages m ON m.id::text = em.source_entity_id
             JOIN comms_channel_participants cp
-              ON cp.channel_id = m.channel_id AND cp.user_id = em.entity_id
+              ON cp.channel_id = m.channel_id
+             AND ((em.entity_type = 'user' AND cp.user_id = em.entity_id)
+               OR (em.entity_type = 'group' AND em.entity_id = 'here' AND cp.user_id LIKE 'macro|%'))
             WHERE (m.id = $1 OR m.thread_id = $1)
               AND em.source_entity_type = 'message'
-              AND em.entity_type = 'user'
               AND cp.left_at IS NULL
         ) AS combined
         "#,
@@ -1063,15 +1064,8 @@ fn push_channel_thread_filter_expr(
 /// channel AND they sent the root message or any reply, or were @-mentioned anywhere
 /// in the thread.
 ///
-/// Group mentions (e.g. @here) are covered indirectly: the client expands them into
-/// per-user mention rows for every channel member at send time, so they match the
-/// mention arm below. That expansion is a send-time snapshot made by a single
-/// producer (the web client) — members who join the channel later, and messages from
-/// producers that don't expand (bots, webhooks), are missed. TODO: persist group
-/// mentions as `entity_type = 'group'` rows in `comms_entity_mentions` (parsed
-/// server-side from the `<m-group-mention>` content tag, see `mention_utils`) and
-/// add an arm here treating every active channel member as a participant of threads
-/// containing one.
+/// Authored @here references include current active channel members. Historical
+/// per-user expansion rows remain valid explicit mentions under the same filter.
 #[cfg(feature = "list")]
 fn push_channel_thread_participant_filter_expr(
     builder: &mut QueryBuilder<'static, Postgres>,
@@ -1105,12 +1099,11 @@ fn push_channel_thread_participant_filter_expr(
                     FROM comms_entity_mentions em
                     WHERE em.source_entity_type = 'message'
                       AND em.source_entity_id = tm.id::text
-                      AND em.entity_type = 'user'
-                      AND em.entity_id = "#,
+                      AND ((em.entity_type = 'user' AND em.entity_id = "#,
     );
     builder.push_bind(participant);
     builder.push(
-        r#"
+        r#") OR (em.entity_type = 'group' AND em.entity_id = 'here'))
                 )
               )
         ))"#,

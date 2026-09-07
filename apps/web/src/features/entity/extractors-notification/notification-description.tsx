@@ -6,6 +6,7 @@ import type { Notification } from '../types/notification';
 import {
   getActionVerb,
   getGithubSenderLogin,
+  getMessageSender,
   getTypeNoun,
   getTypePreposition,
   getUniqueGithubLogins,
@@ -71,14 +72,23 @@ export function NotificationDescription(props: NotificationDescriptionProps) {
       if (props.notification.sender_id) {
         return [macroFirstName(props.notification.sender_id)];
       }
-      return [];
+      const sender = getMessageSender(props.notification);
+      return sender ? [sender.name] : [];
     }
     if (props.stack) {
       if (isGithubNotificationType(props.stack.type)) {
         return getUniqueGithubLogins(props.stack.notifications);
       }
       const macroIds = getUniqueSenderIds(props.stack.notifications);
-      return macroIds.map(macroFirstName);
+      return [
+        ...new Set([
+          ...macroIds.map(macroFirstName),
+          ...props.stack.notifications.flatMap((notification) => {
+            const sender = getMessageSender(notification);
+            return sender ? [sender.name] : [];
+          }),
+        ]),
+      ];
     }
     return [];
   });

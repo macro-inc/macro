@@ -201,10 +201,9 @@ pub struct AgentSession {
     pub owner_id: MacroUserIdStr<'static>,
     /// The root message where the bot was originally invoked, if any.
     pub thread_id: Option<Uuid>,
-    /// The channel `thread_id` lives in, when the session was spawned from a
-    /// thread. Derived from the thread root's message row rather than
-    /// stored — the message's channel is authoritative.
-    pub thread_channel_id: Option<Uuid>,
+    /// Entity owning the originating thread, derived from its root message.
+    /// The persisted message parent is authoritative for routing and access.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
     /// The exact message that originally invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
     /// the bot id of the bot running the agent
@@ -382,7 +381,7 @@ pub struct SessionLog {
     clippy::large_enum_variant,
     reason = "one data variant against None; boxing would only move the size"
 )]
-pub enum ChannelSession {
+pub enum ThreadSession {
     /// No session matched the channel context.
     None,
     /// The bot's session was created from the incoming thread.

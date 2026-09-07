@@ -147,6 +147,7 @@ use utoipa::OpenApi;
     paths(
         health::health_handler,
         messages::inbound::axum_router::list,
+        messages::inbound::axum_router::referenced_threads,
         messages::inbound::axum_router::create,
         messages::inbound::axum_router::get_message,
         messages::inbound::axum_router::get_thread,

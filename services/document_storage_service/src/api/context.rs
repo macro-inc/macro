@@ -31,9 +31,8 @@ use channels::{
     outbound::{
         connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher,
         contacts_dispatcher::ContactsChannelDispatcher,
-        notification_sender::NotificationChannelSender,
-        pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions,
-        pg_channels_repo::PgChannelsRepo, pg_side_effect_context::PgChannelSideEffectContext,
+        notification_sender::NotificationChannelSender, pg_channels_repo::PgChannelsRepo,
+        pg_side_effect_context::PgChannelSideEffectContext,
     },
 };
 use connection::{
@@ -348,25 +347,6 @@ pub(crate) type DssChannelEffects = ChannelSideEffectService<
     DssEventBroker,
 >;
 
-/// Parent-specific delivery for the shared message API.
-pub(crate) type DssMessageDelivery = messages::domain::delivery::ParentMessagePublisher<
-    channels::domain::message_delivery::ChannelMessageDelivery<
-        PgChannelsRepo,
-        SpawnedChannelEventDispatcher<DssChannelEffects>,
-        PgChannelReferenceSharePermissions<EntityAccessService>,
-        messages::outbound::connection_gateway::ConnectionGatewayMessages,
-    >,
-    messages::domain::delivery::DiscussionDelivery<
-        messages::outbound::pg_discussion_context::PgDiscussionContext,
-        messages::outbound::entity_access_audience::EntityAccessMessageAudience<
-            EntityAccessService,
-        >,
-        messages::outbound::connection_gateway::ConnectionGatewayMessages,
-        messages::outbound::notification_sender::MessageNotificationSender<NotificationIngressType>,
-        messages::outbound::pg_discussion_context::PgDiscussionContext,
-    >,
->;
-
 /// PDF geometry mutations use the shared annotation authorization policy.
 pub(crate) type DssAnnotationService = messages::domain::annotations::AnnotationService<
     macro_db_client::annotations::repository::PgAnnotationRepository,
@@ -374,29 +354,12 @@ pub(crate) type DssAnnotationService = messages::domain::annotations::Annotation
 >;
 
 /// Shared messages use the same parent access and authentication services as DSS.
-pub(crate) type DssMessagesState = messages::inbound::axum_router::MessagesRouterState<
-    messages::outbound::pg_message_repo::PgMessageRepository,
-    DssMessageDelivery,
-    EntityAccessService,
-    AuthorizationService,
->;
+pub(crate) type DssMessagesState =
+    messages::inbound::axum_router::MessagesRouterState<EntityAccessService, AuthorizationService>;
 
 /// Type alias for the channels service wired into DSS.
-pub(crate) type DssChannelService = ChannelServiceImpl<
-    PgChannelsRepo,
-    SpawnedChannelEventDispatcher<
-        ChannelSideEffectService<
-            PgChannelSideEffectContext,
-            ConnectionGatewayChannelRealtimePublisher,
-            NotificationChannelSender<NotificationIngressType>,
-            ContactsChannelDispatcher<SqsContactsIngress<SqsContactsQueue>>,
-            DssEventBroker,
-        >,
-    >,
-    PgChannelReferenceSharePermissions<EntityAccessService>,
-    lexical_mention_extractor::LexicalMentionExtractor,
->;
-
+pub(crate) type DssChannelService =
+    ChannelServiceImpl<PgChannelsRepo, SpawnedChannelEventDispatcher<DssChannelEffects>>;
 /// Type alias for the channels router state.
 pub(crate) type DssChannelsState =
     ChannelsRouterState<DssChannelService, EntityAccessService, AuthorizationService>;
@@ -420,7 +383,7 @@ pub(crate) type DssHarnessesState =
 /// Type alias for the channel bot webhook router state.
 pub(crate) type DssChannelBotWebhookState = ChannelBotWebhookRouterState<
     DssBotService,
-    Arc<DssChannelService>,
+    Arc<channels::domain::message_commands::ChannelMessageAdapter>,
     EntityAccessService,
     AuthorizationService,
 >;

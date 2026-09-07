@@ -21,7 +21,6 @@ import {
 } from '../util/scrollToMessage';
 import { EmailParticipants } from './EmailParticipants';
 import { EmailThreadTitle } from './EmailThreadTitle';
-import { InternalDiscussion } from './InternalDiscussion';
 import { MessageContainer } from './MessageContainer';
 
 interface MessageListProps {
@@ -263,7 +262,6 @@ export function MessageList(props: MessageListProps) {
           </Key>
         </StaticMarkdownContext>
       </Layer>
-      <InternalDiscussion />
     </div>
   );
 }

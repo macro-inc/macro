@@ -865,10 +865,10 @@ impl NotificationTitle for MentionedInDocumentCommentMetadata {
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let email = sender.0.email_part();
-        let sender = email.email_str();
+        let sender = sender_id
+            .map(|id| id.0.email_part().email_str().to_owned())
+            .or_else(|| self.sender_display_name.clone())
+            .unwrap_or_else(|| "Agent".to_owned());
         let title = match &self.file_type {
             Some(ft) => format!("{sender} mentioned you in {}.{ft}", self.document_name),
             None => format!("{sender} mentioned you in {}", self.document_name),
@@ -1138,6 +1138,9 @@ impl NotificationExtIos for TaskAssignedMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MentionedInDocumentCommentMetadata {
+    /// Public bot name when the author is an agent rather than a Macro user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_display_name: Option<String>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
@@ -1188,6 +1191,9 @@ impl NotificationExtIos for MentionedInDocumentCommentMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RepliedToDocumentCommentThreadMetadata {
+    /// Public bot name when the author is an agent rather than a Macro user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_display_name: Option<String>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
@@ -1218,10 +1224,10 @@ impl NotificationTitle for RepliedToDocumentCommentThreadMetadata {
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let email = sender.0.email_part();
-        let sender = email.email_str();
+        let sender = sender_id
+            .map(|id| id.0.email_part().email_str().to_owned())
+            .or_else(|| self.sender_display_name.clone())
+            .unwrap_or_else(|| "Agent".to_owned());
         let title = match &self.file_type {
             Some(ft) => format!("{sender} replied in {}.{ft}", self.document_name),
             None => format!("{sender} replied in {}", self.document_name),
@@ -1260,6 +1266,9 @@ impl NotificationExtIos for RepliedToDocumentCommentThreadMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CommentedOnDocumentMetadata {
+    /// Public bot name when the author is an agent rather than a Macro user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_display_name: Option<String>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
@@ -1290,10 +1299,10 @@ impl NotificationTitle for CommentedOnDocumentMetadata {
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let email = sender.0.email_part();
-        let sender = email.email_str();
+        let sender = sender_id
+            .map(|id| id.0.email_part().email_str().to_owned())
+            .or_else(|| self.sender_display_name.clone())
+            .unwrap_or_else(|| "Agent".to_owned());
         let title = match &self.file_type {
             Some(ft) => format!("{sender} commented on {}.{ft}", self.document_name),
             None => format!("{sender} commented on {}", self.document_name),
@@ -1325,78 +1334,6 @@ impl NotificationExtIos for CommentedOnDocumentMetadata {
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
         alert_apns(self, sender_id, notification_id, profile_pic).ok()
-    }
-}
-
-/// Reason for an internal email discussion notification.
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum EmailCommentReason {
-    /// The recipient was explicitly mentioned.
-    Mention,
-    /// Someone replied to a discussion the recipient participated in.
-    Reply,
-    /// Someone commented on the recipient's email thread.
-    Comment,
-}
-
-/// An internal comment on an email thread, distinct from an incoming email.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EmailThreadCommentMetadata {
-    /// Subject of the parent email thread.
-    pub subject: String,
-    /// Shared message UUID.
-    pub message_id: Uuid,
-    /// Root message UUID, distinct from the parent email thread ID.
-    pub thread_id: Uuid,
-    /// Body of the internal comment.
-    pub text: String,
-    /// Context used to word the notification.
-    pub reason: EmailCommentReason,
-}
-
-impl Notification for EmailThreadCommentMetadata {
-    const TYPE_NAME: &'static str = "email_thread_comment";
-}
-
-impl NotificationTitle for EmailThreadCommentMetadata {
-    fn format_title(
-        &self,
-        sender_id: Option<MacroUserIdStr<'_>>,
-    ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("email comment notification requires sender"))?;
-        let name = sender.0.email_part();
-        let action = match self.reason {
-            EmailCommentReason::Mention => "mentioned you in a comment on",
-            EmailCommentReason::Reply => "replied to a comment on",
-            EmailCommentReason::Comment => "commented on",
-        };
-        Ok(format!("{} {action} {}", name.email_str(), self.subject))
-    }
-
-    fn format_body(&self, _: Option<MacroUserIdStr<'_>>) -> Result<String, rootcause::Report> {
-        parse_message_plain_text(&self.text)
-    }
-}
-
-impl NotificationExtIos for EmailThreadCommentMetadata {
-    type NotifData = ::notification::domain::models::apple::PushNotificationData;
-
-    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
-        NotifCollapseKey::new(Self::TYPE_NAME)
-            .append(&entity.entity_id)
-            .append(&self.thread_id.to_string())
-    }
-
-    fn as_apns<'a>(
-        &self,
-        sender_id: Option<MacroUserIdStr<'a>>,
-        _: &Entity<'_>,
-        notification_id: Uuid,
-    ) -> Option<APNSPushNotification<Self::NotifData>> {
-        alert_apns(self, sender_id, notification_id, None).ok()
     }
 }
 

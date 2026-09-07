@@ -1,9 +1,8 @@
 use super::*;
 use agent_trigger::domain::broker_events::AgentBotMentionedEvent;
 use channel_sender::ChannelSender;
-use channels::domain::broker_events::ChannelMessagePostedMetadata;
-use channels::domain::models::ChannelType;
 use chrono::Utc;
+use messages::domain::events::MessagePostedMetadata;
 use std::sync::Mutex;
 
 fn test_session() -> AgentSessionId {
@@ -14,14 +13,13 @@ fn sender() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("asker@example.com").unwrap()
 }
 
-fn message(content: &str, thread_id: Option<Uuid>) -> ChannelMessagePostedMetadata {
-    ChannelMessagePostedMetadata {
-        channel_id: Uuid::from_u128(1),
+fn message(content: &str, thread_id: Option<Uuid>) -> MessagePostedMetadata {
+    MessagePostedMetadata {
+        parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(1)),
         message_id: Uuid::from_u128(2),
         thread_id,
         sender: ChannelSender::new_from_user(sender()),
         triggered_by: None,
-        channel_type: ChannelType::Public,
         content: content.to_owned(),
         mentions: vec![],
         attachments: vec![],
@@ -39,11 +37,11 @@ fn mention(content: &str) -> AgentTriggerTopicEvent {
 }
 
 fn follow_up(content: &str) -> AgentTriggerTopicEvent {
-    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
-        agent_trigger::domain::broker_events::ChannelEventMetadata {
+    AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(
+        agent_trigger::domain::broker_events::ThreadEventMetadata {
             bot_id: bot_id::BotId::TEST_A,
             session_id: test_session(),
-            kind: agent_trigger::domain::broker_events::ChannelKind::MentionThread,
+            kind: agent_trigger::domain::broker_events::ThreadMessageKind::MentionThread,
             message: message(content, Some(Uuid::from_u128(7))),
         },
     ))
@@ -57,7 +55,7 @@ fn a_mention_becomes_open_and_prompt_rooting_its_own_thread() {
         TriggerWork::OpenAndPrompt {
             bot: bot_id::BotId::TEST_A,
             sender: sender(),
-            channel_id: Uuid::from_u128(1),
+            parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(1)),
             thread_id: Uuid::from_u128(2),
             message_id: Uuid::from_u128(2),
             content: "fix the test".to_owned(),

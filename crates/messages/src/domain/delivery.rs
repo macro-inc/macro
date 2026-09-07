@@ -7,11 +7,11 @@ mod test;
 /// Parent and thread facts used when delivering a discussion event.
 #[derive(Debug, Clone)]
 pub struct DiscussionContext {
-    /// Document name or email subject.
+    /// Document name.
     pub name: String,
     /// Authenticated parent owner.
     pub owner: String,
-    /// Document extension, absent for email.
+    /// Optional document extension.
     pub file_type: Option<String>,
     /// Whether the document is a task.
     pub is_task: bool,
@@ -116,7 +116,7 @@ impl DiscussionMentionSharing for NoDiscussionSharing {
     }
 }
 
-/// Discussion delivery policy shared by documents and internal email discussions.
+/// Discussion delivery policy for document comments.
 #[derive(Clone)]
 pub struct DiscussionDelivery<C, A, R, N, S = NoDiscussionSharing> {
     context: C,
@@ -164,7 +164,7 @@ impl<
     async fn publish(&self, event: MessageEvent) -> Result<(), rootcause::Report> {
         if !event.parent.is_discussion() {
             return Err(rootcause::report!(
-                "discussion delivery requires a document or email parent"
+                "discussion delivery requires a document parent"
             ));
         }
         // Run notification delivery even if the transient transport is unavailable.
@@ -174,7 +174,23 @@ impl<
             self.realtime.send(&event, viewers).await
         }
         .await;
-        if let MessageChange::Posted { message, mentions } = &event.change {
+        let notification = match &event.change {
+            MessageChange::Posted {
+                message,
+                mentions,
+                notification_policy,
+            } if *notification_policy != PostMessageNotificationPolicy::Silent => {
+                Some((message, mentions, *notification_policy))
+            }
+            MessageChange::Edited {
+                message,
+                mentions,
+                notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                ..
+            } => Some((message, mentions, PostMessageNotificationPolicy::Default)),
+            _ => None,
+        };
+        if let Some((message, mentions, policy)) = notification {
             let mut context = self.context.context(&event.parent, event.root_id).await?;
             context.sender_profile_picture = self
                 .context
@@ -193,7 +209,6 @@ impl<
                 ..Default::default()
             };
             // Only document link sharing confers explicit visibility on mention.
-            // Email discussion mentions never grant access to the parent mailbox.
             if let MessageParent::Document(_) = &event.parent
                 && let Some(level) = context.link_share_access
                 && let Ok(document) = uuid::Uuid::parse_str(&event.parent.entity_id())
@@ -202,6 +217,11 @@ impl<
                 self.sharing
                     .grant(document, audience.mentioned.clone(), level)
                     .await?;
+            }
+            if policy == PostMessageNotificationPolicy::MentionsOnly {
+                audience.participants.clear();
+                audience.assignees.clear();
+                audience.owners.clear();
             }
             let candidates = audience
                 .mentioned

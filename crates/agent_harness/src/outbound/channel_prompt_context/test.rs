@@ -1,200 +1,142 @@
-use std::sync::{Arc, Mutex};
-
-use chrono::{TimeDelta, Utc};
-
 use super::*;
+use chrono::Utc;
+use entity_access::domain::models::{AccessLevel, Entity, EntityPermission};
+use macro_uuid::Uuid;
+use messages::domain::{api::MockMessageReader, models::Message};
 
-#[derive(Default)]
 struct Authorizer {
-    calls: Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>,
-    fail: bool,
+    allowed: bool,
 }
-
-impl ChannelContextAuthorizer for Authorizer {
-    async fn authorize_member(
+impl ContextAuthorizer for Authorizer {
+    async fn capability(
         &self,
         actor: &MacroUserIdStr<'static>,
-        channel_id: Uuid,
-    ) -> Result<()> {
-        self.calls.lock().unwrap().push((actor.clone(), channel_id));
-        if self.fail {
+        parent: &MessageParent,
+    ) -> Result<EntityAccessReceipt<MessageWrite>> {
+        if !self.allowed {
             return Err(HarnessError::PromptContext(rootcause::report!(
-                "not a channel member"
+                "access revoked"
             )));
         }
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-struct Source {
-    messages: Vec<ChannelContextMessage>,
-    calls: Mutex<Vec<(Uuid, Uuid, i64)>>,
-}
-
-impl ChannelContextSource for Source {
-    async fn message_context(
-        &self,
-        channel_id: Uuid,
-        message_id: Uuid,
-        before: i64,
-    ) -> Result<Vec<ChannelContextMessage>> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push((channel_id, message_id, before));
-        let Some(target) = self
-            .messages
-            .iter()
-            .position(|message| message.id == message_id)
-        else {
-            return Ok(Vec::new());
-        };
-        let start = target.saturating_sub(before as usize);
-        Ok(self.messages[start..=target].to_vec())
-    }
-}
-
-fn message(id: u128, sender: &str, content: &str, deleted: bool) -> ChannelContextMessage {
-    let created_at = Utc::now() + TimeDelta::seconds(id as i64);
-    ChannelContextMessage {
-        id: Uuid::from_u128(id),
-        channel_id: Uuid::from_u128(1),
-        thread_id: None,
-        sender_id: sender.to_owned(),
-        triggered_by: None,
-        bot_profile: None,
-        content: content.to_owned(),
-        created_at,
-        updated_at: created_at,
-        edited_at: None,
-        deleted_at: deleted.then_some(created_at),
+        Ok(EntityAccessReceipt::try_new_authenticated_user(
+            actor.clone(),
+            Entity {
+                entity_type: match parent {
+                    MessageParent::Document(_) => EntityType::Document,
+                    MessageParent::Channel(_) => EntityType::Channel,
+                },
+                entity_id: parent.entity_id(),
+            },
+            EntityPermission::AccessLevel {
+                access_level: AccessLevel::Comment,
+            },
+        )
+        .unwrap())
     }
 }
 
 fn actor() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("actor@example.com").unwrap()
 }
+fn origin() -> AnnounceOrigin {
+    AnnounceOrigin {
+        parent: MessageParent::parse("document", "doc").unwrap(),
+        thread_id: Uuid::from_u128(1),
+        message_id: Uuid::from_u128(2),
+    }
+}
+fn message() -> Message {
+    Message {
+        id: origin().message_id,
+        parent: origin().parent,
+        thread_id: Some(origin().thread_id),
+        sender_id: channel_sender::ChannelSender::new_from_user(actor()),
+        triggered_by: None,
+        bot_profile: None,
+        mentions: vec![],
+        imported_author: None,
+        content: "@agent explain this paragraph".into(),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        edited_at: None,
+        deleted_at: None,
+        attachments: vec![],
+        reactions: vec![],
+    }
+}
 
 #[tokio::test]
-async fn adapter_authorizes_and_returns_only_live_preceding_messages_in_order() {
-    let channel_id = Uuid::from_u128(1);
-    let trigger_id = Uuid::from_u128(4);
-    let source = Arc::new(Source {
-        messages: vec![
-            message(1, "first", "one", false),
-            message(2, "deleted", "two", true),
-            message(3, "third", "three", false),
-            message(4, "actor", "trigger", false),
-        ],
-        calls: Mutex::default(),
-    });
-    let authorizer = Arc::new(Authorizer::default());
-    let adapter = ChannelPromptContextAdapter::new(source.clone(), authorizer.clone());
+async fn document_origin_checks_its_parent_capability_and_root() {
+    let mut source = MockMessageReader::new();
+    source
+        .expect_get()
+        .once()
+        .withf(|access, id| {
+            access.entity().entity_type == EntityType::Document
+                && access.entity().entity_id == "doc"
+                && *id == origin().message_id
+        })
+        .return_once(|_, _| Ok(message()));
+    let adapter =
+        MessagePromptContextAdapter::new(Arc::new(source), Arc::new(Authorizer { allowed: true }));
+    adapter.authorize_origin(&actor(), &origin()).await.unwrap();
+}
 
-    adapter
-        .authorize_member(&actor(), channel_id)
-        .await
-        .unwrap();
-    let messages = adapter
-        .preceding_messages(channel_id, trigger_id)
-        .await
-        .unwrap();
-
-    assert_eq!(
-        messages,
-        vec![
-            PriorChannelMessage {
-                sender: "first".to_owned(),
-                content: "one".to_owned(),
-            },
-            PriorChannelMessage {
-                sender: "third".to_owned(),
-                content: "three".to_owned(),
-            },
-        ]
+#[tokio::test]
+async fn revoked_access_never_reads_message_content() {
+    let adapter = MessagePromptContextAdapter::new(
+        Arc::new(MockMessageReader::new()),
+        Arc::new(Authorizer { allowed: false }),
     );
-    assert_eq!(
-        source.calls.lock().unwrap().as_slice(),
-        &[(channel_id, trigger_id, 10)]
-    );
-    assert_eq!(
-        authorizer.calls.lock().unwrap().as_slice(),
-        &[(actor(), channel_id)]
+    assert!(adapter.authorize_origin(&actor(), &origin()).await.is_err());
+    assert!(
+        adapter
+            .preceding_messages(&actor(), &origin())
+            .await
+            .is_err()
     );
 }
 
 #[tokio::test]
-async fn deleted_rows_do_not_consume_the_ten_message_limit() {
-    let channel_id = Uuid::from_u128(1);
-    let trigger_id = Uuid::from_u128(13);
-    let source = Arc::new(Source {
-        messages: (1..=13)
-            .map(|id| {
-                message(
-                    id,
-                    &format!("sender-{id}"),
-                    &format!("message-{id}"),
-                    id == 10,
-                )
-            })
-            .collect(),
-        calls: Mutex::default(),
-    });
-    let adapter = ChannelPromptContextAdapter::new(source.clone(), Arc::new(Authorizer::default()));
-
-    adapter
-        .authorize_member(&actor(), channel_id)
-        .await
-        .unwrap();
-    let messages = adapter
-        .preceding_messages(channel_id, trigger_id)
-        .await
-        .unwrap();
-
-    assert_eq!(messages.len(), 10);
-    assert_eq!(messages.first().unwrap().content, "message-2");
-    assert_eq!(messages.last().unwrap().content, "message-12");
-    assert_eq!(
-        source.calls.lock().unwrap().as_slice(),
-        &[(channel_id, trigger_id, 10), (channel_id, trigger_id, 20)]
-    );
+async fn a_claimed_root_or_parent_cannot_link_an_unrelated_session() {
+    for (wrong_parent, deleted) in [(false, false), (true, false), (false, true)] {
+        let mut source = MockMessageReader::new();
+        source.expect_get().once().return_once(move |_, _| {
+            let mut message = message();
+            if wrong_parent {
+                message.parent = MessageParent::parse("document", "other-document").unwrap();
+            } else if deleted {
+                message.deleted_at = Some(Utc::now());
+            } else {
+                message.thread_id = Some(Uuid::from_u128(99));
+            }
+            Ok(message)
+        });
+        let adapter = MessagePromptContextAdapter::new(
+            Arc::new(source),
+            Arc::new(Authorizer { allowed: true }),
+        );
+        assert!(adapter.authorize_origin(&actor(), &origin()).await.is_err());
+    }
 }
 
 #[tokio::test]
-async fn denied_membership_prevents_the_channel_fetch() {
-    let source = Arc::new(Source::default());
-    let authorizer = Arc::new(Authorizer {
-        fail: true,
-        ..Default::default()
-    });
-    let adapter = ChannelPromptContextAdapter::new(source.clone(), authorizer);
-
-    let result = adapter.authorize_member(&actor(), Uuid::from_u128(1)).await;
-
-    assert!(matches!(result, Err(HarnessError::PromptContext(_))));
-    assert!(source.calls.lock().unwrap().is_empty());
-}
-
-#[tokio::test]
-async fn bot_authored_prompts_use_the_observed_channel_without_user_authorization() {
-    let channel_id = Uuid::from_u128(1);
-    let trigger_id = Uuid::from_u128(2);
-    let source = Arc::new(Source {
-        messages: vec![
-            message(1, "user", "context", false),
-            message(2, "bot", "trigger", false),
-        ],
-        calls: Mutex::default(),
-    });
-    let authorizer = Arc::new(Authorizer::default());
-    let adapter = ChannelPromptContextAdapter::new(source, authorizer.clone());
-
-    let messages = adapter
-        .preceding_messages(channel_id, trigger_id)
+async fn history_uses_the_shared_authorized_message_reader() {
+    let mut source = MockMessageReader::new();
+    source
+        .expect_preceding()
+        .once()
+        .withf(|access, id, limit| {
+            access.entity().entity_id == "doc" && *id == origin().message_id && *limit == 10
+        })
+        .return_once(|_, _, _| Ok(vec![message()]));
+    let adapter =
+        MessagePromptContextAdapter::new(Arc::new(source), Arc::new(Authorizer { allowed: true }));
+    let history = adapter
+        .preceding_messages(&actor(), &origin())
         .await
         .unwrap();
-
-    assert_eq!(messages.len(), 1);
-    assert!(authorizer.calls.lock().unwrap().is_empty());
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].sender, actor().as_ref());
+    assert_eq!(history[0].content, message().content);
 }

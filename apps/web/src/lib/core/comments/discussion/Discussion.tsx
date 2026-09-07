@@ -2,7 +2,6 @@ import { buildChannelMessageListMeta } from '@channel/Channel/message-list-meta'
 import type { InputSnapshot } from '@channel/Input/types';
 import type { ChannelMessageListMeta } from '@channel/Message/list-meta';
 import { Message } from '@channel/Message/Message';
-import type { MessageActions } from '@channel/Message/types';
 import { buildThreadReplyListMeta } from '@channel/Thread/reply-list-meta';
 import { Thread } from '@channel/Thread/Thread';
 import { ThreadReplyInputConnector } from '@channel/Thread/ThreadReplyInputConnector';
@@ -10,6 +9,7 @@ import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
 import { channelReplyInputOffsetX } from '@channel/Thread/utils/thread-rail-geometry';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
+import type { MessageActions } from '@core/messages/types';
 import { getDisplayName, tryMacroId } from '@core/user';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretRight from '@phosphor/caret-right.svg';
@@ -144,6 +144,20 @@ export function Discussion(props: { label?: string } = {}) {
         <div class="flex-1 border-t border-edge-muted" />
       </div>
 
+      <Show when={source.channelReferences}>
+        {(references) => (
+          <label class="mt-2 flex items-center gap-2 text-xs text-ink-muted">
+            <input
+              type="checkbox"
+              checked={references().enabled()}
+              onChange={(event) =>
+                references().setEnabled(event.currentTarget.checked)
+              }
+            />
+            Include channel mentions
+          </label>
+        )}
+      </Show>
       <Show when={isExpanded()}>
         <StaticMarkdownContext>
           <div class="py-2 text-xs">
@@ -181,6 +195,7 @@ export function Discussion(props: { label?: string } = {}) {
             <Show when={source.canEdit()}>
               <div class="mt-4">
                 <DiscussionInput
+                  parent={source.messageParent?.()}
                   attachmentMode={source.attachmentMode ?? 'inline-images'}
                   input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
                   onSend={handleCreateThread}
@@ -207,7 +222,7 @@ export function DiscussionThreadView(props: {
   onCommentCleanup?: (commentId: string, element: HTMLElement) => void;
 }) {
   const source = useDiscussion();
-  const canEdit = source.canEdit;
+  const canEdit = () => source.canReply?.(props.thread) ?? source.canEdit();
 
   const [isReplying, setIsReplying] = createSignal(false);
   const [editingId, setEditingIdSignal] = createSignal<string | null>(null);
@@ -243,10 +258,11 @@ export function DiscussionThreadView(props: {
   // undefined when the source has no deep-linking — hides the copy-link button.
   const makeCopyLink = (comment: DiscussionComment) => {
     const build = source.buildCommentLink;
-    if (!build) return undefined;
+    if (!build?.(comment)) return undefined;
     return async () => {
       try {
         const url = build(comment);
+        if (!url) return;
         await navigator.clipboard.writeText(url);
         toast.success('Link copied to clipboard');
       } catch {
@@ -324,7 +340,20 @@ export function DiscussionThreadView(props: {
           discussionCommentToMessageData(rootComment());
         return (
           <div class="flex flex-col w-full gap-0">
-            <Show when={source.resolveThread || source.deleteThread}>
+            <Show when={props.thread.sourceLabel}>
+              <a
+                class="mb-1 text-xs text-ink-muted underline"
+                href={props.thread.sourceHref}
+              >
+                From {props.thread.sourceLabel}
+              </a>
+            </Show>
+            <Show
+              when={
+                props.thread.parent?.type !== 'channel' &&
+                (source.resolveThread || source.deleteThread)
+              }
+            >
               <div class="flex items-center justify-end gap-3 text-xs text-ink-muted">
                 <Show when={props.thread.resolved}>
                   <span>Resolved</span>
@@ -450,6 +479,9 @@ export function DiscussionThreadView(props: {
                             <ThreadReplyInputConnector rail="thread" />
                           </Show>
                           <DiscussionInput
+                            parent={
+                              props.thread.parent ?? source.messageParent?.()
+                            }
                             attachmentMode={
                               source.attachmentMode ?? 'inline-images'
                             }
@@ -580,6 +612,7 @@ function DiscussionMessageView(props: {
               }
             >
               <DiscussionInput
+                parent={props.comment.parent ?? source.messageParent?.()}
                 attachmentMode={source.attachmentMode ?? 'inline-images'}
                 input={{
                   mode: 'reply',

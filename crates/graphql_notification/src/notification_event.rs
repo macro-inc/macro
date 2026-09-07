@@ -4,11 +4,10 @@ use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
     AiResponseMetadata, CalendarEventReminderMetadata, CallStartedMetadata, ChannelInviteMetadata,
     ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    CommentedOnDocumentMetadata, DocumentMentionMetadata, EmailCommentReason,
-    EmailThreadCommentMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
-    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
-    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
-    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
+    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
+    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
+    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
     InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
     NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
     TaskAssignedMetadata,
@@ -343,6 +342,9 @@ pub struct GraphqlMentionedInDocumentCommentMetadata(MentionedInDocumentCommentM
 /// Metadata for a mention in a document comment.
 #[Object]
 impl GraphqlMentionedInDocumentCommentMetadata {
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
+    }
     /// Document name.
     async fn document_name(&self) -> &str {
         &self.0.document_name
@@ -395,6 +397,9 @@ pub struct GraphqlRepliedToDocumentCommentThreadMetadata(RepliedToDocumentCommen
 /// Metadata for a reply to a document comment thread.
 #[Object]
 impl GraphqlRepliedToDocumentCommentThreadMetadata {
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
+    }
     /// Document name.
     async fn document_name(&self) -> &str {
         &self.0.document_name
@@ -442,6 +447,9 @@ pub struct GraphqlCommentedOnDocumentMetadata(CommentedOnDocumentMetadata);
 /// Metadata for a comment on a document.
 #[Object]
 impl GraphqlCommentedOnDocumentMetadata {
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
+    }
     /// Document name.
     async fn document_name(&self) -> &str {
         &self.0.document_name
@@ -480,49 +488,6 @@ impl GraphqlCommentedOnDocumentMetadata {
     /// Sender profile-picture URL.
     async fn sender_profile_picture_url(&self) -> Option<&str> {
         self.0.sender_profile_picture_url.as_deref()
-    }
-}
-
-/// GraphQL reason for an internal email comment notification.
-#[derive(Clone, Copy, Debug, Eq, Enum, PartialEq)]
-pub enum GraphqlEmailCommentReason {
-    /// Explicit mention.
-    Mention,
-    /// Reply to a participated discussion.
-    Reply,
-    /// Comment on an owned email thread.
-    Comment,
-}
-
-/// GraphQL wrapper for an internal email discussion notification.
-pub struct GraphqlEmailThreadCommentMetadata(EmailThreadCommentMetadata);
-
-/// An internal comment, with navigation to its parent and root message.
-#[Object]
-impl GraphqlEmailThreadCommentMetadata {
-    /// Email subject.
-    async fn subject(&self) -> &str {
-        &self.0.subject
-    }
-    /// Shared message identifier.
-    async fn message_id(&self) -> ID {
-        ID(self.0.message_id.to_string())
-    }
-    /// Shared root message identifier.
-    async fn thread_id(&self) -> ID {
-        ID(self.0.thread_id.to_string())
-    }
-    /// Internal comment body.
-    async fn text(&self) -> &str {
-        &self.0.text
-    }
-    /// Why this recipient was notified.
-    async fn reason(&self) -> GraphqlEmailCommentReason {
-        match self.0.reason {
-            EmailCommentReason::Mention => GraphqlEmailCommentReason::Mention,
-            EmailCommentReason::Reply => GraphqlEmailCommentReason::Reply,
-            EmailCommentReason::Comment => GraphqlEmailCommentReason::Comment,
-        }
     }
 }
 
@@ -1101,8 +1066,6 @@ pub enum GraphqlNotifEvent {
     RepliedToDocumentCommentThread(GraphqlRepliedToDocumentCommentThreadMetadata),
     /// Document comment metadata.
     CommentedOnDocument(GraphqlCommentedOnDocumentMetadata),
-    /// Internal comment on an email thread.
-    EmailThreadComment(GraphqlEmailThreadCommentMetadata),
     /// Channel invitation metadata.
     ChannelInvite(GraphqlChannelInviteMetadata),
     /// Channel message metadata.
@@ -1155,9 +1118,6 @@ impl From<NotifEvent> for GraphqlNotifEvent {
                 Self::RepliedToDocumentCommentThread(GraphqlRepliedToDocumentCommentThreadMetadata(
                     metadata,
                 ))
-            }
-            NotifEvent::EmailThreadComment(metadata) => {
-                Self::EmailThreadComment(GraphqlEmailThreadCommentMetadata(metadata))
             }
             NotifEvent::CommentedOnDocument(metadata) => {
                 Self::CommentedOnDocument(GraphqlCommentedOnDocumentMetadata(metadata))

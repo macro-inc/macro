@@ -6,8 +6,7 @@ use crate::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use model_notifications::{
-    CommentedOnDocumentMetadata, EmailCommentReason, EmailThreadCommentMetadata,
-    MentionedInDocumentCommentMetadata, NotificationDocumentSubType,
+    CommentedOnDocumentMetadata, MentionedInDocumentCommentMetadata, NotificationDocumentSubType,
     RepliedToDocumentCommentThreadMetadata,
 };
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
@@ -18,12 +17,17 @@ pub struct MessageNotificationSender<N>(pub std::sync::Arc<N>);
 
 impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N> {
     async fn send(&self, n: DiscussionNotification<'_>) -> Result<(), rootcause::Report> {
-        let sender_id = Some(MacroUserIdStr::try_from(n.event.actor.clone())?);
+        let sender_id = n.message.sender_id.as_user().cloned();
+        let sender_display_name = n
+            .message
+            .bot_profile
+            .as_ref()
+            .map(|profile| profile.name.clone())
+            .or_else(|| n.message.sender_id.as_bot().map(|_| "Agent".to_owned()));
         let recipient_ids =
             std::collections::HashSet::from([MacroUserIdStr::try_from(n.recipient)?]);
         let kind = match n.event.parent {
             MessageParent::Document(_) => EntityType::Document,
-            MessageParent::EmailThread(_) => EntityType::EmailThread,
             MessageParent::Channel(_) => {
                 return Err(rootcause::report!(
                     "comment notification requires discussion parent"
@@ -50,62 +54,66 @@ impl<N: NotificationIngress> DiscussionNotifier for MessageNotificationSender<N>
                     .await?
             };
         }
-        if matches!(n.event.parent, MessageParent::EmailThread(_)) {
-            send!(EmailThreadCommentMetadata {
-                subject: n.context.name.clone(),
-                message_id: n.message.id,
-                thread_id: n.event.root_id,
-                text: n.message.content.clone(),
-                reason: match n.reason {
-                    CommentNotificationReason::Mention => EmailCommentReason::Mention,
-                    CommentNotificationReason::Reply => EmailCommentReason::Reply,
-                    _ => EmailCommentReason::Comment,
-                },
-            });
-        } else {
-            let owner = MacroUserIdStr::try_from(n.context.owner.clone())?;
-            let sub_type = n
-                .context
-                .is_task
-                .then_some(NotificationDocumentSubType::Task);
-            match n.reason {
-                CommentNotificationReason::Mention => {
-                    send!(MentionedInDocumentCommentMetadata {
-                        document_name: n.context.name.clone(),
-                        owner,
-                        file_type: n.context.file_type.clone(),
-                        sub_type,
-                        mention_id: n.message.id.to_string(),
-                        comment_id: n.message.id,
-                        thread_id: n.event.root_id,
-                        text: n.message.content.clone(),
-                        sender_profile_picture_url: n.context.sender_profile_picture.clone(),
-                    });
-                }
-                CommentNotificationReason::Reply => {
-                    send!(RepliedToDocumentCommentThreadMetadata {
-                        document_name: n.context.name.clone(),
-                        owner,
-                        file_type: n.context.file_type.clone(),
-                        sub_type,
-                        comment_id: n.message.id,
-                        thread_id: n.event.root_id,
-                        text: n.message.content.clone(),
-                        sender_profile_picture_url: n.context.sender_profile_picture.clone(),
-                    });
-                }
-                _ => {
-                    send!(CommentedOnDocumentMetadata {
-                        document_name: n.context.name.clone(),
-                        owner,
-                        file_type: n.context.file_type.clone(),
-                        sub_type,
-                        comment_id: n.message.id,
-                        thread_id: n.event.root_id,
-                        text: n.message.content.clone(),
-                        sender_profile_picture_url: n.context.sender_profile_picture.clone(),
-                    });
-                }
+        let owner = MacroUserIdStr::try_from(n.context.owner.clone())?;
+        let sub_type = n
+            .context
+            .is_task
+            .then_some(NotificationDocumentSubType::Task);
+        match n.reason {
+            CommentNotificationReason::Mention => {
+                send!(MentionedInDocumentCommentMetadata {
+                    sender_display_name: sender_display_name.clone(),
+                    document_name: n.context.name.clone(),
+                    owner,
+                    file_type: n.context.file_type.clone(),
+                    sub_type,
+                    mention_id: n.message.id.to_string(),
+                    comment_id: n.message.id,
+                    thread_id: n.event.root_id,
+                    text: n.message.content.clone(),
+                    sender_profile_picture_url: n
+                        .message
+                        .bot_profile
+                        .as_ref()
+                        .and_then(|profile| profile.avatar_url.clone())
+                        .or_else(|| n.context.sender_profile_picture.clone()),
+                });
+            }
+            CommentNotificationReason::Reply => {
+                send!(RepliedToDocumentCommentThreadMetadata {
+                    sender_display_name: sender_display_name.clone(),
+                    document_name: n.context.name.clone(),
+                    owner,
+                    file_type: n.context.file_type.clone(),
+                    sub_type,
+                    comment_id: n.message.id,
+                    thread_id: n.event.root_id,
+                    text: n.message.content.clone(),
+                    sender_profile_picture_url: n
+                        .message
+                        .bot_profile
+                        .as_ref()
+                        .and_then(|profile| profile.avatar_url.clone())
+                        .or_else(|| n.context.sender_profile_picture.clone()),
+                });
+            }
+            _ => {
+                send!(CommentedOnDocumentMetadata {
+                    sender_display_name: sender_display_name.clone(),
+                    document_name: n.context.name.clone(),
+                    owner,
+                    file_type: n.context.file_type.clone(),
+                    sub_type,
+                    comment_id: n.message.id,
+                    thread_id: n.event.root_id,
+                    text: n.message.content.clone(),
+                    sender_profile_picture_url: n
+                        .message
+                        .bot_profile
+                        .as_ref()
+                        .and_then(|profile| profile.avatar_url.clone())
+                        .or_else(|| n.context.sender_profile_picture.clone()),
+                });
             }
         }
         Ok(())

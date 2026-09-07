@@ -142,7 +142,6 @@ export function ThreadReplyChannelInput(props: ThreadReplyChannelInputProps) {
         const payload = buildPostMessageSendPayload({
           snapshot,
           threadId: props.threadId,
-          participantIds: participants.ids(),
         });
 
         sendMessageMutation.mutate(

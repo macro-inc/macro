@@ -56,7 +56,7 @@ impl DiscussionContextReader for Context {
         _: Uuid,
     ) -> Result<DiscussionContext, rootcause::Report> {
         Ok(DiscussionContext {
-            name: "Subject".into(),
+            name: "Document".into(),
             owner: "owner".into(),
             file_type: None,
             is_task: false,
@@ -69,12 +69,14 @@ impl DiscussionContextReader for Context {
 }
 fn event() -> MessageEvent {
     let actor = "macro|author@example.com".to_owned();
-    let parent = MessageParent::EmailThread(Uuid::from_u128(1));
+    let parent = MessageParent::parse("document", "legacy-document").unwrap();
     let message = Message {
         id: Uuid::from_u128(3),
         parent: parent.clone(),
         thread_id: Some(Uuid::from_u128(2)),
         sender_id: actor.clone().try_into().unwrap(),
+        bot_profile: None,
+        mentions: vec![],
         imported_author: None,
         triggered_by: None,
         content: "A private discussion".into(),
@@ -91,6 +93,7 @@ fn event() -> MessageEvent {
         actor,
         nonce: None,
         change: MessageChange::Posted {
+            notification_policy: Default::default(),
             message,
             mentions: vec![
                 SimpleMention {
@@ -148,7 +151,7 @@ async fn edits_and_reactions_only_publish_live_updates() {
     let MessageChange::Posted { message, .. } = event.change else {
         unreachable!()
     };
-    event.change = MessageChange::Updated { message };
+    event.change = MessageChange::ReactionChanged { message };
     DiscussionDelivery::new(Context, Access, log.clone(), log.clone())
         .publish(event)
         .await
@@ -172,7 +175,7 @@ impl DiscussionMentionSharing for Shares {
 }
 
 #[tokio::test]
-async fn only_document_mentions_inherit_link_sharing() {
+async fn document_mentions_inherit_link_sharing_for_uuid_parents() {
     let log = DeliveryLog::default();
     let shares = Shares::default();
     let delivery =

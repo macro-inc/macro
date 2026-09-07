@@ -352,6 +352,7 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 		documentMentionSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlMentionedInDocumentCommentMetadata {
+        senderDisplayName
 		mentionedInDocumentCommentDocumentName: documentName
 		mentionedInDocumentCommentOwner: owner
 		mentionedInDocumentCommentFileType: fileType
@@ -363,6 +364,7 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 		mentionedInDocumentCommentSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlRepliedToDocumentCommentThreadMetadata {
+        senderDisplayName
 		repliedToDocumentCommentThreadDocumentName: documentName
 		repliedToDocumentCommentThreadOwner: owner
 		repliedToDocumentCommentThreadFileType: fileType
@@ -373,6 +375,7 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 		repliedToDocumentCommentThreadSenderProfilePictureUrl: senderProfilePictureUrl
 	}
 	... on GraphqlCommentedOnDocumentMetadata {
+        senderDisplayName
 		commentedOnDocumentDocumentName: documentName
 		commentedOnDocumentOwner: owner
 		commentedOnDocumentFileType: fileType
@@ -381,13 +384,6 @@ fragment SoupNotificationMetadataFields on GraphqlNotifEvent {
 		commentedOnDocumentThreadId: threadId
 		commentedOnDocumentText: text
 		commentedOnDocumentSenderProfilePictureUrl: senderProfilePictureUrl
-	}
-	... on GraphqlEmailThreadCommentMetadata {
-		emailCommentSubject: subject
-		emailCommentMessageId: messageId
-		emailCommentThreadId: threadId
-		emailCommentText: text
-		emailCommentReason: reason
 	}
 	... on GraphqlChannelInviteMetadata {
 		channelInviteInvitedBy: invitedBy

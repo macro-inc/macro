@@ -1,6 +1,6 @@
+import type { MessageActions, MessageData } from '@core/messages/types';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal, type JSX } from 'solid-js';
-import type { MessageActions, MessageData } from '../Message/types';
 import { ActionDrawer } from './ActionDrawer';
 import {
   MessageActionDrawerContextProvider,

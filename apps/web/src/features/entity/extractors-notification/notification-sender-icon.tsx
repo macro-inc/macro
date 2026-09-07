@@ -7,6 +7,7 @@ import type { Notification } from '../types/notification';
 import {
   getGithubSenderAvatarUrl,
   getGithubSenderLogin,
+  getMessageSender,
   isGithubNotificationType,
 } from './notification-description-helpers';
 
@@ -74,6 +75,20 @@ export function NotificationSenderIcon(props: NotificationSenderIconProps) {
         {(sender) => (
           <Avatar size={size()}>
             <Avatar.Image src={sender().imageUrl} alt={sender().login} />
+          </Avatar>
+        )}
+      </Match>
+      <Match
+        when={getMessageSender(
+          props.notification ?? props.stack?.notifications[0]
+        )}
+      >
+        {(sender) => (
+          <Avatar size={size()}>
+            <Show when={sender().avatar}>
+              {(avatar) => <Avatar.Image src={avatar()} alt={sender().name} />}
+            </Show>
+            <Avatar.Fallback>{sender().name.slice(0, 1)}</Avatar.Fallback>
           </Avatar>
         )}
       </Match>

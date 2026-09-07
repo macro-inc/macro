@@ -51,7 +51,21 @@ where
             EntityType::EmailThread => self.repo.get_thread_access(entity_id, user_id).await,
             EntityType::Call => self.repo.get_call_access(entity_id, user_id).await,
             EntityType::AgentSession => {
-                self.repo.get_agent_session_access(entity_id, user_id).await
+                let direct = self
+                    .repo
+                    .get_agent_session_access(entity_id, user_id)
+                    .await?;
+                let inherited = if let Some(document) =
+                    self.repo.get_agent_session_document(entity_id).await?
+                {
+                    self.repo
+                        .get_document_access(&document, user_id)
+                        .await?
+                        .map(session_permission_from_document)
+                } else {
+                    None
+                };
+                Ok(direct.max(inherited))
             }
             EntityType::CalendarEvent => {
                 self.repo
@@ -180,14 +194,20 @@ where
             | EntityType::Chat
             | EntityType::Project
             | EntityType::EmailThread
-            | EntityType::Call
-            | EntityType::AgentSession => {
+            | EntityType::Call => {
                 let access_level = self
                     .repo
                     .get_team_entity_access(bot_id, team_id, entity_id, entity_type)
                     .await?
                     .ok_or(AccessError::Unauthorized)?;
                 Ok(EntityPermission::AccessLevel { access_level })
+            }
+            EntityType::AgentSession => {
+                let direct = self.repo.get_team_entity_access(bot_id, team_id, entity_id, entity_type).await?;
+                let inherited = if let Some(document) = self.repo.get_agent_session_document(entity_id).await? {
+                    self.repo.get_team_entity_access(bot_id, team_id, &document, EntityType::Document).await?.map(session_permission_from_document)
+                } else { None };
+                Ok(EntityPermission::AccessLevel { access_level: direct.max(inherited).ok_or(AccessError::Unauthorized)? })
             }
             EntityType::Channel => {
                 let channel_id = Uuid::parse_str(entity_id)
@@ -656,3 +676,13 @@ fn channel_role_result_to_permission(
 
 #[cfg(test)]
 mod test;
+
+// Commenters can prompt the agent; viewers can inspect the response. Parent
+// ownership never confers session ownership or permission to delete it.
+fn session_permission_from_document(level: AccessLevel) -> AccessLevel {
+    if level >= AccessLevel::Comment {
+        AccessLevel::Edit
+    } else {
+        AccessLevel::View
+    }
+}

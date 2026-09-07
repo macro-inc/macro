@@ -300,6 +300,12 @@ export const listTypedNotificationsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -347,6 +353,12 @@ export const listTypedNotificationsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -396,6 +408,12 @@ export const listTypedNotificationsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -428,36 +446,6 @@ export const listTypedNotificationsResponse = zod
                       tag: zod.enum(['commented_on_document']),
                     })
                     .describe('Someone commented on a document the user owns.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          messageId: zod
-                            .uuid()
-                            .describe('Shared message UUID.'),
-                          reason: zod
-                            .enum(['mention', 'reply', 'comment'])
-                            .describe(
-                              'Reason for an internal email discussion notification.'
-                            ),
-                          subject: zod
-                            .string()
-                            .describe('Subject of the parent email thread.'),
-                          text: zod
-                            .string()
-                            .describe('Body of the internal comment.'),
-                          threadId: zod
-                            .uuid()
-                            .describe(
-                              'Root message UUID, distinct from the parent email thread ID.'
-                            ),
-                        })
-                        .describe(
-                          'An internal comment on an email thread, distinct from an incoming email.'
-                        ),
-                      tag: zod.enum(['email_thread_comment']),
-                    })
-                    .describe('Internal discussion on an email thread.'),
                   zod
                     .object({
                       content: zod
@@ -1686,6 +1674,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -1733,6 +1727,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -1782,6 +1782,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -1814,36 +1820,6 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                       tag: zod.enum(['commented_on_document']),
                     })
                     .describe('Someone commented on a document the user owns.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          messageId: zod
-                            .uuid()
-                            .describe('Shared message UUID.'),
-                          reason: zod
-                            .enum(['mention', 'reply', 'comment'])
-                            .describe(
-                              'Reason for an internal email discussion notification.'
-                            ),
-                          subject: zod
-                            .string()
-                            .describe('Subject of the parent email thread.'),
-                          text: zod
-                            .string()
-                            .describe('Body of the internal comment.'),
-                          threadId: zod
-                            .uuid()
-                            .describe(
-                              'Root message UUID, distinct from the parent email thread ID.'
-                            ),
-                        })
-                        .describe(
-                          'An internal comment on an email thread, distinct from an incoming email.'
-                        ),
-                      tag: zod.enum(['email_thread_comment']),
-                    })
-                    .describe('Internal discussion on an email thread.'),
                   zod
                     .object({
                       content: zod
@@ -3066,6 +3042,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -3113,6 +3095,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -3162,6 +3150,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -3194,36 +3188,6 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                       tag: zod.enum(['commented_on_document']),
                     })
                     .describe('Someone commented on a document the user owns.'),
-                  zod
-                    .object({
-                      content: zod
-                        .object({
-                          messageId: zod
-                            .uuid()
-                            .describe('Shared message UUID.'),
-                          reason: zod
-                            .enum(['mention', 'reply', 'comment'])
-                            .describe(
-                              'Reason for an internal email discussion notification.'
-                            ),
-                          subject: zod
-                            .string()
-                            .describe('Subject of the parent email thread.'),
-                          text: zod
-                            .string()
-                            .describe('Body of the internal comment.'),
-                          threadId: zod
-                            .uuid()
-                            .describe(
-                              'Root message UUID, distinct from the parent email thread ID.'
-                            ),
-                        })
-                        .describe(
-                          'An internal comment on an email thread, distinct from an incoming email.'
-                        ),
-                      tag: zod.enum(['email_thread_comment']),
-                    })
-                    .describe('Internal discussion on an email thread.'),
                   zod
                     .object({
                       content: zod
@@ -4449,6 +4413,12 @@ export const getTypedNotificationByIdResponse = zod
                     .describe('The file type of the document.'),
                   mentionId: zod.string().describe('The mention ID.'),
                   owner: zod.string().describe('The owner of the document.'),
+                  senderDisplayName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Public bot name when the author is an agent rather than a Macro user.'
+                    ),
                   senderProfilePictureUrl: zod.string().nullish(),
                   subType: zod
                     .union([
@@ -4492,6 +4462,12 @@ export const getTypedNotificationByIdResponse = zod
                     .nullish()
                     .describe('The file type of the document.'),
                   owner: zod.string().describe('The owner of the document.'),
+                  senderDisplayName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Public bot name when the author is an agent rather than a Macro user.'
+                    ),
                   senderProfilePictureUrl: zod.string().nullish(),
                   subType: zod
                     .union([
@@ -4537,6 +4513,12 @@ export const getTypedNotificationByIdResponse = zod
                     .nullish()
                     .describe('The file type of the document.'),
                   owner: zod.string().describe('The owner of the document.'),
+                  senderDisplayName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Public bot name when the author is an agent rather than a Macro user.'
+                    ),
                   senderProfilePictureUrl: zod.string().nullish(),
                   subType: zod
                     .union([
@@ -4567,32 +4549,6 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['commented_on_document']),
             })
             .describe('Someone commented on a document the user owns.'),
-          zod
-            .object({
-              content: zod
-                .object({
-                  messageId: zod.uuid().describe('Shared message UUID.'),
-                  reason: zod
-                    .enum(['mention', 'reply', 'comment'])
-                    .describe(
-                      'Reason for an internal email discussion notification.'
-                    ),
-                  subject: zod
-                    .string()
-                    .describe('Subject of the parent email thread.'),
-                  text: zod.string().describe('Body of the internal comment.'),
-                  threadId: zod
-                    .uuid()
-                    .describe(
-                      'Root message UUID, distinct from the parent email thread ID.'
-                    ),
-                })
-                .describe(
-                  'An internal comment on an email thread, distinct from an incoming email.'
-                ),
-              tag: zod.enum(['email_thread_comment']),
-            })
-            .describe('Internal discussion on an email thread.'),
           zod
             .object({
               content: zod

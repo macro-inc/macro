@@ -5,7 +5,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::models::{PostMessageNotificationPolicy, PostMessageRequest, Sender};
+use crate::domain::models::{PostMessageNotificationPolicy, PostMessageRequest};
 use crate::domain::ports::ChannelService;
 use crate::inbound::toolset::ChannelToolContext;
 use entity_access::domain::ports::EntityAccessService;
@@ -53,13 +53,18 @@ where
         service_context: ServiceContext<ChannelToolContext<Svc, AccessSvc>>,
         request_context: RequestContext,
     ) -> ToolResult<Self::Output> {
-        service_context
-            .require_channel_member(&request_context, self.channel_id)
-            .await?;
-
-        // AI sends as the tool actor bot; the triggering user is recorded
-        // separately so the client can render a "from <user>" pill.
-        let actor = Sender::new_from_bot(service_context.actor);
+        let access = service_context
+            .entity_access_service
+            .generate_bot_entity_access_receipt::<messages::domain::service::MessageWrite>(
+                service_context.actor,
+                entity_access::domain::models::BotAccessScope::user(
+                    request_context.user_id.clone(),
+                ),
+                &self.channel_id.to_string(),
+                entity_access::domain::models::EntityType::Channel,
+            )
+            .await
+            .map_err(super::channel_access_error)?;
         let triggered_by = Some(request_context.user_id.as_ref().to_string());
 
         let req = PostMessageRequest {
@@ -73,8 +78,8 @@ where
         };
 
         service_context
-            .service
-            .post_message(actor, self.channel_id, req)
+            .messages
+            .post_message(access, req)
             .await
             .map_err(tool_err("failed to send message"))
             .map(|response| SendChannelMessageResponse {

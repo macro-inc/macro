@@ -28,6 +28,7 @@ struct MockRepo {
     owned_email_thread_ids: Arc<Mutex<Vec<Uuid>>>,
     call_access: Arc<Mutex<Option<AccessLevel>>>,
     agent_session_access: Arc<Mutex<Option<AccessLevel>>>,
+    agent_session_document: Arc<Mutex<Option<String>>>,
     reminder_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access: Arc<Mutex<Option<AccessLevel>>>,
     team_entity_access_calls: Arc<AtomicUsize>,
@@ -63,6 +64,7 @@ impl MockRepo {
             owned_email_thread_ids: Arc::new(Mutex::new(Vec::new())),
             call_access: Arc::new(Mutex::new(None)),
             agent_session_access: Arc::new(Mutex::new(None)),
+            agent_session_document: Arc::default(),
             reminder_access: Arc::new(Mutex::new(None)),
             team_entity_access: Arc::new(Mutex::new(None)),
             team_entity_access_calls: Arc::new(AtomicUsize::new(0)),
@@ -212,6 +214,10 @@ impl MockRepo {
 }
 
 impl AccessRepository for MockRepo {
+    async fn get_agent_session_document(&self, _: &str) -> Result<Option<String>, AccessError> {
+        Ok(self.agent_session_document.lock().await.clone())
+    }
+
     async fn get_document_access(
         &self,
         _document_id: &str,
@@ -2108,4 +2114,34 @@ async fn test_get_users_by_entity_project_with_many_users() {
     for (i, u) in result.iter().enumerate() {
         assert_eq!(u.to_string(), format!("macro|user{}@test.com", i));
     }
+}
+
+#[tokio::test]
+async fn document_session_access_tracks_current_document_permission() {
+    let repo = MockRepo::new();
+    *repo.agent_session_document.lock().await = Some("doc".into());
+    let service = EntityAccessServiceImpl::new(repo.clone());
+    for (permission, expected) in [
+        (Some(AccessLevel::View), Some(AccessLevel::View)),
+        (Some(AccessLevel::Comment), Some(AccessLevel::Edit)),
+        (Some(AccessLevel::Owner), Some(AccessLevel::Edit)),
+        (None, None),
+    ] {
+        *repo.document_access.lock().await = permission;
+        assert_eq!(
+            service
+                .get_access_level(None, "session", EntityType::AgentSession)
+                .await
+                .unwrap(),
+            expected
+        );
+    }
+    *repo.agent_session_access.lock().await = Some(AccessLevel::Owner);
+    assert_eq!(
+        service
+            .get_access_level(None, "session", EntityType::AgentSession)
+            .await
+            .unwrap(),
+        Some(AccessLevel::Owner)
+    );
 }

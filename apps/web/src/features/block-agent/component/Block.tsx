@@ -67,7 +67,7 @@ function AgentBlockContent() {
               {(origin) => (
                 <LinkedConversationDrawer
                   id={ORIGIN_THREAD_DRAWER_ID}
-                  channelId={origin().channelId}
+                  parent={origin().parent}
                   messageId={origin().messageId}
                 />
               )}

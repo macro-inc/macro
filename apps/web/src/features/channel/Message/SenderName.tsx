@@ -1,9 +1,9 @@
+import type { MessageData } from '@core/messages/types';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { getBotDisplayName } from '@queries/channel/message-sender';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { useMessage } from './context';
-import type { MessageData } from './types';
 
 type SenderNameProps = {
   class?: string;

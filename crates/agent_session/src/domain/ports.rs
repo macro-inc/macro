@@ -53,7 +53,7 @@ pub trait BotDirectory: Send + Sync + 'static {
 #[derive(Debug, Clone)]
 pub struct SessionThread {
     /// Channel the mentioning message was posted in.
-    pub channel_id: Uuid,
+    pub parent: messages::domain::models::MessageParent,
     /// Thread the session belongs to.
     pub thread_id: Uuid,
     /// The mentioning message itself.
@@ -173,15 +173,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// otherwise `None`. There is nothing else to match: a session does not
     /// own a channel, and messages sent directly to a session arrive through
     /// their own topic rather than as channel events.
-    fn find_for_channel(
+    fn find_for_thread(
         &self,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
-    ) -> impl Future<Output = Result<ChannelSession>> + Send;
+    ) -> impl Future<Output = Result<ThreadSession>> + Send;
 
     /// Every session rooted at this thread, newest first, regardless of bot.
     ///
-    /// [`find_for_channel`](Self::find_for_channel) answers for one known bot;
+    /// [`find_for_thread`](Self::find_for_thread) answers for one known bot;
     /// this answers when no bot was named - a message in the thread may still
     /// be meant for whichever agent lives there.
     fn find_all_for_thread(

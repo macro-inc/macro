@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RepliedToDocumentCommentThreadMetadataFileType } from './repliedToDocumentCommentThreadMetadataFileType';
+import type { RepliedToDocumentCommentThreadMetadataSenderDisplayName } from './repliedToDocumentCommentThreadMetadataSenderDisplayName';
 import type { RepliedToDocumentCommentThreadMetadataSenderProfilePictureUrl } from './repliedToDocumentCommentThreadMetadataSenderProfilePictureUrl';
 import type { RepliedToDocumentCommentThreadMetadataSubType } from './repliedToDocumentCommentThreadMetadataSubType';
 
@@ -20,6 +21,8 @@ export interface RepliedToDocumentCommentThreadMetadata {
   fileType?: RepliedToDocumentCommentThreadMetadataFileType;
   /** The owner of the document. */
   owner: string;
+  /** Public bot name when the author is an agent rather than a Macro user. */
+  senderDisplayName?: RepliedToDocumentCommentThreadMetadataSenderDisplayName;
   senderProfilePictureUrl?: RepliedToDocumentCommentThreadMetadataSenderProfilePictureUrl;
   subType?: RepliedToDocumentCommentThreadMetadataSubType;
   /** the text of the comment */

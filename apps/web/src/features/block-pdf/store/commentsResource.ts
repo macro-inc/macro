@@ -24,6 +24,7 @@ import type { EditMessage } from '@service-storage/generated/schemas/editMessage
 import type { PostMessage } from '@service-storage/messages';
 
 export const documentMessagesQuery = createBlockMemo(() => {
+  if (useBlockName() !== 'pdf') return;
   const id = useBlockId();
   return useMessageThreadsQuery(() => ({ type: 'document', id }));
 });

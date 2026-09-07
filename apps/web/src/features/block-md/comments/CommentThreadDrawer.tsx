@@ -66,6 +66,7 @@ function PinnedReplyComposer(props: {
         classList={{ 'pb-(--safe-bottom)': !virtualKeyboardVisible() }}
       >
         <DiscussionInput
+          parent={context.discussionSource?.messageParent?.()}
           input={{ mode: 'reply', placeholder: 'Reply...' }}
           autofocus={false}
           onReady={(handle) => {

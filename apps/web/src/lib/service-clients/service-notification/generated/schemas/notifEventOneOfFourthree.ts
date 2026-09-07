@@ -4,14 +4,14 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { GithubPrMention } from './githubPrMention';
+import type { GithubPrReview } from './githubPrReview';
 import type { NotifEventOneOfFourthreeTag } from './notifEventOneOfFourthreeTag';
 
 /**
- * The user was mentioned on a GitHub pull request.
+ * A review was submitted on the user's GitHub pull request.
  */
 export type NotifEventOneOfFourthree = {
-  /** The user was mentioned on a GitHub pull request. */
-  content: GithubPrMention;
+  /** A review was submitted on the user's GitHub pull request. */
+  content: GithubPrReview;
   tag: NotifEventOneOfFourthreeTag;
 };

@@ -2,6 +2,7 @@
 //! with in-memory persistence, mock containers, a fake agent, and a
 //! recording announcer. Only the edges are doubles.
 
+use messages::domain::models::MessageParent;
 use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::RawJsonRpcMessage;
@@ -35,11 +36,10 @@ use super::into_session_error;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeliverAction, HarnessCommand,
-    HarnessDefaults, MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults,
-    SpawnContainer,
+    HarnessDefaults, MentionOrigin, OpenSession, PriorMessage, SessionDefaults, SpawnContainer,
 };
 use crate::domain::ports::{
-    AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
+    AgentPromptComposer, ContainerManager as _, MessagePromptContext, NoPeers,
 };
 use crate::outbound::runtime_registry::RuntimeRegistry;
 use crate::testing::helpers::agent::FakeAgent;
@@ -80,7 +80,7 @@ fn open_command() -> OpenSession {
             instructions: String::new(),
         },
         origin: MentionOrigin {
-            channel_id: macro_uuid::generate_uuid_v7(),
+            parent: MessageParent::Channel(macro_uuid::generate_uuid_v7()),
             thread_id,
             message_id: thread_id,
             sender: sender(),
@@ -98,7 +98,7 @@ fn forward_message(content: &str) -> DeliverAction {
         content,
         Some(staff_sender()),
         Some(AnnounceOrigin {
-            channel_id: macro_uuid::Uuid::from_u128(0xf0),
+            parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xf0)),
             thread_id: macro_uuid::Uuid::from_u128(0xf1),
             message_id: macro_uuid::Uuid::from_u128(0xf2),
         }),
@@ -107,12 +107,12 @@ fn forward_message(content: &str) -> DeliverAction {
 
 #[derive(Clone, Default)]
 struct PromptContextMock {
-    messages: Arc<Mutex<Vec<PriorChannelMessage>>>,
+    messages: Arc<Mutex<Vec<PriorMessage>>>,
     failure: Arc<Mutex<Option<String>>>,
 }
 
 impl PromptContextMock {
-    fn with_messages(messages: Vec<PriorChannelMessage>) -> Self {
+    fn with_messages(messages: Vec<PriorMessage>) -> Self {
         Self {
             messages: Arc::new(Mutex::new(messages)),
             failure: Arc::default(),
@@ -127,20 +127,20 @@ impl PromptContextMock {
     }
 }
 
-impl ChannelPromptContext for PromptContextMock {
-    async fn authorize_member(
+impl MessagePromptContext for PromptContextMock {
+    async fn authorize_origin(
         &self,
         _actor: &MacroUserIdStr<'static>,
-        _channel_id: Uuid,
+        _origin: &AnnounceOrigin,
     ) -> crate::domain::error::Result<()> {
         Ok(())
     }
 
     async fn preceding_messages(
         &self,
-        _channel_id: Uuid,
-        _message_id: Uuid,
-    ) -> crate::domain::error::Result<Vec<PriorChannelMessage>> {
+        _actor: &MacroUserIdStr<'static>,
+        _origin: &AnnounceOrigin,
+    ) -> crate::domain::error::Result<Vec<PriorMessage>> {
         if let Some(message) = self.failure.lock().unwrap().clone() {
             return Err(HarnessError::PromptContext(rootcause::report!("{message}")));
         }
@@ -148,7 +148,7 @@ impl ChannelPromptContext for PromptContextMock {
     }
 }
 
-type PromptCompositionCall = (String, Option<Vec<PriorChannelMessage>>);
+type PromptCompositionCall = (String, Option<Vec<PriorMessage>>);
 
 #[derive(Clone, Default)]
 struct PromptComposerMock {
@@ -173,7 +173,8 @@ impl AgentPromptComposer for PromptComposerMock {
     async fn compose(
         &self,
         prompt_markdown: &str,
-        messages: Option<&[PriorChannelMessage]>,
+        _parent: Option<&MessageParent>,
+        messages: Option<&[PriorMessage]>,
     ) -> crate::domain::error::Result<String> {
         self.calls.lock().unwrap().push((
             prompt_markdown.to_owned(),
@@ -470,7 +471,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
     assert_eq!(session.harness, "opencode");
     let announced = announcer.announced();
     assert_eq!(announced.len(), 1);
-    assert_eq!(announced[0].origin_channel_id, origin.channel_id);
+    assert_eq!(announced[0].origin_parent, origin.parent);
     assert_eq!(announced[0].origin_thread_id, origin.thread_id);
     assert_eq!(announced[0].triggered_by, origin.sender);
     assert_eq!(
@@ -490,7 +491,7 @@ async fn open_creates_announces_and_delivers_the_mention() {
 }
 
 #[tokio::test]
-async fn context_failure_still_calls_composer_with_empty_messages_and_delivers() {
+async fn context_failure_blocks_dispatch_and_keeps_the_prompt_queued() {
     let composer = PromptComposerMock::default();
     let (service, _repo, containers, announcer, _runtimes) = harness_with_edges(
         PromptContextMock::failing("channels unavailable"),
@@ -498,32 +499,18 @@ async fn context_failure_still_calls_composer_with_empty_messages_and_delivers()
     );
     let id = AgentSessionId::new();
 
-    let open = service.execute(id, HarnessCommand::Open(open_command()));
-    let drive = async {
-        loop {
-            if containers.spawned() == 1 {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-        let container = containers.container(id).unwrap();
-        complete_handshake(&container).await;
-        container
-    };
-    let (result, container) = tokio::join!(open, drive);
-
-    result.expect("context lookup is best-effort after Kafka admission");
-    assert_eq!(announcer.announced().len(), 1);
-    assert_eq!(
-        composer.calls(),
-        [("@claude fix the failing test".to_owned(), Some(Vec::new()))]
+    let result = service
+        .execute(id, HarnessCommand::Open(open_command()))
+        .await;
+    let container = containers.container(id).unwrap();
+    assert_eq!(service.queued_controls(id).await.unwrap().len(), 1);
+    assert!(
+        result.is_err(),
+        "unreadable context must block message dispatch"
     );
-    assert_eq!(
-        prompts(&container.agent()),
-        [vec![ContentBlock::from(context_prompt(
-            "@claude fix the failing test"
-        ))]]
-    );
+    assert!(announcer.announced().is_empty());
+    assert!(composer.calls().is_empty());
+    assert!(prompts(&container.agent()).is_empty());
 }
 
 #[tokio::test]
@@ -560,7 +547,7 @@ async fn composer_failure_stops_open_delivery_and_keeps_the_prompt_queued() {
 
 #[tokio::test]
 async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
-    let context = vec![PriorChannelMessage {
+    let context = vec![PriorMessage {
         sender: "previous@example.com".to_owned(),
         content: "previous channel message".to_owned(),
     }];
@@ -719,7 +706,10 @@ async fn forward_to_a_live_session_reuses_the_transport() {
             author: AuthorKind::User,
         }
     );
-    assert_eq!(announced[1].origin_channel_id, Uuid::from_u128(0xf0));
+    assert_eq!(
+        announced[1].origin_parent,
+        MessageParent::Channel(Uuid::from_u128(0xf0))
+    );
     assert_eq!(announced[1].origin_thread_id, Uuid::from_u128(0xf1));
 }
 
@@ -1879,7 +1869,7 @@ async fn an_external_open_with_a_mention_announces_as_the_sessions_bot() {
     let mut request = open_external_request("/srv/agent");
     let bot = request.bot_id;
     request.thread = Some(agent_session::domain::ports::SessionThread {
-        channel_id: macro_uuid::Uuid::from_u128(0xC1),
+        parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xC1)),
         thread_id: macro_uuid::Uuid::from_u128(0xC2),
         message_id: macro_uuid::Uuid::from_u128(0xC2),
         content: "@opencode fix the flaky test".to_owned(),
@@ -1897,8 +1887,8 @@ async fn an_external_open_with_a_mention_announces_as_the_sessions_bot() {
     assert_eq!(announced.len(), 1);
     assert_eq!(announced[0].bot_id, bot);
     assert_eq!(
-        announced[0].origin_channel_id,
-        macro_uuid::Uuid::from_u128(0xC1)
+        announced[0].origin_parent,
+        MessageParent::Channel(macro_uuid::Uuid::from_u128(0xC1))
     );
     assert_eq!(
         announced[0].prompted_content,
@@ -1924,7 +1914,7 @@ async fn an_external_prompt_announce_posts_into_the_observed_origin() {
             crate::domain::model::AnnouncePrompt {
                 bot_id: bot,
                 origin: AnnounceOrigin {
-                    channel_id: macro_uuid::Uuid::from_u128(0xAA),
+                    parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA)),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
                     message_id: macro_uuid::Uuid::from_u128(0xAC),
                 },
@@ -1940,8 +1930,8 @@ async fn an_external_prompt_announce_posts_into_the_observed_origin() {
     assert_eq!(announced.len(), 1, "threadless open posts no chip");
     assert_eq!(announced[0].bot_id, bot);
     assert_eq!(
-        announced[0].origin_channel_id,
-        macro_uuid::Uuid::from_u128(0xAA)
+        announced[0].origin_parent,
+        MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA))
     );
     assert_eq!(
         announced[0].origin_thread_id,
@@ -1964,7 +1954,7 @@ async fn an_announce_whose_bot_does_not_own_the_session_is_dropped() {
             crate::domain::model::AnnouncePrompt {
                 bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
                 origin: AnnounceOrigin {
-                    channel_id: macro_uuid::Uuid::from_u128(0xAA),
+                    parent: MessageParent::Channel(macro_uuid::Uuid::from_u128(0xAA)),
                     thread_id: macro_uuid::Uuid::from_u128(0xAB),
                     message_id: macro_uuid::Uuid::from_u128(0xAC),
                 },

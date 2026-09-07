@@ -8,7 +8,6 @@ export const NOTIFICATION_LABEL_BY_TYPE: Record<NotificationType, string> = {
   mentioned_in_document_comment: 'MENTION',
   replied_to_document_comment_thread: 'REPLY',
   commented_on_document: 'COMMENT',
-  email_thread_comment: 'COMMENT',
   channel_invite: 'INVITE',
   new_email: 'EMAIL',
   invite_to_team: 'INVITE',

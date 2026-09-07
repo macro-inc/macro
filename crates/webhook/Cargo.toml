@@ -62,6 +62,7 @@ stream = [
 worker = ["dep:tokio", "ports"]
 
 [dependencies]
+messages = { path = "../messages", features = ["broker"] }
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }

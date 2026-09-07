@@ -2,6 +2,7 @@ import type { NotificationStack } from '@notifications';
 import { Show } from 'solid-js';
 import { DisplayName } from '../components/DisplayName';
 import type { Notification } from '../types/notification';
+import { getMessageSender } from './notification-description-helpers';
 
 interface NotificationSenderProps {
   notification?: Notification;
@@ -46,7 +47,13 @@ export function NotificationSender(props: NotificationSenderProps) {
   };
 
   return (
-    <Show when={senderId()}>
+    <Show
+      when={senderId()}
+      fallback={
+        getMessageSender(props.notification ?? props.stack?.notifications[0])
+          ?.name
+      }
+    >
       {(id) => (
         <>
           <DisplayName id={id()} format="firstName" />

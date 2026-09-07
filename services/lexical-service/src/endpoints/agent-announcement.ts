@@ -11,7 +11,7 @@ import { standardErrorResponses } from "../lib/schemas";
 
 const agentAnnouncementRequest = z.object({
 	replyTarget: z.object({
-		channelId: z.string(),
+		parent: z.object({ type: z.enum(["channel", "document"]), id: z.string().min(1) }),
 		targetMessageId: z.string(),
 		targetThreadId: z.string(),
 		displayText: z.string(),

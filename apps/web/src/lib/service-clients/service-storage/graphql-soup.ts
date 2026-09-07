@@ -694,6 +694,7 @@ function mapGraphqlNotificationMetadata(
         ({
           tag: 'mentioned_in_document_comment',
           content: {
+            senderDisplayName: metadata.senderDisplayName,
             documentName: metadata.mentionedInDocumentCommentDocumentName,
             owner: metadata.mentionedInDocumentCommentOwner,
             fileType: metadata.mentionedInDocumentCommentFileType,
@@ -715,6 +716,7 @@ function mapGraphqlNotificationMetadata(
         ({
           tag: 'replied_to_document_comment_thread',
           content: {
+            senderDisplayName: metadata.senderDisplayName,
             documentName: metadata.repliedToDocumentCommentThreadDocumentName,
             owner: metadata.repliedToDocumentCommentThreadOwner,
             fileType: metadata.repliedToDocumentCommentThreadFileType,
@@ -735,6 +737,7 @@ function mapGraphqlNotificationMetadata(
         ({
           tag: 'commented_on_document',
           content: {
+            senderDisplayName: metadata.senderDisplayName,
             documentName: metadata.commentedOnDocumentDocumentName,
             owner: metadata.commentedOnDocumentOwner,
             fileType: metadata.commentedOnDocumentFileType,
@@ -748,25 +751,6 @@ function mapGraphqlNotificationMetadata(
               metadata.commentedOnDocumentSenderProfilePictureUrl,
           },
         }) satisfies NotifEventMember<'commented_on_document'>
-    )
-    .with(
-      { __typename: 'GraphqlEmailThreadCommentMetadata' },
-      (metadata) =>
-        ({
-          tag: 'email_thread_comment',
-          content: {
-            subject: metadata.emailCommentSubject,
-            messageId: metadata.emailCommentMessageId,
-            threadId: metadata.emailCommentThreadId,
-            text: metadata.emailCommentText,
-            reason:
-              metadata.emailCommentReason === 'MENTION'
-                ? 'mention'
-                : metadata.emailCommentReason === 'REPLY'
-                  ? 'reply'
-                  : 'comment',
-          },
-        }) satisfies NotifEventMember<'email_thread_comment'>
     )
     .with(
       { __typename: 'GraphqlChannelInviteMetadata' },

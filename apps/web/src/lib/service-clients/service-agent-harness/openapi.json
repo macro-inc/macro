@@ -1034,15 +1034,21 @@
             "$ref": "#/components/schemas/SessionStatusDto",
             "description": "The session's status."
           },
-          "threadChannelId": {
-            "type": ["string", "null"],
-            "format": "uuid",
-            "description": "The channel `thread_id` lives in, when the session was spawned from a\nthread."
-          },
           "threadId": {
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The root message of the thread the session was created from, if any."
+          },
+          "threadParent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageParent",
+                "description": "The channel `thread_id` lives in, when the session was spawned from a\nthread."
+              }
+            ]
           },
           "workspace": {
             "type": "string",
@@ -1149,13 +1155,8 @@
       "CreateSessionThread": {
         "type": "object",
         "description": "The triggering mention on a create request.\n\nClients serialize this, so both derives are used.",
-        "required": ["channelId", "messageId"],
+        "required": ["parent", "messageId"],
         "properties": {
-          "channelId": {
-            "type": "string",
-            "format": "uuid",
-            "description": "Channel the mentioning message was posted in."
-          },
           "content": {
             "type": "string",
             "description": "The mention's text, quoted in the session's announcement."
@@ -1165,12 +1166,20 @@
             "format": "uuid",
             "description": "The mentioning message."
           },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Channel the mentioning message was posted in."
+          },
           "threadId": {
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Thread the session belongs to; defaults to the message itself, which\nis how a top-level mention roots its own thread."
           }
         }
+      },
+      "DocumentId": {
+        "type": "string",
+        "description": "A validated document identifier. Historical document ids need not be UUIDs."
       },
       "EditQueuedActionRequest": {
         "type": "object",
@@ -1222,6 +1231,42 @@
             "description": "Which way the frame travelled."
           }
         }
+      },
+      "MessageParent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A channel, including direct messages.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A channel, including direct messages."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document, including tasks and PDFs.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/DocumentId",
+                "description": "A document, including tasks and PDFs."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["document"]
+              }
+            }
+          }
+        ],
+        "description": "The entity whose permissions and lifecycle govern a message."
       },
       "QueuedActionDto": {
         "type": "object",

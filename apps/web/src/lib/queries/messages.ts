@@ -1,8 +1,10 @@
 import { createReconnectEffect } from '@macro-inc/collaboration/websocket';
+import { useEntitySubscription } from '@service-connection/client';
 import {
   createConnectionWebsocketEffect,
   ws,
 } from '@service-connection/websocket';
+import type { ReferencedThread } from '@service-storage/generated/schemas/referencedThread';
 import {
   entityMessagesClient,
   type Message,
@@ -238,4 +240,78 @@ export function useMessageTyping(
     typing()
       .filter((user) => user.rootId === rootId)
       .map((user) => user.userId);
+}
+
+/** Optional, permission-filtered source threads; source messages remain channel-owned. */
+export function useChannelReferenceThreadsQuery(
+  parent: Accessor<MessageParent>,
+  enabled: Accessor<boolean>
+) {
+  const key = () => ['entity-message-references', parent().id] as const;
+  const query = useQuery(() => ({
+    queryKey: key(),
+    enabled: enabled() && parent().type === 'document',
+    refetchInterval: enabled() ? 30_000 : false,
+    queryFn: async () => {
+      const threads: ReferencedThread[] = [];
+      let page = await entityMessagesClient.references(parent());
+      threads.push(...page.threads);
+      while (page.next_cursor) {
+        page = await entityMessagesClient.references(
+          parent(),
+          page.next_cursor
+        );
+        threads.push(...page.threads);
+      }
+      return threads;
+    },
+  }));
+  const invalidate = () => {
+    if (enabled()) void queryClient.invalidateQueries({ queryKey: key() });
+  };
+  createConnectionWebsocketEffect((event) => {
+    if (event.type === 'message_update' || event.type.startsWith('channel_'))
+      invalidate();
+  });
+  createReconnectEffect(ws, invalidate);
+  return query;
+}
+
+/** Load a particular root without fetching every discussion on the parent. */
+export function useMessageThreadQuery(
+  parent: Accessor<MessageParent>,
+  rootId: Accessor<string>
+) {
+  // A linked drawer can outlive (or never open) its source document block.
+  // The shared client keeps other views' subscriptions alive on cleanup.
+  useEntitySubscription(() => ({
+    entity_type: parent().type,
+    entity_id: parent().id,
+  }));
+  const key = () =>
+    [...messageKeys.threads(parent()), 'thread', rootId()] as const;
+  const query = useQuery(() => ({
+    queryKey: key(),
+    queryFn: () => entityMessagesClient.thread(parent(), rootId()),
+  }));
+  const invalidate = () =>
+    void queryClient.invalidateQueries({ queryKey: key() });
+  createConnectionWebsocketEffect((event) => {
+    if (event.type !== 'message_update') return;
+    try {
+      const data =
+        typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+      if (
+        data?.parent?.type === parent().type &&
+        data.parent.id === parent().id &&
+        data.root_id === rootId() &&
+        data.change?.type !== 'typing'
+      )
+        invalidate();
+    } catch {
+      /* A malformed event cannot update cached messages. */
+    }
+  });
+  createReconnectEffect(ws, invalidate);
+  return query;
 }

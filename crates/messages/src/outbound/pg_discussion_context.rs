@@ -42,22 +42,6 @@ impl DiscussionContextReader for PgDiscussionContext {
                     link_share_access: row.link_share_access,
                 }
             }
-            MessageParent::EmailThread(id) => {
-                let row = sqlx::query!(r#"SELECT l.macro_id,
-                    (SELECT subject FROM email_messages WHERE thread_id = t.id ORDER BY created_at DESC, id DESC LIMIT 1) AS subject
-                    FROM email_threads t JOIN email_links l ON l.id = t.link_id WHERE t.id = $1"#, id)
-                    .fetch_one(&self.0).await?;
-                DiscussionContext {
-                    name: row.subject.unwrap_or_else(|| "Email discussion".into()),
-                    owner: row.macro_id,
-                    file_type: None,
-                    is_task: false,
-                    participants: vec![],
-                    assignees: vec![],
-                    sender_profile_picture: None,
-                    link_share_access: None,
-                }
-            }
             MessageParent::Channel(_) => {
                 return Err(rootcause::report!("channel has no discussion context"));
             }

@@ -19,8 +19,8 @@ use axum::{
     routing::post,
 };
 use channels::domain::{
-    models::{PostMessageRequest, PostMessageResponse, Sender},
-    ports::{ChannelMutationErr, ChannelService},
+    models::{PostMessageRequest, PostMessageResponse},
+    ports::{ChannelMessageCommands, ChannelMutationErr},
 };
 use entity_access::{
     domain::{
@@ -46,23 +46,21 @@ pub trait ChannelMessagePoster: Clone + Send + Sync + 'static {
     /// Post a message to a channel.
     fn post_message(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
         req: PostMessageRequest,
     ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send;
 }
 
 impl<S> ChannelMessagePoster for Arc<S>
 where
-    S: ChannelService,
+    S: ChannelMessageCommands,
 {
     fn post_message(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
         req: PostMessageRequest,
     ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
-        ChannelService::post_message(self.as_ref(), actor, channel_id, req)
+        ChannelMessageCommands::post_message(self.as_ref(), access, req)
     }
 }
 
@@ -313,32 +311,13 @@ where
     tracing::Span::current().record("channel_id", tracing::field::display(path.channel_id));
 
     let content = parse_webhook_content(&headers, body)?;
-    let bot_id = match preferred_authentication {
-        Some(authentication) => {
-            record_preferred_bot(&authentication);
-            state
-                .bot_service
-                .ensure_bot_in_channel(authentication.bot_id, path.channel_id)
-                .await?;
-            authentication.bot_id
-        }
-        None => {
-            let bot_auth_token = channel_bot_token(&headers)?;
-            let authenticated = state
-                .bot_service
-                .authenticate_channel_token(path.channel_id, bot_auth_token)
-                .await?;
-            tracing::Span::current()
-                .record("bot_id", tracing::field::display(authenticated.bot_id));
-            authenticated.bot_id
-        }
-    };
+    let access =
+        webhook_access(&state, path.channel_id, preferred_authentication, &headers).await?;
 
     let response = state
         .channel_poster
         .post_message(
-            Sender::new_from_bot(bot_id),
-            path.channel_id,
+            access,
             PostMessageRequest {
                 content,
                 mentions: Vec::new(),
@@ -471,4 +450,83 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
         )
             .into_response()
     }
+}
+
+/// Capability boundary for verified preferred or channel-bound bot credentials.
+async fn webhook_access<B: BotService, P, A: EntityAccessService, Auth>(
+    state: &ChannelBotWebhookRouterState<B, P, A, Auth>,
+    channel_id: Uuid,
+    preferred: Option<BotAuthentication>,
+    headers: &HeaderMap,
+) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, ChannelBotWebhookHandlerErr>
+{
+    use entity_access::domain::models::EntityType;
+    let access = if let Some(authentication) = preferred {
+        record_preferred_bot(&authentication);
+        state
+            .bot_service
+            .ensure_bot_in_channel(authentication.bot_id, channel_id)
+            .await?;
+        if authentication.bot_scope == macro_authorization::BotScope::User
+            && authentication.acting_user.is_none()
+        {
+            owner_scoped_webhook_access(state, authentication.bot_id, channel_id).await
+        } else {
+            entity_access::inbound::axum_extractors::principal_entity_access_receipt(
+                state.access_service.as_ref(),
+                &macro_authorization::MacroAuthorization::Bot(authentication),
+                &channel_id.to_string(),
+                EntityType::Channel,
+            )
+            .await
+        }
+    } else {
+        let authenticated = state
+            .bot_service
+            .authenticate_channel_token(channel_id, channel_bot_token(headers)?)
+            .await?;
+        owner_scoped_webhook_access(state, authenticated.bot_id, channel_id).await
+    };
+    access.map_err(|error| match error {
+        entity_access::domain::models::AccessError::Internal(error)
+        | entity_access::domain::models::AccessError::Unavailable(error) => {
+            BotError::Repo(anyhow::anyhow!(error.to_string())).into()
+        }
+        _ => BotError::Unauthorized.into(),
+    })
+}
+
+async fn owner_scoped_webhook_access<B: BotService, P, A: EntityAccessService, Auth>(
+    state: &ChannelBotWebhookRouterState<B, P, A, Auth>,
+    bot_id: bot_id::BotId,
+    channel_id: Uuid,
+) -> Result<
+    EntityAccessReceipt<messages::domain::service::MessageWrite>,
+    entity_access::domain::models::AccessError,
+> {
+    use entity_access::domain::models::{AccessError, BotAccessScope, EntityType};
+    let bot = state
+        .bot_service
+        .get_self(bot_id)
+        .await
+        .map_err(|error| match error {
+            BotError::Repo(error) => AccessError::Internal(rootcause::report!(error).into()),
+            _ => AccessError::Unauthorized,
+        })?;
+    let scope = match bot.owner {
+        Some(crate::domain::models::BotOwner::User { user_id }) => {
+            BotAccessScope::user(user_id.try_into().map_err(|_| AccessError::Unauthorized)?)
+        }
+        Some(crate::domain::models::BotOwner::Team { team_id }) => BotAccessScope::Team { team_id },
+        None => return Err(AccessError::Unauthorized),
+    };
+    state
+        .access_service
+        .generate_bot_entity_access_receipt(
+            bot_id,
+            scope,
+            &channel_id.to_string(),
+            EntityType::Channel,
+        )
+        .await
 }

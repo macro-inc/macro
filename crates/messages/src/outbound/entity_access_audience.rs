@@ -19,7 +19,6 @@ impl<A: EntityAccessService> MessageAudienceAccess for EntityAccessMessageAudien
         let kind = match parent {
             MessageParent::Channel(_) => EntityType::Channel,
             MessageParent::Document(_) => EntityType::Document,
-            MessageParent::EmailThread(_) => EntityType::EmailThread,
         };
         let mut viewers = HashSet::new();
         for candidate in candidates {
@@ -58,6 +57,59 @@ pub struct EntityAccessMessageReferences<A>(pub A);
 impl<A: EntityAccessService> crate::domain::ports::MessageReferenceAccess
     for EntityAccessMessageReferences<A>
 {
+    fn can_write<'a>(
+        &'a self,
+        auth: &'a entity_access::domain::models::EntityAccessAuth,
+        entity_type: EntityType,
+        entity_id: &'a str,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = Result<bool, crate::domain::ports::MessageError>> + Send + 'a>,
+    > {
+        Box::pin(async move {
+            use entity_access::domain::models::{
+                BotAccessScope, BotReceiptScope, EntityAccessAuth,
+            };
+            let result = match auth {
+                EntityAccessAuth::Authenticated(user) => {
+                    self.0
+                        .generate_entity_access_receipt::<crate::domain::service::MessageWrite>(
+                            &user.0,
+                            None,
+                            entity_id,
+                            entity_type,
+                        )
+                        .await
+                }
+                EntityAccessAuth::Bot(bot) => {
+                    let scope = match bot.scope() {
+                        BotReceiptScope::User { acting_user } => BotAccessScope::User {
+                            user_id: acting_user.clone(),
+                            user_org_id: None,
+                        },
+                        BotReceiptScope::Team { team_id } => {
+                            BotAccessScope::Team { team_id: *team_id }
+                        }
+                    };
+                    self.0
+                        .generate_bot_entity_access_receipt::<crate::domain::service::MessageWrite>(
+                            bot.bot_id(),
+                            scope,
+                            entity_id,
+                            entity_type,
+                        )
+                        .await
+                }
+                _ => return Ok(false),
+            };
+            match result {
+                Ok(_) => Ok(true),
+                Err(AccessError::Unavailable(error) | AccessError::Internal(error)) => {
+                    Err(crate::domain::ports::MessageError::Repository(error))
+                }
+                Err(_) => Ok(false),
+            }
+        })
+    }
     fn can_view<'a>(
         &'a self,
         auth: &'a entity_access::domain::models::EntityAccessAuth,
@@ -67,19 +119,42 @@ impl<A: EntityAccessService> crate::domain::ports::MessageReferenceAccess
         Box<dyn Future<Output = Result<bool, crate::domain::ports::MessageError>> + Send + 'a>,
     > {
         Box::pin(async move {
-            let entity_access::domain::models::EntityAccessAuth::Authenticated(user) = auth else {
-                return Ok(false);
+            use entity_access::domain::models::{
+                BotAccessScope, BotReceiptScope, EntityAccessAuth,
             };
-            match self
-                .0
-                .generate_entity_access_receipt::<MessageView>(
-                    &user.0,
-                    None,
-                    entity_id,
-                    entity_type,
-                )
-                .await
-            {
+            let result = match auth {
+                EntityAccessAuth::Authenticated(user) => {
+                    self.0
+                        .generate_entity_access_receipt::<MessageView>(
+                            &user.0,
+                            None,
+                            entity_id,
+                            entity_type,
+                        )
+                        .await
+                }
+                EntityAccessAuth::Bot(bot) => {
+                    let scope = match bot.scope() {
+                        BotReceiptScope::User { acting_user } => BotAccessScope::User {
+                            user_id: acting_user.clone(),
+                            user_org_id: None,
+                        },
+                        BotReceiptScope::Team { team_id } => {
+                            BotAccessScope::Team { team_id: *team_id }
+                        }
+                    };
+                    self.0
+                        .generate_bot_entity_access_receipt::<MessageView>(
+                            bot.bot_id(),
+                            scope,
+                            entity_id,
+                            entity_type,
+                        )
+                        .await
+                }
+                _ => return Ok(false),
+            };
+            match result {
                 Ok(_) => Ok(true),
                 Err(AccessError::Unavailable(error) | AccessError::Internal(error)) => {
                     Err(crate::domain::ports::MessageError::Repository(error))

@@ -4,14 +4,15 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
-import type { InviteToTeamMetadata } from './inviteToTeamMetadata';
+
 import type { NotifEventOneOfTwofiveTag } from './notifEventOneOfTwofiveTag';
+import type { TaskAssignedMetadata } from './taskAssignedMetadata';
 
 /**
- * A user was invited to a team.
+ * A user was assigned to a task.
  */
 export type NotifEventOneOfTwofive = {
-  /** A user was invited to a team. */
-  content: InviteToTeamMetadata;
+  /** A user was assigned to a task. */
+  content: TaskAssignedMetadata;
   tag: NotifEventOneOfTwofiveTag;
 };

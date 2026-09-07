@@ -1,14 +1,12 @@
 //! Channel-message consumer that emits agent-session trigger events.
 
 use agent_session::outbound::postgres::PgAgentSessionRepo;
-use agent_trigger::domain::processing::process_channel_event;
+use agent_trigger::domain::processing::process_message_event;
 use agent_trigger::domain::service::AgentTriggerService;
 use agent_trigger::outbound::{
-    BotRepoAgentLookup, ChannelThreadHistory, FastModelTriggerJudge, LexicalExplicitReplyExtractor,
+    BotRepoAgentLookup, FastModelTriggerJudge, LexicalExplicitReplyExtractor, MessageThreadHistory,
 };
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use channels::domain::broker_events::ChannelMacroEvent;
-use channels::outbound::pg_channels_repo::PgChannelsRepo;
 use kafka_util::{GroupName, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_event_broker::{
@@ -16,6 +14,8 @@ use macro_event_broker::{
     MacroEventCollection as _, MacroEventConsumerService,
 };
 use macro_service_urls::LexicalServiceUrl;
+use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
+use messages::outbound::pg_message_repo::PgMessageRepository;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::PgPool;
@@ -28,10 +28,10 @@ impl GroupName for AgentTriggerConsumerGroup {
     const GROUP_NAME: &'static str = "agent-trigger-service";
 }
 
-macro_event_broker::declare_topics!(DeclaredChannelEvent: ChannelMacroEvent);
+macro_event_broker::declare_topics!(DeclaredMessageEvent: MessageMacroEvent);
 
-type TriggerKafkaAdapter = KafkaConsumerAdapter<AgentTriggerConsumerGroup, DeclaredChannelEvent>;
-type TriggerConsumer = MacroEventConsumerService<DeclaredChannelEvent, TriggerKafkaAdapter>;
+type TriggerKafkaAdapter = KafkaConsumerAdapter<AgentTriggerConsumerGroup, DeclaredMessageEvent>;
+type TriggerConsumer = MacroEventConsumerService<DeclaredMessageEvent, TriggerKafkaAdapter>;
 
 fn commit_message(consumer: &TriggerConsumer, message: &BorrowedMessage<'_>) -> anyhow::Result<()> {
     consumer
@@ -65,7 +65,15 @@ async fn run(pool: PgPool, kafka_brokers: String, internal_api_key: String) -> a
         BotRepoAgentLookup::new(PgBotsRepo::new(pool.clone())),
         LexicalExplicitReplyExtractor::new(lexical),
         FastModelTriggerJudge::new(ai_usage::pg_recorder(pool.clone())),
-        ChannelThreadHistory::new(PgChannelsRepo::new(pool)),
+        MessageThreadHistory::new(
+            std::sync::Arc::new(messages::domain::service::MessageService::new(
+                PgMessageRepository::new(pool.clone()),
+                messages::domain::ports::NoMessageEventPublisher,
+            )),
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(pool),
+            ),
+        ),
     );
     let publisher = MacroEventBrokerService::new(
         KafkaEventPublisher::new(&kafka_brokers)?,
@@ -73,12 +81,12 @@ async fn run(pool: PgPool, kafka_brokers: String, internal_api_key: String) -> a
     );
     let consumer = KafkaEventConsumer::<AgentTriggerConsumerGroup>::from_env(&kafka_brokers)?;
     let consumer = KafkaConsumerAdapter::<AgentTriggerConsumerGroup, ()>::new(consumer)
-        .subscribe::<DeclaredChannelEvent>()
+        .subscribe::<DeclaredMessageEvent>()
         .map_err(|error| anyhow::anyhow!("failed to subscribe to channel events: {error:?}"))?;
     let consumer = TriggerConsumer::new(consumer);
 
     tracing::info!(
-        topics = ?DeclaredChannelEvent::topics(),
+        topics = ?DeclaredMessageEvent::topics(),
         group = AgentTriggerConsumerGroup::GROUP_NAME,
         "agent trigger listening"
     );
@@ -96,7 +104,7 @@ async fn run(pool: PgPool, kafka_brokers: String, internal_api_key: String) -> a
         let result = async {
             let kafka_message = message.inner();
             let event = match message.decode_payload() {
-                Ok(DeclaredChannelEvent::ChannelMacroEvent(event)) => event,
+                Ok(DeclaredMessageEvent::MessageMacroEvent(event)) => event,
                 Err(error) => {
                     record_span_error(&tracing::Span::current(), &error);
                     tracing::error!(
@@ -114,7 +122,8 @@ async fn run(pool: PgPool, kafka_brokers: String, internal_api_key: String) -> a
                 tracing::field::display(event.event().event_id),
             );
 
-            process_channel_event(&trigger, &publisher, &event).await?;
+            let MessageTopicEvent::Posted(posted) = &event.event().event;
+            process_message_event(&trigger, &publisher, posted).await?;
             commit_message(&consumer, kafka_message)?;
             Ok(())
         }

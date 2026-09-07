@@ -2,7 +2,7 @@ use std::future::Future;
 
 use channels::domain::{
     models::{PostMessageNotificationPolicy, PostMessageRequest, Sender, SimpleMention},
-    ports::ChannelService,
+    ports::ChannelMessageCommands,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use mention_utils::serialize::user_mention;
@@ -17,7 +17,7 @@ const JULIA_EMAIL: &str = "julia@macro.com";
 const TEO_EMAIL: &str = "teo@macro.com";
 
 /// The channel operation required to post a new user's welcome messages.
-pub trait SupportChannelMessageGateway: Send + Sync + 'static {
+pub trait SupportChannelMessageGateway: Send + Sync {
     /// Post a welcome message.
     fn post_message(
         &self,
@@ -27,9 +27,11 @@ pub trait SupportChannelMessageGateway: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
-impl<T> SupportChannelMessageGateway for T
-where
-    T: ChannelService,
+/// Outbound bridge that verifies the support sender's current channel membership.
+pub struct AuthorizedSupportChannelMessages<'a, S, A>(pub &'a S, pub &'a A);
+
+impl<S: ChannelMessageCommands, A: entity_access::domain::ports::EntityAccessService>
+    SupportChannelMessageGateway for AuthorizedSupportChannelMessages<'_, S, A>
 {
     async fn post_message(
         &self,
@@ -37,10 +39,23 @@ where
         channel_id: Uuid,
         request: PostMessageRequest,
     ) -> Result<(), Report> {
-        ChannelService::post_message(self, actor, channel_id, request)
+        let user = actor
+            .as_user()
+            .ok_or_else(|| rootcause::report!("support messages require a user"))?;
+        let access = self
+            .1
+            .generate_entity_access_receipt::<messages::domain::service::MessageWrite>(
+                user,
+                None,
+                &channel_id.to_string(),
+                entity_access::domain::models::EntityType::Channel,
+            )
+            .await
+            .context("support sender must still be a channel member")?;
+        self.0
+            .post_message(access, request)
             .await
             .context("failed to post Macro support welcome message")?;
-
         Ok(())
     }
 }

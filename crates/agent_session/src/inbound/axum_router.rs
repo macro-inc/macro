@@ -437,7 +437,7 @@ pub struct AgentSessionResponse {
     pub thread_id: Option<Uuid>,
     /// The channel `thread_id` lives in, when the session was spawned from a
     /// thread.
-    pub thread_channel_id: Option<Uuid>,
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
     /// The exact message that invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
     /// The bot running the agent.
@@ -502,7 +502,7 @@ impl From<AgentSession> for AgentSessionResponse {
             name: session.name,
             owner_id: session.owner_id.to_string(),
             thread_id: session.thread_id,
-            thread_channel_id: session.thread_channel_id,
+            thread_parent: session.thread_parent,
             originating_message_id: session.originating_message_id,
             bot_id: session.bot_id.as_uuid(),
             model: session.model,
@@ -1228,7 +1228,7 @@ pub struct CreateAgentSessionRequest {
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionThread {
     /// Channel the mentioning message was posted in.
-    pub channel_id: Uuid,
+    pub parent: messages::domain::models::MessageParent,
     /// Thread the session belongs to; defaults to the message itself, which
     /// is how a top-level mention roots its own thread.
     pub thread_id: Option<Uuid>,
@@ -1545,7 +1545,7 @@ pub async fn create_agent_session_handler<
     let owner = resolve_owner(&caller.authorization, request.owner)?;
 
     let thread = request.thread.map(|thread| SessionThread {
-        channel_id: thread.channel_id,
+        parent: thread.parent,
         thread_id: thread.thread_id.unwrap_or(thread.message_id),
         message_id: thread.message_id,
         content: thread.content,

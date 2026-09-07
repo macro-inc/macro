@@ -44,8 +44,8 @@ struct ExtractReplyRequest<'a> {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtractedExplicitReply {
-    /// Channel containing the targeted message.
-    pub channel_id: String,
+    /// Entity containing the targeted message.
+    pub parent: messages::domain::models::MessageParent,
     /// Targeted channel message.
     pub target_message_id: String,
     /// Thread containing the targeted message.
@@ -100,8 +100,8 @@ pub struct AgentAnnouncementChip {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentAnnouncementReplyTarget {
-    /// Channel containing the targeted message.
-    pub channel_id: String,
+    /// Entity containing the targeted message.
+    pub parent: messages::domain::models::MessageParent,
     /// Targeted channel message.
     pub target_message_id: String,
     /// Thread containing the targeted message.
@@ -136,6 +136,8 @@ pub struct AgentContextMessage<'a> {
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AgentContextRequest<'a> {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parent: Option<&'a messages::domain::models::MessageParent>,
     prompt_markdown: &'a str,
     #[serde(skip_serializing_if = "Option::is_none")]
     messages: Option<&'a [AgentContextMessage<'a>]>,
@@ -361,6 +363,7 @@ impl LexicalClient {
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
+        parent: Option<&messages::domain::models::MessageParent>,
         messages: Option<&[AgentContextMessage<'_>]>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
@@ -368,6 +371,7 @@ impl LexicalClient {
             self.client
                 .post(&url)
                 .json(&AgentContextRequest {
+                    parent,
                     prompt_markdown,
                     messages,
                 })
@@ -509,7 +513,7 @@ mod tests {
     fn extract_reply_response_deserializes_a_target() {
         let json = r#"{
             "reply": {
-                "channelId": "channel-1",
+                "parent": {"type": "document", "id": "doc-1"},
                 "targetMessageId": "message-1",
                 "targetThreadId": "thread-1",
                 "displayText": "please fix this",
@@ -519,7 +523,10 @@ mod tests {
 
         let response: ExtractReplyResponse = serde_json::from_str(json).unwrap();
         let reply = response.reply.expect("reply");
-        assert_eq!(reply.channel_id, "channel-1");
+        assert_eq!(
+            reply.parent,
+            messages::domain::models::MessageParent::parse("document", "doc-1").unwrap()
+        );
         assert_eq!(reply.target_message_id, "message-1");
         assert_eq!(reply.sender_id, "bot|00000000-0000-0000-0000-00000000b07a");
     }

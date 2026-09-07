@@ -1,14 +1,14 @@
 //! What one incoming message means for one bot.
 
-use agent_session::domain::model::{AgentSessionId, ChannelSession};
+use agent_session::domain::model::{AgentSessionId, ThreadSession};
 use bot_id::BotId;
 use channel_sender::ChannelSender;
-use channels::domain::broker_events::ChannelMessagePostedMetadata;
-use channels::domain::side_effects::bot_mention_ids;
+use messages::domain::events::MessagePostedMetadata;
+use messages::domain::mentions::bot_mention_ids;
 
 use crate::domain::broker_events::{
-    AgentBotMentionedEvent, AgentSessionMacroEvent, ChannelEventMetadata, ChannelKind,
-    NewAgentSessionEvent,
+    AgentBotMentionedEvent, AgentSessionMacroEvent, NewAgentSessionEvent, ThreadEventMetadata,
+    ThreadMessageKind,
 };
 
 /// Why evaluating a message did not produce an agent-session event.
@@ -91,11 +91,11 @@ pub fn is_own_message(bot: BotId, sender: &ChannelSender<'_>) -> bool {
 pub enum PotentialTriggerEvent<'a> {
     /// A message posted in a comms channel, with the session lookup it
     /// required and the bot being evaluated for it.
-    Channel {
+    Thread {
         /// The message, as the channel topic carried it.
-        posted: &'a ChannelMessagePostedMetadata,
+        posted: &'a MessagePostedMetadata,
         /// The session lookup for the message's thread context.
-        existing: &'a ChannelSession,
+        existing: &'a ThreadSession,
         /// The bot being evaluated when no session exists.
         mentioned_bot: Option<BotId>,
     },
@@ -111,7 +111,7 @@ pub fn yield_event(
     available: bool,
 ) -> AgentSessionEventDecision {
     match message {
-        PotentialTriggerEvent::Channel {
+        PotentialTriggerEvent::Thread {
             posted,
             existing,
             mentioned_bot,
@@ -120,14 +120,14 @@ pub fn yield_event(
 }
 
 fn yield_channel_event(
-    posted: &ChannelMessagePostedMetadata,
-    existing: &ChannelSession,
+    posted: &MessagePostedMetadata,
+    existing: &ThreadSession,
     mentioned_bot: Option<BotId>,
     available: bool,
 ) -> AgentSessionEventDecision {
     let session_bot = match existing {
-        ChannelSession::CreatedFromThread(session) => session.bot_id,
-        ChannelSession::None => match mentioned_bot {
+        ThreadSession::CreatedFromThread(session) => session.bot_id,
+        ThreadSession::None => match mentioned_bot {
             Some(bot_id) => bot_id,
             None => {
                 return AgentSessionEventDecision::NoEvent(NoEventReason::MissingBotContext);
@@ -150,15 +150,15 @@ fn yield_channel_event(
     let mentioned = bot_mention_ids(&posted.mentions).contains(&session_bot);
 
     match (existing, mentioned) {
-        (ChannelSession::CreatedFromThread(session), true) => AgentSessionEventDecision::Event(
-            AgentSessionMacroEvent::channel_event(ChannelEventMetadata {
+        (ThreadSession::CreatedFromThread(session), true) => AgentSessionEventDecision::Event(
+            AgentSessionMacroEvent::thread_event(ThreadEventMetadata {
                 bot_id: session_bot,
                 session_id: session.id,
-                kind: ChannelKind::MentionThread,
+                kind: ThreadMessageKind::MentionThread,
                 message: posted.clone(),
             }),
         ),
-        (ChannelSession::None, true) => {
+        (ThreadSession::None, true) => {
             AgentSessionEventDecision::Event(AgentSessionMacroEvent::new_session(
                 NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
                     bot_id: session_bot,
@@ -166,13 +166,13 @@ fn yield_channel_event(
                 }),
             ))
         }
-        (ChannelSession::CreatedFromThread(session), false) => {
+        (ThreadSession::CreatedFromThread(session), false) => {
             AgentSessionEventDecision::NoEvent(NoEventReason::MentionRequired {
                 bot_id: session_bot,
                 session_id: Some(session.id),
             })
         }
-        (ChannelSession::None, false) => {
+        (ThreadSession::None, false) => {
             AgentSessionEventDecision::NoEvent(NoEventReason::MentionRequired {
                 bot_id: session_bot,
                 session_id: None,

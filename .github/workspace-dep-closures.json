@@ -5252,7 +5252,10 @@
       "crates/workspace-hack"
     ],
     "macro_db_migrator": [
+      "crates/database_env_vars",
       "crates/macro_db_migrator",
+      "crates/macro_env_var",
+      "crates/macro_uuid",
       "crates/workspace-hack"
     ],
     "macro_entrypoint": [
@@ -7324,6 +7327,7 @@
       "crates/contacts",
       "crates/cowlike",
       "crates/crm",
+      "crates/database_env_vars",
       "crates/document_sub_type",
       "crates/email",
       "crates/email_db_client",

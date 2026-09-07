@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM comms_attachments WHERE message_id = $1 AND NOT (id = ANY($2))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "469ae17d42a5cf0d3c45ee247ed39142bae52f4825ec702b60d0bbe8ca4eb34c"
+}

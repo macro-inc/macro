@@ -10,5 +10,5 @@ export type NotifEventOneOfThreethreeTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfThreethreeTag = {
-  ai_response: 'ai_response',
+  github_pr_status_changed: 'github_pr_status_changed',
 } as const;

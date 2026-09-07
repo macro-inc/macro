@@ -1,16 +1,15 @@
 use super::*;
 
 use channel_sender::ChannelSender;
-use channels::domain::models::ChannelType;
 use chrono::Utc;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use serde_json::json;
 
-fn message() -> ChannelMessagePostedMetadata {
-    ChannelMessagePostedMetadata {
-        channel_id: Uuid::from_u128(1),
+fn message() -> MessagePostedMetadata {
+    MessagePostedMetadata {
+        parent: messages::domain::models::MessageParent::Channel(Uuid::from_u128(1)),
         message_id: Uuid::from_u128(2),
         thread_id: None,
         sender: ChannelSender::new_from_user(
@@ -19,7 +18,6 @@ fn message() -> ChannelMessagePostedMetadata {
                 .into_owned(),
         ),
         triggered_by: None,
-        channel_type: ChannelType::Public,
         content: "hello".to_owned(),
         mentions: vec![],
         attachments: vec![],
@@ -44,20 +42,19 @@ fn serializes_a_new_top_level_mention() {
 }
 
 #[test]
-fn serializes_an_existing_channel_event() {
-    let event = AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
-        ChannelEventMetadata {
+fn serializes_an_existing_thread_event() {
+    let event =
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
             bot_id: BotId::TEST_A,
             session_id: AgentSessionId::TEST_A,
-            kind: ChannelKind::MentionThread,
+            kind: ThreadMessageKind::MentionThread,
             message: message(),
-        },
-    ));
+        }));
 
     let value = serde_json::to_value(event).expect("serialize event");
 
     assert_eq!(value["event_type"], "agent_trigger.existing");
-    assert_eq!(value["metadata"]["source"], "channel");
+    assert_eq!(value["metadata"]["source"], "thread");
     assert_eq!(
         value["metadata"]["session_id"],
         json!(AgentSessionId::TEST_A)
@@ -77,14 +74,12 @@ fn event_names_match_the_wire() {
                 message: message(),
             },
         )),
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
-            ChannelEventMetadata {
-                bot_id: BotId::TEST_A,
-                session_id: AgentSessionId::TEST_A,
-                kind: ChannelKind::MentionThread,
-                message: message(),
-            },
-        )),
+        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+            bot_id: BotId::TEST_A,
+            session_id: AgentSessionId::TEST_A,
+            kind: ThreadMessageKind::MentionThread,
+            message: message(),
+        })),
     ]
     .into_iter()
     .map(|event| serde_json::to_value(event).expect("serialize event")["event_type"].to_string())
@@ -99,13 +94,13 @@ fn event_names_match_the_wire() {
 #[test]
 fn channel_kinds_round_trip_in_snake_case() {
     for (kind, wire) in [
-        (ChannelKind::MentionThread, "mention_thread"),
-        (ChannelKind::ExplicitReply, "explicit_reply"),
-        (ChannelKind::Inferred, "inferred"),
+        (ThreadMessageKind::MentionThread, "mention_thread"),
+        (ThreadMessageKind::ExplicitReply, "explicit_reply"),
+        (ThreadMessageKind::Inferred, "inferred"),
     ] {
         let value = serde_json::to_value(kind).expect("serialize kind");
         assert_eq!(value, json!(wire));
-        let parsed: ChannelKind = serde_json::from_value(value).expect("deserialize kind");
+        let parsed: ThreadMessageKind = serde_json::from_value(value).expect("deserialize kind");
         assert_eq!(parsed, kind);
     }
 }

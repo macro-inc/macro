@@ -1,5 +1,6 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import { touchHandler } from '@core/directive/touchHandler';
+import type { MessageActions, MessageData } from '@core/messages/types';
 import type { IUser } from '@core/user/types';
 import TrashIcon from '@icon/square-trash.svg';
 import { type Accessor, type JSX, Match, Show, Switch } from 'solid-js';
@@ -10,7 +11,6 @@ import { useMessage } from './context';
 import type { ChannelMessageListMeta } from './list-meta';
 import { Message } from './Message';
 import { MaybeSwipeToReplyRow } from './SwipeToReplyRow';
-import type { MessageActions, MessageData } from './types';
 
 type ChannelMessageProps = {
   channelId: string;
