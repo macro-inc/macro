@@ -119,6 +119,7 @@ export function EntityIcon(props: EntityIconProps) {
           return fileType ?? 'default';
         })
         .with({ type: 'chat' }, () => 'chat')
+        .with({ type: 'agent_session' }, () => 'agent')
         .with({ type: 'project' }, () => 'project')
         .with({ type: 'email' }, ({ isRead, hasIcsAttachment }) =>
           hasIcsAttachment ? 'emailInvite' : isRead ? 'emailRead' : 'email'

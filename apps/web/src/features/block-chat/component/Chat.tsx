@@ -1,4 +1,6 @@
+import { useChatV3AgentsFlag } from '@app/features/channel/use-chat-v3-agents-flag';
 import type { SendBuilder } from '@block-chat/blockClient';
+import { DeprecatedChatBanner } from '@block-chat/component/DeprecatedChatBanner';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
 import { pendingLocationParamsSignal } from '@block-chat/signal/pendingLocationParams';
@@ -144,7 +146,10 @@ function ChatInner(props: {
   const input = useChatInputContext();
   const chat = useChatContext();
   const canEdit = useCanEdit();
-  const disabled = () => !canEdit();
+  // Legacy AI chats go read-only once agent sessions replace them: the
+  // transcript stays, the composer gives way to a notice.
+  const deprecated = useChatV3AgentsFlag();
+  const disabled = () => !canEdit() || deprecated();
   const scopeId = blockHotkeyScopeSignal.get;
   const blockElement = blockElementSignal.get;
   const { navigatedFromJK } = useNavigatedFromJK();
@@ -194,6 +199,9 @@ function ChatInner(props: {
   const renameMutation = createRenameDssEntityMutation();
 
   const onSend = createCallback(async (request: ChatSendInput) => {
+    // Sends can also arrive through the block method and the soup input's
+    // pending send, neither of which sees the hidden composer.
+    if (disabled()) return;
     const isFirstMessage = chat.messages().length === 0;
     const optimisticId = crypto.randomUUID();
 
@@ -285,6 +293,7 @@ function ChatInner(props: {
   registerScopeSignalHotkey(scopeId, {
     hotkey: 'enter',
     description: 'Focus Chat Input',
+    condition: () => !disabled(),
     keyDownHandler: () => {
       editor.controls.focus();
       return true;
@@ -360,6 +369,15 @@ function ChatInner(props: {
         </div>
         <CustomScrollbar scrollContainer={scrollRef} />
       </div>
+      <Show when={deprecated()}>
+        <FloatRegionOrInline region="accessory">
+          <div class="flex w-full justify-center pb-2 px-2 touch:pb-0 touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">
+            <div class="w-3xl">
+              <DeprecatedChatBanner />
+            </div>
+          </div>
+        </FloatRegionOrInline>
+      </Show>
       <Show when={!disabled()}>
         <FloatRegionOrInline region="accessory">
           <div class="flex w-full justify-center pb-2 px-2 touch:pb-0 touch:px-(--mobile-chrome-gutter) touch:pointer-events-auto">

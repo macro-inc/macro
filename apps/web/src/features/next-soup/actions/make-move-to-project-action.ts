@@ -11,6 +11,8 @@ export const makeMoveToProjectAction = () => {
       entity.type !== 'channel_message' &&
       entity.type !== 'channel_thread' &&
       entity.type !== 'foreign' &&
+      // Agent sessions live in the harness service, outside the folder tree.
+      entity.type !== 'agent_session' &&
       // Reminders are private to their owner and live outside the folder tree.
       entity.type !== 'reminder'
     );

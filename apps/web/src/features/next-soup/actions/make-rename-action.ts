@@ -17,6 +17,9 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
       return false;
     }
     if (entity.type === 'foreign') return false;
+    // The bulk-rename modal writes through the storage service; agent sessions
+    // rename from their own block header instead.
+    if (entity.type === 'agent_session') return false;
 
     if (entity.type === 'channel') {
       if (entity.channelType === 'direct_message') return false;

@@ -162,6 +162,37 @@ export type ChatEntity = EntityBase & {
   properties?: SoupProperty[];
 };
 
+/**
+ * An agent session's last known status, mirroring the harness wire's
+ * `SessionStatusDto`. A snapshot, not a live stream: the list shows what the
+ * session reported when it was fetched.
+ */
+export type AgentSessionStatus =
+  | { kind: 'no_messages' }
+  | { kind: 'event'; event: string }
+  | { kind: 'disconnected' };
+
+/**
+ * A coding-agent session served by `agent_harness_service`. The successor
+ * to {@link ChatEntity}: opens in the `agent` block at `/agent/<id>`. Not a
+ * soup row on the server — the Agents view lists them from the harness API
+ * via `additionalEntities`.
+ */
+export type AgentSessionEntity = EntityBase & {
+  type: 'agent_session';
+  /** The bot running the agent. */
+  botId: string;
+  /** Harness slug (`macro`, `cursor`, ...). */
+  harness: string;
+  /** Model slug the session is running on. */
+  model: string;
+  status: AgentSessionStatus;
+  /** The channel thread the session was spawned from, when it was. */
+  threadId?: string;
+  /** The provider's page for an externally served session, e.g. cursor.com. */
+  externalUrl?: string;
+};
+
 /** Named sub types - 'task', 'snippet' and 'skill' */
 export type NamedSubType = 'task' | 'snippet' | 'skill';
 
@@ -337,8 +368,9 @@ export type ReminderEntity = EntityBase & {
   referencedEntity?: {
     id: string;
     // Calendar events are excluded alongside reminders: neither has a
-    // previewable block, and the mapper yields `undefined` for both.
-    type: Exclude<EntityType, 'reminder' | 'calendar_event'>;
+    // previewable block, and the mapper yields `undefined` for both. Agent
+    // sessions are not previewable items either.
+    type: Exclude<EntityType, 'reminder' | 'calendar_event' | 'agent_session'>;
     fileType?: string;
     subType?: string;
   };
@@ -394,6 +426,7 @@ export type EntityData =
   | ChannelMessageEntity
   | ChannelThreadEntity
   | ChatEntity
+  | AgentSessionEntity
   | DocumentEntity
   | TaskEntity
   | SnippetEntity
@@ -412,6 +445,7 @@ const ENTITY_TYPE_VALUES = new Set<EntityData['type']>([
   'channel_message',
   'channel_thread',
   'chat',
+  'agent_session',
   'document',
   'email',
   'project',
@@ -507,6 +541,12 @@ export const isChannelThreadEntity = (
 
 export const isChatEntity = (entity: EntityData): entity is ChatEntity => {
   return entity.type === 'chat';
+};
+
+export const isAgentSessionEntity = (
+  entity: EntityData
+): entity is AgentSessionEntity => {
+  return entity.type === 'agent_session';
 };
 
 export const isEmailEntity = (entity: EntityData): entity is EmailEntity => {

@@ -546,6 +546,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     // — see `reminderReferenceIconType`.
     .with({ type: 'reminder' }, () => 'reminder')
     .with({ type: 'calendar_event' }, () => 'calendar')
+    .with({ type: 'agent_session' }, () => 'agent')
     .otherwise((e) => e.type);
 
   return validateEntity(typeString);

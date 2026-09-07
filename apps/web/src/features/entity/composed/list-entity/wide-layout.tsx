@@ -1,3 +1,5 @@
+import { SessionStatusPill } from '@app/features/block-agent/ui/SessionStatusPill';
+import { useChatV3AgentsFlag } from '@app/features/channel/use-chat-v3-agents-flag';
 import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { formatCallDuration } from '@block-call/utils';
 import { EntityRowTags } from '@property/tags';
@@ -8,6 +10,7 @@ import { Match, Show, Switch } from 'solid-js';
 import {
   CallDurationBadge,
   CallStatusBadge,
+  DeprecatedBadge,
   SharedBadge,
 } from '../../components/Badges';
 import { MultiSelectCheckbox } from '../../components/MultiSelectCheckbox';
@@ -15,6 +18,7 @@ import { ProjectBreadCrumb } from '../../components/ProjectBreadCrumb';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';
 import {
+  isAgentSessionEntity,
   isAutomationEntity,
   isCallEntity,
   isChannelEntity,
@@ -68,6 +72,8 @@ export function WideLayout(props: LayoutProps) {
   // When a thread resolves to one of the user's inboxes the inbox chip already
   // conveys ownership, so the generic "shared" badge would be redundant.
   const owningInbox = useOwningInboxForEntity(() => props.entity);
+  // Once agent sessions are on, legacy AI chats are read-only and say so.
+  const chatV3Agents = useChatV3AgentsFlag();
 
   return (
     <Entity.Layout
@@ -221,6 +227,12 @@ export function WideLayout(props: LayoutProps) {
               onFilterByTag={soupView?.filterByTag}
             />
           )}
+        </Show>
+        <Show when={isChatEntity(props.entity) && chatV3Agents()}>
+          <DeprecatedBadge />
+        </Show>
+        <Show when={isAgentSessionEntity(props.entity) && props.entity}>
+          {(entity) => <SessionStatusPill status={entity().status} />}
         </Show>
         <Show when={isCallEntity(props.entity) && props.entity}>
           {(entity) => (

@@ -2,9 +2,18 @@
 
 ## Where chats live
 
-- List: `Go to Agents` → `/app/component/agents`, tabs Owned / Running / Shared /
-  Automations / Skills. Existing chats are listed by auto-generated title.
+- List: `Go to Agents` (keyboard `g` then `a`) → `/app/component/agents`, tabs Owned /
+  Running / Shared / Automations / Skills. Existing chats are listed by auto-generated
+  title. With agent sessions enabled (`enable-chat-v3-agents`), the same tabs also list
+  the caller's **agent sessions** (robot icon, status pill such as `Ready` /
+  `Disconnected`; open at `/app/agent/<uuid>`), and every legacy chat row carries a
+  `deprecated` badge whose hover tooltip reads "Macro has moved to agent sessions 2.0.
+  You can still read-only access this session."
 - A chat is `/app/chat/<uuid>`. A doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).
+- With agent sessions enabled, a legacy chat opens **read-only**: the transcript
+  renders, but a `This AI chat is deprecated.` banner with a **New agent session**
+  button sits where the composer was. Do not look for `Ask AI` in that pane; use the
+  button (or `c` then `a`) to start an agent session instead.
 
 ## Start a standalone chat
 

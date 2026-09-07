@@ -60,6 +60,9 @@ function getEntityType(entity: EntityData): EntityType {
     .with({ type: 'calendar_event' }, () => {
       throw new Error('calendar events do not support properties');
     })
+    .with({ type: 'agent_session' }, () => {
+      throw new Error('agent sessions do not support properties');
+    })
     .exhaustive();
 }
 

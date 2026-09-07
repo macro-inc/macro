@@ -2,7 +2,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
 import HashIcon from '@phosphor/hash.svg';
 import UserPlus from '@phosphor/user-plus.svg';
-import { cn, HoverCard } from '@ui';
+import { cn, HoverCard, Tooltip } from '@ui';
 import type { ParentProps } from 'solid-js';
 import type { CallStatus } from '../types/entity';
 
@@ -82,6 +82,22 @@ export function CreatedByBadgeSmall(props: { ownerId: string }) {
 
 export function DraftBadge() {
   return <Badge class="text-warning border-edge-muted px-2">draft</Badge>;
+}
+
+/** Why a legacy AI chat is read-only. Shared by the row badge and the block banner. */
+export const LEGACY_CHAT_DEPRECATION_NOTICE =
+  'Macro has moved to agent sessions 2.0. You can still read-only access this session.';
+
+/**
+ * Marks a legacy AI chat once agent sessions have replaced it. Hover
+ * explains the move; the chat itself opens read-only.
+ */
+export function DeprecatedBadge() {
+  return (
+    <Tooltip label={LEGACY_CHAT_DEPRECATION_NOTICE} placement="top">
+      <Badge class="text-warning border-edge-muted px-2">deprecated</Badge>
+    </Tooltip>
+  );
 }
 
 function _ImportantBadge() {

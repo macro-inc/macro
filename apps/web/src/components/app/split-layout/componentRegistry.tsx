@@ -2,6 +2,7 @@ import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
+import { useChatV3AgentsFlag } from '@app/features/channel/use-chat-v3-agents-flag';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
 import { GettingStarted } from '@app/features/getting-started';
 import { Home } from '@app/features/home';
@@ -44,10 +45,13 @@ import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ViewId } from '@core/types/view';
 import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
+import type { EntityData } from '@entity';
 import { useAutomationEntities } from '@queries/agent-schedule/entities';
+import { useAgentSessionEntities } from '@queries/agent-session/list';
 import { EmptyStatePanel } from '@ui';
 import {
   type Component,
+  createMemo,
   createRenderEffect,
   type JSXElement,
   lazy,
@@ -369,13 +373,21 @@ registerComponent(
       isTeamAdmin: false,
     });
     const automationEntities = useAutomationEntities();
+    // Harness sessions are the flagged successor to AI chats; without the
+    // flag there is no way to create one, so there is nothing to list.
+    const chatV3Agents = useChatV3AgentsFlag();
+    const agentSessionEntities = useAgentSessionEntities(chatV3Agents);
+    const additionalEntities = createMemo<EntityData[]>(() => [
+      ...agentSessionEntities(),
+      ...automationEntities(),
+    ]);
     return (
       <SoupView
         viewName="Agents"
         initialFilters={preset?.filters}
         initialClientFilters={preset?.clientFilters}
         initialGroupBy={preset?.groupBy}
-        additionalEntities={automationEntities}
+        additionalEntities={additionalEntities}
       />
     );
   })

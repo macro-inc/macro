@@ -16,6 +16,7 @@
  * they already handle while the GET is in flight.
  */
 
+import { invalidateAgentSessionList } from '@queries/agent-session/list';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { type Accessor, createSignal } from 'solid-js';
 
@@ -57,6 +58,7 @@ export function startPendingSession(): string {
         return;
       }
       setSessionId(result.value.session.id);
+      invalidateAgentSessionList();
     })
     .catch(() => setFailed(true));
 

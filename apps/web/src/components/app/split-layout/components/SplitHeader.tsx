@@ -88,6 +88,9 @@ function getEntitySplitContent(data: EntityDragEvent['draggable']['data']):
   if (data.type === 'crm_company') return { type: 'company', id: data.id };
   if (data.type === 'crm_contact') return { type: 'contact', id: data.id };
 
+  // Agent sessions open in the `agent` block.
+  if (data.type === 'agent_session') return { type: 'agent', id: data.id };
+
   return { type: data.type, id: data.id };
 }
 

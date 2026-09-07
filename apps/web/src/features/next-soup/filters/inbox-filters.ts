@@ -141,6 +141,9 @@ export function signalFilter(entity: EntityData): boolean {
       // Calendar events are gated into the Inbox by their event-alarm
       // notifications, same as reminders.
       return true;
+    case 'agent_session':
+      // Agent sessions only show in the Agents view, not Inbox.
+      return false;
   }
 }
 

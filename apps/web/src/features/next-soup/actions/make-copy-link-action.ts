@@ -19,6 +19,8 @@ const getEntityUrlType = (entity: EntityData): string => {
     entity.type === 'channel_thread'
   ) {
     return 'channel';
+  } else if (entity.type === 'agent_session') {
+    return 'agent';
   }
   return entity.type;
 };

@@ -60,6 +60,11 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     if (entity.type === 'channel') {
       return false;
     }
+    // The bulk-delete modal deletes storage-service items; agent sessions
+    // are the harness service's.
+    if (entity.type === 'agent_session') {
+      return false;
+    }
     // Reminders carry no owner id — they are private to their owner, and the
     // API only ever returns the caller's own — so the ownership check below
     // would reject every one of them.

@@ -25,6 +25,10 @@ export function getEntityClickContent(entity: EntityData): SplitContent {
       id: e.id,
     }))
     .with({ type: 'chat' }, (e) => ({ type: 'chat' as const, id: e.id }))
+    .with({ type: 'agent_session' }, (e) => ({
+      type: 'agent' as const,
+      id: e.id,
+    }))
     .with({ type: 'email' }, (e) => ({ type: 'email' as const, id: e.id }))
     .with({ type: 'channel' }, (e) => ({
       type: 'channel' as const,

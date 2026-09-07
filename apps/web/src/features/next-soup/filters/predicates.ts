@@ -103,8 +103,12 @@ export function teamsFilter(entity: EntityData): boolean {
   );
 }
 
+/**
+ * Both generations of agent: legacy AI chats and harness agent sessions.
+ * Sessions reach the soup through `additionalEntities`, not the server query.
+ */
 export function agentFilter(entity: EntityData): boolean {
-  return entity.type === 'chat';
+  return entity.type === 'chat' || entity.type === 'agent_session';
 }
 
 export function automationFilter(entity: EntityData): boolean {

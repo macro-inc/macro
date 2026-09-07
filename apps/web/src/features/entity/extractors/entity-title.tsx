@@ -21,6 +21,8 @@ function extractRawTitle(entity: EntityData): JSX.Element {
       .with({ type: 'channel_thread' }, (e) => e.name)
       .with({ type: 'email' }, (e) => e.name || '(No Subject)')
       .with({ type: 'chat' }, (e) => e.name)
+      // The harness names new sessions "Agent Session" until the first prompt.
+      .with({ type: 'agent_session' }, (e) => e.name || 'Agent Session')
       .with({ type: 'call' }, (e) => e.name || blockNameToDefaultFile('call'))
       .with(
         { type: 'automation' },
