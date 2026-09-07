@@ -128,33 +128,33 @@ export function ActivityTimelineRow(props: {
         >
           {(display) => (
             <>
-              <span class="min-w-0 truncate text-ink-muted">
-                <Show
-                  when={propertyChange()}
-                  fallback={
-                    showActor() ? parts().verb : capitalize(parts().verb)
-                  }
-                >
-                  {(change) => (
+              <Show
+                when={propertyChange()}
+                fallback={
+                  <span class="shrink-0 text-ink-muted">
+                    {showActor() ? parts().verb : capitalize(parts().verb)}
+                  </span>
+                }
+              >
+                {(change) => (
+                  <span class="min-w-0 truncate text-ink-muted">
                     <PropertyChangeText
                       action={change()}
                       definition={props.propertyDefinition}
                       capitalize={!showActor()}
                     />
-                  )}
-                </Show>
-              </span>
+                  </span>
+                )}
+              </Show>
               <Show when={parts().connector}>
                 {(connector) => (
                   <span class="shrink-0 text-ink-muted">{connector()}</span>
                 )}
               </Show>
-              {/* A zero basis grown up to its own content sizes the mention
-                  to whatever room is left, so a long name gives way before
-                  the verb loses a pixel. Proportional shrinking nicks the
-                  verb by a subpixel and ellipsizes it ("edit…"). The full
-                  name stays in the mention's hover preview. */}
-              <span class="min-w-0 max-w-max flex-1 truncate">
+              {/* Zero basis grown to its own content: the mention takes only
+                  the room left, so a long name gives way before the verb, and
+                  the floor keeps an ellipsis visible in the tightest pane. */}
+              <span class="min-w-[5ch] max-w-max flex-1 truncate">
                 <EntityMention entityId={head().entityId} display={display()} />
               </span>
             </>
