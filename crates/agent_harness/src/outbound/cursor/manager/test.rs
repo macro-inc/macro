@@ -106,6 +106,13 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never lists thread sessions")
     }
 
+    async fn list_by_owner(
+        &self,
+        _owner_id: &MacroUserIdStr<'static>,
+    ) -> SessionResult<Vec<AgentSession>> {
+        unimplemented!("the manager never lists a user's sessions")
+    }
+
     async fn session_bot(&self, _id: BotId) -> SessionResult<SessionBot> {
         unimplemented!("the manager never renders bots")
     }

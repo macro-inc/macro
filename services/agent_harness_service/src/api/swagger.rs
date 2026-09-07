@@ -3,9 +3,9 @@
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
-    self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionQueueResponse,
-    AgentSessionResponse, ControlRequest, ControlResponse, ControlStatusDto,
-    CreateAgentSessionRequest, CreateAgentSessionResponse, CreateSessionThread,
+    self, AgentSessionListResponse, AgentSessionLogEntryDto, AgentSessionLogResponse,
+    AgentSessionQueueResponse, AgentSessionResponse, ControlRequest, ControlResponse,
+    ControlStatusDto, CreateAgentSessionRequest, CreateAgentSessionResponse, CreateSessionThread,
     EditQueuedActionRequest, LogDirectionDto, LogFrameDto, QueuedActionDto,
     RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto,
 };
@@ -16,6 +16,7 @@ use utoipa::OpenApi;
     info(terms_of_service = "https://macro.com/terms"),
     paths(
         axum_router::create_agent_session_handler,
+        axum_router::list_agent_sessions_handler,
         axum_router::get_agent_session_handler,
         axum_router::rename_agent_session_handler,
         axum_router::get_agent_session_log_handler,
@@ -41,6 +42,7 @@ use utoipa::OpenApi;
         AgentAction,
         AgentActionId,
         AgentSessionResponse,
+        AgentSessionListResponse,
         RenameAgentSessionRequest,
         SessionStatusDto,
         AgentSessionLogResponse,

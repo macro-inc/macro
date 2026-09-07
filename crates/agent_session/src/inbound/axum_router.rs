@@ -161,6 +161,8 @@ impl<R, Access, Auth> FromRef<AgentSessionControlState<R, Access, Auth>> for Arc
 ///
 /// Separate from [`agent_session_control_router`] because reads depend on the
 /// session query service while controls depend on the live-session recipient.
+/// Its `GET /` shares a path with [`agent_session_create_router`]'s `POST /`;
+/// axum merges the two method routers when the routers are merged.
 pub fn agent_session_read_router<T, Access, Auth, S>(
     state: AgentSessionRouterState<T, Access, Auth>,
 ) -> Router<S>
@@ -171,6 +173,7 @@ where
     S: Clone + Send + Sync + 'static,
 {
     Router::new()
+        .route("/", get(list_agent_sessions_handler::<T, Access, Auth>))
         .route(
             "/{session_id}",
             get(get_agent_session_handler::<T, Access, Auth>),
@@ -518,6 +521,48 @@ impl From<AgentSession> for AgentSessionResponse {
             modified_at: session.modified_at,
         }
     }
+}
+
+/// Response body for `GET /agent-sessions`: the caller's own sessions.
+#[derive(Debug, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionListResponse {
+    /// The caller's sessions, most recently modified first.
+    pub sessions: Vec<AgentSessionResponse>,
+}
+
+#[utoipa::path(
+    get,
+    path = "/agent-sessions",
+    tag = "agent-sessions",
+    operation_id = "list_agent_sessions",
+    responses(
+        (status = 200, body = AgentSessionListResponse),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+/// List the agent sessions the caller owns, most recently modified first.
+///
+/// Owner-scoped rather than access-scoped: a session shared with the caller
+/// through a channel grant is reachable from that channel, and this list is
+/// what the Agents view shows as the caller's own sessions.
+#[tracing::instrument(skip_all, fields(actor = %caller.acting_entity()), err(Debug))]
+pub async fn list_agent_sessions_handler<
+    T: AgentSessionService,
+    Access: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<AgentSessionRouterState<T, Access, Auth>>,
+    caller: MacroAuthorizationExtractor<Auth, ActingUser>,
+) -> Result<Json<AgentSessionListResponse>, AgentSessionApiError> {
+    let sessions = state
+        .service
+        .list_owned_sessions(&caller.authorization.user.macro_user_id)
+        .await?;
+    Ok(Json(AgentSessionListResponse {
+        sessions: sessions.into_iter().map(Into::into).collect(),
+    }))
 }
 
 #[utoipa::path(

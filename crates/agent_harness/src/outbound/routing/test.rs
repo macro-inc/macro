@@ -141,6 +141,13 @@ impl AgentSessionRepo for FixedBotSessions {
         unimplemented!("the router never lists thread sessions")
     }
 
+    async fn list_by_owner(
+        &self,
+        _owner_id: &MacroUserIdStr<'static>,
+    ) -> SessionResult<Vec<AgentSession>> {
+        unimplemented!("the router never lists a user's sessions")
+    }
+
     async fn session_bot(&self, _id: BotId) -> SessionResult<SessionBot> {
         unimplemented!("the router never renders bots")
     }

@@ -128,6 +128,9 @@ pub trait SessionOpener: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AgentSessionId>>> + Send;
 }
 
+/// The most sessions [`AgentSessionRepo::list_by_owner`] answers with.
+pub const MAX_LISTED_SESSIONS: i64 = 200;
+
 /// `Send + Sync + 'static` with `Send` futures because callers drive sessions
 /// from spawned tasks - a Kafka consumer hands each message to its own task,
 /// and a repo whose futures are not `Send` cannot be used there.
@@ -187,6 +190,15 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn find_all_for_thread(
         &self,
         thread_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
+
+    /// Every session this user owns, most recently modified first.
+    ///
+    /// Bounded at [`MAX_LISTED_SESSIONS`]: this backs a list view, and a user
+    /// with more sessions than that is looking at the newest ones.
+    fn list_by_owner(
+        &self,
+        owner_id: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
 
     /// The agent behind a session, for rendering the messages it sent.

@@ -660,6 +660,63 @@ async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn list_by_owner_returns_only_that_owners_sessions_newest_first(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let first = create_session(&repo, new_session(bot, None, None)).await;
+    let second = create_session(&repo, new_session(bot, None, None)).await;
+
+    let other_owner = user_id("macro|someone-else@example.com");
+    insert_user(&pool, other_owner.as_ref()).await;
+    let theirs = create_session(
+        &repo,
+        CreateAgentSessionParams {
+            owner_id: other_owner.clone(),
+            ..new_session(bot, None, None)
+        },
+    )
+    .await;
+    ExternalSessionRepo::upsert(&repo, second.id, cursor_external("bc-owned"))
+        .await
+        .expect("attach an external identity");
+
+    // Touching the older session bumps `modified_at`, so it now lists first.
+    AgentSessionRepo::set_name(&repo, first.id, "Renamed")
+        .await
+        .expect("rename the first session");
+
+    let owned = repo
+        .list_by_owner(&user_id(OWNER))
+        .await
+        .expect("list the owner's sessions");
+    assert_eq!(
+        owned.iter().map(|s| s.id).collect::<Vec<_>>(),
+        vec![first.id, second.id]
+    );
+    assert!(owned.iter().all(|s| s.owner_id == user_id(OWNER)));
+    assert_eq!(
+        owned[1].external,
+        Some(cursor_external("bc-owned")),
+        "the external identity joins onto the listed row"
+    );
+
+    let others = repo
+        .list_by_owner(&other_owner)
+        .await
+        .expect("list the other owner's sessions");
+    assert_eq!(
+        others.iter().map(|s| s.id).collect::<Vec<_>>(),
+        vec![theirs.id]
+    );
+
+    let nobody = repo
+        .list_by_owner(&user_id("macro|nobody@example.com"))
+        .await
+        .expect("list a user with no sessions");
+    assert!(nobody.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;

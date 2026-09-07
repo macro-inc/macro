@@ -376,6 +376,10 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.find_all_for_thread(thread_id).await
     }
 
+    async fn list_by_owner(&self, owner_id: &MacroUserIdStr<'static>) -> Result<Vec<AgentSession>> {
+        self.repo.list_by_owner(owner_id).await
+    }
+
     async fn set_acp_session_id(
         &self,
         id: AgentSessionId,

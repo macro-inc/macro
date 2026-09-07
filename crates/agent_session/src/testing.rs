@@ -12,8 +12,8 @@ use crate::domain::model::{
     SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
-    AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo, REPLICA_STALE_AFTER,
-    SessionOwnership,
+    AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo, MAX_LISTED_SESSIONS,
+    REPLICA_STALE_AFTER, SessionOwnership,
 };
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -193,6 +193,20 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             .cloned()
             .collect();
         found.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+        Ok(found)
+    }
+
+    async fn list_by_owner(&self, owner_id: &MacroUserIdStr<'static>) -> Result<Vec<AgentSession>> {
+        let mut found: Vec<AgentSession> = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .values()
+            .filter(|session| session.owner_id == *owner_id)
+            .cloned()
+            .collect();
+        found.sort_by(|a, b| b.modified_at.cmp(&a.modified_at));
+        found.truncate(MAX_LISTED_SESSIONS as usize);
         Ok(found)
     }
 

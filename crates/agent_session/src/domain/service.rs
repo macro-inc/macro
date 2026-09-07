@@ -129,6 +129,12 @@ pub trait AgentSessionService: Send + Sync + 'static {
     /// Get a persisted agent session by id.
     fn get_session(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// Every session `owner_id` owns, most recently modified first.
+    fn list_owned_sessions(
+        &self,
+        owner_id: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
+
     /// Rename a session after owner access has been verified.
     fn rename_session(
         &self,
@@ -585,6 +591,13 @@ where
         self.repo.get(id).await
     }
 
+    async fn list_owned_sessions(
+        &self,
+        owner_id: &MacroUserIdStr<'static>,
+    ) -> Result<Vec<AgentSession>> {
+        self.repo.list_by_owner(owner_id).await
+    }
+
     async fn find_for_channel(
         &self,
         thread_id: Option<Uuid>,
@@ -1002,6 +1015,10 @@ where
 
     async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
         self.repo.find_all_for_thread(thread_id).await
+    }
+
+    async fn list_by_owner(&self, owner_id: &MacroUserIdStr<'static>) -> Result<Vec<AgentSession>> {
+        self.repo.list_by_owner(owner_id).await
     }
 
     async fn set_acp_session_id(

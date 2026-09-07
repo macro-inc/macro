@@ -12,8 +12,8 @@ use crate::domain::model::{
     SandboxSize, SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
 };
 use crate::domain::ports::{
-    AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
-    SessionOwnership,
+    AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, MAX_LISTED_SESSIONS,
+    REPLICA_STALE_AFTER, SessionOwnership,
 };
 use crate::outbound::connection_gateway_realtime::SessionAudience;
 use agent_client_protocol::schema::v1::SessionId;
@@ -422,6 +422,38 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .fetch_all(&self.pool)
         .await
         .context("failed to find agent sessions for thread")?;
+
+        Ok(rows
+            .into_iter()
+            .map(AgentSession::try_from)
+            .collect::<anyhow::Result<Vec<_>>>()?)
+    }
+
+    async fn list_by_owner(&self, owner_id: &MacroUserIdStr<'static>) -> Result<Vec<AgentSession>> {
+        let rows = sqlx::query_as!(
+            AgentSessionRow,
+            r#"
+            SELECT
+                id, name, owner_id, thread_id, originating_message_id, bot_id,
+                model, harness, repo_url, workspace, sandbox_size, instructions,
+                mcp_scope, mcp_servers, acp_session_id, status,
+                status_event_name, agent_session.created_at, modified_at,
+                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_channel_id?",
+                ext.provider AS "external_provider?", ext.external_id AS "external_id?",
+                ext.external_name AS "external_name?", ext.external_url AS "external_url?"
+            FROM agent_session
+            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id
+            WHERE owner_id = $1
+            ORDER BY modified_at DESC
+            LIMIT $2
+            "#,
+            owner_id.as_ref(),
+            MAX_LISTED_SESSIONS,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .context("failed to list agent sessions by owner")?;
 
         Ok(rows
             .into_iter()
