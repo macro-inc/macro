@@ -1,5 +1,6 @@
 import { LIST_VIEW_DOCS_URL } from '@app/constants/docs-links';
 import { isListViewID, type ListView } from '@app/constants/list-views';
+import { useChatV3AgentsFlag } from '@app/features/channel/use-chat-v3-agents-flag';
 import { SoupChatInput } from '@app/features/chat/SoupChatInput';
 import {
   makeMarkDoneAction,
@@ -300,6 +301,10 @@ export const SoupView = (props: SoupViewProps) => {
   const notificationSource = useGlobalNotificationSource();
   const soupView = useSoupView();
   const isInboxView = useIsInboxView();
+  // The bottom composer creates a legacy AI chat and hands it the first send.
+  // Once agent sessions are on, legacy chats are read-only, so that would land
+  // in an empty pane that refuses the message.
+  const chatV3Agents = useChatV3AgentsFlag();
   const openFocusedEntityInPreview = () => {
     const focusedRow = soup.focus.row();
     if (
@@ -764,6 +769,7 @@ export const SoupView = (props: SoupViewProps) => {
         <Show
           when={
             ENABLE_UNIFIED_LIST_AI_INPUT &&
+            !chatV3Agents() &&
             !isTouchDevice() &&
             !isInboxView() &&
             !panel.handle.isControllerSplit() &&

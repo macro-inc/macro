@@ -317,7 +317,9 @@ export function EmptyState(props: {
           primaryAction={{
             label: 'New agent',
             icon: PlusIcon,
-            onClick: () => runCreateAction('chat'),
+            // Legacy chat until agent sessions are on; then a harness session.
+            onClick: () =>
+              runCreateAction(isCreatableEnabled('agent') ? 'agent' : 'chat'),
           }}
           documentationUrl={`${DOCS_BASE}/product/agents`}
         />
