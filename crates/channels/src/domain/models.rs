@@ -970,6 +970,11 @@ pub struct PatchMessageRequest {
     pub attachment_ids_to_delete: Option<Vec<String>>,
     /// Attachments to add.
     pub attachments_to_add: Option<Vec<NewChannelAttachment>>,
+    /// Optionally removes the rich preview of one link for every participant
+    /// by setting `preview: false` on the matching link node(s) in the
+    /// content, server-side. Not a content edit: `edited_at` is untouched.
+    #[serde(default)]
+    pub remove_preview_url: Option<String>,
     /// Optional optimistic-update nonce.
     pub nonce: Option<String>,
     /// Internal notification policy for this patch.

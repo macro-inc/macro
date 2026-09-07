@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests;
 
+use crate::domain::link_preview::remove_link_preview_from_content;
 #[cfg(feature = "attachment")]
 use crate::domain::ports::ChannelAttachmentRepo;
 #[cfg(feature = "list")]
@@ -3595,6 +3596,80 @@ impl ChannelRepo for PgChannelsRepo {
         .context("unable to update message")?;
         mutated_message_from_row(row)
     }
+
+    async fn remove_link_preview(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        url: String,
+    ) -> Result<MutatedMessage, Self::Err> {
+        // Read-transform-write under a row lock so two removals on the same
+        // message cannot clobber each other's payload rewrite. Deliberately
+        // leaves edited_at alone: removing a preview is not a content edit
+        // and must not surface the "edited" badge.
+        let mut tx = self.pool.begin().await.context("unable to begin tx")?;
+        let current = sqlx::query_as!(
+            MutatedMessageRow,
+            r#"
+            SELECT
+                id,
+                channel_id,
+                sender_id,
+                triggered_by_user_id,
+                content,
+                created_at,
+                updated_at,
+                thread_id,
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
+            FROM comms_messages
+            WHERE id = $1 AND channel_id = $2
+            FOR UPDATE
+            "#,
+            message_id,
+            channel_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("unable to load message content")?;
+
+        let rewritten = remove_link_preview_from_content(&current.content, &url);
+        // The URL isn't in this message (or is already suppressed): skip the
+        // write so no updated_at bump or realtime event is emitted.
+        if rewritten == current.content {
+            tx.commit().await.context("unable to commit tx")?;
+            return mutated_message_from_row(current);
+        }
+
+        let row = sqlx::query_as!(
+            MutatedMessageRow,
+            r#"
+            UPDATE comms_messages
+            SET content = $1, updated_at = NOW()
+            WHERE id = $2 AND channel_id = $3
+            RETURNING
+                id,
+                channel_id,
+                sender_id,
+                triggered_by_user_id,
+                content,
+                created_at,
+                updated_at,
+                thread_id,
+                edited_at::timestamptz AS "edited_at?",
+                deleted_at::timestamptz AS "deleted_at?"
+            "#,
+            rewritten,
+            message_id,
+            channel_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .context("unable to update message content")?;
+        tx.commit().await.context("unable to commit tx")?;
+        mutated_message_from_row(row)
+    }
+
     async fn delete_message(
         &self,
         channel_id: Uuid,

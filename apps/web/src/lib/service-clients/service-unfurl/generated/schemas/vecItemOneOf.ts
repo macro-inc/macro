@@ -6,20 +6,34 @@
  */
 import type { VecItemOneOfDescription } from './vecItemOneOfDescription';
 import type { VecItemOneOfFaviconUrl } from './vecItemOneOfFaviconUrl';
+import type { VecItemOneOfImageHeight } from './vecItemOneOfImageHeight';
 import type { VecItemOneOfImageUrl } from './vecItemOneOfImageUrl';
+import type { VecItemOneOfImageWidth } from './vecItemOneOfImageWidth';
 
 /**
  * Unfurl response for a single URL: the URL itself plus any metadata that
-was extracted from the page's `<head>` (title, description, image,
-favicon).
+was extracted from the page's `<head>` (title, description, image and
+optional intrinsic image size, favicon).
  */
 export type VecItemOneOf = {
   /** The page description (from `og:description`), if any. */
   description?: VecItemOneOfDescription;
   /** The page's favicon URL, if any. */
   favicon_url?: VecItemOneOfFaviconUrl;
+  /**
+   * Intrinsic height of the preview image (from `og:image:height`), if both
+width and height were present and parseable.
+   * @minimum 0
+   */
+  image_height?: VecItemOneOfImageHeight;
   /** The page's preview image URL (from `og:image`), if any. */
   image_url?: VecItemOneOfImageUrl;
+  /**
+   * Intrinsic width of the preview image (from `og:image:width`), if both
+width and height were present and parseable.
+   * @minimum 0
+   */
+  image_width?: VecItemOneOfImageWidth;
   /** The page title (from custom URL parser, Open Graph, or `<title>`). */
   title: string;
   /** The URL that was unfurled. */

@@ -363,6 +363,7 @@ where
                 event.channel_id,
                 message_id,
                 PatchMessageRequest {
+                    remove_preview_url: None,
                     content: Some(reply),
                     mentions: None,
                     attachment_ids_to_delete: None,

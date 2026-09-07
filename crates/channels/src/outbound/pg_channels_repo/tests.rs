@@ -3024,6 +3024,43 @@ async fn bot_profiles_includes_soft_deleted_bots(pool: Pool<Postgres>) -> anyhow
     Ok(())
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn remove_link_preview_rewrites_content_without_setting_edited_at(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let url = "https://example.com/article";
+    let content =
+        format!(r#"look at <m-link>{{"url":"{url}","text":"{url}","title":""}}</m-link>"#);
+    sqlx::query("UPDATE comms_messages SET content = $1 WHERE id = $2")
+        .bind(&content)
+        .bind(MSG1)
+        .execute(&pool)
+        .await?;
+
+    let mutated = repo(pool.clone())
+        .remove_link_preview(CH1, MSG1, url.to_string())
+        .await?;
+
+    assert!(
+        mutated.content.contains(r#""preview":false"#),
+        "content: {}",
+        mutated.content
+    );
+    assert!(mutated.edited_at.is_none());
+
+    let persisted: (String, Option<chrono::DateTime<chrono::Utc>>) =
+        sqlx::query_as("SELECT content, edited_at FROM comms_messages WHERE id = $1")
+            .bind(MSG1)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(persisted.0, mutated.content);
+    assert!(persisted.1.is_none());
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn delete_channel_cascades_contacts_backfill_outbox_rows(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());

@@ -6361,6 +6361,12 @@ export type PatchMessageRequest = {
      * Optional optimistic-update nonce.
      */
     nonce?: string | null;
+    /**
+     * Optionally removes the rich preview of one link for every participant
+     * by setting `preview: false` on the matching link node(s) in the
+     * content, server-side. Not a content edit: `edited_at` is untouched.
+     */
+    remove_preview_url?: string | null;
 };
 
 export type PatchProjectRequestV2 = {

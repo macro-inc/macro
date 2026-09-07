@@ -1,19 +1,10 @@
-import { openExternalUrl } from '@core/util/url';
+import { extractDomain, openExternalUrl } from '@core/util/url';
 import LinkIcon from '@phosphor/link.svg';
 import { proxyResource } from '@service-unfurl/client';
 import type { GetUnfurlResponse } from '@service-unfurl/generated/schemas/getUnfurlResponse';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-
-function extractDomain(url: string) {
-  try {
-    const address = new URL('', url);
-    return address.hostname;
-  } catch {
-    return url;
-  }
-}
 
 const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
 type UnfurlLinkProps = {

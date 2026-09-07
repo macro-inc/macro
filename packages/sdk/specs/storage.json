@@ -22322,6 +22322,10 @@
           "nonce": {
             "type": ["string", "null"],
             "description": "Optional optimistic-update nonce."
+          },
+          "remove_preview_url": {
+            "type": ["string", "null"],
+            "description": "Optionally removes the rich preview of one link for every participant\nby setting `preview: false` on the matching link node(s) in the\ncontent, server-side. Not a content edit: `edited_at` is untouched."
           }
         }
       },

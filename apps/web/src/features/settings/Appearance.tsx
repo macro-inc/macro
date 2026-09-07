@@ -1,3 +1,7 @@
+import {
+  setShowLinkPreviews,
+  showLinkPreviews,
+} from '@channel/Message/link-preview-visibility';
 import { toast } from '@core/component/Toast/Toast';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
@@ -700,6 +704,16 @@ export function Appearance() {
                 size="md"
                 onChange={setTooltipsEnabled}
                 checked={tooltipsEnabled()}
+              />
+            </SettingsRow>
+            <SettingsRow
+              label="Show link previews"
+              description="Show rich previews of links shared in messages."
+            >
+              <ToggleSwitch
+                size="md"
+                onChange={setShowLinkPreviews}
+                checked={showLinkPreviews()}
               />
             </SettingsRow>
           </SettingsCard>

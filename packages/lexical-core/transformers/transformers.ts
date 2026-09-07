@@ -181,6 +181,17 @@ function escapeUrl(url: string): string {
   return url.replace(/\(/g, '%28').replace(/\)/g, '%29');
 }
 
+/**
+ * The m-link payload's `preview: false` ("remove link preview") has no home
+ * on Lexical's stock LinkNode, so it rides the node's `rel` attribute — an
+ * anchor attribute the editor UI never touches — to survive edit round-trips.
+ */
+export const NO_PREVIEW_REL = 'no-preview';
+
+function hasNoPreviewRel(rel: string | null): boolean {
+  return rel?.split(' ').includes(NO_PREVIEW_REL) ?? false;
+}
+
 export const LINK_XML: TextMatchTransformer = {
   dependencies: [LinkNode, UnknownMentionNode],
   export: (node: LexicalNode) => {
@@ -190,6 +201,7 @@ export const LINK_XML: TextMatchTransformer = {
       url: escapeUrl(node.getURL()),
       text,
       title: node.getTitle() || '',
+      ...(hasNoPreviewRel(node.getRel()) ? { preview: false } : {}),
     });
   },
   importRegExp: xmlMatcher('m-link'),
@@ -200,7 +212,10 @@ export const LINK_XML: TextMatchTransformer = {
       for (const field of ['url', 'text']) {
         if (!(field in res)) throw new Error(`Missing field ${field}`);
       }
-      const linkNode = $createLinkNode(res.url, { title: res.title });
+      const linkNode = $createLinkNode(res.url, {
+        title: res.title,
+        rel: res.preview === false ? NO_PREVIEW_REL : null,
+      });
       const linkTextNode = $createTextNode(res.text);
       linkTextNode.setFormat(textNode.getFormat());
       linkNode.append(linkTextNode);

@@ -47,7 +47,6 @@ list = [
   "dep:model-entity",
   "dep:recursion",
   "dep:rootcause",
-  "dep:serde_json",
   "frecency/ports",
   "ports",
 ]
@@ -62,7 +61,6 @@ outbound = [
   "dep:model_notifications",
   "dep:models_permissions",
   "dep:notification_hex",
-  "dep:serde_json",
   "dep:share_permission_db_utils",
   "dep:sqlx",
   "entity_access/ports",
@@ -120,7 +118,7 @@ rdkafka = { workspace = true, optional = true }
 recursion = { workspace = true, optional = true }
 rootcause = { workspace = true, optional = true }
 serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
+serde_json = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }

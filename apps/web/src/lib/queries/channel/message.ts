@@ -407,6 +407,60 @@ export function rollbackUpdateChannelMessage(
   });
 }
 
+type RemoveLinkPreviewParams = {
+  channelID: string;
+  messageID: string;
+  /** The link whose preview is being removed. */
+  url: string;
+};
+
+/**
+ * Mutation to remove one link's rich preview for every participant
+ * (sender-only). The server rewrites the matching link node in the content
+ * to carry `preview: false`; the caller is expected to hide the card locally
+ * for instant feedback and undo on error.
+ */
+export function useRemoveLinkPreviewMutation(
+  callbacks?: MutationCallbacks<
+    MessageResponse,
+    Error,
+    RemoveLinkPreviewParams,
+    void
+  >
+) {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async (vars: RemoveLinkPreviewParams) => {
+      return await throwOnErr(
+        async () =>
+          await storageServiceClient.patchMessage({
+            channel_id: vars.channelID,
+            message_id: vars.messageID,
+            remove_preview_url: vars.url,
+          })
+      );
+    },
+    ...withCallbacks<MessageResponse, Error, RemoveLinkPreviewParams, void>(
+      {
+        onError(error) {
+          console.error('failed to remove link preview', error);
+          toast.failure('Failed to remove link preview');
+        },
+        onSettled: (_data, _error, vars) => {
+          softInvalidateTargetCaches(
+            vars.channelID,
+            resolveMessageTarget({
+              channelId: vars.channelID,
+              messageId: vars.messageID,
+            })
+          );
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
 type SendMessageParams = {
   channelID: string;
   message: PostMessageRequest;

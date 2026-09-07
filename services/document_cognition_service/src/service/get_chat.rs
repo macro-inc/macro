@@ -33,6 +33,7 @@ pub async fn get_chat(
                         image_url: v.image_url,
                         title: v.title,
                         url: v.url,
+                        ..Default::default()
                     })
                     .collect(),
             )

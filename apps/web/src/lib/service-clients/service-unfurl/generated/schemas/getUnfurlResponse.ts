@@ -6,20 +6,34 @@
  */
 import type { GetUnfurlResponseDescription } from './getUnfurlResponseDescription';
 import type { GetUnfurlResponseFaviconUrl } from './getUnfurlResponseFaviconUrl';
+import type { GetUnfurlResponseImageHeight } from './getUnfurlResponseImageHeight';
 import type { GetUnfurlResponseImageUrl } from './getUnfurlResponseImageUrl';
+import type { GetUnfurlResponseImageWidth } from './getUnfurlResponseImageWidth';
 
 /**
  * Unfurl response for a single URL: the URL itself plus any metadata that
-was extracted from the page's `<head>` (title, description, image,
-favicon).
+was extracted from the page's `<head>` (title, description, image and
+optional intrinsic image size, favicon).
  */
 export interface GetUnfurlResponse {
   /** The page description (from `og:description`), if any. */
   description?: GetUnfurlResponseDescription;
   /** The page's favicon URL, if any. */
   favicon_url?: GetUnfurlResponseFaviconUrl;
+  /**
+   * Intrinsic height of the preview image (from `og:image:height`), if both
+width and height were present and parseable.
+   * @minimum 0
+   */
+  image_height?: GetUnfurlResponseImageHeight;
   /** The page's preview image URL (from `og:image`), if any. */
   image_url?: GetUnfurlResponseImageUrl;
+  /**
+   * Intrinsic width of the preview image (from `og:image:width`), if both
+width and height were present and parseable.
+   * @minimum 0
+   */
+  image_width?: GetUnfurlResponseImageWidth;
   /** The page title (from custom URL parser, Open Graph, or `<title>`). */
   title: string;
   /** The URL that was unfurled. */

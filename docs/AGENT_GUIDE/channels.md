@@ -92,6 +92,15 @@ instead.
 - Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
   participants.
 
+## Link previews
+
+A channel message with an external URL (`http`/`https`, not an in-app `/app/...`
+link) reserves a constant-height preview slot on first paint — a skeleton while
+unfurl is in flight, then the card or an empty fallback in the same box. The
+row must not grow when metadata or the image arrives. The sender can remove a
+preview with the card's `Remove link preview` button (no "edited" marker).
+Appearance → **Show link previews** hides every slot.
+
 ## Onboarding channel
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —

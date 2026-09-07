@@ -172,7 +172,7 @@
       },
       "GetUnfurlResponse": {
         "type": "object",
-        "description": "Unfurl response for a single URL: the URL itself plus any metadata that\nwas extracted from the page's `<head>` (title, description, image,\nfavicon).",
+        "description": "Unfurl response for a single URL: the URL itself plus any metadata that\nwas extracted from the page's `<head>` (title, description, image and\noptional intrinsic image size, favicon).",
         "required": ["url", "title"],
         "properties": {
           "description": {
@@ -183,9 +183,21 @@
             "type": ["string", "null"],
             "description": "The page's favicon URL, if any."
           },
+          "image_height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Intrinsic height of the preview image (from `og:image:height`), if both\nwidth and height were present and parseable.",
+            "minimum": 0
+          },
           "image_url": {
             "type": ["string", "null"],
             "description": "The page's preview image URL (from `og:image`), if any."
+          },
+          "image_width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Intrinsic width of the preview image (from `og:image:width`), if both\nwidth and height were present and parseable.",
+            "minimum": 0
           },
           "title": {
             "type": "string",
@@ -215,7 +227,7 @@
             },
             {
               "type": "object",
-              "description": "Unfurl response for a single URL: the URL itself plus any metadata that\nwas extracted from the page's `<head>` (title, description, image,\nfavicon).",
+              "description": "Unfurl response for a single URL: the URL itself plus any metadata that\nwas extracted from the page's `<head>` (title, description, image and\noptional intrinsic image size, favicon).",
               "required": ["url", "title"],
               "properties": {
                 "description": {
@@ -226,9 +238,21 @@
                   "type": ["string", "null"],
                   "description": "The page's favicon URL, if any."
                 },
+                "image_height": {
+                  "type": ["integer", "null"],
+                  "format": "int32",
+                  "description": "Intrinsic height of the preview image (from `og:image:height`), if both\nwidth and height were present and parseable.",
+                  "minimum": 0
+                },
                 "image_url": {
                   "type": ["string", "null"],
                   "description": "The page's preview image URL (from `og:image`), if any."
+                },
+                "image_width": {
+                  "type": ["integer", "null"],
+                  "format": "int32",
+                  "description": "Intrinsic width of the preview image (from `og:image:width`), if both\nwidth and height were present and parseable.",
+                  "minimum": 0
                 },
                 "title": {
                   "type": "string",
