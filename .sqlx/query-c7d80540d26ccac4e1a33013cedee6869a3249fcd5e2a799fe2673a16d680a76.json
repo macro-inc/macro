@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_links SET macro_id = $1 WHERE id = (SELECT link_id FROM email_threads WHERE id = $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c7d80540d26ccac4e1a33013cedee6869a3249fcd5e2a799fe2673a16d680a76"
+}

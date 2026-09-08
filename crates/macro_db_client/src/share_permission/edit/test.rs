@@ -62,6 +62,38 @@ async fn edit(
 }
 
 #[sqlx::test]
+async fn supplied_unvalidated_team_fields_reject_before_any_writes(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let mut transaction = pool.begin().await?;
+    let permission = create_share_permission(
+        &mut transaction,
+        &SharePermissionV2::new_document_share_permission(None, None),
+    )
+    .await?;
+    let before = get_stored_share_permission(&mut transaction, &permission.id).await?;
+    for level in [None, Some(AccessLevel::View), Some(AccessLevel::Owner)] {
+        let mut request = update_request(Some(Some(LinkShare::Team)), None);
+        request.team_share_access_level = Some(level);
+        assert!(
+            edit(&mut transaction, &permission.id, request.clone())
+                .await
+                .is_err()
+        );
+        assert!(
+            edit_thread_permission(&mut transaction, &Uuid::nil(), &permission.id, &request)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            get_stored_share_permission(&mut transaction, &permission.id).await?,
+            before
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test]
 async fn edit_share_permission_preserves_update_field_semantics(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

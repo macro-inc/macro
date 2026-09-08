@@ -1304,6 +1304,9 @@ async fn run() -> anyhow::Result<()> {
 
     let redis_sha_client = Arc::new(Redis::new(redis_client));
 
+    let thread_share_service = Arc::new(service::thread_share::ThreadSharePolicyService::new(
+        outbound::thread_share::PgThreadShareRepository::new(db.clone()),
+    ));
     let graphql_entity_mutation_service =
         Arc::new(service::entity_mutation::DssEntityMutationService::new(
             document_service.clone(),
@@ -1318,10 +1321,12 @@ async fn run() -> anyhow::Result<()> {
                 redis_sha_client.clone(),
                 sqs_client.clone(),
                 macro_event_broker.clone(),
+                thread_share_service.clone(),
             )),
         ));
 
     let api_context = ApiContext {
+        thread_share_service,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),

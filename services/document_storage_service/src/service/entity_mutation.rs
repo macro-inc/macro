@@ -19,6 +19,7 @@
 
 use std::{future::Future, sync::Arc};
 
+use super::thread_share::ThreadShareError;
 use call::domain::ports::CallService;
 use channels::domain::ports::ChannelService;
 use chat::domain::ports::ChatService;
@@ -37,7 +38,9 @@ use entity_mutation::{
 };
 use futures::{StreamExt, stream};
 use model_entity::{Entity, EntityType};
-use models_permissions::share_permission::UpdateSharePermissionRequestV2;
+use models_permissions::share_permission::{
+    UpdateSharePermissionRequestV2, team_share::TeamSharePolicyError,
+};
 use projects_hex::domain::ports::ProjectService;
 
 #[cfg(test)]
@@ -54,28 +57,22 @@ pub enum LifecycleError {
     /// The requested entity does not exist.
     #[error("entity not found")]
     NotFound,
-    /// The request violates an input invariant.
-    #[error("invalid lifecycle input: {0}")]
-    InvalidInput(String),
     /// Infrastructure or persistence failed.
     #[error("internal lifecycle failure: {0}")]
     Internal(rootcause::Report),
 }
 
-/// Document and email-thread mutations still orchestrated directly against
-/// persistence instead of a domain service.
+/// Legacy document lifecycle operations and delegation to thread sharing.
 ///
-/// Each method should migrate behind the domain port that owns its entity
-/// kind and become a capability-trait impl there (projects already
-/// graduated); delete this trait once it is empty.
+/// Document operations still use legacy persistence. Thread sharing forwards
+/// its verified receipt to the same narrow domain service used by REST.
 pub trait EntityLifecycleService: Send + Sync + 'static {
-    /// Update an email thread's share policy.
+    /// Delegate an email thread's share policy to its owner-checked domain service.
     fn update_thread_share_policy(
         &self,
-        actor: &EntityMutationActor,
-        entity: &Entity<'static>,
+        receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> impl Future<Output = Result<Vec<Entity<'static>>, LifecycleError>> + Send;
+    ) -> impl Future<Output = Result<(), ThreadShareError>> + Send;
     /// Restore a document.
     fn restore_document(
         &self,
@@ -122,11 +119,28 @@ fn lifecycle_failure(error: LifecycleError) -> EntityMutationErrorCode {
         LifecycleError::NotFound => {
             EntityMutationErrorCode::not_found(rootcause::report!(LifecycleError::NotFound))
         }
-        LifecycleError::InvalidInput(message) => EntityMutationErrorCode::invalid(
-            rootcause::report!(LifecycleError::InvalidInput(message)),
-        ),
         LifecycleError::Internal(report) => {
             EntityMutationErrorCode::internal(rootcause::report!(LifecycleError::Internal(report)))
+        }
+    }
+}
+
+/// Map thread-sharing policy and conditional-write failures onto GraphQL's vocabulary.
+fn thread_share_failure(error: ThreadShareError) -> EntityMutationErrorCode {
+    match error {
+        ThreadShareError::NotFound => EntityMutationErrorCode::not_found(rootcause::report!(error)),
+        ThreadShareError::Policy(
+            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner,
+        ) => EntityMutationErrorCode::forbidden(rootcause::report!(error)),
+        ThreadShareError::Policy(TeamSharePolicyError::InvalidRevision)
+        | ThreadShareError::Conflict => {
+            EntityMutationErrorCode::conflict(rootcause::report!(error))
+        }
+        ThreadShareError::Policy(_) | ThreadShareError::InvalidInput => {
+            EntityMutationErrorCode::invalid(rootcause::report!(error))
+        }
+        ThreadShareError::Internal(_) => {
+            EntityMutationErrorCode::internal(rootcause::report!(error))
         }
     }
 }
@@ -510,25 +524,21 @@ where
         result.and_then(success)
     }
 
-    /// Email threads still update share policy through the lifecycle port.
+    /// The lifecycle wiring delegates thread sharing to the same domain service as REST.
     async fn share_email_thread(
         &self,
         actor: &EntityMutationActor,
         requested: &Entity<'static>,
         policy: UpdateSharePermissionRequestV2,
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
-        self.receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
+        let receipt = self
+            .receipt::<entity_access::domain::models::OwnerAccessLevel>(actor, requested)
             .await?;
-        let affected = self
-            .lifecycle
-            .update_thread_share_policy(actor, requested, policy)
+        self.lifecycle
+            .update_thread_share_policy(receipt, policy)
             .await
-            .map_err(lifecycle_failure)?;
-        Ok(
-            std::iter::once(EntityMutationEffect::updated(requested.clone()))
-                .chain(affected.into_iter().map(EntityMutationEffect::updated))
-                .collect(),
-        )
+            .map_err(thread_share_failure)?;
+        Ok(vec![EntityMutationEffect::updated(requested.clone())])
     }
 
     #[tracing::instrument(skip_all, fields(entity_type = %requested.entity_type, entity_id = %requested.entity_id))]

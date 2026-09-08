@@ -1,21 +1,44 @@
 use crate::api::context::ApiContext;
 use crate::api::context::{AuthorizationService, EntityAccessService};
+use crate::service::thread_share::ThreadShareError;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json, extract};
-use entity_access::domain::models::EntityPermission;
+use axum::{Json, extract};
 use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
 use entity_access::inbound::axum_extractors::ThreadAccessLevelExtractor;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
-use macro_db_client::share_permission::edit::edit_thread_permission;
 use model::response::{
     ErrorResponse, GenericErrorResponse, GenericSuccessResponse, SuccessResponse,
 };
-use model::thread::EmailThreadPermission;
-use models_permissions::share_permission::access_level::{
-    AccessLevel, EditAccessLevel, OwnerAccessLevel,
-};
+use models_permissions::share_permission::access_level::{EditAccessLevel, OwnerAccessLevel};
+use models_permissions::share_permission::team_share::TeamSharePolicyError;
+
+fn thread_share_response(error: ThreadShareError) -> Response {
+    let status = match &error {
+        ThreadShareError::NotFound => StatusCode::NOT_FOUND,
+        ThreadShareError::Policy(
+            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner,
+        ) => StatusCode::FORBIDDEN,
+        ThreadShareError::Policy(TeamSharePolicyError::InvalidRevision)
+        | ThreadShareError::Conflict => StatusCode::CONFLICT,
+        ThreadShareError::Policy(_) | ThreadShareError::InvalidInput => StatusCode::BAD_REQUEST,
+        ThreadShareError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+    let message = if status == StatusCode::INTERNAL_SERVER_ERROR {
+        tracing::error!(error=?error, "unable to update thread share permissions");
+        "unable to update thread share permissions".to_owned()
+    } else {
+        error.to_string()
+    };
+    (
+        status,
+        Json(ErrorResponse {
+            message: message.into(),
+        }),
+    )
+        .into_response()
+}
 
 #[derive(serde::Deserialize)]
 pub struct ThreadParams {
@@ -44,11 +67,15 @@ pub struct PatchThreadRequestV2 {
     request_body = PatchThreadRequestV2,
     responses(
             (status = 200, body=SuccessResponse),
+            (status = 400, body=GenericErrorResponse),
             (status = 401, body=GenericErrorResponse),
+            (status = 403, body=GenericErrorResponse),
+            (status = 404, body=GenericErrorResponse),
+            (status = 409, body=GenericErrorResponse),
             (status = 500, body=GenericErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx, user, project, thread_access), fields(user_id=?user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(ctx, user, project, thread_access), fields(user_id=?user.authorization.user.macro_user_id), err(Debug))]
 pub async fn edit_thread_handler(
     thread_access: ThreadAccessLevelExtractor<
         OwnerAccessLevel,
@@ -57,7 +84,6 @@ pub async fn edit_thread_handler(
     >,
     State(ctx): State<ApiContext>,
     user: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
-    thread_context: Extension<EmailThreadPermission>,
     extract::Path(ThreadParams { thread_id }): extract::Path<ThreadParams>,
     project: ProjectBodyAccessLevelExtractorV2<
         EditAccessLevel,
@@ -68,71 +94,11 @@ pub async fn edit_thread_handler(
 ) -> Result<Response, Response> {
     let req = project.into_inner();
 
-    let access_level = match thread_access.entity_access_receipt.entity_permission() {
-        EntityPermission::AccessLevel { access_level } => *access_level,
-        _ => AccessLevel::Owner,
-    };
-
-    if req.project_id.is_some() && access_level != AccessLevel::Owner {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                message: "you do not have valid permissions to move this item".into(),
-            }),
-        )
-            .into_response());
-    }
-
-    if req.share_permission.is_some() && access_level != AccessLevel::Owner {
-        return Err((
-            StatusCode::UNAUTHORIZED,
-            Json(ErrorResponse {
-                message: "you do not have valid permission to modify share permissions".into(),
-            }),
-        )
-            .into_response());
-    }
-
     if let Some(share_permission) = req.share_permission {
-        let mut tx = ctx.db.begin().await.map_err(|e| {
-            tracing::error!(error=?e, "unable to edit thread");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to edit thread".into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-        edit_thread_permission(
-            &mut tx,
-            &macro_uuid::string_to_uuid(&thread_id).unwrap(),
-            &thread_context.share_permission_id,
-            &share_permission,
-        )
-        .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "unable to update thread share permissions");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to update thread share permissions".into(),
-                }),
-            )
-                .into_response()
-        })?;
-
-        tx.commit().await.map_err(|e| {
-            tracing::error!(error=?e, "unable to edit thread");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    message: "unable to edit thread".into(),
-                }),
-            )
-                .into_response()
-        })?;
+        ctx.thread_share_service
+            .update_share_policy(thread_access.entity_access_receipt, share_permission)
+            .await
+            .map_err(thread_share_response)?;
     }
 
     Ok((

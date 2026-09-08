@@ -1,15 +1,17 @@
-//! Adapter for document and email-thread lifecycle operations that still use
-//! the legacy database clients.
+//! Legacy document lifecycle adapter and wiring to the thread-sharing domain service.
 
 use std::sync::Arc;
 
+use super::thread_share::PgThreadShareRepository;
 use crate::{
     api::util::count_occurrences,
     service::{
         document_event_publisher::publish_document_purged_event,
         entity_mutation::{EntityLifecycleService, LifecycleError},
+        thread_share::{ThreadShareError, ThreadSharePolicyService},
     },
 };
+use entity_access::domain::models::{EntityAccessReceipt, OwnerAccessLevel};
 use entity_mutation::EntityMutationActor;
 use macro_event_broker::MacroEventBroker;
 use macro_sha_count_client::Redis;
@@ -38,16 +40,24 @@ pub struct DssEntityLifecycleAdapter<B: MacroEventBroker> {
     redis: Arc<Redis>,
     sqs: Arc<sqs_client::SQS>,
     event_broker: B,
+    thread_share: Arc<ThreadSharePolicyService<PgThreadShareRepository>>,
 }
 
 impl<B: MacroEventBroker> DssEntityLifecycleAdapter<B> {
     /// Construct the adapter from concrete outbound dependencies.
-    pub fn new(db: PgPool, redis: Arc<Redis>, sqs: Arc<sqs_client::SQS>, event_broker: B) -> Self {
+    pub fn new(
+        db: PgPool,
+        redis: Arc<Redis>,
+        sqs: Arc<sqs_client::SQS>,
+        event_broker: B,
+        thread_share: Arc<ThreadSharePolicyService<PgThreadShareRepository>>,
+    ) -> Self {
         Self {
             db,
             redis,
             sqs,
             event_broker,
+            thread_share,
         }
     }
 }
@@ -55,36 +65,10 @@ impl<B: MacroEventBroker> DssEntityLifecycleAdapter<B> {
 impl<B: MacroEventBroker> EntityLifecycleService for DssEntityLifecycleAdapter<B> {
     async fn update_thread_share_policy(
         &self,
-        _actor: &EntityMutationActor,
-        entity: &Entity<'static>,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
         policy: UpdateSharePermissionRequestV2,
-    ) -> Result<Vec<Entity<'static>>, LifecycleError> {
-        // Threads get their share-permission row lazily; mirror the REST
-        // middleware's get-or-create so a first-time share succeeds. The
-        // caller has already proven Owner access, so the thread exists.
-        let permission =
-            macro_middleware::cloud_storage::thread::ensure_thread_exists::insert_thread_share_permissions(
-                &self.db,
-                &entity.entity_id,
-            )
-            .await
-            .map_err(|error| internal!(error))?;
-        let thread_id = uuid::Uuid::parse_str(&entity.entity_id)
-            .map_err(|error| LifecycleError::InvalidInput(format!("invalid thread id: {error}")))?;
-        let mut transaction = self.db.begin().await.map_err(|error| internal!(error))?;
-        macro_db_client::share_permission::edit::edit_thread_permission(
-            &mut transaction,
-            &thread_id,
-            &permission.share_permission_id,
-            &policy,
-        )
-        .await
-        .map_err(|error| internal!(error))?;
-        transaction
-            .commit()
-            .await
-            .map_err(|error| internal!(error))?;
-        Ok(Vec::new())
+    ) -> Result<(), ThreadShareError> {
+        self.thread_share.update_share_policy(receipt, policy).await
     }
 
     async fn restore_document(

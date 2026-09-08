@@ -15,14 +15,42 @@ fn success_preserves_domain_effect_order_and_kind() {
 }
 
 #[test]
-fn lifecycle_invalid_inputs_map_to_stable_public_error() {
-    let error = lifecycle_failure(LifecycleError::InvalidInput(
-        "invalid project state".to_owned(),
-    ));
+fn thread_invalid_inputs_map_to_stable_public_error() {
+    let error = thread_share_failure(ThreadShareError::InvalidInput);
 
     assert!(matches!(
         error,
         entity_mutation::EntityMutationErrorCode::InvalidInput(_)
+    ));
+}
+
+#[test]
+fn thread_sharing_failures_have_stable_transport_codes() {
+    for policy in [
+        TeamSharePolicyError::NotOwner,
+        TeamSharePolicyError::MissingActor,
+    ] {
+        assert!(matches!(
+            thread_share_failure(ThreadShareError::Policy(policy)),
+            EntityMutationErrorCode::Forbidden(_)
+        ));
+    }
+    for policy in [
+        TeamSharePolicyError::InvalidLevel,
+        TeamSharePolicyError::MissingTeam,
+    ] {
+        assert!(matches!(
+            thread_share_failure(ThreadShareError::Policy(policy)),
+            EntityMutationErrorCode::InvalidInput(_)
+        ));
+    }
+    assert!(matches!(
+        thread_share_failure(ThreadShareError::Conflict),
+        EntityMutationErrorCode::Conflict(_)
+    ));
+    assert!(matches!(
+        thread_share_failure(ThreadShareError::NotFound),
+        EntityMutationErrorCode::NotFound(_)
     ));
 }
 

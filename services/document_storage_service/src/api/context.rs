@@ -534,6 +534,11 @@ pub(crate) struct ApiContext {
     pub graphql_notification_reader: Arc<ai_tools::ToolNotificationService>,
     pub activity_reader: DssActivityReader,
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
+    pub thread_share_service: Arc<
+        crate::service::thread_share::ThreadSharePolicyService<
+            crate::outbound::thread_share::PgThreadShareRepository,
+        >,
+    >,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"EmailThreadPermission\" SET \"userId\" = $1 WHERE \"threadId\" = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6e119aed9bdbf9d8e6e7cb3366ea8f21c1125a1b80be65fb86becad5ebf5c3fb"
+}
