@@ -9,6 +9,7 @@ use utoipa::ToSchema;
 pub mod access_level;
 pub mod channel_share_permission;
 mod link_share;
+pub mod team_share;
 
 pub use link_share::LinkShare;
 
