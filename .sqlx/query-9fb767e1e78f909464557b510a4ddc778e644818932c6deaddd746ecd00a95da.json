@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO team_user (team_id, user_id, team_role)\n        VALUES ('90000000-0000-0000-0000-000000000001', 'macro|owner@test.com', 'owner')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9fb767e1e78f909464557b510a4ddc778e644818932c6deaddd746ecd00a95da"
+}

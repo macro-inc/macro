@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE descendants AS (\n            SELECT id FROM \"Project\" WHERE \"parentId\" = $1\n            UNION\n            SELECT child.id\n            FROM \"Project\" child\n            JOIN descendants parent ON child.\"parentId\" = parent.id\n        )\n        SELECT ($1 = $2) OR EXISTS(SELECT 1 FROM descendants WHERE id = $2) AS \"exists!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "8ce4bf2d630df71400f10210e0dbecfce5fece23c96dff434dcbfa54d25693b3"
+}

@@ -3,8 +3,8 @@
 use std::collections::HashSet;
 
 use entity_access::domain::models::{
-    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-    OwnerAccessLevel, ViewAccessLevel,
+    EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission, OwnerAccessLevel,
+    ViewAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use futures::stream::{FuturesUnordered, StreamExt};
@@ -21,6 +21,9 @@ use model::project::{
 use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::{
+    TeamShareLevel, TeamSharePolicyError, TeamShareRequest, authorize_team_share,
+};
 use s3_key::BulkUploadStagingKey;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
@@ -31,8 +34,8 @@ use super::events::{
     ProjectUploadedMetadata,
 };
 use super::models::{
-    CreateProjectArgs, EditProjectArgs, ProjectError, PurgedProjectTree, RevertDeleteResult,
-    SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, ProjectEditError, ProjectError, PurgedProjectTree,
+    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use super::ports::{
     BulkUploadRequestPort, ProjectRepo, ProjectSearchIndexer, ProjectService, ProjectUploadUrlPort,
@@ -334,24 +337,7 @@ where
             .await
             .map_err(|error| internal_error(error, "unable to create project"))?;
 
-        let entity_id = args
-            .project_parent_id
-            .map(|_| parse_internal_uuid(&project.id, "created project ID"))
-            .transpose()?;
-
-        if let Some((parent_id, entity_id)) = args.project_parent_id.zip(entity_id) {
-            let _ = self
-                .entity_access_management_service
-                .add_entity_to_project(&entity_id, EntityType::Project, &parent_id)
-                .await
-                .inspect_err(|error| {
-                    tracing::error!(
-                        error = ?error,
-                        %entity_id,
-                        project_id = %parent_id,
-                        "unable to update entity access for project"
-                    );
-                });
+        if let Some(parent_id) = args.project_parent_id {
             self.bump_project_modified(&parent_id.to_string()).await;
         }
 
@@ -421,15 +407,37 @@ where
             }
         }
 
-        let project_uuid = parse_internal_uuid(&project.id, "project ID")?;
-        let old_parent_uuid = project
-            .parent_id
-            .as_deref()
-            .map(|id| parse_internal_uuid(id, "stored parent project ID"))
-            .transpose()?;
-        let new_parent_uuid = new_parent_id
-            .map(|id| parse_request_uuid(id, "project parent ID"))
-            .transpose()?;
+        let team_share = match args
+            .share_permission
+            .as_ref()
+            .and_then(|update| update.team_share_access_level)
+        {
+            Some(access_level) => {
+                let facts = self
+                    .repo
+                    .get_team_share_facts(&receipt.entity().entity_id)
+                    .await
+                    .map_err(|error| {
+                        internal_error(error, "unable to read project sharing facts")
+                    })?;
+                authorize_team_share(
+                    receipt.acting_user_id(),
+                    &facts,
+                    TeamShareRequest {
+                        access_level: Some(access_level),
+                        legacy_enabled: None,
+                    },
+                    TeamShareLevel::View,
+                )
+                .map_err(|error| match error {
+                    TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                        ProjectError::UnauthorizedWithMessage(error.to_string())
+                    }
+                    _ => ProjectError::BadRequest(error.to_string()),
+                })?
+            }
+            None => None,
+        };
 
         self.repo
             .edit_project(EditProjectArgs {
@@ -438,26 +446,20 @@ where
                 update_parent: args.project_parent_id.is_some(),
                 parent_id: new_parent_id.map(str::to_string),
                 share_permission: args.share_permission,
+                team_share,
             })
             .await
-            .map_err(|error| internal_error(error, "unable to patch project"))?;
+            .map_err(|error| match error.current_context() {
+                ProjectEditError::NotFound => ProjectError::NotFound(project.id.clone()),
+                ProjectEditError::Deleted => ProjectError::CannotModifyDeleted,
+                ProjectEditError::RecursiveNesting => ProjectError::RecursiveNesting,
+                ProjectEditError::Infrastructure => {
+                    internal_error(error, "unable to patch project")
+                }
+                conflict => ProjectError::BadRequest(conflict.to_string()),
+            })?;
 
         self.bump_project_modified(&project.id).await;
-        let _ = self
-            .entity_access_management_service
-            .move_project(
-                &project_uuid,
-                old_parent_uuid.as_ref(),
-                new_parent_uuid.as_ref(),
-            )
-            .await
-            .inspect_err(|error| {
-                tracing::error!(
-                    error = ?error,
-                    project_id = %project.id,
-                    "unable to update entity access for project"
-                );
-            });
         if let Some(parent_id) = project.parent_id.as_deref() {
             self.bump_project_modified(parent_id).await;
         }
@@ -797,12 +799,6 @@ fn receipt_is_owner(receipt: &EntityAccessReceipt<EditAccessLevel>) -> bool {
 fn parse_request_uuid(value: &str, field: &str) -> Result<Uuid, ProjectError> {
     Uuid::parse_str(value)
         .map_err(|_| ProjectError::BadRequest(format!("{field} must be a valid UUID")))
-}
-
-fn parse_internal_uuid(value: &str, field: &str) -> Result<Uuid, ProjectError> {
-    Uuid::parse_str(value).map_err(|error| {
-        ProjectError::Internal(anyhow::anyhow!("invalid {field} in project data: {error}"))
-    })
 }
 
 fn receipt_access_level<T>(receipt: &EntityAccessReceipt<T>) -> Result<AccessLevel, ProjectError>

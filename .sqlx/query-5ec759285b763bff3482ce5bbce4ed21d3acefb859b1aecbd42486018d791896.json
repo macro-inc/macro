@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Project\" SET \"userId\" = 'macro|viewer@test.com' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ec759285b763bff3482ce5bbce4ed21d3acefb859b1aecbd42486018d791896"
+}

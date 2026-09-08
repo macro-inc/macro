@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"Project\" SET \"userId\" = 'macro|owner@test.com' WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b270b6462313d52db87aa707dc14799b57642d20eeb844257ae139129e88564c"
+}

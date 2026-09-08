@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM team_user WHERE user_id = 'macro|owner@test.com'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "aab8beac6652c70bdc1c4a837f9aa2c6fe9a94ebe8219a6f25b801d7e2a673de"
+}

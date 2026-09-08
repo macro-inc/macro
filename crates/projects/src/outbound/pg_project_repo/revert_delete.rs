@@ -5,8 +5,16 @@ use crate::domain::models::RevertDeleteResult;
 pub(super) async fn revert_delete_project(
     transaction: &mut Transaction<'_, Postgres>,
     project_id: &str,
-    previous_parent_id: Option<&str>,
+    _previous_parent_id: Option<&str>,
 ) -> Result<RevertDeleteResult, sqlx::Error> {
+    entity_access_db_utils::team_share::acquire_guard(transaction).await?;
+    // The service snapshot can be stale. Restore against the current parent only.
+    let parent_id = sqlx::query_scalar!(
+        r#"SELECT "parentId" FROM "Project" WHERE id = $1"#,
+        project_id,
+    )
+    .fetch_one(transaction.as_mut())
+    .await?;
     let projects = sqlx::query!(
         r#"
         WITH RECURSIVE project_hierarchy AS (
@@ -71,23 +79,20 @@ pub(super) async fn revert_delete_project(
     restore_items(transaction, "document", &document_ids, &document_owner_ids).await?;
     restore_items(transaction, "project", &project_ids, &project_owner_ids).await?;
 
-    if let Some(parent_id) = previous_parent_id {
-        let parent_is_deleted = sqlx::query_scalar!(
-            r#"SELECT "deletedAt" IS NOT NULL AS "is_deleted!" FROM "Project" WHERE id = $1"#,
-            parent_id,
+    if let Some(parent_id) = parent_id
+        && !super::edit::parent_is_active(transaction, &parent_id).await?
+    {
+        sqlx::query!(
+            r#"UPDATE "Project" SET "parentId" = NULL WHERE id = $1"#,
+            project_id,
         )
-        .fetch_optional(transaction.as_mut())
-        .await?
-        .unwrap_or(false);
-        if parent_is_deleted {
-            sqlx::query!(
-                r#"UPDATE "Project" SET "parentId" = NULL WHERE id = $1"#,
-                project_id,
-            )
-            .execute(transaction.as_mut())
-            .await?;
-        }
+        .execute(transaction.as_mut())
+        .await?;
     }
+
+    // Canonical settings and direct grants survive soft deletion. Lifecycle cleanup
+    // owns revoking consent; never recreate old shares from a deletion snapshot.
+    super::share::synchronize_project(transaction, project_id).await?;
 
     Ok(RevertDeleteResult {
         project_ids,

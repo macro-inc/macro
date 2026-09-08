@@ -9,6 +9,22 @@ use models_permissions::share_permission::{
 };
 use sqlx::{PgPool, Postgres, Transaction};
 
+/// Reconcile the full subtree before the caller commits its parent assignment.
+pub(super) async fn synchronize_project(
+    transaction: &mut Transaction<'_, Postgres>,
+    project_id: &str,
+) -> Result<(), sqlx::Error> {
+    let project_id = project_id
+        .parse()
+        .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+    entity_access_db_utils::project_inheritance::synchronize_entity(
+        transaction,
+        &project_id,
+        EntityType::Project,
+    )
+    .await
+}
+
 fn link_share_access_level_or_default(link_share_access_level: Option<AccessLevel>) -> AccessLevel {
     link_share_access_level.unwrap_or_else(|| {
         tracing::warn!(

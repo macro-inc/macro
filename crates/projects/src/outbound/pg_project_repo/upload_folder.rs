@@ -19,6 +19,14 @@ pub(super) async fn upload_folder(
     transaction: &mut Transaction<'_, Postgres>,
     args: UploadFolderRepoArgs,
 ) -> Result<UploadFolderWithIdsResponse, sqlx::Error> {
+    entity_access_db_utils::team_share::acquire_guard(transaction).await?;
+    if let Some(parent_id) = args.parent_id.as_deref()
+        && !super::edit::parent_is_active(transaction, parent_id).await?
+    {
+        return Err(sqlx::Error::InvalidArgument(
+            "parent project is missing or deleted".to_string(),
+        ));
+    }
     let root_project = create_pending_project(
         transaction,
         args.user_id.clone(),
@@ -55,6 +63,7 @@ pub(super) async fn upload_folder(
     }
 
     insert_tree_history(transaction, args.user_id.as_ref(), &project_ids, &documents).await?;
+    share::synchronize_project(transaction, &root_project.id).await?;
 
     Ok(UploadFolderWithIdsResponse {
         file_system: FileSystemNodeWithIds::Folder {

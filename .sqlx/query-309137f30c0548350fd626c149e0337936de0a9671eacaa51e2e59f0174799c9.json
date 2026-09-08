@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(SELECT 1 FROM \"Project\" WHERE id = $1 AND \"deletedAt\" IS NULL) AS \"active!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "active!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "309137f30c0548350fd626c149e0337936de0a9671eacaa51e2e59f0174799c9"
+}

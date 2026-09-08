@@ -3,6 +3,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use model::folder::FileSystemNode;
 use model::project::Project;
+use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
 use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 
 /// Arguments for atomically creating a project and its access metadata.
@@ -31,6 +32,37 @@ pub struct EditProjectArgs {
     pub parent_id: Option<String>,
     /// Optional sharing changes.
     pub share_permission: Option<UpdateSharePermissionRequestV2>,
+    /// Actual-owner-authorized team update, rechecked within the metadata transaction.
+    pub team_share: Option<AuthorizedTeamShareCommand>,
+}
+
+/// Conditional project edit failures returned before the transaction commits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum ProjectEditError {
+    /// The project no longer exists.
+    #[error("project not found")]
+    NotFound,
+    /// Ownership, membership or canonical sharing changed after authorization.
+    #[error("project sharing facts changed; retry the request")]
+    ChangedFacts,
+    /// A deleted project cannot be edited.
+    #[error("cannot modify deleted project")]
+    Deleted,
+    /// The proposed parent would introduce a cycle in the current tree.
+    #[error("project is recursively nested")]
+    RecursiveNesting,
+    /// The proposed parent does not exist or is deleted.
+    #[error("parent project is missing or deleted")]
+    InvalidParent,
+    /// The authorized command and requested project/update do not match.
+    #[error("invalid project team-share command")]
+    InvalidCommand,
+    /// An unexplained team grant cannot be overwritten.
+    #[error("untracked direct team grant conflicts with project sharing")]
+    UntrackedGrant,
+    /// Persistence failed; the report retains its cause.
+    #[error("project edit persistence failed")]
+    Infrastructure,
 }
 
 /// Identifiers affected by a recursive soft deletion.

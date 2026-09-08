@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT \"deletedAt\" IS NOT NULL AS \"deleted!\" FROM \"Project\" WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "deleted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ed246f7ebddcc81b3aff56c38da2725fedbfc1213dfee7c0545e63738ad8f469"
+}

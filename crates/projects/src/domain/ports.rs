@@ -28,8 +28,8 @@ use s3_key::BulkUploadStagingKey;
 use uuid::Uuid;
 
 use super::models::{
-    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, MutatedProject, ProjectError,
-    PurgedProjectTree, RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, MutatedProject, ProjectEditError,
+    ProjectError, PurgedProjectTree, RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 
 /// Repository for reading project data from persistent storage.
@@ -77,6 +77,17 @@ pub trait ProjectRepo: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<SharePermissionV2, Self::Err>> + Send;
 
+    /// Read authoritative ownership, membership and canonical sharing state.
+    fn get_team_share_facts(
+        &self,
+        project_id: &str,
+    ) -> impl Future<
+        Output = Result<
+            models_permissions::share_permission::team_share::TeamShareFacts,
+            rootcause::Report,
+        >,
+    > + Send;
+
     /// Get previews for the supplied project identifiers.
     fn batch_get_project_preview(
         &self,
@@ -96,11 +107,12 @@ pub trait ProjectRepo: Send + Sync + 'static {
         args: CreateProjectArgs,
     ) -> impl Future<Output = Result<MutatedProject, Self::Err>> + Send;
 
-    /// Edit project fields and optional sharing configuration atomically.
+    /// Edit metadata, canonical sharing and inherited grants in one guarded transaction.
+    /// Recheck authorized facts and topology constraints before writing.
     fn edit_project(
         &self,
         args: EditProjectArgs,
-    ) -> impl Future<Output = Result<MutatedProject, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<MutatedProject, rootcause::Report<ProjectEditError>>> + Send;
 
     /// Return whether the proposed parent is inside the project's subtree.
     fn is_project_recursively_nested(

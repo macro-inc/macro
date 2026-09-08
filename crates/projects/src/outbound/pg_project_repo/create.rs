@@ -12,6 +12,14 @@ pub(super) async fn create_project(
     transaction: &mut Transaction<'_, Postgres>,
     args: &CreateProjectArgs,
 ) -> Result<Project, sqlx::Error> {
+    entity_access_db_utils::team_share::acquire_guard(transaction).await?;
+    if let Some(parent_id) = args.parent_id.as_deref()
+        && !super::edit::parent_is_active(transaction, parent_id).await?
+    {
+        return Err(sqlx::Error::InvalidArgument(
+            "parent project is missing or deleted".to_string(),
+        ));
+    }
     let project = sqlx::query_as!(
         Project,
         r#"
@@ -63,5 +71,6 @@ pub(super) async fn create_project(
     )
     .await?;
 
+    share::synchronize_project(transaction, &project.id).await?;
     Ok(project)
 }

@@ -12,12 +12,387 @@ use models_permissions::share_permission::{
 use sqlx::{Pool, Postgres};
 
 use super::PgProjectRepo;
-use crate::domain::models::{CreateProjectArgs, EditProjectArgs, UploadFolderRepoArgs};
+use crate::domain::models::{
+    CreateProjectArgs, EditProjectArgs, ProjectEditError, UploadFolderRepoArgs,
+};
 use crate::domain::ports::ProjectRepo;
+use models_permissions::share_permission::team_share::{
+    TeamShareLevel, TeamShareRequest, authorize_team_share,
+};
 
 const ROOT_ID: &str = "10000000-0000-0000-0000-000000000001";
 const CHILD_ID: &str = "10000000-0000-0000-0000-000000000002";
 const DELETED_ID: &str = "10000000-0000-0000-0000-000000000009";
+
+async fn setup_team(pool: &Pool<Postgres>) -> rootcause::Result<()> {
+    sqlx::query!(
+        r#"INSERT INTO team (id, name, owner_id, seat_count)
+        VALUES ('90000000-0000-0000-0000-000000000001', 'Team', 'macro|owner@test.com', 2)"#
+    )
+    .execute(pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO team_user (team_id, user_id, team_role)
+        VALUES ('90000000-0000-0000-0000-000000000001', 'macro|owner@test.com', 'owner')"#
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+fn metadata_edit(project_id: &str) -> EditProjectArgs {
+    EditProjectArgs {
+        project_id: project_id.to_owned(),
+        name: None,
+        update_parent: false,
+        parent_id: None,
+        share_permission: None,
+        team_share: None,
+    }
+}
+
+async fn team_edit(
+    repo: &PgProjectRepo,
+    project_id: &str,
+    level: Option<AccessLevel>,
+) -> rootcause::Result<EditProjectArgs> {
+    let facts = repo.get_team_share_facts(project_id).await?;
+    let team_share = authorize_team_share(
+        Some(&facts.owner),
+        &facts,
+        TeamShareRequest {
+            access_level: Some(level),
+            legacy_enabled: None,
+        },
+        TeamShareLevel::View,
+    )?;
+    Ok(EditProjectArgs {
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            team_share_access_level: Some(level),
+            link_share: None,
+            link_share_access_level: None,
+            channel_share_permissions: None,
+        }),
+        team_share,
+        ..metadata_edit(project_id)
+    })
+}
+
+async fn create_child(repo: &PgProjectRepo, parent_id: &str) -> rootcause::Result<String> {
+    Ok(repo
+        .create_project(CreateProjectArgs {
+            user_id: "macro|owner@test.com".to_owned(),
+            name: "Child".to_owned(),
+            parent_id: Some(parent_id.to_owned()),
+            share_permission: SharePermissionV2::new_project_share_permission(None),
+        })
+        .await?
+        .id)
+}
+
+async fn team_grants(
+    pool: &Pool<Postgres>,
+    entity_id: &str,
+) -> rootcause::Result<Vec<(Option<String>, AccessLevel)>> {
+    Ok(sqlx::query!(
+        r#"SELECT granted_from_project_id, access_level AS "access_level: AccessLevel"
+        FROM entity_access WHERE entity_id::text = $1 AND source_type = 'team'
+        ORDER BY granted_from_project_id NULLS FIRST"#,
+        entity_id
+    )
+    .map(|row| (row.granted_from_project_id, row.access_level))
+    .fetch_all(pool)
+    .await?)
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn explicit_sharing_downgrades_and_revokes_only_its_root_contribution(
+    pool: Pool<Postgres>,
+) -> rootcause::Result<()> {
+    setup_team(&pool).await?;
+    let repo = PgProjectRepo::new(pool.clone());
+    repo.edit_project(team_edit(&repo, ROOT_ID, Some(AccessLevel::Edit)).await?)
+        .await?;
+    let child = create_child(&repo, ROOT_ID).await?;
+    repo.edit_project(team_edit(&repo, &child, Some(AccessLevel::Comment)).await?)
+        .await?;
+    let grandchild = create_child(&repo, &child).await?;
+    repo.edit_project(team_edit(&repo, &grandchild, Some(AccessLevel::View)).await?)
+        .await?;
+    assert_eq!(team_grants(&pool, &grandchild).await?.len(), 3);
+
+    for level in [Some(AccessLevel::View), None] {
+        repo.edit_project(team_edit(&repo, ROOT_ID, level).await?)
+            .await?;
+        let grants = team_grants(&pool, &grandchild).await?;
+        assert!(grants.contains(&(None, AccessLevel::View)));
+        assert!(grants.contains(&(Some(child.clone()), AccessLevel::Comment)));
+        assert_eq!(
+            grants
+                .iter()
+                .find(|(root, _)| root.as_deref() == Some(ROOT_ID))
+                .map(|(_, level)| *level),
+            level
+        );
+        assert_eq!(
+            repo.get_project_share_permission(ROOT_ID)
+                .await?
+                .team_share_access_level,
+            level
+        );
+    }
+    // A share-only patch and a rename leave the parent and independent ancestor grant intact.
+    let before = team_grants(&pool, &grandchild).await?;
+    let facts = repo.get_team_share_facts(&grandchild).await?;
+    let mut rename = metadata_edit(&grandchild);
+    rename.name = Some("Renamed".to_owned());
+    repo.edit_project(rename).await?;
+    assert_eq!(repo.get_team_share_facts(&grandchild).await?, facts);
+    assert_eq!(team_grants(&pool, &grandchild).await?, before);
+    assert_eq!(
+        repo.get_basic_project(&grandchild)
+            .await?
+            .unwrap()
+            .parent_id
+            .as_deref(),
+        Some(child.as_str())
+    );
+
+    // Same-value clears are still supplied operations and advance the revision.
+    let revision = repo.get_team_share_facts(ROOT_ID).await?.revision;
+    repo.edit_project(team_edit(&repo, ROOT_ID, None).await?)
+        .await?;
+    assert_eq!(
+        repo.get_team_share_facts(ROOT_ID).await?.revision,
+        revision + 1
+    );
+    repo.edit_project(team_edit(&repo, ROOT_ID, Some(AccessLevel::Edit)).await?)
+        .await?;
+    assert_eq!(team_grants(&pool, &grandchild).await?.len(), 3);
+
+    // Detaching the subtree drops ancestors, but retains its own direct/descendant shares.
+    let mut detach = metadata_edit(&child);
+    detach.update_parent = true;
+    repo.edit_project(detach).await?;
+    assert_eq!(team_grants(&pool, &grandchild).await?, before);
+    assert_eq!(
+        team_grants(&pool, &child).await?,
+        vec![(None, AccessLevel::Comment)]
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn stale_team_commands_and_later_failures_roll_back_metadata_and_grants(
+    pool: Pool<Postgres>,
+) -> rootcause::Result<()> {
+    setup_team(&pool).await?;
+    let repo = PgProjectRepo::new(pool.clone());
+    let mut stale = team_edit(&repo, ROOT_ID, Some(AccessLevel::Edit)).await?;
+    stale.name = Some("Must not commit".to_owned());
+    stale.update_parent = true;
+    stale.parent_id = Some("10000000-0000-0000-0000-000000000005".to_owned());
+    repo.edit_project(team_edit(&repo, ROOT_ID, Some(AccessLevel::Comment)).await?)
+        .await?;
+    let before = repo.get_team_share_facts(ROOT_ID).await?;
+    let grants = team_grants(&pool, CHILD_ID).await?;
+    assert_eq!(
+        *repo
+            .edit_project(stale)
+            .await
+            .unwrap_err()
+            .current_context(),
+        ProjectEditError::ChangedFacts
+    );
+
+    let mut failing = team_edit(&repo, ROOT_ID, Some(AccessLevel::View)).await?;
+    failing.name = Some("Must not commit".to_owned());
+    failing.update_parent = true;
+    failing.parent_id = Some("10000000-0000-0000-0000-000000000005".to_owned());
+    // The canonical operation runs first; a duplicate channel insertion fails afterward.
+    failing.share_permission.as_mut().unwrap().channel_share_permissions = Some(vec![
+        models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission {
+            channel_id: "channel-one".to_owned(), access_level: Some(AccessLevel::View),
+            operation: models_permissions::share_permission::channel_share_permission::UpdateOperation::Add,
+        }
+    ]);
+    assert!(repo.edit_project(failing).await.is_err());
+    assert_eq!(repo.get_team_share_facts(ROOT_ID).await?, before);
+    assert_eq!(team_grants(&pool, CHILD_ID).await?, grants);
+    let project = repo.get_project_by_id(ROOT_ID).await?.unwrap();
+    assert_eq!(project.name, "Root");
+    assert_eq!(project.parent_id, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn restore_uses_current_parent_and_does_not_reconstruct_cleared_consent(
+    pool: Pool<Postgres>,
+) -> rootcause::Result<()> {
+    setup_team(&pool).await?;
+    let repo = PgProjectRepo::new(pool.clone());
+    repo.edit_project(team_edit(&repo, ROOT_ID, Some(AccessLevel::Edit)).await?)
+        .await?;
+    let child = create_child(&repo, ROOT_ID).await?;
+    repo.edit_project(team_edit(&repo, &child, Some(AccessLevel::View)).await?)
+        .await?;
+    let original = repo.get_team_share_facts(&child).await?;
+    repo.soft_delete_project(ROOT_ID).await?;
+    assert_eq!(repo.get_team_share_facts(&child).await?, original);
+
+    // Restore a child beneath a still-deleted parent, even with an omitted/stale snapshot.
+    repo.revert_delete_project(&child, None).await?;
+    assert_eq!(
+        repo.get_basic_project(&child).await?.unwrap().parent_id,
+        None
+    );
+    assert_eq!(
+        team_grants(&pool, &child).await?,
+        vec![(None, AccessLevel::View)]
+    );
+    assert_eq!(repo.get_team_share_facts(&child).await?, original);
+
+    // Lifecycle cleanup while deleted must remain authoritative on restoration.
+    repo.soft_delete_project(&child).await?;
+    let mut tx = pool.begin().await?;
+    let facts = share_permission_db_utils::team_share::load_facts(
+        &mut tx,
+        &model_entity::EntityType::Project.with_entity_str(&child),
+    )
+    .await?;
+    share_permission_db_utils::team_share::maintain(
+        &mut tx,
+        &models_permissions::share_permission::team_share::TeamShareMaintenance::Clear {
+            expected: facts,
+        },
+    )
+    .await?;
+    sqlx::query!("DELETE FROM team_user WHERE user_id = 'macro|owner@test.com'")
+        .execute(tx.as_mut())
+        .await?;
+    tx.commit().await?;
+    repo.revert_delete_project(&child, Some(ROOT_ID.to_owned()))
+        .await?;
+    assert!(repo.get_team_share_facts(&child).await?.current.is_none());
+    assert!(team_grants(&pool, &child).await?.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn concurrent_move_rechecks_cycles_after_acquiring_guard(
+    pool: Pool<Postgres>,
+) -> rootcause::Result<()> {
+    let repo = PgProjectRepo::new(pool.clone());
+    let other = "10000000-0000-0000-0000-000000000005";
+    assert!(!repo.is_project_recursively_nested(ROOT_ID, other).await?);
+    let mut first = pool.begin().await?;
+    let mut first_move = metadata_edit(other);
+    first_move.update_parent = true;
+    first_move.parent_id = Some(CHILD_ID.to_owned());
+    super::edit::edit_project(&mut first, &first_move).await?;
+
+    let barrier = std::sync::Arc::new(tokio::sync::Barrier::new(2));
+    let other_barrier = barrier.clone();
+    let contender = tokio::spawn(async move {
+        let mut second_move = metadata_edit(ROOT_ID);
+        second_move.update_parent = true;
+        second_move.parent_id = Some(other.to_owned());
+        other_barrier.wait().await;
+        repo.edit_project(second_move).await
+    });
+    barrier.wait().await;
+    // Wait for an actual database lock wait, not a scheduling-dependent sleep.
+    tokio::time::timeout(std::time::Duration::from_secs(10), async {
+        loop {
+            let waiting = sqlx::query_scalar!("SELECT EXISTS (SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND database = (SELECT oid FROM pg_database WHERE datname = current_database()))")
+                .fetch_one(first.as_mut()).await?;
+            if waiting == Some(true) { break; }
+            tokio::task::yield_now().await;
+        }
+        Ok::<_, sqlx::Error>(())
+    }).await??;
+    first.commit().await?;
+    let error = contender.await?.unwrap_err();
+    assert_eq!(*error.current_context(), ProjectEditError::RecursiveNesting);
+    assert_eq!(
+        PgProjectRepo::new(pool)
+            .get_basic_project(ROOT_ID)
+            .await?
+            .unwrap()
+            .parent_id,
+        None
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("projects_test_data"))
+)]
+async fn owner_and_membership_are_rechecked_before_explicit_writes(
+    pool: Pool<Postgres>,
+) -> rootcause::Result<()> {
+    setup_team(&pool).await?;
+    let repo = PgProjectRepo::new(pool.clone());
+    let command = team_edit(&repo, ROOT_ID, Some(AccessLevel::Edit)).await?;
+    let mut tx = pool.begin().await?;
+    entity_access_db_utils::team_share::acquire_guard(&mut tx).await?;
+    sqlx::query!(
+        r#"UPDATE "Project" SET "userId" = 'macro|viewer@test.com' WHERE id = $1"#,
+        ROOT_ID
+    )
+    .execute(tx.as_mut())
+    .await?;
+    tx.commit().await?;
+    assert_eq!(
+        *repo
+            .edit_project(command)
+            .await
+            .unwrap_err()
+            .current_context(),
+        ProjectEditError::ChangedFacts
+    );
+
+    let mut tx = pool.begin().await?;
+    entity_access_db_utils::team_share::acquire_guard(&mut tx).await?;
+    sqlx::query!(
+        r#"UPDATE "Project" SET "userId" = 'macro|owner@test.com' WHERE id = $1"#,
+        ROOT_ID
+    )
+    .execute(tx.as_mut())
+    .await?;
+    tx.commit().await?;
+    let command = team_edit(&repo, ROOT_ID, Some(AccessLevel::Edit)).await?;
+    let mut tx = pool.begin().await?;
+    entity_access_db_utils::team_share::acquire_guard(&mut tx).await?;
+    sqlx::query!("DELETE FROM team_user WHERE user_id = 'macro|owner@test.com'")
+        .execute(tx.as_mut())
+        .await?;
+    tx.commit().await?;
+    assert_eq!(
+        *repo
+            .edit_project(command)
+            .await
+            .unwrap_err()
+            .current_context(),
+        ProjectEditError::ChangedFacts
+    );
+    assert!(team_grants(&pool, CHILD_ID).await?.is_empty());
+    assert_eq!(repo.get_team_share_facts(ROOT_ID).await?.revision, 0);
+    Ok(())
+}
 
 #[derive(Debug, Eq, PartialEq)]
 struct StoredSharePermission {
@@ -250,6 +625,16 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
         })
         .await?;
 
+    let inherited = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity_access
+        WHERE entity_id::text = $1 AND granted_from_project_id = $2"#,
+        project.id,
+        ROOT_ID,
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(inherited, 2, "creation commits current ancestor grants");
+
     let metadata_count = sqlx::query_scalar!(
         r#"
         SELECT COUNT(*) AS "count!"
@@ -259,6 +644,7 @@ async fn create_is_atomic_and_inserts_all_metadata(pool: Pool<Postgres>) -> anyh
         WHERE permission."projectId" = $1
           AND history."itemType" = 'project'
           AND access.access_level = 'owner'
+          AND access.granted_from_project_id IS NULL
         "#,
         project.id,
     )
@@ -331,6 +717,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
     let repo = PgProjectRepo::new(pool.clone());
     let unchanged = repo
         .edit_project(EditProjectArgs {
+            team_share: None,
             project_id: CHILD_ID.to_owned(),
             name: Some("Renamed".to_owned()),
             update_parent: false,
@@ -342,6 +729,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
 
     let moved = repo
         .edit_project(EditProjectArgs {
+            team_share: None,
             project_id: CHILD_ID.to_owned(),
             name: None,
             update_parent: true,
@@ -356,6 +744,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
 
     let updated = repo
         .edit_project(EditProjectArgs {
+            team_share: None,
             project_id: ROOT_ID.to_owned(),
             name: None,
             update_parent: true,
@@ -388,6 +777,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
     })
     .await?;
     assert_eq!(
@@ -409,6 +799,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
     })
     .await?;
     let before_omitted_update = project_share_permission_columns(&pool, ROOT_ID).await;
@@ -431,6 +822,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
     })
     .await?;
     assert_eq!(
@@ -449,6 +841,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
     })
     .await?;
     assert_eq!(
@@ -639,7 +1032,10 @@ async fn purge_rolls_back_all_deletions(pool: Pool<Postgres>) -> anyhow::Result<
 async fn upload_folder_preserves_tree_metadata_and_compensates(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
+    setup_team(&pool).await?;
     let repo = PgProjectRepo::new(pool.clone());
+    repo.edit_project(team_edit(&repo, ROOT_ID, Some(AccessLevel::Comment)).await?)
+        .await?;
     let file = FolderItem {
         name: "nested.pdf".to_owned(),
         full_name: "nested.pdf".to_owned(),
@@ -718,6 +1114,20 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
     .fetch_one(&pool)
     .await?;
     assert_eq!(created_permissions, 4);
+    for id in result.project_ids.iter().chain(&document_ids) {
+        assert_eq!(
+            team_grants(&pool, id).await?,
+            vec![(Some(ROOT_ID.to_owned()), AccessLevel::Comment)]
+        );
+    }
+    for id in &result.project_ids {
+        assert_eq!(
+            repo.get_project_share_permission(id)
+                .await?
+                .team_share_access_level,
+            None
+        );
+    }
 
     repo.delete_uploaded_tree(&result.project_ids, &document_ids)
         .await?;

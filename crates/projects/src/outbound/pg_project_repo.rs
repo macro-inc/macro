@@ -18,11 +18,13 @@ use model::project::{
     BasicProject, Project, ProjectPreviewData, ProjectPreviewV2, ProjectWithUploadRequest,
     WithProjectId,
 };
+use rootcause::prelude::*;
+use share_permission_db_utils::team_share::acquire_guard;
 use sqlx::PgPool;
 
 use crate::domain::models::{
-    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, PurgedProjectTree, RevertDeleteResult,
-    SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, ProjectEditError, PurgedProjectTree,
+    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use crate::domain::ports::ProjectRepo;
 
@@ -185,6 +187,20 @@ impl ProjectRepo for PgProjectRepo {
         share::get_project_share_permission(&self.pool, project_id).await
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_share_facts(
+        &self,
+        project_id: &str,
+    ) -> Result<models_permissions::share_permission::team_share::TeamShareFacts, rootcause::Report>
+    {
+        let mut transaction = self.pool.begin().await?;
+        Ok(share_permission_db_utils::team_share::load_facts(
+            &mut transaction,
+            &model_entity::EntityType::Project.with_entity_str(project_id),
+        )
+        .await?)
+    }
+
     #[tracing::instrument(err, skip(self, project_ids))]
     async fn batch_get_project_preview(
         &self,
@@ -253,10 +269,20 @@ impl ProjectRepo for PgProjectRepo {
     }
 
     #[tracing::instrument(err, skip(self, args))]
-    async fn edit_project(&self, args: EditProjectArgs) -> Result<Project, Self::Err> {
-        let mut transaction = self.pool.begin().await?;
+    async fn edit_project(
+        &self,
+        args: EditProjectArgs,
+    ) -> Result<Project, rootcause::Report<ProjectEditError>> {
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context(ProjectEditError::Infrastructure)?;
         let project = edit::edit_project(&mut transaction, &args).await?;
-        transaction.commit().await?;
+        transaction
+            .commit()
+            .await
+            .context(ProjectEditError::Infrastructure)?;
         Ok(project)
     }
 
@@ -273,6 +299,7 @@ impl ProjectRepo for PgProjectRepo {
     #[tracing::instrument(err, skip(self))]
     async fn soft_delete_project(&self, project_id: &str) -> Result<SoftDeleteResult, Self::Err> {
         let mut transaction = self.pool.begin().await?;
+        acquire_guard(&mut transaction).await?;
         let result = delete::soft_delete_project(&mut transaction, project_id).await?;
         transaction.commit().await?;
         Ok(result)
@@ -284,6 +311,7 @@ impl ProjectRepo for PgProjectRepo {
         project_id: &str,
     ) -> Result<PurgedProjectTree, Self::Err> {
         let mut transaction = self.pool.begin().await?;
+        acquire_guard(&mut transaction).await?;
         let result = delete::purge_deleted_project_tree(&mut transaction, project_id).await?;
         transaction.commit().await?;
         Ok(result)
@@ -324,6 +352,7 @@ impl ProjectRepo for PgProjectRepo {
         document_ids: &[String],
     ) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
+        acquire_guard(&mut transaction).await?;
         delete::delete_uploaded_tree(&mut transaction, project_ids, document_ids).await?;
         transaction.commit().await?;
         Ok(())
