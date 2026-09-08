@@ -870,7 +870,10 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
 
     let ids = [from_channel.id, private.id, missing];
 
-    let mut owner_view = repo.preview(&user_id(OWNER), &ids).await.expect("owner preview");
+    let mut owner_view = repo
+        .preview(&user_id(OWNER), &ids)
+        .await
+        .expect("owner preview");
     owner_view.sort_by_key(|preview| preview.id().as_uuid());
     let mut expected = vec![
         AgentSessionPreview::Access(AgentSessionPreviewData {

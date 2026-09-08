@@ -657,12 +657,12 @@ impl From<AgentSessionPreview> for AgentSessionPreviewDto {
                 created_at: data.created_at,
                 modified_at: data.modified_at,
             }),
-            AgentSessionPreview::NoAccess(id) => Self::NoAccess(WithAgentSessionId {
-                id: id.as_uuid(),
-            }),
-            AgentSessionPreview::DoesNotExist(id) => Self::DoesNotExist(WithAgentSessionId {
-                id: id.as_uuid(),
-            }),
+            AgentSessionPreview::NoAccess(id) => {
+                Self::NoAccess(WithAgentSessionId { id: id.as_uuid() })
+            }
+            AgentSessionPreview::DoesNotExist(id) => {
+                Self::DoesNotExist(WithAgentSessionId { id: id.as_uuid() })
+            }
         }
     }
 }

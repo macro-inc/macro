@@ -60,24 +60,25 @@ async fn seed(pool: &PgPool) -> anyhow::Result<Fixture> {
     let shared = Uuid::now_v7();
     let private = Uuid::now_v7();
     for (id, name, modified) in [
-        (shared, "Shared session", "2026-01-02 00:00:00+00"),
-        (private, "Private session", "2026-01-03 00:00:00+00"),
+        (shared, "Shared session", "2026-01-02T00:00:00Z"),
+        (private, "Private session", "2026-01-03T00:00:00Z"),
     ] {
-        sqlx::query(
+        let modified: chrono::DateTime<chrono::Utc> = modified.parse()?;
+        sqlx::query!(
             r#"
             INSERT INTO agent_session (
                 id, owner_id, bot_id, model, harness, repo_url, workspace, name,
                 status, status_event_name, created_at, modified_at
             )
             VALUES ($1, $2, $3, 'model', 'harness', NULL, '/workspace', $4,
-                    'event', 'session/end', '2026-01-01 00:00:00+00', $5::timestamptz)
+                    'event', 'session/end', '2026-01-01 00:00:00+00', $5)
             "#,
+            id,
+            OWNER,
+            BOT_ID,
+            name,
+            modified,
         )
-        .bind(id)
-        .bind(OWNER)
-        .bind(BOT_ID)
-        .bind(name)
-        .bind(modified)
         .execute(pool)
         .await?;
         sqlx::query!(
