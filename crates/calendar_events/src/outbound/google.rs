@@ -1169,12 +1169,20 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
                 .and_then(google_start)
                 .is_some_and(|candidate| candidate == start)
         });
-        if let Some(instance) = matched {
-            self.delete_event_raw(access_token, target, &instance.id)
-                .await?;
+        // Only a landed delete makes the refresh non-retryable; when no
+        // instance matched nothing was written, so a flaky refresh may retry.
+        match matched {
+            Some(instance) => {
+                self.delete_event_raw(access_token, target, &instance.id)
+                    .await?;
+                self.series_outcome(access_token, target, master_provider_event_id)
+                    .await
+            }
+            None => {
+                self.refreshed_series_outcome(access_token, target, master_provider_event_id)
+                    .await
+            }
         }
-        self.series_outcome(access_token, target, master_provider_event_id)
-            .await
     }
 
     #[tracing::instrument(
@@ -1263,23 +1271,31 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
                 .await?
             }
         };
-        if let Some(provider_event_id) = &patch_target {
+        let wrote = if let Some(provider_event_id) = &patch_target {
             match self
                 .patch_actor_response(access_token, target, provider_event_id, actor, response)
                 .await?
             {
-                RsvpPatch::Applied => {}
+                RsvpPatch::Applied => true,
                 RsvpPatch::NotAttendee => return Ok(GoogleRsvpOutcome::NotAttendee),
                 RsvpPatch::Gone => return Ok(GoogleRsvpOutcome::Gone),
             }
-        }
+        } else {
+            false
+        };
 
         // Every scope resolves by refreshing the series from Google, which
         // owns recurrence expansion and now holds the exceptions just written.
-        match self
-            .series_outcome(access_token, target, master_provider_event_id)
-            .await?
-        {
+        // Only a landed patch makes that refresh non-retryable; with no
+        // occurrence to patch nothing was written, so a flaky refresh may retry.
+        let outcome = if wrote {
+            self.series_outcome(access_token, target, master_provider_event_id)
+                .await?
+        } else {
+            self.refreshed_series_outcome(access_token, target, master_provider_event_id)
+                .await?
+        };
+        match outcome {
             GoogleSeriesMutationOutcome::Applied(upsert) => Ok(GoogleRsvpOutcome::Applied(upsert)),
             GoogleSeriesMutationOutcome::SeriesDeleted | GoogleSeriesMutationOutcome::Gone => {
                 Ok(GoogleRsvpOutcome::Gone)
