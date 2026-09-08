@@ -9,6 +9,7 @@ mod test;
 
 mod build_context;
 mod display_results;
+pub mod markdown_email_renderer;
 mod schemas;
 pub mod search;
 mod search_tools;

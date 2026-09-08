@@ -4,6 +4,7 @@
 //! [`build_tool_service_context_from_env`] to wire up the shared context
 //! instead of duplicating the wiring logic.
 
+use crate::markdown_email_renderer::LexicalMarkdownEmailRenderer;
 use crate::tool_context::{
     ChannelSideEffectClients, NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress,
     NoOpSnsEndpointManager, ToolImportToolContext, ToolNotificationQueue, ToolServiceContext,
@@ -300,7 +301,7 @@ pub async fn build_tool_service_context_from_env(
     let document_tool_context = DocumentToolContext::new(
         document_service,
         (*entity_access_service).clone(),
-        lexical_client,
+        lexical_client.clone(),
         sync_client.as_ref().clone(),
         ReqwestEditingWorkerClient::new(ai_editing_worker_url, Arc::new(reqwest::Client::new())),
         env.document_permission_jwt.to_string(),
@@ -330,6 +331,7 @@ pub async fn build_tool_service_context_from_env(
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             pool.clone(),
         ))),
+        Arc::new(LexicalMarkdownEmailRenderer::new(Arc::new(lexical_client))),
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(

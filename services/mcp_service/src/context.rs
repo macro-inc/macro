@@ -1,3 +1,4 @@
+use ai_tools::markdown_email_renderer::LexicalMarkdownEmailRenderer;
 use std::sync::Arc;
 
 use ai_tools::{
@@ -297,6 +298,7 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             db.clone(),
         ))),
+        Arc::new(LexicalMarkdownEmailRenderer::new(lexical_client.clone())),
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(
