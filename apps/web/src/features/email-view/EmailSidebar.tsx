@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { ViewFavorites } from '@app/features/favorites/view-favorites';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
@@ -153,14 +154,14 @@ function EmailSidebarSection(props: {
   const contentId = createUniqueId();
   return (
     <section aria-label={props.label}>
-      <h2 class="mb-1 flex items-center text-xs font-medium text-ink-subtle">
+      <h2 class="mb-1 flex h-7 shrink-0 items-center text-xs font-medium text-ink-subtle">
         <Show
           when={props.collapsible}
           fallback={<span class="px-3">{props.label}</span>}
         >
           <button
             type="button"
-            class="flex min-w-0 flex-1 items-center gap-2 rounded-md px-3 py-1 text-left hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+            class="flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg px-3 py-1 text-left hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
             aria-expanded={expanded()}
             aria-controls={contentId}
             onClick={() => setExpanded((value) => !value)}
@@ -190,18 +191,15 @@ export function EmailSidebar() {
   const mailboxActive = (id: string) =>
     tags.activeIds().length === 0 && (view.activeTab() ?? 'important') === id;
   return (
-    <aside
-      aria-label="Email navigation"
-      class="flex size-full min-h-0 flex-col border-r border-edge-muted bg-sidebar"
-    >
-      <header class="flex h-12 shrink-0 items-center border-b border-edge-muted px-5">
-        <h1 class="text-xl font-semibold tracking-tight text-ink">Email</h1>
-      </header>
+    <ViewSidebar.Root aria-label="Email navigation">
+      <ViewSidebar.Header>
+        <ViewSidebar.Title>Email</ViewSidebar.Title>
+      </ViewSidebar.Header>
       <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4">
         <EmailInboxSelector />
         <Button
           variant="ghost"
-          class="mt-3 h-10 justify-start gap-3 rounded-xl border-edge-muted bg-ink/4 px-3 text-ink"
+          class="mt-3 h-10 shrink-0 justify-start gap-3 rounded-xl border-edge-muted bg-ink/4 px-3 text-ink"
           onClick={() => runCreateAction('email', { source: 'sidebar' })}
         >
           <PencilIcon class="size-4" />
@@ -229,7 +227,10 @@ export function EmailSidebar() {
                           }
                           onClick={() => applyTabPreset('mail', item.id)}
                         >
-                          <Dynamic component={item.icon} class="size-4" />
+                          <Dynamic
+                            component={item.icon}
+                            class="size-4 shrink-0 text-ink-muted"
+                          />
                           {item.label}
                         </Button>
                       )}
@@ -296,6 +297,6 @@ export function EmailSidebar() {
         teamAvailable={teamQuery.isSuccess && Boolean(teamQuery.data?.team)}
         onClose={() => setCreatingTag(false)}
       />
-    </aside>
+    </ViewSidebar.Root>
   );
 }

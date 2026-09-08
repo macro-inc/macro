@@ -33,11 +33,13 @@ function EmailListHeader() {
   return (
     <>
       <header class="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-edge-muted px-4">
-        <h2 class="text-sm font-semibold text-ink">{title()}</h2>
+        <h2 class="min-w-0 truncate text-sm font-semibold text-ink">
+          {title()}
+        </h2>
         <div class="min-w-0 max-w-80 flex-1">
           <SoupSearchbar
             placeholder="Search mail"
-            class="h-9 gap-2 px-3 py-1.5"
+            class="h-9 gap-2 bg-transparent px-3 py-1.5 text-sm focus-within:ring-2 focus-within:ring-accent/20"
           />
         </div>
       </header>

@@ -169,7 +169,7 @@ export function TasksControls(props: { tagsOnly?: boolean }) {
         <section aria-label="Tags" class="flex min-h-0 flex-1 flex-col">
           <button
             type="button"
-            class="mb-2 flex h-7 shrink-0 items-center gap-2 px-3 text-xs text-ink-muted hover:text-ink"
+            class="mb-1 flex h-7 shrink-0 items-center gap-2 rounded-lg px-3 text-left text-xs font-medium text-ink-subtle hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
             aria-expanded={tagsExpanded()}
             onClick={() => setTagsExpanded(!tagsExpanded())}
           >

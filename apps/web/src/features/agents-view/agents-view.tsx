@@ -2,6 +2,7 @@ import {
   SearchBar,
   useViewControlHotkeys,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { ViewFavorites } from '@app/features/favorites/view-favorites';
@@ -142,16 +143,11 @@ function AgentsWorkspace() {
           main={{ min: 280 }}
         >
           <ViewShell.Aside>
-            <aside
-              aria-label="Agents navigation"
-              class="flex size-full min-h-0 flex-col border-r border-edge-muted bg-sidebar"
-            >
-              <header class="flex h-12 shrink-0 items-center border-b border-edge-muted px-5">
-                <h1 class="text-xl font-semibold tracking-tight text-ink">
-                  Agents
-                </h1>
-              </header>
-              <div class="shrink-0 px-3 pt-3 pb-2">
+            <ViewSidebar.Root aria-label="Agents navigation">
+              <ViewSidebar.Header>
+                <ViewSidebar.Title>Agents</ViewSidebar.Title>
+              </ViewSidebar.Header>
+              <div class="shrink-0 px-3 pt-4 pb-2">
                 <SearchBar
                   label="Search agent chats"
                   placeholder="Search chats"
@@ -187,7 +183,7 @@ function AgentsWorkspace() {
                   )}
                 </For>
               </nav>
-              <div class="mt-5 shrink-0 px-3">
+              <div class="mt-6 shrink-0 px-3">
                 <ViewFavorites
                   view="agents"
                   onOpen={(favorite) => {
@@ -199,8 +195,8 @@ function AgentsWorkspace() {
                   }}
                 />
               </div>
-              <div class="mt-5 flex min-h-0 flex-1 flex-col px-3 pb-3">
-                <h2 class="mb-2 shrink-0 px-3 text-xs text-ink-muted">
+              <div class="mt-6 flex min-h-0 flex-1 flex-col px-3 pb-3">
+                <h2 class="mb-1 flex h-7 shrink-0 items-center px-3 text-xs font-medium text-ink-subtle">
                   Recent chats
                 </h2>
                 <div class="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
@@ -243,7 +239,7 @@ function AgentsWorkspace() {
                   </Show>
                 </div>
               </div>
-            </aside>
+            </ViewSidebar.Root>
           </ViewShell.Aside>
           <ViewShell.Main>
             <Show

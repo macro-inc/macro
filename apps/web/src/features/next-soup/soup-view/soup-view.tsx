@@ -767,7 +767,15 @@ export const SoupView = (props: SoupViewProps) => {
         <CrmDefaultViewLoader />
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
-        <Show when={!props.header && !isTouchDevice() && activeListView()}>
+        <Show
+          when={
+            !props.header &&
+            !isTouchDevice() &&
+            activeListView() &&
+            activeListView() !== 'search' &&
+            activeListView() !== 'companies'
+          }
+        >
           <aside
             aria-label="View favorites"
             class="w-64 shrink-0 border-r border-edge-muted bg-sidebar px-3 py-4"

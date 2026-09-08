@@ -12,7 +12,7 @@ export function DriveFolderTree(props: {
 }) {
   const rowClass = (id?: string) =>
     cn(
-      'flex h-9 min-w-0 items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-hover',
+      'flex h-9 min-w-0 items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-accent',
       (id ? props.selected === id : props.rootActive) && 'bg-active text-ink'
     );
   const Branch = (p: { node: FolderNode }) => (

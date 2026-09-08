@@ -137,7 +137,7 @@ Email sidebar sections Mail, Views, and Tags start expanded and toggle via their
 
 The + button beside the Email sidebar Tags heading opens the shared Create tag dialog (name, color, and personal/team scope when available). It remains accessible when Tags is collapsed or empty. Saving refreshes the sidebar through the existing tags query.
 
-Favorites are scoped to each app view: Email threads, Chat channels/messages, Tasks task documents, Files non-task documents, Agents chats/sessions, and the corresponding types for other lists. Inbox does not show a Favorites section. Email places Favorites below Views; Chat above Channels in All only (hidden in Recent); Tasks beneath its navigation. Other list views use a favorites rail. Sections are collapsible and display at most five 36px rows before scrolling internally. Clicking opens the favorited entity; Chat channel favorites select the conversation in place.
+Favorites are scoped to each app view: Email threads, Chat channels/messages, Tasks task documents, Files non-task documents, Agents chats/sessions, and the corresponding types for other lists. Inbox does not show a Favorites section. Email places Favorites below Views; Chat above Channels in All only (hidden in Recent); Tasks beneath its navigation. Other list views use a favorites rail, except Search and CRM, which do not show Favorites. Sections are collapsible and display at most five 36px rows before scrolling internally. Clicking opens the favorited entity; Chat channel favorites select the conversation in place.
 
 Calendar exposes its entity-filtered Favorites in the existing contextual side panel, also capped at five visible rows.
 
@@ -160,3 +160,12 @@ the outer rail and the content panel. Inbox's list pane uses the same sidebar to
 Default inner sidebar widths are 288px for Email, Drive, and Tasks, and 320px for
 Chat and Agents. Generic favorites rails are 256px; Inbox's inner sidebar
 defaults to 384px. Resizable sidebars retain their existing drag limits.
+
+
+The desktop Inbox, Chat, Email, Drive, Tasks, and Agents sidebars share
+`ViewSidebar.Root`, `.Header`, and `.Title`: a 48px header, 20px title,
+20px header insets, the sidebar surface token, and a subtle right divider.
+Navigation rows are 36px with normal-weight text, section headings are 28px
+with 12px muted labels, and sidebar groups use a 24px gap. Search controls are
+36px tall with 14px text and visible focus rings; filter controls are 32px.
+Chat scroll fades use the sidebar surface token to avoid a visible color seam.

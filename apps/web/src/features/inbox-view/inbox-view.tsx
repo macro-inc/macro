@@ -1,4 +1,4 @@
-import { ViewShell } from '@app/components/view-shell';
+import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -79,17 +79,14 @@ function InboxViewRoot() {
                   resizable
                 >
                   <ViewShell.Aside>
-                    <aside
-                      aria-label="Inbox navigation"
-                      class="flex size-full min-h-0 flex-col border-r border-edge-muted bg-sidebar"
-                    >
+                    <ViewSidebar.Root aria-label="Inbox navigation">
                       <InboxHeader>
                         <InboxTabs />
                       </InboxHeader>
                       <Suspense fallback={<InboxFallback />}>
                         <InboxList onPreview={setSelectedEntity} />
                       </Suspense>
-                    </aside>
+                    </ViewSidebar.Root>
                   </ViewShell.Aside>
                   <ViewShell.Main class="overflow-hidden">
                     <Show

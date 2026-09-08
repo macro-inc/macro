@@ -54,10 +54,10 @@ export function ViewFavorites(props: {
   return (
     <section aria-label="Favorites" class={cn('min-h-0 shrink-0', props.class)}>
       <Show when={!props.hideHeading}>
-        <h2 class="mb-1 text-xs font-medium text-ink-subtle">
+        <h2 class="mb-1 h-7 text-xs font-medium text-ink-subtle">
           <button
             type="button"
-            class="flex w-full items-center gap-2 rounded-md px-3 py-1 text-left hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
+            class="flex h-full w-full items-center gap-2 rounded-lg px-3 py-1 text-left hover:text-ink focus-visible:outline-2 focus-visible:outline-accent"
             aria-expanded={expanded()}
             aria-controls={id}
             onClick={() => setExpanded((value) => !value)}

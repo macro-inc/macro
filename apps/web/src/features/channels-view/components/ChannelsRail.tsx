@@ -4,7 +4,7 @@ import {
   listOwnedSlotName,
   useListInteractions,
 } from '@app/components/list';
-import { useViewTabHotkeys } from '@app/components/view-shell';
+import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { CommandState } from '@app/features/command';
 import { ViewFavorites } from '@app/features/favorites/view-favorites';
 import { favoriteSplitContent } from '@app/util/favorites';
@@ -353,19 +353,14 @@ export function ChannelsRail(props: {
   );
 
   return (
-    <aside
+    <ViewSidebar.Root
       aria-label="Chat navigation"
-      class={cn(
-        'flex size-full min-h-0 flex-col border-r border-edge-muted bg-sidebar pb-4',
-        props.mode === 'slim' && 'pt-3'
-      )}
+      class={cn('pb-4', props.mode === 'slim' && 'pt-3')}
     >
       <Switch>
         <Match when={props.mode === 'full'}>
-          <div class="flex h-12 min-h-12 shrink-0 items-center gap-2 border-b border-edge-muted px-5">
-            <h1 class="min-w-0 flex-1 truncate text-xl font-semibold tracking-tight text-ink">
-              Chat
-            </h1>
+          <ViewSidebar.Header>
+            <ViewSidebar.Title>Chat</ViewSidebar.Title>
             <Button
               variant="ghost"
               size="icon-md"
@@ -380,7 +375,7 @@ export function ChannelsRail(props: {
               <MagnifyingGlassIcon class="size-4.5" />
             </Button>
             <SplitPanel.CloseButton size="icon-sm" />
-          </div>
+          </ViewSidebar.Header>
 
           <div class="flex min-h-12 shrink-0 items-center border-b border-edge-muted px-3 py-2">
             <Tabs
@@ -416,27 +411,29 @@ export function ChannelsRail(props: {
             tabIndex={-1}
             aria-activedescendant={activeDescendant()}
             class={cn(
-              'scrollbar-hidden min-h-0 flex-1 pt-3 outline-none',
-              state.tab === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
+              'scrollbar-hidden min-h-0 flex-1 outline-none',
+              state.tab === 'browse'
+                ? 'overflow-hidden pt-6'
+                : 'overflow-y-auto pt-3'
             )}
           >
             <Switch>
               <Match when={state.tab === 'browse'}>
-                <div class="flex h-full min-h-0 flex-col gap-5 px-3">
+                <div class="flex h-full min-h-0 flex-col gap-6 px-3">
                   <CollapsibleSection.Root open={state.expandedGroups.channels}>
                     <CollapsibleSection.Header
                       focused={
                         list.focus.key() === rowKeyForSection('channels')
                       }
                       focusWithin={list.focus.item()?.group === 'channels'}
-                      class="h-9 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
+                      class="h-7 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
                     >
                       <button
                         id={domIdForRow(rowKeyForSection('channels'))}
                         type="button"
                         role="treeitem"
                         tabIndex={-1}
-                        class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         aria-expanded={state.expandedGroups.channels}
                         onClick={() =>
                           activateRow(rowKeyForSection('channels'))
@@ -455,7 +452,7 @@ export function ChannelsRail(props: {
                           </span>
                         </Show>
                       </button>
-                      <div data-section-action="" class="pr-1">
+                      <div data-section-action="" class="pr-2">
                         <CreateRailAction
                           label="Create channel"
                           onClick={() => openNewChannelModal()}
@@ -508,14 +505,14 @@ export function ChannelsRail(props: {
                       focusWithin={
                         list.focus.item()?.group === 'direct_messages'
                       }
-                      class="h-9 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
+                      class="h-7 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
                     >
                       <button
                         id={domIdForRow(rowKeyForSection('direct_messages'))}
                         type="button"
                         role="treeitem"
                         tabIndex={-1}
-                        class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                        class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-3 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
                         aria-expanded={state.expandedGroups.direct_messages}
                         onClick={() =>
                           activateRow(rowKeyForSection('direct_messages'))
@@ -537,7 +534,7 @@ export function ChannelsRail(props: {
                           </span>
                         </Show>
                       </button>
-                      <div data-section-action="" class="pr-1">
+                      <div data-section-action="" class="pr-2">
                         <CreateRailAction
                           label="Start direct message"
                           onClick={() => {
@@ -666,8 +663,10 @@ export function ChannelsRail(props: {
             tabIndex={-1}
             aria-activedescendant={activeDescendant()}
             class={cn(
-              'scrollbar-hidden min-h-0 flex-1 pt-3 outline-none',
-              state.tab === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
+              'scrollbar-hidden min-h-0 flex-1 outline-none',
+              state.tab === 'browse'
+                ? 'overflow-hidden pt-6'
+                : 'overflow-y-auto pt-3'
             )}
           >
             <Switch>
@@ -860,6 +859,6 @@ export function ChannelsRail(props: {
           </div>
         </Match>
       </Switch>
-    </aside>
+    </ViewSidebar.Root>
   );
 }

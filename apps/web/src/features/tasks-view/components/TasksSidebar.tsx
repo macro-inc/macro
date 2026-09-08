@@ -27,7 +27,7 @@ export function TasksNavigation(props: { onNavigate?: () => void }) {
         {(item) => (
           <ViewSidebar.Item
             active={state.tab === item.id}
-            class="h-9 rounded-xl px-3 text-sm"
+            class="h-9 shrink-0 gap-3 rounded-xl px-3 text-sm font-normal"
             onClick={() => {
               setTab(item.id);
               props.onNavigate?.();
@@ -57,13 +57,10 @@ export function TasksSidebar() {
     setActiveId: setTab,
   });
   return (
-    <aside
-      aria-label="Tasks navigation"
-      class="flex size-full min-h-0 flex-col border-r border-edge-muted bg-sidebar"
-    >
-      <header class="flex h-12 shrink-0 items-center border-b border-edge-muted px-5">
-        <h1 class="text-xl font-semibold tracking-tight text-ink">Tasks</h1>
-      </header>
+    <ViewSidebar.Root aria-label="Tasks navigation">
+      <ViewSidebar.Header>
+        <ViewSidebar.Title>Tasks</ViewSidebar.Title>
+      </ViewSidebar.Header>
       <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3 py-4">
         <Button
           variant="ghost"
@@ -80,6 +77,6 @@ export function TasksSidebar() {
           <TasksControls tagsOnly />
         </div>
       </div>
-    </aside>
+    </ViewSidebar.Root>
   );
 }

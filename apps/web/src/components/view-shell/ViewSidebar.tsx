@@ -8,7 +8,7 @@ function Root(props: JSX.HTMLAttributes<HTMLElement>) {
     <aside
       {...rest}
       class={cn(
-        'flex size-full min-h-0 min-w-0 flex-col border-r border-edge px-4 pb-5 pt-4',
+        'flex size-full min-h-0 min-w-0 flex-col border-r border-edge-muted bg-sidebar',
         local.class
       )}
       data-view-sidebar=""
@@ -18,19 +18,19 @@ function Root(props: JSX.HTMLAttributes<HTMLElement>) {
   );
 }
 
-function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
+function Header(props: JSX.HTMLAttributes<HTMLElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
-    <div
+    <header
       {...rest}
       class={cn(
-        'flex min-w-0 shrink-0 items-center justify-between gap-3',
+        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-2 border-b border-edge-muted px-5',
         local.class
       )}
       data-view-sidebar-header=""
     >
       {local.children}
-    </div>
+    </header>
   );
 }
 
@@ -40,7 +40,7 @@ function Title(props: JSX.HTMLAttributes<HTMLHeadingElement>) {
     <h1
       {...rest}
       class={cn(
-        'min-w-0 truncate text-2xl font-semibold tracking-[-0.03em] text-ink',
+        'min-w-0 flex-1 truncate text-xl font-semibold tracking-tight text-ink',
         local.class
       )}
     >

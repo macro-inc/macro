@@ -1,4 +1,4 @@
-import { ViewShell } from '@app/components/view-shell';
+import { ViewShell, ViewSidebar } from '@app/components/view-shell';
 import { ViewFavorites } from '@app/features/favorites/view-favorites';
 import {
   buildDocumentTypeQuery,
@@ -87,11 +87,13 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
   const header = () => (
     <>
       <header class="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-edge-muted px-4">
-        <h2 class="truncate text-sm font-semibold text-ink">{title()}</h2>
+        <h2 class="min-w-0 truncate text-sm font-semibold text-ink">
+          {title()}
+        </h2>
         <div class="min-w-0 max-w-80 flex-1">
           <SoupSearchbar
             placeholder="Search files"
-            class="h-9 gap-2 px-3 py-1.5"
+            class="h-9 gap-2 bg-transparent px-3 py-1.5 text-sm focus-within:ring-2 focus-within:ring-accent/20"
           />
         </div>
       </header>
@@ -142,20 +144,15 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
           main={{ min: 280 }}
         >
           <ViewShell.Aside>
-            <aside
-              aria-label="Drive navigation"
-              class="flex size-full min-h-0 flex-col border-r border-edge-muted bg-sidebar"
-            >
-              <header class="flex h-12 shrink-0 items-center border-b border-edge-muted px-5">
-                <h1 class="text-xl font-semibold tracking-tight text-ink">
-                  Drive
-                </h1>
-              </header>
+            <ViewSidebar.Root aria-label="Drive navigation">
+              <ViewSidebar.Header>
+                <ViewSidebar.Title>Drive</ViewSidebar.Title>
+              </ViewSidebar.Header>
               <div class="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-3 py-4">
                 <div class="w-full [&>div]:w-full">
                   <SoupViewCreateButton sidebar />
                 </div>
-                <nav aria-label="Files">
+                <nav aria-label="Files" class="flex shrink-0 flex-col gap-0.5">
                   <For each={TABS}>
                     {(tab) => (
                       <Button
@@ -174,7 +171,10 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
                         }
                         onClick={() => navigate(tab.id)}
                       >
-                        <Dynamic component={tab.icon} class="size-4 shrink-0" />
+                        <Dynamic
+                          component={tab.icon}
+                          class="size-4 shrink-0 text-ink-muted"
+                        />
                         {tab.label}
                       </Button>
                     )}
@@ -182,7 +182,7 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
                 </nav>
                 <ViewFavorites view="documents" />
                 <section aria-label="Folders" class="min-h-0 shrink-0">
-                  <h2 class="mb-2 px-3 text-xs font-medium text-ink-subtle">
+                  <h2 class="mb-1 flex h-7 items-center px-3 text-xs font-medium text-ink-subtle">
                     Folders
                   </h2>
                   <DriveFolderTree
@@ -207,7 +207,7 @@ export function DriveView(props: ComponentProps<typeof SoupView>) {
                   </Show>
                 </section>
               </div>
-            </aside>
+            </ViewSidebar.Root>
           </ViewShell.Aside>
           <ViewShell.Main>
             <SoupView {...props} viewName="Drive" header={header()} />
