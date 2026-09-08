@@ -62,7 +62,9 @@ impl FavoritesMutationService for NoOpFavoriteMutationService {
 
 /// Result of setting an entity's favorite state.
 pub struct SetFavoritePayload<E: SoupEntityEdges> {
+    /// Generic entity-mutation outcome, including normalized Soup effects.
     result: GraphqlEntityMutationResult<E>,
+    /// Persisted favorite after an add, or `None` after a removal.
     favorite: Option<GraphqlFavorite>,
 }
 
