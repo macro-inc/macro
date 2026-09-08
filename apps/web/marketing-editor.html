@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!-- Not a page anyone should land on directly; it is embedded in an iframe
+         on the marketing site. -->
+    <meta name="robots" content="noindex" />
+    <!-- Defense in depth, NOT the fix.
+
+         The previously shipped bundle needed this tag to stop a permanent
+         retry loop against production auth: two module-scope, self-connecting
+         WebSocket singletons sit in MarkdownShell's import graph and dial out
+         on import. That is now fixed at the source — both modules, and the
+         analytics singleton that booted GTM and the Meta pixel, resolve to
+         inert stubs (see MODULE_STUBS in vite.marketing-editor.config.ts), and
+         a built bundle with no CSP at all was verified making four requests,
+         all same-origin.
+
+         The tag stays because this bundle is compiled from the full app and
+         ships on the marketing origin, where such calls would be same-site
+         rather than CORS-blocked. If a future dependency change reintroduces a
+         dialer, visitors get a blocked request instead of a retry loop, and
+         MODULE_STUBS is the place to fix it properly.
+
+         'self' rather than 'none': connect-src governs fetch(), and Loro's wasm
+         is fetched from a same-origin asset path. It does not affect the
+         same-origin contentDocument access UtilLiveEditor.tsx needs for theme
+         sync and first-keystroke detection. -->
+    <meta http-equiv="Content-Security-Policy" content="connect-src 'self'" />
+    <title>Macro Live Editor</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Some app components portal here rather than into their own subtree;
+         present so anything that does still has a mount target. -->
+    <div id="modal"></div>
+    <script type="module" src="/src/marketing-editor/main.tsx"></script>
+  </body>
+</html>

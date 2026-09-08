@@ -1,0 +1,260 @@
+/**
+ * Marketing live-editor demo styles.
+ *
+ * Loaded only by src/marketing-editor/main.tsx. The app's own theme tokens come
+ * from index.css (imported by the entry HTML), and the HOST page additionally
+ * writes its resolved --a0..--c4 and --hero-app-chrome-bg onto this document's
+ * root so the editor tracks the marketing page's palette — see
+ * solid-site's src/app/components/utils/UtilLiveEditor.tsx.
+ *
+ * Everything here is layout for the iframe: the app supplies the editor's own
+ * typography and colours.
+ */
+
+/* The iframe is exactly as tall as the host sizes it, and the editor scrolls
+   inside rather than the document, so the host's iframe never needs to grow. */
+html,
+body {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  /* Embedded, the host writes --hero-app-chrome-bg onto this document and sets
+     body.style.background inline, so this rule only decides what the demo looks
+     like opened directly (dev, or checking a build by hand). It falls back to
+     the app's own base surface rather than `transparent`, because the theme's
+     ink is near-white — --c0 is oklch(1 0 14deg) — so a transparent body
+     renders the entire document white-on-white. */
+  background-color: var(--hero-app-chrome-bg, var(--b0));
+}
+
+/*
+ * The mount point needs an explicit height or the percentage chain below it
+ * breaks: a percentage height resolves against the parent's height, and #root
+ * has none, so .live-editor-root fell back to sizing itself to its content.
+ * That made the editor 117px shorter than the window it sits in — the shell
+ * got 295px of a 460px frame — and left almost no room to type before the
+ * content reached the bottom.
+ */
+#root {
+  height: 100%;
+}
+
+.live-editor-root {
+  box-sizing: border-box;
+  display: grid;
+  /*
+   * minmax(0, 1fr), not the implicit auto row. An auto row sizes to its content
+   * and will happily exceed its own fixed-height container, which is exactly
+   * what happened: this box stayed 460px while its row grew to 487px, pushing
+   * the column past the window and letting the shell grow instead of scroll.
+   * Content then lived below the visible bottom, clipped rather than reachable.
+   */
+  grid-template-rows: minmax(0, 1fr);
+  height: 100%;
+  justify-items: center;
+  width: 100%;
+}
+
+/* Caps the measure so the demo reads like a document rather than a wall of
+   text on a wide viewport, and gives the floating link/format menus room. */
+.live-editor-column {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  /* Grid items default to min-height:auto, which refuses to shrink below
+     content — the other half of why this column could outgrow the window. */
+  min-height: 0;
+  max-width: 720px;
+  padding: 24px 28px;
+  position: relative;
+  width: 100%;
+}
+
+.live-editor-shell {
+  min-height: 0;
+  overflow-y: auto;
+
+  /* phosphor/check.svg, verbatim — see the checked::after rule below. */
+  --md-check-glyph: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 256 256'%3E%3Cpath d='M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z'/%3E%3C/svg%3E");
+}
+
+/* ---- Title row --------------------------------------------------------- */
+
+/*
+ * The document's first block is reserved as its title (enforced by a RootNode
+ * transform in main.tsx). While it is empty, main.tsx puts the placeholder
+ * string on it as data-title-placeholder and this draws it.
+ *
+ * Absolutely positioned so it never occupies layout: an inline ::before would
+ * push the caret to the right of the placeholder text. --color-ink-placeholder
+ * is the token the app's own TitleEditor placeholder uses.
+ */
+.live-editor-shell [data-title-placeholder] {
+  position: relative;
+}
+
+.live-editor-shell [data-title-placeholder]::before {
+  /*
+   * --color-ink-placeholder is the app's placeholder token, kept as the source
+   * of truth, but the host page's --c4 resolves lighter than the app's own
+   * (0.75 vs 0.60 lightness), which reads as body text rather than a hint on
+   * this near-black ground. Mixing toward transparent dims it against whatever
+   * surface it lands on instead of hardcoding a second colour.
+   */
+  color: color-mix(in oklab, var(--color-ink-placeholder) 65%, transparent);
+  content: attr(data-title-placeholder);
+  inset-inline-start: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  user-select: none;
+}
+
+/* ---- Checklist boxes --------------------------------------------------- */
+
+/*
+ * Softens the in-document checkbox to match the app's shared Checkbox
+ * component.
+ *
+ * The markdown editor rolls its own box in LexicalMarkdown/styles.css
+ * (outline: 2px solid currentcolor, border-radius: 0) and that rule was
+ * skipped by the theme-v3 pass, so it still reads as a hard, full-contrast
+ * square. components/ui/components/Checkbox.tsx meanwhile is rounded-sm with a
+ * 1px muted edge and an accent fill when checked, which is what the rest of
+ * the product looks like.
+ *
+ * Only the outline width, its colour and the corner radius change: outline is
+ * drawn outside the box and costs no layout, so the ::after checkmark stays
+ * aligned without touching any geometry.
+ *
+ * This is a presentation-only override for the marketing demo. The real fix is
+ * the same three declarations in styles.css, which would bring the app's own
+ * documents along with it.
+ */
+.live-editor-shell .md-list.md-check > li::before {
+  border-radius: 0.2em;
+  /*
+   * --color-edge (0.36 lightness) is the app Checkbox's border, but that sits
+   * on a raised surface; here the box sits on the near-black document ground,
+   * where it nearly disappears next to bullet markers drawn in currentcolor.
+   * --c4 is the dimmest text token, so an empty box reads as clearly present
+   * while still sitting below the text and bullets in the hierarchy.
+   */
+  outline: 1px solid var(--c4);
+  /*
+   * The upstream rule fades the fill over 200ms, which is what makes ticking a
+   * box feel sluggish — a toggle should register as immediate. outline-color
+   * rather than the outline shorthand, so the 1px width is never animated.
+   */
+  transition:
+    background-color 90ms ease-out,
+    outline-color 90ms ease-out;
+}
+
+.live-editor-shell .md-list.md-check > li.checked::before {
+  background-color: var(--color-accent);
+  outline-color: var(--color-accent);
+}
+
+/*
+ * Swaps the checkmark for the app's own glyph.
+ *
+ * Upstream draws it as an L — border-bottom plus border-left, rotated -45deg —
+ * which gives hard square ends and sits large in the box. The app's Checkbox
+ * renders phosphor's `check` instead, whose path is stroked with a8,8 arc caps,
+ * so its ends are round. Reusing that exact path keeps the demo honest and gets
+ * the rounder, smaller mark in one move.
+ *
+ * Applied as a mask rather than a background image so the colour stays
+ * token-driven: the mark has to be --color-surface to read against the accent
+ * fill behind it. Borders are zeroed because a mask clips the element's borders
+ * too, which would otherwise leave fragments of the old L.
+ *
+ * Sized 0.6em in the 0.8em box — the same 0.75 glyph-to-box ratio as the app
+ * (size-3 icon in a size-4 control) — and centred on the box's content edge:
+ * left -1.25em + (0.8 - 0.6)/2, top 0.35em + the same.
+ */
+.live-editor-shell .md-list.md-check > li.checked::after {
+  border: 0;
+  width: 0.6em;
+  height: 0.6em;
+  left: -1.15em;
+  top: 0.45em;
+  transform: none;
+  background-color: var(--color-surface);
+  -webkit-mask-image: var(--md-check-glyph);
+  mask-image: var(--md-check-glyph);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+/* ---- Equation input ---------------------------------------------------- */
+
+/* Sits in its own grid row rather than floating over the text, so opening it
+   cannot cover the line the equation is being inserted into. Collapsed to zero
+   height when closed so it costs no layout. */
+.marketing-editor-latex {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  interpolate-size: allow-keywords;
+  height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: height 160ms ease, opacity 160ms ease;
+}
+
+.marketing-editor-latex--open {
+  height: auto;
+  opacity: 1;
+  padding-top: 12px;
+}
+
+.marketing-editor-latex__label {
+  color: var(--c4, #8a8a8a);
+  flex: none;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.marketing-editor-latex__input {
+  background-color: color-mix(in srgb, var(--c4, #888) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--c4, #888) 24%, transparent);
+  border-radius: 8px;
+  color: var(--c1, #f5f5f5);
+  flex: 1;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  font-size: 13px;
+  min-width: 0;
+  outline: none;
+  padding: 7px 10px;
+}
+
+.marketing-editor-latex__input:focus-visible {
+  border-color: var(--a0, #e08b3e);
+}
+
+.marketing-editor-latex__hint {
+  color: color-mix(in srgb, var(--c4, #888) 80%, transparent);
+  flex: none;
+  font-size: 11.5px;
+}
+
+@media (max-width: 620px) {
+  .live-editor-column {
+    padding: 16px 18px;
+  }
+  .marketing-editor-latex__hint {
+    display: none;
+  }
+}

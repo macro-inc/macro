@@ -48,6 +48,9 @@ CodeSignTool/
 **/.build
 **/dist
 **/.dist-production
+# Marketing live-editor demo output. Not matched by **/dist, and the built copy
+# is committed to the marketing site repo rather than this one.
+dist-marketing-editor
 
 **/*.tsbuildinfo
 
