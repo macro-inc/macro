@@ -113,8 +113,8 @@ export function MarkdownPopup(props: {
 }) {
   const blockId = useBlockId();
 
-  const { editor, plugins } = useContext(LexicalWrapperContext) ?? {};
-  if (!editor || !plugins) {
+  const { editor } = useContext(LexicalWrapperContext) ?? {};
+  if (!editor) {
     console.error('MarkdownPopup mounted outside of LexicalWrapperContext!');
     return '';
   }
@@ -166,7 +166,7 @@ export function MarkdownPopup(props: {
     setAiEditLocation(editor.read(() => $getSelectionLocation()));
   };
 
-  plugins.use(
+  autoRegister(
     popupPlugin({
       setIsPopupVisible: setPopupVisible,
       setSelection: setSelectionAndHighlight,
@@ -182,7 +182,7 @@ export function MarkdownPopup(props: {
           ) != null
         );
       },
-    })
+    })(editor)
   );
 
   // The actual control value for showPopup lags.

@@ -242,10 +242,7 @@ export class EditorConfigBuilder implements EditorBuilder {
    */
   buildHandle(): EditorHandle {
     if (this._handle) return this._handle;
-    this._handle = buildHandleFromConfig(this.state);
-    for (const plugin of this._queuedPlugins) {
-      this._handle.plugins.use(plugin);
-    }
+    this._handle = buildHandleFromConfig(this.state, this._queuedPlugins);
     return this._handle;
   }
 

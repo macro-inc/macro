@@ -9,7 +9,6 @@ import {
 import { $reconcileLexicalState } from '@core/component/LexicalMarkdown/collaboration/reconcile';
 import { useRemoteCursors } from '@core/component/LexicalMarkdown/collaboration/remote-cursor';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
-import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
 import {
   initializeEditorEmpty,
   initializeEditorWithVersionedState,
@@ -80,7 +79,6 @@ export type CollabObservability = {
 
 export type CollabProviderProps = {
   editor: LexicalEditor;
-  pluginManager: PluginManager;
   editorContainerRef: HTMLDivElement;
   highlightLayerRef: HTMLDivElement;
   mappings: NodeIdMappings;
@@ -450,9 +448,12 @@ export function CollabProvider(props: CollabProviderProps) {
     );
   }
 
+  let cleanupLexicalStateSync = () => {};
+
   function startSync() {
+    cleanupLexicalStateSync();
     syncEngine.start();
-    props.pluginManager.use(lexicalStateSyncPlugin);
+    cleanupLexicalStateSync = lexicalStateSyncPlugin();
   }
 
   const [managerInitialized, setManagerInitialized] = createSignal(
@@ -576,6 +577,7 @@ export function CollabProvider(props: CollabProviderProps) {
   );
 
   onCleanup(() => {
+    cleanupLexicalStateSync();
     syncEngine.stop();
     walSyncer.destroy();
     const documentId = syncSource()?.documentId;

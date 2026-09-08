@@ -290,7 +290,6 @@ export function CollabMdSurface(props: CollabMdSurfaceProps) {
           <Show when={session.syncSource()}>
             <CollabProvider
               editor={editor}
-              pluginManager={plugins}
               editorContainerRef={editorContainerRef}
               highlightLayerRef={editorContainerRef}
               mappings={lexicalWrapper.mapping!}

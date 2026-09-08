@@ -33,6 +33,7 @@
         "@inkibra/tauri-plugins": "git+https://github.com/macro-inc/tauri-plugins.git#6ddd6600e20436388f169e936b610fe93944b7b0",
         "@kobalte/core": "^0.13.11",
         "@leeoniya/ufuzzy": "^1.0.19",
+        "@lexical/extension": "0.45.0",
         "@lexical/history": "0.45.0",
         "@lexical/html": "0.45.0",
         "@lexical/link": "0.45.0",

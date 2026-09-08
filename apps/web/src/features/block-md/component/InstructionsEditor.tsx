@@ -396,7 +396,6 @@ export function InstructionsEditor(props: {
         <Show when={IS_SYNC()}>
           <MarkdownCollabProvider
             editor={editor}
-            pluginManager={plugins}
             editorContainerRef={editorContainerRef}
             highlighLayerRef={editorContainerRef}
             mappings={lexicalWrapper.mapping!}

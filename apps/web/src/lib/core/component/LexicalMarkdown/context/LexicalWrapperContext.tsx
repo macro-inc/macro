@@ -1,6 +1,7 @@
 /**
  * @file Wrap the Lexical Editor in some helpful utilities.
  */
+import { buildEditorFromExtensions } from '@lexical/extension';
 import {
   type EditorType,
   type NodeIdMappings,
@@ -11,19 +12,19 @@ import {
 } from '@macro-inc/lexical-core';
 import type { NodeKey } from 'lexical';
 import {
-  createEditor,
+  defineExtension,
   type EditorThemeClasses,
   type LexicalEditor,
 } from 'lexical';
 import { createContext } from 'solid-js';
 import type { Store } from 'solid-js/store';
+import { insertTextPlugin } from '../plugins/insert-text';
+import { nodeTransformPlugin } from '../plugins/node-transform';
 import {
   createPluginManager,
-  insertTextPlugin,
-  nodeTransformPlugin,
   type PluginManager,
-  type SelectionData,
-} from '../plugins';
+} from '../plugins/pluginManager';
+import type { SelectionData } from '../plugins/selection-data';
 import { theme as baseTheme } from '../theme';
 
 type LexicalWrapperProps = {
@@ -32,6 +33,8 @@ type LexicalWrapperProps = {
   isInteractable: () => boolean;
   withIds?: boolean;
   theme?: EditorThemeClasses;
+  /** Register editor behavior as part of the extension lifecycle. */
+  configure?: (wrapper: LexicalWrapper) => void;
 };
 
 export type LexicalWrapperBase = {
@@ -82,6 +85,7 @@ export function createLexicalWrapper({
   isInteractable,
   withIds,
   theme,
+  configure,
 }: LexicalWrapperProps): LexicalWrapper {
   _id++;
 
@@ -94,44 +98,49 @@ export function createLexicalWrapper({
     return true;
   });
 
-  const editor = createEditor({
-    theme: theme ?? baseTheme,
-    namespace: namespace + '_' + _id,
-    nodes: [...nodes, ...replacements],
-    onError: console.error,
-  });
+  const mapping = withIds ? createMapping() : undefined;
+  let wrapper!: LexicalWrapper;
+  let disposeEditor = () => {};
+  const editorWithDispose = buildEditorFromExtensions(
+    defineExtension({
+      name: 'macro/editor',
+      theme: theme ?? baseTheme,
+      namespace: namespace + '_' + _id,
+      nodes: () => [...nodes, ...replacements],
+      onError: console.error,
+      register: (editor) => {
+        const plugins = createPluginManager(editor, type);
+        wrapper = {
+          plugins,
+          editor,
+          cleanup: () => disposeEditor(),
+          type,
+          isInteractable,
+          mapping,
+        };
 
-  const plugins = createPluginManager(editor, type);
+        // Default plugins here.
+        plugins.use(insertTextPlugin());
+        plugins.use(nodeTransformPlugin());
 
-  let mapping: NodeIdMappings | undefined;
+        if (mapping) {
+          plugins.use(
+            nodeIdPlugin({
+              nodes: SupportedNodeTypes,
+              idLength: 8,
+              mappings: mapping,
+            })
+          );
+        }
 
-  // Default plugins here.
-  plugins.use(insertTextPlugin());
-  plugins.use(nodeTransformPlugin());
+        configure?.(wrapper);
+        return plugins.cleanup;
+      },
+    })
+  );
+  disposeEditor = editorWithDispose.dispose;
 
-  if (withIds) {
-    mapping = createMapping();
-    plugins.use(
-      nodeIdPlugin({
-        nodes: SupportedNodeTypes,
-        idLength: 8,
-        mappings: mapping,
-      })
-    );
-  }
-
-  const cleanup = () => {
-    plugins.cleanup();
-  };
-
-  return {
-    plugins,
-    editor,
-    cleanup,
-    type,
-    isInteractable,
-    mapping,
-  };
+  return wrapper;
 }
 
 export function isWrapperWithIds(

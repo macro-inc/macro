@@ -89,7 +89,7 @@ export const CommentsProvider: VoidComponent<{
     console.error('Cannot use comment plugin without node ids.');
     return null;
   }
-  const { plugins, editor } = wrapper;
+  const { editor } = wrapper;
 
   const currentPeerId = () => props.loroManager.peerIdStr;
 
@@ -378,7 +378,7 @@ export const CommentsProvider: VoidComponent<{
     )
   );
 
-  plugins.use(
+  autoRegister(
     commentPlugin({
       ops: {
         add: addCommentMark,
@@ -387,7 +387,7 @@ export const CommentsProvider: VoidComponent<{
         init: initComments,
       },
       peerId: currentPeerId,
-    })
+    })(editor)
   );
 
   return null;
