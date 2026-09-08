@@ -10,9 +10,9 @@
  * another viewer sees the same live card with its controls disabled and the
  * owner named as the one it waits on.
  *
- * URL mode never opens anything on its own. The card shows the full URL and
- * its host, and only after the user presses Open does it send the consent and
- * open a new tab - never an iframe, never a prefetch.
+ * The form, URL consent, and unrecognized-request controls are the
+ * `LiveElicitation` ones the channel's Magic Chip shares; a Macro user tool
+ * under review opens the tool's own composer here.
  */
 
 import { CalendarDraftComposer } from '@core/component/AI/component/tool/calendar/DraftComposer';
@@ -22,25 +22,22 @@ import type {
   AnsweredValue,
   MessagePart,
 } from '@service-agent-fold/generated/types';
-import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
 import type {
   CreateCalendarEvent,
   SendEmail,
 } from '@service-cognition/generated/tools/types';
 import { Button } from '@ui';
-import { createMemo, createSignal, For, Match, Show, Switch } from 'solid-js';
-import { createStore } from 'solid-js/store';
-import { match } from 'ts-pattern';
+import { createMemo, For, Match, Show, Switch } from 'solid-js';
+import { match, P } from 'ts-pattern';
 import { useAgentSession } from '../../context/AgentSessionContext';
-import {
-  type FieldValue,
-  initialValues,
-  toContent,
-  validate,
-} from '../../state/elicitation-form';
 import { createElicitationReviewSink } from '../../state/elicitation-review-sink';
-import { ElicitationForm, ToolCard } from '../../ui';
+import { ToolCard } from '../../ui';
+import {
+  LiveForm,
+  LiveQuestion,
+  type RespondToElicitation,
+} from './LiveElicitation';
 import { UserToolCall } from './UserToolCall';
 
 type ElicitationPartData = Extract<MessagePart, { kind: 'elicitation' }>;
@@ -99,13 +96,6 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
             </div>
           </Show>
           {match(props.part.request)
-            .with({ kind: 'form' }, (request) => (
-              <LiveForm
-                schema={request.schema}
-                locked={locked()}
-                onRespond={elicitation.respond}
-              />
-            ))
             .with({ kind: 'user_tool' }, (request) => (
               <LiveUserTool
                 request={request}
@@ -114,98 +104,20 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
                 onRespond={elicitation.respond}
               />
             ))
-            .with({ kind: 'url' }, (request) => (
-              <LiveUrl
-                url={request.url}
-                locked={locked()}
-                onRespond={elicitation.respond}
-              />
-            ))
-            .with({ kind: 'unrecognized' }, (request) => (
-              <div class="flex flex-col gap-2">
-                <div class="text-xs text-ink-extra-muted italic">
-                  This client cannot display a "{request.mode}" request.
-                </div>
-                <DeclineCancel
+            .with(
+              { kind: P.union('form', 'url', 'unrecognized') },
+              (request) => (
+                <LiveQuestion
+                  request={request}
                   locked={locked()}
                   onRespond={elicitation.respond}
                 />
-              </div>
-            ))
+              )
+            )
             .exhaustive()}
         </div>
       </ToolCard>
     </Show>
-  );
-}
-
-function DeclineCancel(props: {
-  locked: boolean;
-  onRespond: (answer: { action: 'decline' } | { action: 'cancel' }) => unknown;
-}) {
-  return (
-    <>
-      <Button
-        variant="outline"
-        size="xs"
-        disabled={props.locked}
-        onClick={() => props.onRespond({ action: 'decline' })}
-      >
-        Decline
-      </Button>
-      <Button
-        variant="ghost"
-        size="xs"
-        disabled={props.locked}
-        onClick={() => props.onRespond({ action: 'cancel' })}
-      >
-        Cancel
-      </Button>
-    </>
-  );
-}
-
-function LiveForm(props: {
-  schema: Extract<ElicitationPartData['request'], { kind: 'form' }>['schema'];
-  locked: boolean;
-  onRespond: (answer: ElicitationAnswer) => unknown;
-}) {
-  const [values, setValues] = createStore(initialValues(props.schema));
-  const [touched, setTouched] = createSignal(false);
-  const errors = createMemo(() => validate(props.schema, values));
-  const shownErrors = () => (touched() ? errors() : {});
-
-  const submit = () => {
-    if (props.locked) return;
-    setTouched(true);
-    if (Object.keys(errors()).length > 0) return;
-    props.onRespond({
-      action: 'accept',
-      content: toContent(props.schema, values),
-    });
-  };
-
-  return (
-    <div class="flex flex-col gap-3">
-      <ElicitationForm
-        schema={props.schema}
-        values={values}
-        errors={shownErrors()}
-        disabled={props.locked}
-        onChange={(name: string, value: FieldValue) => setValues(name, value)}
-      />
-      <div class="flex items-center gap-2">
-        <Button
-          variant="cta"
-          size="xs"
-          disabled={props.locked}
-          onClick={submit}
-        >
-          Submit
-        </Button>
-        <DeclineCancel locked={props.locked} onRespond={props.onRespond} />
-      </div>
-    </div>
   );
 }
 
@@ -220,7 +132,7 @@ function LiveUserTool(props: {
   request: UserToolRequest;
   toolCall: string;
   locked: boolean;
-  onRespond: (answer: ElicitationAnswer) => Promise<boolean>;
+  onRespond: RespondToElicitation;
 }) {
   const { elicitation } = useAgentSession();
   const typed = createMemo(() => {
@@ -286,40 +198,6 @@ function LiveUserTool(props: {
   );
 }
 
-function LiveUrl(props: {
-  url: string;
-  locked: boolean;
-  onRespond: (answer: {
-    action: 'accept' | 'decline' | 'cancel';
-  }) => Promise<boolean> | unknown;
-}) {
-  const host = () => urlHost(props.url);
-  const open = async () => {
-    if (props.locked) return;
-    // Consent goes to the agent first so it learns the user agreed even if
-    // the popup is blocked; the link below stays as the fallback.
-    const accepted = await props.onRespond({ action: 'accept' });
-    if (accepted === false) return;
-    window.open(props.url, '_blank', 'noopener,noreferrer');
-  };
-  return (
-    <div class="flex flex-col gap-2">
-      <div class="text-xs text-ink-muted">
-        Opens <span class="font-medium text-ink">{host()}</span> in a new tab.
-      </div>
-      <div class="rounded-md border border-edge-muted bg-surface px-2 py-1 font-mono text-xs text-ink-muted break-all">
-        {props.url}
-      </div>
-      <div class="flex items-center gap-2">
-        <Button variant="cta" size="xs" disabled={props.locked} onClick={open}>
-          Open
-        </Button>
-        <DeclineCancel locked={props.locked} onRespond={props.onRespond} />
-      </div>
-    </div>
-  );
-}
-
 function ResolvedElicitation(props: { part: ElicitationPartData }) {
   // A reviewed user tool that has reported back reads as the tool: the draft
   // it ran with and what it did - the same card the chat block's user tools
@@ -354,15 +232,6 @@ function ResolvedElicitation(props: { part: ElicitationPartData }) {
       )}
     </Show>
   );
-}
-
-/** The host of a URL-mode request, for the consent card, or the raw text. */
-function urlHost(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
 }
 
 /** One answer as a line of text. The fold has already resolved the values. */

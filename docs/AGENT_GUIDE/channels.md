@@ -51,6 +51,14 @@ bottom row reads the current activity (`Booting agent`, `Writing response`, ...)
 answer text to expand it in place (`Show less` collapses it again); click the
 bottom row to open the agent session. Before an
 answer exists, clicking the answer area also opens the session.
+When the agent stops to ask a question, the chip's bottom section becomes the question
+itself: `Waiting for you` (or `Waiting for <owner>`) over the prompt, then the same
+controls the session shows - a form's fields (choice rows, text and number inputs, a
+yes/no, an `Other` row when the agent allows a free-text answer) with `Submit`,
+`Decline`, and `Cancel`; a URL request's host and `Open`; a Macro user tool's draft
+summarized read-only with `Create event`/`Send email` and `Cancel`. `Open session`
+(or `Edit in session` for a tool draft) sits at the right of that row. Only the
+session's owner can answer; other viewers see the controls disabled.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention. With GraphQL enabled, document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit

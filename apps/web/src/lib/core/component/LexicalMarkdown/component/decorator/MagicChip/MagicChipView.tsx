@@ -1,4 +1,9 @@
 import {
+  LiveQuestion,
+  type LiveQuestionRequest,
+  type RespondToElicitation,
+} from '@app/features/block-agent/component/parts/LiveElicitation';
+import {
   EmailDraft,
   EventDraft,
 } from '@app/features/block-agent/component/parts/UserToolCall';
@@ -43,6 +48,12 @@ function currentActivity(presentation: MagicChipPresentation) {
     : undefined;
 }
 
+function isTextEntry(target: EventTarget | null) {
+  return (
+    target instanceof Element && target.closest('input, textarea') !== null
+  );
+}
+
 function replyPreview(activity: MagicChipActivity | undefined) {
   if (!activity) return 'Open session';
   return `${activity.label}${activity.detail ? ` ${activity.detail}` : ''}`;
@@ -56,11 +67,12 @@ export type MagicChipAnswer = {
 };
 
 /**
- * A question the agent stopped to ask, kept small for a channel thread: what
- * is being asked, a read-only summary of a user tool's draft, and the two
- * decisions. Editing the draft, or answering a form field by field, happens
- * in the session - "Edit in session" opens it. Anyone but the session's
- * owner sees the summary and who is being waited on.
+ * A question the agent stopped to ask, answered in the thread: a form's
+ * fields, a URL's consent, or a Macro user tool's draft summarized read-only
+ * with the two decisions. The same controls the session shows, so the chip
+ * offers everything the session would except editing a tool's draft, which
+ * needs the tool's composer - `Edit in session` opens it. Anyone but the
+ * session's owner sees the question locked and who is being waited on.
  */
 const AskingCard: Component<{
   agentSessionId: string;
@@ -81,8 +93,16 @@ const AskingCard: Component<{
     });
     return call.isOk() ? { tool: call.value, draft: current.draft } : undefined;
   });
+  // Everything but a recognized user tool goes through the shared controls; a
+  // draft the tool's schema rejects falls back to the flat form the agent
+  // also sent, as the session does.
+  const question = (): LiveQuestionRequest | undefined => {
+    const current = request();
+    if (current.kind !== 'user_tool') return current;
+    return userTool() ? undefined : { kind: 'form', schema: current.schema };
+  };
   const locked = () =>
-    !props.asking.canAnswer || props.answer?.answering === true;
+    !props.asking.canAnswer || !props.answer || props.answer.answering;
   const waitingFor = () =>
     props.asking.canAnswer
       ? 'Waiting for you'
@@ -92,90 +112,106 @@ const AskingCard: Component<{
       .with('CreateCalendarEvent', () => 'Create event')
       .with('SendEmail', () => 'Send email')
       .otherwise(() => 'Confirm');
-  const respond = (answer: ElicitationAnswer) => {
-    if (locked()) return;
-    void props.answer?.respond(answer);
+  const respond: RespondToElicitation = async (answer) => {
+    if (locked()) return false;
+    return (await props.answer?.respond(answer)) ?? false;
   };
   // The chip sends the draft as the agent wrote it; edits need the session's
   // composer.
   const accept = () =>
-    respond({
+    void respond({
       action: 'accept',
-      content:
-        request().kind === 'user_tool'
-          ? { [DRAFT_FIELD]: JSON.stringify(userTool()?.draft ?? {}) }
-          : {},
+      content: { [DRAFT_FIELD]: JSON.stringify(userTool()?.draft ?? {}) },
     });
+  const openSession = (label: string) => (
+    <Button
+      variant="ghost"
+      size="xs"
+      disabled={!props.onOpen}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={props.onOpen}
+    >
+      {label}
+    </Button>
+  );
 
   return (
     <div
-      class="flex w-full min-w-0 flex-col gap-2 rounded-lg border border-edge-muted bg-surface p-3"
+      class="flex w-full min-w-0 flex-col gap-2 border-t border-edge-muted px-3 py-2.5"
       data-magic-chip={props.agentSessionId}
       data-magic-chip-asking
       data-message-reply-preview={`${waitingFor()} · ${props.asking.question.message}`}
     >
-      <div class="flex items-center gap-2 text-xs">
-        <span class="shrink-0 font-semibold text-ink-muted" aria-live="polite">
+      <div class="flex flex-col gap-0.5">
+        <span class="text-xs font-semibold text-ink-muted" aria-live="polite">
           {waitingFor()}
         </span>
-        <span class="min-w-0 truncate text-ink">
+        <span class="text-sm text-ink wrap-break-word">
           {props.asking.question.message}
         </span>
       </div>
       <Switch>
-        <Match
-          when={userTool()?.tool.name === 'CreateCalendarEvent' && userTool()}
-        >
+        <Match when={userTool()}>
           {(reviewed) => (
-            <EventDraft event={reviewed().tool.data as CreateCalendarEvent} />
+            <>
+              <Switch>
+                <Match when={reviewed().tool.name === 'CreateCalendarEvent'}>
+                  <EventDraft
+                    event={reviewed().tool.data as CreateCalendarEvent}
+                  />
+                </Match>
+                <Match when={reviewed().tool.name === 'SendEmail'}>
+                  <EmailDraft
+                    email={reviewed().tool.data as SendEmail}
+                    inFlight={false}
+                  />
+                </Match>
+              </Switch>
+              <div class="flex flex-wrap items-center gap-2">
+                <Show when={props.asking.canAnswer}>
+                  <Button
+                    variant="cta"
+                    size="xs"
+                    disabled={locked()}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={accept}
+                  >
+                    {confirmLabel()}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    disabled={locked()}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => void respond({ action: 'decline' })}
+                  >
+                    Cancel
+                  </Button>
+                </Show>
+                <span class="ml-auto">
+                  {openSession(
+                    props.asking.canAnswer ? 'Edit in session' : 'Open session'
+                  )}
+                </span>
+              </div>
+            </>
           )}
         </Match>
-        <Match when={userTool()?.tool.name === 'SendEmail' && userTool()}>
-          {(reviewed) => (
-            <EmailDraft
-              email={reviewed().tool.data as SendEmail}
-              inFlight={false}
-            />
+        <Match when={question()}>
+          {(live) => (
+            // Keyed on the request so a new question starts a fresh draft
+            // while metadata refreshes of the same one keep what was typed.
+            <Show when={String(props.asking.question.requestId)} keyed>
+              <LiveQuestion
+                request={live()}
+                locked={locked()}
+                onRespond={respond}
+                trailing={openSession('Open session')}
+              />
+            </Show>
           )}
         </Match>
       </Switch>
-      <div class="flex flex-wrap items-center gap-2">
-        <Show when={props.asking.canAnswer}>
-          <Show when={userTool()}>
-            <Button
-              variant="cta"
-              size="xs"
-              disabled={locked()}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={accept}
-            >
-              {confirmLabel()}
-            </Button>
-          </Show>
-          <Button
-            variant="outline"
-            size="xs"
-            disabled={locked()}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => respond({ action: 'decline' })}
-          >
-            {userTool() ? 'Cancel' : 'Decline'}
-          </Button>
-        </Show>
-        <Button
-          variant="ghost"
-          size="xs"
-          disabled={!props.onOpen}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={props.onOpen}
-        >
-          {props.asking.canAnswer
-            ? userTool()
-              ? 'Edit in session'
-              : 'Answer in session'
-            : 'Open session'}
-        </Button>
-      </div>
     </div>
   );
 };
@@ -321,7 +357,11 @@ export const MagicChipView: Component<{
         class="my-2 w-full min-w-0 max-w-full overflow-hidden rounded-lg border border-edge-muted bg-surface"
         data-magic-chip={props.agentSessionId}
         data-magic-chip-preview
-        onMouseDown={(event) => event.preventDefault()}
+        onMouseDown={(event) => {
+          // The chip sits in a Lexical message; a press must not move the
+          // editor's selection, unless it is landing in one of its own inputs.
+          if (!isTextEntry(event.target)) event.preventDefault();
+        }}
       >
         <div
           role="button"

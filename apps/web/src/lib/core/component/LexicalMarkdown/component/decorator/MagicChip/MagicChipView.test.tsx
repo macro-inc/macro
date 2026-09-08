@@ -20,6 +20,14 @@ vi.mock('@core/component/LexicalMarkdown/theme', () => ({
   channelTheme: {},
 }));
 
+// The chip answers a form with the real `ElicitationForm`; the rest of the
+// block-agent ui barrel reaches the composer, comments, and a socket.
+vi.mock('@app/features/block-agent/ui', async () => ({
+  ElicitationForm: (
+    await import('@app/features/block-agent/ui/ElicitationForm')
+  ).ElicitationForm,
+}));
+
 afterEach(cleanup);
 
 const LONG_PATH =
@@ -328,5 +336,167 @@ describe('MagicChipView review transition', () => {
     expect(area.getAttribute('aria-expanded')).toBe('true');
     fireEvent.click(view.getByText('Open session'));
     expect(onOpen).toHaveBeenCalledOnce();
+  });
+});
+
+const colourForm = {
+  kind: 'form' as const,
+  schema: {
+    title: null,
+    description: null,
+    required: ['question_0'],
+    properties: [
+      {
+        name: 'question_0',
+        title: 'Best colour',
+        description: null,
+        schema: {
+          type: 'string' as const,
+          minLength: null,
+          maxLength: null,
+          pattern: null,
+          format: null,
+          default: null,
+          options: [
+            { value: 'Red', title: 'Red', description: null },
+            { value: 'Blue', title: 'Blue', description: null },
+          ],
+          customField: 'question_0_custom',
+        },
+      },
+    ],
+  },
+};
+
+function askingQuestion(
+  request: Extract<
+    MagicChipPresentation,
+    { kind: 'asking' }
+  >['asking']['question']['request'],
+  canAnswer = true
+): MagicChipPresentation {
+  return {
+    kind: 'asking',
+    markdown: '',
+    asking: {
+      question: {
+        requestId: 0,
+        turn: 0,
+        toolCall: null,
+        message: "What's the best colour?",
+        request,
+      },
+      canAnswer,
+      ownerName: 'Alice Owner',
+    },
+  };
+}
+
+describe('MagicChipView asking a form', () => {
+  it('offers the choices in the thread and submits the one picked', () => {
+    const view = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={askingQuestion(colourForm)}
+        answer={{ answering: false, respond }}
+        onOpen={onOpen}
+      />
+    ));
+    expect(view.getByText("What's the best colour?")).toBeTruthy();
+    expect(view.getByRole('radio', { name: 'Red' })).toBeTruthy();
+
+    // A required question refuses an empty submit.
+    fireEvent.click(view.getByText('Submit'));
+    expect(respond).not.toHaveBeenCalled();
+    expect(view.getByText('Required')).toBeTruthy();
+
+    fireEvent.click(view.getByRole('radio', { name: 'Blue' }));
+    fireEvent.click(view.getByText('Submit'));
+    expect(respond).toHaveBeenCalledWith({
+      action: 'accept',
+      content: { question_0: 'Blue' },
+    });
+
+    fireEvent.click(view.getByText('Decline'));
+    expect(respond).toHaveBeenLastCalledWith({ action: 'decline' });
+    fireEvent.click(view.getByText('Open session'));
+    expect(onOpen).toHaveBeenCalledOnce();
+  });
+
+  it('types a custom answer and sends it under the custom key', () => {
+    const view = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={askingQuestion(colourForm)}
+        answer={{ answering: false, respond }}
+      />
+    ));
+    fireEvent.input(view.getByPlaceholderText('Type your own answer'), {
+      target: { value: 'teal' },
+    });
+    fireEvent.click(view.getByText('Submit'));
+    expect(respond).toHaveBeenCalledWith({
+      action: 'accept',
+      content: { question_0_custom: 'teal' },
+    });
+  });
+
+  it('a viewer who is not the owner sees the choices locked', () => {
+    const view = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={askingQuestion(colourForm, false)}
+        answer={{ answering: false, respond }}
+        onOpen={onOpen}
+      />
+    ));
+    expect(view.getByText('Waiting for Alice Owner')).toBeTruthy();
+    const red = view.getByRole('radio', { name: 'Red' }) as HTMLButtonElement;
+    expect(red.disabled).toBe(true);
+    fireEvent.click(view.getByText('Submit'));
+    expect(respond).not.toHaveBeenCalled();
+  });
+
+  it('a url request shows the host and opens only after consent', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const view = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={askingQuestion({
+          kind: 'url',
+          elicitationId: 'gh-1',
+          url: 'https://agent.example.com/connect?e=gh-1',
+        })}
+        answer={{ answering: false, respond }}
+      />
+    ));
+    expect(view.getByText('agent.example.com')).toBeTruthy();
+    fireEvent.click(view.getByText('Open'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(respond).toHaveBeenCalledWith({ action: 'accept' });
+    expect(open).toHaveBeenCalledWith(
+      'https://agent.example.com/connect?e=gh-1',
+      '_blank',
+      'noopener,noreferrer'
+    );
+    open.mockRestore();
+  });
+
+  it('a request this client cannot display can still be declined', () => {
+    const view = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={askingQuestion({
+          kind: 'unrecognized',
+          mode: 'hologram',
+          raw: {},
+        })}
+        answer={{ answering: false, respond }}
+      />
+    ));
+    expect(view.getByText(/cannot display a "hologram" request/)).toBeTruthy();
+    fireEvent.click(view.getByText('Decline'));
+    expect(respond).toHaveBeenCalledWith({ action: 'decline' });
   });
 });
