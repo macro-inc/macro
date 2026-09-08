@@ -161,7 +161,11 @@ export function createEmailComposeServices(): EmailComposeServices {
         } catch (error) {
           reportError(error);
         }
-        return result;
+        return {
+          draftId: result.draft.db_id ?? undefined,
+          threadId: result.draft.thread_db_id ?? undefined,
+          inboxId: result.draft.link_id,
+        };
       },
       async deleteDraft({ completingThread, ...input }) {
         await remove.mutateAsync({
@@ -213,7 +217,11 @@ export function createEmailComposeServices(): EmailComposeServices {
         } catch (error) {
           reportError(error);
         }
-        return result;
+        return {
+          draftId: result.message.db_id ?? undefined,
+          threadId: result.message.thread_db_id ?? undefined,
+          inboxId: result.message.link_id,
+        };
       },
       async unschedule(input) {
         await unschedule.mutateAsync({

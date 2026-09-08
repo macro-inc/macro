@@ -1,8 +1,44 @@
 import type { ThreadQueryData, ThreadQueryResult } from '@queries/email/thread';
+import type { ApiMessage, ApiThread } from '@service-email/generated/schemas';
 import { batch, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-import { message, thread } from '../tests/fixtures';
-import { createEmailThreadSource, decodeThread } from './thread-source';
+
+function message(id: string, overrides: Partial<ApiMessage> = {}): ApiMessage {
+  return {
+    db_id: id,
+    thread_db_id: 'thread',
+    link_id: 'inbox',
+    created_at: '2026-09-01T10:00:00Z',
+    updated_at: '2026-09-01T10:00:00Z',
+    to: [{ email: 'viewer@example.com' }],
+    cc: [],
+    bcc: [],
+    attachments: [],
+    attachments_draft: [],
+    attachments_forwarded: [],
+    labels: [],
+    is_read: true,
+    is_draft: false,
+    is_sent: false,
+    is_starred: false,
+    has_attachments: false,
+    ...overrides,
+  };
+}
+function thread(messages: ApiMessage[]): ApiThread {
+  return {
+    db_id: 'thread',
+    link_id: 'inbox',
+    access_level: 'owner',
+    inbox_visible: true,
+    is_read: true,
+    created_at: '2026-09-01T10:00:00Z',
+    updated_at: '2026-09-01T10:00:00Z',
+    messages,
+  };
+}
+
+import { createEmailThreadSource, toEmailThread } from './thread-source';
 
 describe('thread query adaptation', () => {
   it('guards resource reads, retains available data during refresh errors, and clears it when switching threads', () =>
@@ -69,9 +105,9 @@ describe('thread query adaptation', () => {
       message('one', { body_replyless: '' }),
       message('two', { body_replyless: null }),
     ]);
-    const decoded = decodeThread(wire);
-    expect(decoded.messages.map((m) => m.body_replyless)).toEqual(['', null]);
-    decoded.messages[0].to[0].email = 'changed@example.com';
+    const projected = toEmailThread(wire);
+    expect(projected.messages.map((m) => m.body_replyless)).toEqual(['', null]);
+    projected.messages[0].to[0].email = 'changed@example.com';
     expect(wire.messages[0].to[0].email).toBe('viewer@example.com');
   });
 });
@@ -126,3 +162,84 @@ it.each(['fetchOlder', 'refresh'] as const)(
     }
   }
 );
+
+it('keeps rendering and attachment identities while excluding transport metadata', () => {
+  const wire = thread([
+    message('message', {
+      headers_json: { transport: 'private' },
+      provider_history_id: 'sync-history',
+      from: { email: 'sender@example.com', name: 'Sender', photo_url: 'photo' },
+      labels: [
+        {
+          created_at: 'now',
+          link_id: 'inbox',
+          name: 'CATEGORY_PERSONAL',
+          provider_label_id: 'UNREAD',
+        },
+      ],
+      attachments: [
+        {
+          db_id: 'inline',
+          content_id: 'image-cid',
+          sfs_id: 'file',
+          mime_type: 'image/png',
+          filename: 'image.png',
+          size_bytes: 123,
+        },
+      ],
+      attachments_draft: [
+        {
+          id: 'draft-file',
+          draft_id: 'message',
+          content_type: 'text/plain',
+          file_name: 'notes.txt',
+          s3_key: 'notes',
+          sha: 'sha',
+          size: 42,
+        },
+      ],
+      attachments_forwarded: [
+        {
+          attachment_id: 'forward-file',
+          draft_id: 'message',
+          message_provider_id: 'provider',
+          provider_attachment_id: 'private-id',
+          filename: 'forward.txt',
+          mime_type: 'text/plain',
+          size_bytes: 15,
+        },
+      ],
+      provider_id: 'reply-provider-id',
+      scheduled_send_time: '2026-10-01T12:00:00Z',
+    }),
+  ]);
+  const projected = toEmailThread(wire).messages[0];
+  expect(projected).toMatchObject({
+    provider_id: 'reply-provider-id',
+    scheduled_send_time: '2026-10-01T12:00:00Z',
+    labels: [{ name: 'CATEGORY_PERSONAL', provider_label_id: 'UNREAD' }],
+    attachments: [{ db_id: 'inline', content_id: 'image-cid', sfs_id: 'file' }],
+    attachments_draft: [{ id: 'draft-file', s3_key: 'notes' }],
+    attachments_forwarded: [
+      { attachment_id: 'forward-file', filename: 'forward.txt' },
+    ],
+  });
+  expect(projected).not.toHaveProperty('headers_json');
+  expect(projected).not.toHaveProperty('provider_history_id');
+  expect(projected.attachments_forwarded[0]).not.toHaveProperty(
+    'message_provider_id'
+  );
+  // Feature state must not mutate the query cache's nested values.
+  projected.from!.name = 'Changed';
+  projected.labels[0].name = 'Changed';
+  projected.attachments[0].filename = 'Changed';
+  projected.attachments_draft[0].file_name = 'Changed';
+  projected.attachments_forwarded[0].filename = 'Changed';
+  expect(wire.messages[0].from?.name).toBe('Sender');
+  expect(wire.messages[0].labels[0].name).toBe('CATEGORY_PERSONAL');
+  expect(wire.messages[0].attachments[0].filename).toBe('image.png');
+  expect(wire.messages[0].attachments_draft[0].file_name).toBe('notes.txt');
+  expect(wire.messages[0].attachments_forwarded[0].filename).toBe(
+    'forward.txt'
+  );
+});

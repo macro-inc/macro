@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import type {
   EmailComposeServices,
-  SavedEmailDraft,
+  PersistedEmailIdentity,
 } from '../context/compose-services';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { composeServices } from '../tests/services';
@@ -261,7 +261,7 @@ describe('send and schedule ordering', () => {
   afterEach(() => vi.useRealTimers());
 
   it('serializes the last reply edit on disposal and reuses the ID from its first save', async () => {
-    let finish!: (value: { draft: SavedEmailDraft }) => void;
+    let finish!: (value: PersistedEmailIdentity) => void;
     const services = composeServices();
     vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(
       new Promise((resolve) => {
@@ -275,9 +275,7 @@ describe('send and schedule ordering', () => {
     state.dispose();
     await vi.advanceTimersByTimeAsync(1000);
     expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
-    finish({
-      draft: { db_id: 'saved-reply', thread_db_id: 'thread', link_id: 'inbox' },
-    });
+    finish({ draftId: 'saved-reply', threadId: 'thread', inboxId: 'inbox' });
     await vi.advanceTimersByTimeAsync(0);
     expect(services.drafts.saveDraft).toHaveBeenCalledTimes(2);
     const latest = vi.mocked(services.drafts.saveDraft).mock.calls[1][0].draft;
@@ -373,13 +371,7 @@ describe('send and schedule ordering', () => {
         vi.mocked(services.delivery.sendMessage).mockImplementationOnce(
           async () => {
             await pending;
-            return {
-              message: {
-                db_id: 'sent',
-                thread_db_id: 'thread',
-                link_id: 'inbox',
-              },
-            };
+            return { draftId: 'sent', threadId: 'thread', inboxId: 'inbox' };
           }
         );
       else vi.mocked(services.drafts.deleteDraft).mockReturnValueOnce(pending);
@@ -411,7 +403,7 @@ describe('send and schedule ordering', () => {
   );
 
   it('does not attach a forwarded file removed while the first draft save is pending', async () => {
-    let finish!: (value: { draft: SavedEmailDraft }) => void;
+    let finish!: (value: PersistedEmailIdentity) => void;
     const services = composeServices();
     vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(
       new Promise((resolve) => {
@@ -431,9 +423,7 @@ describe('send and schedule ordering', () => {
       state.edit('Forwarding');
       await vi.advanceTimersByTimeAsync(500);
       state.handleRemoveAttachment(attachment);
-      finish({
-        draft: { db_id: 'draft', thread_db_id: 'thread', link_id: 'inbox' },
-      });
+      finish({ draftId: 'draft', threadId: 'thread', inboxId: 'inbox' });
       await vi.advanceTimersByTimeAsync(0);
       expect(
         services.attachmentStorage.addForwardedAttachments
@@ -444,7 +434,7 @@ describe('send and schedule ordering', () => {
   });
 
   it('does not submit a second reply while its first send is still saving', async () => {
-    let finish!: (value: { draft: SavedEmailDraft }) => void;
+    let finish!: (value: PersistedEmailIdentity) => void;
     const services = composeServices();
     vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(
       new Promise((resolve) => {
@@ -457,13 +447,7 @@ describe('send and schedule ordering', () => {
       await vi.advanceTimersByTimeAsync(0);
       await state.sendEmail();
       expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
-      finish({
-        draft: {
-          db_id: 'saved-reply',
-          thread_db_id: 'thread',
-          link_id: 'inbox',
-        },
-      });
+      finish({ draftId: 'saved-reply', threadId: 'thread', inboxId: 'inbox' });
       await sending;
       await vi.advanceTimersByTimeAsync(1000);
       expect(services.delivery.sendMessage).toHaveBeenCalledOnce();
@@ -478,16 +462,12 @@ describe('send and schedule ordering', () => {
     async (remount) => {
       const services = composeServices();
       const persisted = {
-        db_id: 'cross-inbox-draft',
-        thread_db_id: 'secondary-thread',
-        link_id: 'secondary',
+        draftId: 'cross-inbox-draft',
+        threadId: 'secondary-thread',
+        inboxId: 'secondary',
       };
-      vi.mocked(services.drafts.saveDraft).mockResolvedValue({
-        draft: persisted,
-      });
-      vi.mocked(services.delivery.sendMessage).mockResolvedValue({
-        message: persisted,
-      });
+      vi.mocked(services.drafts.saveDraft).mockResolvedValue(persisted);
+      vi.mocked(services.delivery.sendMessage).mockResolvedValue(persisted);
       vi.mocked(services.delivery.undoSend).mockImplementation(
         async ({ onUndone }) => {
           await onUndone();
@@ -560,10 +540,12 @@ describe('send and schedule ordering', () => {
 
   it('reconciles each previous persisted thread when a reply moves between inboxes', async () => {
     const services = composeServices();
-    let finish!: (value: { draft: SavedEmailDraft }) => void;
+    let finish!: (value: PersistedEmailIdentity) => void;
     vi.mocked(services.drafts.saveDraft)
       .mockResolvedValue({
-        draft: { db_id: 'draft-c', thread_db_id: 'thread-c', link_id: 'c' },
+        draftId: 'draft-c',
+        threadId: 'thread-c',
+        inboxId: 'c',
       })
       .mockReturnValueOnce(
         new Promise((resolve) => {
@@ -571,10 +553,14 @@ describe('send and schedule ordering', () => {
         })
       )
       .mockResolvedValueOnce({
-        draft: { db_id: 'draft-b', thread_db_id: 'thread-b', link_id: 'b' },
+        draftId: 'draft-b',
+        threadId: 'thread-b',
+        inboxId: 'b',
       })
       .mockResolvedValueOnce({
-        draft: { db_id: 'draft-c', thread_db_id: 'thread-c', link_id: 'c' },
+        draftId: 'draft-c',
+        threadId: 'thread-c',
+        inboxId: 'c',
       });
     const state = replyComposer(services);
     try {
@@ -582,9 +568,7 @@ describe('send and schedule ordering', () => {
       await vi.advanceTimersByTimeAsync(500);
       state.persistDraftOnSenderSwitch('b');
       state.persistDraftOnSenderSwitch('c');
-      finish({
-        draft: { db_id: 'draft-a', thread_db_id: 'thread-a', link_id: 'inbox' },
-      });
+      finish({ draftId: 'draft-a', threadId: 'thread-a', inboxId: 'inbox' });
       await vi.advanceTimersByTimeAsync(0);
       const inputs = vi
         .mocked(services.drafts.saveDraft)
@@ -610,7 +594,7 @@ describe('send and schedule ordering', () => {
   });
 
   it('waits for a saved reply and dispatches with its returned draft ID', async () => {
-    let finishSaving!: (value: { draft: SavedEmailDraft }) => void;
+    let finishSaving!: (value: PersistedEmailIdentity) => void;
     const services = composeServices();
     vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(
       new Promise((resolve) => {
@@ -624,11 +608,9 @@ describe('send and schedule ordering', () => {
       expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
       expect(services.delivery.sendMessage).not.toHaveBeenCalled();
       finishSaving({
-        draft: {
-          db_id: 'saved-reply',
-          thread_db_id: 'thread',
-          link_id: 'inbox',
-        },
+        draftId: 'saved-reply',
+        threadId: 'thread',
+        inboxId: 'inbox',
       });
       await vi.advanceTimersByTimeAsync(0);
       expect(services.delivery.sendMessage).toHaveBeenCalledOnce();
@@ -643,7 +625,7 @@ describe('send and schedule ordering', () => {
   it.each(['standalone', 'reply'] as const)(
     '%s does not dispatch when scheduling starts during the pending draft save',
     async (kind) => {
-      let finishSaving!: (value: { draft: SavedEmailDraft }) => void;
+      let finishSaving!: (value: PersistedEmailIdentity) => void;
       let finishScheduling!: () => void;
       const services = composeServices({
         delivery: {
@@ -669,7 +651,9 @@ describe('send and schedule ordering', () => {
         const scheduling = state.schedule(new Date('2026-10-01T12:00:00Z'));
         await vi.advanceTimersByTimeAsync(0);
         finishSaving({
-          draft: { db_id: 'draft', thread_db_id: 'thread', link_id: 'inbox' },
+          draftId: 'draft',
+          threadId: 'thread',
+          inboxId: 'inbox',
         });
         await vi.advanceTimersByTimeAsync(0);
         expect(services.delivery.sendMessage).not.toHaveBeenCalled();

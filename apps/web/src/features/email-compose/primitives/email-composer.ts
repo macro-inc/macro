@@ -19,7 +19,7 @@ import type {
   EmailComposeHost,
   EmailDelivery,
   EmailDraftStorage,
-  SavedEmailDraft,
+  PersistedEmailIdentity,
 } from '../context/compose-services';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import type { EmailRecipient } from '../core/email-recipient';
@@ -237,10 +237,10 @@ export function createEmailComposer(props: EmailComposeInput) {
       previousThreadId: previousThreadID,
     });
 
-    const newThreadID = draftResponse.draft.thread_db_id ?? undefined;
+    const newThreadID = draftResponse.threadId ?? undefined;
     setCurrentThreadID(newThreadID);
 
-    const draftId = draftResponse.draft.db_id;
+    const draftId = draftResponse.draftId;
     if (draftId) {
       setCurrentDraftID(draftId);
       await attachmentPersistence.upload(draftId, { linkId: saveLinkId });
@@ -347,9 +347,12 @@ export function createEmailComposer(props: EmailComposeInput) {
       onUndone: () => restoreAfterUndoSend(draftId, threadId, linkId),
     });
 
-  const afterSend = (message: SavedEmailDraft, linkId: string | undefined) => {
-    const draftId = message.db_id;
-    const threadId = message.thread_db_id;
+  const afterSend = (
+    identity: PersistedEmailIdentity,
+    linkId: string | undefined
+  ) => {
+    const draftId = identity.draftId;
+    const threadId = identity.threadId;
     if (draftId) endUndoSend(draftId);
     try {
       const toastId = props.notices.feedback.success('Email sent', {
@@ -497,7 +500,7 @@ export function createEmailComposer(props: EmailComposeInput) {
         });
 
         completed = true;
-        afterSend(result.message, currentLink.id);
+        afterSend(result, currentLink.id);
       } finally {
         cleanupWatermark();
       }

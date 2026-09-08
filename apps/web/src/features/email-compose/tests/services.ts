@@ -46,7 +46,9 @@ export function composeServices(
     },
     drafts: {
       saveDraft: vi.fn(async () => ({
-        draft: { db_id: 'draft', thread_db_id: 'thread', link_id: 'inbox' },
+        draftId: 'draft',
+        threadId: 'thread',
+        inboxId: 'inbox',
       })),
       deleteDraft: vi.fn(async () => {}),
       restoreDraft: vi.fn(async () => {}),
@@ -54,7 +56,9 @@ export function composeServices(
     },
     delivery: {
       sendMessage: vi.fn(async () => ({
-        message: { db_id: 'sent', thread_db_id: 'thread', link_id: 'inbox' },
+        draftId: 'sent',
+        threadId: 'thread',
+        inboxId: 'inbox',
       })),
       unschedule: vi.fn(async () => {}),
       schedule: vi.fn(async () => {}),

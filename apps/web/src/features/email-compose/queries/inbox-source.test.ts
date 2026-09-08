@@ -39,7 +39,6 @@ it('keeps cached secondary-inbox reply semantics after a failed refresh and does
         link_id: 'secondary',
         from: { email: 'shared@example.com' },
         to: [{ email: 'colleague@example.com' }],
-        is_sent: true,
       });
       const form = createEmailFormState(
         { viewerEmail: owner, inboxes: source.inboxes },

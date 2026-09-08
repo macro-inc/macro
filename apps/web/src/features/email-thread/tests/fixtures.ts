@@ -17,8 +17,6 @@ export function thread(
     access_level: 'owner',
     inbox_visible: true,
     is_read: true,
-    created_at: '2026-09-01T10:00:00Z',
-    updated_at: '2026-09-01T10:00:00Z',
     messages,
     ...overrides,
   };

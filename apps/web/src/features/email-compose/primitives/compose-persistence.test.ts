@@ -10,7 +10,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
   EmailComposeHost,
   EmailComposeServices,
-  SavedEmailDraft,
+  PersistedEmailIdentity,
 } from '../context/compose-services';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { composeServices } from '../tests/services';
@@ -56,8 +56,10 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
-const response: { draft: SavedEmailDraft } = {
-  draft: { db_id: 'saved-id', thread_db_id: 'thread', link_id: 'inbox' },
+const response: PersistedEmailIdentity = {
+  draftId: 'saved-id',
+  threadId: 'thread',
+  inboxId: 'inbox',
 };
 beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
@@ -90,7 +92,7 @@ it('does not save an untouched composer or repeat a settled autosave on disposal
   expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
 });
 it('serializes a disposal flush behind the first save and reuses its returned ID', async () => {
-  const pending = deferred<{ draft: SavedEmailDraft }>();
+  const pending = deferred<PersistedEmailIdentity>();
   const services = composeServices();
   vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(pending.promise);
   const root = mount(services);
@@ -118,7 +120,7 @@ it('discard cancels an unsaved debounce without creating a draft', async () => {
   expect(services.drafts.deleteDraft).not.toHaveBeenCalled();
 });
 it('discard waits for an in-flight first save and deletes its returned draft', async () => {
-  const pending = deferred<{ draft: SavedEmailDraft }>();
+  const pending = deferred<PersistedEmailIdentity>();
   const services = composeServices();
   vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(pending.promise);
   const root = mount(services);
@@ -150,7 +152,7 @@ it('keeps the draft editable after failed deletion and saves later edits', async
   expect(services.drafts.saveDraft).toHaveBeenCalledTimes(2);
 });
 it('waits for the saved draft ID, prevents duplicate sends, and does not recreate the sent draft on disposal', async () => {
-  const pending = deferred<{ draft: SavedEmailDraft }>();
+  const pending = deferred<PersistedEmailIdentity>();
   const services = composeServices();
   vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(pending.promise);
   const root = mount(services);
@@ -212,7 +214,7 @@ it('keeps a successful send completed when navigation fails', async () => {
 
 it('keeps completion independent when two composers share delivery capabilities', async () => {
   const services = composeServices();
-  const pending = deferred<{ message: SavedEmailDraft }>();
+  const pending = deferred<PersistedEmailIdentity>();
   vi.mocked(services.delivery.sendMessage).mockReturnValueOnce(pending.promise);
   const first = mount(services);
   const second = mount(services);
@@ -225,7 +227,7 @@ it('keeps completion independent when two composers share delivery capabilities'
   expect(services.delivery.sendMessage).toHaveBeenCalledTimes(2);
   expect(first.state.context.isSending()).toBe(true);
   expect(second.state.context.isSending()).toBe(false);
-  pending.resolve({ message: response.draft });
+  pending.resolve(response);
   await vi.advanceTimersByTimeAsync(1);
   expect(first.state.context.isSending()).toBe(false);
   first.dispose();
@@ -277,7 +279,7 @@ it('rejects sender/schedule changes and repeated discard while a deletion is pen
 });
 
 it('rejects sender and scheduling changes after send dispatch', async () => {
-  const pending = deferred<{ message: SavedEmailDraft }>();
+  const pending = deferred<PersistedEmailIdentity>();
   const services = composeServices();
   const root = mount(services);
   vi.mocked(services.delivery.sendMessage).mockReturnValueOnce(pending.promise);
@@ -289,13 +291,13 @@ it('rejects sender and scheduling changes after send dispatch', async () => {
   expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
   expect(services.delivery.schedule).not.toHaveBeenCalled();
   expect(root.state.context.selectedFromLinkId?.()).toBe('inbox');
-  pending.resolve({ message: response.draft });
+  pending.resolve(response);
   await vi.advanceTimersByTimeAsync(1);
   root.dispose();
 });
 
 it('uses the captured inbox for attachment upload when a sender switch queues behind a save', async () => {
-  const pending = deferred<{ draft: SavedEmailDraft }>();
+  const pending = deferred<PersistedEmailIdentity>();
   const services = composeServices();
   services.accounts = {
     ...services.accounts,

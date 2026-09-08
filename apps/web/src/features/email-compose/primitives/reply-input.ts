@@ -10,7 +10,7 @@ import type {
   EmailDelivery,
   EmailDraftStorage,
   EmailUndoHandle,
-  SavedEmailDraft,
+  PersistedEmailIdentity,
 } from '../context/compose-services';
 import type { EmailReplySession } from '../context/email-form-dependencies';
 import type { EmailDraft } from '../core/email-draft';
@@ -375,9 +375,12 @@ export function createReplyInput(
       onUndone: () => restoreAfterUndoSend(draftId, threadId, linkId),
     });
 
-  const afterSend = (message: SavedEmailDraft, linkId: string | undefined) => {
+  const afterSend = (
+    identity: PersistedEmailIdentity,
+    linkId: string | undefined
+  ) => {
     autosave.cancel();
-    const draftId = message.db_id;
+    const draftId = identity.draftId;
     if (draftId) endUndoSend(draftId);
     try {
       const toastId = props.notices.feedback.success('Email sent', {
@@ -387,11 +390,9 @@ export function createReplyInput(
                 label: 'Undo',
                 onClick: () => {
                   if (toastId != null) props.notices.feedback.dismiss(toastId);
-                  void undoSend(
-                    draftId,
-                    message.thread_db_id ?? undefined,
-                    linkId
-                  ).catch(props.notices.reportError);
+                  void undoSend(draftId, identity.threadId, linkId).catch(
+                    props.notices.reportError
+                  );
                 },
               },
             ]
@@ -590,11 +591,11 @@ export function createReplyInput(
       previousThreadId: savedDraftThreadId(),
     });
 
-    const draftId = draftResponse.draft.db_id;
+    const draftId = draftResponse.draftId;
     if (draftId) {
       setSavedDraft({
         id: draftId,
-        threadId: draftResponse.draft.thread_db_id ?? undefined,
+        threadId: draftResponse.threadId ?? undefined,
       });
       await attachmentPersistence.upload(draftId, { linkId });
 
@@ -864,7 +865,7 @@ export function createReplyInput(
         props.notices.feedback.failure('Failed to send email');
         return;
       }
-      afterSend(result.message, linkId);
+      afterSend(result, linkId);
     } catch (error) {
       props.notices.reportError(error);
     } finally {

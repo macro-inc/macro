@@ -14,11 +14,11 @@ export interface EmailInbox {
   };
 }
 
-export interface SavedEmailDraft {
-  db_id?: string | null;
-  thread_db_id?: string | null;
-  provider_id?: string | null;
-  link_id: string;
+/** Identity returned by a successful save or send. Transport envelopes stay in adapters. */
+export interface PersistedEmailIdentity {
+  draftId?: string;
+  threadId?: string;
+  inboxId: string;
 }
 
 export interface SaveEmailDraft {
@@ -53,7 +53,7 @@ export interface EmailAttachmentChange {
 }
 
 export interface EmailDraftStorage {
-  saveDraft(input: SaveEmailDraft): Promise<{ draft: SavedEmailDraft }>;
+  saveDraft(input: SaveEmailDraft): Promise<PersistedEmailIdentity>;
   deleteDraft(input: DeleteEmailDraft): Promise<void>;
   restoreDraft(input: {
     draftId: string;
@@ -76,7 +76,7 @@ export interface EmailAttachmentStorage {
 }
 
 export interface EmailDelivery {
-  sendMessage(input: SendEmailDraft): Promise<{ message: SavedEmailDraft }>;
+  sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
   unschedule(input: { draftID: string; linkId?: string }): Promise<void>;
   schedule(
     input: { draftID: string; send_time: string },
