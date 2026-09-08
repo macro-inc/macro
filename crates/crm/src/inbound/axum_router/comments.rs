@@ -86,11 +86,12 @@ pub struct EditCrmCommentRequest {
 #[tracing::instrument(skip_all, err, fields(entity_id = %entity_id))]
 pub async fn list_handler<
     C: CrmService,
+    St,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: EntityPermissionExtractor<Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
 ) -> Result<Json<Vec<CrmCommentThread>>, CrmError> {
     let (team_id, team_role) = owning_team_for_entity(&state, &access).await?;
@@ -124,11 +125,12 @@ pub async fn list_handler<
 #[tracing::instrument(skip_all, err, fields(entity_id = %entity_id))]
 pub async fn create_handler<
     C: CrmService,
+    St,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: EntityPermissionExtractor<Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path((_entity_type, entity_id)): Path<(CrmCommentEntityType, Uuid)>,
     Json(req): Json<CreateCrmCommentRequest>,
 ) -> Result<Json<CrmCommentThread>, CrmError> {
@@ -182,11 +184,12 @@ pub async fn create_handler<
 #[tracing::instrument(skip_all, err, fields(comment_id = %comment_id))]
 pub async fn edit_handler<
     C: CrmService,
+    St,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: CrmCommentAccessLevelExtractor<ViewAccessLevel, C, Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path(comment_id): Path<Uuid>,
     Json(req): Json<EditCrmCommentRequest>,
 ) -> Result<Json<CrmComment>, CrmError> {
@@ -225,11 +228,12 @@ pub async fn edit_handler<
 #[tracing::instrument(skip_all, err, fields(comment_id = %comment_id))]
 pub async fn delete_handler<
     C: CrmService,
+    St,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
     access: CrmCommentAccessLevelExtractor<ViewAccessLevel, C, Eas, Auth>,
-    State(state): State<CrmRouterState<C, Eas, Auth>>,
+    State(state): State<CrmRouterState<C, St, Eas, Auth>>,
     Path(comment_id): Path<Uuid>,
 ) -> Result<Json<DeleteCrmCommentResult>, CrmError> {
     let result = state
@@ -248,10 +252,11 @@ pub async fn delete_handler<
 /// than a real authorization miss.
 async fn owning_team_for_entity<
     C: CrmService,
+    St,
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 >(
-    state: &CrmRouterState<C, Eas, Auth>,
+    state: &CrmRouterState<C, St, Eas, Auth>,
     access: &EntityPermissionExtractor<Eas, Auth>,
 ) -> Result<(Uuid, TeamRole), CrmError> {
     let user_id = access

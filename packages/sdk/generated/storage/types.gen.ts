@@ -3869,6 +3869,48 @@ export type CrmDomainResponse = {
 export type CrmPermissionRole = 'admin' | 'owner';
 
 /**
+ * One stage in a `PUT /crm/stages` body.
+ */
+export type CrmStageInput = {
+    /**
+     * Existing stage to keep; omit to add one.
+     */
+    id?: string | null;
+    /**
+     * Label after the update; non-blank and unique within the set.
+     */
+    label: string;
+};
+
+/**
+ * One stage of the team's custom pipeline.
+ */
+export type CrmStageResponse = {
+    /**
+     * Property option id companies carry as their stage value.
+     */
+    id: string;
+    /**
+     * Label.
+     */
+    label: string;
+};
+
+/**
+ * The team's custom stage set.
+ */
+export type CrmStagesResponse = {
+    /**
+     * Team-scoped stage definition id.
+     */
+    definition_id: string;
+    /**
+     * Stages in pipeline order.
+     */
+    stages: Array<CrmStageResponse>;
+};
+
+/**
  * The team's CRM configuration (everything on `team_crm_settings`
  * except the `crm_enabled` killswitch, which is managed via
  * `PATCH /team/crm` on the auth service).
@@ -7110,6 +7152,16 @@ export type ReorderPinRequest = {
      * The type of the pin
      */
     pinnedItemType: string;
+};
+
+/**
+ * Request body for `PUT /crm/stages`: the whole stage set in order.
+ */
+export type ReplaceCrmStagesRequest = {
+    /**
+     * Stages first to last.
+     */
+    stages: Array<CrmStageInput>;
 };
 
 /**
@@ -11569,6 +11621,49 @@ export type PutCrmTeamSettingsResponses = {
 };
 
 export type PutCrmTeamSettingsResponse = PutCrmTeamSettingsResponses[keyof PutCrmTeamSettingsResponses];
+
+export type ResetCrmTeamStagesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/crm/stages';
+};
+
+export type ResetCrmTeamStagesErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ResetCrmTeamStagesError = ResetCrmTeamStagesErrors[keyof ResetCrmTeamStagesErrors];
+
+export type ResetCrmTeamStagesResponses = {
+    204: void;
+};
+
+export type ResetCrmTeamStagesResponse = ResetCrmTeamStagesResponses[keyof ResetCrmTeamStagesResponses];
+
+export type PutCrmTeamStagesData = {
+    body: ReplaceCrmStagesRequest;
+    path?: never;
+    query?: never;
+    url: '/crm/stages';
+};
+
+export type PutCrmTeamStagesErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PutCrmTeamStagesError = PutCrmTeamStagesErrors[keyof PutCrmTeamStagesErrors];
+
+export type PutCrmTeamStagesResponses = {
+    200: CrmStagesResponse;
+};
+
+export type PutCrmTeamStagesResponse = PutCrmTeamStagesResponses[keyof PutCrmTeamStagesResponses];
 
 export type GetUserDocumentsHandlerData = {
     body?: never;

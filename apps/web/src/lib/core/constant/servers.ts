@@ -34,7 +34,7 @@ const serverHostRemote = {
   'pdf-service': `https://pdf-service${devServerSuffix}.macro.com`,
   'document-storage-service': `${gatewayHost}/dss`,
   'websocket-service': `wss://services${devServerSuffix}.macro.com`,
-  'cognition-service': `https://document-cognition${devServerSuffix}.macro.com`,
+  'cognition-service': `${gatewayHost}/cognition`,
   'connection-gateway': `${gatewayHost.replace(/^http/, 'ws')}/connection-gateway`,
   'notification-service': `${gatewayHost}/notification`,
   'static-file': `https://static-file-service${devServerSuffix}.macro.com`,

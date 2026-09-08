@@ -536,7 +536,7 @@ export function InboxList() {
                               <div role="gridcell">
                                 <InboxListEntity
                                   class="mx-0 w-full border-b border-edge touch:border-b-0"
-                                  cardClass="rounded-none px-4 py-3"
+                                  cardClass="rounded-none px-4 py-3 mobile:pl-(--soup-row-padding-l)"
                                   entity={entityRow().entity}
                                   occurrenceKey={entityRow().id}
                                   checked={list.selection.isSelected(

@@ -5384,6 +5384,10 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
+	The authenticated user's favorites in manual order.
+	"""
+	favorites: [GraphqlFavorite!]!
+	"""
 	A page of the authenticated user's own activity, newest first.
 	Delegated actions performed on the user's behalf are included.
 	"""
