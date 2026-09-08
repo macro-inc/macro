@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT sp.\"linkShare\" AS link_share, sp.\"linkShareAccessLevel\" AS \"level: AccessLevel\" FROM \"SharePermission\" sp JOIN \"EmailThreadPermission\" tp ON tp.\"sharePermissionId\" = sp.id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_share",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "level: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "60ef898de2bf1bbb469f35148f6d340e12f776b10517e2e36fbb6c2b5caf9904"
+}

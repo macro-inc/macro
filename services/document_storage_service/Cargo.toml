@@ -93,6 +93,7 @@ entity_access = { path = "../../crates/entity_access", features = [
   "inbound",
   "schema",
 ] }
+entity_access_db_utils = { path = "../../crates/entity_access_db_utils" }
 entity_access_management = { path = "../../crates/entity_access_management" }
 entity_mutation = { path = "../../crates/entity_mutation" }
 favorites = { path = "../../crates/favorites", features = [
@@ -187,6 +188,7 @@ search_service = { path = "../../crates/search_service" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
 soup = { path = "../../crates/soup", features = [
   "axum",
   "inbound",

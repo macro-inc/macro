@@ -1,13 +1,14 @@
 //! Small SQL helpers for `SharePermission` and `ChannelSharePermission` rows.
 
 use anyhow::Context;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{LinkShare, TeamLinkShareDefault};
 use sqlx::{Executor, PgPool, Postgres};
 
 #[cfg(test)]
 mod test;
+
+pub mod team_share;
 
 /// Look up the link-share preference of the user's team.
 ///
@@ -163,82 +164,10 @@ where
 ///
 /// Threads are synced email, not user-created items, so the team default
 /// link-share preference intentionally does not apply: link sharing is always
-/// off initially (the insert below writes NULL link-share columns).
+/// off initially. Delegates to the guarded transaction-aware implementation.
 pub async fn ensure_thread_share_permission(pool: &PgPool, thread_id: &str) -> anyhow::Result<()> {
-    let existing_share_permission_id = sqlx::query_scalar!(
-        r#"
-        SELECT "sharePermissionId" as "share_permission_id!"
-        FROM "EmailThreadPermission"
-        WHERE "threadId" = $1
-        "#,
-        thread_id,
-    )
-    .fetch_optional(pool)
-    .await
-    .context("failed to get email thread permission")?;
-
-    if existing_share_permission_id.is_some() {
-        return Ok(());
-    }
-
-    let thread_uuid = macro_uuid::string_to_uuid(thread_id).context("invalid thread id")?;
-    let owner_id = sqlx::query_scalar!(
-        r#"
-        SELECT l.macro_id as "macro_id!"
-        FROM email_threads t
-        JOIN email_links l ON t.link_id = l.id
-        WHERE t.id = $1
-        "#,
-        thread_uuid,
-    )
-    .fetch_optional(pool)
-    .await
-    .with_context(|| format!("failed to fetch macro_id for thread ID {thread_id}"))?
-    .context("thread not found")?;
-    let owner_id = MacroUserIdStr::parse_from_str(&owner_id)
-        .context("invalid thread owner macro user id")?
-        .into_owned();
-
     let mut transaction = pool.begin().await.context("failed to start transaction")?;
-    let share_permission_id = sqlx::query_scalar!(
-        r#"
-        INSERT INTO "SharePermission" (
-            "linkShare",
-            "linkShareAccessLevel",
-            "createdAt",
-            "updatedAt"
-        )
-        VALUES (NULL, NULL, NOW(), NOW())
-        RETURNING id as "id!"
-        "#,
-    )
-    .fetch_one(transaction.as_mut())
-    .await
-    .context("failed to create thread share permission")?;
-
-    sqlx::query!(
-        r#"
-        INSERT INTO "EmailThreadPermission" ("threadId", "sharePermissionId", "userId")
-        VALUES ($1, $2, $3)
-        "#,
-        thread_id,
-        share_permission_id,
-        owner_id.as_ref(),
-    )
-    .execute(transaction.as_mut())
-    .await
-    .context("failed to create email thread permission")?;
-
-    entity_access_db_utils::insert_entity_access_row(
-        &mut transaction,
-        &thread_uuid,
-        entity_access_db_utils::EntityType::EmailThread,
-        owner_id.as_ref(),
-        entity_access_db_utils::EntityAccessSourceType::User,
-        AccessLevel::Owner,
-    )
-    .await
-    .context("failed to insert owner entity access row for thread")?;
+    team_share::ensure_thread_share_permission_in_transaction(&mut transaction, thread_id).await?;
 
     transaction
         .commit()

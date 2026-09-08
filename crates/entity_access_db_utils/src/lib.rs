@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod test;
 
+pub mod team_share;
+
 use macro_user_id::user_id::MacroUserIdStr;
 pub use model_entity::EntityType;
 pub use models_entity_access_management::EntityAccessSourceType;

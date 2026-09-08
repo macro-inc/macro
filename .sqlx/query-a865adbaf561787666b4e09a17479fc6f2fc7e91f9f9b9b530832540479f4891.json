@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"SharePermission\" SET team_share_revision = $1 WHERE id = 'document'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a865adbaf561787666b4e09a17479fc6f2fc7e91f9f9b9b530832540479f4891"
+}

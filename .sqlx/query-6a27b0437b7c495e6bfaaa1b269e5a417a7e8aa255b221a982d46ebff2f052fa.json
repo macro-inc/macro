@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM team_user",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "6a27b0437b7c495e6bfaaa1b269e5a417a7e8aa255b221a982d46ebff2f052fa"
+}

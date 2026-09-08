@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"EmailThreadPermission\" (\"threadId\", \"sharePermissionId\", \"userId\") VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4442d02231238afe1d89ba0af7fe03a000ad612945c053448b78f142bda30d50"
+}

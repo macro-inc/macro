@@ -36,6 +36,7 @@ non_empty = { path = "../non_empty" }
 rand = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+share_permission_db_utils = { path = "../share_permission_db_utils" }
 sqlx = { workspace = true }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }

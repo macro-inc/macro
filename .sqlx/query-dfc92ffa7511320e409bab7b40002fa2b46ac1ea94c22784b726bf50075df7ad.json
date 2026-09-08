@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE entity_access SET access_level = 'owner' WHERE entity_type = 'email_thread'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "dfc92ffa7511320e409bab7b40002fa2b46ac1ea94c22784b726bf50075df7ad"
+}

@@ -36,7 +36,12 @@ axum = [
 gmail_token = ["dep:authentication_service_client", "dep:redis", "ports"]
 http_client = ["dep:reqwest", "ports"]
 inbound = ["ports"]
-outbound = ["dep:sqlx", "ports"]
+outbound = [
+  "dep:entity_access_db_utils",
+  "dep:share_permission_db_utils",
+  "dep:sqlx",
+  "ports",
+]
 ports = ["crm/ports", "dep:tokio", "frecency/ports"]
 
 [dependencies]
@@ -47,6 +52,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true, optional = true }
 base64 = { workspace = true }
 entity_access = { path = "../entity_access" }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 entity_access_management = { path = "../entity_access_management", default-features = false, features = [
   "ports",
 ] }
@@ -82,6 +88,7 @@ serde_json = { workspace = true }
 serde_with = { workspace = true }
 authentication_service_client = { path = "../authentication_service_client", optional = true }
 redis = { workspace = true, features = ["tokio-rustls-comp"], optional = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }

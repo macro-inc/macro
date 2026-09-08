@@ -39,7 +39,9 @@ inbound = ["axum", "ports"]
 outbound = [
   "dep:analytics_client",
   "dep:contacts",
+  "dep:entity_access_db_utils",
   "dep:models_email",
+  "dep:share_permission_db_utils",
   "dep:sqlx",
   "dep:sqs_client",
   "dep:url",
@@ -104,7 +106,9 @@ notification = { path = "../notification", optional = true, default-features = f
 
 # Outbound dependencies
 analytics_client = { path = "../analytics_client", optional = true }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 models_email = { path = "../models_email", optional = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "email",

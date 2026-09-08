@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE \"SharePermission\" SET team_share_access_level = 'comment', team_share_team_id = $1 WHERE id = 'document'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e4991d21207d5c1fb4dd39b5114659cc10cdef07ba81f2e291691fd23a64a716"
+}
