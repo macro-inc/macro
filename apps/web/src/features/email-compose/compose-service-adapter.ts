@@ -88,6 +88,8 @@ export function createEmailComposeServices(): EmailComposeServices {
       icon: ArrowCounterClockwise,
     })),
   });
+  const reportError = (error: unknown) =>
+    Telemetry.error(error instanceof Error ? error : new Error(String(error)));
   return {
     viewerLoading: user.isLoading,
     prepareSignatureLinks: interceptMailtoLinks,
@@ -99,16 +101,14 @@ export function createEmailComposeServices(): EmailComposeServices {
       alert: (message, options) => toast.alert(message, notice(options)),
       dismiss: toast.dismiss,
     },
-    reportError: (error) =>
-      Telemetry.error(
-        error instanceof Error ? error : new Error(String(error))
-      ),
+    reportError,
     isTouch: isTouchDevice,
     isMobile,
     scheduleEnabled: ENABLE_EMAIL_SCHEDULED_SEND,
     recipientName: (id) => getDisplayName(tryMacroId(id)),
-    recordMention: (sourceId, targetId) =>
-      trackMention(sourceId, 'document', targetId),
+    recordMention: (sourceId, targetId) => {
+      void trackMention(sourceId, 'document', targetId).catch(reportError);
+    },
     makePublic: makeAttachmentPublic,
     uploadEditorFiles(input) {
       if (!input.editor) return;
@@ -141,12 +141,18 @@ export function createEmailComposeServices(): EmailComposeServices {
         linkId: headerId(input.linkId),
         skipSoupRefetch: completingThread,
       });
-      const threadId = result.draft.thread_db_id;
-      if (threadId) markThreadDraftSaved(threadId);
-      if (previousThreadId && previousThreadId !== threadId) {
-        markThreadDraftSaved(previousThreadId);
-        invalidateSoupEntity(previousThreadId);
-        void refetchSoupEntity(previousThreadId, 'emailThread');
+      try {
+        const threadId = result.draft.thread_db_id;
+        if (threadId) markThreadDraftSaved(threadId);
+        if (previousThreadId && previousThreadId !== threadId) {
+          markThreadDraftSaved(previousThreadId);
+          invalidateSoupEntity(previousThreadId);
+          void refetchSoupEntity(previousThreadId, 'emailThread').catch(
+            reportError
+          );
+        }
+      } catch (error) {
+        reportError(error);
       }
       return result;
     },
@@ -156,7 +162,11 @@ export function createEmailComposeServices(): EmailComposeServices {
         linkId: headerId(input.linkId),
         skipSoupRefetch: completingThread,
       });
-      if (input.threadId) markThreadDraftSaved(input.threadId);
+      try {
+        if (input.threadId) markThreadDraftSaved(input.threadId);
+      } catch (error) {
+        reportError(error);
+      }
     },
     async sendMessage({ completingThread, ...input }) {
       const result = await send.mutateAsync({
@@ -164,8 +174,12 @@ export function createEmailComposeServices(): EmailComposeServices {
         linkId: headerId(input.linkId),
         skipSoupRefetch: completingThread,
       });
-      if (result.message.thread_db_id)
-        markThreadDraftSaved(result.message.thread_db_id);
+      try {
+        if (result.message.thread_db_id)
+          markThreadDraftSaved(result.message.thread_db_id);
+      } catch (error) {
+        reportError(error);
+      }
       return result;
     },
     uploadAttachments: (input) =>
@@ -184,7 +198,11 @@ export function createEmailComposeServices(): EmailComposeServices {
         ...input,
         linkId: headerId(input.linkId),
       });
-      invalidateSoupEntity(input.draftID);
+      try {
+        invalidateSoupEntity(input.draftID);
+      } catch (error) {
+        reportError(error);
+      }
     },
     schedule: async (input, linkId) => {
       await scheduleEmailMessage(input, headerId(linkId));

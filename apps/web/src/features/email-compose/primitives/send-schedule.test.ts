@@ -16,7 +16,7 @@ import { decodeBase64Utf8 } from '../core/decode-base64';
 import { composeServices } from '../tests/services';
 import { createEmailComposer } from './email-composer';
 import { createEmailFormState } from './email-form-state';
-import { createReplyInput } from './reply-input';
+import { createReplyInput, type ReplyInputProps } from './reply-input';
 
 function emailEditor() {
   const editor = createEditor({
@@ -40,7 +40,8 @@ function emailEditor() {
 
 function replyComposer(
   services: EmailComposeServices,
-  replyingTo = () => message('parent')
+  replyingTo = () => message('parent'),
+  callbacks: Pick<ReplyInputProps, 'sideEffectOnSend' | 'onMarkDone'> = {}
 ) {
   return createRoot((dispose) => {
     const { editor, edit } = emailEditor();
@@ -52,6 +53,7 @@ function replyComposer(
     );
     const state = createReplyInput(
       {
+        ...callbacks,
         services,
         sourceEntityId: 'thread',
         replyingTo,
@@ -115,6 +117,140 @@ function composer(
 }
 
 describe('send and schedule ordering', () => {
+  it('undoes mark-done while the post-send refresh is still pending', async () => {
+    const services = composeServices();
+    let finish!: () => void;
+    const refresh = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const undo = vi.fn(async () => {});
+    const onMarkDone = vi.fn((options) =>
+      options.onUndoHandle({ id: 'done', undo, dispose() {} })
+    );
+    vi.mocked(services.undoSend).mockImplementation(async ({ onUndone }) => {
+      await onUndone();
+    });
+    const state = replyComposer(services, undefined, {
+      sideEffectOnSend: () => refresh,
+      onMarkDone,
+    });
+    try {
+      const send = state.sendEmail(true);
+      await vi.advanceTimersByTimeAsync(0);
+      const sentNotice = vi
+        .mocked(services.feedback.success)
+        .mock.calls.find(([text]) => text === 'Email sent');
+      expect(onMarkDone).toHaveBeenCalledOnce();
+      sentNotice?.[1]?.actions?.[0].onClick();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(undo).toHaveBeenCalledOnce();
+      expect(state.isSending()).toBe(false);
+      state.edit('Restored reply edited before refresh');
+      await vi.advanceTimersByTimeAsync(600);
+      expect(
+        decodeBase64Utf8(
+          vi.mocked(services.saveDraft).mock.lastCall?.[0].draft.body_html ?? ''
+        )
+      ).toContain('Restored reply edited before refresh');
+      finish();
+      await send;
+      expect(onMarkDone).toHaveBeenCalledOnce();
+    } finally {
+      finish();
+      state.dispose();
+    }
+  });
+
+  it('does not add a scheduling notice after persistence already failed', async () => {
+    const services = composeServices();
+    const failure = new Error('Draft save failed');
+    vi.mocked(services.saveDraft).mockImplementationOnce(async () => {
+      services.feedback.failure('Failed to save draft');
+      throw failure;
+    });
+    const state = replyComposer(services);
+    try {
+      await state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
+      expect(services.schedule).not.toHaveBeenCalled();
+      expect(services.feedback.failure).toHaveBeenCalledExactlyOnceWith(
+        'Failed to save draft'
+      );
+      expect(services.reportError).toHaveBeenCalledWith(failure);
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('does not overwrite a newly edited reply when an older unmounted send fails', async () => {
+    const services = composeServices();
+    let reject!: (error: Error) => void;
+    vi.mocked(services.sendMessage).mockReturnValueOnce(
+      new Promise((_, fail) => {
+        reject = fail;
+      })
+    );
+    const first = replyComposer(services);
+    first.edit('Older reply');
+    const send = first.sendEmail();
+    await vi.advanceTimersByTimeAsync(0);
+    first.dispose();
+    const newer = replyComposer(services);
+    try {
+      newer.form().setSubject('New subject');
+      newer.edit('Newer reply');
+      reject(new Error('Offline'));
+      await send;
+      expect(newer.form().subject()).toBe('New subject');
+      expect(decodeBase64Utf8(newer.collectDraft()?.body_html ?? '')).toContain(
+        'Newer reply'
+      );
+    } finally {
+      newer.dispose();
+    }
+  });
+  it('completes reply mark-done when the post-send refresh fails', async () => {
+    const services = composeServices();
+    const failure = new Error('Refresh failed');
+    const onMarkDone = vi.fn();
+    const state = replyComposer(services, undefined, {
+      sideEffectOnSend: async () => {
+        throw failure;
+      },
+      onMarkDone,
+    });
+    try {
+      await state.sendEmail(true);
+      expect(services.sendMessage).toHaveBeenCalledOnce();
+      expect(onMarkDone).toHaveBeenCalledOnce();
+      expect(services.reportError).toHaveBeenCalledWith(failure);
+      expect(services.feedback.failure).not.toHaveBeenCalled();
+      expect(state.isSending()).toBe(false);
+    } finally {
+      state.dispose();
+    }
+  });
+
+  it('restores a failed reply after optimistic reset without marking it done', async () => {
+    const services = composeServices();
+    vi.mocked(services.sendMessage).mockRejectedValueOnce(new Error('Offline'));
+    const onMarkDone = vi.fn();
+    const state = replyComposer(services, undefined, { onMarkDone });
+    try {
+      state.edit('Keep my reply');
+      await state.sendEmail(true);
+      expect(services.feedback.failure).toHaveBeenCalledExactlyOnceWith(
+        'Failed to send email'
+      );
+      expect(onMarkDone).not.toHaveBeenCalled();
+      expect(state.savedDraftId()).toBe('draft');
+      expect(decodeBase64Utf8(state.collectDraft()?.body_html ?? '')).toContain(
+        'Keep my reply'
+      );
+      expect(state.isSending()).toBe(false);
+    } finally {
+      state.dispose();
+    }
+  });
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 

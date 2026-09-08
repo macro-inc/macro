@@ -15,12 +15,12 @@ import type {
 import type {
   EmailComposeHost,
   EmailComposeServices,
+  SavedEmailDraft,
 } from '../context/compose-services';
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import type { EmailRecipient } from '../core/email-recipient';
 import { plainTextToHtml } from '../core/plain-text-to-html';
 import { convertEmailRecipientToContactInfo } from '../core/recipient-conversion';
-import { createComposeOperation } from '../primitives/compose-operation';
 import type {
   ComposeContextValue,
   ComposeValidationError,
@@ -69,8 +69,6 @@ export function createEmailComposer(props: EmailComposeInput) {
   const services = props.services;
   const initialDraftID = props.draft?.db_id ?? props.draftID;
   const hasPaidAccess = services.hasPaidAccess;
-  const saveDraftMutation = createComposeOperation(services.saveDraft);
-  const deleteDraftMutation = createComposeOperation(services.deleteDraft);
 
   const form = createEmailFormState(
     {
@@ -210,7 +208,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     if (!draftToSave) {
       const draftID = currentDraftID();
       if (draftID) {
-        await deleteDraftMutation.run({
+        await services.deleteDraft({
           draftId: draftID,
           threadId: currentThreadID(),
           linkId: saveLinkId,
@@ -221,7 +219,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     }
 
     const previousThreadID = currentThreadID();
-    const draftResponse = await saveDraftMutation.run({
+    const draftResponse = await services.saveDraft({
       draft: {
         ...draftToSave,
         db_id: currentDraftID(),
@@ -245,7 +243,11 @@ export function createEmailComposer(props: EmailComposeInput) {
   // left without the keep-or-delete prompt.
   const [draftDirty, setDraftDirty] = createSignal(false);
 
-  const [submitting, setSubmitting] = createSignal(false);
+  const [sendPhase, setSendPhase] = createSignal<
+    'idle' | 'preparing' | 'sending'
+  >('idle');
+  const submitting = () => sendPhase() !== 'idle';
+  const sending = () => sendPhase() === 'sending';
   const [discarding, setDiscarding] = createSignal(false);
   let completed = false;
   const persistencePaused = () => submitting() || discarding() || completed;
@@ -336,13 +338,11 @@ export function createEmailComposer(props: EmailComposeInput) {
       onUndone: () => restoreAfterUndoSend(draftId, threadId, linkId),
     });
 
-  const sendMutation = createComposeOperation(services.sendMessage, {
-    onSuccess: (data, vars) => {
-      const draftId = data.message.db_id;
-      const threadId = data.message.thread_db_id;
-      // This send opens a fresh undo cycle for the draft id.
-      if (draftId) endUndoSend(draftId);
-      const sendLinkId = vars.linkId;
+  const afterSend = (message: SavedEmailDraft, linkId: string | undefined) => {
+    const draftId = message.db_id;
+    const threadId = message.thread_db_id;
+    if (draftId) endUndoSend(draftId);
+    try {
       const toastId = services.feedback.success('Email sent', {
         actions: draftId
           ? [
@@ -350,21 +350,24 @@ export function createEmailComposer(props: EmailComposeInput) {
                 label: 'Undo',
                 onClick: () => {
                   if (toastId != null) services.feedback.dismiss(toastId);
-                  void undoSend(draftId, threadId ?? undefined, sendLinkId);
+                  void undoSend(draftId, threadId ?? undefined, linkId).catch(
+                    services.reportError
+                  );
                 },
               },
             ]
           : undefined,
         duration: 5_000,
       });
-      if (data.message.thread_db_id) {
-        props.host?.showThread?.(data.message.thread_db_id);
-      }
-    },
-    onError: () => {
-      services.feedback.failure('Failed to send email');
-    },
-  });
+    } catch (error) {
+      services.reportError(error);
+    }
+    try {
+      if (threadId) props.host?.showThread?.(threadId);
+    } catch (error) {
+      services.reportError(error);
+    }
+  };
 
   const onSubmit = async () => {
     if (scheduling() || persistencePaused()) return;
@@ -411,7 +414,7 @@ export function createEmailComposer(props: EmailComposeInput) {
       return;
     }
 
-    setSubmitting(true);
+    setSendPhase('preparing');
     try {
       // Ensure the draft is saved before sending so undo-send always has a
       // draft id to snapshot and restore (the send reuses the draft's db_id).
@@ -460,7 +463,8 @@ export function createEmailComposer(props: EmailComposeInput) {
       const bodyMacro = content();
 
       try {
-        await sendMutation.run({
+        setSendPhase('sending');
+        const result = await services.sendMessage({
           message: {
             to: convertToContactInfoArray(recipients.to),
             cc:
@@ -484,13 +488,15 @@ export function createEmailComposer(props: EmailComposeInput) {
         });
 
         completed = true;
+        afterSend(result.message, currentLink.id);
       } finally {
         cleanupWatermark();
       }
-    } catch {
-      // Send failures are reported by the operation; keep the draft editable.
+    } catch (error) {
+      services.reportError(error);
+      if (!completed) services.feedback.failure('Failed to send email');
     } finally {
-      setSubmitting(false);
+      setSendPhase('idle');
     }
   };
 
@@ -504,7 +510,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     services,
     draftId: currentDraftID,
     saveDraft: executeSaveDraft,
-    threadId: () => saveDraftMutation.result()?.draft.thread_db_id,
+    threadId: currentThreadID,
     linkId: activeLinkId,
     sendTime: form.sendTime,
     setSendTime: (date) => {
@@ -514,8 +520,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     recipientCount: totalRecipientCount,
   });
   const scheduling = schedule.pending;
-  const scheduleBlocked = () =>
-    sendMutation.pending() || discarding() || completed;
+  const scheduleBlocked = () => sending() || discarding() || completed;
   const handleSendTimeChange = (date: Date | null) => {
     if (scheduleBlocked()) return Promise.resolve();
     return schedule.change(date);
@@ -540,7 +545,7 @@ export function createEmailComposer(props: EmailComposeInput) {
       await autosave.settled().catch(() => {});
       const draftId = currentDraftID();
       if (draftId) {
-        await deleteDraftMutation.run({
+        await services.deleteDraft({
           draftId,
           threadId: currentThreadID(),
           linkId: activeLinkId(),

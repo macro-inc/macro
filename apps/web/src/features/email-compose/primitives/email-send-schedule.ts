@@ -3,7 +3,6 @@ import type {
   EmailComposeFeedback,
   EmailDelivery,
 } from '../context/compose-services';
-import { createComposeOperation } from './compose-operation';
 
 type ScheduleServices = Pick<
   EmailDelivery,
@@ -23,12 +22,6 @@ export function createEmailSendSchedule(options: {
 }) {
   const { services } = options;
   const [pending, setPending] = createSignal(false);
-  const unschedule = createComposeOperation(services.unschedule, {
-    onSuccess: () => {
-      services.feedback.success('Email unscheduled');
-    },
-    onError: () => services.feedback.failure('Failed to unschedule email'),
-  });
 
   const change = async (date: Date | null) => {
     if (pending()) return;
@@ -39,34 +32,43 @@ export function createEmailSendSchedule(options: {
       const currentDraft = options.draftId();
       if (!date && previous && currentDraft) {
         try {
-          await unschedule.run({
+          await services.unschedule({
             draftID: currentDraft,
             linkId,
           });
-          options.setSendTime(null);
-        } catch {
-          // The operation reports failure; retain the confirmed send time.
+        } catch (error) {
+          services.reportError(error);
+          services.feedback.failure('Failed to unschedule email');
+          return;
         }
+        options.setSendTime(null);
+        services.feedback.success('Email unscheduled');
         return;
       }
       if (!date) {
         options.setSendTime(null);
         return;
       }
+      // Persistence owns its failure notice; a failed save is not a failed schedule request.
+      let draftID: string | undefined;
       try {
-        // An allocated ID does not mean the latest body and attachments are saved.
-        const draftID = await options.saveDraft();
+        draftID = await options.saveDraft();
+      } catch (error) {
+        services.reportError(error);
+        return;
+      }
+      try {
         if (!draftID) throw new Error('Draft required');
         await services.schedule(
           { draftID, send_time: date.toISOString() },
           linkId
         );
-        options.setSendTime(date);
       } catch (error) {
         services.reportError(error);
         services.feedback.failure('Failed to schedule message');
         return;
       }
+      options.setSendTime(date);
       const threadID = options.threadId();
       if (threadID) {
         try {
@@ -78,6 +80,9 @@ export function createEmailSendSchedule(options: {
           );
         }
       }
+    } catch (error) {
+      // Presentation failures do not change a successful schedule/unschedule.
+      services.reportError(error);
     } finally {
       setPending(false);
     }

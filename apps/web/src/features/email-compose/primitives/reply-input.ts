@@ -6,10 +6,10 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import type {
   EmailComposeServices,
   EmailUndoHandle,
+  SavedEmailDraft,
 } from '../context/compose-services';
 import type { EmailReplySession } from '../context/email-form-dependencies';
 import type { EmailDraft } from '../core/email-draft';
-import { createComposeOperation } from '../primitives/compose-operation';
 import { createAttachmentPersistence } from './attachment-persistence';
 import { createDraftAutosave } from './draft-autosave';
 import { createEmailSendSchedule } from './email-send-schedule';
@@ -99,7 +99,9 @@ export type ReplyInputProps = {
    * undo-send restore. The parent latches the seed key on it so the input
    * stops remounting on later draft versions. */
   onEngaged?: () => void;
-  sideEffectOnSend?: (newMessageId: EmailDraftId | null) => void;
+  sideEffectOnSend?: (
+    newMessageId: EmailDraftId | null
+  ) => void | Promise<void>;
   onMarkDone?: (opts?: {
     silent?: boolean;
     onUndoHandle?: (handle: EmailUndoHandle) => void;
@@ -300,7 +302,7 @@ export function createReplyInput(
 
   // Register a callback so stale undoSend closures from a previous mount can
   // restore state into this (the live) component instance.
-  const unregisterUndo = replyUndo.register(undoKey, (snapshot) => {
+  const restoreMountedReply = (snapshot: UndoReplySnapshot) => {
     const draftId = snapshot.draftId;
     props.onEngaged?.();
     setSavedDraft({ id: draftId, threadId: snapshot.threadId });
@@ -316,8 +318,13 @@ export function createReplyInput(
     form().setReplyAppended(snapshot.replyAppended);
     // Reopen with the quote visible, as it was when the send was undone.
     if (snapshot.replyAppended) setQuoteCollapsed(false);
+  };
+  let mounted = true;
+  const unregisterUndo = replyUndo.register(undoKey, restoreMountedReply);
+  onCleanup(() => {
+    mounted = false;
+    unregisterUndo();
   });
-  onCleanup(unregisterUndo);
 
   const initialHtml = () => restoredSnapshot?.bodyHtml ?? props.preloadedHtml;
   const [editorConnected, setEditorConnected] = createSignal(false);
@@ -397,16 +404,11 @@ export function createReplyInput(
       onUndone: () => restoreAfterUndoSend(draftId, threadId, linkId),
     });
 
-  const sendMutation = createComposeOperation(services.sendMessage, {
-    onSuccess: async ({ message }, vars) => {
-      // Cancel the post-reset save scheduled by sendEmail's resetState() and
-      // re-enable autosave for any future edits in this BaseInput instance
-      // (covers new-message flows where replyingTo never changes).
-      autosave.cancel();
-      const draftId = message.db_id;
-      // This send opens a fresh undo cycle for the draft id.
-      if (draftId) endUndoSend(draftId);
-      const sendLinkId = vars.linkId;
+  const afterSend = (message: SavedEmailDraft, linkId: string | undefined) => {
+    autosave.cancel();
+    const draftId = message.db_id;
+    if (draftId) endUndoSend(draftId);
+    try {
       const toastId = services.feedback.success('Email sent', {
         actions: draftId
           ? [
@@ -417,22 +419,28 @@ export function createReplyInput(
                   void undoSend(
                     draftId,
                     message.thread_db_id ?? undefined,
-                    sendLinkId
-                  );
+                    linkId
+                  ).catch(services.reportError);
                 },
               },
             ]
           : undefined,
         duration: 5_000,
       });
-      pendingMentions.forEach((mention) => {
+    } catch (error) {
+      services.reportError(error);
+    }
+    const mentions = pendingMentions;
+    pendingMentions = [];
+    for (const mention of mentions) {
+      try {
         services.recordMention(sourceEntityId, mention.documentId);
-      });
-      pendingMentions = [];
-      props.sideEffectOnSend?.(message.db_id ?? null);
-      if (shouldMarkDoneOnSuccess()) {
-        // Silent: the "Email sent" toast is already up and the mark-done
-        // toast would replace it.
+      } catch (error) {
+        services.reportError(error);
+      }
+    }
+    if (shouldMarkDoneOnSuccess()) {
+      try {
         props.onMarkDone?.({
           silent: true,
           onUndoHandle: (handle) => {
@@ -440,17 +448,23 @@ export function createReplyInput(
           },
           nextEntityId: pendingMarkDoneNavigationTargetId,
         });
+      } catch (error) {
+        services.reportError(error);
+        services.feedback.failure('Email sent, but unable to mark thread done');
+      } finally {
         pendingMarkDoneNavigationTargetId = undefined;
         setShouldMarkDoneOnSuccess(false);
       }
-    },
-    onError: () => {
-      // Restore autosave so the user can keep editing after a failed send.
-      autosave.cancel();
-      pendingMarkDoneNavigationTargetId = undefined;
-      services.feedback.failure('Failed to send email');
-    },
-  });
+    }
+    try {
+      // Presentation refresh must not keep a successfully sent or undone reply disabled.
+      void Promise.resolve(props.sideEffectOnSend?.(draftId ?? null)).catch(
+        services.reportError
+      );
+    } catch (error) {
+      services.reportError(error);
+    }
+  };
 
   const attachmentPersistence = createAttachmentPersistence({
     services,
@@ -458,12 +472,6 @@ export function createReplyInput(
     draftId: savedDraftId,
     linkId: activeLinkId,
   });
-
-  const addForwardedAttachmentsMutation = createComposeOperation(
-    services.addForwardedAttachments
-  );
-  const saveDraftMutation = createComposeOperation(services.saveDraft);
-  const deleteDraftMutation = createComposeOperation(services.deleteDraft);
 
   createEffect(
     on(
@@ -517,7 +525,11 @@ export function createReplyInput(
     );
   });
 
-  const [submitting, setSubmitting] = createSignal(false);
+  const [sendPhase, setSendPhase] = createSignal<
+    'idle' | 'preparing' | 'sending'
+  >('idle');
+  const submitting = () => sendPhase() !== 'idle';
+  const sending = () => sendPhase() === 'sending';
   let pendingDeletion = false;
 
   function collectDraft() {
@@ -565,7 +577,7 @@ export function createReplyInput(
     if (!draftToSave) {
       const draftId = savedDraftId();
       if (draftId) {
-        await deleteDraftMutation.run({
+        await services.deleteDraft({
           draftId,
           threadId: savedDraftThreadId(),
           linkId,
@@ -591,7 +603,7 @@ export function createReplyInput(
       return;
     }
 
-    const draftResponse = await saveDraftMutation.run({
+    const draftResponse = await services.saveDraft({
       draft: {
         ...draftToSave,
         db_id: savedDraftId(),
@@ -615,7 +627,7 @@ export function createReplyInput(
         .attachments.list()
         .filter((attachment) => attachment.type === 'forwarded');
       if (forwarded.length) {
-        await addForwardedAttachmentsMutation.run({
+        await services.addForwardedAttachments({
           draftID: draftId,
           attachments: forwarded.map((a) => ({
             attachmentID: a.attachmentID,
@@ -631,13 +643,13 @@ export function createReplyInput(
   const autosave = createDraftAutosave({
     capture: captureSave,
     persist: persistDraft,
-    paused: () => submitting() || pendingDeletion || sendMutation.pending(),
+    paused: () => submitting() || pendingDeletion,
   });
   function executeSaveDraft(completingThread = false) {
     return autosave.save(captureSave(completingThread));
   }
   function scheduleDraftSave() {
-    if (submitting() || pendingDeletion || sendMutation.pending()) return;
+    if (submitting() || pendingDeletion) return;
     props.onEngaged?.();
     autosave.schedule();
   }
@@ -646,13 +658,7 @@ export function createReplyInput(
   // without a text edit, so it moves to the new inbox and the choice survives a
   // refresh. Driven by the explicit switch (below) rather than inbox reactivity.
   const persistDraftOnSenderSwitch = (linkId: string) => {
-    if (
-      submitting() ||
-      pendingDeletion ||
-      sendMutation.pending() ||
-      scheduling()
-    )
-      return;
+    if (submitting() || pendingDeletion || scheduling()) return;
     props.onEngaged?.();
     form().setSelectedFromLink(linkId);
     autosave.cancel();
@@ -693,12 +699,7 @@ export function createReplyInput(
 
   const sendEmail = async (markDone = false) => {
     if (scheduling()) return;
-    if (
-      submitting() ||
-      pendingDeletion ||
-      sendMutation.pending() ||
-      attachmentPersistence.uploading()
-    )
+    if (submitting() || pendingDeletion || attachmentPersistence.uploading())
       return;
 
     const to = form().recipients().to.map(convertEmailRecipientToContactInfo);
@@ -765,7 +766,7 @@ export function createReplyInput(
       ? ctx.getMarkDoneNavigationTargetId()
       : undefined;
 
-    setSubmitting(true);
+    setSendPhase('preparing');
     try {
       // Ensure draft is saved before sending so undo-send always has a draft to restore
       autosave.cancel();
@@ -839,7 +840,8 @@ export function createReplyInput(
 
       const currentDraftID = savedDraftId();
 
-      sendMutation.start({
+      setSendPhase('sending');
+      const pendingSend = services.sendMessage({
         message: {
           db_id: currentDraftID,
           bcc,
@@ -861,15 +863,35 @@ export function createReplyInput(
         completingThread: willMarkDone,
       });
 
-      // The pending send owns the editor reset and suppresses its deferred onChange.
-      resetState();
-      clearDraftState();
-
-      cleanupWatermark();
+      // Reset immediately while this task owns completion, including after unmount.
+      try {
+        resetState();
+        clearDraftState();
+      } catch (error) {
+        services.reportError(error);
+      } finally {
+        cleanupWatermark();
+      }
+      let result;
+      try {
+        result = await pendingSend;
+      } catch (error) {
+        autosave.cancel();
+        pendingMarkDoneNavigationTargetId = undefined;
+        setShouldMarkDoneOnSuccess(false);
+        if (mounted && currentDraftID) {
+          const snapshot = replyUndo.peek(currentDraftID);
+          if (snapshot) restoreMountedReply(snapshot);
+        }
+        services.reportError(error);
+        services.feedback.failure('Failed to send email');
+        return;
+      }
+      afterSend(result.message, linkId);
     } catch (error) {
       services.reportError(error);
     } finally {
-      setSubmitting(false);
+      setSendPhase('idle');
     }
   };
 
@@ -886,13 +908,7 @@ export function createReplyInput(
   };
 
   const deleteDraftAndReset = async () => {
-    if (
-      submitting() ||
-      pendingDeletion ||
-      sendMutation.pending() ||
-      scheduling()
-    )
-      return;
+    if (submitting() || pendingDeletion || scheduling()) return;
     // Keep Lexical's deferred reset notification from recreating a discarded draft.
     pendingDeletion = true;
     autosave.cancel();
@@ -900,7 +916,7 @@ export function createReplyInput(
       await autosave.settled().catch(() => {});
       const draftId = savedDraftId();
       if (draftId) {
-        await deleteDraftMutation.run({
+        await services.deleteDraft({
           draftId,
           threadId: savedDraftThreadId(),
           linkId: activeLinkId(),
@@ -990,7 +1006,7 @@ export function createReplyInput(
     },
   });
   const scheduling = schedule.pending;
-  const scheduleBlocked = () => pendingDeletion || sendMutation.pending();
+  const scheduleBlocked = () => pendingDeletion || sending();
   const handleSendTimeChange = (date: Date | null) =>
     scheduleBlocked() ? Promise.resolve() : schedule.change(date);
 
@@ -1005,7 +1021,6 @@ export function createReplyInput(
     submitting() ||
     scheduling() ||
     attachmentPersistence.uploading() ||
-    sendMutation.pending() ||
     !!form().sendTime();
   const scheduleSendDisabled = () =>
     scheduleBlocked() ||
@@ -1072,7 +1087,7 @@ export function createReplyInput(
     savedDraftId,
     initialHtml,
     handleEditorConnect,
-    isSending: () => submitting() || sendMutation.pending(),
+    isSending: submitting,
     isUploading: attachmentPersistence.uploading,
     recipients,
     collectDraft,

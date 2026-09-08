@@ -8,6 +8,7 @@ import {
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
+  EmailComposeHost,
   EmailComposeServices,
   SavedEmailDraft,
 } from '../context/compose-services';
@@ -15,10 +16,14 @@ import { decodeBase64Utf8 } from '../core/decode-base64';
 import { composeServices } from '../tests/services';
 import { createEmailComposer } from './email-composer';
 
-function mount(services: EmailComposeServices) {
+function mount(services: EmailComposeServices, host?: EmailComposeHost) {
   const root = createRoot((dispose) => ({
     dispose,
-    state: createEmailComposer({ services, initialTo: ['maya@example.com'] }),
+    state: createEmailComposer({
+      services,
+      host,
+      initialTo: ['maya@example.com'],
+    }),
   }));
   const editor = createEditor({
     nodes: SupportedNodeTypes,
@@ -176,6 +181,51 @@ it('resumes autosave after a failed send', async () => {
   root.dispose();
   await vi.advanceTimersByTimeAsync(1000);
   expect(services.saveDraft).toHaveBeenCalledTimes(2);
+  expect(services.feedback.failure).toHaveBeenCalledExactlyOnceWith(
+    'Failed to send email'
+  );
+});
+
+it('keeps a successful send completed when navigation fails', async () => {
+  const services = composeServices();
+  const error = new Error('Navigation failed');
+  const root = mount(services, {
+    showThread: () => {
+      throw error;
+    },
+  });
+  root.edit('Send this');
+  root.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(services.reportError).toHaveBeenCalledWith(error);
+  expect(services.feedback.failure).not.toHaveBeenCalled();
+  root.state.context.onSend();
+  root.dispose();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(services.sendMessage).toHaveBeenCalledOnce();
+  expect(services.saveDraft).toHaveBeenCalledOnce();
+});
+
+it('keeps completion independent when two composers share delivery capabilities', async () => {
+  const services = composeServices();
+  const pending = deferred<{ message: SavedEmailDraft }>();
+  vi.mocked(services.sendMessage).mockReturnValueOnce(pending.promise);
+  const first = mount(services);
+  const second = mount(services);
+  first.edit('First');
+  second.edit('Second');
+  first.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(1);
+  second.state.context.onSend();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(services.sendMessage).toHaveBeenCalledTimes(2);
+  expect(first.state.context.isSending()).toBe(true);
+  expect(second.state.context.isSending()).toBe(false);
+  pending.resolve({ message: response.draft });
+  await vi.advanceTimersByTimeAsync(1);
+  expect(first.state.context.isSending()).toBe(false);
+  first.dispose();
+  second.dispose();
 });
 it('waits for an existing attachment upload before flushing newer body edits', async () => {
   const pending = deferred<void>();

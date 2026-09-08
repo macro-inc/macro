@@ -1,6 +1,5 @@
-import type { Accessor } from 'solid-js';
+import { type Accessor, createSignal } from 'solid-js';
 import type { EmailAttachmentStorage } from '../context/compose-services';
-import { createComposeOperation } from './compose-operation';
 import type { DraftFormAttachment } from './email-form-state';
 import type { EmailFormContextValue } from './email-form-types';
 
@@ -24,17 +23,13 @@ export function createAttachmentPersistence(options: {
     'uploadAttachments' | 'removeAttachment' | 'removeForwardedAttachment'
   >;
 }) {
-  const upload = createComposeOperation(options.services.uploadAttachments);
-  const remove = createComposeOperation(options.services.removeAttachment);
-  const removeForwarded = createComposeOperation(
-    options.services.removeForwardedAttachment
-  );
   // An assigned ID only proves that the attachment record exists. Every save
   // must also wait for content uploads started by earlier concurrent saves.
   const inFlight = new Set<Promise<void>>();
+  const [uploading, setUploading] = createSignal(false);
 
   return {
-    uploading: upload.pending,
+    uploading,
     async upload(draftId: string, inbox = { linkId: options.linkId() }) {
       const attachments = options
         .attachments()
@@ -47,7 +42,7 @@ export function createAttachmentPersistence(options: {
         );
       let run: Promise<void> | undefined;
       if (attachments.length) {
-        run = upload.run({
+        run = options.services.uploadAttachments({
           draftID: draftId,
           attachments: attachments.map((attachment) => attachment.file),
           linkId: inbox.linkId,
@@ -61,7 +56,11 @@ export function createAttachmentPersistence(options: {
           () => undefined
         );
         inFlight.add(settled);
-        settled.then(() => inFlight.delete(settled));
+        setUploading(true);
+        void settled.then(() => {
+          inFlight.delete(settled);
+          setUploading(inFlight.size > 0);
+        });
       }
       while (inFlight.size) await Promise.all([...inFlight]);
       // All work has settled; rethrow this save's own upload failure.
@@ -77,11 +76,15 @@ export function createAttachmentPersistence(options: {
       const draftID = options.draftId();
       if (!draftID || !attachment.attachmentID) return;
       const operation =
-        attachment.type === 'forwarded' ? removeForwarded : remove;
-      operation.start({
+        attachment.type === 'forwarded'
+          ? options.services.removeForwardedAttachment
+          : options.services.removeAttachment;
+      void operation({
         draftID,
         attachmentID: attachment.attachmentID,
         linkId: options.linkId(),
+      }).catch(() => {
+        // The attachment query reports removal failures; keep optimistic removal.
       });
     },
   };
