@@ -12982,6 +12982,30 @@
         ],
         "description": "Which Pipedream MCP servers an agent's sessions are handed.\n\nOne value for the whole choice, so a selection can never travel without\nits scope or a scope without its selection. Serialized with a `scope` tag,\nwhich the generated TypeScript sees as a discriminated union."
       },
+      "AgentSessionFilters": {
+        "type": "object",
+        "description": "Filters for agent sessions.",
+        "properties": {
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Agent session ids to filter by. Empty to include all accessible sessions."
+          },
+          "include": {
+            "type": "boolean",
+            "description": "Opt this query into agent sessions at all. Agent sessions are off by\ndefault — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].\nAsking for specific `ids` or `owners` also opts in."
+          },
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Filter by session owner. Examples: ['macro|user1@user.com']. Empty to\ninclude every owner."
+          }
+        }
+      },
       "AgentSessionLifecycleEvent": {
         "oneOf": [
           {
@@ -14052,6 +14076,9 @@
         "type": "object",
         "description": "Wire-format entity filter AST accepted by soup AST endpoints.",
         "properties": {
+          "asf": {
+            "description": "Filters applied to agent sessions (wire key `asf`). Like reminders,\nempty/omitted returns **no** agent sessions: they are opt-in, so the\ncaller must send `inc`, an id, or an owner to get any."
+          },
           "calf": {
             "description": "filters applied to canonical calendar events"
           },
@@ -20145,6 +20172,10 @@
         "type": "object",
         "description": "a bundle of all of the filters for each entity type",
         "properties": {
+          "agent_session_filters": {
+            "$ref": "#/components/schemas/AgentSessionFilters",
+            "description": "the bundled [AgentSessionFilters]"
+          },
           "calendar_event_filters": {
             "$ref": "#/components/schemas/CalendarEventFilters",
             "description": "the bundled [CalendarEventFilters]"
@@ -24922,6 +24953,81 @@
           }
         }
       },
+      "SoupAgentSession_SoupPropertiesField": {
+        "allOf": [
+          {
+            "type": "object",
+            "description": "Property fields that can be flattened into property-bearing Soup items.",
+            "required": ["properties"],
+            "properties": {
+              "properties": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SoupProperty"
+                },
+                "description": "Properties attached to the entity."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "ownerId",
+              "botId",
+              "status",
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "botId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The bot running this session"
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the session was created"
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The agent session uuid"
+              },
+              "name": {
+                "type": "string",
+                "description": "The user-facing name of the session"
+              },
+              "ownerId": {
+                "type": "string",
+                "description": "Who the session belongs to"
+              },
+              "status": {
+                "type": "string",
+                "description": "The session's last known status.\n\n`no_messages` until the first system event arrives, `disconnected` if\nthe connection dropped without a clean close, otherwise the wire name\nof the most recent system event (for example `session/end`)."
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "The channel thread the session was opened from, when any"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "The time the session was last modified"
+              },
+              "viewedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "The time the session was last viewed by the requesting user"
+              }
+            }
+          }
+        ],
+        "description": "An agent session as displayed in Soup.\n\nMirrors [`crate::chat::SoupChat`]: an agent session is the coding-agent\ncounterpart of a chat, so it carries the same identity, ownership, and\nrecency fields plus the session's last known status."
+      },
       "SoupApiItem": {
         "allOf": [
           {
@@ -26136,6 +26242,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["reminder"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Agent session item.",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupAgentSession_SoupPropertiesField",
+                "description": "Agent session item."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agentSession"]
               }
             }
           }
