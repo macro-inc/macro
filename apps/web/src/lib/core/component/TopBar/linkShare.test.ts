@@ -77,6 +77,12 @@ describe('link share copy', () => {
     });
   });
 
+  it('does not imply disabling links removes other access', () => {
+    expect(getLinkShareScopeCopy('NONE').description).toBe(
+      'Link access is disabled. Existing team, people, channel, and inherited access is unchanged.'
+    );
+  });
+
   it('distinguishes team links from explicit team or channel sharing', () => {
     const copy = getLinkShareScopeCopy('TEAM');
 
@@ -89,23 +95,102 @@ describe('link share copy', () => {
 });
 
 describe('getShareStatus', () => {
-  it.each([
-    ['PUBLIC', true, 'Public'],
-    ['TEAM', true, 'Team'],
-    [null, true, 'Shared'],
-    [null, false, 'Just me'],
-  ] as const)(
-    'uses %s with explicit shares %s for the %s status',
-    (linkShare, hasExplicitShares, expectedLabel) => {
-      expect(getShareStatus(linkShare, hasExplicitShares).label).toBe(
-        expectedLabel
-      );
+  it.each(['view', 'comment', 'edit'] as const)(
+    'shows explicit team %s access with link sharing off',
+    (teamShareAccessLevel) => {
+      expect(
+        getShareStatus({
+          linkShare: null,
+          teamShareAccessLevel,
+          hasPeopleOrChannelShares: false,
+        })
+      ).toEqual({
+        label: 'Team',
+        tooltip: "Shared directly with the owner's team.",
+      });
     }
   );
 
-  it('uses link-specific tooltip copy for team links', () => {
-    expect(getShareStatus('TEAM', false).tooltip).toBe(
-      getLinkShareScopeCopy('TEAM').description
-    );
+  it('keeps public link status while acknowledging team and recipient grants', () => {
+    expect(
+      getShareStatus({
+        linkShare: 'PUBLIC',
+        teamShareAccessLevel: 'comment',
+        hasPeopleOrChannelShares: true,
+      })
+    ).toEqual({
+      label: 'Public',
+      tooltip:
+        "Anyone with the link can access this item. Shared directly with the owner's team. Shared with specific people or channels.",
+    });
+  });
+
+  it.each([null, undefined])(
+    'describes a team link without explicit team grants (%s) as link access',
+    (teamShareAccessLevel) => {
+      expect(
+        getShareStatus({
+          linkShare: 'TEAM',
+          teamShareAccessLevel,
+          hasPeopleOrChannelShares: false,
+        })
+      ).toEqual({
+        label: 'Team',
+        tooltip: getLinkShareScopeCopy('TEAM').description,
+      });
+    }
+  );
+
+  it('acknowledges both team-link access and explicit team sharing', () => {
+    const status = getShareStatus({
+      linkShare: 'TEAM',
+      teamShareAccessLevel: 'view',
+      hasPeopleOrChannelShares: false,
+    });
+    expect(status.label).toBe('Team');
+    expect(status.tooltip).toContain('with the link');
+    expect(status.tooltip).toContain("Shared directly with the owner's team.");
+  });
+
+  it.each([null, undefined])(
+    'preserves people/channel status when explicit team access is %s',
+    (teamShareAccessLevel) => {
+      expect(
+        getShareStatus({
+          linkShare: null,
+          teamShareAccessLevel,
+          hasPeopleOrChannelShares: true,
+        })
+      ).toEqual({
+        label: 'Shared',
+        tooltip: 'Shared with specific people or channels.',
+      });
+    }
+  );
+
+  it.each([null, undefined])(
+    'does not treat explicit team %s as proof of privacy',
+    (teamShareAccessLevel) => {
+      expect(
+        getShareStatus({
+          linkShare: null,
+          teamShareAccessLevel,
+          hasPeopleOrChannelShares: false,
+        })
+      ).toEqual({
+        label: 'Link off',
+        tooltip:
+          'Link sharing is off. Access through teams, people, channels, or parent folders may still apply.',
+      });
+    }
+  );
+
+  it('handles absent legacy response fields without claiming privacy', () => {
+    const status = getShareStatus({
+      linkShare: undefined,
+      hasPeopleOrChannelShares: false,
+    });
+    expect(status.label).toBe('Link off');
+    expect(status.tooltip).toContain('may still apply');
   });
 });

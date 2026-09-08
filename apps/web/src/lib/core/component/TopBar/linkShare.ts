@@ -17,7 +17,7 @@ type LinkShareScopeCopy = {
 };
 
 export type ShareStatus = {
-  label: 'Public' | 'Team' | 'Shared' | 'Just me';
+  label: 'Public' | 'Team' | 'Shared' | 'Link off';
   tooltip: string;
 };
 
@@ -26,7 +26,7 @@ const LINK_SHARE_SCOPE_COPY: Record<LinkShareScope, LinkShareScopeCopy> = {
     label: 'None',
     title: 'Link sharing off',
     description:
-      'Only people and channels you explicitly share with can access this item.',
+      'Link access is disabled. Existing team, people, channel, and inherited access is unchanged.',
   },
   PUBLIC: {
     label: 'Public',
@@ -87,33 +87,41 @@ export function getLinkShareScopeCopy(
   return LINK_SHARE_SCOPE_COPY[scope];
 }
 
-export function getShareStatus(
-  linkShare: LinkShare | null | undefined,
-  hasExplicitShares: boolean
-): ShareStatus {
+export function getShareStatus({
+  linkShare,
+  teamShareAccessLevel,
+  hasPeopleOrChannelShares,
+}: {
+  linkShare: LinkShare | null | undefined;
+  teamShareAccessLevel?: AccessLevel | null;
+  hasPeopleOrChannelShares: boolean;
+}): ShareStatus {
+  const hasTeamShare = teamShareAccessLevel != null;
+  const descriptions: string[] = [];
+
+  if (linkShare != null) {
+    descriptions.push(LINK_SHARE_SCOPE_COPY[linkShare].description);
+  }
+  if (hasTeamShare) {
+    descriptions.push("Shared directly with the owner's team.");
+  }
+  if (hasPeopleOrChannelShares) {
+    descriptions.push('Shared with specific people or channels.');
+  }
+
+  let label: ShareStatus['label'] = 'Link off';
   if (linkShare === 'PUBLIC') {
-    return {
-      label: 'Public',
-      tooltip: LINK_SHARE_SCOPE_COPY.PUBLIC.description,
-    };
-  }
-
-  if (linkShare === 'TEAM') {
-    return {
-      label: 'Team',
-      tooltip: LINK_SHARE_SCOPE_COPY.TEAM.description,
-    };
-  }
-
-  if (hasExplicitShares) {
-    return {
-      label: 'Shared',
-      tooltip: 'Shared with specific people or channels.',
-    };
+    label = 'Public';
+  } else if (linkShare === 'TEAM' || hasTeamShare) {
+    label = 'Team';
+  } else if (hasPeopleOrChannelShares) {
+    label = 'Shared';
   }
 
   return {
-    label: 'Just me',
-    tooltip: 'Only you can access this item.',
+    label,
+    tooltip:
+      descriptions.join(' ') ||
+      'Link sharing is off. Access through teams, people, channels, or parent folders may still apply.',
   };
 }
