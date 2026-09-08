@@ -12,6 +12,7 @@ type ChannelActivityTarget = {
   channelId: string;
   source:
     | { type: 'message' }
+    | { type: 'notification'; notificationId: string }
     | {
         type: 'call';
         callId: string;
@@ -32,6 +33,8 @@ export function useChannelRailActivity(
   const [activityTargets, setActivityTargets] = createStore<
     Partial<Record<ChannelsGroup, ChannelActivityTarget>>
   >({});
+  const [acknowledgedNotificationIds, setAcknowledgedNotificationIds] =
+    createStore<Record<string, boolean>>({});
 
   const channelsById = createMemo(
     () => new Map(channels().map((channel) => [channel.id, channel]))
@@ -47,7 +50,9 @@ export function useChannelRailActivity(
       channels: 0,
       direct_messages: 0,
     };
-    const latestChannelIds: Partial<Record<ChannelsGroup, string>> = {};
+    const notificationIdsByChannel = new Map<string, string[]>();
+    const latestTargets: Partial<Record<ChannelsGroup, ChannelActivityTarget>> =
+      {};
     const notifications = [...notificationSource.notifications()].sort((a, b) =>
       compareDateDesc(a.created_at, b.created_at)
     );
@@ -64,16 +69,36 @@ export function useChannelRailActivity(
         notification.entity_id
       );
       unreadChannelIds.add(notification.entity_id);
+      const notificationIds =
+        notificationIdsByChannel.get(notification.entity_id) ?? [];
+      notificationIds.push(notification.id);
+      notificationIdsByChannel.set(notification.entity_id, notificationIds);
 
       const channel = channelsById().get(notification.entity_id);
       if (!channel) continue;
 
       const group = channelGroup(channel);
       if (isFirstUnreadForChannel) unreadCounts[group] += 1;
-      latestChannelIds[group] ??= channel.id;
+      if (
+        !latestTargets[group] &&
+        !acknowledgedNotificationIds[notification.id]
+      ) {
+        latestTargets[group] = {
+          channelId: channel.id,
+          source: {
+            type: 'notification',
+            notificationId: notification.id,
+          },
+        };
+      }
     }
 
-    return { latestChannelIds, unreadChannelIds, unreadCounts };
+    return {
+      latestTargets,
+      notificationIdsByChannel,
+      unreadChannelIds,
+      unreadCounts,
+    };
   });
 
   const recordActivity = (
@@ -162,14 +187,7 @@ export function useChannelRailActivity(
     const recordedTarget = activityTargets[group];
     if (recordedTarget) return recordedTarget;
 
-    const notificationChannelId =
-      notificationActivity().latestChannelIds[group];
-    return notificationChannelId
-      ? {
-          channelId: notificationChannelId,
-          source: { type: 'message' },
-        }
-      : undefined;
+    return notificationActivity().latestTargets[group];
   };
 
   const targetChannelId = (group: ChannelsGroup) => target(group)?.channelId;
@@ -177,7 +195,7 @@ export function useChannelRailActivity(
   const targetLabel = (group: ChannelsGroup) => {
     const source = target(group)?.source;
     if (!source) return;
-    if (source.type === 'message') return 'New activity';
+    if (source.type !== 'call') return 'New activity';
 
     return callStatuses().get(source.callId) === 'incoming'
       ? 'Incoming call'
@@ -186,6 +204,12 @@ export function useChannelRailActivity(
 
   const clearTarget = (group: ChannelsGroup, channelId: string) => {
     if (targetChannelId(group) !== channelId) return;
+
+    for (const notificationId of notificationActivity().notificationIdsByChannel.get(
+      channelId
+    ) ?? []) {
+      setAcknowledgedNotificationIds(notificationId, true);
+    }
 
     if (activityTargets[group]?.channelId === channelId) {
       setActivityTargets(group, undefined);

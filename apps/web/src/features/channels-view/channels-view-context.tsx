@@ -11,6 +11,7 @@ import {
 import { createChannelsViewPersistence } from './persistence';
 import type {
   ChannelsGroup,
+  ChannelsQueryScope,
   ChannelsRailMode,
   ChannelsTab,
   ChannelsViewState,
@@ -24,6 +25,7 @@ type ChannelsViewProviderProps = ContextProviderProps & {
 export type ChannelsViewContext = {
   state: Store<ChannelsViewState>;
   setTab: (tab: ChannelsTab) => void;
+  setMobileTab: (tab: ChannelsQueryScope) => void;
   setSelectedChannelId: (channelId: string | undefined) => void;
   setGroupOpen: (group: ChannelsGroup, open: boolean) => void;
   setAsideWidth: (width: number) => void;
@@ -40,6 +42,9 @@ export const [ChannelsViewProvider, useChannelsView] =
       const [state, setState] = makePersistedState(
         createStore<ChannelsViewState>({
           tab: initial.tab ?? 'browse',
+          mobileTab:
+            initial.mobileTab ??
+            (initial.tab === 'recents' ? 'recents' : 'channels'),
           selectedChannelId: initial.selectedChannelId,
           expandedGroups: {
             channels: initial.expandedGroups?.channels ?? true,
@@ -63,6 +68,7 @@ export const [ChannelsViewProvider, useChannelsView] =
       return {
         state,
         setTab: (tab) => setState('tab', tab),
+        setMobileTab: (tab) => setState('mobileTab', tab),
         setSelectedChannelId: (channelId) =>
           setState('selectedChannelId', channelId),
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),

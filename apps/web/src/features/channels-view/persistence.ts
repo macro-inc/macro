@@ -44,6 +44,9 @@ const channelsExpandedGroupsSchema = z.preprocess(
 const channelsEntryStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
   tab: z.enum(['browse', 'recents']).default('browse'),
+  mobileTab: z
+    .enum(['channels', 'direct_messages', 'recents'])
+    .default('channels'),
   selectedChannelId: z.string().optional(),
   expandedGroups: channelsExpandedGroupsSchema.default({
     channels: true,
@@ -56,6 +59,7 @@ type ChannelsEntryState = z.infer<typeof channelsEntryStateSchemaWithDefaults>;
 const DEFAULT_CHANNELS_ENTRY_STATE = {
   version: 1,
   tab: 'browse',
+  mobileTab: 'channels',
   selectedChannelId: undefined,
   expandedGroups: {
     channels: true,
@@ -85,6 +89,7 @@ function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
   return {
     version: 1,
     tab: state.tab,
+    mobileTab: state.mobileTab,
     ...(state.selectedChannelId === undefined
       ? {}
       : { selectedChannelId: state.selectedChannelId }),
@@ -102,6 +107,7 @@ function restoreChannelsEntryState(
   return {
     ...current,
     tab: restored.tab,
+    mobileTab: restored.mobileTab,
     selectedChannelId: restored.selectedChannelId,
     expandedGroups: restored.expandedGroups,
   };

@@ -8,6 +8,7 @@ export type ChannelsRailMode = 'auto' | 'full' | 'slim';
 
 export type ChannelsViewState = {
   tab: ChannelsTab;
+  mobileTab: ChannelsQueryScope;
   selectedChannelId?: string;
   expandedGroups: Record<ChannelsGroup, boolean>;
   asideWidth: number;

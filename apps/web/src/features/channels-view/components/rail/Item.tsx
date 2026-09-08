@@ -1,5 +1,6 @@
 import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/incoming-calls';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type ChannelEntity, Entity } from '@entity';
 import XIcon from '@phosphor/x.svg';
@@ -67,7 +68,10 @@ export function IncomingCallActions(props: {
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
-              void joinChannelCall(props.channelId);
+              void joinChannelCall(props.channelId).catch((error) => {
+                console.error('Failed to join call', error);
+                toast.failure('Failed to join call');
+              });
             }}
           >
             <PhoneIncomingIcon class="incoming-call-shake size-3" />

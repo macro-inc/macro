@@ -19,7 +19,7 @@ import {
   CHANNELS_NARROW_RAIL_WIDTH,
 } from './constants';
 import { useChannelsQuery } from './queries';
-import type { ChannelsQueryScope, ChannelsViewStateOptions } from './types';
+import type { ChannelsViewStateOptions } from './types';
 
 export type ChannelsViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
@@ -29,10 +29,7 @@ export type ChannelsViewProps = {
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
-  const { state, setAsideWidth, setRailMode } = useChannelsView();
-  const [mobileTab, setMobileTab] = createSignal<ChannelsQueryScope>(
-    state.tab === 'recents' ? 'recents' : 'channels'
-  );
+  const { state, setAsideWidth, setMobileTab, setRailMode } = useChannelsView();
   const [workspace, setWorkspace] = createSignal<HTMLDivElement>();
   const workspaceSize = createElementSize(workspace);
   const breakpoints = createSizeBreakpoints(
@@ -59,7 +56,7 @@ function ChannelsViewRoot() {
         };
 
   const channelsQuery = useChannelsQuery(() =>
-    isTouchDevice() ? mobileTab() : 'recents'
+    isTouchDevice() ? state.mobileTab : 'recents'
   );
   const channels = createMemo(() =>
     (channelsQuery.data?.entities ?? []).filter(isChannelEntity)
@@ -150,7 +147,7 @@ function ChannelsViewRoot() {
                 <ChannelsMobileView
                   channels={channels()}
                   source={channelsQuery}
-                  tab={mobileTab()}
+                  tab={state.mobileTab}
                   onTabChange={setMobileTab}
                 />
               </Suspense>

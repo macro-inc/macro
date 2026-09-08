@@ -49,7 +49,7 @@ export function ChannelsMobileView(props: {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
   const currentUserId = useUserId();
-  const { state, setSelectedChannelId, setTab } = useChannelsView();
+  const { state, setSelectedChannelId } = useChannelsView();
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const [topSpacer, setTopSpacer] = createSignal<HTMLDivElement>();
@@ -70,7 +70,6 @@ export function ChannelsMobileView(props: {
 
   const selectTab = (tab: ChannelsQueryScope) => {
     props.onTabChange(tab);
-    setTab(tab === 'recents' ? 'recents' : 'browse');
     viewport()?.scrollTo({ top: 0 });
   };
 
