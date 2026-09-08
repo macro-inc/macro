@@ -68,7 +68,7 @@ function usePageViewTracking(pageTitle: string) {
   });
 }
 
-const NEW_APP_VIEWS_FLAG_WAIT_MS = 3_000;
+const NEW_APP_VIEWS_FLAG_WAIT_MS = 5_000;
 
 function useNewAppViews(options?: {
   enabledLayout?: () => 'legacy' | 'composable';
