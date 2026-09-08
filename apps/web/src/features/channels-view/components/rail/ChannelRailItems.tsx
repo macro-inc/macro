@@ -9,9 +9,10 @@ import type { MacroId } from '@core/user/macroId';
 import { type ChannelEntity, Entity } from '@entity';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
+import XIcon from '@phosphor/x.svg';
 import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
-import XIcon from '@phosphor/x.svg';
+import { getBotDisplayName } from '@queries/channel/message-sender';
 import { Button, cn, Tooltip } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
 import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
@@ -162,6 +163,7 @@ function UserDisplayName(props: { id: MacroId }) {
 function MessageSenderName(props: { id?: string }) {
   const currentUserId = useUserId();
   const macroId = () => (props.id ? tryMacroId(props.id) : undefined);
+  const botName = () => (props.id ? getBotDisplayName(props.id) : undefined);
   const isCurrentUser = () =>
     props.id?.toLocaleLowerCase() === currentUserId()?.toLocaleLowerCase();
 
@@ -169,10 +171,9 @@ function MessageSenderName(props: { id?: string }) {
     <Switch>
       <Match when={!props.id}>Unknown sender</Match>
       <Match when={isCurrentUser()}>You</Match>
+      <Match when={botName()}>{(name) => name()}</Match>
       <Match when={macroId()}>{(id) => <UserDisplayName id={id()} />}</Match>
-      <Match when={true}>
-        {props.id?.startsWith('bot|') ? 'Bot' : 'Someone'}
-      </Match>
+      <Match when={true}>Someone</Match>
     </Switch>
   );
 }
