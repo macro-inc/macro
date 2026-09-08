@@ -527,6 +527,98 @@ async fn replace_property_options_applies_the_plan_in_one_pass(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../fixtures", scripts("properties"))
 )]
+async fn replace_property_options_strips_every_deleted_id(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool.clone());
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+    let low = PRIORITY_OPTION_LOW.parse::<Uuid>().unwrap();
+    let medium = PRIORITY_OPTION_MEDIUM.parse::<Uuid>().unwrap();
+    let urgent = PRIORITY_OPTION_URGENT.parse::<Uuid>().unwrap();
+
+    repo.upsert_entity_property(
+        "doc_multi_delete",
+        EntityType::Document,
+        property_id,
+        Some(PropertyValue::SelectOption(vec![low, medium, urgent])),
+    )
+    .await?;
+
+    let outcome = repo
+        .replace_property_options(
+            property_id,
+            &PropertyOptionReplacePlan {
+                delete: vec![medium, urgent],
+                ..Default::default()
+            },
+        )
+        .await?;
+
+    let PropertyOptionReplaceOutcome::Replaced(options) = outcome else {
+        panic!("expected Replaced, got {outcome:?}");
+    };
+    assert_eq!(options.len(), 2);
+    assert!(options.iter().all(|o| o.id != medium && o.id != urgent));
+
+    let raw: serde_json::Value = sqlx::query_scalar!(
+        r#"
+        SELECT values as "values!: serde_json::Value"
+        FROM entity_properties
+        WHERE entity_id = $1 AND entity_type = $2 AND property_definition_id = $3
+        "#,
+        "doc_multi_delete",
+        EntityType::Document as EntityType,
+        property_id
+    )
+    .fetch_one(&pool)
+    .await?;
+    let stored: PropertyValue = serde_json::from_value(raw)?;
+    assert_eq!(stored, PropertyValue::SelectOption(vec![low]));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn replace_property_options_rejects_duplicates_within_the_batch(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool.clone());
+    let property_id = PRIORITY_PROPERTY_ID.parse::<Uuid>().unwrap();
+    let before = repo.get_property_options(property_id).await?.len();
+
+    let outcome = repo
+        .replace_property_options(
+            property_id,
+            &PropertyOptionReplacePlan {
+                insert: vec![
+                    PropertyOptionInsert {
+                        value: PropertyOptionValue::String("Blocked".to_string()),
+                        display_order: 4,
+                    },
+                    PropertyOptionInsert {
+                        value: PropertyOptionValue::String("Blocked".to_string()),
+                        display_order: 5,
+                    },
+                ],
+                ..Default::default()
+            },
+        )
+        .await?;
+
+    assert!(matches!(
+        outcome,
+        PropertyOptionReplaceOutcome::DuplicateValue
+    ));
+    assert_eq!(repo.get_property_options(property_id).await?.len(), before);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
 async fn replace_property_options_rolls_back_on_duplicate(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
