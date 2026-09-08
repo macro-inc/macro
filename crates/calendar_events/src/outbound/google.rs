@@ -339,9 +339,11 @@ fn provider_response_error(status: StatusCode, body: &str) -> GoogleProviderErro
     } else if status == StatusCode::UNAUTHORIZED
         || status == StatusCode::REQUEST_TIMEOUT
         // Google returns an undocumented 412 ("Precondition check failed.")
-        // transiently on plain reads. Classifying it — and any unknown 4xx —
-        // as permanent wedged whole accounts on one flaky calendar, so 412 is
-        // retryable rather than terminal.
+        // transiently on plain reads, which as a Permanent classification
+        // wedged whole accounts on one flaky calendar; treat it as retryable.
+        // Other unrecognized 4xx stay Permanent — a genuine client error (400,
+        // 409, …) must not retry forever — and are now contained to the one
+        // calendar by the per-calendar isolation in the backfill loop.
         || status == StatusCode::PRECONDITION_FAILED
         || status == StatusCode::TOO_MANY_REQUESTS
         || status.is_server_error()

@@ -385,6 +385,16 @@ fn undocumented_precondition_failure_is_retryable() {
 }
 
 #[test]
+fn other_unknown_client_errors_stay_permanent() {
+    // Only 412 is the known transient read failure; a genuine client error
+    // must not retry forever, and per-calendar isolation already contains it.
+    let error =
+        provider_response_error(StatusCode::CONFLICT, r#"{"error":{"message":"Conflict"}}"#);
+
+    assert_eq!(error.kind(), GoogleProviderErrorKind::Permanent);
+}
+
+#[test]
 fn provider_error_keeps_google_reason_strings() {
     let error = provider_response_error(
         StatusCode::FORBIDDEN,

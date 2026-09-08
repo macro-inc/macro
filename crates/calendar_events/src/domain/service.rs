@@ -691,6 +691,13 @@ where
             {
                 Ok(batch) => batch,
                 Err(error) => {
+                    // A bad or insufficient grant is account-wide, not
+                    // calendar-local: surface it immediately so the coordinator
+                    // prompts reauthorization rather than marking the account
+                    // ready off the calendars that happened to sync.
+                    if error.kind() == GoogleProviderErrorKind::ReauthRequired {
+                        return Err(rootcause::report!(error).into());
+                    }
                     // Isolate one calendar's provider failure: record it for
                     // the settings badge, leave its sync state untouched so
                     // the next poll retries it, and keep syncing the rest. A
@@ -718,7 +725,14 @@ where
                         calendar_id=%calendar_id,
                         "isolating a failed Google Calendar and continuing the account sync"
                     );
-                    last_isolated_error = Some(error);
+                    // Keep a retryable failure ahead of a permanent one so, if
+                    // every calendar fails, one calendar's permanent error does
+                    // not stop the whole inbox from polling when the others were
+                    // only transient.
+                    last_isolated_error = Some(match last_isolated_error {
+                        Some(previous) if is_retryable_kind(previous.kind()) => previous,
+                        _ => error,
+                    });
                     continue;
                 }
             };
@@ -829,9 +843,11 @@ where
         }
 
         // Fail the run only when every synced calendar errored, so the
-        // coordinator classifies a wholesale outage (e.g. an expired token) for
-        // retry. A partial failure is already isolated per calendar above; the
-        // calendar list fetch failing returned earlier.
+        // coordinator classifies a wholesale outage for retry. The surfaced
+        // error prefers a retryable kind (see the loop) so a mix that includes
+        // a transient failure keeps polling. A partial failure is isolated per
+        // calendar above, a reauthorization signal returned immediately, and
+        // the calendar list fetch failing returned earlier.
         if synced_calendars == 0
             && let Some(error) = last_isolated_error
         {
@@ -848,6 +864,16 @@ where
 
         Ok(())
     }
+}
+
+/// Whether a provider failure kind lets the run keep polling. A wholesale
+/// failure prefers one of these over a permanent error so a single calendar's
+/// permanent error cannot stop the inbox when the rest were only transient.
+fn is_retryable_kind(kind: GoogleProviderErrorKind) -> bool {
+    matches!(
+        kind,
+        GoogleProviderErrorKind::Transient | GoogleProviderErrorKind::SyncTokenExpired
+    )
 }
 
 fn validate_upsert(upsert: &CalendarEventUpsert) -> Result<(), Report> {
