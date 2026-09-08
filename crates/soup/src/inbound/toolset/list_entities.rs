@@ -311,6 +311,9 @@ impl EntityItem {
             SoupItem::Reminder(_) => {
                 unreachable!("ListEntities tool does not surface Reminder rows")
             }
+            SoupItem::AgentSession(_) => {
+                unreachable!("ListEntities tool does not surface AgentSession rows")
+            }
             SoupItem::ForeignEntity(foreign_entity) => EntityItem::ForeignEntity {
                 id: foreign_entity.id,
                 foreign_entity_id: foreign_entity.foreign_entity_id,
@@ -360,7 +363,8 @@ fn any_item_has_tags(items: &[EnrichedSoupItem]) -> bool {
             | SoupItem::ChannelThread(_)
             | SoupItem::Call(_)
             | SoupItem::ForeignEntity(_)
-            | SoupItem::Reminder(_) => return false,
+            | SoupItem::Reminder(_)
+            | SoupItem::AgentSession(_) => return false,
         };
         properties
             .iter()
@@ -563,6 +567,8 @@ impl ListEntities {
             // Reminders are opt-in in Soup, so leaving this unset is already
             // what keeps them out of the tool surface — no force-filter needed.
             reminder_filter: None,
+            // Agent sessions are opt-in too; unset keeps them off the tool surface.
+            agent_session_filter: None,
             properties_filter,
         };
 
@@ -637,6 +643,7 @@ impl ListEntities {
             },
             // Same as CrmCompany — no ItemType::Reminder to toggle against.
             reminder_filter: ast.reminder_filter,
+            agent_session_filter: ast.agent_session_filter,
             properties_filter: ast.properties_filter,
         }
     }
