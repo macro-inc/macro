@@ -1,9 +1,9 @@
 use super::LexicalClient;
 use crate::types::{CognitionResponseData, CognitionV2ResponseData};
 
+use crate::types::MarkdownParseResult;
 use agent_fold::domain::model::MessageId;
 use anyhow::{Context, Result};
-use models_search::document::MarkdownParseResult;
 use serde::de::DeserializeOwned;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

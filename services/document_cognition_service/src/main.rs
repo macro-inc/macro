@@ -1,6 +1,5 @@
 #![recursion_limit = "256"]
 use crate::api::context::ApiContext;
-use ai_tools::markdown_email_renderer::LexicalMarkdownEmailRenderer;
 use ai_tools::{NoOpCallRtcClient, NoOpConnectionService, NoOpNotificationIngress};
 use anyhow::Context;
 use call::domain::service::{CallRecordQueryServiceImpl, CallServiceImpl};
@@ -399,7 +398,7 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             db.clone(),
         ))),
-        Arc::new(LexicalMarkdownEmailRenderer::new(lexical_client.clone())),
+        lexical_client.clone(),
     );
 
     tracing::info!("initialized email tool context");

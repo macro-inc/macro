@@ -40,3 +40,18 @@ pub enum NewMdNode {
 pub struct CognitionV2ResponseData {
     pub data: Vec<NewMdNode>,
 }
+
+/// One parsed markdown node from the lexical service's `/cognition` parse.
+///
+/// Lives here rather than in `models_search` so `lexical_client` stays free of
+/// that crate: the chain `models_search -> models_soup -> email` would
+/// otherwise make any dependency on this client circular for `email`.
+#[derive(Debug, serde::Deserialize, serde::Serialize, Clone)]
+pub struct MarkdownParseResult {
+    /// Lexical node id.
+    pub node_id: String,
+    /// Node content.
+    pub content: String,
+    /// Node content before markdown stripping.
+    pub raw_content: String,
+}

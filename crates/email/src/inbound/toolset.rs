@@ -10,7 +10,6 @@ mod update_thread_labels;
 #[cfg(test)]
 mod test;
 
-use crate::domain::ports::MarkdownEmailRenderer;
 use crate::domain::{
     models::Link,
     ports::{EmailService, GmailTokenProvider},
@@ -98,7 +97,7 @@ pub struct EmailToolContext<
     /// The entity access service for verifying thread access.
     pub entity_access_service: Arc<E>,
     /// Renders model-authored markdown into the HTML an email body carries.
-    pub markdown_renderer: Arc<dyn MarkdownEmailRenderer>,
+    pub lexical_client: Arc<lexical_client::LexicalClient>,
 }
 
 impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> Clone
@@ -109,7 +108,7 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> Clone
             service: self.service.clone(),
             token_provider: self.token_provider.clone(),
             entity_access_service: self.entity_access_service.clone(),
-            markdown_renderer: self.markdown_renderer.clone(),
+            lexical_client: self.lexical_client.clone(),
         }
     }
 }
@@ -120,13 +119,13 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> EmailToolCo
         service: Arc<T>,
         token_provider: Arc<G>,
         entity_access_service: Arc<E>,
-        markdown_renderer: Arc<dyn MarkdownEmailRenderer>,
+        lexical_client: Arc<lexical_client::LexicalClient>,
     ) -> Self {
         Self {
             service,
             token_provider,
             entity_access_service,
-            markdown_renderer,
+            lexical_client,
         }
     }
 
@@ -158,12 +157,12 @@ impl<T: EmailService, G: GmailTokenProvider, E: EntityAccessService> EmailToolCo
         }
 
         let rendered = self
-            .markdown_renderer
-            .render(body)
+            .lexical_client
+            .markdown_to_html(body)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("Failed to render the email body: {e}"),
-                internal_error: e.into(),
+                internal_error: e,
             })?;
 
         Ok(ResolvedToolBody {

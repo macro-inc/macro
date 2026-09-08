@@ -5775,6 +5775,7 @@ dependencies = [
  "frecency",
  "futures",
  "item_filters",
+ "lexical_client",
  "lol_html",
  "macro_authorization",
  "macro_db_migrator",
@@ -9162,7 +9163,6 @@ version = "0.1.0"
 dependencies = [
  "agent_fold",
  "anyhow",
- "models_search",
  "reqwest 0.13.4",
  "serde",
  "serde_json",

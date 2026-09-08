@@ -630,27 +630,6 @@ pub trait EmailService: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<EmailFilter>, EmailErr>> + Send;
 }
 
-/// An email body rendered from model-authored Markdown.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderedEmailBody {
-    /// The HTML body, exported the way the draft composer exports it.
-    pub html: String,
-    /// The plain-text alternative.
-    pub text: String,
-}
-
-/// Port for turning the Markdown a model writes into an email body.
-///
-/// The composer does this in the browser by exporting a live Lexical editor;
-/// a host without one needs the same conversion server-side. The
-/// implementation lives outside this crate because the lexical service client
-/// depends on `email` transitively.
-#[async_trait::async_trait]
-pub trait MarkdownEmailRenderer: Send + Sync + 'static {
-    /// Render `markdown` into the HTML and text an email body carries.
-    async fn render(&self, markdown: &str) -> Result<RenderedEmailBody, EmailErr>;
-}
-
 /// Port for fetching a Gmail access token for a given email link.
 ///
 /// The domain service receives the token as an opaque `&str`. This trait

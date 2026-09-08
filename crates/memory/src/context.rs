@@ -21,7 +21,6 @@ use foreign_entity::{
 };
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::outbound::postgres::FrecencyPgStorage;
-use ai_tools::markdown_email_renderer::LexicalMarkdownEmailRenderer;
 use lexical_client::LexicalClient;
 use notification::domain::service::{NotificationReaderService, PlatformArnConfig};
 use notification::outbound::repository::DbNotificationRepository;
@@ -186,9 +185,7 @@ pub async fn build_tool_service_context(
         Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
             pool.clone(),
         ))),
-        Arc::new(LexicalMarkdownEmailRenderer::new(Arc::new(
-            lexical_client.clone(),
-        ))),
+        Arc::new(lexical_client.clone()),
     );
 
     let call_service = call::domain::service::CallServiceImpl::new(
