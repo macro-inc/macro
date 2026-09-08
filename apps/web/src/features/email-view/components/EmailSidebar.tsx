@@ -1,16 +1,16 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import BellSlashIcon from '@phosphor/bell-slash.svg';
+import { AnimatedNoiseIcon } from '@icon/wide-noise';
+import { AnimatedSignalIcon } from '@icon/wide-signal';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
-import NotePencilIcon from '@phosphor/note-pencil.svg';
+import FileIcon from '@phosphor/file.svg';
 import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import TrayIcon from '@phosphor/tray.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import { Button } from '@ui';
-import { For } from 'solid-js';
+import { type Component, For } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import { EMAIL_TAB_IDS, EMAIL_TABS, type EmailTabItem } from '../constants';
@@ -18,12 +18,12 @@ import { useEmailView } from '../email-view-context';
 import type { EmailTab } from '../types';
 import { EmailInboxSelector } from './EmailInboxSelector';
 
-const TAB_ICONS: Record<EmailTab, typeof TrayIcon> = {
-  important: TrayIcon,
-  noise: BellSlashIcon,
+const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
+  important: AnimatedSignalIcon,
+  noise: AnimatedNoiseIcon,
   sent: PaperPlaneTiltIcon,
   calendar: CalendarBlankIcon,
-  drafts: NotePencilIcon,
+  drafts: FileIcon,
   shared: UsersThreeIcon,
   all: EnvelopeIcon,
 };
@@ -39,11 +39,9 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
         props.onNavigate?.();
       }}
     >
-      <Dynamic
-        component={TAB_ICONS[props.item.id]}
-        aria-hidden="true"
-        class="size-4 shrink-0"
-      />
+      <span aria-hidden="true" class="flex size-4 shrink-0 items-center">
+        <Dynamic component={TAB_ICONS[props.item.id]} class="size-4" />
+      </span>
       <span class="truncate">{props.item.label}</span>
     </ViewSidebar.Item>
   );
