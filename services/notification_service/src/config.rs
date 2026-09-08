@@ -1,3 +1,10 @@
+//! Configuration for the notification service, loaded via the standard
+//! `macro_config` pattern so it gets a `doppler_config` validation binary.
+//!
+//! Required env vars are declared here as typed fields. The `doppler_config`
+//! binary loads this `Config` from Doppler for both the dev and prod
+//! environments, surfacing any missing or mistyped values at CI time.
+
 use anyhow::Context;
 use database_env_vars::{DatabaseUrl, RedisUri};
 use macro_auth::InternalApiKey;

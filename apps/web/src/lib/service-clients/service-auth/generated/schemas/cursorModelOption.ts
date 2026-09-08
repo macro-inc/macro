@@ -8,13 +8,17 @@
 /**
  * One model the settings dropdown can offer.
 
-Just id and name: the dropdown lists models, not the hundreds of parameter
-variants each carries. The chosen id's parameters are resolved to Cursor's
-default variant at session start.
+Id, name and family: the dropdown lists models, not the hundreds of
+parameter variants each carries. The chosen id's parameters are resolved to
+Cursor's default variant at session start. The family is the same heading
+the Cursor ACP agent groups its session model select under, so the settings
+picker and the in-session picker read the same way.
  */
 export interface CursorModelOption {
   /** The human-readable name, e.g. `Cursor Grok 4.6`. */
   displayName: string;
+  /** The family heading to list this model under, e.g. `Cursor Grok`. */
+  group: string;
   /** The id to store and send, e.g. `grok-4.6`. */
   id: string;
 }

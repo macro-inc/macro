@@ -27,7 +27,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_DOCUMENT_MENTION_NOTIFICATIONS: true,
-  ENABLE_GRAPHQL_SOUP: () => mocks.graphqlEnabled,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
 
 vi.mock('@macro-inc/collaboration/websocket', () => ({

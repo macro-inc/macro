@@ -11,13 +11,13 @@ import type {
   ThemeV1,
   ThemeV3,
 } from '../types/themeTypes';
+import { normalizeThemeColorTokens } from '../utils/themeColorTokens';
 import {
   convertThemev0v1,
   convertThemev1v2,
   convertThemev2v3,
 } from '../utils/themeMigrations';
 import { isThemeV2, isThemeV3 } from '../utils/themeValidation';
-import { normalizeThemeColorTokens } from '../utils/themeVNext';
 
 export const [isThemeSaved, setIsThemeSaved] = createSignal<boolean>(true);
 

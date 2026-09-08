@@ -9,11 +9,10 @@ import {
   blockNameToMimeTypes,
 } from '@core/constant/allBlocks';
 import {
-  DISABLE_AUTO_UPDATE_UI_FLAG,
-  ENABLE_AUTO_UPDATE_UI_OVERRIDE,
-  ENABLE_NOTIFICATION_SETTINGS_FLAG,
-  ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
+  disableAutoUpdateUi,
   ENABLE_PROFILE_PICTURES,
+  enableAutoUpdateUiOverride,
+  enableNotificationSettings,
 } from '@core/constant/featureFlags';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { useEmail, useUserId } from '@core/context/user';
@@ -316,16 +315,11 @@ export function Account() {
   const email = useEmail();
   const userId = useUserId();
   const logout = useLogout();
-  const disableAutoUpdateUIFlag = useFeatureFlag(DISABLE_AUTO_UPDATE_UI_FLAG);
+  const disableAutoUpdateUIFlag = useFeatureFlag(disableAutoUpdateUi);
   const autoUpdateUIEnabled = createMemo(
-    () => ENABLE_AUTO_UPDATE_UI_OVERRIDE ?? !disableAutoUpdateUIFlag().enabled
+    () => enableAutoUpdateUiOverride ?? !disableAutoUpdateUIFlag().enabled
   );
-  const notificationSettingsFlag = useFeatureFlag(
-    ENABLE_NOTIFICATION_SETTINGS_FLAG,
-    {
-      enabledOverride: ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
-    }
-  );
+  const notificationSettingsFlag = useFeatureFlag(enableNotificationSettings);
   const [showDeleteModal, setShowDeleteModal] = createSignal<boolean>(false);
   const [showDeleteConfirmModal, setShowDeleteConfirmModal] =
     createSignal<boolean>(false);

@@ -29,7 +29,7 @@ import { pressPulse } from '@components/app/mobile/pressPulse';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { UserIcon } from '@core/component/UserIcon';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
-import { ENABLE_MULTI_INBOX_OVERRIDE } from '@core/constant/featureFlags';
+import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useAddInboxFlow } from '@core/email-link';
 import { Accordion } from '@kobalte/core/accordion';
@@ -135,9 +135,7 @@ export const MobileFilterDrawer = (props: {
     selectedIds: inboxFilter,
     setSelectedIds: setInboxFilter,
   });
-  const multiInboxFlag = useFeatureFlag('enable-multi-inbox', {
-    enabledOverride: ENABLE_MULTI_INBOX_OVERRIDE,
-  });
+  const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const addInbox = useAddInboxFlow();
 
   // Mirrors the desktop InboxSelector's visibility rule so the "Connect

@@ -152,7 +152,10 @@ where
     async fn spawn(&self, command: SpawnContainer) -> Result<Self::Transport> {
         match self.route(command.session_id).await? {
             Route::InMem(facts) => Ok(RoutedTransport::InMem(
-                self.inmem().manager.attach(facts).await,
+                self.inmem()
+                    .manager
+                    .attach(facts, Some(command.egress.session_token))
+                    .await,
             )),
             Route::Sandbox => self
                 .sandbox
@@ -182,7 +185,7 @@ where
     async fn resume(&self, session: AgentSessionId) -> Result<Self::Transport> {
         match self.route(session).await? {
             Route::InMem(facts) => Ok(RoutedTransport::InMem(
-                self.inmem().manager.attach(facts).await,
+                self.inmem().manager.attach(facts, None).await,
             )),
             Route::Sandbox => self
                 .sandbox
@@ -192,11 +195,13 @@ where
         }
     }
 
-    /// An in-process session has no container and no egress environment, so
-    /// there is no token to read back; sandboxes delegate to their provider.
+    /// An in-process session has no container environment to read a token
+    /// back from, so the manager remembers the one spawn handed it; a
+    /// session this process never spawned yields none. Sandboxes delegate to
+    /// their provider.
     async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
         match self.route(session).await? {
-            Route::InMem(_) => Ok(None),
+            Route::InMem(_) => Ok(self.inmem().manager.session_token(session)),
             Route::Sandbox => self.sandbox.session_token(session).await,
         }
     }

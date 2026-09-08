@@ -1,5 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { ENABLE_REMINDERS } from '@core/constant/featureFlags';
+import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import { openEntityInSplitFromUnifiedList } from '../utils';
 import type { EntityActionListState } from './entity-action-context';
@@ -14,7 +14,7 @@ import type { EntityActionListState } from './entity-action-context';
  */
 export const makeEditReminderAction = () => {
   const canExecute = (entity: EntityData): boolean =>
-    ENABLE_REMINDERS() && entity.type === 'reminder';
+    isFeatureEnabled(enableReminders) && entity.type === 'reminder';
 
   const execute = (entities: EntityData[]) => {
     const [entity] = entities;

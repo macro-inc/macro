@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::model::DEFAULT_AGENT_SESSION_NAME;
+use crate::domain::model::{AgentMcpServer, DEFAULT_AGENT_SESSION_NAME};
 use crate::domain::ports::AgentSessionRepo;
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent};
@@ -94,6 +94,7 @@ fn new_session(
         workspace: "/workspace".to_string(),
         sandbox_size: SandboxSize::Default,
         instructions: None,
+        mcp_servers: AgentMcpServers::OwnerConnections,
         egress_token_hash: None,
     }
 }
@@ -242,6 +243,54 @@ async fn instructions_round_trip_on_every_read_path(pool: PgPool) {
             .collect::<Vec<_>>(),
         vec![Some(INSTRUCTIONS)]
     );
+}
+
+/// The MCP selection is a snapshot like `instructions`: whatever was chosen at
+/// creation comes back identically on every read path, servers and names
+/// included, and the default is the owner's connections.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn mcp_server_selection_round_trips_on_every_read_path(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let (_channel_id, thread_id, originating_message_id) =
+        insert_originating_thread_fixture(&pool).await;
+    let selection = AgentMcpServers::Selected {
+        servers: vec![
+            AgentMcpServer {
+                app_slug: "linear".to_owned(),
+                server_name: "Linear".to_owned(),
+            },
+            AgentMcpServer {
+                app_slug: "notion".to_owned(),
+                server_name: "Notion".to_owned(),
+            },
+        ],
+    };
+    let params = CreateAgentSessionParams {
+        mcp_servers: selection.clone(),
+        egress_token_hash: Some("mcp-token-hash".to_owned()),
+        ..new_session(bot_id, Some(thread_id), Some(originating_message_id))
+    };
+    let id = params.id;
+
+    let created = create_session(&repo, params).await;
+    assert_eq!(created.mcp_servers, selection);
+    let fetched = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get agent session");
+    assert_eq!(fetched.mcp_servers, selection);
+    let by_token = AgentSessionRepo::find_by_egress_token_hash(&repo, "mcp-token-hash")
+        .await
+        .expect("the token lookup should run")
+        .expect("the token should resolve to the session");
+    assert_eq!(by_token.mcp_servers, selection);
+
+    let default = create_session(&repo, new_session(bot_id, None, None)).await;
+    assert_eq!(default.mcp_servers, AgentMcpServers::OwnerConnections);
+    let fetched = AgentSessionRepo::get(&repo, default.id)
+        .await
+        .expect("get agent session");
+    assert_eq!(fetched.mcp_servers, AgentMcpServers::OwnerConnections);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

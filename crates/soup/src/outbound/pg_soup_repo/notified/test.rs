@@ -25,6 +25,8 @@ const REMINDER_R1: &str = "88888888-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const LINK_1: &str = "55555555-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const TEAM_T: &str = "eeeeeeee-1111-1111-1111-111111111111";
 const CHANNEL_X_INVITE: &str = "0190a000-0000-7000-8000-000000000000";
+const THREAD_M_MENTION: &str = "0190a000-0000-7000-8000-000000000006";
+const PR_F1_EVENT: &str = "0190a000-0000-7000-8000-000000000003";
 
 const EVERYTHING: NotifiedHydratableTypes = NotifiedHydratableTypes {
     channels: true,
@@ -358,6 +360,72 @@ async fn channel_conjuncts_ignore_thread_scoped_notifications(
         notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
     assert!(!keys(&page).contains(&(EntityType::Channel, CHANNEL_X.to_string())));
     assert!(keys(&page).contains(&(EntityType::ChannelMessage, THREAD_M.to_string())));
+    assert_eq!(page.len(), 10);
+
+    Ok(())
+}
+
+/// Channel-thread and foreign-entity trees fold at hydration, but the
+/// notification-state conjuncts they imply pre-filter the candidates over
+/// the rows their folds predicate on: the thread's own notifications (not
+/// its channel's) and the foreign entity's notifications.
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("notified_at")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn thread_and_foreign_entity_conjuncts_prefilter_candidates(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use item_filters::ast::channel::ChannelThreadLiteral;
+
+    sqlx::query("UPDATE user_notification SET done = TRUE WHERE notification_id = ANY($1::uuid[])")
+        .bind(vec![
+            Uuid::parse_str(THREAD_M_MENTION)?,
+            Uuid::parse_str(PR_F1_EVENT)?,
+        ])
+        .execute(&pool)
+        .await?;
+
+    let link_ids = [Uuid::parse_str(LINK_1)?];
+    let sources = sources();
+    let thread = (EntityType::ChannelMessage, THREAD_M.to_string());
+    let pr_f1 = (EntityType::ForeignEntity, PR_F1.to_string());
+    let pr_f3 = (EntityType::ForeignEntity, PR_F3.to_string());
+
+    // Not-done trees drop the done mention and the done pull request; the
+    // channel's live invite does not keep the thread row.
+    let filter = EntityFilterAst {
+        channel_thread_filter: Some(Arc::new(filter_ast::Expr::val(
+            ChannelThreadLiteral::NotificationDone(false),
+        ))),
+        foreign_entity_filter: Some(Arc::new(filter_ast::Expr::val(
+            ForeignEntityLiteral::NotificationDone(false),
+        ))),
+        ..EntityFilterAst::default()
+    };
+    let page =
+        notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
+    assert!(!keys(&page).contains(&thread));
+    assert!(!keys(&page).contains(&pr_f1));
+    assert!(keys(&page).contains(&pr_f3));
+    assert!(keys(&page).contains(&(EntityType::Channel, CHANNEL_X.to_string())));
+    assert_eq!(page.len(), 9);
+
+    // Done trees keep them and drop the live pull request instead.
+    let filter = EntityFilterAst {
+        channel_thread_filter: Some(Arc::new(filter_ast::Expr::val(
+            ChannelThreadLiteral::NotificationDone(true),
+        ))),
+        foreign_entity_filter: Some(Arc::new(filter_ast::Expr::val(
+            ForeignEntityLiteral::NotificationDone(true),
+        ))),
+        ..EntityFilterAst::default()
+    };
+    let page =
+        notified_soup_page(&pool, req(Some(&filter), &link_ids, &sources, EVERYTHING)).await?;
+    assert!(keys(&page).contains(&thread));
+    assert!(keys(&page).contains(&pr_f1));
+    assert!(!keys(&page).contains(&pr_f3));
     assert_eq!(page.len(), 10);
 
     Ok(())

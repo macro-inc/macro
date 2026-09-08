@@ -67,6 +67,9 @@ export const entityKeys = createQueryKeys('entity', {
   documentMetadata: (documentId: string) => ({
     queryKey: [documentId],
   }),
+  documentAccessLevel: (documentId: string) => ({
+    queryKey: [documentId, 'accessLevel'],
+  }),
   projectData: (projectId: string) => ({
     queryKey: [projectId],
   }),

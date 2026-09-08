@@ -3938,12 +3938,16 @@
       },
       "CursorModelOption": {
         "type": "object",
-        "description": "One model the settings dropdown can offer.\n\nJust id and name: the dropdown lists models, not the hundreds of parameter\nvariants each carries. The chosen id's parameters are resolved to Cursor's\ndefault variant at session start.",
-        "required": ["id", "displayName"],
+        "description": "One model the settings dropdown can offer.\n\nId, name and family: the dropdown lists models, not the hundreds of\nparameter variants each carries. The chosen id's parameters are resolved to\nCursor's default variant at session start. The family is the same heading\nthe Cursor ACP agent groups its session model select under, so the settings\npicker and the in-session picker read the same way.",
+        "required": ["id", "displayName", "group"],
         "properties": {
           "displayName": {
             "type": "string",
             "description": "The human-readable name, e.g. `Cursor Grok 4.6`."
+          },
+          "group": {
+            "type": "string",
+            "description": "The family heading to list this model under, e.g. `Cursor Grok`."
           },
           "id": {
             "type": "string",

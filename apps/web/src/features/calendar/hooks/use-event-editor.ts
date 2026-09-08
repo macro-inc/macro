@@ -11,8 +11,11 @@ import {
   type EventEditorDisabledFields,
   type EventEditorSubmitValues,
 } from '../components/composer/event-form-model';
-import type { CalendarEvent } from '../types';
-import { DEFAULT_CALENDAR_SOURCE } from '../types';
+import {
+  type CalendarEvent,
+  DEFAULT_CALENDAR_SOURCE,
+  reminderCalendarIdOf,
+} from '../types';
 import {
   calendarDisplayLabel,
   spansMultipleInboxes,
@@ -25,6 +28,16 @@ import {
 const EDIT_DISABLED_FIELDS = {
   calendar: true,
 } satisfies EventEditorDisabledFields;
+
+/**
+ * Whether the editor addresses the copy whose reminders Macro's alerts
+ * follow and whose guests and conferencing Macro records. Another copy's
+ * reminders are Google's own and never fire here, and guests or a Meet link
+ * written onto another copy never reach the event Macro shows.
+ */
+function editsPrimaryCopy(event: CalendarEvent) {
+  return reminderCalendarIdOf(event) === event.calendarId;
+}
 
 interface UseEventEditorProps {
   event: Accessor<CalendarEvent | undefined>;
@@ -58,15 +71,20 @@ export function useEventEditor(props: UseEventEditorProps) {
     const event = props.event();
     if (event) {
       const calendarId = event.calendarId ?? event.calendar.id;
-      const calendar = calendarsQuery.data?.find(
+      const calendars = calendarsQuery.data ?? [];
+      const calendar = calendars.find(
         (candidate) => candidate.id === calendarId
+      );
+      const reminderCalendar = calendars.find(
+        (candidate) => candidate.id === reminderCalendarIdOf(event)
       );
       return [
         {
           id: calendarId,
           label: event.calendar.name || 'Calendar',
           color: event.calendar.color,
-          defaultReminders: calendar?.defaultReminders,
+          defaultReminders: reminderCalendar?.defaultReminders,
+          isPrimary: calendar?.isPrimary ?? event.calendar.isPrimary,
         },
       ];
     }
@@ -76,6 +94,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       label: calendarDisplayLabel(calendar, spansInboxes()),
       color: calendar.color ?? DEFAULT_CALENDAR_SOURCE.color,
       defaultReminders: calendar.defaultReminders,
+      isPrimary: calendar.isPrimary,
     }));
   });
 
@@ -105,6 +124,7 @@ export function useEventEditor(props: UseEventEditorProps) {
 
       update.mutate({
         eventId: event.eventId,
+        calendarId: event.calendarId,
         patch: {
           title: values.title,
           time: values.time,
@@ -120,6 +140,7 @@ export function useEventEditor(props: UseEventEditorProps) {
             : {}),
           ...(values.conference ? { conference: values.conference } : {}),
           ...(values.reminders ? { reminders: values.reminders } : {}),
+          ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
         },
       });
       return;
@@ -135,6 +156,7 @@ export function useEventEditor(props: UseEventEditorProps) {
       attendees: values.guestEmails.map((email) => ({ email })),
       ...(values.conference ? { conference: values.conference } : {}),
       ...(values.reminders ? { reminders: values.reminders } : {}),
+      ...(values.outOfOffice ? { outOfOffice: values.outOfOffice } : {}),
     });
   };
 
@@ -146,9 +168,12 @@ export function useEventEditor(props: UseEventEditorProps) {
     () => {
       const event = props.event();
       if (!event) return undefined;
+      const editsOtherCopy = !editsPrimaryCopy(event);
       return {
         ...EDIT_DISABLED_FIELDS,
-        guests: !viewerCanEditGuests(event),
+        guests: editsOtherCopy || !viewerCanEditGuests(event),
+        conference: editsOtherCopy,
+        reminders: editsOtherCopy,
       };
     }
   );

@@ -128,7 +128,8 @@ where
             None
         };
 
-        let mut metadata_builder = NewDocumentMetadata::builder(self.document_name.clone());
+        let mut metadata_builder = NewDocumentMetadata::builder(self.document_name.clone())
+            .attribution(service_context.attribution(user_id.clone()));
         if let Some(project_id) = self.project_id {
             metadata_builder = metadata_builder.project_id(project_id);
         }

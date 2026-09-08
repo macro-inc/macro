@@ -72,6 +72,7 @@ import {
   tableTouchSelectionPlugin,
   tagsPlugin,
   textPastePlugin,
+  trailingParagraphPlugin,
   wordcountPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
@@ -136,11 +137,12 @@ import { useUrlParams } from '@core/component/ParamsProvider';
 import { toast } from '@core/component/Toast/Toast';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import {
-  ENABLE_GIT_BLAME,
   ENABLE_MARKDOWN_AI_GENERATE,
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_MARKDOWN_DIFF,
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
+  enableGitBlame,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { IS_MAC } from '@core/constant/isMac';
 import { useUserId } from '@core/context/user';
@@ -170,7 +172,6 @@ import {
   type PeerIdValidator,
   peerIdPlugin,
 } from '@macro-inc/lexical-core';
-import WarningIcon from '@phosphor/warning.svg';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { onElementConnect } from '@solid-primitives/lifecycle';
@@ -201,8 +202,10 @@ import {
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import type { MarkdownRewriteOutput } from '../signal/rewriteSignal';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
+import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
+import { isMarkdownEditorLoading } from './markdownEditorLoadingState';
 
 false && fileFolderDrop;
 
@@ -613,6 +616,7 @@ export function MarkdownEditor(props: {
     .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
+    .use(trailingParagraphPlugin())
     .use(
       checkboxToTaskPlugin({
         currentUserId: userId(),
@@ -954,7 +958,7 @@ export function MarkdownEditor(props: {
   });
 
   const [blameTooltipStore, setBlameTooltipStore] = createBlameTooltipStore();
-  if (ENABLE_GIT_BLAME()) {
+  if (isFeatureEnabled(enableGitBlame)) {
     plugins.use(
       blameTooltipPlugin({ setState: (s) => setBlameTooltipStore(s) })
     );
@@ -972,13 +976,11 @@ export function MarkdownEditor(props: {
 
   return (
     <LexicalWrapperContext.Provider value={lexicalWrapper}>
-      {/* SCUFFED: are these the right transparency values? */}
       <Show when={editorError()}>
         {(error) => (
-          <div class="pointer-events-none text-alert-ink p-2 bg-alert-bg w-full border-alert/30 border mb-2 flex items-center gap-2">
-            <WarningIcon class="size-6 shrink-0" />
+          <EditorSystemMessage variant="warning" class="mb-2">
             {getErrorDescription(error())}
-          </div>
+          </EditorSystemMessage>
         )}
       </Show>
       {/* Note: the mt-1.5 here is to preserve markdown node margin tops. which means this div should avoid padding and border. */}
@@ -1032,7 +1034,7 @@ export function MarkdownEditor(props: {
           editorFocus={editorFocus}
           style={{ height: `${clickTargetHeight()}px` }}
         />
-        <Show when={!editorReady()}>
+        <Show when={isMarkdownEditorLoading(editorReady(), editorError())}>
           <div
             aria-hidden="true"
             class="pointer-events-none absolute inset-x-0 top-0 flex flex-col gap-2.5 pt-1"
@@ -1047,7 +1049,7 @@ export function MarkdownEditor(props: {
             {getBlankMarkdownPlaceholder(canEdit())}
           </div>
         </Show>
-        <Show when={ENABLE_GIT_BLAME()}>
+        <Show when={isFeatureEnabled(enableGitBlame)}>
           <Suspense>
             <BlameTooltip state={blameTooltipStore} documentId={blockId} />
           </Suspense>

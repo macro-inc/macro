@@ -376,3 +376,23 @@ fn a_repeated_git_service_parameter_does_not_escalate() {
         })
     );
 }
+
+#[test]
+fn an_mcp_destination_is_read_off_the_proxy_path() {
+    assert_eq!(
+        McpDestination::from_path("/mcp-macro"),
+        Some(McpDestination::Macro)
+    );
+    assert_eq!(
+        McpDestination::from_path("/mcp/google_sheets"),
+        Some(McpDestination::Connected(
+            McpServerSlug::parse("google_sheets").expect("slug")
+        ))
+    );
+    // A slug outside the charset, a nested path and a stray route all name
+    // nothing, the same as they do at the router.
+    assert_eq!(McpDestination::from_path("/mcp/Not-A-Slug"), None);
+    assert_eq!(McpDestination::from_path("/mcp/a/b"), None);
+    assert_eq!(McpDestination::from_path("/mcp/"), None);
+    assert_eq!(McpDestination::from_path("/git/info/refs"), None);
+}

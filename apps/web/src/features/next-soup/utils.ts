@@ -24,7 +24,8 @@ import type {
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
-  ENABLE_CALENDAR_UI,
+  enableCalendarUi,
+  isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
 import {
@@ -644,7 +645,7 @@ export const openEntityInSplitFromUnifiedList = async (
   // Calendar is a singleton block. Event opens retarget that one instance
   // with a locator range, including repeat clicks on an already-open split.
   if (entity.type === 'calendar_event') {
-    if (!ENABLE_CALENDAR_UI()) return;
+    if (!isFeatureEnabled(enableCalendarUi)) return;
     const params = calendarBlockParamsForEntity(entity);
     const existing = splitManager.getSplitByContent(
       'calendar',

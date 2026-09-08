@@ -18,8 +18,7 @@ use rootcause::prelude::ResultExt as _;
 use serde::de::DeserializeOwned;
 use webhook::domain::models::{WebhookFilter, WebhookScope};
 
-use crate::config::MacroApi;
-use crate::outbound::credentials::{HarnessCredentials, HarnessScope};
+use crate::config::{HarnessCredentials, HarnessScope, MacroApi};
 
 #[cfg(test)]
 mod test;

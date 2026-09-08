@@ -313,6 +313,49 @@ impl EventType {
     }
 }
 
+/// How an out-of-office event responds to conflicting invitations, mirroring
+/// Google's `autoDeclineMode`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum OutOfOfficeAutoDeclineMode {
+    /// Leave conflicting invitations alone. The default, so an out-of-office
+    /// event only blocks time and shows the status until the user asks for
+    /// declines.
+    #[default]
+    DeclineNone,
+    /// Decline every conflicting invitation, existing and new.
+    DeclineAllConflictingInvitations,
+    /// Decline only invitations that arrive after the event is created.
+    DeclineOnlyNewConflictingInvitations,
+}
+
+impl OutOfOfficeAutoDeclineMode {
+    /// The provider representation Google's `autoDeclineMode` field expects.
+    pub fn as_google_str(self) -> &'static str {
+        match self {
+            Self::DeclineNone => "declineNone",
+            Self::DeclineAllConflictingInvitations => "declineAllConflictingInvitations",
+            Self::DeclineOnlyNewConflictingInvitations => "declineOnlyNewConflictingInvitations",
+        }
+    }
+}
+
+/// The extra properties Google requires on an out-of-office event, mirroring
+/// its `outOfOfficeProperties` block. Their presence on a draft or patch is
+/// what marks the mutation as out-of-office.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct OutOfOfficeProperties {
+    /// How conflicting invitations are handled while the user is out.
+    #[serde(default)]
+    pub auto_decline_mode: OutOfOfficeAutoDeclineMode,
+    /// Message returned to organizers whose invitations are auto-declined.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decline_message: Option<String>,
+}
+
 /// The conferencing system backing an event's join URL.
 ///
 /// Macro generates only Google Meet conferences, so this distinguishes one it
@@ -484,7 +527,45 @@ impl EventReminders {
     }
 }
 
+/// The content one provider copy of an event carries.
+///
+/// Google keeps these fields per calendar copy: a shared calendar's copy of a
+/// member's event can have its own title, type, reminders, and access role.
+/// The entity holds its canonical source's values. Every other copy's values
+/// are read from here so a client can show the copy that belongs to the
+/// calendar being viewed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEventSourceContent {
+    /// Calendar this copy lives on.
+    pub calendar_id: Uuid,
+    /// Display title.
+    pub title: String,
+    /// Optional event body.
+    pub description: Option<String>,
+    /// Optional physical or virtual location label.
+    pub location: Option<String>,
+    /// Provider event type.
+    pub event_type: EventType,
+    /// Event visibility.
+    pub visibility: EventVisibility,
+    /// Availability behavior.
+    pub transparency: EventTransparency,
+    /// Whether the calendar's access role prohibits editing this copy.
+    pub is_read_only: bool,
+    /// Reminder configuration of this copy.
+    pub reminders: EventReminders,
+    /// Provider-reported creator email.
+    pub creator_email: Option<String>,
+    /// Provider-reported creator display name.
+    pub creator_name: Option<String>,
+}
+
 /// A stable, first-class Macro calendar event entity.
+///
+/// Content fields hold the canonical source's values: the account's primary
+/// calendar copy when one is synced, else the freshest remaining copy.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -499,6 +580,12 @@ pub struct CalendarEvent {
     /// projections stored before calendars were attributed.
     #[serde(default)]
     pub calendar_id: Option<Uuid>,
+    /// Content of every active copy of this event, canonical first: the
+    /// primary calendar's copy, then the freshest. A client picks the copy
+    /// whose calendar it is showing and falls back to the first. Populated
+    /// only on the read path, so stored projections omit it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub sources: Vec<CalendarEventSourceContent>,
     /// Display title.
     pub title: String,
     /// Optional event body.
@@ -541,7 +628,7 @@ pub struct CalendarEvent {
     pub conference_provider: Option<ConferenceProvider>,
     /// Provider/iCalendar sequence number.
     pub sequence: u32,
-    /// Whether the current user can edit the canonical source.
+    /// Whether the canonical source's calendar prohibits editing it.
     pub is_read_only: bool,
     /// Attendees, keyed by email during persistence.
     pub attendees: Vec<CalendarAttendee>,
@@ -647,6 +734,27 @@ impl CalendarOccurrenceCursor {
             occurrence_key: occurrence.occurrence_key.clone(),
         }
     }
+}
+
+/// One teammate's out-of-office occurrence, read from the projection their
+/// own connected primary calendar synced.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TeamOutOfOffice {
+    /// Macro user who is out of office.
+    pub owner_id: String,
+    /// The teammate's calendar event entity id.
+    pub event_id: Uuid,
+    /// RFC 5545 UID, used to collapse the same event synced through more
+    /// than one of the teammate's connected inboxes.
+    pub ical_uid: String,
+    /// Stable key of this occurrence within the event.
+    pub occurrence_key: String,
+    /// Event title. `None` once visibility policy withholds it.
+    pub title: Option<String>,
+    /// Stored event visibility backing the title policy.
+    pub visibility: EventVisibility,
+    /// Occurrence time span.
+    pub time: EventTime,
 }
 
 /// One mentioned event to resolve for a requester's mention preview.
@@ -900,6 +1008,10 @@ pub struct CalendarEventDraft {
     pub reminders: Option<EventReminders>,
     /// Conference to attach on creation. `None` creates the event without one.
     pub conference: Option<ConferenceChange>,
+    /// Out-of-office properties. `Some` creates the event as a Google
+    /// out-of-office status event (primary calendar only, timed, no
+    /// attendees); `None` creates a regular event.
+    pub out_of_office: Option<OutOfOfficeProperties>,
 }
 
 /// User-supplied changes to an existing provider event. `None` fields are
@@ -926,6 +1038,10 @@ pub struct CalendarEventPatch {
     pub reminders: Option<EventReminders>,
     /// Conference change to apply; `None` leaves the conference untouched.
     pub conference: Option<ConferenceChange>,
+    /// Replacement out-of-office properties, applied only to an event that is
+    /// already out-of-office — the provider event type is immutable. `None`
+    /// leaves them untouched.
+    pub out_of_office: Option<OutOfOfficeProperties>,
 }
 
 impl CalendarEventPatch {
@@ -951,9 +1067,10 @@ pub struct CalendarLinkTokenIdentity {
 pub struct CalendarEventMutationTarget {
     /// Macro entity identifier.
     pub event_id: Uuid,
-    /// Whether the canonical source prohibits mutation.
+    /// Whether the addressed copy's calendar prohibits mutation.
     pub is_read_only: bool,
-    /// Google event identifier of the best-ranked provider source.
+    /// Google event identifier of the addressed provider copy: the one on
+    /// the requested calendar, else the canonical source.
     pub provider_event_id: String,
     /// Recurring master identifier when the stored source is an instance.
     pub provider_recurring_event_id: Option<String>,
@@ -1015,6 +1132,9 @@ pub struct VisibleCalendar {
     pub is_primary: bool,
     /// Whether the grant can create and modify events on this calendar.
     pub is_writable: bool,
+    /// Whether this is one of Google's shared system calendars (holidays,
+    /// birthdays) the account subscribes to rather than one a person maintains.
+    pub is_subscription: bool,
     /// Default reminders applied to events that keep `useDefault`.
     pub default_reminders: Vec<EventReminderOverride>,
 }
@@ -1034,6 +1154,9 @@ pub struct CalendarCreationTarget {
     pub provider_calendar_id: String,
     /// Whether the provider role prohibits event creation.
     pub is_read_only: bool,
+    /// Whether this is its account's primary calendar. Out-of-office events
+    /// can only be created here.
+    pub is_primary: bool,
     /// Grant of the connected inbox this calendar belongs to.
     pub token_identity: CalendarLinkTokenIdentity,
     /// The clicker's owned inboxes. `None` when they own none.

@@ -4,7 +4,7 @@ import type { BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { SUPPORTED_CHAT_ATTACHMENT_BLOCKS } from '@core/component/AI/constant/fileType';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
-import { ENABLE_CRM } from '@core/constant/featureFlags';
+import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
 import { type EntityItem, useQuickAccess } from '@core/context/quickAccess';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
@@ -127,7 +127,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     : undefined;
 
   const customCompanies =
-    ENABLE_CRM() && props.entities
+    isFeatureEnabled(enableCrm) && props.entities
       ? useEntityMentionFromList({
           items: props.entities,
           buckets: ['crm_company'],
@@ -153,7 +153,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   // CRM companies only surface in mentions when the feature is enabled —
   // the mention hook isn't even wired up otherwise.
-  const companyMention = ENABLE_CRM()
+  const companyMention = isFeatureEnabled(enableCrm)
     ? (customCompanies ??
       useEntityMention({
         buckets: ['crm_company'],

@@ -31,6 +31,8 @@ type SessionState = {
   foldedSinks: Set<FoldedMessageSink>;
   metadataSinks: Set<SessionMetadataSink>;
   opening?: Promise<void>;
+  /** Drops realtime frames the fetched log already contained. */
+  overlap?: OverlapFilter;
   ready: boolean;
   references: number;
 };
@@ -127,17 +129,16 @@ async function open(state: SessionState): Promise<void> {
     }
 
     state.bot = result.value.bot;
+    state.overlap = createOverlapFilter(result.value.entries);
     await openSession(state.agentSessionId, result.value.entries);
     machineOpen = true;
 
     // Frames can continue arriving while each worker request is in flight.
     // Drain until an empty check and `ready` assignment can happen together.
-    let fetched = result.value.entries;
     while (state.buffered.length > 0) {
       const buffered = state.buffered;
       state.buffered = [];
-      const replay = dropOverlap(fetched, buffered);
-      fetched = [];
+      const replay = state.overlap(buffered);
       if (replay.length > 0) await push(state, replay);
     }
     state.ready = true;
@@ -172,7 +173,11 @@ export function handleAgentSessionLog(event: AgentSessionLogEvent): void {
     state.buffered.push(entry);
     return;
   }
-  void push(state, [entry]).catch((error: unknown) => {
+  // The gateway can deliver a frame after the HTTP log that already held it
+  // was fetched; folding it again would open a second turn for one prompt.
+  const fresh = state.overlap?.([entry]) ?? [entry];
+  if (fresh.length === 0) return;
+  void push(state, fresh).catch((error: unknown) => {
     console.error('[agent-fold] live frame could not be folded', error);
   });
 }
@@ -195,24 +200,62 @@ async function push(
   for (const sink of state.foldedSinks) sink(messages);
 }
 
+type OverlapFilter = (
+  entries: AgentSessionLogEntryDto[]
+) => AgentSessionLogEntryDto[];
+
+/**
+ * A key under which the same log row compares equal however it travelled.
+ *
+ * The fetched log comes out of a jsonb column, which stores object keys in
+ * its own order; realtime frames are serialized from memory in insertion
+ * order. `JSON.stringify` therefore differs for one and the same entry, so
+ * keys are sorted before comparing.
+ */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, inner: unknown) => {
+    if (!inner || typeof inner !== 'object' || Array.isArray(inner)) {
+      return inner;
+    }
+    return Object.fromEntries(
+      Object.entries(inner as Record<string, unknown>).sort(([a], [b]) =>
+        a < b ? -1 : a > b ? 1 : 0
+      )
+    );
+  });
+}
+
+/**
+ * Build a filter that drops each fetched occurrence once, so realtime frames
+ * that duplicate the snapshot are skipped whenever they arrive, while a
+ * genuinely new frame with the same content later still passes.
+ */
+export function createOverlapFilter(
+  fetched: AgentSessionLogEntryDto[]
+): OverlapFilter {
+  const remaining = new Map<string, number>();
+  for (const entry of fetched) {
+    const key = canonical(entry);
+    remaining.set(key, (remaining.get(key) ?? 0) + 1);
+  }
+
+  return (entries) => {
+    if (remaining.size === 0) return entries;
+    return entries.filter((entry) => {
+      const key = canonical(entry);
+      const count = remaining.get(key);
+      if (!count) return true;
+      if (count === 1) remaining.delete(key);
+      else remaining.set(key, count - 1);
+      return false;
+    });
+  };
+}
+
 /** Return buffered frame occurrences not already present in the snapshot. */
 export function dropOverlap(
   fetched: AgentSessionLogEntryDto[],
   buffered: AgentSessionLogEntryDto[]
 ): AgentSessionLogEntryDto[] {
-  if (buffered.length === 0 || fetched.length === 0) return buffered;
-
-  const fetchedCounts = new Map<string, number>();
-  for (const entry of fetched) {
-    const key = JSON.stringify(entry);
-    fetchedCounts.set(key, (fetchedCounts.get(key) ?? 0) + 1);
-  }
-
-  return buffered.filter((entry) => {
-    const key = JSON.stringify(entry);
-    const remaining = fetchedCounts.get(key) ?? 0;
-    if (remaining === 0) return true;
-    fetchedCounts.set(key, remaining - 1);
-    return false;
-  });
+  return createOverlapFilter(fetched)(buffered);
 }

@@ -2,7 +2,7 @@ import type { ThemeV2, ThemeV2Tokens, ThemeV3 } from '../types/themeTypes';
 import {
   getThemeColorMode,
   legacyThemeToVNextTokens,
-} from '../utils/themeVNext';
+} from '../utils/themeColorTokens';
 
 type LegacyDefaultThemeDefinition<TId extends string> = {
   id: TId;

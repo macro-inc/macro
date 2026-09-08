@@ -16,10 +16,7 @@ import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { type BlockName, useBlockAliasedName, useBlockName } from '@core/block';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  ENABLE_REMINDERS_FLAG,
-  ENABLE_REMINDERS_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableReminders } from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
@@ -445,9 +442,7 @@ export function SplitFileMenu(props: {
   // is a memo, so without a reactive dependency the item would stay missing for
   // the life of this menu if PostHog answered after it was first computed. The
   // other reminder surfaces re-evaluate per interaction and don't need this.
-  const remindersFlag = useFeatureFlag(ENABLE_REMINDERS_FLAG, {
-    enabledOverride: ENABLE_REMINDERS_OVERRIDE,
-  });
+  const remindersFlag = useFeatureFlag(enableReminders);
 
   // Injected here rather than per-block so every block rendering this menu gets
   // it, the way Favorite does. Entity types the reminders API cannot mint an

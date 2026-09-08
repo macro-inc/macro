@@ -60,6 +60,7 @@ model_notifications = { path = "../../crates/model_notifications" }
 notification = { path = "../../crates/notification" }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true }
+tower = { workspace = true }
 
 macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_cors = { path = "../../crates/macro_cors" }

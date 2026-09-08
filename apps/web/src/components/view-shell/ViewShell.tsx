@@ -271,6 +271,27 @@ function Root(props: ViewShellRootProps) {
 function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   const ws = useViewShellInternal();
+  const redistributionPreferredSize = () => {
+    const layout = ws.aside.layout();
+    if (layout.preserveDuringResize !== false) return layout.width;
+
+    const shellWidth = ws.width();
+    const mainLayout = ws.main.layout();
+    if (
+      shellWidth === undefined ||
+      mainLayout.preferredWidth === undefined ||
+      ws.detail.placement() === 'inline'
+    ) {
+      return layout.width;
+    }
+
+    const availableForAside =
+      shellWidth -
+      RESIZE_GUTTER -
+      Math.max(mainLayout.preferredWidth, mainLayout.min);
+
+    return Math.min(layout.width, Math.max(layout.min, availableForAside));
+  };
 
   return (
     <Resize.Panel
@@ -278,6 +299,7 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
       index={0}
       minSize={ws.aside.layout().min}
       maxSize={ws.aside.layout().max}
+      redistributionPreferredSize={redistributionPreferredSize()}
       target={{ kind: 'px', px: ws.aside.layout().width }}
       collapsed={() => ws.aside.isCollapsed()}
     >

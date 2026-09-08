@@ -6,24 +6,36 @@ version = "0.1.0"
 
 [dependencies]
 agent = { path = "../agent" }
+# The egress proxy's domain service, driven in-process: the same verification,
+# resolution and stamping a sandbox reaches over the wire, minus the wire.
+agent_egress = { path = "../agent_egress" }
 agent-client-protocol = { workspace = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 ai_tools = { path = "../ai_tools" }
 ai_toolset = { path = "../ai_toolset" }
 ai_usage = { path = "../ai_usage" }
+bytes = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
+http = { workspace = true }
+http-body-util = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
+mcp_select = { path = "../mcp_select" }
+mcp_toolset = { path = "../mcp_toolset" }
 memory = { path = "../memory" }
 prompt = { path = "../prompt" }
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
+sse-stream = { workspace = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync", "rt", "time", "macros"] }
 tokio-util = { workspace = true }
 tracing = { workspace = true }
+url = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

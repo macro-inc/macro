@@ -1,5 +1,7 @@
 use super::*;
-use crate::domain::model::{Author, PermissionOutcome, ToolDetail, ToolStatus, ToolUseId, TurnId};
+use crate::domain::model::{
+    Author, PermissionOutcome, ToolDetail, ToolName, ToolStatus, ToolUseId, TurnId, UserToolOutcome,
+};
 use non_empty::NonEmpty;
 use serde_json::json;
 
@@ -11,15 +13,13 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
         request_id: None,
         parts: NonEmpty::one(MessagePart::ToolUse {
             id: ToolUseId("tool-1".to_owned()),
-            label: "Bash".to_owned(),
+            name: ToolName::native("Bash"),
             status: ToolStatus::Running,
             detail: ToolDetail::Terminal {
                 command: Some("ls".to_owned()),
                 output: None,
                 exit_code: None,
             },
-            raw_input: Some(Box::new(json!({ "command": "ls" }))),
-            raw_output: None,
         }),
         stop: None,
     };
@@ -35,18 +35,46 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
             "parts": [{
                 "kind": "tool_use",
                 "id": "tool-1",
-                "label": "Bash",
+                "name": { "kind": "native", "name": "Bash" },
                 "status": "running",
                 "detail": {
                     "kind": "terminal",
                     "command": "ls",
                     "output": null,
                     "exitCode": null
-                },
-                "rawInput": { "command": "ls" },
-                "rawOutput": null
+                }
             }],
             "stop": null
+        })
+    );
+
+    assert_eq!(
+        serde_json::to_value(ToolDetail::UserTool {
+            input: json!({ "subject": "Hi" }),
+            outcome: UserToolOutcome::Draft {
+                draft_id: "d1".to_owned(),
+                thread_id: None,
+            },
+        })
+        .unwrap(),
+        json!({
+            "kind": "user_tool",
+            "input": { "subject": "Hi" },
+            "outcome": { "kind": "draft", "draftId": "d1", "threadId": null }
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(ToolDetail::Macro {
+            input: json!({ "documentId": "x" }),
+            output: None,
+            error: None,
+        })
+        .unwrap(),
+        json!({
+            "kind": "macro",
+            "input": { "documentId": "x" },
+            "output": null,
+            "error": null
         })
     );
 

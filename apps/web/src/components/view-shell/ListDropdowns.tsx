@@ -186,7 +186,7 @@ export function ListFilterDropdown<
                   </Dropdown.SubTrigger>
                   <Dropdown.SubContent
                     class={cn(
-                      'max-h-72 min-w-24 max-w-[90vw] overflow-y-auto',
+                      'max-h-72 min-w-24 max-w-[min(16rem,calc(100vw-1rem))] overflow-y-auto',
                       group.contentClass
                     )}
                   >

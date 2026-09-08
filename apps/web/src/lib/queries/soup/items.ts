@@ -1,9 +1,6 @@
 import { filterSoupItemByRequestBody } from '@app/features/next-soup/filters/query-filters';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_GRAPHQL_SOUP_FLAG,
-  ENABLE_GRAPHQL_SOUP_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { throwOnErr } from '@core/util/result';
 import type { EntityData } from '@entity';
 import {
@@ -74,6 +71,8 @@ interface SoupItemsQueryOptions {
     groupBy?: GroupByField;
     groupKey?: string;
     itemFilter?: (item: SoupApiItem) => boolean;
+    /** Gates optimistic cache inserts only — fetched rows never run through it. */
+    insertFilter?: (item: SoupApiItem) => boolean;
   };
   showSupportedForeignEntities?: boolean;
   /** Resets view-owned GraphQL state before a mutation-driven network refresh. */
@@ -346,9 +345,7 @@ export function useSoupAstItemsQuery(
   args: Accessor<SoupAstItemsQueryArgs>,
   options?: Accessor<SoupItemsQueryOptions>
 ): SoupAstItemsQuery {
-  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
 
   const queryEnabled = () => options?.().enabled !== false;
   const graphqlRequested = () => {

@@ -39,6 +39,7 @@ impl AgentRuntimeDirectory for PgAgentRuntimeDirectory {
                 model: agent.default_model,
                 harness: agent.harness,
                 instructions: agent.instructions,
+                mcp_servers: agent.mcp,
             }))
     }
 }

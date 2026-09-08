@@ -19,16 +19,16 @@ export type CreateEntryPersistenceStorageOptions<TState, TStored> = {
  * TODO: Replace the split layout's captor pattern with direct entry-state
  * persistence.
  *
- * Writes update a deferred capture value. The split manager commits that
- * value to the current history entry immediately before navigation.
+ * The split manager reads the latest canonical value and commits its selected
+ * projection to the current history entry immediately before navigation.
  */
 export function createEntryPersistenceStorage<TState, TStored>(
   options: CreateEntryPersistenceStorageOptions<TState, TStored>
 ): PersistenceStorage<TState> {
   let captured: TStored | undefined;
-  const dispose = options.handle.registerEntryStateCaptor(
-    options.key,
-    () => captured
+  let readCurrent: (() => TState) | undefined;
+  const dispose = options.handle.registerEntryStateCaptor(options.key, () =>
+    readCurrent ? options.select(readCurrent()) : captured
   );
   const update = (state: TState) => {
     captured = options.select(state);
@@ -41,7 +41,10 @@ export function createEntryPersistenceStorage<TState, TStored>(
         ? undefined
         : options.restore(current, stored);
     },
-    initialize: update,
+    initialize: (state, read) => {
+      update(state);
+      readCurrent = read;
+    },
     write: update,
     dispose,
   };

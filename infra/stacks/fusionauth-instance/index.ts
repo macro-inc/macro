@@ -12,7 +12,12 @@ import {
 } from 'pulumi-fusionauth';
 import * as pulumi from '@pulumi/pulumi';
 import * as fs from 'fs';
-import { config, stack } from '../../packages/shared';
+import {
+  config,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 
 import 'dotenv/config';
 import {
@@ -292,6 +297,11 @@ const macroApplication = new FusionAuthApplication(
         stack === 'local' || stack === 'dev' ? 'AllowWildcards' : 'ExactMatch',
       authorizedRedirectUrls: [
         `${AUTHENTICATION_SERVICE_DOMAIN}/oauth/redirect`,
+        ...(stack === 'dev' || stack === 'prod'
+          ? [
+              `${getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL)}/oauth/redirect`,
+            ]
+          : []),
         `https://mcp-server${stack === 'prod' ? '' : `-${stack}`}.macro.com/oauth/callback`,
         ...(stack === 'local' || stack === 'dev'
           ? ['http://localhost:8085/*', 'http://localhost:8085/oauth/*']
@@ -468,8 +478,10 @@ new FusionAuthIdpOpenIdConnect(
     oauth2ClientId: GOOGLE_CLIENT_ID,
     oauth2ClientSecret: GOOGLE_CLIENT_SECRET,
     oauth2ClientAuthenticationMethod: 'client_secret_basic',
+    // Logins mint a fresh refresh token. include_granted_scopes keeps the
+    // scopes granted earlier through /link/gmail (calendar) on that token.
     oauth2AuthorizationEndpoint:
-      'https://accounts.google.com/o/oauth2/v2/auth?prompt=consent&access_type=offline',
+      'https://accounts.google.com/o/oauth2/v2/auth?prompt=consent&access_type=offline&include_granted_scopes=true',
     oauth2TokenEndpoint: 'https://oauth2.googleapis.com/token',
     oauth2UserInfoEndpoint: 'https://openidconnect.googleapis.com/v1/userinfo',
     buttonText: 'GoogleGmail',

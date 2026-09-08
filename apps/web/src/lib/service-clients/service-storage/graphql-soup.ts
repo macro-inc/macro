@@ -1,6 +1,8 @@
+import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_BEARER_TOKEN_AUTH,
-  ENABLE_GRAPHQL_SOUP,
+  enableGraphqlSoup,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
@@ -352,7 +354,7 @@ function fallbackAfterInitializationFailure(): void {
   cachedCacheCleanup = undefined;
   cachedCacheHost = undefined;
   cacheInitializationFailed = true;
-  cachedClient = ENABLE_GRAPHQL_SOUP()
+  cachedClient = isFeatureEnabled(enableGraphqlSoup)
     ? getUncachedRealtimeClient()
     : graphqlSoupClient;
   browserCacheClientActivated = false;
@@ -385,7 +387,7 @@ export function getGraphqlSoupClient(): Client {
     return cachedClient;
   const rollout = getBrowserTursoCacheRolloutDecision();
   if (!rollout.enabled) {
-    return ENABLE_GRAPHQL_SOUP()
+    return isFeatureEnabled(enableGraphqlSoup)
       ? getUncachedRealtimeClient()
       : graphqlSoupClient;
   }
@@ -407,6 +409,9 @@ export function getGraphqlSoupClient(): Client {
     const onInitializationError = (error: Error) => {
       if (!host || cachedCacheHost !== host) return;
       fallbackAfterInitializationFailure();
+      toast.failure('Local cache unavailable', {
+        subtext: 'Macro will continue without local caching for this session.',
+      });
       console.warn(
         'graphql cache async init failed; using uncached client',
         error
@@ -465,7 +470,7 @@ export function getGraphqlSoupClient(): Client {
       cachedCacheCleanup = undefined;
       cacheInitializationFailed = true;
       console.warn('graphql cache init failed; using uncached client', error);
-      return ENABLE_GRAPHQL_SOUP()
+      return isFeatureEnabled(enableGraphqlSoup)
         ? getUncachedRealtimeClient()
         : graphqlSoupClient;
     }
@@ -1240,6 +1245,7 @@ export function mapGraphqlSoupItem(item: GraphqlSoupItem): SoupApiItem | null {
             isRead: entity.isRead,
             isDraft: entity.isDraft,
             isImportant: entity.isImportant,
+            isSignal: entity.isSignal,
             projectId: entity.projectId ?? undefined,
             sortTs: entity.sortTs,
             createdAt: entity.createdAt,

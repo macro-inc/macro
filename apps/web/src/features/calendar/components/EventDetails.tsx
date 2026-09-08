@@ -9,6 +9,7 @@ import {
 import { plural } from '@core/util/string';
 import { openExternalUrl } from '@core/util/url';
 import { Collapsible } from '@kobalte/core/collapsible';
+import AirplaneTiltIcon from '@phosphor/airplane-tilt.svg';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
 import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
@@ -380,7 +381,7 @@ function EventRemindersItem(props: {
     resolveReminderOverrides(
       props.event.reminders,
       props.defaultReminders,
-      props.event.eventType
+      props.event.reminderEventType ?? props.event.eventType
     ).toSorted((a, b) => a.minutes - b.minutes)
   );
 
@@ -550,6 +551,12 @@ export function EventDetails(props: {
         <div class="select-text text-sm text-ink-muted sm:text-xs">
           {formatEventSchedule(props.event, props.timeFormat)}
         </div>
+        <Show when={props.event.eventType === 'out_of_office'}>
+          <div class="flex select-text items-center gap-1.5 text-sm text-ink-extra-muted sm:text-xs">
+            <AirplaneTiltIcon aria-hidden="true" class="size-4 sm:size-3.5" />
+            Out of office
+          </div>
+        </Show>
         <Show when={recurrenceDescription()}>
           {(description) => (
             <div class="select-text text-sm text-ink-extra-muted sm:text-xs">

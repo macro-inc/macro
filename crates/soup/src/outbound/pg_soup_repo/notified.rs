@@ -4,9 +4,9 @@
 //! Every candidate is gated on existence, deletion and access, and on the
 //! request's filters where soup owns the fold (documents, chats, projects,
 //! calendar events, properties). Channel, channel-thread, email,
-//! foreign-entity and reminder candidates are gated on access (plus, for
-//! channels and emails, the notification-state and importance conjuncts
-//! their trees imply): their filter trees fold in their own domains' query
+//! foreign-entity and reminder candidates are gated on access (plus the
+//! notification-state and, for emails, importance conjuncts their trees
+//! imply): their filter trees fold in their own domains' query
 //! builders, so the service applies them in full when it hydrates the page
 //! through those legs and drops the candidates that fail, refilling from the
 //! next candidate page. A short page from this query therefore still means
@@ -30,9 +30,9 @@ use std::str::FromStr;
 
 use crate::domain::models::{NotifiedEntity, NotifiedSoupRequest};
 use crate::outbound::pg_soup_repo::candidate_gates::{
-    channel_gate, channel_thread_gate, chat_gate, document_gate, email_gate, includes_channels,
-    includes_chats, includes_documents, includes_email_threads, includes_projects, project_gate,
-    uuid_guarded,
+    channel_gate, channel_thread_gate, chat_gate, document_gate, email_gate, implied_conjuncts_sql,
+    includes_channels, includes_chats, includes_documents, includes_email_threads,
+    includes_projects, project_gate, uuid_guarded,
 };
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     build_notification_done_clause, build_notification_seen_clause, build_properties_filter,
@@ -102,8 +102,23 @@ fn calendar_event_gate(filter: Option<&EntityFilterAst>) -> String {
 
 /// Foreign entities are visible through the source they were stored for:
 /// the caller themselves or a team they belong to (`$7`/`$8` are the
-/// parallel id / auth-entity arrays of those sources).
-fn foreign_entity_gate() -> String {
+/// parallel id / auth-entity arrays of those sources). The foreign-entity
+/// tree folds in its own crate, which hydration applies in full; the
+/// notification-state conjuncts it implies are pre-applied here.
+fn foreign_entity_gate(filter: Option<&EntityFilterAst>) -> String {
+    let implied =
+        implied_conjuncts_sql(
+            filter.and_then(|f| f.foreign_entity_filter.as_deref()),
+            |literal| match literal {
+                ForeignEntityLiteral::NotificationDone(done) => Some(
+                    build_notification_done_clause("fe.id", "foreign_entity", *done),
+                ),
+                ForeignEntityLiteral::NotificationSeen(seen) => Some(
+                    build_notification_seen_clause("fe.id", "foreign_entity", *seen),
+                ),
+                _ => None,
+            },
+        );
     uuid_guarded(
         ID_SQL,
         format!(
@@ -115,6 +130,7 @@ fn foreign_entity_gate() -> String {
                     WHERE source.id = fe.stored_for_id
                     AND source.auth_entity = fe.stored_for_auth_entity
                 )
+                {implied}
             )"#
         ),
     )
@@ -199,11 +215,14 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
 
 /// Fetches one page of notified-at candidates.
 ///
-/// Shape: keyset scan of the user's live notifications in `created_at DESC`
-/// order over the `notified` CTE's derived entity key, keeping only each
-/// entity's newest notification (the `NOT EXISTS` group-max), gated per
-/// entity type on existence/deletion/access and the soup-owned filters so
-/// `LIMIT` lands after gating.
+/// Shape: the user's live notifications collapse to one row per derived
+/// entity key, its newest notification (the `latest` window's first row per
+/// partition), which the fenced subquery orders and keysets; the outer query
+/// gates those per entity type on existence/deletion/access and the
+/// soup-owned filters in that order until `LIMIT` is met. The `OFFSET 0`
+/// fence keeps the gates outside the dedupe and the inner order intact, so
+/// the planner neither pushes the gates down onto every notification nor
+/// re-sorts after them.
 ///
 /// `user_notification.created_at` is a naive `TIMESTAMP` written in UTC, so
 /// the keyset binds and the returned value stay naive and are re-tagged as
@@ -245,18 +264,29 @@ pub(super) async fn notified_soup_page(
             JOIN notification n ON n.id = un.notification_id
             WHERE un.user_id = $1
             AND un.deleted_at IS NULL
+        ),
+        latest AS NOT MATERIALIZED (
+            SELECT
+                entity_type,
+                entity_id,
+                created_at,
+                row_number() OVER (
+                    PARTITION BY entity_type, entity_id
+                    ORDER BY created_at DESC, notification_id DESC
+                ) AS rn
+            FROM notified
+            WHERE entity_type = ANY($2)
         )
-        SELECT nc.entity_type, nc.entity_id, nc.created_at AS notified_at
-        FROM notified nc
-        WHERE nc.entity_type = ANY($2)
-        AND ($3::timestamp IS NULL OR (nc.created_at, nc.entity_id) < ($3, $4))
-        AND NOT EXISTS (
-            SELECT 1 FROM notified newer
-            WHERE newer.entity_type = nc.entity_type
-            AND newer.entity_id = nc.entity_id
-            AND (newer.created_at, newer.notification_id) > (nc.created_at, nc.notification_id)
-        )
-        AND CASE nc.entity_type
+        SELECT nc.entity_type, nc.entity_id, nc.notified_at
+        FROM (
+            SELECT entity_type, entity_id, created_at AS notified_at
+            FROM latest
+            WHERE rn = 1
+            AND ($3::timestamp IS NULL OR (created_at, entity_id) < ($3, $4))
+            ORDER BY created_at DESC, entity_id DESC
+            OFFSET 0
+        ) nc
+        WHERE CASE nc.entity_type
             WHEN 'document' THEN {document_gate}
             WHEN 'chat' THEN {chat_gate}
             WHEN 'project' THEN {project_gate}
@@ -268,17 +298,17 @@ pub(super) async fn notified_soup_page(
             WHEN 'reminder' THEN {reminder_gate}
             ELSE FALSE
         END
-        ORDER BY nc.created_at DESC, nc.entity_id DESC
+        ORDER BY nc.notified_at DESC, nc.entity_id DESC
         LIMIT $6
         "#,
         document_gate = document_gate(ID_SQL, req.filter),
         chat_gate = chat_gate(ID_SQL, req.filter),
         project_gate = project_gate(ID_SQL, req.filter),
         channel_gate = channel_gate(ID_SQL, req.filter),
-        channel_thread_gate = channel_thread_gate(ID_SQL),
+        channel_thread_gate = channel_thread_gate(ID_SQL, req.filter),
         email_gate = email_gate(ID_SQL, req.filter),
         calendar_event_gate = calendar_event_gate(req.filter),
-        foreign_entity_gate = foreign_entity_gate(),
+        foreign_entity_gate = foreign_entity_gate(req.filter),
         reminder_gate = reminder_gate(),
     );
 

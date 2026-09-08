@@ -28,13 +28,13 @@ import type {
   ThemeV3,
 } from '../types/themeTypes';
 import { getOklch } from './colorUtil';
-import { convertThemev2v3 } from './themeMigrations';
-import { isThemeV2, isThemeV3 } from './themeValidation';
 import {
   isStructuralThemeToken,
   normalizeThemeColorTokens,
   themeTokenCssVar,
-} from './themeVNext';
+} from './themeColorTokens';
+import { convertThemev2v3 } from './themeMigrations';
+import { isThemeV2, isThemeV3 } from './themeValidation';
 
 export function exportTheme(themeId?: string) {
   const id = themeId ?? currentThemeId();

@@ -12,13 +12,12 @@ import { withEntityNotifications } from '@app/features/soup/entity-notifications
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import {
-  ENABLE_CALENDAR_UI,
-  ENABLE_INBOX_NOTIFIED_SORT_FLAG,
-  ENABLE_INBOX_NOTIFIED_SORT_OVERRIDE,
-  ENABLE_REMINDERS,
-  ENABLE_SNIPPETS,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-  ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE,
+  enableCalendarUi,
+  enableInboxNotifiedSort,
+  enableReminders,
+  enableSnippets,
+  enableSupportedSoupForeignEntities,
+  isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import {
@@ -42,6 +41,7 @@ import {
 } from '../../next-soup/filters/predicates';
 import { INBOX_FACETS, type InboxFacetContext } from '../inbox-facets';
 import type { InboxTab, InboxViewState } from '../types';
+import { soupItemMatchesInboxTab } from './inbox-item-filter';
 import {
   buildInboxQuery,
   type InboxQueryCapabilities,
@@ -106,22 +106,17 @@ export function useInboxDataSource(
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
 
-  const foreignEntities = useFeatureFlag(
-    ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_FLAG,
-    { enabledOverride: ENABLE_SUPPORTED_SOUP_FOREIGN_ENTITIES_OVERRIDE }
-  );
-  const notifiedSort = useFeatureFlag(ENABLE_INBOX_NOTIFIED_SORT_FLAG, {
-    enabledOverride: ENABLE_INBOX_NOTIFIED_SORT_OVERRIDE,
-  });
+  const foreignEntities = useFeatureFlag(enableSupportedSoupForeignEntities);
+  const notifiedSort = useFeatureFlag(enableInboxNotifiedSort);
 
   const facetContext = (): InboxFacetContext => ({ notificationSource });
 
   const capabilities = (): InboxQueryCapabilities => ({
-    calendar: ENABLE_CALENDAR_UI(),
+    calendar: isFeatureEnabled(enableCalendarUi),
     foreignEntities: foreignEntities().enabled,
     notifiedSort: notifiedSort().enabled,
-    reminders: ENABLE_REMINDERS(),
-    snippets: ENABLE_SNIPPETS(),
+    reminders: isFeatureEnabled(enableReminders),
+    snippets: isFeatureEnabled(enableSnippets),
   });
 
   const viewContext = createMemo(
@@ -136,10 +131,19 @@ export function useInboxDataSource(
 
   const queryArgs = createMemo(() => buildInboxQuery(viewContext()));
 
-  const query = useSoupAstItemsQuery(queryArgs, () => ({
-    enabled: true,
-    showSupportedForeignEntities: foreignEntities().enabled,
-  }));
+  const query = useSoupAstItemsQuery(queryArgs, () => {
+    // Capture the tab alongside the query args so the insert gate stays bound
+    // to the query it was registered on: after a tab switch the previous
+    // tab's cached query keeps gating cache inserts by its own membership.
+    const tab = viewContext().tab;
+    return {
+      enabled: true,
+      showSupportedForeignEntities: foreignEntities().enabled,
+      meta: {
+        insertFilter: (item) => soupItemMatchesInboxTab(item, tab),
+      },
+    };
+  });
 
   const transformEntities = (entities: EntityData[]) => {
     const context = viewContext();

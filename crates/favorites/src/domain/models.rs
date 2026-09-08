@@ -1,6 +1,7 @@
 //! Domain models for favorites.
 
 use chrono::{DateTime, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use serde::{Deserialize, Serialize};
 
@@ -56,12 +57,24 @@ pub struct FavoritesList {
     pub favorites: Vec<Favorite>,
 }
 
+/// Authenticated actor performing a favorites mutation.
+#[derive(Clone, Debug)]
+pub struct FavoritesMutationActor {
+    /// Stable Macro user id.
+    pub user_id: MacroUserIdStr<'static>,
+    /// Organization id attached to the authenticated request, when present.
+    pub organization_id: Option<i64>,
+}
+
 /// Errors returned by the favorites service.
 #[derive(Debug, thiserror::Error)]
 pub enum FavoritesError {
     /// The favorite (or entity) could not be found in the user's collection.
     #[error("favorite not found")]
     NotFound,
+    /// The entity kind is not supported by the favorites mutation surface.
+    #[error("entities of type {0} cannot be favorited")]
+    UnsupportedEntityType(EntityType),
     /// The request was invalid.
     #[error("{0}")]
     BadRequest(String),

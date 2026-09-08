@@ -1,5 +1,5 @@
 import { openReminderComposer } from '@app/features/reminders/reminder-composer';
-import { ENABLE_REMINDERS } from '@core/constant/featureFlags';
+import { enableReminders, isFeatureEnabled } from '@core/constant/featureFlags';
 import type { EntityData } from '@entity';
 import { reminderTarget } from '@queries/reminders/reminders';
 import type { EntityActionListState } from './entity-action-context';
@@ -49,7 +49,7 @@ export const makeCreateReminderAction = (
   options?: MakeCreateReminderOptions
 ) => {
   const canExecute = (entity: EntityData): boolean =>
-    ENABLE_REMINDERS() && reminderTarget(entity) !== undefined;
+    isFeatureEnabled(enableReminders) && reminderTarget(entity) !== undefined;
 
   const execute = (entities: EntityData[]) => {
     const [entity] = entities;

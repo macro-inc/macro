@@ -1,6 +1,6 @@
 ---
 source: crates/agent_fold/src/domain/test/fold.rs
-assertion_line: 314
+assertion_line: 381
 expression: agent.parts
 ---
 NonEmpty {
@@ -9,21 +9,23 @@ NonEmpty {
             id: ToolUseId(
                 "del",
             ),
-            label: "del",
+            name: Native {
+                name: "del",
+            },
             status: Completed,
             detail: Delete {
                 paths: [
                     "/repo/dead.rs",
                 ],
             },
-            raw_input: None,
-            raw_output: None,
         },
         ToolUse {
             id: ToolUseId(
                 "mv",
             ),
-            label: "mv",
+            name: Native {
+                name: "mv",
+            },
             status: Completed,
             detail: Move {
                 paths: [
@@ -31,14 +33,14 @@ NonEmpty {
                     "/repo/to.rs",
                 ],
             },
-            raw_input: None,
-            raw_output: None,
         },
         ToolUse {
             id: ToolUseId(
                 "search",
             ),
-            label: "search",
+            name: Native {
+                name: "search",
+            },
             status: Completed,
             detail: Search {
                 paths: [
@@ -48,42 +50,42 @@ NonEmpty {
                     "1 match",
                 ),
             },
-            raw_input: None,
-            raw_output: None,
         },
         ToolUse {
             id: ToolUseId(
                 "fetch",
             ),
-            label: "fetch",
+            name: Native {
+                name: "fetch",
+            },
             status: Completed,
             detail: Fetch {
                 output: Some(
                     "page body",
                 ),
             },
-            raw_input: None,
-            raw_output: None,
         },
         ToolUse {
             id: ToolUseId(
                 "think",
             ),
-            label: "think",
+            name: Native {
+                name: "think",
+            },
             status: Completed,
             detail: Think {
                 output: Some(
                     "reasoning aloud",
                 ),
             },
-            raw_input: None,
-            raw_output: None,
         },
         ToolUse {
             id: ToolUseId(
                 "mystery",
             ),
-            label: "mystery",
+            name: Native {
+                name: "mystery",
+            },
             status: Completed,
             detail: Other {
                 kind: "other",
@@ -96,12 +98,6 @@ NonEmpty {
                     },
                 ),
             },
-            raw_input: Some(
-                Object {
-                    "foo": String("bar"),
-                },
-            ),
-            raw_output: None,
         },
     ],
 }

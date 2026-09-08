@@ -1,8 +1,5 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_GRAPHQL_SOUP_FLAG,
-  ENABLE_GRAPHQL_SOUP_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableGraphqlSoup } from '@core/constant/featureFlags';
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
@@ -94,9 +91,7 @@ type HistoryQueryKey =
   | typeof historyKeys.graphqlList.queryKey;
 
 export function useHistoryQuery() {
-  const graphqlSoupFlag = useFeatureFlag(ENABLE_GRAPHQL_SOUP_FLAG, {
-    enabledOverride: ENABLE_GRAPHQL_SOUP_OVERRIDE,
-  });
+  const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const graphqlCacheHost = () => {
     if (!graphqlSoupFlag().enabled) return undefined;
     const cacheHost = getGraphqlSoupCacheHost();

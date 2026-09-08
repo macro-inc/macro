@@ -96,6 +96,7 @@ fragment SoupItemFields on GraphqlSoupEntity {
 						isRead
 						isDraft
 						isImportant
+						isSignal
 						projectId
 						sortTs
 						createdAt

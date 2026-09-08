@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO agent_mcp_servers (bot_id, app_slug, server_name)\n        SELECT $1, slug, name\n        FROM UNNEST($2::text[], $3::text[]) AS t(slug, name)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1f4e3fb707254f91d431dd2b3fdb51b57ffca7a47e548309096f5b39775d1e1a"
+}

@@ -20,16 +20,12 @@ import { useHasPermission } from '../context/user';
 import { isNativeMobilePlatform } from '../mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '../mobile/isTouchDevice';
 import {
-  BOT_MANAGEMENT_FLAG,
-  BOT_MANAGEMENT_OVERRIDE,
+  botManagement,
   DEV_MODE_ENV,
   ENABLE_APP_STORE_QR_CODE,
-  ENABLE_CHAT_V3_AGENTS_FLAG,
-  ENABLE_CHAT_V3_AGENTS_OVERRIDE,
-  ENABLE_CRM_FLAG,
-  ENABLE_CRM_OVERRIDE,
-  ENABLE_NOTIFICATION_SETTINGS_FLAG,
-  ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
+  enableChatV3Agents,
+  enableCrm,
+  enableNotificationSettings,
 } from './featureFlags';
 import { PERMISSION_IDS } from './permissions';
 import type { SettingsTab } from './SettingsState';
@@ -162,21 +158,10 @@ export const getSettingsTabItem = (
  * surface a tab the panel won't render.
  */
 export const useSettingsTabAvailable = () => {
-  const botManagementFlag = useFeatureFlag(BOT_MANAGEMENT_FLAG, {
-    enabledOverride: BOT_MANAGEMENT_OVERRIDE,
-  });
-  const chatV3AgentsFlag = useFeatureFlag(ENABLE_CHAT_V3_AGENTS_FLAG, {
-    enabledOverride: ENABLE_CHAT_V3_AGENTS_OVERRIDE,
-  });
-  const crmFlag = useFeatureFlag(ENABLE_CRM_FLAG, {
-    enabledOverride: ENABLE_CRM_OVERRIDE,
-  });
-  const notificationSettingsFlag = useFeatureFlag(
-    ENABLE_NOTIFICATION_SETTINGS_FLAG,
-    {
-      enabledOverride: ENABLE_NOTIFICATION_SETTINGS_OVERRIDE,
-    }
-  );
+  const botManagementFlag = useFeatureFlag(botManagement);
+  const chatV3AgentsFlag = useFeatureFlag(enableChatV3Agents);
+  const crmFlag = useFeatureFlag(enableCrm);
+  const notificationSettingsFlag = useFeatureFlag(enableNotificationSettings);
   const hasAdminPanel = useHasPermission(PERMISSION_IDS.WRITE_ADMIN_PANEL);
 
   return (tab: SettingsTab): boolean => {

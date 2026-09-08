@@ -27,7 +27,8 @@ const {
 }));
 
 vi.mock('@core/constant/featureFlags', () => ({
-  ENABLE_GRAPHQL_SOUP: graphqlSoupEnabledMock,
+  enableGraphqlSoup: { key: 'enable-graphql-soup' },
+  isFeatureEnabled: graphqlSoupEnabledMock,
 }));
 
 vi.mock('./client', () => ({

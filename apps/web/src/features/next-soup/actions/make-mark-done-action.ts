@@ -10,7 +10,10 @@ import {
 } from '@app/features/next-soup/utils';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
-import { ENABLE_GRAPHQL_SOUP } from '@core/constant/featureFlags';
+import {
+  enableGraphqlSoup,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import type { HotkeyGroup } from '@core/hotkey/types';
 import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
@@ -253,7 +256,7 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
       scopeChannelNotificationsToEntity: scopeChannelNotifications,
     });
 
-    const useEntityMutations = ENABLE_GRAPHQL_SOUP();
+    const useEntityMutations = isFeatureEnabled(enableGraphqlSoup);
     // A whole-channel row in the new inbox intentionally excludes notification
     // stacks rendered as separate thread rows. The entity endpoint cannot
     // express "channel except its threads", so only that selective case keeps

@@ -169,7 +169,7 @@ async fn websocket_rejects_invalid_credentials_before_infrastructure_state() {
         vec![("authorization", "Bearer not-a-token")],
         vec![(INTERNAL_API_KEY_HEADER, TEST_INTERNAL_API_KEY)],
     ] {
-        let (status, body) = send_websocket_request(address, &headers).await;
+        let (status, body) = send_websocket_request(address, WEBSOCKET_PATH, &headers).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);
         assert_eq!(body, UNAUTHORIZED_BODY);
     }
@@ -179,13 +179,14 @@ async fn websocket_rejects_invalid_credentials_before_infrastructure_state() {
 
 async fn send_websocket_request(
     address: std::net::SocketAddr,
+    path: &str,
     headers: &[(&str, &str)],
 ) -> (StatusCode, String) {
     let mut stream = tokio::net::TcpStream::connect(address)
         .await
         .expect("test client should connect");
     let mut request = format!(
-        "GET {WEBSOCKET_PATH} HTTP/1.1\r\n\
+        "GET {path} HTTP/1.1\r\n\
          Host: {address}\r\n\
          Connection: Upgrade\r\n\
          Upgrade: websocket\r\n\
@@ -295,5 +296,105 @@ async fn internal_probe_accepts_both_header_conventions_and_rejects_wrong_keys()
             .body(Body::empty())
             .expect("invalid probe request should build");
         assert_unauthorized(send(invalid_request).await);
+    }
+}
+
+#[tokio::test]
+async fn health_is_reachable_at_root_and_gateway_prefix() {
+    for path in ["/health", "/connection-gateway/health"] {
+        let response = super::mount_at_root_and_prefix(super::health::router())
+            .oneshot(
+                Request::builder()
+                    .uri(path)
+                    .method("GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK, "{path}");
+    }
+}
+
+#[tokio::test]
+async fn unprefixed_unknown_path_is_not_rewritten_onto_the_prefix() {
+    let response = super::mount_at_root_and_prefix(super::health::router())
+        .oneshot(
+            Request::builder()
+                .uri("/missing")
+                .method("GET")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn websocket_upgrade_is_authorized_at_root_and_gateway_prefix() {
+    for path in [
+        WEBSOCKET_PATH,
+        "/connection-gateway",
+        "/connection-gateway/",
+        "/connection-gateway?macro-api-token=not-a-token",
+    ] {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .expect("test listener should bind");
+        let address = listener
+            .local_addr()
+            .expect("test listener should have a local address");
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                super::mount_at_root_and_prefix(test_router())
+                    .merge(
+                        Router::new()
+                            .route("/connection-gateway/", get(connection::ws_handler))
+                            .with_state(test_state()),
+                    )
+                    .into_make_service(),
+            )
+            .await
+            .expect("test server should run");
+        });
+
+        let (status, body) =
+            send_websocket_request(address, path, &[("authorization", "Bearer not-a-token")]).await;
+        assert_eq!(status, StatusCode::UNAUTHORIZED, "{path}");
+        assert_eq!(body, UNAUTHORIZED_BODY, "{path}");
+
+        server.abort();
+    }
+}
+
+#[tokio::test]
+async fn openapi_document_is_served_at_root_and_gateway_prefix() {
+    for path in [
+        "/api-doc/openapi.json",
+        "/connection-gateway/api-doc/openapi.json",
+    ] {
+        let response = super::swagger_ui()
+            .oneshot(
+                Request::builder()
+                    .uri(path)
+                    .method("GET")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK, "{path}");
+        let body = response.into_body().collect().await.unwrap().to_bytes();
+        let spec: Value = serde_json::from_slice(&body)
+            .unwrap_or_else(|_| panic!("{path} should be OpenAPI JSON"));
+        assert!(
+            spec.get("openapi").is_some(),
+            "{path} should contain an openapi version"
+        );
     }
 }

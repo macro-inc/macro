@@ -75,6 +75,49 @@ fn connection_gateway_url_parses() {
 }
 
 #[test]
+fn connection_gateway_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = ConnectionGatewayUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
+}
+
+#[test]
+fn connection_gateway_websocket_url_parses() {
+    assert_parses_for_all_environments(ConnectionGatewayWebsocketUrl::default_for_environment);
+}
+
+#[test]
+fn connection_gateway_websocket_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = ConnectionGatewayWebsocketUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
+}
+
+#[test]
+fn connection_gateway_websocket_url_is_the_ws_form_of_the_http_url() {
+    for environment in ENVS {
+        let http = ConnectionGatewayUrl::default_for_environment(environment);
+        let websocket = ConnectionGatewayWebsocketUrl::default_for_environment(environment);
+        let expected = http.as_ref().replacen("http", "ws", 1);
+        assert_eq!(
+            websocket.as_ref(),
+            expected,
+            "{environment:?}: websocket URL must be the http URL with the scheme swapped to ws"
+        );
+    }
+}
+
+#[test]
 fn document_cognition_service_url_parses() {
     assert_parses_for_all_environments(DocumentCognitionServiceUrl::default_for_environment);
 }
@@ -131,6 +174,18 @@ fn contacts_service_url_has_no_trailing_slash() {
 #[test]
 fn email_service_url_parses() {
     assert_parses_for_all_environments(EmailServiceUrl::default_for_environment);
+}
+
+#[test]
+fn email_service_url_has_no_trailing_slash() {
+    for environment in ENVS {
+        let url = EmailServiceUrl::default_for_environment(environment);
+        assert!(
+            !url.as_ref().ends_with('/'),
+            "clients concatenate paths, so {} must not end with /",
+            url.as_ref()
+        );
+    }
 }
 
 #[test]
@@ -259,8 +314,8 @@ crate::service_url! {
         #[derive(Debug, Clone)]
         pub TestEmailServiceUrl {
             local: "http://localhost:8087",
-            dev: "https://email-service-dev.macro.com",
-            prod: "https://email-service.macro.com",
+            dev: "https://dev-gateway.macro.com/email",
+            prod: "https://gateway.macro.com/email",
         },
     }
 }
@@ -298,7 +353,7 @@ fn grouped_defaults_do_not_check_overrides() {
     );
     assert_eq!(
         service_urls.test_email_service_url.as_ref(),
-        "https://email-service.macro.com",
+        "https://gateway.macro.com/email",
     );
 }
 
@@ -329,6 +384,10 @@ fn exported_service_urls_match_local_values() {
     assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
         "http://localhost:8082",
+    );
+    assert_eq!(
+        service_urls.connection_gateway_websocket_url.as_ref(),
+        "ws://localhost:8082",
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
@@ -378,7 +437,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
-        "https://auth-service-dev.macro.com",
+        "https://dev-gateway.macro.com/auth",
     );
     assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
@@ -394,7 +453,11 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
-        "https://connection-gateway-dev.macro.com",
+        "https://dev-gateway.macro.com/connection-gateway",
+    );
+    assert_eq!(
+        service_urls.connection_gateway_websocket_url.as_ref(),
+        "wss://dev-gateway.macro.com/connection-gateway",
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
@@ -422,7 +485,7 @@ fn exported_service_urls_match_dev_values() {
     );
     assert_eq!(
         service_urls.email_service_url.as_ref(),
-        "https://email-service-dev.macro.com",
+        "https://dev-gateway.macro.com/email",
     );
     assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),
@@ -445,7 +508,7 @@ fn exported_service_urls_match_prod_values() {
     assert_eq!(service_urls.app_service_url.as_ref(), "https://macro.com");
     assert_eq!(
         service_urls.auth_service_url.as_ref(),
-        "https://auth-service.macro.com",
+        "https://gateway.macro.com/auth",
     );
     assert_eq!(
         service_urls.document_storage_service_url.as_ref(),
@@ -461,7 +524,11 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.connection_gateway_url.as_ref(),
-        "https://connection-gateway.macro.com",
+        "https://gateway.macro.com/connection-gateway",
+    );
+    assert_eq!(
+        service_urls.connection_gateway_websocket_url.as_ref(),
+        "wss://gateway.macro.com/connection-gateway",
     );
     assert_eq!(
         service_urls.document_cognition_service_url.as_ref(),
@@ -489,7 +556,7 @@ fn exported_service_urls_match_prod_values() {
     );
     assert_eq!(
         service_urls.email_service_url.as_ref(),
-        "https://email-service.macro.com",
+        "https://gateway.macro.com/email",
     );
     assert_eq!(
         service_urls.image_proxy_service_url.as_ref(),
@@ -530,6 +597,10 @@ fn exported_service_url_override_names_are_derived_from_env_var_names() {
     assert_eq!(
         ConnectionGatewayUrl::local().override_env_var_name(),
         "OVERRIDE_CONNECTION_GATEWAY_URL",
+    );
+    assert_eq!(
+        ConnectionGatewayWebsocketUrl::local().override_env_var_name(),
+        "OVERRIDE_CONNECTION_GATEWAY_WEBSOCKET_URL",
     );
     assert_eq!(
         DocumentCognitionServiceUrl::local().override_env_var_name(),

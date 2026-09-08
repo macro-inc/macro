@@ -10,12 +10,12 @@ import {
   useChatInputContext,
 } from '@core/component/AI/context';
 import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
+import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
 import {
-  ENABLE_HOME_OVERRIDE,
-  ENABLE_HOME_RECOMMENDATIONS_FLAG,
-  ENABLE_HOME_RECOMMENDATIONS_OVERRIDE,
+  enableHomeRecommendations,
+  enableHomeView,
 } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { useUserContext } from '@core/context/user';
@@ -76,11 +76,7 @@ function getGreeting() {
 
 export function Home() {
   return (
-    <ShowFeatureFlag
-      key="enable-home-view"
-      enabledOverride={ENABLE_HOME_OVERRIDE}
-      fallback={<Navigate href="/" />}
-    >
+    <ShowFeatureFlag flag={enableHomeView} fallback={<Navigate href="/" />}>
       <ChatInputProvider>
         <DragDropWrapper class="relative size-full">
           <HomeContent />
@@ -138,10 +134,7 @@ function HomeContent() {
             <HomeBackfillProgress />
           </HomeSectionBoundary>
 
-          <ShowFeatureFlag
-            key={ENABLE_HOME_RECOMMENDATIONS_FLAG}
-            enabledOverride={ENABLE_HOME_RECOMMENDATIONS_OVERRIDE}
-          >
+          <ShowFeatureFlag flag={enableHomeRecommendations}>
             <HomeSectionBoundary title="recommendations" fallback={null}>
               <RecommendedSection />
             </HomeSectionBoundary>
@@ -171,12 +164,12 @@ const HomeChatInput = () => {
   const input = useChatInputContext();
 
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
+  const attachmentMentionCallbacks = createMentionAttachmentCallbacks(
+    input.attachments,
+    getAttachmentFromMention
+  );
   const editor = buildChatEditor().withMentions({
-    onCreate: (mention) => {
-      const attachment = getAttachmentFromMention(mention);
-      if (attachment) input.attachments.addAttachment(attachment);
-    },
-    onRemove: (mention) => input.attachments.removeAttachment(mention.itemId),
+    ...attachmentMentionCallbacks,
     block: 'chat',
     showOpenTabs: true,
   });

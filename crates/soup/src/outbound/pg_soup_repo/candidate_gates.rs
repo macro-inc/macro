@@ -10,7 +10,7 @@
 
 use filter_ast::Expr;
 use item_filters::ast::EntityFilterAst;
-use item_filters::ast::channel::ChannelLiteral;
+use item_filters::ast::channel::{ChannelLiteral, ChannelThreadLiteral};
 use item_filters::ast::email::EmailLiteral;
 use item_filters::ast::properties::{PropertyEntityType, properties_filter_matches_propertyless};
 use system_properties::SystemPropertyKey;
@@ -41,7 +41,10 @@ fn and_conjuncts<'a, T>(expr: &'a Expr<T>, out: &mut Vec<&'a T>) {
 
 /// Renders the implied conjuncts of `tree` that `fold` knows how to express
 /// as ` AND ...` clauses, in tree order.
-fn implied_conjuncts_sql<T>(tree: Option<&Expr<T>>, fold: impl Fn(&T) -> Option<String>) -> String {
+pub(super) fn implied_conjuncts_sql<T>(
+    tree: Option<&Expr<T>>,
+    fold: impl Fn(&T) -> Option<String>,
+) -> String {
     let Some(tree) = tree else {
         return String::new();
     };
@@ -190,8 +193,29 @@ pub(super) fn channel_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> St
 
 /// Channel-thread rows are root messages; one is visible iff it is undeleted
 /// and the caller is an active participant of its channel. The thread tree
-/// folds in the channels crate, which hydration applies in full.
-pub(super) fn channel_thread_gate(id_sql: &str) -> String {
+/// folds in the channels crate, which hydration applies in full; the
+/// notification-state conjuncts it implies are pre-applied here over the
+/// thread's own notifications (the channel notifications naming this root
+/// as their secondary item, the same rows the channels fold predicates on).
+pub(super) fn channel_thread_gate(id_sql: &str, filter: Option<&EntityFilterAst>) -> String {
+    let implied = implied_conjuncts_sql(
+        filter.and_then(|f| f.channel_thread_filter.as_deref()),
+        |literal| {
+            let predicate = match literal {
+                ChannelThreadLiteral::NotificationDone(done) => NotificationPredicate::Done(*done),
+                ChannelThreadLiteral::NotificationSeen(seen) => NotificationPredicate::Seen(*seen),
+                _ => return None,
+            };
+            Some(build_notification_exists_clause(
+                "m.channel_id",
+                "channel",
+                &format!(
+                    "n.secondary_event_item_type = 'channel_message' AND n.secondary_event_item_id = m.id::text AND {}",
+                    predicate.sql()
+                ),
+            ))
+        },
+    );
     uuid_guarded(
         id_sql,
         format!(
@@ -204,6 +228,7 @@ pub(super) fn channel_thread_gate(id_sql: &str) -> String {
                 WHERE m.id = {id_sql}::uuid
                 AND m.thread_id IS NULL
                 AND m.deleted_at IS NULL
+                {implied}
             )"#
         ),
     )

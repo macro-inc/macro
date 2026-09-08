@@ -1,5 +1,5 @@
-import { themeCssVars } from '@theme/utils/themeVNext';
 import type { ThemeV3 } from '@theme/types/themeTypes';
+import { themeCssVars } from '@theme/utils/themeColorTokens';
 import { cn, Layer } from '@ui';
 import type { JSX } from 'solid-js';
 

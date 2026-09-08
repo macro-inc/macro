@@ -6,6 +6,7 @@
  */
 
 import type { AgentChannelScope } from './agentChannelScope';
+import type { AgentMcpServers } from './agentMcpServers';
 import type { CreateAgentRequestAvatarUrl } from './createAgentRequestAvatarUrl';
 import type { CreateAgentRequestDescription } from './createAgentRequestDescription';
 import type { CreateAgentRequestHarnessId } from './createAgentRequestHarnessId';
@@ -32,6 +33,8 @@ export interface CreateAgentRequest {
   harness_id?: CreateAgentRequestHarnessId;
   /** Instructions supplied to the agent at the start of a conversation. */
   instructions: string;
+  /** Which MCP servers sessions of this agent are handed. */
+  mcp?: AgentMcpServers;
   /** Display name. */
   name: string;
   /** Team owner. Omit for a private, user-owned agent. */

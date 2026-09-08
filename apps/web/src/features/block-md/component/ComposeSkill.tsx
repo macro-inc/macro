@@ -44,6 +44,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { EditorSystemMessage } from './EditorSystemMessage';
 
 function composerTitleNavigationPlugin(
   bodyEditor: Accessor<LexicalEditor | undefined>
@@ -422,7 +423,9 @@ export function ComposeSkill(props: ComposeSkillProps) {
       <Show when={errorMessage()}>
         <div class="w-full border-b border-edge-muted" />
         <div class="p-2">
-          <div class="text-sm text-failure-ink px-3 py-2">{errorMessage()}</div>
+          <EditorSystemMessage variant="error">
+            {errorMessage()}
+          </EditorSystemMessage>
         </div>
       </Show>
 

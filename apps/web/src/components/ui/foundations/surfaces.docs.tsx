@@ -1,6 +1,7 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
 import { For } from 'solid-js';
 import { Button } from '../components/Button';
+import { Layer } from '../components/Layer';
 import { Panel } from '../components/Panel';
 
 // #region demo:depths
@@ -62,9 +63,11 @@ function LayerTokensDemo() {
               <div class="rounded-sm bg-surface p-2 text-xs text-ink-muted">
                 bg-surface
               </div>
-              <div class="rounded-sm bg-lift p-2 text-xs text-ink-muted">
-                bg-lift
-              </div>
+              <Layer offset={1}>
+                <div class="rounded-sm bg-surface p-2 text-xs text-ink-muted">
+                  Layer offset=1 + bg-surface
+                </div>
+              </Layer>
             </div>
           </Panel>
         )}
@@ -99,7 +102,7 @@ export default defineDoc({
   name: 'Surfaces & Depth',
   category: 'Foundations',
   description:
-    'Depth, not a chosen color, is how backgrounds are set. A container declares its depth and everything inside reads `bg-surface`, `bg-inset`, and `bg-lift` relative to it — so the same component looks right wherever it is nested.',
+    'Depth, not a chosen color, is how backgrounds are set. A container declares its depth and everything inside reads `bg-surface` and `bg-inset` relative to it — so the same component looks right wherever it is nested.',
   exports: ['Layer', 'Surface'],
   import: "import { Layer, Panel, Surface } from '@ui';",
   demos: [
@@ -125,7 +128,7 @@ export default defineDoc({
       id: 'layer-tokens',
       title: 'Layer-relative tokens',
       description:
-        '`bg-inset` sits one step back, `bg-surface` is the layer itself, `bg-lift` one step forward. The classes never change — only what they resolve to.',
+        '`bg-inset` sits one step back and `bg-surface` is the layer itself. To move content forward, wrap it in `Layer offset={1}` and continue using `bg-surface`.',
       render: LayerTokensDemo,
       fill: true,
       depth: 0,
@@ -143,7 +146,7 @@ export default defineDoc({
   guidelines: {
     do: [
       'Set `depth` on the container and let children read `bg-surface`.',
-      'Use `bg-inset` for wells (inputs, code blocks) and `bg-lift` for raised items.',
+      'Use `bg-inset` for wells (inputs and code blocks) and `Layer offset={1}` with `bg-surface` for raised items.',
       'Verify new components at several depths using the toolbar control.',
     ],
     dont: [

@@ -1,9 +1,6 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import {
-  ENABLE_CRM_FLAG,
-  ENABLE_CRM_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableCrm } from '@core/constant/featureFlags';
 import type { Accessor } from 'solid-js';
 import type { NavItemGates } from './nav-items';
 
@@ -15,9 +12,7 @@ import type { NavItemGates } from './nav-items';
  */
 export function useNavItemGates(): Accessor<NavItemGates> {
   const calendar = useCalendarUiFlag();
-  const crm = useFeatureFlag(ENABLE_CRM_FLAG, {
-    enabledOverride: ENABLE_CRM_OVERRIDE,
-  });
+  const crm = useFeatureFlag(enableCrm);
   return () => ({
     showCalendar: calendar(),
     showCustomers: crm().enabled,

@@ -48,10 +48,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/popup/popupPlugin';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import {
-  INLINE_AI_EDITING_FLAG,
-  INLINE_AI_EDITING_OVERRIDE,
-} from '@core/constant/featureFlags';
+import { enableInlineAiEditing } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -201,9 +198,7 @@ export function MarkdownPopup(props: {
   });
 
   const canEdit = useCanEdit();
-  const inlineAiEditing = useFeatureFlag(INLINE_AI_EDITING_FLAG, {
-    enabledOverride: INLINE_AI_EDITING_OVERRIDE,
-  });
+  const inlineAiEditing = useFeatureFlag(enableInlineAiEditing);
   const canComment = useCanComment();
   const currentUserId = useUserId();
 

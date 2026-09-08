@@ -33,7 +33,6 @@ import {
   type AutoLinkMatchMode,
   autoRegister,
   awaitPlugin,
-  blockDecoratorTrailingParagraphPlugin,
   codePlugin,
   createAccessoryStore,
   customSelectionDataPlugin,
@@ -49,6 +48,7 @@ import {
   snippetsPlugin,
   tabIndentationPlugin,
   textPastePlugin,
+  trailingParagraphPlugin,
 } from '../../plugins';
 import { checkboxToTaskPlugin } from '../../plugins/checkbox-to-task';
 import { restoreFocusPlugin } from '../../plugins/restore-focus';
@@ -218,7 +218,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     .delete()
     .state<string>(setMarkdownState, 'markdown')
     .history(400)
-    .use(blockDecoratorTrailingParagraphPlugin())
+    .use(trailingParagraphPlugin())
     .use(restoreFocusPlugin())
     .use(checkboxToTaskPlugin())
     .use(mediaPlugin())

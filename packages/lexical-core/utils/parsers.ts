@@ -70,6 +70,20 @@ export function parsePullRequestMentions(text: string): string {
   });
 }
 
+/** `<m-connect-app>` chips read as their call to action. */
+export function parseConnectApps(text: string): string {
+  return text.replace(/<m-connect-app>(.*?)<\/m-connect-app>/g, (_, json) => {
+    try {
+      const data = JSON.parse(json);
+      return typeof data.name === 'string' && data.name
+        ? `Connect ${data.name}`
+        : '';
+    } catch {
+      return '';
+    }
+  });
+}
+
 export function parseTagMentions(text: string): string {
   return text.replace(/<m-tag>(.*?)<\/m-tag>/g, (_, json) => {
     try {
@@ -194,6 +208,7 @@ export function markdownToPlainText(markdown: string): string {
     parseDocumentMentions,
     parsePullRequestMentions,
     parseTagMentions,
+    parseConnectApps,
     parseSnapshots,
     parseDocumentCards,
     parseLinks,
@@ -382,6 +397,9 @@ export function markdownToEmbeddingText(markdown: string): string {
     data.name ? `#${data.name}` : ''
   );
   text = replaceJsonTag(text, 'm-theme-mention', (data) => data.name || '');
+  text = replaceJsonTag(text, 'm-connect-app', (data) =>
+    data.name ? `Connect ${data.name}` : ''
+  );
   text = replaceJsonTag(text, 'm-await', (data) => data.text || '');
   text = replaceJsonTag(
     text,

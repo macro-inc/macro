@@ -1,3 +1,5 @@
+import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
+import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
 import { ThrownResultError } from '@core/util/result';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
@@ -76,6 +78,14 @@ export function Harness() {
   // Only worth fetching once there is a key to ask Cursor through.
   const cursorModels = useCursorModelsQuery(cursorRegistered);
   const setCursorDefaultModel = useSetCursorDefaultModel();
+  const cursorModelOptions = () =>
+    (cursorModels.data?.models ?? []).map((model) => ({
+      id: model.id,
+      label: model.displayName,
+      group: model.group,
+    }));
+  const selectedCursorModelId = () =>
+    cursorStatus.data?.defaultModelId ?? cursorModelOptions()[0]?.id ?? null;
 
   const handleCursorModelChange = async (modelId: string) => {
     try {
@@ -213,24 +223,42 @@ export function Harness() {
                   <label for="cursor-default-model" class="text-xs text-ink">
                     Default model
                   </label>
-                  <select
-                    id="cursor-default-model"
-                    class="settings-input w-56"
-                    value={cursorStatus.data?.defaultModelId ?? ''}
-                    disabled={setCursorDefaultModel.isPending}
-                    onChange={(event) =>
-                      void handleCursorModelChange(event.currentTarget.value)
+                  <Show
+                    when={isLargeModelCatalog(cursorModelOptions())}
+                    fallback={
+                      <select
+                        id="cursor-default-model"
+                        class="settings-input w-56"
+                        value={cursorStatus.data?.defaultModelId ?? ''}
+                        disabled={setCursorDefaultModel.isPending}
+                        onChange={(event) =>
+                          void handleCursorModelChange(
+                            event.currentTarget.value
+                          )
+                        }
+                      >
+                        <For each={cursorModels.data?.models ?? []}>
+                          {(model) => (
+                            <option value={model.id}>
+                              {model.displayName}
+                            </option>
+                          )}
+                        </For>
+                      </select>
                     }
                   >
-                    <For each={cursorModels.data?.models ?? []}>
-                      {(model) => (
-                        <option value={model.id}>{model.displayName}</option>
-                      )}
-                    </For>
-                  </select>
+                    <ModelCatalogPicker
+                      value={selectedCursorModelId()}
+                      options={cursorModelOptions()}
+                      onSelect={(id) => void handleCursorModelChange(id)}
+                      disabled={setCursorDefaultModel.isPending}
+                      ariaLabel="Default model"
+                      triggerClass="w-72 max-w-full justify-between"
+                    />
+                  </Show>
                   <p class="text-xs text-ink-extra-muted">
-                    The model new @cursor sessions start on. You can still
-                    switch it per session.
+                    The model new `@cursor` sessions start on. Recommended
+                    models stay up top; everything else is behind More models.
                   </p>
                 </div>
 
