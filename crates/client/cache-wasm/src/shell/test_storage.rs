@@ -215,6 +215,14 @@ impl Storage for BrowserStorage {
 }
 
 impl PredicateIndexStorage for BrowserStorage {
+    async fn reconcile_predicate_index(
+        &self,
+        query: &ValidatedIndexQuery,
+        baseline: &[cache_core::predicate::reconciliation::PredicateBaselineEntry],
+    ) -> Result<cache_core::predicate::reconciliation::PredicateReconciliation, Self::Error> {
+        self.inner.reconcile_predicate_index(query, baseline).await
+    }
+
     async fn delete_batch_with_projections(
         &mut self,
         keys: &[EntityKey<'static>],
