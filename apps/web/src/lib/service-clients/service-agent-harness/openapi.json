@@ -883,6 +883,13 @@
         "description": "Ask the agent to work on something.",
         "required": ["prompt"],
         "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptAttachment"
+            },
+            "description": "Files the prompt refers to, in the order the user attached them.\nDelivered after the text as one `resource_link` block each."
+          },
           "prompt": {
             "type": "string",
             "description": "What to tell the agent."
@@ -1228,6 +1235,30 @@
           }
         }
       },
+      "PromptAttachment": {
+        "type": "object",
+        "description": "A file the prompt refers to, by where the agent can fetch it.\n\nMirrors ACP's `resource_link` content block, which every agent must\naccept: bytes never ride the prompt, only a URI (a static file service URL\nin practice) with enough metadata for a client to render a chip and for\nthe agent to decide whether to fetch it. Keeping the wire shape ACP-native\nmeans the harness translates without resolving anything, and the fold\nreads the same fields back off the logged frame.",
+        "required": ["uri", "name"],
+        "properties": {
+          "mimeType": {
+            "type": ["string", "null"],
+            "description": "The file's media type, when known."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, typically the original file name."
+          },
+          "size": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Size in bytes, when known."
+          },
+          "uri": {
+            "type": "string",
+            "description": "Where the agent can fetch the file."
+          }
+        }
+      },
       "QueuedActionDto": {
         "type": "object",
         "description": "One action waiting in a session's queue.\n\nClients deserialize this, so both derives are used.",
@@ -1240,6 +1271,13 @@
           "actorUserId": {
             "type": ["string", "null"],
             "description": "The user who queued it, absent when a bot acted on nobody's behalf."
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PromptAttachment"
+            },
+            "description": "Files the prompt refers to, for prompts only. Kept through an edit,\nwhich replaces the text alone."
           },
           "createdAt": {
             "type": "string",

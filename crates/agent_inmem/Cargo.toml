@@ -13,6 +13,7 @@ agent-client-protocol = { workspace = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 ai_tools = { path = "../ai_tools" }
+attachment = { path = "../attachment" }
 ai_toolset = { path = "../ai_toolset" }
 ai_usage = { path = "../ai_usage" }
 bytes = { workspace = true }
@@ -25,6 +26,8 @@ macro_uuid = { path = "../macro_uuid" }
 mcp_select = { path = "../mcp_select" }
 mcp_toolset = { path = "../mcp_toolset" }
 memory = { path = "../memory" }
+model-entity = { path = "../model-entity" }
+non_empty = { path = "../non_empty" }
 prompt = { path = "../prompt" }
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client"] }
 serde = { workspace = true }

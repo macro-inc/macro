@@ -15,7 +15,7 @@ use agent_runtime_protocol::domain::action::AgentAction;
 use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToRuntimeMessage, ToServerMessage};
 use serde::Deserialize;
 
-use super::convert::{content_block_text, param};
+use super::convert::{content_block_text, param, user_content_part};
 
 /// How one push changed [`State::messages`].
 #[derive(Debug, Clone, Copy)]
@@ -383,7 +383,7 @@ impl FoldState {
                         .is_none_or(|turn| turn.prompt_id.is_none()) =>
             {
                 StepChange::message(
-                    content_block_text(chunk.content).and_then(|text| self.replay_user_text(text)),
+                    user_content_part(chunk.content).and_then(|part| self.replay_user_part(part)),
                 )
             }
             SessionUpdate::UserMessageChunk(_) => Vec::new(),

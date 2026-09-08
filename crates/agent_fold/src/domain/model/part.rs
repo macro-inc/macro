@@ -19,6 +19,25 @@ pub enum MessagePart {
         /// The prose.
         text: String,
     },
+    /// A file the user attached to their prompt, by where it can be fetched.
+    ///
+    /// Read off the prompt's `resource_link` blocks - the only shape this
+    /// side sends files in, since bytes never ride the log. Rendering decides
+    /// from `mime_type` whether that is a thumbnail or a chip.
+    Attachment {
+        /// Where the file can be fetched - a static file service URL.
+        uri: String,
+        /// Display name, typically the original file name.
+        name: String,
+        /// The file's media type, when the sender knew it.
+        #[serde(rename = "mimeType")]
+        mime_type: Option<String>,
+        /// Size in bytes, when the sender knew it. A double on the wire:
+        /// specta refuses 64-bit integers, and no file this renders is
+        /// anywhere near the precision limit.
+        #[specta(type = Option<f64>)]
+        size: Option<i64>,
+    },
     /// The agent's reasoning, which a reader may want to hide by default.
     Thought {
         /// The reasoning.

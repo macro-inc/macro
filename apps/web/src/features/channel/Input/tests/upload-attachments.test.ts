@@ -98,6 +98,8 @@ describe('uploadInputAttachments', () => {
         id: 'uploaded-image-1',
         name: 'image.png',
         kind: 'image',
+        mimeType: 'image/png',
+        size: 3,
       },
     ]);
   });
@@ -158,6 +160,8 @@ describe('uploadInputAttachments', () => {
         id: media.uploadedId,
         name: media.name,
         kind: media.kind,
+        mimeType: media.mimeType,
+        size: 3,
         width: 1920,
         height: 1080,
       },
@@ -204,6 +208,8 @@ describe('uploadInputAttachments', () => {
         name: 'manual',
         kind: 'document',
         iconType: 'pdf',
+        mimeType: 'application/pdf',
+        size: 3,
       },
     ]);
   });

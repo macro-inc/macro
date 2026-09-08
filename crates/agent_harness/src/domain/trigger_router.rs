@@ -6,9 +6,11 @@ use agent_trigger::domain::broker_events::{
 };
 use bot_id::BotId;
 
+use agent_runtime_protocol::domain::action::AgentAction;
+
 use super::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, AnnouncePrompt, DeliverAction, HarnessCommand,
-    MentionOrigin, OpenSession,
+    MentionOrigin, OpenSession, StaticFileLinks,
 };
 
 /// What one trigger event asks this deployment to do.
@@ -60,6 +62,7 @@ pub fn agent_trigger_bot_id(event: &AgentTriggerTopicEvent) -> Option<BotId> {
 pub fn route_agent_trigger(
     event: AgentTriggerTopicEvent,
     runtime: Option<AgentRuntimeConfig>,
+    links: &StaticFileLinks,
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
         AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
@@ -85,6 +88,7 @@ pub fn route_agent_trigger(
                         message_id: message.message_id,
                         sender,
                         content: message.content,
+                        attachments: links.prompt_attachments(&message.attachments),
                     },
                 }),
             ))
@@ -109,7 +113,10 @@ pub fn route_agent_trigger(
                 return Ok(RoutedTrigger::Command(
                     session_id,
                     HarnessCommand::Deliver(DeliverAction::prompt(
-                        message.content,
+                        AgentAction::prompt_with_attachments(
+                            message.content,
+                            links.prompt_attachments(&message.attachments),
+                        ),
                         message.sender.as_user().cloned(),
                         Some(origin),
                     )),

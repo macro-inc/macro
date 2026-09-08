@@ -36,6 +36,11 @@ export type AgentActionId = string;
  */
 export type AgentPromptAction = {
     /**
+     * Files the prompt refers to, in the order the user attached them.
+     * Delivered after the text as one `resource_link` block each.
+     */
+    attachments?: Array<PromptAttachment>;
+    /**
      * What to tell the agent.
      */
     prompt: string;
@@ -394,6 +399,35 @@ export type LogFrameDto = {
 };
 
 /**
+ * A file the prompt refers to, by where the agent can fetch it.
+ *
+ * Mirrors ACP's `resource_link` content block, which every agent must
+ * accept: bytes never ride the prompt, only a URI (a static file service URL
+ * in practice) with enough metadata for a client to render a chip and for
+ * the agent to decide whether to fetch it. Keeping the wire shape ACP-native
+ * means the harness translates without resolving anything, and the fold
+ * reads the same fields back off the logged frame.
+ */
+export type PromptAttachment = {
+    /**
+     * The file's media type, when known.
+     */
+    mimeType?: string | null;
+    /**
+     * Display name, typically the original file name.
+     */
+    name: string;
+    /**
+     * Size in bytes, when known.
+     */
+    size?: number | null;
+    /**
+     * Where the agent can fetch the file.
+     */
+    uri: string;
+};
+
+/**
  * One action waiting in a session's queue.
  *
  * Clients deserialize this, so both derives are used.
@@ -407,6 +441,11 @@ export type QueuedActionDto = {
      * The user who queued it, absent when a bot acted on nobody's behalf.
      */
     actorUserId?: string | null;
+    /**
+     * Files the prompt refers to, for prompts only. Kept through an edit,
+     * which replaces the text alone.
+     */
+    attachments?: Array<PromptAttachment>;
     /**
      * When it was accepted.
      */

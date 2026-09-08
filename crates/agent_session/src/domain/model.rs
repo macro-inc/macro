@@ -308,6 +308,10 @@ pub struct QueuedActionDto {
     /// replaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prompt: Option<String>,
+    /// Files the prompt refers to, for prompts only. Kept through an edit,
+    /// which replaces the text alone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<agent_runtime_protocol::domain::action::PromptAttachment>,
     /// The user who queued it, absent when a bot acted on nobody's behalf.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor_user_id: Option<String>,
@@ -318,14 +322,17 @@ pub struct QueuedActionDto {
 impl From<super::ports::QueuedControl> for QueuedActionDto {
     fn from(queued: super::ports::QueuedControl) -> Self {
         use agent_runtime_protocol::domain::action::AgentAction;
-        let prompt = match &queued.action {
-            AgentAction::Prompt(action) => Some(action.prompt.clone()),
-            _ => None,
+        let (prompt, attachments) = match &queued.action {
+            AgentAction::Prompt(action) => {
+                (Some(action.prompt.clone()), action.attachments.clone())
+            }
+            _ => (None, Vec::new()),
         };
         Self {
             action_id: queued.action_id,
             kind: queued.action.as_ref().to_owned(),
             prompt,
+            attachments,
             actor_user_id: queued.actor.map(|actor| actor.to_string()),
             created_at: queued.created_at,
         }

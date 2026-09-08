@@ -615,3 +615,110 @@ fn a_turn_that_had_started_talking_fails_in_place() {
         "what the agent managed to say is kept"
     );
 }
+
+const LINKED_PROMPT: &str = concat!(
+    r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":["#,
+    r#"{"type":"text","text":"what is wrong "},"#,
+    r#"{"type":"text","text":"in this screenshot?"},"#,
+    r#"{"type":"resource_link","uri":"https://static.example/file/11111111-1111-4111-8111-111111111111","name":"screenshot.png","mimeType":"image/png","size":2048},"#,
+    r#"{"type":"resource_link","uri":"https://static.example/file/22222222-2222-4222-8222-222222222222","name":"notes.txt"}"#,
+    r#"]}}}"#,
+    "\n",
+    r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#,
+);
+
+/// A prompt's attached files fold to attachment parts after its text, so
+/// the transcript shows what the user sent alongside what they said.
+#[test]
+fn a_prompt_with_attached_files_folds_them_as_parts() {
+    let (messages, warnings) = fold_capturing_warnings(parse_log(LINKED_PROMPT));
+    assert_eq!(warnings, vec![]);
+
+    let user = &messages[0];
+    assert!(matches!(user.author, Author::User { .. }));
+    assert_eq!(
+        user.parts.as_slice(),
+        &[
+            MessagePart::Text {
+                text: "what is wrong in this screenshot?".to_owned()
+            },
+            MessagePart::Attachment {
+                uri: "https://static.example/file/11111111-1111-4111-8111-111111111111".to_owned(),
+                name: "screenshot.png".to_owned(),
+                mime_type: Some("image/png".to_owned()),
+                size: Some(2048),
+            },
+            MessagePart::Attachment {
+                uri: "https://static.example/file/22222222-2222-4222-8222-222222222222".to_owned(),
+                name: "notes.txt".to_owned(),
+                mime_type: None,
+                size: None,
+            },
+        ]
+    );
+}
+
+/// Files alone are a message too - "look at this" needs no words.
+#[test]
+fn a_prompt_of_only_attached_files_still_derives_a_user_message() {
+    let log = parse_log(
+        r#"{"direction":"to_runtime","user_id":"macro|user@example.com","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"resource_link","uri":"https://static.example/file/1","name":"a.png","mimeType":"image/png"}]}}}"#,
+    );
+    let messages = fold(log);
+    assert_eq!(messages.len(), 1);
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[MessagePart::Attachment {
+            uri: "https://static.example/file/1".to_owned(),
+            name: "a.png".to_owned(),
+            mime_type: Some("image/png".to_owned()),
+            size: None,
+        }]
+    );
+}
+
+/// A replayed session's user chunks carry the same links, and fold to the
+/// same shape as a live prompt: text first, files after.
+#[test]
+fn replayed_user_chunks_keep_attached_files() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":1}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":0,"result":{}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":1,"method":"session/load","params":{"sessionId":"s","cwd":"/","mcpServers":[]}}}"#,
+        "\n",
+        // The file arrives before the words: the text still leads.
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"resource_link","uri":"https://static.example/file/1","name":"a.png","mimeType":"image/png"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"what is "}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"user_message_chunk","content":{"type":"text","text":"this?"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"a cat"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":1,"result":{}}}"#,
+    ));
+    let messages = fold(log);
+    assert_eq!(messages.len(), 2, "the replayed prompt and its answer");
+    assert_eq!(
+        messages[0].parts.as_slice(),
+        &[
+            MessagePart::Text {
+                text: "what is this?".to_owned()
+            },
+            MessagePart::Attachment {
+                uri: "https://static.example/file/1".to_owned(),
+                name: "a.png".to_owned(),
+                mime_type: Some("image/png".to_owned()),
+                size: None,
+            },
+        ]
+    );
+    assert_eq!(
+        messages[1].parts.as_slice(),
+        &[MessagePart::Text {
+            text: "a cat".to_owned()
+        }]
+    );
+}

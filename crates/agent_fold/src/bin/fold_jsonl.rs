@@ -234,6 +234,18 @@ fn render_part(part: &MessagePart) -> String {
             MessagePart::Text { text } => {
                 let _ = writeln!(out, "{}", text.trim_end());
             }
+            MessagePart::Attachment {
+                uri,
+                name,
+                mime_type,
+                ..
+            } => {
+                let _ = writeln!(
+                    out,
+                    "[attachment] {name} ({}) {uri}",
+                    mime_type.as_deref().unwrap_or("unknown type")
+                );
+            }
             MessagePart::Thought { text } => {
                 let _ = writeln!(out, "[thought]\n{}", indent(text.trim_end()));
             }

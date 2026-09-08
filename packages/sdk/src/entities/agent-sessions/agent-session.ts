@@ -3,6 +3,7 @@ import type {
   AgentSessionLogResponse,
   AgentSessionResponse,
   ControlResponse,
+  PromptAttachment,
   SandboxSize,
 } from '../../../generated/agent-harness/types.gen';
 import { unwrap } from '../../utils';
@@ -126,9 +127,22 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
   }
 
-  /** Send a prompt to the session — sugar over {@link control}. */
-  prompt(text: string): Promise<ControlResponse> {
-    return this.control({ type: 'prompt', prompt: text });
+  /**
+   * Send a prompt to the session — sugar over {@link control}.
+   *
+   * `attachments` are files the prompt refers to, each by a URL the agent
+   * can fetch (a static file service URL in practice); they reach the agent
+   * as ACP `resource_link` blocks after the text.
+   */
+  prompt(
+    text: string,
+    attachments?: PromptAttachment[],
+  ): Promise<ControlResponse> {
+    return this.control({
+      type: 'prompt',
+      prompt: text,
+      ...(attachments && attachments.length > 0 ? { attachments } : {}),
+    });
   }
 
   /**
