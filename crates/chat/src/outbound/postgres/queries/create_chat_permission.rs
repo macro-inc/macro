@@ -5,6 +5,8 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Postgres, Transaction};
 
 /// Create a share permission row and associate it with the given chat.
+/// Ordinary creation and copies never import explicit team consent from the input.
+/// The canonical columns retain their NULL/zero database defaults.
 #[tracing::instrument(err, skip(tx))]
 pub(crate) async fn create_chat_permission(
     tx: &mut Transaction<'_, Postgres>,

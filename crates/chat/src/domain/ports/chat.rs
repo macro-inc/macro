@@ -11,14 +11,17 @@ use entity_access::domain::models::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::Chat;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts, TeamShareMaintenance,
+};
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 /// Repository trait for low-level chat data access.
 pub trait ChatRepo: Send + Sync + 'static {
     /// Create a new chat, returning the chat ID.
     ///
-    /// `share_permission` is the pre-resolved initial share permission — the
-    /// repository persists it verbatim and carries no share-policy of its own.
+    /// `share_permission` contains the pre-resolved initial link policy.
+    /// Explicit team sharing always starts NULL; placement and inheritance commit together.
     fn create(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -32,6 +35,12 @@ pub trait ChatRepo: Send + Sync + 'static {
         &self,
         user_id: &str,
     ) -> impl std::future::Future<Output = Result<Option<TeamLinkShareDefault>>> + Send;
+
+    /// Load persisted ownership, membership, and canonical sharing facts.
+    fn get_team_share_facts(
+        &self,
+        chat_id: &str,
+    ) -> impl std::future::Future<Output = Result<TeamShareFacts>> + Send;
 
     /// Get the full chat response (metadata, messages, web citations).
     fn get_chat(
@@ -52,8 +61,8 @@ pub trait ChatRepo: Send + Sync + 'static {
 
     /// Copy a chat (create a new chat and duplicate its messages), returning the new chat ID.
     ///
-    /// `share_permission` is the pre-resolved initial share permission for the
-    /// copy — the repository persists it verbatim.
+    /// `share_permission` contains the copier's pre-resolved link policy.
+    /// Copies never import explicit team consent from the source.
     fn copy_chat(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -62,11 +71,13 @@ pub trait ChatRepo: Send + Sync + 'static {
         share_permission: SharePermissionV2,
     ) -> impl std::future::Future<Output = Result<String>> + Send;
 
-    /// Revert a soft-deleted chat (clears `deleted_at`, restores history).
+    /// Restore history, persisted placement, and inheritance atomically after
+    /// rechecking sharing facts and applying any domain-requested lifecycle cleanup.
     fn revert_delete(
         &self,
         chat_id: &str,
-        project_id: Option<&str>,
+        expected: TeamShareFacts,
+        maintenance: Option<TeamShareMaintenance>,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// Get the share permissions for a chat.
@@ -84,12 +95,14 @@ pub trait ChatRepo: Send + Sync + 'static {
         chat_id: &str,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 
-    /// Patch a chat's metadata (name, project, share permissions).
+    /// Atomically patch metadata, sharing, and inheritance after rechecking the stored owner.
+    /// A supplied team field must match the domain-authorized command.
     fn patch(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        expected_owner: MacroUserIdStr<'static>,
         chat_id: &str,
         args: PatchChatArgs,
+        team_share: Option<AuthorizedTeamShareCommand>,
     ) -> impl std::future::Future<Output = Result<()>> + Send;
 
     /// Update a project's `updatedAt` timestamp.

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE entity_access ADD CONSTRAINT test_reject_chat_inheritance CHECK (entity_type <> 'chat' OR granted_from_project_id IS NULL)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "58f79548f128ef7cb624d8612ce6c3dbb1f819f090b9bedcf04ca5457bc4b1dd"
+}

@@ -91,12 +91,10 @@ pub async fn synchronize_entity(
         .fetch_optional(transaction.as_mut())
         .await?
         .flatten();
-        let ancestors = match parent {
-            Some(parent) => {
-                let parent =
-                    Uuid::parse_str(&parent).map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
-                crate::walk_up_project_tree(transaction, &parent).await?
-            }
+        // Legacy text project IDs cannot supply UUID-keyed grants. Treat them
+        // as having no attributable ancestors, still removing stale contributions.
+        let ancestors = match parent.and_then(|parent| Uuid::parse_str(&parent).ok()) {
+            Some(parent) => crate::walk_up_project_tree(transaction, &parent).await?,
             None => Vec::new(),
         };
         let sources = get_all_source_entities_for_projects(transaction, &ancestors).await?;

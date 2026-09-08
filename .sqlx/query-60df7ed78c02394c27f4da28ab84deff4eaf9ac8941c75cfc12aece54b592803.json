@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"ProjectPermission\" (\"projectId\", \"sharePermissionId\") VALUES ($1, $1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "60df7ed78c02394c27f4da28ab84deff4eaf9ac8941c75cfc12aece54b592803"
+}

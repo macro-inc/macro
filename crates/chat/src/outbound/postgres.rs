@@ -15,9 +15,42 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatMessageWithAttachments;
 use model::chat::NewChatMessage;
+use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts, TeamShareMaintenance,
+};
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
+use rootcause::compat::boxed_error::IntoBoxedError;
+use share_permission_db_utils::team_share::{self, TeamShareError};
 use sqlx::PgPool;
+
+fn team_share_error(error: rootcause::Report<TeamShareError>) -> ChatErr {
+    match error.current_context() {
+        TeamShareError::NotFound => ChatErr::NotFound,
+        TeamShareError::ChangedFacts => ChatErr::Access(
+            entity_access::domain::models::AccessError::UnauthorizedWithMessage(
+                "chat ownership or team-share facts changed",
+            ),
+        ),
+        TeamShareError::UntrackedGrant
+        | TeamShareError::InvalidEntity
+        | TeamShareError::InvalidAdoption => ChatErr::BadRequest(error.to_string()),
+        TeamShareError::InvalidState | TeamShareError::Infrastructure => {
+            ChatErr::Unknown(anyhow::Error::from_boxed(error.into_boxed_error()))
+        }
+    }
+}
+
+async fn synchronize_placement(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    chat_id: &str,
+) -> Result<()> {
+    let id = uuid::Uuid::parse_str(chat_id).map_err(|e| ChatErr::BadRequest(e.to_string()))?;
+    entity_access_db_utils::project_inheritance::synchronize_entity(tx, &id, EntityType::Chat)
+        .await
+        .map_err(|e| ChatErr::Unknown(e.into()))
+}
 
 /// Convert an [`anyhow::Error`] to a [`ChatErr`], detecting `sqlx::RowNotFound`.
 fn to_chat_err(e: anyhow::Error) -> ChatErr {
@@ -40,6 +73,18 @@ impl PgChatRepo {
     /// Create a new [`PgChatRepo`] with the given connection pool.
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    async fn begin_guarded(&self) -> Result<sqlx::Transaction<'_, sqlx::Postgres>> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
+        team_share::acquire_guard(&mut tx)
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
+        Ok(tx)
     }
 
     async fn get_messages(&self, chat_id: &str) -> anyhow::Result<Vec<ChatMessageWithAttachments>> {
@@ -82,11 +127,7 @@ impl ChatRepo for PgChatRepo {
         args: CreateChatArgs,
         share_permission: SharePermissionV2,
     ) -> Result<String> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| ChatErr::Unknown(e.into()))?;
+        let mut tx = self.begin_guarded().await?;
 
         let chat_id = queries::insert_chat::insert_chat(
             &mut tx,
@@ -124,6 +165,7 @@ impl ChatRepo for PgChatRepo {
         .await
         .map_err(|e| ChatErr::Unknown(e.into()))?;
 
+        synchronize_placement(&mut tx, &chat_id).await?;
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "create_chat transaction error");
             ChatErr::Unknown(e.into())
@@ -140,6 +182,20 @@ impl ChatRepo for PgChatRepo {
         share_permission_db_utils::get_team_default_link_share(&self.pool, user_id)
             .await
             .map_err(|e| ChatErr::Unknown(e.into()))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_share_facts(&self, chat_id: &str) -> Result<TeamShareFacts> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| ChatErr::Unknown(e.into()))?;
+        let facts = team_share::load_facts(&mut tx, &EntityType::Chat.with_entity_str(chat_id))
+            .await
+            .map_err(team_share_error)?;
+        tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
+        Ok(facts)
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -186,11 +242,7 @@ impl ChatRepo for PgChatRepo {
         args: CopyChatArgs,
         share_permission: SharePermissionV2,
     ) -> Result<String> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| ChatErr::Unknown(e.into()))?;
+        let mut tx = self.begin_guarded().await?;
 
         let chat_id = queries::insert_chat::insert_chat(
             &mut tx,
@@ -232,6 +284,7 @@ impl ChatRepo for PgChatRepo {
             .await
             .map_err(to_chat_err)?;
 
+        synchronize_placement(&mut tx, &chat_id).await?;
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "copy_chat transaction error");
             ChatErr::Unknown(e.into())
@@ -241,15 +294,40 @@ impl ChatRepo for PgChatRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn revert_delete(&self, chat_id: &str, project_id: Option<&str>) -> Result<()> {
+    async fn revert_delete(
+        &self,
+        chat_id: &str,
+        expected: TeamShareFacts,
+        maintenance: Option<TeamShareMaintenance>,
+    ) -> Result<()> {
         let mut tx = self
             .pool
             .begin()
             .await
             .map_err(|e| ChatErr::Unknown(e.into()))?;
-        queries::revert_delete_chat::revert_delete_chat(&mut tx, chat_id, project_id)
+        let facts = team_share::load_facts(&mut tx, &EntityType::Chat.with_entity_str(chat_id))
+            .await
+            .map_err(team_share_error)?;
+        if facts != expected {
+            return Err(team_share_error(rootcause::report!(
+                TeamShareError::ChangedFacts
+            )));
+        }
+        if let Some(maintenance) = maintenance {
+            if !matches!(&maintenance, TeamShareMaintenance::Clear { expected } if *expected == facts)
+            {
+                return Err(team_share_error(rootcause::report!(
+                    TeamShareError::ChangedFacts
+                )));
+            }
+            team_share::maintain(&mut tx, &maintenance)
+                .await
+                .map_err(team_share_error)?;
+        }
+        queries::revert_delete_chat::revert_delete_chat(&mut tx, chat_id)
             .await
             .map_err(to_chat_err)?;
+        synchronize_placement(&mut tx, chat_id).await?;
         tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
         Ok(())
     }
@@ -263,25 +341,18 @@ impl ChatRepo for PgChatRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete(&self, chat_id: &str) -> Result<()> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| ChatErr::Unknown(e.into()))?;
+        let mut tx = self.begin_guarded().await?;
         queries::soft_delete_chat::soft_delete_chat(&mut tx, chat_id)
             .await
             .map_err(to_chat_err)?;
+        synchronize_placement(&mut tx, chat_id).await?;
         tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
         Ok(())
     }
 
     #[tracing::instrument(err, skip(self))]
     async fn permanently_delete(&self, chat_id: &str) -> Result<()> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| ChatErr::Unknown(e.into()))?;
+        let mut tx = self.begin_guarded().await?;
         queries::permanently_delete_chat::permanently_delete_chat(&mut tx, chat_id)
             .await
             .map_err(to_chat_err)?;
@@ -292,15 +363,45 @@ impl ChatRepo for PgChatRepo {
     #[tracing::instrument(err, skip(self))]
     async fn patch(
         &self,
-        user_id: MacroUserIdStr<'static>,
+        expected_owner: MacroUserIdStr<'static>,
         chat_id: &str,
         args: PatchChatArgs,
+        team_share: Option<AuthorizedTeamShareCommand>,
     ) -> Result<()> {
-        let mut tx = self
-            .pool
-            .begin()
-            .await
-            .map_err(|e| ChatErr::Unknown(e.into()))?;
+        let mut tx = self.begin_guarded().await?;
+        let owner = sqlx::query_scalar!(
+            r#"SELECT "userId" FROM "Chat" WHERE id = $1 FOR UPDATE"#,
+            chat_id
+        )
+        .fetch_one(tx.as_mut())
+        .await
+        .map_err(|e| to_chat_err(e.into()))?;
+        if owner != expected_owner.as_ref() {
+            return Err(team_share_error(rootcause::report!(
+                TeamShareError::ChangedFacts
+            )));
+        }
+        let requested = args
+            .share_permission
+            .as_ref()
+            .and_then(|p| p.team_share_access_level);
+        match (&team_share, requested) {
+            (Some(command), Some(level))
+                if command.expected().entity == EntityType::Chat.with_entity_str(chat_id)
+                    && command.expected().owner == expected_owner
+                    && command.target().map(|grant| AccessLevel::from(grant.level)) == level =>
+            {
+                team_share::apply(&mut tx, command)
+                    .await
+                    .map_err(team_share_error)?;
+            }
+            (None, None) => {}
+            _ => {
+                return Err(ChatErr::BadRequest(
+                    "team-share command does not match patch".into(),
+                ));
+            }
+        }
 
         queries::patch_chat::patch_chat(
             &mut tx,
@@ -321,6 +422,9 @@ impl ChatRepo for PgChatRepo {
             .map_err(to_chat_err)?;
         }
 
+        if args.project_id.is_some() {
+            synchronize_placement(&mut tx, chat_id).await?;
+        }
         tx.commit().await.map_err(|e| ChatErr::Unknown(e.into()))?;
         Ok(())
     }

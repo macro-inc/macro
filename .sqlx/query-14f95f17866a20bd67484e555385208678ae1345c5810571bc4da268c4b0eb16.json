@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE \"Chat\" ADD CONSTRAINT test_reject_name CHECK (name <> 'Rejected')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "14f95f17866a20bd67484e555385208678ae1345c5810571bc4da268c4b0eb16"
+}

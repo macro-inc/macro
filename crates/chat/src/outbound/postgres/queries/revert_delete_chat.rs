@@ -8,18 +8,16 @@ use anyhow::Context;
 pub(crate) async fn revert_delete_chat(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     chat_id: &str,
-    project_id: Option<&str>,
 ) -> anyhow::Result<()> {
-    let chat_owner = sqlx::query!(
+    let chat = sqlx::query!(
         r#"
         UPDATE "Chat"
         SET "deletedAt" = NULL
         WHERE id = $1
-        RETURNING "userId" as owner
+        RETURNING "userId" as owner, "projectId" as project_id
         "#,
         chat_id,
     )
-    .map(|row| row.owner)
     .fetch_one(&mut **tx)
     .await
     .context("unable to update chat")?;
@@ -31,7 +29,7 @@ pub(crate) async fn revert_delete_chat(
         ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
         SET "updatedAt" = NOW();
         "#,
-        chat_owner,
+        chat.owner,
         chat_id,
         "chat",
     )
@@ -39,7 +37,7 @@ pub(crate) async fn revert_delete_chat(
     .await
     .context("unable to add chat to history")?;
 
-    if let Some(project_id) = project_id {
+    if let Some(project_id) = chat.project_id {
         let is_deleted = sqlx::query!(
             r#"
             SELECT "deletedAt" as deleted_at FROM "Project" WHERE "id" = $1

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "ALTER TABLE entity_access DROP CONSTRAINT test_reject_chat_inheritance",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "d6fd233709d125a144b351f8fe92d2fa6cd964da208b9550731f44eeaa38ac0a"
+}

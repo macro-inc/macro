@@ -14,14 +14,17 @@ use crate::domain::{
 use agent::types::{AssistantMessagePart, ChatMessageContent};
 use ai_toolset::{AsyncToolCollection, RequestContext, tool_object::UserToolResponse};
 use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
-    OwnerAccessLevel, ViewAccessLevel,
+    AccessError, AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt,
+    EntityPermission, OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
-use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::team_share::{
+    TeamShareLevel, TeamShareMaintenance, TeamSharePolicyError, TeamShareRequest,
+    authorize_team_share,
+};
 use std::sync::Arc;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -145,16 +148,7 @@ where
 
         if let Some(project_id) = &project_id
             && !project_id.is_empty()
-            && let (Ok(chat_uuid), Ok(project_uuid)) = (
-                uuid::Uuid::parse_str(&chat_id),
-                uuid::Uuid::parse_str(project_id),
-            )
         {
-            let _ = self
-                .entity_access_management_service
-                .add_entity_to_project(&chat_uuid, EntityType::Chat, &project_uuid)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
             let _ = self.repo.update_project_modified(project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
@@ -272,16 +266,7 @@ where
 
         if let Some(project_id) = &project_id
             && !project_id.is_empty()
-            && let (Ok(chat_uuid), Ok(project_uuid)) = (
-                uuid::Uuid::parse_str(chat_id),
-                uuid::Uuid::parse_str(project_id),
-            )
         {
-            let _ = self
-                .entity_access_management_service
-                .remove_entity_from_project(&chat_uuid, EntityType::Chat, &project_uuid)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to remove entity from project"));
             let _ = self.repo.update_project_modified(project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
@@ -312,16 +297,7 @@ where
 
         if let Some(project_id) = &project_id
             && !project_id.is_empty()
-            && let (Ok(chat_uuid), Ok(project_uuid)) = (
-                uuid::Uuid::parse_str(chat_id),
-                uuid::Uuid::parse_str(project_id),
-            )
         {
-            let _ = self
-                .entity_access_management_service
-                .remove_entity_from_project(&chat_uuid, EntityType::Chat, &project_uuid)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to remove entity from project"));
             let _ = self.repo.update_project_modified(project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
@@ -349,55 +325,78 @@ where
         {
             return Err(ChatErr::BadRequest("name too long".to_string()));
         }
-        let user_id = entity_access_receipt.get_authenticated_user()?;
+        let team_level = args
+            .share_permission
+            .as_ref()
+            .and_then(|p| p.team_share_access_level);
+        // Only the new team-share operation admits user-scoped bots. Existing
+        // rename/move/link/channel and tool-execution boundaries stay unchanged.
+        let user_id = match entity_access_receipt.auth() {
+            EntityAccessAuth::Bot(_)
+                if team_level.is_some()
+                    && args.name.is_none()
+                    && args.project_id.is_none()
+                    && args.share_permission.as_ref().is_some_and(|p| {
+                        p.link_share.is_none()
+                            && p.link_share_access_level.is_none()
+                            && p.channel_share_permissions.is_none()
+                    }) =>
+            {
+                entity_access_receipt
+                    .acting_user_id()
+                    .ok_or(AccessError::Unauthorized)?
+            }
+            _ => entity_access_receipt.get_authenticated_user()?,
+        };
         let chat_id = &entity_access_receipt.entity().entity_id;
-
-        let old_project_id = self
-            .repo
-            .get_metadata(chat_id)
-            .await
-            .ok()
-            .and_then(|c| c.project_id);
+        let chat = self.repo.get_metadata(chat_id).await?;
+        let expected_owner =
+            MacroUserIdStr::try_from(chat.user_id).map_err(|e| ChatErr::Unknown(e.into()))?;
+        let team_share = if team_level.is_some() {
+            let facts = self.repo.get_team_share_facts(chat_id).await?;
+            authorize_team_share(
+                entity_access_receipt.acting_user_id(),
+                &facts,
+                TeamShareRequest {
+                    access_level: team_level,
+                    legacy_enabled: None,
+                },
+                TeamShareLevel::View,
+            )
+            .map_err(|error| match error {
+                TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                    ChatErr::Access(AccessError::Unauthorized)
+                }
+                _ => ChatErr::BadRequest(error.to_string()),
+            })?
+        } else {
+            None
+        };
+        let old_project_id = chat.project_id;
         let new_project_id = args.project_id.clone();
         let project_changing =
             new_project_id.is_some() && new_project_id.as_deref() != old_project_id.as_deref();
         let name = args.name.clone();
         let share_permission_updated = args.share_permission.is_some();
 
-        self.repo.patch(user_id.to_owned(), chat_id, args).await?;
+        self.repo
+            .patch(expected_owner, chat_id, args, team_share)
+            .await?;
 
-        // Remove from old project (only if the project is actually changing)
+        // Recency updates are best-effort; placement and grants already committed together.
         if project_changing
             && let Some(old_project_id) = &old_project_id
             && !old_project_id.is_empty()
-            && let (Ok(chat_uuid), Ok(old_uuid)) = (
-                uuid::Uuid::parse_str(chat_id),
-                uuid::Uuid::parse_str(old_project_id),
-            )
         {
-            let _ = self
-                .entity_access_management_service
-                .remove_entity_from_project(&chat_uuid, EntityType::Chat, &old_uuid)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to remove entity from project"));
             let _ = self.repo.update_project_modified(old_project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date"),
             );
         }
 
-        // Add to new project's entity access + bump modified timestamp
+        // Bump the destination project's recency.
         if let Some(new_project_id) = &new_project_id
             && !new_project_id.is_empty()
-            && let (Ok(chat_uuid), Ok(new_uuid)) = (
-                uuid::Uuid::parse_str(chat_id),
-                uuid::Uuid::parse_str(new_project_id),
-            )
         {
-            let _ = self
-                .entity_access_management_service
-                .add_entity_to_project(&chat_uuid, EntityType::Chat, &new_uuid)
-                .await
-                .inspect_err(|e| tracing::error!(error=?e, project_id=?new_project_id, "unable to add entity to project"));
             let _ = self.repo.update_project_modified(new_project_id).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?new_project_id, "unable to update project modified date"),
             );
@@ -422,9 +421,15 @@ where
     ) -> Result<()> {
         let chat_id = &entity_access_receipt.entity().entity_id;
         let chat = self.repo.get_metadata(chat_id).await?;
-        self.repo
-            .revert_delete(chat_id, chat.project_id.as_deref())
-            .await?;
+        let facts = self.repo.get_team_share_facts(chat_id).await?;
+        // Restoration must not revive consent for a team the owner has left.
+        let maintenance = facts
+            .current
+            .filter(|grant| Some(grant.team_id) != facts.owner_team_id)
+            .map(|_| TeamShareMaintenance::Clear {
+                expected: facts.clone(),
+            });
+        self.repo.revert_delete(chat_id, facts, maintenance).await?;
 
         self.publish_chat_event(&ChatMacroEvent::restored(ChatRestoredMetadata {
             chat_id: chat_id.clone(),

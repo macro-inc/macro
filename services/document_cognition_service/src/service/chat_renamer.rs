@@ -76,6 +76,7 @@ async fn rename_initial_chat(
                 project_id: None,
                 share_permission: None,
             },
+            None,
         )
         .await
         .map_err(anyhow::Error::from)?;

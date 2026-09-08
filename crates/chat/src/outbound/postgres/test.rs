@@ -22,6 +22,464 @@ fn default_share_permission() -> SharePermissionV2 {
     SharePermissionV2::new_chat_share_permission(None)
 }
 
+use model_entity::EntityType;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts, TeamShareLevel, TeamShareMaintenance,
+    TeamShareRequest, authorize_team_share,
+};
+use uuid::Uuid;
+
+fn test_owner() -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from("macro|test@example.com".to_string()).unwrap()
+}
+
+fn team_policy(level: Option<Option<AccessLevel>>) -> UpdateSharePermissionRequestV2 {
+    UpdateSharePermissionRequestV2 {
+        team_share_access_level: level,
+        link_share: None,
+        link_share_access_level: None,
+        channel_share_permissions: None,
+    }
+}
+
+fn authorize(facts: &TeamShareFacts, level: Option<AccessLevel>) -> AuthorizedTeamShareCommand {
+    authorize_team_share(
+        Some(&facts.owner),
+        facts,
+        TeamShareRequest {
+            access_level: Some(level),
+            legacy_enabled: None,
+        },
+        TeamShareLevel::View,
+    )
+    .unwrap()
+    .unwrap()
+}
+
+async fn set_team_level(repo: &PgChatRepo, chat_id: &str, level: Option<AccessLevel>) {
+    let facts = repo.get_team_share_facts(chat_id).await.unwrap();
+    repo.patch(
+        facts.owner.clone(),
+        chat_id,
+        PatchChatArgs {
+            name: None,
+            project_id: None,
+            share_permission: Some(team_policy(Some(level))),
+        },
+        Some(authorize(&facts, level)),
+    )
+    .await
+    .unwrap();
+}
+
+async fn seed_team_project(pool: &Pool<Postgres>) -> (Uuid, String) {
+    let team = Uuid::now_v7();
+    let project = Uuid::now_v7().to_string();
+    let owner = test_owner();
+    sqlx::query!(
+        "INSERT INTO team (id, name, owner_id, seat_count) VALUES ($1, 'Team', $2, 1)",
+        team,
+        owner.as_ref()
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        "INSERT INTO team_user (team_id, user_id, team_role) VALUES ($1, $2, 'owner')",
+        team,
+        owner.as_ref()
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "Project" (id, name, "userId") VALUES ($1, 'Shared project', $2)"#,
+        project,
+        owner.as_ref()
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    sqlx::query!(r#"INSERT INTO "SharePermission" (id) VALUES ($1)"#, project)
+        .execute(pool)
+        .await
+        .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "ProjectPermission" ("projectId", "sharePermissionId") VALUES ($1, $1)"#,
+        project
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+    let mut tx = pool.begin().await.unwrap();
+    let facts = share_permission_db_utils::team_share::load_facts(
+        &mut tx,
+        &EntityType::Project.with_entity_str(&project),
+    )
+    .await
+    .unwrap();
+    share_permission_db_utils::team_share::apply(
+        &mut tx,
+        &authorize(&facts, Some(AccessLevel::Comment)),
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+    (team, project)
+}
+
+async fn team_grants(pool: &Pool<Postgres>, chat_id: &str) -> Vec<(Option<String>, String)> {
+    sqlx::query!(r#"SELECT granted_from_project_id, access_level::text AS "level!" FROM entity_access WHERE entity_id = $1 AND entity_type = 'chat' AND source_type = 'team' ORDER BY granted_from_project_id NULLS FIRST"#, Uuid::parse_str(chat_id).unwrap())
+        .fetch_all(pool).await.unwrap().into_iter().map(|row| (row.granted_from_project_id, row.level)).collect()
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn canonical_chat_sharing_downgrades_preserves_omission_and_revisions(pool: Pool<Postgres>) {
+    let (team, _) = seed_team_project(&pool).await;
+    let repo = PgChatRepo::new(pool.clone());
+    let chat = create_test_chat(&repo, "Canonical").await;
+    for (index, level) in [AccessLevel::Edit, AccessLevel::View, AccessLevel::View]
+        .into_iter()
+        .enumerate()
+    {
+        set_team_level(&repo, &chat, Some(level)).await;
+        let facts = repo.get_team_share_facts(&chat).await.unwrap();
+        assert_eq!(facts.revision, index as i64 + 1);
+        assert_eq!(facts.current.unwrap().team_id, team);
+        assert_eq!(
+            repo.get_permissions(&chat)
+                .await
+                .unwrap()
+                .team_share_access_level,
+            Some(level)
+        );
+        assert_eq!(
+            team_grants(&pool, &chat).await,
+            vec![(None, level.to_string())]
+        );
+    }
+    patch_share_permission(&repo, &chat, team_policy(None)).await;
+    assert_eq!(repo.get_team_share_facts(&chat).await.unwrap().revision, 3);
+    for revision in [4, 5] {
+        set_team_level(&repo, &chat, None).await;
+        let facts = repo.get_team_share_facts(&chat).await.unwrap();
+        assert_eq!(facts.revision, revision);
+        assert!(facts.current.is_none());
+        assert!(team_grants(&pool, &chat).await.is_empty());
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn create_copy_and_moves_commit_current_inheritance_without_copying_consent(
+    pool: Pool<Postgres>,
+) {
+    let (_, project) = seed_team_project(&pool).await;
+    let repo = PgChatRepo::new(pool.clone());
+    let mut permission = default_share_permission();
+    permission.team_share_access_level = Some(AccessLevel::Edit);
+    let chat = repo
+        .create(
+            test_owner(),
+            CreateChatArgs {
+                name: "Placed".into(),
+                project_id: Some(project.clone()),
+            },
+            permission.clone(),
+        )
+        .await
+        .unwrap();
+    assert!(
+        repo.get_team_share_facts(&chat)
+            .await
+            .unwrap()
+            .current
+            .is_none()
+    );
+    assert_eq!(
+        team_grants(&pool, &chat).await,
+        vec![(Some(project.clone()), "comment".into())]
+    );
+    set_team_level(&repo, &chat, Some(AccessLevel::Edit)).await;
+    let copy = repo
+        .copy_chat(
+            test_owner(),
+            &chat,
+            CopyChatArgs {
+                name: "Copy".into(),
+                project_id: Some(project.clone()),
+            },
+            permission,
+        )
+        .await
+        .unwrap();
+    let copied = repo.get_team_share_facts(&copy).await.unwrap();
+    assert!(copied.current.is_none());
+    assert_eq!(copied.revision, 0);
+    assert_eq!(
+        team_grants(&pool, &copy).await,
+        vec![(Some(project.clone()), "comment".into())]
+    );
+    for destination in ["project-123", project.as_str(), ""] {
+        repo.patch(
+            test_owner(),
+            &chat,
+            PatchChatArgs {
+                name: None,
+                project_id: Some(destination.into()),
+                share_permission: None,
+            },
+            None,
+        )
+        .await
+        .unwrap();
+        let mut expected = vec![(None, "edit".into())];
+        if destination == project {
+            expected.push((Some(project.clone()), "comment".into()));
+        }
+        assert_eq!(team_grants(&pool, &chat).await, expected);
+    }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn mixed_patch_rolls_back_grants_revision_metadata_and_placement(pool: Pool<Postgres>) {
+    let (_, project) = seed_team_project(&pool).await;
+    let repo = PgChatRepo::new(pool.clone());
+    let chat = create_test_chat(&repo, "Original").await;
+    let facts = repo.get_team_share_facts(&chat).await.unwrap();
+    // Fail after the canonical grant write, when the accompanying metadata is written.
+    sqlx::query!(
+        r#"ALTER TABLE "Chat" ADD CONSTRAINT test_reject_name CHECK (name <> 'Rejected')"#
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut policy = team_policy(Some(Some(AccessLevel::Edit)));
+    policy.link_share = Some(None);
+    let before_permission = get_stored_share_permission(&pool, &chat).await;
+    assert!(
+        repo.patch(
+            test_owner(),
+            &chat,
+            PatchChatArgs {
+                name: Some("Rejected".into()),
+                project_id: Some(project),
+                share_permission: Some(policy)
+            },
+            Some(authorize(&facts, Some(AccessLevel::Edit)))
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(repo.get_team_share_facts(&chat).await.unwrap(), facts);
+    assert_eq!(
+        get_stored_share_permission(&pool, &chat).await,
+        before_permission
+    );
+    let metadata = repo.get_metadata(&chat).await.unwrap();
+    assert_eq!(metadata.name, "Original");
+    assert!(metadata.project_id.is_none());
+    assert!(team_grants(&pool, &chat).await.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn stale_owner_and_team_commands_reject_all_writes(pool: Pool<Postgres>) {
+    seed_team_project(&pool).await;
+    let repo = PgChatRepo::new(pool.clone());
+    let chat = create_test_chat(&repo, "Original").await;
+    let facts = repo.get_team_share_facts(&chat).await.unwrap();
+    let other = MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap();
+    assert!(matches!(
+        repo.patch(
+            other,
+            &chat,
+            PatchChatArgs {
+                name: Some("Changed".into()),
+                project_id: None,
+                share_permission: None
+            },
+            None
+        )
+        .await,
+        Err(ChatErr::Access(_))
+    ));
+    set_team_level(&repo, &chat, None).await;
+    assert!(matches!(
+        repo.patch(
+            test_owner(),
+            &chat,
+            PatchChatArgs {
+                name: Some("Changed".into()),
+                project_id: None,
+                share_permission: Some(team_policy(Some(Some(AccessLevel::Edit))))
+            },
+            Some(authorize(&facts, Some(AccessLevel::Edit)))
+        )
+        .await,
+        Err(ChatErr::Access(_))
+    ));
+    assert_eq!(repo.get_metadata(&chat).await.unwrap().name, "Original");
+    assert!(team_grants(&pool, &chat).await.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn restore_clears_departed_owner_consent_and_uses_stored_project(pool: Pool<Postgres>) {
+    let (_, project) = seed_team_project(&pool).await;
+    let repo = PgChatRepo::new(pool.clone());
+    let chat = repo
+        .create(
+            test_owner(),
+            CreateChatArgs {
+                name: "Restore".into(),
+                project_id: Some(project.clone()),
+            },
+            default_share_permission(),
+        )
+        .await
+        .unwrap();
+    set_team_level(&repo, &chat, Some(AccessLevel::Edit)).await;
+    repo.delete(&chat).await.unwrap();
+    let owner = test_owner();
+    sqlx::query!("DELETE FROM team_user WHERE user_id = $1", owner.as_ref())
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query!(
+        r#"UPDATE "Project" SET "deletedAt" = NOW() WHERE id = $1"#,
+        project
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let facts = repo.get_team_share_facts(&chat).await.unwrap();
+    assert!(facts.owner_team_id.is_none());
+    repo.revert_delete(
+        &chat,
+        facts.clone(),
+        Some(TeamShareMaintenance::Clear { expected: facts }),
+    )
+    .await
+    .unwrap();
+    let metadata = repo.get_metadata(&chat).await.unwrap();
+    assert!(metadata.deleted_at.is_none());
+    assert!(metadata.project_id.is_none());
+    assert!(
+        repo.get_permissions(&chat)
+            .await
+            .unwrap()
+            .team_share_access_level
+            .is_none()
+    );
+    assert!(team_grants(&pool, &chat).await.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
+async fn inheritance_failure_rolls_back_create_copy_move_and_restore(pool: Pool<Postgres>) {
+    let (_, project) = seed_team_project(&pool).await;
+    let repo = PgChatRepo::new(pool.clone());
+    let chat = create_test_chat(&repo, "Original").await;
+    sqlx::query!("ALTER TABLE entity_access ADD CONSTRAINT test_reject_chat_inheritance CHECK (entity_type <> 'chat' OR granted_from_project_id IS NULL)").execute(&pool).await.unwrap();
+    assert!(
+        repo.create(
+            test_owner(),
+            CreateChatArgs {
+                name: "Rejected create".into(),
+                project_id: Some(project.clone())
+            },
+            default_share_permission()
+        )
+        .await
+        .is_err()
+    );
+    assert!(
+        repo.copy_chat(
+            test_owner(),
+            &chat,
+            CopyChatArgs {
+                name: "Rejected copy".into(),
+                project_id: Some(project.clone())
+            },
+            default_share_permission()
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "Chat""#)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        Some(1)
+    );
+    assert!(
+        repo.patch(
+            test_owner(),
+            &chat,
+            PatchChatArgs {
+                name: Some("Rejected move".into()),
+                project_id: Some(project.clone()),
+                share_permission: None
+            },
+            None
+        )
+        .await
+        .is_err()
+    );
+    let metadata = repo.get_metadata(&chat).await.unwrap();
+    assert_eq!(metadata.name, "Original");
+    assert!(metadata.project_id.is_none());
+    repo.delete(&chat).await.unwrap();
+    // Simulate a trashed chat still assigned to a live shared project.
+    sqlx::query!(
+        r#"UPDATE "Chat" SET "projectId" = $1 WHERE id = $2"#,
+        project,
+        chat
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let facts = repo.get_team_share_facts(&chat).await.unwrap();
+    assert!(repo.revert_delete(&chat, facts, None).await.is_err());
+    assert!(repo.get_metadata(&chat).await.unwrap().deleted_at.is_some());
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM "UserHistory" WHERE "itemId" = $1"#,
+            chat
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    sqlx::query!("ALTER TABLE entity_access DROP CONSTRAINT test_reject_chat_inheritance")
+        .execute(&pool)
+        .await
+        .unwrap();
+    let facts = repo.get_team_share_facts(&chat).await.unwrap();
+    repo.revert_delete(&chat, facts, None).await.unwrap();
+    assert_eq!(
+        team_grants(&pool, &chat).await,
+        vec![(Some(project), "comment".into())]
+    );
+}
+
 #[derive(Debug, Eq, PartialEq)]
 struct StoredSharePermission {
     id: String,
@@ -88,6 +546,7 @@ async fn patch_share_permission(
             project_id: None,
             share_permission: Some(share_permission),
         },
+        None,
     )
     .await
     .unwrap();
@@ -707,6 +1166,7 @@ async fn patch_chat_updates_name(pool: Pool<Postgres>) {
             project_id: None,
             share_permission: None,
         },
+        None,
     )
     .await
     .unwrap();
@@ -748,6 +1208,7 @@ async fn patch_chat_updates_project(pool: Pool<Postgres>) {
             project_id: Some("project-123".to_string()),
             share_permission: None,
         },
+        None,
     )
     .await
     .unwrap();
@@ -797,6 +1258,7 @@ async fn patch_chat_clears_project(pool: Pool<Postgres>) {
             project_id: Some("".to_string()),
             share_permission: None,
         },
+        None,
     )
     .await
     .unwrap();
@@ -944,7 +1406,13 @@ async fn revert_delete_restores_chat(pool: Pool<Postgres>) {
     let chat = repo.get_metadata(&chat_id).await.unwrap();
     assert!(chat.deleted_at.is_some());
 
-    repo.revert_delete(&chat_id, None).await.unwrap();
+    repo.revert_delete(
+        &chat_id,
+        repo.get_team_share_facts(&chat_id).await.unwrap(),
+        None,
+    )
+    .await
+    .unwrap();
 
     // Confirm it's restored
     let chat = repo.get_metadata(&chat_id).await.unwrap();

@@ -8,6 +8,7 @@ use attachment::FormattedParts;
 use entity_access_management::domain::models::EntityAccessManagementError;
 use macro_event_broker::{EventBrokerError, MacroEvent};
 use model::chat::Chat;
+use model_entity::EntityType;
 
 use super::*;
 use crate::domain::models::{ChatResponse, PatchChatMessageArgs};
@@ -37,6 +38,17 @@ struct MessagePersistence {
 #[derive(Clone, Default)]
 struct StubChatRepo {
     metadata_project_id: Option<String>,
+    team_facts: Option<models_permissions::share_permission::team_share::TeamShareFacts>,
+    received_team_commands: Arc<
+        Mutex<
+            Vec<
+                Option<
+                    models_permissions::share_permission::team_share::AuthorizedTeamShareCommand,
+                >,
+            >,
+        >,
+    >,
+    received_maintenance: Arc<Mutex<Option<TeamShareMaintenance>>>,
     message_persistence: Arc<Mutex<MessagePersistence>>,
     team_default: Option<models_permissions::share_permission::TeamLinkShareDefault>,
     received_share_permission: Arc<Mutex<Option<SharePermissionV2>>>,
@@ -102,6 +114,24 @@ impl ChatRepo for StubChatRepo {
         Ok(self.team_default)
     }
 
+    async fn get_team_share_facts(
+        &self,
+        chat_id: &str,
+    ) -> Result<models_permissions::share_permission::team_share::TeamShareFacts> {
+        if let Some(facts) = &self.team_facts {
+            return Ok(facts.clone());
+        }
+        Ok(
+            models_permissions::share_permission::team_share::TeamShareFacts {
+                entity: EntityType::Chat.with_entity_string(chat_id.to_string()),
+                owner: owner(),
+                owner_team_id: None,
+                current: None,
+                revision: 0,
+            },
+        )
+    }
+
     async fn get_chat(&self, _chat_id: &str) -> Result<ChatResponse> {
         unimplemented!("not exercised")
     }
@@ -143,7 +173,13 @@ impl ChatRepo for StubChatRepo {
         Ok(NEW_CHAT_ID.to_string())
     }
 
-    async fn revert_delete(&self, _chat_id: &str, _project_id: Option<&str>) -> Result<()> {
+    async fn revert_delete(
+        &self,
+        _chat_id: &str,
+        _expected: models_permissions::share_permission::team_share::TeamShareFacts,
+        maintenance: Option<TeamShareMaintenance>,
+    ) -> Result<()> {
+        *self.received_maintenance.lock().unwrap() = maintenance;
         if self.fail_revert_delete {
             return Err(Self::repo_err());
         }
@@ -173,7 +209,11 @@ impl ChatRepo for StubChatRepo {
         _user_id: MacroUserIdStr<'static>,
         _chat_id: &str,
         _args: PatchChatArgs,
+        team_share: Option<
+            models_permissions::share_permission::team_share::AuthorizedTeamShareCommand,
+        >,
     ) -> Result<()> {
+        self.received_team_commands.lock().unwrap().push(team_share);
         if self.fail_patch {
             return Err(Self::repo_err());
         }
@@ -416,6 +456,152 @@ fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
         project_id: None,
         share_permission,
     }
+}
+
+fn team_patch(level: Option<Option<AccessLevel>>) -> PatchChatArgs {
+    PatchChatArgs {
+        name: None,
+        project_id: None,
+        share_permission: Some(
+            models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+                team_share_access_level: level,
+                link_share: None,
+                link_share_access_level: None,
+                channel_share_permissions: None,
+            },
+        ),
+    }
+}
+
+fn bot_receipt(
+    acting_user: Option<MacroUserIdStr<'static>>,
+) -> EntityAccessReceipt<OwnerAccessLevel> {
+    use entity_access::domain::models::{BotId, BotReceiptScope};
+    let scope = match acting_user {
+        Some(acting_user) => BotReceiptScope::User { acting_user },
+        None => BotReceiptScope::Team {
+            team_id: uuid::Uuid::nil(),
+        },
+    };
+    EntityAccessReceipt::dangerously_assert_bot(
+        BotId::new_from_uuid(uuid::Uuid::nil()).into_storage_id(),
+        scope,
+        CHAT_ID,
+        EntityType::Chat,
+    )
+}
+
+#[tokio::test]
+async fn team_sharing_requires_actual_owner_even_for_clear() {
+    let broker = RecordingEventBroker::default();
+    let service = build_service(StubChatRepo::default(), broker.clone());
+    for level in [Some(AccessLevel::View), Some(AccessLevel::Owner), None] {
+        let receipt = EntityAccessReceipt::dangerously_assert_authenticated_user(
+            MacroUserIdStr::try_from("macro|other@example.com".to_string()).unwrap(),
+            CHAT_ID,
+            EntityType::Chat,
+        );
+        assert!(matches!(
+            service.patch(receipt, team_patch(Some(level))).await,
+            Err(ChatErr::Access(_))
+        ));
+    }
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn owner_without_team_can_clear_but_cannot_enable_or_grant_owner() {
+    let service = build_service(StubChatRepo::default(), RecordingEventBroker::default());
+    for level in [AccessLevel::View, AccessLevel::Owner] {
+        assert!(matches!(
+            service
+                .patch(owner_receipt(CHAT_ID), team_patch(Some(Some(level))))
+                .await,
+            Err(ChatErr::BadRequest(_))
+        ));
+    }
+    service
+        .patch(owner_receipt(CHAT_ID), team_patch(Some(None)))
+        .await
+        .unwrap();
+    service
+        .patch(owner_receipt(CHAT_ID), team_patch(None))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn owner_scoped_bot_can_clear_without_gaining_unrelated_capabilities() {
+    let service = build_service(StubChatRepo::default(), RecordingEventBroker::default());
+    service
+        .patch(bot_receipt(Some(owner())), team_patch(Some(None)))
+        .await
+        .unwrap();
+    assert!(
+        service
+            .patch(bot_receipt(None), team_patch(Some(None)))
+            .await
+            .is_err()
+    );
+    assert!(
+        service
+            .patch(bot_receipt(Some(owner())), patch_args(false))
+            .await
+            .is_err()
+    );
+    assert!(
+        service
+            .copy_chat(bot_receipt(Some(owner())).try_into_requirement().unwrap())
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn owner_bot_sets_exact_level_and_omission_has_no_command() {
+    let mut repo = StubChatRepo::default();
+    let mut facts = repo.get_team_share_facts(CHAT_ID).await.unwrap();
+    facts.owner_team_id = Some(uuid::Uuid::nil());
+    repo.team_facts = Some(facts);
+    let commands = repo.received_team_commands.clone();
+    let service = build_service(repo, RecordingEventBroker::default());
+    service
+        .patch(
+            bot_receipt(Some(owner())),
+            team_patch(Some(Some(AccessLevel::Comment))),
+        )
+        .await
+        .unwrap();
+    service
+        .patch(owner_receipt(CHAT_ID), team_patch(None))
+        .await
+        .unwrap();
+    let commands = commands.lock().unwrap();
+    assert_eq!(
+        commands[0].as_ref().unwrap().target().unwrap().level,
+        TeamShareLevel::Comment
+    );
+    assert!(commands[1].is_none());
+}
+
+#[tokio::test]
+async fn restore_requests_cleanup_only_for_departed_owner_team() {
+    let mut repo = StubChatRepo::default();
+    let mut facts = repo.get_team_share_facts(CHAT_ID).await.unwrap();
+    facts.current = Some(
+        models_permissions::share_permission::team_share::TeamShareGrant {
+            team_id: uuid::Uuid::nil(),
+            level: TeamShareLevel::Edit,
+        },
+    );
+    repo.team_facts = Some(facts.clone());
+    let maintenance = repo.received_maintenance.clone();
+    let service = build_service(repo, RecordingEventBroker::default());
+    service.revert_delete(owner_receipt(CHAT_ID)).await.unwrap();
+    assert_eq!(
+        *maintenance.lock().unwrap(),
+        Some(TeamShareMaintenance::Clear { expected: facts })
+    );
 }
 
 // -- Tests --
