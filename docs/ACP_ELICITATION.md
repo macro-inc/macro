@@ -307,7 +307,11 @@ branch:
   `test/harness_readers.rs`.
 - `agent_inmem`: model-callable `AskUser` sends a real `elicitation/create`
   through a domain user-input port; `/ask <question> | option | option`
-  remains the deterministic local end-to-end rig.
+  remains the deterministic end-to-end rig in local and deployed development
+  environments. The host passes an explicit development-command setting into
+  the in-memory manager; it defaults off, and production treats `/ask` as
+  ordinary prompt text. Model-callable `AskUser` and user-tool review do not
+  depend on this setting.
 - Web: `ElicitationPart` (form with select / "Other" / text / number /
   boolean / multi-select, URL consent), `blockedOnUser` composer notice,
   MagicChip ranking, gallery demo, form-model tests.

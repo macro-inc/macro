@@ -65,6 +65,7 @@ pub struct InMemAgentManager {
     engine: Arc<dyn TurnEngine>,
     frames: Arc<dyn FrameSource>,
     mcp: Arc<dyn DynMcpToolConnector>,
+    enable_dev_commands: bool,
     store: Arc<SessionStore>,
     live: DashMap<AgentSessionId, LiveAgent>,
     /// Each live session's egress token. An in-process session has no
@@ -89,6 +90,7 @@ impl InMemAgentManager {
             engine,
             frames,
             mcp,
+            enable_dev_commands: false,
             store: Arc::new(SessionStore::new()),
             live: DashMap::new(),
             tokens: DashMap::new(),
@@ -100,6 +102,14 @@ impl InMemAgentManager {
     #[must_use]
     pub fn session_token(&self, session: AgentSessionId) -> Option<String> {
         self.tokens.get(&session).map(|token| token.clone())
+    }
+
+    /// Enable manual development commands such as `/ask`. Disabled by default;
+    /// the host opts in for its local and development environments.
+    #[must_use]
+    pub fn with_dev_commands(mut self, enabled: bool) -> Self {
+        self.enable_dev_commands = enabled;
+        self
     }
 
     /// Start (or restart) the session's agent and return the transport the
@@ -146,6 +156,7 @@ impl InMemAgentManager {
             mcp: Arc::clone(&self.mcp),
             mcp_tools: std::sync::Mutex::new(None),
             client_renders_forms: AtomicBool::new(false),
+            enable_dev_commands: self.enable_dev_commands,
         });
         let session_id = facts.id;
         let task = tokio::spawn(async move {

@@ -64,6 +64,12 @@ stream over the app's websocket, not the HTTP response.
 
 ## Agent sessions asking a question
 
+For manual testing on local or deployed development environments, send
+`/ask <question>` for free text or `/ask <question> | option | option` for a
+single choice. This shortcut bypasses the model. It is disabled in production,
+where the text is an ordinary prompt; the model's `AskUser` tool and user-tool
+review remain independent of this development setting.
+
 An agent session (the `/app/channel/<channel>/agent/<session>` pane) can pause its turn to
 ask you something. A card titled `<bot> is asking` with trailing text `Waiting for you`
 appears in the transcript, and the notice `The agent is waiting for your answer above` sits

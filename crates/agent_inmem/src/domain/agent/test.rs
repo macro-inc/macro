@@ -64,6 +64,7 @@ where
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
+        enable_dev_commands: true,
     });
 
     let (client_channel, agent_channel) = AcpChannel::duplex();
@@ -397,6 +398,7 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
+        enable_dev_commands: false,
         mcp: Arc::new(Arc::clone(&spy)),
         mcp_tools: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
@@ -449,6 +451,7 @@ async fn with_asking_agent<Out>(
 ) -> (Vec<SessionNotification>, Vec<CreateElicitationRequest>, Out) {
     with_asking_engine(
         Arc::new(ScriptedEngine::new(vec![])),
+        true,
         answer,
         Duration::ZERO,
         scenario,
@@ -460,6 +463,7 @@ async fn with_asking_agent<Out>(
 /// answer each question - the user's think time.
 async fn with_asking_engine<Engine, Out>(
     engine: Arc<Engine>,
+    enable_dev_commands: bool,
     answer: agent_client_protocol::schema::v1::ElicitationAction,
     delay: Duration,
     scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId) -> Out,
@@ -488,6 +492,7 @@ where
         client_renders_forms: AtomicBool::new(false),
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
+        enable_dev_commands,
     });
 
     let (client_channel, agent_channel) = AcpChannel::duplex();
@@ -569,6 +574,39 @@ fn spoken(notifications: &[SessionNotification]) -> String {
             _ => None,
         })
         .collect()
+}
+
+#[tokio::test]
+async fn ask_is_an_ordinary_prompt_when_dev_commands_are_disabled() {
+    use agent_client_protocol::schema::v1::ElicitationAction;
+
+    let prompt = "/ask Which colour? | red | blue";
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "An ordinary model response".to_owned(),
+    )]));
+    let (notifications, asked, response) = with_asking_engine(
+        Arc::clone(&engine),
+        false,
+        ElicitationAction::Decline,
+        Duration::ZERO,
+        async |connection, session| {
+            connection
+                .send_request(text_prompt(&session, prompt))
+                .block_task()
+                .await
+                .expect("the ordinary turn should complete")
+        },
+    )
+    .await;
+
+    assert!(
+        asked.is_empty(),
+        "the manual command must not ask a question"
+    );
+    assert_eq!(engine.requests().len(), 1);
+    assert_eq!(engine.requests()[0].messages, vec![prompt]);
+    assert_eq!(spoken(&notifications), "An ordinary model response");
+    assert_eq!(response.stop_reason, StopReason::EndTurn);
 }
 
 #[tokio::test]
@@ -733,6 +771,7 @@ async fn a_turn_waiting_on_the_user_outlasts_the_idle_timeout() {
         )])));
     let (notifications, asked, response) = with_asking_engine(
         Arc::new(AskingEngine),
+        false,
         answer,
         TURN_IDLE_TIMEOUT * 3,
         async |connection, session| {
@@ -837,6 +876,7 @@ async fn a_user_tool_review_is_a_tool_scoped_form_elicitation_naming_the_tool() 
         ])));
     let (notifications, asked, response) = with_asking_engine(
         Arc::new(ReviewingEngine),
+        false,
         answer,
         Duration::ZERO,
         async |connection, session| {

@@ -164,6 +164,10 @@ async fn run() -> anyhow::Result<()> {
         .await
         .context("failed to resolve agent harness service secrets")?;
     let bot_id = BotId::new_from_uuid(config.harness_bot_id);
+    let enable_dev_commands = matches!(
+        config.environment,
+        Environment::Local | Environment::Develop
+    );
     // The in-process "macro(new)" bot is a compile-time identity, not
     // configuration: it is always `bot_id::MACRO_NEW_BOT_ID`, so the only real
     // question is whether this environment serves it. Production stays off
@@ -342,7 +346,7 @@ async fn run() -> anyhow::Result<()> {
                     Arc::new(AcpMcpConnector::new(EgressMcpClient::new(Arc::clone(
                         &egress,
                     )))),
-                ),
+                ).with_dev_commands(enable_dev_commands),
             })
         }
         None => None,

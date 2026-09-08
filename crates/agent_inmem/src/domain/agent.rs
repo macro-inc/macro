@@ -78,7 +78,8 @@ const SUBAGENT_TOOL: &str = "Subagent";
 ///
 /// A test rig, deliberately: the fastest way to drive the whole elicitation
 /// path (hold, render, answer, fold) end to end without an external agent or
-/// a model. The agent's own tools do not ask questions yet.
+/// a model. Only handled when the host enables development commands; the
+/// model-callable `AskUser` tool does not depend on that setting.
 pub const ASK_COMMAND: &str = "/ask";
 
 /// The property the `/ask` form's one field is sent back under.
@@ -118,6 +119,9 @@ pub struct AgentState {
     /// Whether the client advertised `elicitation.form` on `initialize`. The
     /// protocol forbids asking a mode the client did not advertise.
     pub client_renders_forms: AtomicBool,
+    /// Whether the host enables manual development commands such as `/ask`.
+    /// When disabled, their text is passed to the model as an ordinary prompt.
+    pub enable_dev_commands: bool,
 }
 
 impl AgentState {
@@ -542,7 +546,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         ));
                         return responder.respond(PromptResponse::new(StopReason::EndTurn));
                     }
-                    if let Some(question) = prompt.trim().strip_prefix(ASK_COMMAND) {
+                    if state.enable_dev_commands
+                        && let Some(question) = prompt.trim().strip_prefix(ASK_COMMAND)
+                    {
                         let question = question.trim().to_owned();
                         let cancel = state.begin_turn();
                         connection.spawn({
