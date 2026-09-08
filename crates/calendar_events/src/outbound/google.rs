@@ -338,6 +338,11 @@ fn provider_response_error(status: StatusCode, body: &str) -> GoogleProviderErro
         GoogleProviderErrorKind::ReauthRequired
     } else if status == StatusCode::UNAUTHORIZED
         || status == StatusCode::REQUEST_TIMEOUT
+        // Google returns an undocumented 412 ("Precondition check failed.")
+        // transiently on plain reads. Classifying it — and any unknown 4xx —
+        // as permanent wedged whole accounts on one flaky calendar, so 412 is
+        // retryable rather than terminal.
+        || status == StatusCode::PRECONDITION_FAILED
         || status == StatusCode::TOO_MANY_REQUESTS
         || status.is_server_error()
         || reasons.contains(&"authError")
@@ -351,11 +356,29 @@ fn provider_response_error(status: StatusCode, body: &str) -> GoogleProviderErro
     } else {
         GoogleProviderErrorKind::Permanent
     };
-    let message = payload
-        .map(|payload| payload.error.message)
-        .filter(|message| !message.is_empty())
-        .unwrap_or_else(|| format!("Google Calendar returned HTTP {status}"));
+    let message = provider_error_message(payload.as_ref(), status, &reasons);
     GoogleProviderError::new(kind, message)
+}
+
+/// Compose the provider error message, keeping Google's `reason` strings
+/// alongside the human-readable `message` so a failure is diagnosable from a
+/// stored `last_error` alone. Without this only `error.message` survived, so
+/// the exact reason for an undocumented 412 was unknowable from the database.
+fn provider_error_message(
+    payload: Option<&GoogleErrorResponse>,
+    status: StatusCode,
+    reasons: &[&str],
+) -> String {
+    let base = payload
+        .map(|payload| payload.error.message.as_str())
+        .filter(|message| !message.is_empty())
+        .map(str::to_owned)
+        .unwrap_or_else(|| format!("Google Calendar returned HTTP {status}"));
+    if reasons.is_empty() {
+        base
+    } else {
+        format!("{base} (reasons: {})", reasons.join(", "))
+    }
 }
 
 impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {

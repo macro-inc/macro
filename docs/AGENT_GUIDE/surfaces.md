@@ -42,7 +42,9 @@ The side panel's `Calendars` section folds each connected account into a collaps
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
-carry a small RSS icon.
+carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
+warning icon whose tooltip shows the provider error; the account keeps syncing its other
+calendars and the badge clears on its own once that calendar syncs again.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,

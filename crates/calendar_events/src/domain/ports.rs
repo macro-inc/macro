@@ -481,6 +481,20 @@ pub trait CalendarRepository: Send + Sync + 'static {
         events_upserted: usize,
     ) -> impl Future<Output = Result<Vec<RetiredCalendarEvent>, Report>> + Send;
 
+    /// Record a provider failure isolated to one calendar under the backfill's
+    /// fencing token: store the message, stamp the time, and bump the
+    /// consecutive-failure counter that gates whether the failure surfaces to
+    /// the user. The calendar's sync state is left untouched so the next poll
+    /// retries it. A successful `commit_google_calendar_sync` clears all three.
+    fn record_google_calendar_sync_error(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_id: Uuid,
+        message: &str,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
+
     /// Record a freshly opened push channel for one calendar under the
     /// backfill's fencing token.
     fn record_watch_channel(

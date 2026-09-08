@@ -27,6 +27,8 @@ struct FakeRepo {
     /// Retirements the snapshot commit reports back, standing in for sources
     /// the change feed cancelled or a full snapshot no longer observed.
     sync_retirements: Vec<RetiredCalendarEvent>,
+    /// Provider calendars whose isolated sync failure was recorded, in order.
+    recorded_sync_errors: Arc<Mutex<Vec<String>>>,
 }
 
 impl CalendarRepository for FakeRepo {
@@ -190,6 +192,21 @@ impl CalendarRepository for FakeRepo {
         _calendar_ids: Vec<Uuid>,
     ) -> Result<Vec<RetiredCalendarEvent>, Report> {
         Ok(Vec::new())
+    }
+
+    async fn record_google_calendar_sync_error(
+        &self,
+        _key: CalendarBackfillJobKey,
+        _lease_token: Uuid,
+        _account_id: Uuid,
+        _calendar_id: Uuid,
+        message: &str,
+    ) -> Result<(), Report> {
+        self.recorded_sync_errors
+            .lock()
+            .unwrap()
+            .push(message.to_string());
+        Ok(())
     }
 
     async fn record_watch_channel(
@@ -567,12 +584,110 @@ impl GoogleCalendarProvider for PartialFailureGoogleProvider {
     }
 }
 
+/// Fails the poll of every calendar it lists.
+#[derive(Clone)]
+struct TotalFailureGoogleProvider;
+
+impl GoogleCalendarProvider for TotalFailureGoogleProvider {
+    async fn list_calendars(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+    ) -> Result<Vec<ProviderCalendar>, GoogleProviderError> {
+        let calendar = |id: &str, primary: bool| ProviderCalendar {
+            provider_calendar_id: id.to_string(),
+            name: id.to_string(),
+            description: None,
+            time_zone: Some("UTC".to_string()),
+            color: None,
+            access_role: Some("owner".to_string()),
+            is_primary: primary,
+            is_selected: true,
+            default_reminders: Vec::new(),
+        };
+        Ok(vec![calendar("primary", true), calendar("team", false)])
+    }
+
+    async fn sync_events(
+        &self,
+        _access_token: &str,
+        _context: GoogleEventSyncContext,
+    ) -> Result<GoogleEventSyncBatch, GoogleProviderError> {
+        Err(GoogleProviderError::new(
+            GoogleProviderErrorKind::Transient,
+            "every calendar's poll failed",
+        ))
+    }
+
+    async fn watch_calendar(
+        &self,
+        _access_token: &str,
+        _email_link_id: Uuid,
+        _provider_calendar_id: &str,
+        _channel_id: Uuid,
+        _config: &GoogleWatchConfig,
+    ) -> Result<GoogleWatchChannel, GoogleProviderError> {
+        unreachable!("watch is disabled in these tests")
+    }
+}
+
 #[tokio::test]
-async fn partial_progress_reports_changes_when_a_later_calendar_fails() {
+async fn one_failed_calendar_is_isolated_and_the_account_completes() {
+    let lifecycle = FakeLifecycle::claimed();
+    let repository = FakeRepo::default();
+    let recorded_sync_errors = repository.recorded_sync_errors.clone();
+    let coordinator = GoogleCalendarBackfillCoordinator::new(
+        repository,
+        PartialFailureGoogleProvider,
+        lifecycle.clone(),
+        NoopMacroEventBroker,
+        None,
+    );
+
+    let mut report = GoogleBackfillRunReport::default();
+    coordinator
+        .run(
+            CalendarBackfillJobKey {
+                job_id: Uuid::now_v7(),
+                email_link_id: Uuid::now_v7(),
+            },
+            "macro|calendar@example.com",
+            "secret",
+            OccurrenceRange::maintenance_horizon(Utc::now()),
+            &mut report,
+        )
+        .await
+        .expect("a single unreadable calendar must not fail the whole account");
+
+    assert_eq!(
+        report.events_upserted, 1,
+        "the healthy calendar's commit must still land"
+    );
+    assert!(report.changed());
+    let recorded = recorded_sync_errors.lock().unwrap();
+    assert_eq!(
+        recorded.len(),
+        1,
+        "the failed calendar records its own error"
+    );
+    assert!(recorded[0].contains("the second calendar's poll failed"));
+    assert_eq!(
+        lifecycle.completions.lock().unwrap().len(),
+        1,
+        "the run completes rather than failing"
+    );
+    assert!(lifecycle.failures.lock().unwrap().is_empty());
+}
+
+/// Every calendar failing is a wholesale outage: the run fails so the
+/// coordinator can classify it (transient here) for retry, rather than
+/// quietly reporting success on an account that synced nothing.
+#[tokio::test]
+async fn every_calendar_failing_fails_the_run_for_retry() {
     let lifecycle = FakeLifecycle::claimed();
     let coordinator = GoogleCalendarBackfillCoordinator::new(
         FakeRepo::default(),
-        PartialFailureGoogleProvider,
+        TotalFailureGoogleProvider,
         lifecycle.clone(),
         NoopMacroEventBroker,
         None,
@@ -597,11 +712,8 @@ async fn partial_progress_reports_changes_when_a_later_calendar_fails() {
         error,
         GoogleCalendarBackfillRunError::Retryable(_)
     ));
-    assert_eq!(
-        report.events_upserted, 1,
-        "the first calendar's durable commit must surface through the failed run"
-    );
-    assert!(report.changed());
+    assert_eq!(report.events_upserted, 0);
+    assert!(lifecycle.completions.lock().unwrap().is_empty());
 }
 
 #[tokio::test]

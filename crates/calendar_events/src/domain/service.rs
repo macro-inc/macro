@@ -641,6 +641,12 @@ where
             .await
             .map_err(|error| -> Report { rootcause::report!(error).into() })?;
         let mut calendar_ids = Vec::with_capacity(calendars.len());
+        // A provider failure isolated to one calendar is recorded and skipped
+        // rather than failing the account; the run only fails when every
+        // synced calendar errors, so the coordinator can still classify a
+        // wholesale outage for retry.
+        let mut synced_calendars = 0usize;
+        let mut last_isolated_error: Option<GoogleProviderError> = None;
 
         for provider_calendar in calendars {
             let provider_calendar_id = provider_calendar.provider_calendar_id.clone();
@@ -663,7 +669,7 @@ where
                 continue;
             }
             let plan = stored_calendar.sync_plan(&range);
-            let batch = self
+            let batch = match self
                 .provider
                 .sync_events(
                     access_token,
@@ -682,7 +688,41 @@ where
                     },
                 )
                 .await
-                .map_err(|error| -> Report { rootcause::report!(error).into() })?;
+            {
+                Ok(batch) => batch,
+                Err(error) => {
+                    // Isolate one calendar's provider failure: record it for
+                    // the settings badge, leave its sync state untouched so
+                    // the next poll retries it, and keep syncing the rest. A
+                    // single unreadable calendar — such as a transient Google
+                    // 412 — must not wedge the whole account.
+                    self.repository
+                        .record_google_calendar_sync_error(
+                            key,
+                            lease_token,
+                            account_id,
+                            calendar_id,
+                            &error.to_string(),
+                        )
+                        .await
+                        .inspect_err(|record_error| {
+                            tracing::warn!(
+                                error=?record_error,
+                                calendar_id=%calendar_id,
+                                "failed to record isolated Google Calendar sync error"
+                            );
+                        })
+                        .ok();
+                    tracing::warn!(
+                        error=?error,
+                        calendar_id=%calendar_id,
+                        "isolating a failed Google Calendar and continuing the account sync"
+                    );
+                    last_isolated_error = Some(error);
+                    continue;
+                }
+            };
+            synced_calendars += 1;
             let mut calendar_count = 0;
             for upsert in batch.upserts {
                 if let Err(error) = validate_upsert(&upsert) {
@@ -786,6 +826,16 @@ where
                     }
                 }
             }
+        }
+
+        // Fail the run only when every synced calendar errored, so the
+        // coordinator classifies a wholesale outage (e.g. an expired token) for
+        // retry. A partial failure is already isolated per calendar above; the
+        // calendar list fetch failing returned earlier.
+        if synced_calendars == 0
+            && let Some(error) = last_isolated_error
+        {
+            return Err(rootcause::report!(error).into());
         }
 
         // A calendar dropped from the provider's list retires its sources, so

@@ -375,6 +375,28 @@ fn unrelated_forbidden_response_is_permanent() {
 }
 
 #[test]
+fn undocumented_precondition_failure_is_retryable() {
+    let error = provider_response_error(
+        StatusCode::PRECONDITION_FAILED,
+        r#"{"error":{"message":"Precondition check failed."}}"#,
+    );
+
+    assert_eq!(error.kind(), GoogleProviderErrorKind::Transient);
+}
+
+#[test]
+fn provider_error_keeps_google_reason_strings() {
+    let error = provider_response_error(
+        StatusCode::FORBIDDEN,
+        r#"{"error":{"message":"Forbidden","errors":[{"reason":"variableTermLimitExceeded"}]}}"#,
+    );
+
+    let rendered = error.to_string();
+    assert!(rendered.contains("Forbidden"), "{rendered}");
+    assert!(rendered.contains("variableTermLimitExceeded"), "{rendered}");
+}
+
+#[test]
 fn cancelled_single_events_become_tombstones() {
     let cancelled: GoogleEvent = serde_json::from_value(serde_json::json!({
         "id": "gone-event",

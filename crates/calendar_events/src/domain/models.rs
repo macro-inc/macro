@@ -1135,6 +1135,10 @@ pub struct VisibleCalendar {
     /// Whether this is one of Google's shared system calendars (holidays,
     /// birthdays) the account subscribes to rather than one a person maintains.
     pub is_subscription: bool,
+    /// A persistent sync failure isolated to this calendar, surfaced so the
+    /// settings row can badge it. `None` while the calendar is syncing
+    /// normally or a failure has not yet crossed the persistence threshold.
+    pub sync_error: Option<String>,
     /// Default reminders applied to events that keep `useDefault`.
     pub default_reminders: Vec<EventReminderOverride>,
 }

@@ -1,5 +1,6 @@
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import RssIcon from '@phosphor/rss.svg';
+import WarningIcon from '@phosphor/warning.svg';
 import { Checkbox } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { CalendarSource } from '../types';
@@ -98,6 +99,19 @@ export function SourceControls(props: SourceControlsProps) {
                         <span class="min-w-0 flex-1 truncate">
                           {source.name}
                         </span>
+                        <Show when={source.syncError}>
+                          {(error) => (
+                            <span
+                              title={`Sync failed: ${error()}`}
+                              class="flex shrink-0 text-alert-ink"
+                            >
+                              <WarningIcon
+                                class="size-3"
+                                aria-label={`Sync failed: ${error()}`}
+                              />
+                            </span>
+                          )}
+                        </Show>
                         <Show when={source.isSubscription}>
                           <span
                             title="Subscription calendar"

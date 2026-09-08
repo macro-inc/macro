@@ -376,6 +376,11 @@ impl From<&CalendarEventUpsert> for StoredSourceProjection {
     }
 }
 
+/// Consecutive isolated sync failures a calendar must accumulate before its
+/// error surfaces to the user. A one-off transient failure clears on the next
+/// successful poll, so only a persistent failure earns a settings-row badge.
+const CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD: i32 = 3;
+
 impl CalendarRepository for PgCalendarRepository {
     #[tracing::instrument(skip(self, scopes), err)]
     async fn apply_google_grant(
@@ -1384,6 +1389,9 @@ impl CalendarRepository for PgCalendarRepository {
             UPDATE calendars
             SET sync_token = $3,
                 synced_at = now(),
+                last_sync_error = NULL,
+                last_sync_error_at = NULL,
+                consecutive_sync_failures = 0,
                 materialized_starts_at = CASE
                     WHEN $4 THEN $5
                     ELSE materialized_starts_at
@@ -1425,6 +1433,41 @@ impl CalendarRepository for PgCalendarRepository {
 
         tx.commit().await.map_err(report)?;
         Ok(retired)
+    }
+
+    #[tracing::instrument(skip(self, message), fields(job_id = %key.job_id), err)]
+    async fn record_google_calendar_sync_error(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_id: Uuid,
+        message: &str,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
+        // The sync state (token, materialized range) is deliberately left
+        // untouched so the next poll retries this calendar; only the failure
+        // bookkeeping advances.
+        sqlx::query!(
+            r#"
+            UPDATE calendars
+            SET last_sync_error = $3,
+                last_sync_error_at = now(),
+                consecutive_sync_failures = consecutive_sync_failures + 1,
+                updated_at = now()
+            WHERE id = $1
+              AND account_id = $2
+              AND NOT is_deleted
+            "#,
+            calendar_id,
+            account_id,
+            message,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        tx.commit().await.map_err(report)
     }
 
     #[tracing::instrument(skip(self, channel), fields(job_id = %key.job_id), err)]
@@ -1922,7 +1965,12 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.is_primary,
                 calendar.access_role,
                 calendar.provider_calendar_id,
-                calendar.default_reminders
+                calendar.default_reminders,
+                CASE
+                    WHEN calendar.consecutive_sync_failures >= $2
+                    THEN calendar.last_sync_error
+                    ELSE NULL
+                END AS sync_error
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
@@ -1946,6 +1994,7 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.name ASC
             "#,
             requester_id,
+            CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD,
         )
         .fetch_all(&self.pool)
         .await
@@ -1961,6 +2010,7 @@ impl CalendarRepository for PgCalendarRepository {
                 is_primary: row.is_primary,
                 is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
                 is_subscription: is_system_calendar(&row.provider_calendar_id),
+                sync_error: row.sync_error,
                 default_reminders: serde_json::from_value(row.default_reminders)
                     .inspect_err(|e| {
                         tracing::error!(error = ?e, calendar_id = %row.id, "malformed calendar default_reminders json");
