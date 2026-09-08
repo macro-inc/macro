@@ -41,7 +41,7 @@ const DEV_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.CONNECTION_GATEWAY_URL]:
     'https://dev-gateway.macro.com/connection-gateway',
   [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]:
-    'https://document-cognition-dev.macro.com',
+    'https://dev-gateway.macro.com/cognition',
   [ServiceUrl.LEXICAL_SERVICE_URL]:
     'https://lexical-service-dev.macroverse.workers.dev',
   [ServiceUrl.UNFURL_SERVICE_URL]: 'https://dev-gateway.macro.com/unfurl',
@@ -64,7 +64,7 @@ const PROD_SERVICE_URLS: ServiceUrlMap = {
   [ServiceUrl.CONNECTION_GATEWAY_URL]:
     'https://gateway.macro.com/connection-gateway',
   [ServiceUrl.DOCUMENT_COGNITION_SERVICE_URL]:
-    'https://document-cognition.macro.com',
+    'https://gateway.macro.com/cognition',
   [ServiceUrl.LEXICAL_SERVICE_URL]:
     'https://lexical-service-prod.macroverse.workers.dev',
   [ServiceUrl.UNFURL_SERVICE_URL]: 'https://gateway.macro.com/unfurl',

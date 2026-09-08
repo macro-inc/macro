@@ -1,5 +1,6 @@
 //! GraphQL inbound adapter for the favorites domain: ordered favorite objects,
-//! mutations, and the DataLoader-backed current-viewer favorite edge.
+//! user-scoped queries, mutations, and the DataLoader-backed current-viewer
+//! favorite edge.
 #![deny(missing_docs)]
 #![deny(clippy::missing_docs_in_private_items)]
 
@@ -9,6 +10,8 @@ mod loaders;
 mod mutations;
 /// GraphQL favorite output objects.
 mod objects;
+/// User-scoped favorites query adapter.
+mod queries;
 
 pub use loaders::{
     EntityFavoriteEdgeReader, EntityFavoriteLoader, NoOpEntityFavoriteEdgeReader,
@@ -16,3 +19,4 @@ pub use loaders::{
 };
 pub use mutations::{FavoriteMutationRoot, NoOpFavoriteMutationService, ReorderFavoritesInput};
 pub use objects::GraphqlFavorite;
+pub use queries::{FavoriteQueryReader, resolve_favorites};

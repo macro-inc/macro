@@ -5101,6 +5101,53 @@ export const putCrmTeamSettingsResponse = zod
   );
 
 /**
+ * @summary Replace the team's deal stages; requires `edit_stages_role` (403 otherwise).
+ */
+export const putCrmTeamStagesBody = zod
+  .object({
+    stages: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .nullish()
+              .describe('Existing stage to keep; omit to add one.'),
+            label: zod
+              .string()
+              .describe(
+                'Label after the update; non-blank and unique within the set.'
+              ),
+          })
+          .describe('One stage in a `PUT \/crm\/stages` body.')
+      )
+      .describe('Stages first to last.'),
+  })
+  .describe(
+    'Request body for `PUT \/crm\/stages`: the whole stage set in order.'
+  );
+
+export const putCrmTeamStagesResponse = zod
+  .object({
+    definition_id: zod.uuid().describe('Team-scoped stage definition id.'),
+    stages: zod
+      .array(
+        zod
+          .object({
+            id: zod
+              .uuid()
+              .describe(
+                'Property option id companies carry as their stage value.'
+              ),
+            label: zod.string().describe('Label.'),
+          })
+          .describe("One stage of the team's custom pipeline.")
+      )
+      .describe('Stages in pipeline order.'),
+  })
+  .describe("The team's custom stage set.");
+
+/**
  * @summary Gets the users documents to populate their recent document list
  */
 export const getUserDocumentsHandlerQueryParams = zod.object({

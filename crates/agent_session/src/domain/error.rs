@@ -36,6 +36,11 @@ pub enum AgentSessionError {
         "agent session {0} cannot be restored because the agent supports neither session/resume nor session/load"
     )]
     ResumeUnsupported(AgentSessionId),
+    /// The answer names an elicitation the live connection is not holding:
+    /// already answered, cancelled by a stop, lost with the connection, or
+    /// never asked.
+    #[error("agent session {0} has no pending elicitation matching that request id")]
+    ElicitationNotPending(AgentSessionId),
     #[error("agent session {0} action delivery timed out")]
     DeliveryTimedOut(AgentSessionId),
     #[error("agent session {0} log persistence timed out")]

@@ -410,6 +410,90 @@ discipline above is the cost of admission.
 
 ## Lifecycle mapping
 
+### Durable Load History
+
+Cursor restores through ACP `session/load`, not `session/resume`. The implementation
+captures original prompts, complete SSE records, polling bodies, and local
+lifecycle decisions before translating them. Loading uses the same processing
+machine as live delivery and never executes a provider prompt or tool again.
+
+Every replayed ACP frame is appended to `agent_session_log`, including repeated
+conversation content. Only a matching, valid, successfully persisted load
+response selects a new effective-history window, starting at that connection's
+initialization. The selection is atomic with the response under the session's
+ownership fence. The raw audit history is retained; the product log endpoint
+reads the selected indexed range. Generic server and browser folds stage load
+updates separately and replace visible history only on success. Failed or
+incomplete loads preserve the committed conversation; resume does not replace it.
+
+Live recovery uses this same load path. Cursor captures foreign or interrupted
+runs into its native journal without publishing replacement conversation frames.
+Its notifier enqueues a typed, host-local reload requirement; the pipe adapter
+delivers that requirement before a queued prompt response. The session domain
+waits for the current prompt response, queues subsequent commands, and initiates
+`initialize` followed by standard `session/load`. Each successful load therefore
+has its own durable initialization boundary. There is no agent-initiated client
+request or separate history replacement protocol. The notification never waits
+for load while holding Cursor's writer gate; the load reply remains serialized
+with live writers through `ReplayGuard`.
+The requirement is consumed internally, never persisted as a user-facing status.
+Already-dispatched prompts may finish while reload is pending; subsequent commands
+wait at the host's handshake gate. Recovery observed while a load reply is queued
+causes another load before those commands are flushed. Standalone ACP clients
+without the host channel continue serving prompts and expose captured history on
+their next client-initiated load, without unsolicited replacement traffic.
+One pending-reload bit suppresses further background capture until load completes,
+without rejecting already-dispatched prompts. Recovery validates the journal before
+requesting load; unavailable original prompts retain the old visible history rather
+than demanding a replacement known to be incomplete.
+
+Existing sessions without a complete native journal require provider-history
+hydration. If Cursor no longer exposes enough history to reconstruct the
+conversation, load must fail explicitly rather than select an incomplete
+replacement. Operators should account for this retention limitation before
+rollout. The delivered-run watermark remains separate from journal capture
+progress, and local journal sequence numbers are not remote SSE resume tokens.
+
+The journal's atomic owner fence is not a second ownership authority. The
+session service acquires the claim and binds that exact generation once through
+`activate_reserved` and `RuntimeAttachment::on_activate`, which receives the typed
+`SessionClaim` before actor startup. Container providers return attachments;
+transport mapping preserves the callback and shared handshake. Physical
+transports carry frames only. The journal never
+claims ownership or refreshes its fence from a database read.
+
+The browser forwards the effective-history snapshot and buffered/live durable
+rows to Rust `LogIngestion` through WASM `snapshot` and `push_rows`. Ingestion
+retains the snapshot IDs and inclusive `(created_at, id)` boundary, preserving
+Postgres timestamp precision without a JavaScript timestamp comparator. It drops
+only snapshot duplicates and excluded older rows, never distinct ACP replay
+rows, and preserves live delivery order without a moving high-water mark.
+The ID set stays bounded by snapshot size. `FoldMachine` remains append-only;
+raw recording consumers retain the existing `extend` and `push` API.
+
+Routing new commands away from a stale replica does not stop its existing work.
+`PgAgentSessionRepo::claim` can take over when the old replica's heartbeat is
+stale, without notifying its process. `activate_reserved` gives the actor a
+fenced ACP log writer; the next rejected append stops that actor. `run_session`
+then drops its transport, and the pipe pump closes asynchronously. Independently,
+`CursorContainerManager::serve_session` awaits `sync_foreign_runs` inside its
+timer branch: pipe cancellation is not polled again until that await finishes.
+A provider response can therefore reach the native journal after takeover even
+with no new command dispatched to the old replica.
+
+`PgCursorJournal::lock_owner` checks the bound replica/generation while holding
+the `agent_session` row lock through journal commit. Takeover updates that same
+row: either the old append commits before takeover, or it fails after takeover.
+The existing `SessionClaim` is a token, not a transaction-bound storage capability;
+the existing fenced ACP writer only covers ACP log appends. Wrapping a simple
+journal with a preflight ownership check would lose this atomicity. Retain the
+small storage fence rather than introduce a new generic transaction wrapper.
+
+Native SSE records contain only event name, original data, and provider ID.
+Scripted providers emit the same wire-shaped records through the production
+decoder; recorded fixtures retain their original payloads rather than being
+decoded and re-encoded as domain enums.
+
 Most of the sandbox lifecycle is meaningless for Cursor. Stating what each port
 method degenerates to, so the small implementation does not read as an
 oversight:

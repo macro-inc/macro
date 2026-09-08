@@ -268,8 +268,17 @@ function Root(props: ViewShellRootProps) {
  * Sizing region for navigation. Renders a div, not aside.
  * ViewSidebar.Root inside keeps the landmark.
  */
-function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+type ViewShellAsideProps = JSX.HTMLAttributes<HTMLDivElement> & {
+  /** Called with the solved aside width after a drag or keyboard resize. */
+  onWidthChangeEnd?: (width: number) => void;
+};
+
+function Aside(props: ViewShellAsideProps) {
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'onWidthChangeEnd',
+  ]);
   const ws = useViewShellInternal();
   const redistributionPreferredSize = () => {
     const layout = ws.aside.layout();
@@ -302,6 +311,7 @@ function Aside(props: JSX.HTMLAttributes<HTMLDivElement>) {
       redistributionPreferredSize={redistributionPreferredSize()}
       target={{ kind: 'px', px: ws.aside.layout().width }}
       collapsed={() => ws.aside.isCollapsed()}
+      onSizeChangeEnd={local.onWidthChangeEnd}
     >
       <div
         {...rest}
@@ -351,7 +361,7 @@ function Header(props: JSX.HTMLAttributes<HTMLElement>) {
     <header
       {...rest}
       class={cn(
-        'shrink-0 px-4 pb-5 pt-4 @max-[760px]/view-shell:px-3 @max-[480px]/view-shell:px-2',
+        'shrink-0 px-4 pb-3 pt-2 touch:px-(--mobile-chrome-gutter) touch:pt-[calc(var(--safe-top,0px)+0.5rem)]',
         local.class
       )}
       data-view-shell-header=""
@@ -370,7 +380,7 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
       <div
         {...rest}
         class={cn(
-          'min-h-0 min-w-0 flex-1 px-4 pb-4 @max-[760px]/view-shell:px-3 @max-[480px]/view-shell:px-2',
+          'min-h-0 min-w-0 flex-1 px-4 pb-4 @max-[760px]/view-shell:px-3 @max-[720px]/view-shell:pb-2 @max-[480px]/view-shell:px-2',
           local.class
         )}
         data-view-shell-content=""

@@ -93,3 +93,14 @@ fn domain_parts_serialize_directly_into_the_browser_contract() {
         })
     );
 }
+
+#[test]
+fn empty_replacement_is_an_explicit_browser_event() {
+    let event = FoldEvent::MessagesReplaced(std::borrow::Cow::Owned(vec![])).into_owned();
+    assert!(event.message().is_none());
+    let session = AgentSessionId::new_from_uuid(macro_uuid::Uuid::from_u128(7));
+    assert_eq!(
+        serde_json::to_value(FoldedStreamEvent::new(session, event)).unwrap(),
+        json!({"kind":"replace", "messages":[]})
+    );
+}

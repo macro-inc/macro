@@ -3,7 +3,7 @@ use std::{marker::PhantomData, sync::Arc};
 use async_graphql::{Context, InputObject, Object};
 use entity_mutation::EntityMutationErrorCode;
 use favorites::domain::{
-    models::{Favorite, FavoritesError, FavoritesMutationActor},
+    models::{Favorite, FavoritesError, FavoritesMutationActor, SetFavoriteResult},
     ports::FavoritesMutationService,
 };
 use graphql_common::require_authenticated_user;
@@ -43,7 +43,7 @@ impl FavoritesMutationService for NoOpFavoriteMutationService {
         _actor: FavoritesMutationActor,
         _entity: Entity<'static>,
         _favorite: bool,
-    ) -> Result<Entity<'static>, FavoritesError> {
+    ) -> Result<SetFavoriteResult, FavoritesError> {
         Err(FavoritesError::BadRequest(
             "favorite mutations are not configured".to_string(),
         ))
@@ -57,6 +57,28 @@ impl FavoritesMutationService for NoOpFavoriteMutationService {
         Err(FavoritesError::BadRequest(
             "favorite mutations are not configured".to_string(),
         ))
+    }
+}
+
+/// Result of setting an entity's favorite state.
+pub struct SetFavoritePayload<E: SoupEntityEdges> {
+    /// Generic entity-mutation outcome, including normalized Soup effects.
+    result: GraphqlEntityMutationResult<E>,
+    /// Persisted favorite after an add, or `None` after a removal.
+    favorite: Option<GraphqlFavorite>,
+}
+
+/// GraphQL result of setting an entity's favorite state.
+#[Object]
+impl<E: SoupEntityEdges> SetFavoritePayload<E> {
+    /// Entity mutation result, including normalized Soup cache effects.
+    async fn result(&self) -> &GraphqlEntityMutationResult<E> {
+        &self.result
+    }
+
+    /// Persisted favorite after an add, or `null` after a removal.
+    async fn favorite(&self) -> Option<&GraphqlFavorite> {
+        self.favorite.as_ref()
     }
 }
 
@@ -88,8 +110,8 @@ fn mutation_error_code(error: FavoritesError) -> EntityMutationErrorCode {
     }
 }
 
-/// Convert an aggregate favorites failure into a user-safe GraphQL error.
-fn reorder_error(error: FavoritesError) -> async_graphql::Error {
+/// Expose failures to the transport so durable mutations roll back, including replay.
+fn mutation_error(error: FavoritesError) -> async_graphql::Error {
     let message = match &error {
         FavoritesError::NotFound => "favorite not found".to_string(),
         FavoritesError::UnsupportedEntityType(_) | FavoritesError::BadRequest(_) => {
@@ -97,7 +119,7 @@ fn reorder_error(error: FavoritesError) -> async_graphql::Error {
         }
         FavoritesError::Unauthorized => "not authorized to update favorites".to_string(),
         FavoritesError::Internal(_) => {
-            tracing::error!(error = ?error, "failed to reorder favorites");
+            tracing::error!(error = ?error, "failed to update favorites");
             "favorites mutation failed".to_string()
         }
     };
@@ -111,7 +133,7 @@ where
     S: FavoritesMutationService,
     E: SoupEntityEdges,
 {
-    /// Add or remove an entity from the actor's favorites.
+    /// Add or remove an entity and return the generic entity mutation result.
     #[tracing::instrument(skip_all, err(Debug))]
     async fn set_entity_favorite(
         &self,
@@ -125,9 +147,31 @@ where
             .set_favorite(actor, entity.into_model(), favorite)
             .await;
 
+        // Preserve both the success and error union shapes for legacy callers.
         Ok(match result {
-            Ok(entity) => GraphqlEntityMutationResult::from_updated_entity(entity),
+            Ok(result) => GraphqlEntityMutationResult::from_updated_entity(result.entity),
             Err(error) => GraphqlEntityMutationResult::from_error_code(mutation_error_code(error)),
+        })
+    }
+
+    /// Add or remove an entity and return the persisted favorite record.
+    #[tracing::instrument(skip_all, err(Debug))]
+    async fn set_favorite(
+        &self,
+        ctx: &Context<'_>,
+        entity: EntityRefInput,
+        favorite: bool,
+    ) -> async_graphql::Result<SetFavoritePayload<E>> {
+        let actor = ctx.data::<FavoritesMutationActor>()?.clone();
+        let service = ctx.data::<Arc<S>>()?;
+        let result = service
+            .set_favorite(actor, entity.into_model(), favorite)
+            .await
+            .map_err(mutation_error)?;
+
+        Ok(SetFavoritePayload {
+            result: GraphqlEntityMutationResult::from_updated_entity(result.entity),
+            favorite: result.favorite.map(GraphqlFavorite::new),
         })
     }
 
@@ -148,7 +192,7 @@ where
         let favorites = service
             .reorder_favorites(user_id, ordered)
             .await
-            .map_err(reorder_error)?;
+            .map_err(mutation_error)?;
 
         Ok(favorites.into_iter().map(GraphqlFavorite::new).collect())
     }

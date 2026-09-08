@@ -1,4 +1,4 @@
-use super::error::Result;
+use super::error::{AgentSessionError, Result};
 use super::model::*;
 use agent_client_protocol::schema::v1::SessionId;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
@@ -28,16 +28,116 @@ pub struct BotFacts {
     /// bots' sessions are opened by the trigger pipeline, never over HTTP,
     /// and nothing may dial in for them.
     pub is_managed: bool,
+    /// Whether this is a first-party system bot rather than a user- or
+    /// team-owned persona. System bots belong to everyone.
+    pub is_system: bool,
     /// The user who owns the bot, when it is user-owned.
     pub owner_user_id: Option<MacroUserIdStr<'static>>,
+    /// Team that owns the bot, when it is team-owned.
+    pub owner_team_id: Option<Uuid>,
     /// The registered harness this bot's agent is bound to, when it is one.
     pub harness_id: Option<harness_id::HarnessId>,
+    /// Runtime profile for a persisted agent. Fixed system bots have no
+    /// persisted profile and use deployment defaults instead.
+    pub managed_profile: Option<ManagedAgentProfile>,
+}
+
+/// Runtime settings snapshotted when a managed persona opens a session.
+#[derive(Debug, Clone)]
+pub struct ManagedAgentProfile {
+    /// Model configured as this persona's default.
+    pub model: String,
+    /// Harness serving this persona.
+    pub harness: String,
+    /// Instructions configured for this persona.
+    pub instructions: String,
+    /// MCP servers this persona may use.
+    pub mcp_servers: AgentMcpServers,
+}
+
+/// A managed persona selected for one managed session.
+#[derive(Debug, Clone)]
+pub struct SelectedManagedPersona {
+    /// Bot identity used by the session.
+    pub bot_id: BotId,
+    /// Runtime settings resolved from a persisted persona. `None` for a fixed
+    /// system bot, whose sessions run on the deployment's defaults for it.
+    pub profile: Option<ManagedAgentProfile>,
 }
 
 /// Read-only lookup of the bots sessions may be opened for.
 pub trait BotDirectory: Send + Sync + 'static {
     /// Fetch a bot's facts; `None` when no such bot exists.
     fn bot_facts(&self, bot: BotId) -> impl Future<Output = Result<Option<BotFacts>>> + Send;
+
+    /// Whether a user belongs to a team that owns a persona.
+    fn user_has_team(
+        &self,
+        user: MacroUserIdStr<'static>,
+        team_id: Uuid,
+    ) -> impl Future<Output = Result<bool>> + Send;
+}
+
+/// Why a user cannot select a bot as a managed session persona.
+#[derive(Debug)]
+pub enum ManagedPersonaError {
+    /// No active bot has this id.
+    Unknown,
+    /// The bot has no agent runtime.
+    NotAgent,
+    /// The bot is served by an external runtime.
+    External,
+    /// The user does not own or belong to the persona's owner.
+    Forbidden,
+    /// Looking up the persona or its owner failed.
+    Lookup(AgentSessionError),
+}
+
+/// Resolve and authorize a managed persona for a user.
+///
+/// Ownership policy lives in the domain: private personas belong to their
+/// owner, team personas are available to team members, and managed system
+/// bots (the deployment's own coders) are available to everyone, exactly as
+/// they are when mentioned in a channel.
+pub async fn managed_persona_for_user<Bots: BotDirectory>(
+    bots: &Bots,
+    bot_id: BotId,
+    user: &MacroUserIdStr<'static>,
+) -> std::result::Result<SelectedManagedPersona, ManagedPersonaError> {
+    let facts = bots
+        .bot_facts(bot_id)
+        .await
+        .map_err(ManagedPersonaError::Lookup)?
+        .ok_or(ManagedPersonaError::Unknown)?;
+    if !facts.has_agent {
+        return Err(ManagedPersonaError::NotAgent);
+    }
+    if !facts.is_managed {
+        return Err(ManagedPersonaError::External);
+    }
+    if facts.is_system {
+        return Ok(SelectedManagedPersona {
+            bot_id,
+            profile: None,
+        });
+    }
+    let authorized = if let Some(owner) = facts.owner_user_id {
+        owner.as_ref() == user.as_ref()
+    } else if let Some(team_id) = facts.owner_team_id {
+        bots.user_has_team(user.clone(), team_id)
+            .await
+            .map_err(ManagedPersonaError::Lookup)?
+    } else {
+        false
+    };
+    if !authorized {
+        return Err(ManagedPersonaError::Forbidden);
+    }
+    let profile = facts.managed_profile.ok_or(ManagedPersonaError::NotAgent)?;
+    Ok(SelectedManagedPersona {
+        bot_id,
+        profile: Some(profile),
+    })
 }
 
 /// The mention that triggered a session, when one did.
@@ -92,8 +192,11 @@ pub struct OpenManagedSession {
     /// First prompt to deliver once the sandbox is attached. `None` opens an
     /// idle session its owner prompts from the session's own surface.
     pub prompt: Option<String>,
-    /// Instructions the session's runtime works under, for its whole life.
-    /// `None` runs the runtime's own default.
+    /// A selected persona's authoritative runtime profile. `None` uses the
+    /// deployment's default managed coding persona.
+    pub profile: Option<SelectedManagedPersona>,
+    /// Ad-hoc instructions for the default managed persona. Ignored when a
+    /// persisted persona profile is selected.
     pub instructions: Option<String>,
 }
 
@@ -342,7 +445,7 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
     /// session's current fence.
     ///
     /// This is the write half of the fencing contract: the check and the
-    /// append are one atomic statement, so a replica that stalled past its
+    /// append are one atomic operation, so a replica that stalled past its
     /// heartbeat and was superseded cannot interleave frames no matter when
     /// it wakes - its append matches nothing and fails with
     /// [`FencedOut`](super::error::AgentSessionError::FencedOut), which the
@@ -353,7 +456,20 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         claim: &SessionClaim,
     ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
 
-    /// List all log entries for a session, in chronological order.
+    /// Append a successful load response and select its initialization atomically,
+    /// under the current ownership fence. The boundary must belong to this session.
+    fn create_fenced_with_boundary(
+        &self,
+        log: AgentSessionLog,
+        claim: &SessionClaim,
+        boundary: Option<HistoryBoundary>,
+    ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
+
+    /// List effective ACP history in deterministic `(created_at, id)` order.
+    /// Starts at the latest successfully loaded initialization, or the beginning.
+    /// Raw failed/partial replay frames remain; consumers must stage load attempts.
+    /// The first returned row is the inclusive transport reconciliation cursor;
+    /// buffered rows ordered before it are obsolete. An empty result has none.
     ///
     /// Entries come back stamped with when the log recorded them: the frame
     /// itself carries no time, and a reader ordering or merging a session's
@@ -367,7 +483,17 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
 /// Sequential live log writer owned by one session actor.
 pub trait AgentSessionLogWriter: Send + 'static {
     /// Persist and fold one frame into this connection's live projection.
-    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<()>> + Send;
+    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Uuid>> + Send {
+        self.append_with_boundary(log, None)
+    }
+
+    /// Persist a frame and optional successful-load boundary in one transaction.
+    /// Returns its durable row identity before the actor continues.
+    fn append_with_boundary(
+        &mut self,
+        log: AgentSessionLog,
+        boundary: Option<HistoryBoundary>,
+    ) -> impl Future<Output = Result<Uuid>> + Send;
 }
 
 /// A session's queue changed; this is the whole queue as it stands now.

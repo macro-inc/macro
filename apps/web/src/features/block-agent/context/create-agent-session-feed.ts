@@ -76,6 +76,20 @@ function sameMessage(a: FoldedMessage, b: FoldedMessage): boolean {
 export function createAgentSessionFeed(
   sessionId: Accessor<string | undefined>
 ): AgentSessionFeed {
+  // Whether this block went on screen before it had a session to load.
+  //
+  // `resource.latest` falls back to a *suspending* read until the resource has
+  // resolved once, and suspending hands the block's
+  // `<Suspense fallback={<LoadingBlock />}>` a promise: Solid swaps in the
+  // fallback, which detaches the whole block subtree and re-attaches it when
+  // the fetch lands. A cold open has nothing on screen to lose and wants that
+  // skeleton. This block does: it opened on a placeholder minutes before the
+  // create resolved, the user has been typing into its composer the whole
+  // time, and the detach blanks the transcript and drops the caret to
+  // `<body>`. Absent is a state it already renders — that is the whole point
+  // of the placeholder — so report that for the first fetch instead.
+  const openedPending = sessionId() === undefined;
+
   const [list, setList] = createStore<FoldedMessage[]>([]);
   const [bot, setBot] = createSignal<SessionBot>();
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
@@ -142,6 +156,15 @@ export function createAgentSessionFeed(
       const fold = await acquireAgentSessionFold({
         agentSessionId: id,
         onChange: upsert,
+        onReplace: (messages) =>
+          setList(
+            produce((current: FoldedMessage[]) => {
+              // Replay can reuse turn/author and tool IDs for different part
+              // kinds. Replace row identities atomically so mounted parts
+              // cannot keep reading a union variant that reconcile removed.
+              current.splice(0, current.length, ...messages);
+            })
+          ),
         onMetadata: setMetadata,
       });
       if (superseded()) {
@@ -203,8 +226,12 @@ export function createAgentSessionFeed(
     mutate(session);
   };
 
+  // A first fetch would suspend; see `openedPending`.
+  const session = () =>
+    openedPending && resource.state === 'pending' ? undefined : resource.latest;
+
   return {
-    session: () => resource.latest,
+    session,
     bot,
     metadata,
     messages,

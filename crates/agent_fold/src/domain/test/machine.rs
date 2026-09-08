@@ -45,6 +45,10 @@ impl Consumer {
             FoldEvent::NewMessage(message) => (true, message.into_owned()),
             FoldEvent::MessageUpdate(message) => (false, message.into_owned()),
             FoldEvent::MetadataUpdated(_) => return,
+            FoldEvent::MessagesReplaced(messages) => {
+                self.messages = messages.into_owned();
+                return;
+            }
         };
         let id = message.id();
         self.reports.push((is_new, id));
@@ -272,23 +276,16 @@ fn content_without_a_prompt_still_folds() {
         "\n",
         r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"picking up where we left off"}}}}}"#,
         "\n",
-        // Closed by a response to the prompt that lives in the resumed
-        // session's own log - not by the load response, which carries config
-        // options rather than a stop reason.
-        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p","result":{"stopReason":"end_turn"}}}"#,
+        // Replay becomes visible only when the matching load succeeds.
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"l","result":{}}}"#,
     ));
     let consumer = Consumer::drive(resumed);
 
-    let agent_side = MessageId {
-        turn: TurnId(0),
-        author: AuthorKind::Agent,
-    };
-    assert_eq!(
-        consumer.reports,
-        vec![(true, agent_side), (false, agent_side)],
-        "the agent's side is announced and then closed; there is no prompt to \
-         derive a user side from"
+    assert!(
+        consumer.reports.is_empty(),
+        "replay is delivered as a replacement, not new activity"
     );
+    assert_eq!(consumer.messages.len(), 1);
 
     let agent = &consumer.messages[0];
     assert_eq!(
@@ -298,9 +295,8 @@ fn content_without_a_prompt_still_folds() {
         }]
     );
     assert_eq!(
-        agent.stop,
-        Some(StopReason::EndTurn),
-        "a turn nothing prompted is closed by the first response that stops"
+        agent.stop, None,
+        "load completion does not imply that the last replayed turn finished"
     );
 }
 

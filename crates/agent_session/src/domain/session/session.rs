@@ -3,10 +3,12 @@
 use std::collections::VecDeque;
 
 use agent_client_protocol::schema::v1::{
-    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse, McpServer,
-    NewSessionRequest, NewSessionResponse, PermissionOptionKind, RequestId,
-    RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse, Response,
-    ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionId,
+    ClientCapabilities, CreateElicitationRequest, CreateElicitationResponse, ElicitationAction,
+    ElicitationCapabilities, ElicitationFormCapabilities, ElicitationMode, ElicitationScope,
+    ElicitationUrlCapabilities, InitializeRequest, InitializeResponse, LoadSessionRequest,
+    LoadSessionResponse, McpServer, NewSessionRequest, NewSessionResponse, PermissionOptionKind,
+    RequestId, RequestPermissionOutcome, RequestPermissionRequest, RequestPermissionResponse,
+    Response, ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionId,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
@@ -20,8 +22,8 @@ use crate::domain::error::AgentSessionError;
 use crate::domain::model::AgentSessionId;
 
 use super::types::{
-    CloseReason, Effect, Input, PendingAction, RuntimeStatus, SessionOpening, SessionPhase,
-    SessionRestoreSupport, StopReason,
+    CloseReason, Effect, Input, PendingAction, PendingElicitation, RuntimeStatus, SessionOpening,
+    SessionPhase, SessionRestoreSupport, StopReason,
 };
 
 const INITIAL_REQUEST_NUM: u64 = 0;
@@ -31,8 +33,10 @@ const INITIAL_REQUEST_NUM: u64 = 0;
 /// See the [module docs](super) for scope and the sans-IO contract.
 pub struct SessionMachine<Token> {
     id: AgentSessionId,
+    initialization: Option<crate::domain::model::HistoryBoundary>,
     phase: SessionPhase,
     next_request: u64,
+    connection_context: Option<macro_uuid::Uuid>,
     /// Held outside the phase so a partial flush strands nothing.
     pending: VecDeque<PendingAction<Token>>,
     /// The newest turn-occupying request the runtime has not answered yet.
@@ -43,6 +47,7 @@ pub struct SessionMachine<Token> {
     /// [`Effect::TurnEnded`].
     in_flight_turn: Option<(RequestId, AgentActionId)>,
     resume_session_id: Option<SessionId>,
+    reload_required: bool,
     /// Directory the agent works in, snapshotted on the session row at
     /// creation; `session/new`, `session/resume`, and `session/load` all
     /// carry it, so a reconnect re-enters the directory the session
@@ -59,11 +64,14 @@ impl<Token> SessionMachine<Token> {
     pub fn new(id: AgentSessionId, workspace: String, mcp_servers: Vec<McpServer>) -> Self {
         Self {
             id,
+            initialization: None,
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
+            connection_context: None,
             pending: VecDeque::new(),
             in_flight_turn: None,
             resume_session_id: None,
+            reload_required: false,
             workspace,
             mcp_servers,
         }
@@ -78,11 +86,14 @@ impl<Token> SessionMachine<Token> {
     ) -> Self {
         Self {
             id,
+            initialization: None,
             phase: SessionPhase::Booting,
             next_request: INITIAL_REQUEST_NUM,
+            connection_context: None,
             pending: VecDeque::new(),
             in_flight_turn: None,
             resume_session_id: Some(session_id),
+            reload_required: false,
             workspace,
             mcp_servers,
         }
@@ -93,6 +104,19 @@ impl<Token> SessionMachine<Token> {
         self.id
     }
 
+    /// Namespace request IDs for a fresh actor on a potentially shared transport.
+    pub(crate) fn with_connection_context(mut self, context: macro_uuid::Uuid) -> Self {
+        self.connection_context = Some(context);
+        self
+    }
+
+    /// Retain the durable initialization identity for this actor's connection.
+    pub fn initialization_persisted(&mut self, id: macro_uuid::Uuid) {
+        self.initialization = Some(crate::domain::model::HistoryBoundary {
+            initialization_log_id: id,
+        });
+    }
+
     /// Current phase.
     pub fn status(&self) -> RuntimeStatus {
         match &self.phase {
@@ -100,7 +124,7 @@ impl<Token> SessionMachine<Token> {
             SessionPhase::Initializing { .. } | SessionPhase::Opening { .. } => {
                 RuntimeStatus::Handshaking
             }
-            SessionPhase::Live { session_id } => RuntimeStatus::Live {
+            SessionPhase::Live { session_id, .. } => RuntimeStatus::Live {
                 session_id: session_id.clone(),
             },
             SessionPhase::Dead => RuntimeStatus::Dead,
@@ -110,6 +134,18 @@ impl<Token> SessionMachine<Token> {
     /// Number of accepted actions that have not reached the transport.
     pub fn pending_count(&self) -> usize {
         self.pending.len()
+    }
+
+    /// The id of the elicitation this connection is holding for the user, if
+    /// any.
+    pub fn pending_elicitation(&self) -> Option<&RequestId> {
+        match &self.phase {
+            SessionPhase::Live {
+                elicitation: Some(pending),
+                ..
+            } => Some(&pending.request_id),
+            _ => None,
+        }
     }
 
     /// Advance the machine by one input, returning the effects it implies.
@@ -123,6 +159,14 @@ impl<Token> SessionMachine<Token> {
             } => self.on_command(from, action, action_id, token),
             Input::Inbound(message) => self.on_inbound(message),
             Input::Ready { restore } => self.on_connection_ready(restore),
+            Input::SharedReady { restore, context } => {
+                if !matches!(self.phase, SessionPhase::Booting) {
+                    return vec![];
+                }
+                let mut effects = vec![Effect::EstablishInitialization { context }];
+                self.begin_opening(restore, &mut effects);
+                effects
+            }
             Input::Closed(reason) => self.on_closed(reason),
         }
     }
@@ -149,10 +193,27 @@ impl<Token> SessionMachine<Token> {
     ) -> Vec<Effect<Token>> {
         let mut effects = Vec::new();
 
+        // A stop cancels the question the agent is waiting on, and does so
+        // before the cancel notification goes out, so the agent hears the
+        // answer to its request before it hears that the turn is over.
+        if matches!(action, AgentAction::Stop) {
+            self.cancel_pending_elicitation(from.clone(), &mut effects);
+        }
+
         let session_id = match &self.phase {
             SessionPhase::Booting
             | SessionPhase::Initializing { .. }
             | SessionPhase::Opening { .. } => {
+                // An answer cannot be queued: it names a request id that only
+                // a live connection could have received, and any connection
+                // that opens from here is a fresh one.
+                if let AgentAction::RespondElicitation(_) = &action {
+                    effects.push(Effect::Complete {
+                        token,
+                        result: Err(AgentSessionError::ElicitationNotPending(self.id)),
+                    });
+                    return effects;
+                }
                 self.pending.push_back(PendingAction {
                     from,
                     action,
@@ -161,7 +222,7 @@ impl<Token> SessionMachine<Token> {
                 });
                 return effects;
             }
-            SessionPhase::Live { session_id } => session_id.clone(),
+            SessionPhase::Live { session_id, .. } => session_id.clone(),
             SessionPhase::Dead => {
                 effects.push(Effect::Complete {
                     token,
@@ -170,6 +231,26 @@ impl<Token> SessionMachine<Token> {
                 return effects;
             }
         };
+
+        // An answer must match the one elicitation being held, and answering
+        // it releases the slot before the response goes out.
+        if let AgentAction::RespondElicitation(answer) = &action {
+            let matches = matches!(
+                &self.phase,
+                SessionPhase::Live { elicitation: Some(pending), .. }
+                    if pending.request_id == answer.request_id.to_request_id()
+            );
+            if !matches {
+                effects.push(Effect::Complete {
+                    token,
+                    result: Err(AgentSessionError::ElicitationNotPending(self.id)),
+                });
+                return effects;
+            }
+            if let SessionPhase::Live { elicitation, .. } = &mut self.phase {
+                *elicitation = None;
+            }
+        }
 
         // Through the queue even when live, so an action can never overtake
         // one accepted earlier. (A completed flush leaves the queue empty, so
@@ -185,9 +266,27 @@ impl<Token> SessionMachine<Token> {
     }
 
     fn on_inbound(&mut self, message: ToServerMessage) -> Vec<Effect<Token>> {
+        // Host-local recovery is a command to this machine, not a user-facing
+        // runtime status or a history replacement frame.
+        if matches!(
+            message,
+            ToServerMessage::Event {
+                event: SystemEvent::ReloadRequired
+            }
+        ) {
+            let mut effects = Vec::new();
+            if !matches!(self.phase, SessionPhase::Dead) {
+                self.reload_required = true;
+                if self.in_flight_turn.is_none() {
+                    self.begin_reload(&mut effects);
+                }
+            }
+            return effects;
+        }
         // Every inbound message is logged, before anything reacts to it: the
         // log stream is the session's history, not a digest of it.
         let mut effects = vec![Effect::Log {
+            boundary: None,
             message: message.clone(),
         }];
 
@@ -209,6 +308,16 @@ impl<Token> SessionMachine<Token> {
         let mut effects = Vec::new();
         self.die(StopReason::Closed(reason), &mut effects);
         effects
+    }
+
+    fn begin_reload(&mut self, effects: &mut Vec<Effect<Token>>) {
+        let SessionPhase::Live { session_id, .. } = &self.phase else {
+            return;
+        };
+        self.resume_session_id = Some(session_id.clone());
+        self.initialization = None;
+        self.phase = SessionPhase::Booting;
+        self.begin_handshake(effects);
     }
 
     /// Ready starts initialization; actions remain queued until `session/new` completes.
@@ -245,9 +354,13 @@ impl<Token> SessionMachine<Token> {
                     .take()
                     .expect("checked just above; nothing between the check and the take");
                 effects.push(Effect::TurnEnded { action_id });
+                if self.reload_required {
+                    self.begin_reload(effects);
+                }
                 return;
             }
             self.respond_to_permission_request(&frame, effects);
+            self.hold_or_refuse_elicitation(&frame, effects);
             return;
         }
 
@@ -292,12 +405,17 @@ impl<Token> SessionMachine<Token> {
         // connection needs the same answer, and only this machine was told it.
         effects.push(Effect::Initialized { restore });
         self.begin_opening(restore, effects);
+        // The load about to start covers every recovery observed so far. A
+        // later signal while its reply is queued requires another load.
+        self.reload_required = false;
     }
 
     /// Ask the agent for this session, however it has to be established.
     fn begin_opening(&mut self, restore: SessionRestoreSupport, effects: &mut Vec<Effect<Token>>) {
         let opening = match self.resume_session_id.clone() {
-            Some(session_id) if restore.resume => self.build_resume_session_request(session_id),
+            Some(session_id) if restore.resume && !self.reload_required => {
+                self.build_resume_session_request(session_id)
+            }
             Some(session_id) if restore.load => self.build_load_session_request(session_id),
             Some(_) => {
                 self.resume_unsupported(effects);
@@ -364,17 +482,31 @@ impl<Token> SessionMachine<Token> {
                     );
                     return;
                 }
+                let Some(initialization) = self.initialization else {
+                    self.die(StopReason::InitializationNotPersisted, effects);
+                    return;
+                };
+                // Only a matching, well-formed successful load selects history.
+                // The actor executes this log effect before any readiness side effect.
+                if let Some(Effect::Log { boundary, .. }) = effects.first_mut() {
+                    *boundary = Some(initialization);
+                }
                 (session_id, false)
             }
         };
 
         self.phase = SessionPhase::Live {
             session_id: session_id.clone(),
+            elicitation: None,
         };
         if persist {
             effects.push(Effect::PersistAcpSession {
                 session_id: session_id.clone(),
             });
+        }
+        if self.reload_required {
+            self.begin_reload(effects);
+            return;
         }
         self.flush(&session_id, effects);
     }
@@ -424,7 +556,18 @@ impl<Token> SessionMachine<Token> {
     fn build_initialize_request(
         &mut self,
     ) -> std::result::Result<(RawJsonRpcMessage, RequestId), agent_client_protocol::Error> {
+        // Both elicitation modes are advertised: the session page renders
+        // forms and opens URLs after consent. Agents that check (they must)
+        // will only ask once this says they may - so this line must never
+        // ship ahead of `hold_or_refuse_elicitation`, or every agent that
+        // asks hangs on a request nothing answers.
+        let capabilities = ClientCapabilities::new().elicitation(
+            ElicitationCapabilities::new()
+                .form(ElicitationFormCapabilities::new())
+                .url(ElicitationUrlCapabilities::new()),
+        );
         let (method, params) = InitializeRequest::new(PROTOCOL_VERSION)
+            .client_capabilities(capabilities)
             .to_untyped_message()?
             .into_parts();
         let request_id = self.next_id();
@@ -490,6 +633,114 @@ impl<Token> SessionMachine<Token> {
             from: None,
             message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
                 request.id.clone(),
+                Ok(result),
+            ))),
+        });
+    }
+
+    /// An `elicitation/create` is held for the user rather than answered - the
+    /// one agent request this machine does not resolve on its own. What
+    /// cannot be held is refused on the spot with `-32602`, the code the
+    /// protocol names for a mode the client did not advertise: a request
+    /// this machine cannot parse, a mode it does not render, a request
+    /// scoped outside any session, one for another session on the same
+    /// connection, or a second question while the first is still open.
+    fn hold_or_refuse_elicitation(
+        &mut self,
+        frame: &RawJsonRpcMessage,
+        effects: &mut Vec<Effect<Token>>,
+    ) {
+        let RawJsonRpcMessage::Request(request) = frame else {
+            return;
+        };
+        if !CreateElicitationRequest::matches_method(&request.method) {
+            return;
+        }
+        let SessionPhase::Live {
+            session_id,
+            elicitation,
+        } = &mut self.phase
+        else {
+            return;
+        };
+
+        let parsed = request
+            .params
+            .clone()
+            .ok_or("an elicitation needs params")
+            .and_then(|params| {
+                serde_json::from_value::<CreateElicitationRequest>(params.into_value())
+                    .map_err(|_| "the elicitation did not parse")
+            });
+        let refusal = match parsed {
+            Err(reason) => Some(reason),
+            Ok(elicitation_request) => {
+                let scope = match &elicitation_request.mode {
+                    ElicitationMode::Form(form) => Some(&form.scope),
+                    ElicitationMode::Url(url) => Some(&url.scope),
+                    // `#[non_exhaustive]`: an `Other` mode, or one ACP adds later.
+                    _ => None,
+                };
+                match scope {
+                    None => Some("this client renders only form and url elicitations"),
+                    Some(ElicitationScope::Request(_)) => {
+                        Some("request-scoped elicitation is not supported")
+                    }
+                    Some(ElicitationScope::Session(scope)) if &scope.session_id != session_id => {
+                        Some("the elicitation names another session")
+                    }
+                    Some(ElicitationScope::Session(_)) if elicitation.is_some() => {
+                        Some("one elicitation at a time")
+                    }
+                    Some(ElicitationScope::Session(_)) => None,
+                    // `#[non_exhaustive]` scope.
+                    Some(_) => Some("unrecognized elicitation scope"),
+                }
+            }
+        };
+
+        match refusal {
+            None => {
+                *elicitation = Some(PendingElicitation {
+                    request_id: request.id.clone(),
+                });
+            }
+            Some(reason) => {
+                let error = agent_client_protocol::Error::invalid_params().data(reason);
+                effects.push(Effect::Send {
+                    from: None,
+                    message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
+                        request.id.clone(),
+                        Err(error),
+                    ))),
+                });
+            }
+        }
+    }
+
+    /// Answer the held elicitation with `cancel` and release the slot. What a
+    /// stop does before its cancel notification, so the agent's request is
+    /// resolved rather than left dangling on a turn that is ending anyway.
+    fn cancel_pending_elicitation(
+        &mut self,
+        from: Option<MacroUserIdStr<'static>>,
+        effects: &mut Vec<Effect<Token>>,
+    ) {
+        let SessionPhase::Live { elicitation, .. } = &mut self.phase else {
+            return;
+        };
+        let Some(pending) = elicitation.take() else {
+            return;
+        };
+        let Ok(result) =
+            serde_json::to_value(CreateElicitationResponse::new(ElicitationAction::Cancel))
+        else {
+            return;
+        };
+        effects.push(Effect::Send {
+            from,
+            message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::response(
+                pending.request_id,
                 Ok(result),
             ))),
         });
@@ -572,7 +823,10 @@ impl<Token> SessionMachine<Token> {
     /// carries the session, so sessions sharing one connection cannot collide
     /// with each other either.
     fn next_id(&mut self) -> RequestId {
-        let id = RequestId::Str(format!("agent_session:{}:{}", self.id, self.next_request));
+        let id = RequestId::Str(match self.connection_context {
+            Some(context) => format!("agent_session:{}:{context}:{}", self.id, self.next_request),
+            None => format!("agent_session:{}:{}", self.id, self.next_request),
+        });
         self.next_request += 1;
         id
     }

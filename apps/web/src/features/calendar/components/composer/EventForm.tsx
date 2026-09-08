@@ -1,5 +1,4 @@
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import AirplaneTiltIcon from '@phosphor/airplane-tilt.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Layer } from '@ui';
 import { createEffect, createUniqueId, Show } from 'solid-js';
@@ -292,20 +291,17 @@ export function EventForm(props: EventFormProps) {
               <div
                 role="note"
                 aria-label="Out-of-office event"
-                class="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning-bg p-3 text-xs text-warning-ink"
+                class="flex min-w-0 flex-col gap-1 rounded-lg border border-warning/40 bg-warning-bg p-3 text-xs text-warning-ink"
               >
-                <AirplaneTiltIcon class="mt-px size-4 shrink-0" />
-                <div class="flex min-w-0 flex-col gap-1">
-                  <span class="font-medium">Out-of-office event</span>
-                  <span>{notice().effect}</span>
-                  <Show when={notice().declineMessage}>
-                    {(message) => (
-                      <span class="italic">
-                        Auto-decline reply: “{message()}”
-                      </span>
-                    )}
-                  </Show>
-                </div>
+                <span class="font-medium">Out-of-office event</span>
+                <span>{notice().effect}</span>
+                <Show when={notice().declineMessage}>
+                  {(message) => (
+                    <span class="italic">
+                      Auto-decline reply: “{message()}”
+                    </span>
+                  )}
+                </Show>
               </div>
             )}
           </Show>

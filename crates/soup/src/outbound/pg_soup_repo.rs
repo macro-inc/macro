@@ -300,8 +300,9 @@ fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
 ///
 /// This helper collects entity references from items that support properties
 /// and performs one bulk lookup. System properties are always included, plus
-/// the caller's own and team tag properties. Tasks use `EntityType::Task` while
-/// regular documents use `EntityType::Document`.
+/// the caller's own and team tag properties and the team's CRM stage
+/// definition. Tasks use `EntityType::Task` while regular documents use
+/// `EntityType::Document`.
 #[tracing::instrument(err, skip(db, items))]
 pub(crate) async fn populate_properties(
     db: &sqlx::PgPool,

@@ -44,7 +44,8 @@ export function Harness() {
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
   const disconnectCursor = useDisconnectCursorApiKey();
-  const cursorRegistered = () => cursorStatus.data?.registered ?? false;
+  const cursorRegistered = () =>
+    cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const harnessesQuery = useHarnessesQuery();
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const [pairingDialog, setPairingDialog] = createSignal<{
@@ -79,13 +80,15 @@ export function Harness() {
   const cursorModels = useCursorModelsQuery(cursorRegistered);
   const setCursorDefaultModel = useSetCursorDefaultModel();
   const cursorModelOptions = () =>
-    (cursorModels.data?.models ?? []).map((model) => ({
+    (cursorModels.isSuccess ? cursorModels.data.models : []).map((model) => ({
       id: model.id,
       label: model.displayName,
       group: model.group,
     }));
   const selectedCursorModelId = () =>
-    cursorStatus.data?.defaultModelId ?? cursorModelOptions()[0]?.id ?? null;
+    (cursorStatus.isSuccess ? cursorStatus.data.defaultModelId : null) ??
+    cursorModelOptions()[0]?.id ??
+    null;
 
   const handleCursorModelChange = async (modelId: string) => {
     try {
@@ -167,8 +170,14 @@ export function Harness() {
             </p>
 
             <Show
-              when={!cursorStatus.isPlaceholderData}
-              fallback={<p class="mt-4 text-xs text-ink-muted">Loading…</p>}
+              when={cursorStatus.isSuccess && !cursorStatus.isPlaceholderData}
+              fallback={
+                <p class="mt-4 text-xs text-ink-muted">
+                  {cursorStatus.isError
+                    ? 'Could not load your Cursor connection. Try refreshing this page.'
+                    : 'Loading…'}
+                </p>
+              }
             >
               <Show
                 when={cursorRegistered()}
@@ -229,19 +238,20 @@ export function Harness() {
                       <select
                         id="cursor-default-model"
                         class="settings-input w-56"
-                        value={cursorStatus.data?.defaultModelId ?? ''}
-                        disabled={setCursorDefaultModel.isPending}
+                        value={selectedCursorModelId() ?? ''}
+                        disabled={
+                          setCursorDefaultModel.isPending ||
+                          !cursorModels.isSuccess
+                        }
                         onChange={(event) =>
                           void handleCursorModelChange(
                             event.currentTarget.value
                           )
                         }
                       >
-                        <For each={cursorModels.data?.models ?? []}>
+                        <For each={cursorModelOptions()}>
                           {(model) => (
-                            <option value={model.id}>
-                              {model.displayName}
-                            </option>
+                            <option value={model.id}>{model.label}</option>
                           )}
                         </For>
                       </select>
@@ -251,10 +261,21 @@ export function Harness() {
                       value={selectedCursorModelId()}
                       options={cursorModelOptions()}
                       onSelect={(id) => void handleCursorModelChange(id)}
-                      disabled={setCursorDefaultModel.isPending}
+                      disabled={
+                        setCursorDefaultModel.isPending ||
+                        !cursorModels.isSuccess
+                      }
                       ariaLabel="Default model"
                       triggerClass="w-72 max-w-full justify-between"
                     />
+                  </Show>
+                  <Show when={cursorModels.isPending}>
+                    <p class="text-xs text-ink-muted">Loading models…</p>
+                  </Show>
+                  <Show when={cursorModels.isError}>
+                    <p class="text-xs text-negative">
+                      Could not load Cursor models. Try refreshing this page.
+                    </p>
                   </Show>
                   <p class="text-xs text-ink-extra-muted">
                     The model new `@cursor` sessions start on. Recommended
@@ -322,10 +343,16 @@ export function Harness() {
                 Connected agents
               </div>
               <For
-                each={harnessesQuery.data ?? []}
+                each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
                 fallback={
                   <div class="flex flex-col items-center py-6 text-center">
-                    <p class="text-sm text-ink">No agents connected</p>
+                    <p class="text-sm text-ink">
+                      {harnessesQuery.isPending
+                        ? 'Loading connected agents…'
+                        : harnessesQuery.isError
+                          ? 'Could not load connected agents.'
+                          : 'No agents connected'}
+                    </p>
                     <p class="mt-1 text-xs text-ink-extra-muted">
                       Agents connected through macrod will appear here.
                     </p>

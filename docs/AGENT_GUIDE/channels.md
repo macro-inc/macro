@@ -43,15 +43,35 @@ own time zone (their primary calendar's), so it resolves relative times ("tomorr
 bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+The reply renders a Magic Chip: a rounded card of constant height that is present
+from the moment the session boots. Its answer area shows a pulsing star while the
+agent works, then the opening of the answer clipped to four lines and faded out; its
+bottom row reads the current activity (`Booting agent`, `Writing response`, ...) and
+`Open session` once the turn ends. A `Show more` cue sits over the fade: click the
+answer text to expand it in place (`Show less` collapses it again); click the
+bottom row to open the agent session. Before an
+answer exists, clicking the answer area also opens the session.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
-other channel mention.
+other channel mention. With GraphQL enabled, document mentions and preview cards load
+in bounded batches, including task status/priority/assignees and the viewer's edit
+permission. Task badges can appear with the initial preview rather than waiting for
+separate properties/document-metadata requests; cached titles may appear first while
+those edges load. Ordinary document/task mentions do not wait for the built-in skills
+list. Built-in skill mentions retain their non-document behavior.
+The Magic Chip that streams the agent's reply stays inside the message column: long
+thoughts, file paths, and unbreakable tokens wrap or truncate instead of expanding the
+thread past the chat's right edge.
 
 ## Message scrolling and navigation
 
 Channels open at the latest message, with short conversations aligned above the
 composer. Incoming messages and growing replies stay in view while the channel is
-at the bottom. Scrolling up leaves the viewport on the history being read; loading
-older messages preserves that message's position.
+at the bottom. Consecutive sends stay pinned through server acknowledgement and
+composer resizing, without bouncing upward between messages.
+Scrolling up more than 1px leaves the viewport on the history being read, even
+when only slightly above the bottom. Composer and viewport resizing respect the
+same boundary. Returning to the bottom resumes following; loading older messages
+preserves the reading position.
 
 Message and reply links reveal the target inside its thread. Keyboard message
 navigation scrolls only when the selected message is outside the usable viewport.

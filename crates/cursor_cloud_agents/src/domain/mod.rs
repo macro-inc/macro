@@ -17,3 +17,6 @@ pub mod service;
 
 /// The pure Cursor→ACP translation machine.
 pub mod translate;
+
+/// Durable native inputs and their complete replay machine.
+pub mod journal;

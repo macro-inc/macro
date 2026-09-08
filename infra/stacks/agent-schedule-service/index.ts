@@ -54,7 +54,6 @@ const service = new AgentScheduleService(`agent-schedule-service-${stack}`, {
   platform: { family: 'linux', architecture: 'amd64' },
   serviceContainerPort: 8080,
   healthCheckPath: '/health',
-  isPrivate: false,
   ecsClusterArn: cloudStorageClusterArn,
   cloudStorageClusterName,
   secretKeyArns: [

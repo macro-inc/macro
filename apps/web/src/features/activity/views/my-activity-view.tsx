@@ -4,12 +4,13 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { Button } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import { ActionGraph } from '../components/action-graph';
-import { TopEntitiesSection, TopEntityRow } from '../components/top-entities';
+import { TopEntitiesSection, TopEntityChip } from '../components/top-entities';
 import {
   type OpenEntityTarget,
   useActivityContext,
 } from '../context/activity-context';
 import type { ActivityEvent, ActivityTopEntity } from '../core/event';
+import { placeholderOverview } from '../core/placeholder-overview';
 import { createActorName } from '../primitives/actor-name';
 import { createEntityOpener } from '../primitives/entity-opener';
 import { createMyActivityState } from '../primitives/my-activity';
@@ -61,32 +62,38 @@ export function MyActivityView(props: {
               when={overview()}
               fallback={
                 <OverviewInset>
-                  <p class="px-2 py-1 text-ink-extra-muted text-xs">
-                    {state.overview().t === 'error'
-                      ? 'Activity overview is unavailable right now.'
-                      : 'Loading activity overview…'}
-                  </p>
+                  <Show
+                    when={state.overview().t === 'error'}
+                    fallback={
+                      <ActionGraph
+                        overview={placeholderOverview(new Date())}
+                        skeleton
+                      />
+                    }
+                  >
+                    <p class="px-2 py-1 text-ink-extra-muted text-xs">
+                      Activity overview is unavailable right now.
+                    </p>
+                  </Show>
                 </OverviewInset>
               }
             >
               {(overview) => (
-                <>
-                  <OverviewInset>
-                    <ActionGraph overview={overview()} />
-                  </OverviewInset>
-                  <TopEntitiesSection
-                    empty={overview().topEntities.length === 0}
-                  >
-                    <For each={overview().topEntities}>
-                      {(entity) => (
-                        <OpenableTopEntityRow
-                          entity={entity}
-                          onOpen={props.onOpen}
-                        />
-                      )}
-                    </For>
-                  </TopEntitiesSection>
-                </>
+                <OverviewInset>
+                  <ActionGraph overview={overview()} />
+                  <Show when={overview().topEntities.length > 0}>
+                    <TopEntitiesSection>
+                      <For each={overview().topEntities}>
+                        {(entity) => (
+                          <OpenableTopEntityChip
+                            entity={entity}
+                            onOpen={props.onOpen}
+                          />
+                        )}
+                      </For>
+                    </TopEntitiesSection>
+                  </Show>
+                </OverviewInset>
               )}
             </Show>
             <Switch>
@@ -156,7 +163,7 @@ function NamedActivityRow(props: {
   );
 }
 
-function OpenableTopEntityRow(props: {
+function OpenableTopEntityChip(props: {
   entity: ActivityTopEntity;
   onOpen: (target: OpenEntityTarget) => void;
 }) {
@@ -168,7 +175,7 @@ function OpenableTopEntityRow(props: {
     props.onOpen
   );
   return (
-    <TopEntityRow
+    <TopEntityChip
       entity={props.entity}
       display={opener()?.display}
       rowProps={opener()?.handlers}

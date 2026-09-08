@@ -2,6 +2,8 @@
  * @vitest-environment jsdom
  */
 
+import { useCursorModelsQuery } from '@queries/auth/cursor-api-key';
+import type { CursorModelsResponse } from '@service-auth/generated/schemas';
 import {
   fireEvent,
   render,
@@ -9,11 +11,19 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from '@tanstack/solid-query';
+import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
 
 const mocks = vi.hoisted(() => ({
   status: {
+    isSuccess: true,
+    isError: false,
     data: {
       registered: false,
       defaultModelId: null as string | null,
@@ -22,6 +32,9 @@ const mocks = vi.hoisted(() => ({
     isPlaceholderData: false,
   },
   models: {
+    isSuccess: true,
+    isPending: false,
+    isError: false,
     data: {
       models: [{ id: 'default-model', displayName: 'Default Model' }],
     },
@@ -35,6 +48,8 @@ const mocks = vi.hoisted(() => ({
 
 const harnessMocks = vi.hoisted(() => ({
   query: {
+    isSuccess: true,
+    isPending: false,
     data: [] as unknown[],
     isError: false,
   },
@@ -65,7 +80,7 @@ vi.mock('@queries/auth/cursor-api-key', () => ({
     mutateAsync: mocks.disconnect,
     isPending: false,
   }),
-  useCursorModelsQuery: () => mocks.models,
+  useCursorModelsQuery: vi.fn(() => mocks.models),
   useSetCursorDefaultModel: () => ({
     mutateAsync: mocks.setDefaultModel,
     isPending: false,
@@ -151,6 +166,84 @@ beforeEach(() => {
 });
 
 describe('Harness', () => {
+  it.each(['success', 'error'] as const)(
+    'keeps settings visible while Cursor models load and after %s',
+    async (outcome) => {
+      mocks.status.data.registered = true;
+      let resolveModels!: (models: CursorModelsResponse) => void;
+      let rejectModels!: (error: Error) => void;
+      const response = new Promise<CursorModelsResponse>((resolve, reject) => {
+        resolveModels = resolve;
+        rejectModels = reject;
+      });
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      vi.mocked(useCursorModelsQuery).mockImplementationOnce(() =>
+        useQuery(() => ({
+          queryKey: ['pending-cursor-models'],
+          queryFn: () => response,
+        }))
+      );
+      const view = render(() => (
+        <QueryClientProvider client={client}>
+          <Suspense fallback={<p>Settings suspended</p>}>
+            <Harness />
+          </Suspense>
+        </QueryClientProvider>
+      ));
+      expect(screen.queryByText('Settings suspended')).toBeNull();
+      expect(screen.getByText('Loading models…')).toBeTruthy();
+      expect(
+        (
+          screen.getByRole('combobox', {
+            name: 'Default model',
+          }) as HTMLSelectElement
+        ).disabled
+      ).toBe(true);
+
+      if (outcome === 'error') {
+        rejectModels(new Error('Cursor is unavailable'));
+        await waitFor(() =>
+          expect(screen.getByText(/Could not load Cursor models/)).toBeTruthy()
+        );
+        expect(screen.queryByText('Settings suspended')).toBeNull();
+        expect(
+          (
+            screen.getByRole('combobox', {
+              name: 'Default model',
+            }) as HTMLSelectElement
+          ).disabled
+        ).toBe(true);
+      } else {
+        resolveModels({
+          models: [
+            {
+              id: 'loaded-model',
+              displayName: 'Loaded Model',
+              group: 'Cursor',
+            },
+          ],
+        });
+        await waitFor(() =>
+          expect(
+            screen.getByRole('option', { name: 'Loaded Model' })
+          ).toBeTruthy()
+        );
+        expect(screen.queryByText('Settings suspended')).toBeNull();
+        expect(
+          (
+            screen.getByRole('combobox', {
+              name: 'Default model',
+            }) as HTMLSelectElement
+          ).disabled
+        ).toBe(false);
+      }
+      view.unmount();
+      client.clear();
+    }
+  );
+
   it('shows the three configurable harness options', () => {
     render(() => <Harness />);
 

@@ -1,5 +1,6 @@
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { ComposeAgentSession } from '@app/features/block-agent/component/ComposeAgentSession';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
@@ -49,12 +50,12 @@ import { EmptyStatePanel } from '@ui';
 import {
   type Component,
   createRenderEffect,
+  createSignal,
   type JSXElement,
   lazy,
-  Match,
+  onCleanup,
   onMount,
   Show,
-  Switch,
 } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
@@ -68,18 +69,29 @@ function usePageViewTracking(pageTitle: string) {
   });
 }
 
-function useNewAppViews() {
+const NEW_APP_VIEWS_FLAG_WAIT_MS = 5_000;
+
+function useNewAppViews(options?: {
+  enabledLayout?: () => 'legacy' | 'composable';
+}) {
   const panel = useSplitPanelOrThrow();
-  const posthog = usePosthog();
   const flag = useFeatureFlag(enableNewAppViews);
-  const ready = () =>
-    enableNewAppViews.override !== undefined || posthog.flagsLoaded();
+  const [timedOut, setTimedOut] = createSignal(false);
+  const timer = setTimeout(() => setTimedOut(true), NEW_APP_VIEWS_FLAG_WAIT_MS);
+  onCleanup(() => clearTimeout(timer));
+
+  // PostHog can be blocked or fail before invoking its flag callback. Bound
+  // the loading state so these views fall back to their legacy equivalents
+  // instead of displaying a loading block forever.
+  const ready = () => !flag().loading || timedOut();
   const enabled = () => ready() && flag().enabled;
 
   createRenderEffect(() => {
     if (!ready()) return;
     panel.handle.updateMeta?.({
-      splitPanelLayout: enabled() ? 'composable' : 'legacy',
+      splitPanelLayout: enabled()
+        ? (options?.enabledLayout?.() ?? 'composable')
+        : 'legacy',
     });
   });
 
@@ -471,7 +483,9 @@ function LegacyChannelsView() {
 }
 
 function FeatureGatedChannelsView() {
-  const newAppViews = useNewAppViews();
+  const newAppViews = useNewAppViews({
+    enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+  });
 
   return (
     <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
@@ -485,16 +499,7 @@ function FeatureGatedChannelsView() {
 function RegisteredChannelsView() {
   usePageViewTracking('channels');
 
-  return (
-    <Switch>
-      <Match when={isTouchDevice()}>
-        <LegacyChannelsView />
-      </Match>
-      <Match when={!isTouchDevice()}>
-        <FeatureGatedChannelsView />
-      </Match>
-    </Switch>
-  );
+  return <FeatureGatedChannelsView />;
 }
 
 registerComponent('channels', withAuth(RegisteredChannelsView));
@@ -677,6 +682,12 @@ registerComponent('email-compose', (params) => {
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');
   return <ComposeTask {...params} />;
+});
+registerComponent('agent-session-compose', (params) => {
+  usePageViewTracking('agent-session-compose');
+  return (
+    <ComposeAgentSession preferNewSplit={params?.preferNewSplit === true} />
+  );
 });
 registerComponent('calendar-event-compose', (params) => {
   usePageViewTracking('calendar-event-compose');

@@ -1,9 +1,10 @@
 import { ViewShell } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { Surface } from '@ui';
+import { cn, Surface } from '@ui';
 import { onMount, Suspense } from 'solid-js';
 import { TasksHeader } from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
@@ -19,8 +20,12 @@ export type TasksViewProps = {
 function TasksListFallback() {
   return (
     <Surface
-      depth={2}
-      class="grid min-h-0 min-w-0 place-items-center rounded-2xl text-ink-muted"
+      depth={isTouchDevice() ? 0 : 2}
+      hideBorder={isTouchDevice()}
+      class={cn('grid min-h-0 min-w-0 place-items-center text-ink-muted', {
+        'rounded-2xl': !isTouchDevice(),
+        'rounded-none bg-transparent': isTouchDevice(),
+      })}
     >
       <SpinnerIcon aria-label="Loading tasks" class="size-5 animate-spin" />
     </Surface>

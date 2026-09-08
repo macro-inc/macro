@@ -64,7 +64,7 @@ async fn container_session_runs_and_logs_end_to_end() {
         NoOpRealtime,
     ));
     let containers = MockContainerManager::new();
-    let container = containers
+    let attachment = containers
         .spawn(SpawnContainer {
             session_id: id,
             kind: AgentKind::SandboxedCoder,
@@ -73,13 +73,11 @@ async fn container_session_runs_and_logs_end_to_end() {
         })
         .await
         .unwrap();
+    let container = containers.container(id).unwrap();
     let agent = container.agent();
 
     let record = sessions.create_session(params(id)).await.unwrap();
-    sessions
-        .attach_session(id, RuntimeAttachment::solo(container.clone()))
-        .await
-        .unwrap();
+    sessions.attach_session(id, attachment).await.unwrap();
     assert_eq!(record.id, id);
     assert_eq!(containers.spawned(), 1);
     assert!(agent.received_requests().is_empty());

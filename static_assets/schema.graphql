@@ -96,9 +96,13 @@ type CompleteMutationRoot {
 	"""
 	duplicateEntities(inputs: [DuplicateEntityInput!]!): EntityMutationPayload!
 	"""
-	Add or remove an entity from the actor's favorites.
+	Add or remove an entity and return the generic entity mutation result.
 	"""
 	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!
+	"""
+	Add or remove an entity and return the persisted favorite record.
+	"""
+	setFavorite(entity: EntityRefInput!, favorite: Boolean!): SetFavoritePayload!
 	"""
 	Persist the authenticated user's complete favorites order and return the authoritative list.
 	"""
@@ -2056,6 +2060,10 @@ enum GraphqlEntityType {
 GraphQL fields for an ordered favorite.
 """
 type GraphqlFavorite {
+	"""
+	Stable cache identity within the authenticated user's favorites collection.
+	"""
+	id: ID!
 	"""
 	Canonical type of the favorited entity.
 	"""
@@ -5384,6 +5392,10 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
+	The authenticated user's favorites in manual order.
+	"""
+	favorites: [GraphqlFavorite!]!
+	"""
 	A page of the authenticated user's own activity, newest first.
 	Delegated actions performed on the user's behalf are included.
 	"""
@@ -5598,6 +5610,20 @@ input SetEntityPropertyInput {
 	Omit or pass null to attach the property without a value.
 	"""
 	value: GraphqlSetPropertyValue
+}
+
+"""
+GraphQL result of setting an entity's favorite state.
+"""
+type SetFavoritePayload {
+	"""
+	Entity mutation result, including normalized Soup cache effects.
+	"""
+	result: GraphqlEntityMutationResult!
+	"""
+	Persisted favorite after an add, or `null` after a removal.
+	"""
+	favorite: GraphqlFavorite
 }
 
 """

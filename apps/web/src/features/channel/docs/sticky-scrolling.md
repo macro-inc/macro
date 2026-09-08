@@ -6,6 +6,15 @@ and compensation when measured messages grow or shrink. `followOnAppend` is
 only enabled when the query includes the newest page. Reading older history
 must never be interrupted by incoming messages.
 
+Use the same 1px end tolerance for TanStack, composer/viewport resizing, and saved
+positions. Scrolling up beyond rounding tolerance stops following, even a few pixels
+from the bottom; returning to the end resumes it.
+Acknowledging a send replaces the optimistic message ID, temporarily replacing its
+measured height with an estimate. A loose end threshold treats that intermediate
+layout as pinned and applies the estimate-to-measurement delta as a backward scroll.
+ResizeObserver measurements also run in the current frame: delaying them with
+`useAnimationFrameWithResizeObserver` exposes stale row and composer geometry.
+
 The list exposes three navigation operations: `scrollToLatest`, `scrollToMessage`,
 and `scrollToElement`. Message navigation can include keyboard intent for pagination.
 `initialPosition` chooses latest, a mounted target, or a saved snapshot; these are mutually exclusive. `onReady` publishes the handle after the
@@ -46,7 +55,10 @@ accounted for those measurements. Actual touch/momentum deferral remains in the 
 Message IDs also key Solid's rendered components, preserving editors and expanded
 threads across pagination. `Key` owns each row's virtual-item accessor; a shared
 map lookup can disappear while a queued measurement effect is still running.
-Measurement effects track index changes only, leaving size changes to ResizeObserver.
+Measurement effects track index changes and register rows in a microtask after child
+effects fill their Markdown, still before paint. Measuring the empty shell can
+temporarily shrink the sizer and clamp the browser scroll position, especially
+with floating mobile insets. Later size changes belong to ResizeObserver.
 `targetId` keeps the pending thread mounted for precise navigation to nested replies;
 only the list translates that ID into a virtual index. Snapshot
 restoration pairs the offset with `takeSnapshot()`.

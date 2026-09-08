@@ -7,12 +7,10 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
-  serviceLoadBalancer,
   ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
 import {
-  BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   DopplerEcsEnvironment,
   getGatewayAlb,
@@ -25,21 +23,15 @@ const gatewayLoadBalancer = getGatewayAlb();
 const BASE_NAME = pulumi.getProject();
 const REPO_ROOT = '../../..';
 
-export const SERVICE_DOMAIN_NAME = `unfurl-service${
-  stack === 'prod' ? '' : `-${stack}`
-}.${BASE_DOMAIN}`;
-
 type CreateUnfurlServiceArgs = {
   cloudStorageClusterName: pulumi.Output<string> | string;
   ecsClusterArn: pulumi.Output<string> | string;
   vpc: {
     vpcId: pulumi.Output<string> | string;
-    publicSubnetIds: pulumi.Output<string[]> | string[];
     privateSubnetIds: pulumi.Output<string[]> | string[];
   };
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   serviceContainerPort: number;
-  isPrivate?: boolean;
   containerEnvVars?: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   tags: { [key: string]: string };
@@ -47,13 +39,9 @@ type CreateUnfurlServiceArgs = {
 
 export class UnfurlService extends pulumi.ComponentResource {
   public ecr: awsx.ecr.Repository;
-  public serviceAlbSg: aws.ec2.SecurityGroup;
   public serviceSg: aws.ec2.SecurityGroup;
   public targetGroup: aws.lb.TargetGroup;
-  public lb: aws.lb.LoadBalancer;
-  public listener: aws.lb.Listener;
   public service: awsx.ecs.FargateService;
-  public domain: string;
   public cloudStorageClusterName: pulumi.Output<string> | string;
   public tags: { [key: string]: string };
   public role: aws.iam.Role;
@@ -66,7 +54,6 @@ export class UnfurlService extends pulumi.ComponentResource {
       platform,
       serviceContainerPort,
       healthCheckPath,
-      isPrivate,
       containerEnvVars,
       cloudStorageClusterName,
       tags,
@@ -98,12 +85,7 @@ export class UnfurlService extends pulumi.ComponentResource {
     this.ecr = image.ecr;
 
     // sg
-    const sg = this.initializeSecurityGroups({
-      vpcId: vpc.vpcId,
-      serviceContainerPort,
-    });
-    this.serviceAlbSg = sg.serviceAlbSg;
-    this.serviceSg = sg.serviceSg;
+    this.serviceSg = this.initializeSecurityGroups({ vpcId: vpc.vpcId });
 
     const gatewayTargetGroup = new ServiceTargetGroup(
       `${stack}-${BASE_NAME}`,
@@ -121,20 +103,7 @@ export class UnfurlService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // lb
-    const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
-      serviceName: BASE_NAME, // service name
-      serviceContainerPort,
-      healthCheckPath,
-      vpc,
-      albSecurityGroupId: this.serviceAlbSg.id,
-      isPrivate,
-      tags,
-      idleTimeout: 3600,
-    });
-    this.targetGroup = targetGroup;
-    this.lb = lb;
-    this.listener = listener;
+    this.targetGroup = gatewayTargetGroup.target_group;
 
     this.role = new aws.iam.Role(
       `${BASE_NAME}-role`,
@@ -182,11 +151,6 @@ export class UnfurlService extends pulumi.ComponentResource {
         },
         loadBalancers: [
           {
-            targetGroupArn: targetGroup.arn,
-            containerName: 'service',
-            containerPort: serviceContainerPort,
-          },
-          {
             targetGroupArn: gatewayTargetGroup.target_group.arn,
             containerName: 'service',
             containerPort: serviceContainerPort,
@@ -229,7 +193,7 @@ export class UnfurlService extends pulumi.ComponentResource {
                   name: `${BASE_NAME}-tcp-${stack}`,
                   hostPort: serviceContainerPort,
                   containerPort: serviceContainerPort,
-                  targetGroup,
+                  targetGroup: this.targetGroup,
                 },
               ],
             },
@@ -256,68 +220,19 @@ export class UnfurlService extends pulumi.ComponentResource {
     this.setupAutoScaling();
 
     this.setupServiceAlarms();
-
-    // domain record
-    const zone = aws.route53.getZoneOutput({ name: BASE_DOMAIN });
-
-    new aws.route53.Record(
-      `${BASE_NAME}-domain-record`,
-      {
-        name: `${SERVICE_DOMAIN_NAME}`,
-        type: 'A',
-        zoneId: zone.zoneId,
-        aliases: [
-          {
-            evaluateTargetHealth: false,
-            name: this.lb.dnsName,
-            zoneId: this.lb.zoneId,
-          },
-        ],
-      },
-      { parent: this }
-    );
-
-    this.domain = `https://${SERVICE_DOMAIN_NAME}`;
   }
 
   initializeSecurityGroups({
     vpcId,
-    serviceContainerPort,
   }: {
     vpcId: pulumi.Output<string> | string;
-    serviceContainerPort: number;
   }) {
-    const serviceAlbSg = new aws.ec2.SecurityGroup(
-      `${BASE_NAME}-alb-sg-${stack}`,
-      {
-        name: `${BASE_NAME}-alb-sg-${stack}`,
-        description: `${BASE_NAME} application load balancer security group`,
-        vpcId,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
     const serviceSg = new aws.ec2.SecurityGroup(
       `${BASE_NAME}-sg-${stack}`,
       {
         name: `${BASE_NAME}-sg-${stack}`,
         vpcId,
         description: `${BASE_NAME} security group that is attached directly to the service`,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-alb-in`,
-      {
-        securityGroupId: serviceSg.id,
-        description: 'Allow inbound traffic from the services ALB',
-        referencedSecurityGroupId: serviceAlbSg.id,
-        fromPort: serviceContainerPort,
-        toPort: serviceContainerPort,
-        ipProtocol: 'tcp',
         tags: this.tags,
       },
       { parent: this }
@@ -335,50 +250,7 @@ export class UnfurlService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // ALB SG rules
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-http`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow inbound HTTP traffic',
-        cidrIpv4: '0.0.0.0/0',
-        fromPort: 80,
-        ipProtocol: 'tcp',
-        toPort: 80,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-https`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow inbound HTTPS traffic',
-        cidrIpv4: '0.0.0.0/0',
-        fromPort: 443,
-        ipProtocol: 'tcp',
-        toPort: 443,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupEgressRule(
-      `${BASE_NAME}-out-service`,
-      {
-        description: 'Allow traffic to the service security group',
-        securityGroupId: serviceAlbSg.id,
-        referencedSecurityGroupId: serviceSg.id,
-        fromPort: serviceContainerPort,
-        ipProtocol: 'tcp',
-        toPort: serviceContainerPort,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    return { serviceAlbSg, serviceSg };
+    return serviceSg;
   }
 
   setupAutoScaling() {
@@ -397,19 +269,7 @@ export class UnfurlService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const lbPortion: pulumi.Output<string> = this.lb.arn.apply((arn) => {
-      const parts = arn.split(':loadbalancer/');
-      return parts[1];
-    });
-
-    const tgPortion: pulumi.Output<string> = this.targetGroup.arn.apply(
-      (arn) => {
-        const parts = arn.split(':');
-        return parts[parts.length - 1];
-      }
-    );
-
-    const resourceLabel = pulumi.interpolate`${lbPortion}/${tgPortion}`;
+    const resourceLabel = pulumi.interpolate`${gatewayLoadBalancer.albArnSuffix}/${this.targetGroup.arnSuffix}`;
 
     // Create an Auto Scaling policy for request count.
     new aws.appautoscaling.Policy(
@@ -533,7 +393,7 @@ export class UnfurlService extends pulumi.ComponentResource {
       `${BASE_NAME}-http-5xx-alarm`,
       {
         name: `${BASE_NAME}-http-5xx-${stack}`,
-        metricName: 'HTTPCode_ELB_5XX_Count',
+        metricName: 'HTTPCode_Target_5XX_Count',
         namespace: 'AWS/ApplicationELB',
         statistic: 'Sum',
         period: 180,
@@ -541,9 +401,10 @@ export class UnfurlService extends pulumi.ComponentResource {
         threshold: 25,
         comparisonOperator: 'GreaterThanOrEqualToThreshold',
         dimensions: {
-          LoadBalancer: this.lb.arn,
+          LoadBalancer: gatewayLoadBalancer.albArnSuffix,
+          TargetGroup: this.targetGroup.arnSuffix,
         },
-        alarmDescription: `High HTTP 5XX count alarm for ${BASE_NAME} Load Balancer.`,
+        alarmDescription: `High HTTP 5XX count alarm for ${BASE_NAME} gateway target group.`,
         actionsEnabled: true,
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,

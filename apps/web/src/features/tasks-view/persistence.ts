@@ -52,11 +52,15 @@ const tasksEntryStateSchemaWithDefaults = z.object({
 
 type TasksEntryState = z.infer<typeof tasksEntryStateSchemaWithDefaults>;
 
-const DEFAULT_TASKS_ENTRY_STATE: TasksEntryState =
-  tasksEntryStateSchemaWithDefaults.parse({});
-const tasksEntryStateSchema = tasksEntryStateSchemaWithDefaults.catch(
-  DEFAULT_TASKS_ENTRY_STATE
-);
+const DEFAULT_TASKS_ENTRY_STATE = {
+  version: 1,
+  tab: 'my-tasks',
+  search: '',
+  groupBy: 'priority',
+  sort: [{ id: 'updated_at' }],
+  facets: normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION),
+  collapsedGroupIds: [],
+} satisfies TasksEntryState;
 
 const tasksPreferencesSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -65,11 +69,10 @@ const tasksPreferencesSchemaWithDefaults = z.object({
 
 type TasksPreferences = z.infer<typeof tasksPreferencesSchemaWithDefaults>;
 
-const DEFAULT_TASKS_PREFERENCES: TasksPreferences =
-  tasksPreferencesSchemaWithDefaults.parse({});
-const tasksPreferencesSchema = tasksPreferencesSchemaWithDefaults.catch(
-  DEFAULT_TASKS_PREFERENCES
-);
+const DEFAULT_TASKS_PREFERENCES = {
+  version: 1,
+  collapsedSidebarSectionIds: [],
+} satisfies TasksPreferences;
 
 const tasksListStateSchemaWithDefaults = z.object({
   version: z.literal(1).default(1),
@@ -79,11 +82,11 @@ const tasksListStateSchemaWithDefaults = z.object({
 
 type TasksListEntryState = z.infer<typeof tasksListStateSchemaWithDefaults>;
 
-const DEFAULT_TASKS_LIST_ENTRY_STATE: TasksListEntryState =
-  tasksListStateSchemaWithDefaults.parse({});
-const tasksListStateSchema = tasksListStateSchemaWithDefaults.catch(
-  DEFAULT_TASKS_LIST_ENTRY_STATE
-);
+const DEFAULT_TASKS_LIST_ENTRY_STATE = {
+  version: 1,
+  focusKey: undefined,
+  scrollOffset: 0,
+} satisfies TasksListEntryState;
 
 export type TasksListStateSnapshot = {
   focusKey: TasksListEntryState['focusKey'];
@@ -91,8 +94,8 @@ export type TasksListStateSnapshot = {
 };
 
 export const DEFAULT_TASKS_LIST_STATE: TasksListStateSnapshot = {
-  focusKey: DEFAULT_TASKS_LIST_ENTRY_STATE.focusKey,
-  scrollOffset: DEFAULT_TASKS_LIST_ENTRY_STATE.scrollOffset,
+  focusKey: undefined,
+  scrollOffset: 0,
 };
 
 function selectEntryState(state: TasksViewState): TasksEntryState {
@@ -117,7 +120,8 @@ function createTasksEntryStorage(options: {
     restore: (current, stored) => {
       if (!options.restore) return undefined;
 
-      const restored = tasksEntryStateSchema.parse(stored);
+      const result = tasksEntryStateSchemaWithDefaults.safeParse(stored);
+      const restored = result.success ? result.data : DEFAULT_TASKS_ENTRY_STATE;
       return {
         ...current,
         tab: restored.tab,
@@ -139,7 +143,10 @@ export function createTasksListEntryStorage(
     handle,
     key: TASKS_LIST_ENTRY_STATE_KEY,
     restore: (current, stored) => {
-      const restored = tasksListStateSchema.parse(stored);
+      const result = tasksListStateSchemaWithDefaults.safeParse(stored);
+      const restored = result.success
+        ? result.data
+        : DEFAULT_TASKS_LIST_ENTRY_STATE;
 
       return {
         ...current,
@@ -182,13 +189,24 @@ function createTasksPreferencesStorage(options: {
       if (raw === null) return undefined;
 
       try {
-        const parsed = tasksPreferencesSchema.parse(JSON.parse(raw));
+        const result = tasksPreferencesSchemaWithDefaults.safeParse(
+          JSON.parse(raw)
+        );
+        const restored = result.success
+          ? result.data
+          : DEFAULT_TASKS_PREFERENCES;
+
         return {
           ...current,
-          collapsedSidebarSectionIds: [...parsed.collapsedSidebarSectionIds],
+          collapsedSidebarSectionIds: [...restored.collapsedSidebarSectionIds],
         };
       } catch {
-        return undefined;
+        return {
+          ...current,
+          collapsedSidebarSectionIds: [
+            ...DEFAULT_TASKS_PREFERENCES.collapsedSidebarSectionIds,
+          ],
+        };
       }
     },
     initialize: (current) => {

@@ -19,6 +19,7 @@ enum ServiceCall {
 #[derive(Default)]
 struct FakeFavoritesService {
     calls: Mutex<Vec<ServiceCall>>,
+    remove_missing: bool,
 }
 
 impl FakeFavoritesService {
@@ -74,6 +75,9 @@ impl FavoritesService for FakeFavoritesService {
                 entity.entity_type,
                 entity.entity_id.to_string(),
             ));
+        if self.remove_missing {
+            return Err(FavoritesError::NotFound);
+        }
         Ok(())
     }
 
@@ -114,6 +118,7 @@ struct AuthorizerCall {
 #[derive(Default)]
 struct FakeAuthorizer {
     calls: Mutex<Vec<AuthorizerCall>>,
+    deny: bool,
 }
 
 impl FakeAuthorizer {
@@ -137,6 +142,9 @@ impl FavoritesAuthorizer for FakeAuthorizer {
                 entity_type: entity.entity_type,
                 entity_id: entity.entity_id.to_string(),
             });
+        if self.deny {
+            return Err(FavoritesError::Unauthorized);
+        }
         Ok(
             EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
                 actor.user_id.clone(),
@@ -174,12 +182,19 @@ async fn favorite_authorizes_then_delegates_to_core_service() {
     let service = FavoritesMutationServiceImpl::new(favorites.clone(), authorizer.clone());
     let entity = EntityType::Document.with_entity_string("document-1".to_string());
 
-    let updated = service
+    let result = service
         .set_favorite(actor(), entity.clone(), true)
         .await
         .expect("favorite should succeed");
 
-    assert_eq!(updated, entity);
+    assert_eq!(result.entity, entity);
+    assert_eq!(
+        result
+            .favorite
+            .as_ref()
+            .map(|favorite| favorite.entity_id.as_str()),
+        Some("document-1")
+    );
     assert_eq!(
         authorizer.calls(),
         vec![AuthorizerCall {
@@ -205,12 +220,13 @@ async fn unfavorite_delegates_without_requiring_current_entity_access() {
     let service = FavoritesMutationServiceImpl::new(favorites.clone(), authorizer.clone());
     let entity = EntityType::Document.with_entity_string("document-1".to_string());
 
-    let updated = service
+    let result = service
         .set_favorite(actor(), entity.clone(), false)
         .await
         .expect("unfavorite should succeed");
 
-    assert_eq!(updated, entity);
+    assert_eq!(result.entity, entity);
+    assert!(result.favorite.is_none());
     assert!(authorizer.calls().is_empty());
     assert_eq!(
         favorites.calls(),
@@ -219,6 +235,81 @@ async fn unfavorite_delegates_without_requiring_current_entity_access() {
             "document-1".to_string()
         )]
     );
+}
+
+#[tokio::test]
+async fn every_supported_interactive_entity_can_be_added_and_removed() {
+    for entity_type in [
+        EntityType::Document,
+        EntityType::Chat,
+        EntityType::Project,
+        EntityType::EmailThread,
+        EntityType::Channel,
+        EntityType::Call,
+        EntityType::ForeignEntity,
+        EntityType::CrmCompany,
+        EntityType::CrmContact,
+    ] {
+        let favorites = Arc::new(FakeFavoritesService::default());
+        let authorizer = Arc::new(FakeAuthorizer::default());
+        let service = FavoritesMutationServiceImpl::new(favorites.clone(), authorizer.clone());
+        let entity = entity_type.with_entity_string("entity-1".to_string());
+
+        let added = service
+            .set_favorite(actor(), entity.clone(), true)
+            .await
+            .unwrap();
+        assert_eq!(added.favorite.unwrap().entity_type, entity_type);
+        let removed = service.set_favorite(actor(), entity, false).await.unwrap();
+        assert!(removed.favorite.is_none());
+        assert_eq!(authorizer.calls().len(), 1);
+        assert_eq!(
+            favorites.calls(),
+            vec![
+                ServiceCall::Add(entity_type, "entity-1".to_string()),
+                ServiceCall::Remove(entity_type, "entity-1".to_string()),
+            ]
+        );
+    }
+}
+
+#[tokio::test]
+async fn denied_contact_add_never_reaches_persistence() {
+    let favorites = Arc::new(FakeFavoritesService::default());
+    let authorizer = Arc::new(FakeAuthorizer {
+        deny: true,
+        ..Default::default()
+    });
+    let service = FavoritesMutationServiceImpl::new(favorites.clone(), authorizer);
+    let result = service
+        .set_favorite(
+            actor(),
+            EntityType::CrmContact.with_entity_string("contact-1".into()),
+            true,
+        )
+        .await;
+
+    assert!(matches!(result, Err(FavoritesError::Unauthorized)));
+    assert!(favorites.calls().is_empty());
+}
+
+#[tokio::test]
+async fn replaying_an_already_removed_favorite_succeeds() {
+    let favorites = Arc::new(FakeFavoritesService {
+        remove_missing: true,
+        ..Default::default()
+    });
+    let service = FavoritesMutationServiceImpl::new(favorites, Arc::new(FakeAuthorizer::default()));
+    let result = service
+        .set_favorite(
+            actor(),
+            EntityType::Document.with_entity_string("document-1".into()),
+            false,
+        )
+        .await
+        .expect("an already absent favorite satisfies the requested state");
+
+    assert!(result.favorite.is_none());
 }
 
 #[tokio::test]
