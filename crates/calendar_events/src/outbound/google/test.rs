@@ -381,8 +381,7 @@ fn unrelated_forbidden_mutation_is_permanent() {
 
 #[test]
 fn undocumented_precondition_failure_is_retryable() {
-    // The 412 that wedged accounts arrived on a read, but it is treated as
-    // retryable for mutations too since we never send an If-Match.
+    // We never send an If-Match, so a 412 is retryable for mutations too.
     for kind in [GoogleRequestKind::Read, GoogleRequestKind::Mutation] {
         let error = provider_response_error(
             kind,
@@ -396,9 +395,6 @@ fn undocumented_precondition_failure_is_retryable() {
 
 #[test]
 fn unknown_client_errors_are_retryable_on_reads_but_permanent_on_mutations() {
-    // Our read requests are well-formed, so an unrecognized 4xx from a read is
-    // a Google-side quirk (retry); the same status on a mutation is a genuine
-    // client rejection and must not retry forever.
     let read = provider_response_error(
         GoogleRequestKind::Read,
         StatusCode::CONFLICT,

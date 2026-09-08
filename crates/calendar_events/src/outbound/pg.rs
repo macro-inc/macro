@@ -11,10 +11,11 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
-        CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
-        CalendarBackfillJob, CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget,
-        CalendarEvent, CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
+        ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus,
+        CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD, CalendarAttendee, CalendarBackfillClaim,
+        CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
+        CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
+        CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
         CalendarEventSourceContent, CalendarEventUpsert, CalendarGrantIntent,
         CalendarLinkTokenIdentity, CalendarMentionEvent, CalendarMentionPreview,
         CalendarMentionRequestItem, CalendarOccurrence, CalendarOccurrenceCursor,
@@ -375,11 +376,6 @@ impl From<&CalendarEventUpsert> for StoredSourceProjection {
         }
     }
 }
-
-/// Consecutive isolated sync failures a calendar must accumulate before its
-/// error surfaces to the user. A one-off transient failure clears on the next
-/// successful poll, so only a persistent failure earns a settings-row badge.
-const CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD: i32 = 3;
 
 impl CalendarRepository for PgCalendarRepository {
     #[tracing::instrument(skip(self, scopes), err)]
@@ -1446,9 +1442,6 @@ impl CalendarRepository for PgCalendarRepository {
     ) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
-        // The sync state (token, materialized range) is deliberately left
-        // untouched so the next poll retries this calendar; only the failure
-        // bookkeeping advances.
         sqlx::query!(
             r#"
             UPDATE calendars
@@ -1966,11 +1959,8 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.access_role,
                 calendar.provider_calendar_id,
                 calendar.default_reminders,
-                CASE
-                    WHEN calendar.consecutive_sync_failures >= $2
-                    THEN calendar.last_sync_error
-                    ELSE NULL
-                END AS sync_error
+                calendar.last_sync_error,
+                calendar.consecutive_sync_failures
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
@@ -1994,7 +1984,6 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.name ASC
             "#,
             requester_id,
-            CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD,
         )
         .fetch_all(&self.pool)
         .await
@@ -2010,7 +1999,9 @@ impl CalendarRepository for PgCalendarRepository {
                 is_primary: row.is_primary,
                 is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
                 is_subscription: is_system_calendar(&row.provider_calendar_id),
-                sync_error: row.sync_error,
+                sync_error: row.last_sync_error.filter(|_| {
+                    row.consecutive_sync_failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD
+                }),
                 default_reminders: serde_json::from_value(row.default_reminders)
                     .inspect_err(|e| {
                         tracing::error!(error = ?e, calendar_id = %row.id, "malformed calendar default_reminders json");
@@ -2288,6 +2279,18 @@ async fn upsert_calendar_tx(
             is_selected = EXCLUDED.is_selected,
             is_deleted = false,
             default_reminders = EXCLUDED.default_reminders,
+            last_sync_error = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error
+            END,
+            last_sync_error_at = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error_at
+            END,
+            consecutive_sync_failures = CASE
+                WHEN calendars.is_deleted THEN 0
+                ELSE calendars.consecutive_sync_failures
+            END,
             updated_at = now()
         RETURNING
             id,

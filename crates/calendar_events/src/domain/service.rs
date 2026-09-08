@@ -641,11 +641,11 @@ where
             .await
             .map_err(|error| -> Report { rootcause::report!(error).into() })?;
         let mut calendar_ids = Vec::with_capacity(calendars.len());
-        // A provider failure isolated to one calendar is recorded and skipped
-        // rather than failing the account; the run only fails when every
-        // synced calendar errors, so the coordinator can still classify a
-        // wholesale outage for retry.
-        let mut synced_calendars = 0usize;
+        // One calendar's provider failure is recorded and skipped rather than
+        // failing the account. The run fails only when no calendar is healthy,
+        // so the coordinator can still classify a wholesale outage.
+        let mut any_calendar_healthy = false;
+        let mut isolated_failures: Vec<(Uuid, String)> = Vec::new();
         let mut last_isolated_error: Option<GoogleProviderError> = None;
 
         for provider_calendar in calendars {
@@ -666,6 +666,7 @@ where
                     synced_at > Utc::now() - super::models::SYSTEM_CALENDAR_SYNC_INTERVAL
                 })
             {
+                any_calendar_healthy = true;
                 continue;
             }
             let plan = stored_calendar.sync_plan(&range);
@@ -698,45 +699,24 @@ where
                     if error.kind() == GoogleProviderErrorKind::ReauthRequired {
                         return Err(rootcause::report!(error).into());
                     }
-                    // Isolate one calendar's provider failure: record it for
-                    // the settings badge, leave its sync state untouched so
-                    // the next poll retries it, and keep syncing the rest. A
-                    // single unreadable calendar — such as a transient Google
-                    // 412 — must not wedge the whole account.
-                    self.repository
-                        .record_google_calendar_sync_error(
-                            key,
-                            lease_token,
-                            account_id,
-                            calendar_id,
-                            &error.to_string(),
-                        )
-                        .await
-                        .inspect_err(|record_error| {
-                            tracing::warn!(
-                                error=?record_error,
-                                calendar_id=%calendar_id,
-                                "failed to record isolated Google Calendar sync error"
-                            );
-                        })
-                        .ok();
                     tracing::warn!(
                         error=?error,
                         calendar_id=%calendar_id,
                         "isolating a failed Google Calendar and continuing the account sync"
                     );
-                    // Keep a retryable failure ahead of a permanent one so, if
-                    // every calendar fails, one calendar's permanent error does
-                    // not stop the whole inbox from polling when the others were
-                    // only transient.
+                    isolated_failures.push((calendar_id, error.message().to_owned()));
+                    // A retryable failure outranks a permanent one so a total
+                    // failure still surfaces as retryable.
                     last_isolated_error = Some(match last_isolated_error {
-                        Some(previous) if is_retryable_kind(previous.kind()) => previous,
+                        Some(previous) if previous.kind() != GoogleProviderErrorKind::Permanent => {
+                            previous
+                        }
                         _ => error,
                     });
                     continue;
                 }
             };
-            synced_calendars += 1;
+            any_calendar_healthy = true;
             let mut calendar_count = 0;
             for upsert in batch.upserts {
                 if let Err(error) = validate_upsert(&upsert) {
@@ -842,16 +822,33 @@ where
             }
         }
 
-        // Fail the run only when every synced calendar errored, so the
-        // coordinator classifies a wholesale outage for retry. The surfaced
-        // error prefers a retryable kind (see the loop) so a mix that includes
-        // a transient failure keeps polling. A partial failure is isolated per
-        // calendar above, a reauthorization signal returned immediately, and
-        // the calendar list fetch failing returned earlier.
-        if synced_calendars == 0
-            && let Some(error) = last_isolated_error
-        {
+        // No calendar is healthy: a wholesale outage the coordinator classifies
+        // for retry. The account-level failure carries it, so no calendar is
+        // badged for it.
+        if !any_calendar_healthy && let Some(error) = last_isolated_error {
             return Err(rootcause::report!(error).into());
+        }
+
+        // Record each isolated failure for the settings badge, leaving the
+        // calendar's sync state untouched so the next poll retries it.
+        for (calendar_id, message) in isolated_failures {
+            self.repository
+                .record_google_calendar_sync_error(
+                    key,
+                    lease_token,
+                    account_id,
+                    calendar_id,
+                    &message,
+                )
+                .await
+                .inspect_err(|error| {
+                    tracing::warn!(
+                        error=?error,
+                        calendar_id=%calendar_id,
+                        "failed to record isolated Google Calendar sync error"
+                    );
+                })
+                .ok();
         }
 
         // A calendar dropped from the provider's list retires its sources, so
@@ -864,16 +861,6 @@ where
 
         Ok(())
     }
-}
-
-/// Whether a provider failure kind lets the run keep polling. A wholesale
-/// failure prefers one of these over a permanent error so a single calendar's
-/// permanent error cannot stop the inbox when the rest were only transient.
-fn is_retryable_kind(kind: GoogleProviderErrorKind) -> bool {
-    matches!(
-        kind,
-        GoogleProviderErrorKind::Transient | GoogleProviderErrorKind::SyncTokenExpired
-    )
 }
 
 fn validate_upsert(upsert: &CalendarEventUpsert) -> Result<(), Report> {

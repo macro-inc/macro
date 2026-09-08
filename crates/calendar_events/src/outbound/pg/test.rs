@@ -2752,23 +2752,19 @@ async fn a_persistently_failing_calendar_badges_then_clears_on_recovery(pool: Pg
     else {
         panic!("Google job should be claimable");
     };
+    let primary = ProviderCalendar {
+        provider_calendar_id: "primary".to_string(),
+        name: "Primary".to_string(),
+        description: None,
+        time_zone: Some("UTC".to_string()),
+        color: None,
+        access_role: Some("owner".to_string()),
+        is_primary: true,
+        is_selected: true,
+        default_reminders: Vec::new(),
+    };
     let calendar_id = repo
-        .upsert_google_calendar(
-            key,
-            lease_token,
-            account_id,
-            ProviderCalendar {
-                provider_calendar_id: "primary".to_string(),
-                name: "Primary".to_string(),
-                description: None,
-                time_zone: Some("UTC".to_string()),
-                color: None,
-                access_role: Some("owner".to_string()),
-                is_primary: true,
-                is_selected: true,
-                default_reminders: Vec::new(),
-            },
-        )
+        .upsert_google_calendar(key, lease_token, account_id, primary.clone())
         .await
         .unwrap()
         .id;
@@ -2816,6 +2812,35 @@ async fn a_persistently_failing_calendar_badges_then_clears_on_recovery(pool: Pg
 
     // A fresh failure after recovery starts the count over, so one blip does
     // not immediately re-badge.
+    repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+        .await
+        .unwrap();
+    assert_eq!(sync_error().await, None);
+
+    // A badged calendar that drops off the provider list and later returns
+    // starts clean rather than resurrecting its old badge.
+    for _ in 0..2 {
+        repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
+            .await
+            .unwrap();
+    }
+    assert_eq!(sync_error().await.as_deref(), Some(message));
+    repo.reconcile_google_calendar_list(key, lease_token, account_id, Vec::new())
+        .await
+        .unwrap();
+    assert!(
+        repo.list_visible_calendars(owner_id)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    let resurrected_id = repo
+        .upsert_google_calendar(key, lease_token, account_id, primary)
+        .await
+        .unwrap()
+        .id;
+    assert_eq!(resurrected_id, calendar_id);
+    assert_eq!(sync_error().await, None);
     repo.record_google_calendar_sync_error(key, lease_token, account_id, calendar_id, message)
         .await
         .unwrap();

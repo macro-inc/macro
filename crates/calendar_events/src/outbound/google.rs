@@ -300,8 +300,24 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             if let Some(token) = &page_token {
                 request = request.query(&[("pageToken", token)]);
             }
+            let response = request.send().await.map_err(provider_transport_error)?;
+            let status = response.status();
+            if !status.is_success() {
+                let body = response.text().await.map_err(provider_transport_error)?;
+                let error = provider_response_error(GoogleRequestKind::Read, status, &body);
+                // A missing series master is not a Google quirk to retry.
+                if status == StatusCode::NOT_FOUND
+                    && error.kind() == GoogleProviderErrorKind::Transient
+                {
+                    return Err(GoogleProviderError::new(
+                        GoogleProviderErrorKind::Permanent,
+                        error.message(),
+                    ));
+                }
+                return Err(error);
+            }
             let page: GoogleEventListResponse =
-                send_google(GoogleRequestKind::Read, request).await?;
+                response.json().await.map_err(provider_transport_error)?;
             result.extend(page.items);
             page_token = page.next_page_token;
             if page_token.is_none() {
@@ -315,9 +331,9 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
 /// Whether a request reads calendar state or mutates it. An unrecognized 4xx
 /// means different things for each: our read requests are well-formed, so an
 /// unknown 4xx from a read is a Google-side quirk (like the undocumented 412)
-/// and is retried; a mutation's unknown 4xx is a real client rejection and
+/// and is retried. A mutation's unknown 4xx is a real client rejection and
 /// stays permanent so it does not retry forever.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 enum GoogleRequestKind {
     Read,
     Mutation,
@@ -366,9 +382,8 @@ fn provider_response_error(
         || status == StatusCode::TOO_MANY_REQUESTS
         // Google returns an undocumented 412 ("Precondition check failed.")
         // transiently, and we never send an If-Match, so it is never the
-        // documented precondition failure — treat it as retryable for reads
-        // and mutations alike. As a Permanent classification it wedged whole
-        // accounts on one flaky calendar.
+        // documented precondition failure. Reads already fall through to
+        // retryable below, so this arm keeps a mutation's 412 retryable too.
         || status == StatusCode::PRECONDITION_FAILED
         || status.is_server_error()
         || reasons.contains(&"authError")
@@ -379,15 +394,11 @@ fn provider_response_error(
         || reasons.contains(&"userRateLimitExceeded")
     {
         GoogleProviderErrorKind::Transient
-    } else if request_kind == GoogleRequestKind::Read {
-        // Any other unrecognized 4xx from a read is a Google-side quirk, not a
-        // request defect: our read requests are well-formed, so retry rather
-        // than failing the calendar permanently the way the 412 once did.
-        GoogleProviderErrorKind::Transient
     } else {
-        // A mutation's unknown 4xx is a genuine client rejection (bad payload,
-        // conflict) and must not retry forever.
-        GoogleProviderErrorKind::Permanent
+        match request_kind {
+            GoogleRequestKind::Read => GoogleProviderErrorKind::Transient,
+            GoogleRequestKind::Mutation => GoogleProviderErrorKind::Permanent,
+        }
     };
     let message = provider_error_message(payload.as_ref(), status, &reasons);
     GoogleProviderError::new(kind, message)
@@ -395,17 +406,16 @@ fn provider_response_error(
 
 /// Compose the provider error message, keeping Google's `reason` strings
 /// alongside the human-readable `message` so a failure is diagnosable from a
-/// stored `last_error` alone. Without this only `error.message` survived, so
-/// the exact reason for an undocumented 412 was unknowable from the database.
+/// stored `last_error` alone.
 fn provider_error_message(
     payload: Option<&GoogleErrorResponse>,
     status: StatusCode,
     reasons: &[&str],
 ) -> String {
     let base = payload
-        .map(|payload| payload.error.message.as_str())
+        .map(|payload| &payload.error.message)
         .filter(|message| !message.is_empty())
-        .map(str::to_owned)
+        .cloned()
         .unwrap_or_else(|| format!("Google Calendar returned HTTP {status}"));
     if reasons.is_empty() {
         base
@@ -1505,8 +1515,8 @@ fn truncate_recurrence_lines(lines: &[String], cutoff: &EventStart) -> Vec<Strin
 /// A read that runs after a mutation has already landed must never surface as
 /// retryable: the caller's retry would re-apply the write. `create_event`
 /// carries no idempotency key, so it would POST a duplicate event, and a
-/// re-sent patch re-notifies every guest. The write is in Google either way;
-/// the next sync converges the projection, so the demotion loses nothing.
+/// re-sent patch re-notifies every guest. The write is in Google either way.
+/// The next sync converges the projection, so the demotion loses nothing.
 /// A reauthorization signal is kept — retrying would not help it either, and
 /// the caller maps it to a reauth prompt rather than a retry.
 fn non_retryable_after_write(error: GoogleProviderError) -> GoogleProviderError {
@@ -1515,7 +1525,7 @@ fn non_retryable_after_write(error: GoogleProviderError) -> GoogleProviderError 
             GoogleProviderError::new(
                 GoogleProviderErrorKind::Permanent,
                 format!(
-                    "readback after an applied mutation was not retried: {}",
+                    "Google Calendar applied the change but has not returned it yet, refresh to see it: {}",
                     error.message()
                 ),
             )
