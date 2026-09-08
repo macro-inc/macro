@@ -14,16 +14,18 @@ import {
 } from '@queries/agent-session/session-fold';
 import type {
   FoldedMessage,
-  PendingElicitation,
+  SessionMetadata,
 } from '@service-agent-fold/generated/types';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentSessionLogEntryDto,
+  SessionBot,
   SessionStatusDto,
 } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import {
   deriveMagicChipPresentation,
+  type MagicChipHeader,
   type MagicChipPresentation,
   type MagicChipQuestion,
 } from './presentation';
@@ -45,23 +47,36 @@ function magicChipStatus(
   return MAGIC_CHIP_STATUSES.find((candidate) => candidate === value);
 }
 
+/** The model's display name, or its id when the runtime lists no name. */
+function modelName(metadata: SessionMetadata | undefined): string | undefined {
+  const model = metadata?.model;
+  if (!model) return undefined;
+  return (
+    metadata.supportedModels.find((option) => option.id === model)?.name ??
+    model
+  );
+}
+
 /**
  * Observe the session lifecycle and the chip's anchored folded turn.
  *
  * Also the chip's half of answering a question the agent stops to ask in
  * that turn: the session's metadata names the live question, the session
  * row names its owner, and {@link ElicitationController} sends the answer.
+ * The header reads the bot and model off the same fold.
  */
 export function createMagicChipModel(props: MagicChipDecoratorProps): {
   presentation: Accessor<MagicChipPresentation>;
+  header: Accessor<MagicChipHeader | undefined>;
   elicitation: ElicitationController;
 } {
   const [latestEvent, setLatestEvent] = createSignal<string>();
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const [persistedStatus, setPersistedStatus] = createSignal(props.status);
   const [ownerId, setOwnerId] = createSignal<string>();
-  const [pendingElicitation, setPendingElicitation] =
-    createSignal<PendingElicitation>();
+  const [bot, setBot] = createSignal<SessionBot>();
+  const [metadata, setMetadata] = createSignal<SessionMetadata>();
+  const pendingElicitation = () => metadata()?.pendingElicitation ?? undefined;
   const viewerId = useUserId();
   let active = true;
   let release: (() => void) | undefined;
@@ -112,9 +127,7 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
         )
       );
     },
-    onMetadata: (metadata) => {
-      setPendingElicitation(metadata.pendingElicitation ?? undefined);
-    },
+    onMetadata: setMetadata,
   })
     .then((acquired) => {
       if (!active) {
@@ -123,7 +136,8 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
       }
       release = acquired.release;
       setMessages(acquired.messages);
-      setPendingElicitation(acquired.metadata.pendingElicitation ?? undefined);
+      setBot(acquired.bot);
+      setMetadata(acquired.metadata);
     })
     .catch((error: unknown) => {
       console.error('[magic-chip] session log could not be folded', error);
@@ -174,5 +188,11 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
     });
   };
 
-  return { presentation, elicitation };
+  const header = (): MagicChipHeader | undefined => {
+    const agent = bot()?.name;
+    const model = modelName(metadata());
+    return agent || model ? { agent, model } : undefined;
+  };
+
+  return { presentation, header, elicitation };
 }

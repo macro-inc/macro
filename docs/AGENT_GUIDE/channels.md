@@ -44,25 +44,27 @@ bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cu
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 The reply renders a Magic Chip: a rounded card of constant height that is present
-from the moment the session boots. Its answer area shows a pulsing star while the
-agent works, then the opening of the answer clipped to four lines and faded out; its
-bottom row reads the current activity (`Booting agent`, `Writing response`, ...) and
-`Open session` once the turn ends. A `Show more` cue sits over the fade: click the
-answer text to expand it in place (`Show less` collapses it again); click the
-bottom row to open the agent session. Before an
-answer exists, clicking the answer area also opens the session.
-When the agent stops to ask a question the chip keeps its height and shows the question in
-a pane: beside the answer on the chip's right when the agent said something first, or as the
-whole card when it did not. The pane reads `Waiting for you` (or `Waiting for <owner>`) with
-an `Open in session` arrow at its top-right, then the prompt and the question's fields - a
-form's choices (rows with an accent box, an `Other` row when the agent allows a free-text
-answer), text and number inputs, a yes/no; a URL request's host and address; a Macro user
-tool's draft summarized read-only - scrolling inside the chip when long. The decisions sit
-on the chip's bottom row in the footer's place: `Submit` (or `Open` for a URL) and `Decline`
-for a question, `Create event`/`Send email` and `Cancel` for a tool draft. Only the
-session's owner gets the decisions; other viewers see the fields disabled and the bottom
-row reads who is being waited on. The answer area shows the pulsing star only while the
-agent is busy; a finished or waiting turn with nothing said shows nothing there.
+from the moment the session boots. Its header names the bot as a mention (`@cursor`),
+the model when the runtime has reported one, and what the turn is doing (`Booting
+agent`, `Running command · cargo test`, `Waiting for you`, `Done`); clicking the header
+or its arrow (`Open in session`) opens the agent session. The area under the header
+holds the agent's latest passage: a pulsing star while the agent is busy before it
+writes, the passage as it streams, and the final passage once the turn ends - the last
+text the agent wrote, not the whole turn, and a finished turn with nothing said leaves
+the area empty. The passage is clipped to four lines with a fade and a `Show more`
+cue: click it to expand in place (`Show less` collapses it). Before an answer exists,
+clicking the area also opens the session.
+When the agent stops to ask a question the chip keeps its height. A form or URL question
+puts its prompt and fields in a pane - beside the passage on the chip's right when the
+agent said something first, or as the whole card when it did not - scrolling inside the
+chip when long: a form's choices (rows with an accent box, an `Other` row when the agent
+allows a free-text answer), text and number inputs, a yes/no; a URL request's host and
+address. Its decisions sit in the header before the arrow: `Submit` (or `Open` for a URL)
+and `Decline`. A Macro user tool the agent drafted (`SendEmail`, `CreateCalendarEvent`)
+is kept simple: the header offers only its go-ahead (`Send email`, `Create event`) and the
+arrow into the session, where the draft can be read, edited, or cancelled. Only the
+session's owner gets the decisions; other viewers see a form's fields disabled and the
+header reads who is being waited on.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention. With GraphQL enabled, document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit

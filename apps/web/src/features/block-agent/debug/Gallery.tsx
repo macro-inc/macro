@@ -443,6 +443,20 @@ const FIXTURE_ELICITATION: ElicitationSchema = {
   ],
 };
 
+const GALLERY_CHIP_HEADER = { agent: 'cursor', model: 'Claude Opus 5 High' };
+
+/** The chip through a turn: booting, writing, and done. */
+function MagicChipStateDemo(props: { presentation: MagicChipPresentation }) {
+  return (
+    <MagicChipView
+      agentSessionId="gallery"
+      presentation={props.presentation}
+      header={GALLERY_CHIP_HEADER}
+      onOpen={() => console.log('[gallery] open session')}
+    />
+  );
+}
+
 /** The chip asking, one per request kind; answers land in the console. */
 function MagicChipAskingDemo(props: {
   request: PendingElicitation['request'];
@@ -468,6 +482,7 @@ function MagicChipAskingDemo(props: {
     <MagicChipView
       agentSessionId="gallery"
       presentation={presentation}
+      header={GALLERY_CHIP_HEADER}
       answer={{
         answering: false,
         respond: async (answer) => {
@@ -506,6 +521,38 @@ export default function AgentUiGallery() {
         <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
           <Item label="ElicitationForm (live validation)">
             <ElicitationFormDemo />
+          </Item>
+
+          <Item label="MagicChip (booting, writing, done)">
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'working',
+                activity: {
+                  label: 'Booting agent',
+                  detail: 'Preparing workspace',
+                  busy: true,
+                },
+              }}
+            />
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'answering',
+                markdown:
+                  'The failing test is in `agent_fold`: the batch fold re-derives every message per frame, so the',
+                activity: {
+                  label: 'Running command',
+                  detail: 'cargo test -p agent_fold',
+                  busy: true,
+                },
+              }}
+            />
+            <MagicChipStateDemo
+              presentation={{
+                kind: 'settled',
+                markdown:
+                  '**Fixed.** The incremental machine now handles the replay; `cargo test -p agent_fold` passes.',
+              }}
+            />
           </Item>
 
           <Item label="MagicChip asking (form, quiet form, url, tool draft)">
