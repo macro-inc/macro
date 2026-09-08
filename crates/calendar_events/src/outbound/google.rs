@@ -845,7 +845,21 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
     /// Recurring series are re-read from the provider so Google stays the
     /// recurrence expansion authority, exactly like ingestion. `None` means
     /// the series master disappeared between the mutation and the refresh.
+    ///
+    /// The write has already landed by the time this runs, so no failure here
+    /// may surface as retryable — see [`non_retryable_after_write`].
     async fn mutation_readback(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        event: GoogleEvent,
+    ) -> Result<Option<CalendarEventUpsert>, GoogleProviderError> {
+        self.readback_mutation(access_token, target, event)
+            .await
+            .map_err(non_retryable_after_write)
+    }
+
+    async fn readback_mutation(
         &self,
         access_token: &str,
         target: &GoogleCalendarTarget,
@@ -909,7 +923,21 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
     }
 
     /// Refresh a series after reshaping it, mapping the outcome for callers.
+    ///
+    /// The reshaping write has already landed, so no failure here may surface
+    /// as retryable — see [`non_retryable_after_write`].
     async fn series_outcome(
+        &self,
+        access_token: &str,
+        target: &GoogleCalendarTarget,
+        master_provider_event_id: &str,
+    ) -> Result<GoogleSeriesMutationOutcome, GoogleProviderError> {
+        self.refreshed_series_outcome(access_token, target, master_provider_event_id)
+            .await
+            .map_err(non_retryable_after_write)
+    }
+
+    async fn refreshed_series_outcome(
         &self,
         access_token: &str,
         target: &GoogleCalendarTarget,
@@ -1456,6 +1484,28 @@ fn truncate_recurrence_lines(lines: &[String], cutoff: &EventStart) -> Vec<Strin
             format!("RRULE:{}", kept.join(";"))
         })
         .collect()
+}
+
+/// A read that runs after a mutation has already landed must never surface as
+/// retryable: the caller's retry would re-apply the write. `create_event`
+/// carries no idempotency key, so it would POST a duplicate event, and a
+/// re-sent patch re-notifies every guest. The write is in Google either way;
+/// the next sync converges the projection, so the demotion loses nothing.
+/// A reauthorization signal is kept — retrying would not help it either, and
+/// the caller maps it to a reauth prompt rather than a retry.
+fn non_retryable_after_write(error: GoogleProviderError) -> GoogleProviderError {
+    match error.kind() {
+        GoogleProviderErrorKind::Transient | GoogleProviderErrorKind::SyncTokenExpired => {
+            GoogleProviderError::new(
+                GoogleProviderErrorKind::Permanent,
+                format!(
+                    "readback after an applied mutation was not retried: {}",
+                    error.message()
+                ),
+            )
+        }
+        GoogleProviderErrorKind::Permanent | GoogleProviderErrorKind::ReauthRequired => error,
+    }
 }
 
 fn mutation_normalization_error(error: Report) -> GoogleProviderError {

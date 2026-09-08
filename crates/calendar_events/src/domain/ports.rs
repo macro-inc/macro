@@ -54,6 +54,11 @@ impl GoogleProviderError {
     pub fn kind(&self) -> GoogleProviderErrorKind {
         self.kind
     }
+
+    /// Return the provider failure detail, without the Display prefix.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
 }
 
 /// Stable identifiers and sync policy for one provider calendar fetch.

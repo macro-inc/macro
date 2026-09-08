@@ -428,6 +428,34 @@ fn provider_error_keeps_google_reason_strings() {
 }
 
 #[test]
+fn readback_failures_after_a_write_are_never_retryable() {
+    // A retry of the outer mutation would re-apply the write (a duplicate
+    // POST, re-notified guests), so a retryable readback failure is demoted.
+    for kind in [
+        GoogleProviderErrorKind::Transient,
+        GoogleProviderErrorKind::SyncTokenExpired,
+    ] {
+        let demoted = non_retryable_after_write(GoogleProviderError::new(kind, "Conflict"));
+        assert_eq!(demoted.kind(), GoogleProviderErrorKind::Permanent);
+        assert!(
+            demoted.message().contains("Conflict"),
+            "{}",
+            demoted.message()
+        );
+    }
+
+    // Kinds a retry would not help pass through untouched.
+    for kind in [
+        GoogleProviderErrorKind::Permanent,
+        GoogleProviderErrorKind::ReauthRequired,
+    ] {
+        let kept = non_retryable_after_write(GoogleProviderError::new(kind, "kept"));
+        assert_eq!(kept.kind(), kind);
+        assert_eq!(kept.message(), "kept");
+    }
+}
+
+#[test]
 fn cancelled_single_events_become_tombstones() {
     let cancelled: GoogleEvent = serde_json::from_value(serde_json::json!({
         "id": "gone-event",
