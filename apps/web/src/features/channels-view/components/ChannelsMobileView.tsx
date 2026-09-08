@@ -9,6 +9,7 @@ import type { ChannelEntity } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import type { SoupAstItemsQuery } from '@queries/soup/items';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { Button } from '@ui';
 import {
   createMemo,
   createSignal,
@@ -17,7 +18,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { Button } from '@ui';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../channels-view-context';
 import { filterChannelsForScope } from '../queries';

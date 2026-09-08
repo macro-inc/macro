@@ -7,7 +7,7 @@ import { openNewChannelModal } from '@channel/CreateChannelModal';
 import EmptyStateChannelsGraphic from '@design/empty-state-channels.svg';
 import BookOpenIcon from '@phosphor/book-open.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { EmptyStatePanel, type EmptyStateAction } from '@ui';
+import { type EmptyStateAction, EmptyStatePanel } from '@ui';
 import type { ChannelsQueryScope } from '../types';
 
 type ChannelsEmptyStateContent = {

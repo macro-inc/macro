@@ -5,8 +5,8 @@ import { Match, Switch } from 'solid-js';
 import { channelMentionsUser } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import { useChannelRail } from './Context';
-import { SlimChannelItem } from './Item';
 import { ConversationCard } from './ConversationCard';
+import { SlimChannelItem } from './Item';
 
 export function ChannelsRailRecents() {
   const rail = useChannelRail();
