@@ -327,6 +327,7 @@ fn malformed_master_is_quarantined_without_deleting_its_provider_identity() {
 #[test]
 fn quota_forbidden_response_is_retryable() {
     let error = provider_response_error(
+        GoogleRequestKind::Read,
         StatusCode::FORBIDDEN,
         r#"{"error":{"message":"Quota exceeded","errors":[{"reason":"userRateLimitExceeded"}]}}"#,
     );
@@ -337,6 +338,7 @@ fn quota_forbidden_response_is_retryable() {
 #[test]
 fn insufficient_permissions_require_reauthorization() {
     let error = provider_response_error(
+        GoogleRequestKind::Read,
         StatusCode::FORBIDDEN,
         r#"{"error":{"message":"Insufficient Permission","errors":[{"reason":"insufficientPermissions"}]}}"#,
     );
@@ -347,6 +349,7 @@ fn insufficient_permissions_require_reauthorization() {
 #[test]
 fn expired_sync_token_requests_a_full_resync() {
     let error = provider_response_error(
+        GoogleRequestKind::Read,
         StatusCode::GONE,
         r#"{"error":{"message":"Sync token is no longer valid","errors":[{"reason":"fullSyncRequired"}]}}"#,
     );
@@ -357,6 +360,7 @@ fn expired_sync_token_requests_a_full_resync() {
 #[test]
 fn rejected_access_token_is_retryable_with_a_fresh_token() {
     let error = provider_response_error(
+        GoogleRequestKind::Read,
         StatusCode::UNAUTHORIZED,
         r#"{"error":{"message":"Invalid Credentials","errors":[{"reason":"authError"}]}}"#,
     );
@@ -365,8 +369,9 @@ fn rejected_access_token_is_retryable_with_a_fresh_token() {
 }
 
 #[test]
-fn unrelated_forbidden_response_is_permanent() {
+fn unrelated_forbidden_mutation_is_permanent() {
     let error = provider_response_error(
+        GoogleRequestKind::Mutation,
         StatusCode::FORBIDDEN,
         r#"{"error":{"message":"Forbidden","errors":[{"reason":"forbidden"}]}}"#,
     );
@@ -376,27 +381,43 @@ fn unrelated_forbidden_response_is_permanent() {
 
 #[test]
 fn undocumented_precondition_failure_is_retryable() {
-    let error = provider_response_error(
-        StatusCode::PRECONDITION_FAILED,
-        r#"{"error":{"message":"Precondition check failed."}}"#,
-    );
+    // The 412 that wedged accounts arrived on a read, but it is treated as
+    // retryable for mutations too since we never send an If-Match.
+    for kind in [GoogleRequestKind::Read, GoogleRequestKind::Mutation] {
+        let error = provider_response_error(
+            kind,
+            StatusCode::PRECONDITION_FAILED,
+            r#"{"error":{"message":"Precondition check failed."}}"#,
+        );
 
-    assert_eq!(error.kind(), GoogleProviderErrorKind::Transient);
+        assert_eq!(error.kind(), GoogleProviderErrorKind::Transient);
+    }
 }
 
 #[test]
-fn other_unknown_client_errors_stay_permanent() {
-    // Only 412 is the known transient read failure; a genuine client error
-    // must not retry forever, and per-calendar isolation already contains it.
-    let error =
-        provider_response_error(StatusCode::CONFLICT, r#"{"error":{"message":"Conflict"}}"#);
+fn unknown_client_errors_are_retryable_on_reads_but_permanent_on_mutations() {
+    // Our read requests are well-formed, so an unrecognized 4xx from a read is
+    // a Google-side quirk (retry); the same status on a mutation is a genuine
+    // client rejection and must not retry forever.
+    let read = provider_response_error(
+        GoogleRequestKind::Read,
+        StatusCode::CONFLICT,
+        r#"{"error":{"message":"Conflict"}}"#,
+    );
+    assert_eq!(read.kind(), GoogleProviderErrorKind::Transient);
 
-    assert_eq!(error.kind(), GoogleProviderErrorKind::Permanent);
+    let mutation = provider_response_error(
+        GoogleRequestKind::Mutation,
+        StatusCode::CONFLICT,
+        r#"{"error":{"message":"Conflict"}}"#,
+    );
+    assert_eq!(mutation.kind(), GoogleProviderErrorKind::Permanent);
 }
 
 #[test]
 fn provider_error_keeps_google_reason_strings() {
     let error = provider_response_error(
+        GoogleRequestKind::Read,
         StatusCode::FORBIDDEN,
         r#"{"error":{"message":"Forbidden","errors":[{"reason":"variableTermLimitExceeded"}]}}"#,
     );
