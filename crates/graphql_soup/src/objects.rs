@@ -2238,7 +2238,7 @@ impl<E: SoupEntityEdges> SoupPatch<E> {
     /// Construct an update only after its viewer-scoped item has been hydrated.
     pub fn updated(item: SoupProjectionHydration) -> Self {
         Self::Updated(SoupUpdated {
-            item: GraphqlSoupEntity::new_with_projection(item),
+            item: Box::new(GraphqlSoupEntity::new_with_projection(item)),
         })
     }
 
@@ -2298,7 +2298,7 @@ impl<E: SoupEntityEdges> SoupPatch<E> {
 /// Created or updated Soup entity with its current viewer-scoped data already hydrated.
 pub struct SoupUpdated<E: SoupEntityEdges> {
     /// Canonical hydrated entity, never a nullable lookup result.
-    item: GraphqlSoupEntity<E>,
+    item: Box<GraphqlSoupEntity<E>>,
 }
 
 /// GraphQL representation of a created or updated Soup entity.
