@@ -40,6 +40,22 @@ async fn set_legacy_team_share(
     repo.set_team_share(command).await
 }
 
+async fn set_comment_share(repo: &PgDocumentRepo) {
+    let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
+    let command = authorize_team_share(
+        Some(&facts.owner),
+        &facts,
+        TeamShareRequest {
+            access_level: Some(Some(AccessLevel::Comment)),
+            legacy_enabled: None,
+        },
+        TeamShareLevel::Edit,
+    )
+    .unwrap()
+    .unwrap();
+    repo.set_team_share(command).await.unwrap();
+}
+
 async fn team_edit_args(repo: &PgDocumentRepo, level: Option<AccessLevel>) -> EditDocumentRepoArgs {
     let facts = repo.get_team_share_facts(TEST_DOCUMENT_ID).await.unwrap();
     let command = authorize_team_share(
@@ -275,6 +291,381 @@ async fn inherited_team_grant_does_not_enable_explicit_toggle(pool: Pool<Postgre
     assert_eq!(inherited, Some(1));
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn creation_team_consent_is_explicit_and_uses_owner_membership(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    for subtype in [
+        None,
+        Some(document_sub_type::DocumentSubType::Task),
+        Some(document_sub_type::DocumentSubType::Snippet),
+    ] {
+        let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+        args.sub_type = subtype;
+        let document = repo
+            .create_document(args, md_share_permission())
+            .await
+            .unwrap();
+        let facts = repo
+            .get_team_share_facts(&document.document_id)
+            .await
+            .unwrap();
+        assert_eq!(facts.current, None);
+        assert_eq!(facts.revision, 0);
+    }
+
+    insert_second_team(&pool).await;
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, true, Some(SECOND_TEAM_ID));
+    args.share_with_team = true;
+    let document = repo
+        .create_document(args, md_share_permission())
+        .await
+        .unwrap();
+    let facts = repo
+        .get_team_share_facts(&document.document_id)
+        .await
+        .unwrap();
+    let grant = facts.current.unwrap();
+    assert_eq!(grant.team_id, TEST_TEAM_ID);
+    assert_eq!(grant.level, TeamShareLevel::Comment);
+    assert_eq!(facts.revision, 1);
+    assert_eq!(
+        repo.get_team_task_metadata(&document.document_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .team_id,
+        SECOND_TEAM_ID
+    );
+    let level = sqlx::query_scalar!(
+        r#"SELECT access_level AS "level: AccessLevel" FROM entity_access
+        WHERE entity_id = $1 AND source_type = 'team' AND granted_from_project_id IS NULL"#,
+        uuid::Uuid::parse_str(&document.document_id).unwrap(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(level, AccessLevel::Comment);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn task_creation_failure_rolls_back_all_initialization(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let permissions_before = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "SharePermission""#)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let id = uuid::Uuid::new_v4();
+    let mut args = create_document_args("macro|no-team@user.com", true, Some(TEST_TEAM_ID));
+    args.id = Some(id);
+    args.share_with_team = true;
+    assert!(
+        repo.create_document(args, md_share_permission())
+            .await
+            .is_err()
+    );
+    assert!(repo.get_document_metadata(&id.to_string()).await.is_err());
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "SharePermission""#)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        permissions_before
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1",
+            id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert!(team_task_numbers(&pool, TEST_TEAM_ID).await.is_empty());
+
+    sqlx::raw_sql(
+        r#"
+        CREATE FUNCTION reject_team_grant() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'injected team grant failure'; END $$;
+        CREATE TRIGGER reject_team_grant BEFORE INSERT ON entity_access
+        FOR EACH ROW WHEN (NEW.source_type = 'team') EXECUTE FUNCTION reject_team_grant();
+    "#,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, true, Some(TEST_TEAM_ID));
+    args.id = Some(id);
+    args.share_with_team = true;
+    assert!(
+        repo.create_document(args, md_share_permission())
+            .await
+            .is_err()
+    );
+    assert!(repo.get_document_metadata(&id.to_string()).await.is_err());
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "SharePermission""#)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        permissions_before
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM entity_access WHERE entity_id = $1",
+            id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM "UserHistory" WHERE "itemId" = $1"#,
+            id.to_string()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert_eq!(
+        sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM "DocumentInstance" WHERE "documentId" = $1"#,
+            id.to_string()
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap(),
+        Some(0)
+    );
+    assert!(team_task_numbers(&pool, TEST_TEAM_ID).await.is_empty());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn create_copy_and_move_reconcile_project_grants_atomically(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let project_id = uuid::uuid!("d0000000-0000-0000-0000-100000000001");
+    let mut tx = pool.begin().await.unwrap();
+    share_permission_db_utils::team_share::acquire_guard(&mut tx)
+        .await
+        .unwrap();
+    let permission_id =
+        sqlx::query_scalar!(r#"INSERT INTO "SharePermission" DEFAULT VALUES RETURNING id"#)
+            .fetch_one(&mut *tx)
+            .await
+            .unwrap();
+    sqlx::query!(
+        r#"INSERT INTO "ProjectPermission" ("projectId", "sharePermissionId") VALUES ($1, $2)"#,
+        project_id.to_string(),
+        permission_id
+    )
+    .execute(&mut *tx)
+    .await
+    .unwrap();
+    let project_id_string = project_id.to_string();
+    let entity = EntityType::Project.with_entity_str(&project_id_string);
+    let facts = share_permission_db_utils::team_share::load_facts(&mut tx, &entity)
+        .await
+        .unwrap();
+    let command = authorize_team_share(
+        Some(&facts.owner),
+        &facts,
+        TeamShareRequest {
+            access_level: Some(Some(AccessLevel::View)),
+            legacy_enabled: None,
+        },
+        TeamShareLevel::Edit,
+    )
+    .unwrap()
+    .unwrap();
+    share_permission_db_utils::team_share::apply(&mut tx, &command)
+        .await
+        .unwrap();
+    tx.commit().await.unwrap();
+
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, true, None);
+    args.project_id = Some(project_id);
+    args.share_with_team = true;
+    let original = repo
+        .create_document(args, md_share_permission())
+        .await
+        .unwrap();
+    let original_facts = repo
+        .get_team_share_facts(&original.document_id)
+        .await
+        .unwrap();
+    let mut source_permission = md_share_permission();
+    source_permission.team_share_access_level = Some(AccessLevel::Comment);
+    let copy = repo
+        .copy_document(
+            CopyDocumentRepoArgs {
+                original_document: original.clone(),
+                user_id: user_id(TEST_DOCUMENT_NON_OWNER_ID),
+                document_name: "copy".to_string(),
+                file_type: Some(model::document::FileType::Md),
+                team_id: None,
+            },
+            source_permission,
+        )
+        .await
+        .unwrap();
+    let copy_facts = repo.get_team_share_facts(&copy.document_id).await.unwrap();
+    assert_eq!(copy_facts.current, None);
+    assert_eq!(copy_facts.revision, 0);
+    for document in [&original, &copy] {
+        let level = sqlx::query_scalar!(
+            r#"SELECT access_level AS "level: AccessLevel" FROM entity_access
+            WHERE entity_id = $1 AND source_type = 'team' AND granted_from_project_id = $2"#,
+            uuid::Uuid::parse_str(&document.document_id).unwrap(),
+            project_id.to_string(),
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(level, AccessLevel::View);
+    }
+
+    for (document, expected_facts) in [(&original, &original_facts), (&copy, &copy_facts)] {
+        for project in ["".to_string(), project_id.to_string(), "".to_string()] {
+            repo.edit_document(EditDocumentRepoArgs {
+                document_id: document.document_id.clone(),
+                document_name: None,
+                project_id: Some(project.clone()),
+                share_permission: None,
+                team_share: None,
+                revoke_non_owner_user_access: false,
+                file_type: None,
+            })
+            .await
+            .unwrap();
+            assert_eq!(
+                &repo
+                    .get_team_share_facts(&document.document_id)
+                    .await
+                    .unwrap(),
+                expected_facts
+            );
+            let count = sqlx::query_scalar!("SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND source_type = 'team' AND granted_from_project_id IS NOT NULL",
+                uuid::Uuid::parse_str(&document.document_id).unwrap(),
+            ).fetch_one(&pool).await.unwrap();
+            assert_eq!(count, Some(if project.is_empty() { 0 } else { 1 }));
+        }
+    }
+    let copied_direct = sqlx::query_scalar!("SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND source_type = 'team' AND granted_from_project_id IS NULL",
+        uuid::Uuid::parse_str(&copy.document_id).unwrap(),
+    ).fetch_one(&pool).await.unwrap();
+    assert_eq!(copied_direct, Some(0));
+
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+    args.project_id = Some(project_id);
+    let ordinary = repo
+        .create_document(args, md_share_permission())
+        .await
+        .unwrap();
+    let facts = repo
+        .get_team_share_facts(&ordinary.document_id)
+        .await
+        .unwrap();
+    assert_eq!(facts.current, None);
+    assert_eq!(facts.revision, 0);
+    let inherited = sqlx::query_scalar!(
+        r#"SELECT access_level AS "level: AccessLevel" FROM entity_access
+        WHERE entity_id = $1 AND source_type = 'team' AND granted_from_project_id = $2"#,
+        uuid::Uuid::parse_str(&ordinary.document_id).unwrap(),
+        project_id.to_string(),
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(inherited, AccessLevel::View);
+
+    sqlx::raw_sql(r#"
+        CREATE FUNCTION reject_inherited_grant() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'injected inheritance failure'; END $$;
+        CREATE TRIGGER reject_inherited_grant BEFORE INSERT ON entity_access
+        FOR EACH ROW WHEN (NEW.granted_from_project_id IS NOT NULL) EXECUTE FUNCTION reject_inherited_grant();
+    "#).execute(&pool).await.unwrap();
+    let permission_count = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "SharePermission""#)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let document_count = sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "Document""#)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+    args.project_id = Some(project_id);
+    assert!(
+        repo.create_document(args, md_share_permission())
+            .await
+            .is_err()
+    );
+    assert!(
+        repo.copy_document(
+            CopyDocumentRepoArgs {
+                original_document: ordinary,
+                user_id: user_id(TEST_DOCUMENT_NON_OWNER_ID),
+                document_name: "failed copy".to_string(),
+                file_type: Some(model::document::FileType::Md),
+                team_id: None,
+            },
+            md_share_permission()
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "SharePermission""#)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        permission_count
+    );
+    assert_eq!(
+        sqlx::query_scalar!(r#"SELECT COUNT(*) FROM "Document""#)
+            .fetch_one(&pool)
+            .await
+            .unwrap(),
+        document_count
+    );
+    assert!(
+        repo.edit_document(EditDocumentRepoArgs {
+            document_id: original.document_id.clone(),
+            document_name: Some("failed move".to_string()),
+            project_id: Some(project_id.to_string()),
+            share_permission: None,
+            team_share: None,
+            revoke_non_owner_user_access: false,
+            file_type: None,
+        })
+        .await
+        .is_err()
+    );
+    let persisted = repo
+        .get_document_metadata(&original.document_id)
+        .await
+        .unwrap();
+    assert_eq!(persisted.project_id, None);
+    assert_eq!(persisted.document_name, original.document_name);
+    assert_eq!(
+        repo.get_team_share_facts(&original.document_id)
+            .await
+            .unwrap(),
+        original_facts
+    );
+}
+
 const TEST_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000001");
 const SECOND_TEAM_ID: uuid::Uuid = uuid::uuid!("a0000000-0000-0000-0000-000000000002");
 const TEST_DOCUMENT_ID: &str = "d0000000-0000-0000-0000-000000000001";
@@ -300,6 +691,7 @@ fn create_document_args(
         file_type: Some(model::document::FileType::Md),
         project_id: None,
         team_id,
+        share_with_team: false,
         created_at: None,
         sub_type: is_task.then_some(document_sub_type::DocumentSubType::Task),
         skip_history: false,
@@ -1013,11 +1405,9 @@ async fn test_edit_document_name_and_project(pool: Pool<Postgres>) {
 async fn test_share_with_team_creates_access_for_team_members(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
-    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    set_comment_share(&repo).await;
 
-    // All 3 team members should have access rows
+    // The owner and team have independent direct access rows.
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
     let rows = sqlx::query!(
         r#"
@@ -1071,13 +1461,16 @@ async fn test_get_team_ids_for_user_returns_empty_when_user_not_on_team(pool: Po
 async fn test_share_with_team_idempotent(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
-    // Call twice — second call should be a no-op
-    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
-    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    // Repeated consent advances revision without duplicating grants.
+    set_comment_share(&repo).await;
+    set_comment_share(&repo).await;
+    assert_eq!(
+        repo.get_team_share_facts(TEST_DOCUMENT_ID)
+            .await
+            .unwrap()
+            .revision,
+        2
+    );
 
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
     let count = sqlx::query_scalar!(
@@ -1162,10 +1555,10 @@ async fn test_set_team_share_rejects_untracked_team_grant(pool: Pool<Postgres>) 
     let repo = PgDocumentRepo::new(pool.clone());
     let document_id = "d0000000-0000-0000-0000-000000000001";
 
-    // Existing Comment-level team grant (e.g. from task creation)
-    repo.share_with_team(&TEST_TEAM_ID, document_id)
-        .await
-        .unwrap();
+    // Simulate an untracked historical Comment grant, not canonical consent.
+    sqlx::query!("INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'document', $2, 'team', 'comment')",
+        uuid::Uuid::parse_str(document_id).unwrap(), TEST_TEAM_ID.to_string(),
+    ).execute(&pool).await.unwrap();
 
     // An untracked grant is not consent and must not be silently adopted.
     assert!(
@@ -1252,9 +1645,7 @@ async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<
     .await
     .unwrap();
 
-    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    set_comment_share(&repo).await;
 
     // teammate1 should still have just their original edit row, not a second comment row
     let rows = sqlx::query!(
@@ -1278,12 +1669,10 @@ async fn test_share_with_team_skips_user_with_existing_direct_access(pool: Pool<
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
-async fn test_share_with_explicit_team_id(pool: Pool<Postgres>) {
+async fn test_share_with_owner_team(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
 
-    repo.share_with_team(&TEST_TEAM_ID, "d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    set_comment_share(&repo).await;
 
     let doc_uuid = macro_uuid::string_to_uuid("d0000000-0000-0000-0000-000000000001").unwrap();
     let rows = sqlx::query!(
@@ -2039,6 +2428,32 @@ fn pdf_share_permission() -> SharePermissionV2 {
     SharePermissionV2::new_document_share_permission(Some(model::document::FileType::Pdf), None)
 }
 
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn email_import_does_not_initialize_team_consent(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let attachments = insert_email_attachments(&pool, 1).await;
+    let mut args = import_email_document_args(TEST_DOCUMENT_OWNER_ID, "import", attachments[0]);
+    args.create.share_with_team = true;
+    let mut permission = pdf_share_permission();
+    permission.team_share_access_level = Some(AccessLevel::Edit);
+    let EmailImportRepoOutcome::Created(document) = repo
+        .import_email_attachment_document(args, permission)
+        .await
+        .unwrap()
+    else {
+        panic!("expected a new import");
+    };
+    let facts = repo
+        .get_team_share_facts(&document.document_id)
+        .await
+        .unwrap();
+    assert_eq!(facts.current, None);
+    assert_eq!(facts.revision, 0);
+}
+
 fn import_email_document_args(
     owner: &str,
     sha: &str,
@@ -2054,6 +2469,7 @@ fn import_email_document_args(
             file_type: Some(model::document::FileType::Pdf),
             project_id: None,
             team_id: None,
+            share_with_team: false,
             created_at: None,
             sub_type: None,
             skip_history: true,

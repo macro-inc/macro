@@ -2047,7 +2047,7 @@ async fn test_edit_document_rename_only_keeps_project_access() {
 }
 
 #[tokio::test]
-async fn test_edit_document_project_change_moves_project_access() {
+async fn test_edit_document_project_change_leaves_grants_to_repository() {
     let document_id = uuid::Uuid::new_v4().to_string();
     let old_project_id = uuid::Uuid::new_v4();
     let new_project_id = uuid::Uuid::new_v4();
@@ -2078,14 +2078,14 @@ async fn test_edit_document_project_change_moves_project_access() {
         .await
         .unwrap();
 
-    assert_eq!(
-        *entity_access.removed_from_projects.lock().unwrap(),
-        vec![old_project_id]
+    assert!(
+        entity_access
+            .removed_from_projects
+            .lock()
+            .unwrap()
+            .is_empty()
     );
-    assert_eq!(
-        *entity_access.added_to_projects.lock().unwrap(),
-        vec![new_project_id]
-    );
+    assert!(entity_access.added_to_projects.lock().unwrap().is_empty());
 }
 
 #[tokio::test]
@@ -2158,6 +2158,81 @@ async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event()
     assert_eq!(event.payload["metadata"]["owner"], "macro|user@user.com");
 }
 
+struct RejectUnexpectedFinalization;
+
+impl crate::domain::ports::markdown::MarkdownInitializationPort for RejectUnexpectedFinalization {
+    async fn initialize_existing_markdown(
+        &self,
+        _: &str,
+        _: &str,
+    ) -> Result<Vec<u8>, DocumentError> {
+        panic!("failed repository creation must not initialize markdown");
+    }
+}
+
+impl crate::domain::ports::create::DocumentBytesUploadPort for RejectUnexpectedFinalization {
+    async fn upload_document_bytes(
+        &self,
+        _: crate::domain::ports::create::DocumentBytesUpload,
+    ) -> Result<(), DocumentError> {
+        panic!("failed repository creation must not upload content");
+    }
+}
+
+#[tokio::test]
+async fn creator_forwards_explicit_consent_and_stops_after_repository_failure() {
+    use crate::domain::create::{
+        DocumentCreator, MarkdownSubtype, NewDocumentMetadata, NewMarkdownTextDocument,
+    };
+
+    for (subtype, expected_share) in [
+        (MarkdownSubtype::Note, false),
+        (MarkdownSubtype::Snippet, false),
+        (MarkdownSubtype::from_task_flag(true, None), true),
+        (
+            MarkdownSubtype::Task {
+                property_values: None,
+                share_with_team: false,
+                team_id: None,
+            },
+            false,
+        ),
+    ] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_team_default_link_share()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        repo.expect_create_document()
+            .withf(move |args, permission| {
+                args.share_with_team == expected_share
+                    && permission.team_share_access_level.is_none()
+            })
+            .times(1)
+            .returning(|_, _| {
+                Box::pin(std::future::ready(Err(anyhow::anyhow!(
+                    "creation rolled back"
+                ))))
+            });
+        let (service, event_broker) = make_test_service_with_event_broker(repo);
+        let creator = DocumentCreator::new(
+            service,
+            RejectUnexpectedFinalization,
+            RejectUnexpectedFinalization,
+        );
+        let result = creator
+            .create_markdown_text(
+                create_document_repo_args(FileType::Md).user_id,
+                NewMarkdownTextDocument {
+                    metadata: NewDocumentMetadata::new("test"),
+                    markdown: String::new(),
+                    subtype,
+                },
+            )
+            .await;
+        assert!(result.is_err());
+        assert!(event_broker.published().lock().unwrap().is_empty());
+    }
+}
+
 fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
     CreateDocumentRepoArgs {
         id: None,
@@ -2169,6 +2244,7 @@ fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
         file_type: Some(file_type),
         project_id: None,
         team_id: None,
+        share_with_team: false,
         created_at: None,
         sub_type: None,
         skip_history: false,

@@ -724,12 +724,6 @@ impl<
 
         if let Some(project_id) = &project_id {
             let project_id_str = project_id.to_string();
-            let document_uuid =
-                uuid::Uuid::parse_str(&document_response_metadata.document_id).unwrap();
-            let _ = self
-                .entity_access_management_service
-                .add_entity_to_project(&document_uuid, EntityType::Document, project_id)
-                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
             let _ = self.repo.update_project_modified(&project_id_str).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
@@ -1483,11 +1477,6 @@ impl<
             && !old_project_id.is_empty()
         {
             let old_project_id = uuid::Uuid::parse_str(old_project_id).unwrap();
-            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
-            let _ = self
-                .entity_access_management_service
-                .remove_entity_from_project(&document_uuid, EntityType::Document, &old_project_id)
-                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update entity access for project"));
             let _ = self.repo.update_project_modified(&old_project_id.to_string()).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?old_project_id, "unable to update project modified date"),
             );
@@ -1496,11 +1485,6 @@ impl<
             && !project_id.is_empty()
         {
             let project_id = uuid::Uuid::parse_str(project_id).unwrap();
-            let document_uuid = uuid::Uuid::parse_str(&document_context.document_id).unwrap();
-            let _ = self
-                .entity_access_management_service
-                .add_entity_to_project(&document_uuid, EntityType::Document, &project_id)
-                .await.inspect_err(|e| tracing::error!(error=?e, project_id=?project_id, "unable to update entity access for project"));
             let _ = self.repo.update_project_modified(&project_id.to_string()).await.inspect_err(
                 |e| tracing::error!(error=?e, project_id=?project_id, "unable to update project modified date"),
             );
@@ -1897,18 +1881,6 @@ impl<
         request: &CreateTaskRequest,
         attribution: &Attribution,
     ) -> Result<(), DocumentError> {
-        if request.share_with_team
-            && let Some(team_id) = request.team_id
-        {
-            let _ = self
-                .repo
-                .share_with_team(&team_id, document_id)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, "failed to share task with team");
-                });
-        }
-
         // Use provided properties or assign default ones for task
         let properties = if let Some(properties) = request.property_values.as_ref() {
             properties

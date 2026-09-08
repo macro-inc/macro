@@ -490,8 +490,10 @@ impl DocumentRepo for PgDocumentRepo {
     ) -> Result<EmailImportRepoOutcome, Self::Err> {
         let ImportEmailAttachmentRepoArgs {
             email_attachment_id,
-            create,
+            mut create,
         } = args;
+        // Imports do not carry task-creation consent, including reuse paths.
+        create.share_with_team = false;
 
         // Unlocked reuse: attachment already linked, or a live email doc with
         // this sha already exists. The advisory lock is only required when a
@@ -554,6 +556,9 @@ impl DocumentRepo for PgDocumentRepo {
         use share_permission_db_utils::team_share;
 
         let mut transaction = self.pool.begin().await?;
+        if args.project_id.is_some() {
+            team_share::acquire_guard(&mut transaction).await?;
+        }
         if let Some(command) = &args.team_share {
             if command.expected().entity.entity_type != EntityType::Document
                 || command.expected().entity.entity_id != args.document_id
@@ -610,6 +615,17 @@ impl DocumentRepo for PgDocumentRepo {
                 &entity_id,
                 EntityType::Document,
                 &owner,
+            )
+            .await?;
+        }
+
+        if args.project_id.is_some() {
+            let document_id = uuid::Uuid::parse_str(&args.document_id)
+                .map_err(|error| DocumentError::BadRequest(error.to_string()))?;
+            entity_access_db_utils::project_inheritance::synchronize_entity(
+                &mut transaction,
+                &document_id,
+                entity_access_db_utils::EntityType::Document,
             )
             .await?;
         }
@@ -873,15 +889,6 @@ impl DocumentRepo for PgDocumentRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn share_with_team(
-        &self,
-        team_id: &uuid::Uuid,
-        document_id: &str,
-    ) -> Result<(), Self::Err> {
-        share::share_with_team(&self.pool, team_id, document_id).await
-    }
-
-    #[tracing::instrument(err, skip(self))]
     async fn get_team_share_facts(
         &self,
         document_id: &str,
@@ -1086,6 +1093,7 @@ impl DocumentRepo for PgDocumentRepo {
         } = args;
 
         let mut transaction = self.pool.begin().await?;
+        entity_access_db_utils::team_share::acquire_guard(&mut transaction).await?;
 
         let document = match file_type {
             Some(model::document::FileType::Docx) => {
@@ -1134,6 +1142,13 @@ impl DocumentRepo for PgDocumentRepo {
         // Insert user history
         let now = chrono::Utc::now();
         create::insert_history(&mut transaction, &document_id, &user_id, &now).await?;
+
+        entity_access_db_utils::project_inheritance::synchronize_entity(
+            &mut transaction,
+            &document_id,
+            entity_access_db_utils::EntityType::Document,
+        )
+        .await?;
 
         transaction.commit().await?;
 

@@ -320,8 +320,11 @@ pub struct CreateDocumentRepoArgs {
     pub file_type: Option<FileType>,
     /// Project to associate the document with.
     pub project_id: Option<uuid::Uuid>,
-    /// Team to use when assigning a per-team task number.
+    /// Team to use when assigning a per-team task number, never sharing authority.
     pub team_id: Option<uuid::Uuid>,
+    /// Explicit task creation consent. Initializes Comment using the persisted owner's team.
+    /// Ordinary documents, snippets, and imports must leave this false.
+    pub share_with_team: bool,
     /// Custom creation timestamp.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Sub type of the document — task or snippet (MD files only).

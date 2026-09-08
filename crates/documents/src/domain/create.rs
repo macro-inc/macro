@@ -66,6 +66,7 @@ impl NewDocumentMetadata {
             file_type: kind.file_type,
             project_id: self.project_id,
             team_id: kind.team_id,
+            share_with_team: kind.share_with_team,
             created_at: self.created_at,
             sub_type: kind.subtype.sub_type(),
             skip_history: self.skip_history,
@@ -122,6 +123,7 @@ struct RepoDocumentKind {
     sha: String,
     subtype: RepoDocumentSubtype,
     team_id: Option<uuid::Uuid>,
+    share_with_team: bool,
 }
 
 enum RepoDocumentSubtype {
@@ -567,6 +569,7 @@ where
                     MarkdownSubtype::Skill => RepoDocumentSubtype::MarkdownSkill,
                 },
                 team_id,
+                share_with_team: task.as_ref().is_some_and(|(_, share, _)| *share),
             },
         );
         let attribution = args.resolved_attribution();
@@ -654,6 +657,7 @@ where
                 sha: hashes.hex,
                 subtype: RepoDocumentSubtype::Regular,
                 team_id: None,
+                share_with_team: false,
             },
         );
 
@@ -756,6 +760,7 @@ mod tests {
             sha: "sha".to_string(),
             subtype: RepoDocumentSubtype::Regular,
             team_id: None,
+            share_with_team: false,
         }
     }
 

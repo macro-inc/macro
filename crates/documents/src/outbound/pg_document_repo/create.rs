@@ -155,7 +155,8 @@ pub async fn set_document_version(
 
 /// Sets share permission for the document
 ///
-/// The permission is resolved by the domain layer; this function persists it verbatim.
+/// Link permission is resolved by the domain layer. Canonical team state always starts
+/// NULL; only guarded explicit task initialization may establish a team share.
 #[tracing::instrument(skip(transaction, share_permission), err)]
 pub async fn set_share_permission(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
@@ -387,6 +388,10 @@ pub async fn insert_new_document(
     args: CreateDocumentRepoArgs,
     share_permission: &SharePermissionV2,
 ) -> Result<DocumentMetadata, sqlx::Error> {
+    use models_permissions::share_permission::team_share::TeamShareCreation;
+    use share_permission_db_utils::team_share;
+
+    team_share::acquire_guard(transaction).await?;
     let CreateDocumentRepoArgs {
         id,
         sha,
@@ -395,11 +400,18 @@ pub async fn insert_new_document(
         file_type,
         project_id,
         team_id,
+        share_with_team,
         created_at: provided_created_at,
         sub_type: requested_sub_type,
         skip_history,
         attribution: _,
     } = args;
+
+    if share_with_team && requested_sub_type != Some(DocumentSubType::Task) {
+        return Err(sqlx::Error::InvalidArgument(
+            "only tasks support explicit creation sharing".into(),
+        ));
+    }
 
     let now = chrono::Utc::now();
     let created_at = provided_created_at.as_ref().unwrap_or(&now);
@@ -451,6 +463,31 @@ pub async fn insert_new_document(
         user_id.as_ref(),
         entity_access_db_utils::EntityAccessSourceType::User,
         entity_access_db_utils::AccessLevel::Owner,
+    )
+    .await?;
+
+    if share_with_team {
+        let document_id_string = document_id.to_string();
+        let entity = model_entity::EntityType::Document.with_entity_str(&document_id_string);
+        team_share::initialize(transaction, &entity, TeamShareCreation::ExplicitTask)
+            .await
+            .map_err(|error| sqlx::Error::Decode(error.into()))?;
+        // Numbering is independent of authorization. An explicit team still controls
+        // numbering, but absent one the sharing owner's team supplies the number.
+        if team_id.is_none() {
+            let facts = team_share::load_facts(transaction, &entity)
+                .await
+                .map_err(|error| sqlx::Error::Decode(error.into()))?;
+            if let Some(team_id) = facts.owner_team_id {
+                allocate_team_task_number(transaction, &team_id, &document_id).await?;
+            }
+        }
+    }
+
+    entity_access_db_utils::project_inheritance::synchronize_entity(
+        transaction,
+        &document_id,
+        entity_access_db_utils::EntityType::Document,
     )
     .await?;
 

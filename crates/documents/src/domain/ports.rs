@@ -230,13 +230,6 @@ pub trait DocumentRepo: Send + Sync + 'static {
         task_short_id: &str,
     ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
-    /// Share a document with the given team.
-    fn share_with_team(
-        &self,
-        team_id: &uuid::Uuid,
-        document_id: &str,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
     /// Load persisted ownership, membership and explicit sharing facts for policy.
     fn get_team_share_facts(
         &self,

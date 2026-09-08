@@ -2,11 +2,8 @@
 
 use axum::{Json, extract::State};
 use base64::Engine;
-use entity_access::domain::models::MemberTeamRole;
 use entity_access::domain::ports::EntityAccessService;
-use entity_access::inbound::axum_extractors::{
-    OptionalMacroUserTeamExtractorV2, ProjectBodyAccessLevelExtractorV2,
-};
+use entity_access::inbound::axum_extractors::ProjectBodyAccessLevelExtractorV2;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 use models_permissions::share_permission::access_level::{AccessLevel, EditAccessLevel};
 
@@ -34,7 +31,7 @@ use super::task_duplicates::spawn_task_duplicate_detection;
         (status = 500, body = model_error_response::ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(state, user, optional_team, project), fields(user_id=?user.authorization.user.macro_user_id))]
+#[tracing::instrument(skip(state, user, project), fields(user_id=?user.authorization.user.macro_user_id), err)]
 pub async fn create_task_handler<
     T: DocumentService + DocumentCreationService,
     Svc: EntityAccessService,
@@ -42,7 +39,6 @@ pub async fn create_task_handler<
 >(
     State(state): State<DocumentRouterState<T, Svc, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    optional_team: OptionalMacroUserTeamExtractorV2<MemberTeamRole, Svc, Auth>,
     project: ProjectBodyAccessLevelExtractorV2<EditAccessLevel, CreateTaskRequest, Svc, Auth>,
 ) -> Result<Json<CreateTaskResponse>, DocumentError> {
     let req = project.into_inner();
@@ -55,14 +51,6 @@ pub async fn create_task_handler<
         metadata = metadata.project_id(project_id);
     }
 
-    let team_id = if req.share_with_team {
-        optional_team
-            .entity_access_receipt
-            .map(|team| macro_uuid::string_to_uuid(&team.entity().entity_id).unwrap())
-    } else {
-        None
-    };
-
     let created = state
         .creator
         .create_markdown_text(
@@ -72,8 +60,8 @@ pub async fn create_task_handler<
                 markdown,
                 subtype: MarkdownSubtype::Task {
                     property_values: req.property_values,
-                    share_with_team: req.share_with_team && team_id.is_some(), // we should only try and share if the user is in a team and they have share_with_team set
-                    team_id,
+                    share_with_team: req.share_with_team,
+                    team_id: req.team_id,
                 },
             },
         )
