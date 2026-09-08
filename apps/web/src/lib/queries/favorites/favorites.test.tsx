@@ -15,9 +15,9 @@ const mocks = vi.hoisted(() => ({
   graphqlSoupEnabled: vi.fn(() => true),
   createGraphqlFavoritesQuery: vi.fn(),
   createGraphqlReorderMutation: vi.fn(),
-  createGraphqlSetMutation: vi.fn(),
+  createGraphqlAddMutation: vi.fn(),
+  createGraphqlRemoveMutation: vi.fn(),
   refreshGraphqlFavorites: vi.fn(),
-  graphqlReorderResult: vi.fn(),
   graphqlReorderMutate: vi.fn(),
   graphqlReorderMutateAsync: vi.fn(),
   graphqlSetMutate: vi.fn(),
@@ -44,14 +44,11 @@ vi.mock('@service-storage/client', () => ({
   },
 }));
 
-vi.mock('@service-storage/graphql-favorites', () => ({
-  graphqlReorderFavoritesResult: mocks.graphqlReorderResult,
-}));
-
 vi.mock('./graphql', () => ({
   createGraphqlFavoritesQuery: mocks.createGraphqlFavoritesQuery,
   createGraphqlReorderFavoritesMutation: mocks.createGraphqlReorderMutation,
-  createGraphqlSetFavoriteMutation: mocks.createGraphqlSetMutation,
+  createGraphqlAddFavoriteMutation: mocks.createGraphqlAddMutation,
+  createGraphqlRemoveFavoriteMutation: mocks.createGraphqlRemoveMutation,
   refreshActiveGraphqlFavoritesQueries: mocks.refreshGraphqlFavorites,
 }));
 
@@ -120,25 +117,16 @@ describe('favorites transport', () => {
       mutate: mocks.graphqlReorderMutate,
       mutateAsync: mocks.graphqlReorderMutateAsync,
     });
-    mocks.createGraphqlSetMutation.mockReturnValue({
+    const toggle = {
       isPending: false,
       error: null,
       mutate: mocks.graphqlSetMutate,
       mutateAsync: mocks.graphqlSetMutateAsync,
-    });
-    mocks.graphqlSetMutateAsync.mockResolvedValue({
-      data: {
-        setFavorite: {
-          __typename: 'SetFavoritePayload',
-          result: { __typename: 'GraphqlMutationSuccess' },
-          favorite: null,
-        },
-      },
-    });
+    };
+    mocks.createGraphqlAddMutation.mockReturnValue(toggle);
+    mocks.createGraphqlRemoveMutation.mockReturnValue(toggle);
+    mocks.graphqlSetMutateAsync.mockResolvedValue(favorite('document-1', 1));
     mocks.graphqlReorderMutateAsync.mockResolvedValue({
-      data: { reorderFavorites: [] },
-    });
-    mocks.graphqlReorderResult.mockReturnValue({
       kind: 'queued',
       transactionId: 'transaction-1',
     });
@@ -162,6 +150,23 @@ describe('favorites transport', () => {
     expect(mocks.createGraphqlFavoritesQuery).toHaveBeenCalledOnce();
     expect(mocks.getFavoritesRest).not.toHaveBeenCalled();
     expect(testQueryClient.getQueryCache().getAll()).toEqual([]);
+  });
+
+  it('keeps available GraphQL data visible even when its request errors', () => {
+    mocks.createGraphqlFavoritesQuery.mockReturnValue({
+      data: { favorites: [favorite('document-1', 0)] },
+      isSuccess: false,
+      isError: true,
+    });
+    const favoritesData = renderHook(() => useFavoritesData());
+    expect(favoritesData()?.favorites).toHaveLength(1);
+  });
+
+  it('does not suspend while REST favorites are pending', () => {
+    mocks.graphqlSoupEnabled.mockReturnValue(false);
+    mocks.getFavoritesRest.mockReturnValue(new Promise(() => {}));
+    const favoritesData = renderHook(() => useFavoritesData());
+    expect(favoritesData()).toBeUndefined();
   });
 
   it('keeps queued reorder entirely on the captured GraphQL path', async () => {
@@ -195,14 +200,8 @@ describe('favorites transport', () => {
     await mutations.add.mutateAsync(args);
     await mutations.remove.mutateAsync(args);
 
-    expect(mocks.createGraphqlSetMutation).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ favorite: true })
-    );
-    expect(mocks.createGraphqlSetMutation).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ favorite: false })
-    );
+    expect(mocks.createGraphqlAddMutation).toHaveBeenCalledOnce();
+    expect(mocks.createGraphqlRemoveMutation).toHaveBeenCalledOnce();
     expect(mocks.graphqlSetMutateAsync).toHaveBeenCalledTimes(2);
     expect(mocks.addFavoriteRest).not.toHaveBeenCalled();
     expect(mocks.removeFavoriteRest).not.toHaveBeenCalled();

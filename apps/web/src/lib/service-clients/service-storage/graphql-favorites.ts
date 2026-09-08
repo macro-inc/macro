@@ -1,9 +1,4 @@
 import {
-  enableGraphqlSoup,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
-import { throwOnErr } from '@core/util/result';
-import {
   executeOptimisticMutation,
   optimisticMutationDispositionOf,
   prependUnique,
@@ -11,9 +6,8 @@ import {
   select,
   update,
 } from '@graphql-cache/exchange/optimistic';
-import type { Client, OperationResult } from '@urql/core';
-import { v5 as uuidv5 } from 'uuid';
-import { storageServiceClient } from './client';
+import { type Client, createRequest, type OperationResult } from '@urql/core';
+import { v4 as uuidv4 } from 'uuid';
 import type { Favorite } from './generated/schemas/favorite';
 import type { FavoriteEntityType } from './generated/schemas/favoriteEntityType';
 import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavoritesRequest';
@@ -28,7 +22,6 @@ import {
   type SetFavoriteMutation,
   type SetFavoriteMutationVariables,
 } from './graphql/generated/graphql';
-import { getGraphqlSoupClient } from './graphql-soup';
 
 const FAVORITE_ENTITY_TYPE_TO_GRAPHQL = {
   user: 'USER',
@@ -91,24 +84,11 @@ export function mapGraphqlFavorite(favorite: FavoriteFieldsFragment): Favorite {
   };
 }
 
-const SET_FAVORITE_OPTIMISTIC_UUID_NAMESPACE =
-  'e45ea486-2307-486e-bcbf-091380243800';
-
 /** Input for setting one entity's favorite state. */
 export type SetFavoriteArgs = {
   entityType: FavoriteEntityType;
   entityId: string;
 };
-
-/** Stable coalescing UUID for one entity's absolute favorite-state slot. */
-export function setFavoriteOptimisticMutationUuid(
-  args: SetFavoriteArgs
-): string {
-  return uuidv5(
-    JSON.stringify(['setFavorite', args.entityType, args.entityId]),
-    SET_FAVORITE_OPTIMISTIC_UUID_NAMESPACE
-  );
-}
 
 /** Submit a durable optimistic GraphQL add/remove favorite mutation. */
 export function executeGraphqlSetFavoriteMutation(
@@ -155,7 +135,10 @@ export function executeGraphqlSetFavoriteMutation(
     },
     optimisticData,
     {
-      uuid: setFavoriteOptimisticMutationUuid(args),
+      // Membership changes also affect ordering: removing then re-adding
+      // appends a favorite. Coalescing that pair into an add would preserve
+      // the server's old position instead. Keep each toggle in queue order.
+      uuid: uuidv4(),
       // A cold offline cache has no user.favorites field to patch. The
       // optimistic mutation itself can still be durably queued; replay
       // revalidation populates the list once the network is available.
@@ -170,6 +153,27 @@ export function executeGraphqlSetFavoriteMutation(
       revalidations: [{ document: FavoritesDocument, variables: {} }],
     }
   ).toPromise();
+}
+
+/** Read an accepted toggle's own payload, never a mounted query's snapshot. */
+export function graphqlSetFavoriteResult(
+  result: OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables>
+): Favorite | undefined {
+  const disposition = optimisticMutationDispositionOf(result);
+  // Superseded operations intentionally carry no data. They are accepted via
+  // their replacement, not missing-data errors. Also supports older queued work.
+  if (disposition?.kind === 'queued') {
+    const favorite = result.data?.setFavorite.favorite;
+    return favorite ? mapGraphqlFavorite(favorite) : undefined;
+  }
+  if (disposition?.kind === 'permanently-failed') throw disposition.error;
+  if (result.error) throw result.error;
+  const payload = result.data?.setFavorite;
+  if (!payload) throw new Error('setFavorite mutation returned no data');
+  if (payload.result.__typename === 'GraphqlMutationError') {
+    throw new Error(payload.result.message);
+  }
+  return payload.favorite ? mapGraphqlFavorite(payload.favorite) : undefined;
 }
 
 /**
@@ -209,6 +213,18 @@ export function executeGraphqlReorderFavoritesMutation(
   const optimisticData: ReorderFavoritesMutation = {
     reorderFavorites: favorites,
   };
+  // An empty reorder is a no-op, not a replacement for an existing queued order.
+  if (favorites.length === 0) {
+    return Promise.resolve({
+      operation: client.createRequestOperation(
+        'mutation',
+        createRequest(ReorderFavoritesDocument, variables)
+      ),
+      data: optimisticData,
+      stale: false,
+      hasNext: false,
+    });
+  }
   return executeOptimisticMutation(
     client,
     ReorderFavoritesDocument,
@@ -244,29 +260,4 @@ export function graphqlReorderFavoritesResult(
   }
 
   return { kind: 'committed' };
-}
-
-/** Execute a durable optimistic GraphQL favorites reorder. */
-export async function executeGraphqlReorderFavorites(
-  client: Client,
-  args: ReorderFavoritesRequest
-): Promise<ReorderFavoritesResult> {
-  return graphqlReorderFavoritesResult(
-    await executeGraphqlReorderFavoritesMutation(client, args)
-  );
-}
-
-/** Reorder favorites through the configured REST or GraphQL transport. */
-export async function reorderFavorites(
-  args: ReorderFavoritesRequest,
-  graphqlSoupEnabled = isFeatureEnabled(enableGraphqlSoup)
-): Promise<ReorderFavoritesResult> {
-  if (!graphqlSoupEnabled) {
-    await throwOnErr(() =>
-      storageServiceClient.favorites.reorderFavorites(args)
-    );
-    return { kind: 'committed' };
-  }
-
-  return await executeGraphqlReorderFavorites(getGraphqlSoupClient(), args);
 }

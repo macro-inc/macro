@@ -1,8 +1,8 @@
-import type { Client } from '@urql/core';
+import { type Client, CombinedError } from '@urql/core';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fromValue } from 'wonka';
+import { fromValue, makeSubject } from 'wonka';
 
 const getGraphqlSoupClientMock = vi.hoisted(() => vi.fn());
 
@@ -10,9 +10,19 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: getGraphqlSoupClientMock,
 }));
 
+vi.mock('@core/constant/featureFlags', () => ({
+  enableGraphqlSoup: {},
+  isFeatureEnabled: () => true,
+}));
+vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
+vi.mock('../client', () => ({ queryClient: {} }));
+
+import { useAddFavoriteMutation, useFavoritesData } from './favorites';
 import {
+  createGraphqlAddFavoriteMutation,
   createGraphqlFavoritesQuery,
-  createGraphqlSetFavoriteMutation,
+  createGraphqlRemoveFavoriteMutation,
+  createGraphqlReorderFavoritesMutation,
 } from './graphql';
 
 let dispose: (() => void) | undefined;
@@ -88,6 +98,137 @@ describe('GraphQL favorites queries', () => {
     vi.clearAllMocks();
   });
 
+  it('retains cached favorites through a background offline failure', async () => {
+    const subject = makeSubject<
+      ReturnType<typeof favoritesResult> | { error: CombinedError }
+    >();
+    executeQuery.mockImplementation(() => subject.source);
+    const state = renderHook(() => ({
+      query: createGraphqlFavoritesQuery(),
+      data: useFavoritesData(),
+    }));
+    await vi.waitFor(() => expect(executeQuery).toHaveBeenCalledTimes(2));
+    subject.next(favoritesResult([graphqlFavorite('document-1', 0)]));
+    await vi.waitFor(() => expect(state.data()?.favorites).toHaveLength(1));
+    subject.next({
+      error: new CombinedError({ networkError: new Error('offline') }),
+    });
+    await vi.waitFor(() => expect(state.query.isError).toBe(true));
+    expect(state.data()?.favorites).toHaveLength(1);
+  });
+
+  it('returns the add payload consistently without any mounted query', async () => {
+    const context = { rollback: vi.fn() };
+    const onSuccess = vi.fn();
+    const onSettled = vi.fn();
+    const mutation = renderHook(() =>
+      useAddFavoriteMutation({
+        onMutate: () => context,
+        onSuccess,
+        onSettled,
+      })
+    );
+    const input = { entityType: 'document' as const, entityId: 'document-1' };
+    const result = await mutation.mutateAsync(input);
+    expect(result).toMatchObject({
+      entityId: 'document-1',
+      sortOrder: 1,
+      fileType: 'md',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    expect(onSuccess).toHaveBeenCalledWith(result, input, context);
+    expect(onSettled).toHaveBeenCalledWith(result, null, input, context);
+    expect(executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('does not replace an add response with a stale mounted query record', async () => {
+    executeQuery.mockImplementation(() =>
+      fromValue(favoritesResult([graphqlFavorite('document-1', 99)]))
+    );
+    const hooks = renderHook(() => ({
+      query: createGraphqlFavoritesQuery(),
+      mutation: useAddFavoriteMutation(),
+    }));
+    const result = await hooks.mutation.mutateAsync({
+      entityType: 'document',
+      entityId: 'document-1',
+    });
+    expect(result?.sortOrder).toBe(1);
+    expect(hooks.query.data?.favorites[0].sortOrder).toBe(99);
+  });
+
+  it('accepts superseded toggles without an error or stale-data refetch', async () => {
+    executeMutation.mockReturnValue({
+      toPromise: async () => ({
+        extensions: {
+          normalizedCacheMutationDisposition: {
+            kind: 'superseded',
+            transactionId: 'old',
+            replacementTransactionId: 'new',
+          },
+        },
+      }),
+    });
+    const onError = vi.fn();
+    const onSuccess = vi.fn();
+    const hooks = renderHook(() => ({
+      query: createGraphqlFavoritesQuery(),
+      mutation: createGraphqlAddFavoriteMutation({ onError, onSuccess }),
+    }));
+    const input = { entityType: 'document' as const, entityId: 'document-1' };
+    await expect(hooks.mutation.mutateAsync(input)).resolves.toBeUndefined();
+    expect(onError).not.toHaveBeenCalled();
+    expect(onSuccess).toHaveBeenCalledWith(undefined, input, undefined);
+    expect(executeQuery).toHaveBeenCalledOnce();
+  });
+
+  it('runs the error lifecycle rather than success when a toggle is rejected', async () => {
+    const error = new CombinedError({
+      graphQLErrors: [new Error('not authorized')],
+    });
+    executeMutation.mockReturnValue({ toPromise: async () => ({ error }) });
+    const onError = vi.fn();
+    const onSuccess = vi.fn();
+    const onSettled = vi.fn();
+    const mutation = renderHook(() =>
+      createGraphqlRemoveFavoriteMutation({ onError, onSuccess, onSettled })
+    );
+    const input = { entityType: 'document' as const, entityId: 'document-1' };
+    await expect(mutation.mutateAsync(input)).rejects.toBe(error);
+    expect(onSuccess).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith(error, input, undefined);
+    expect(onSettled).toHaveBeenCalledWith(undefined, error, input, undefined);
+    expect(mutation.error).toBe(error);
+    expect(mutation.isPending).toBe(false);
+  });
+
+  it('reports queued reorder identically to callbacks and mutateAsync', async () => {
+    executeMutation.mockReturnValue({
+      toPromise: async () => ({
+        extensions: {
+          normalizedCacheMutationDisposition: {
+            kind: 'queued',
+            transactionId: 'order-1',
+          },
+        },
+      }),
+    });
+    const onSuccess = vi.fn();
+    const onSettled = vi.fn();
+    const hooks = renderHook(() => ({
+      query: createGraphqlFavoritesQuery(),
+      mutation: createGraphqlReorderFavoritesMutation({ onSuccess, onSettled }),
+    }));
+    const input = {
+      favorites: [{ entityType: 'document' as const, entityId: 'document-1' }],
+    };
+    const result = await hooks.mutation.mutateAsync(input);
+    expect(result).toEqual({ kind: 'queued', transactionId: 'order-1' });
+    expect(onSuccess).toHaveBeenCalledWith(result, input, undefined);
+    expect(onSettled).toHaveBeenCalledWith(result, null, input, undefined);
+    expect(executeQuery).toHaveBeenCalledOnce();
+  });
+
   it('projects the live GraphQL list in normalized sort order', async () => {
     const query = renderHook(() => createGraphqlFavoritesQuery());
 
@@ -110,10 +251,7 @@ describe('GraphQL favorites queries', () => {
     const onSuccess = vi.fn();
     const hooks = renderHook(() => ({
       query: createGraphqlFavoritesQuery(),
-      mutation: createGraphqlSetFavoriteMutation({
-        favorite: true,
-        onSuccess,
-      }),
+      mutation: createGraphqlAddFavoriteMutation({ onSuccess }),
     }));
 
     await hooks.mutation.mutateAsync({
@@ -184,7 +322,7 @@ describe('GraphQL favorites queries', () => {
     });
     const hooks = renderHook(() => ({
       query: createGraphqlFavoritesQuery(),
-      mutation: createGraphqlSetFavoriteMutation({ favorite: true }),
+      mutation: createGraphqlAddFavoriteMutation(),
     }));
 
     await vi.waitFor(() => expect(hooks.query.isSuccess).toBe(true));
@@ -193,7 +331,7 @@ describe('GraphQL favorites queries', () => {
       entityId: 'document-3',
     });
 
-    expect(result.error).toBeUndefined();
+    expect(result?.entityId).toBe('document-3');
     expect(executeQuery).toHaveBeenCalledOnce();
   });
 
@@ -215,16 +353,14 @@ describe('GraphQL favorites queries', () => {
         },
       }),
     });
-    const mutation = renderHook(() =>
-      createGraphqlSetFavoriteMutation({ favorite: true })
-    );
+    const mutation = renderHook(() => createGraphqlAddFavoriteMutation());
 
     const result = await mutation.mutateAsync({
       entityType: 'document',
       entityId: 'document-3',
     });
 
-    expect(result.error).toBeUndefined();
+    expect(result?.entityId).toBe('document-3');
     expect(executeQuery).not.toHaveBeenCalled();
     expect(executeMutation.mock.calls[0]?.[2]).toEqual({
       normalizedCacheOptimistic: expect.objectContaining({

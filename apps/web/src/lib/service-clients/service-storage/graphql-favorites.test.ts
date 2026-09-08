@@ -1,114 +1,83 @@
-import { stringifyDocument } from '@urql/core';
-import { ok } from 'neverthrow';
+import {
+  type Client,
+  CombinedError,
+  createClient,
+  stringifyDocument,
+} from '@urql/core';
+import { validate as validateUuid } from 'uuid';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FavoritesDocument,
   ReorderFavoritesDocument,
   SetFavoriteDocument,
 } from './graphql/generated/graphql';
-
-const { graphqlSoupEnabledMock, mutationMock, reorderFavoritesRestMock } =
-  vi.hoisted(() => ({
-    graphqlSoupEnabledMock: vi.fn(() => true),
-    mutationMock: vi.fn(),
-    reorderFavoritesRestMock: vi.fn(),
-  }));
-
-vi.mock('@core/constant/featureFlags', () => ({
-  enableGraphqlSoup: { key: 'enable-graphql-soup' },
-  isFeatureEnabled: graphqlSoupEnabledMock,
-}));
-
-vi.mock('./client', () => ({
-  storageServiceClient: {
-    favorites: { reorderFavorites: reorderFavoritesRestMock },
-  },
-}));
-
-vi.mock('./graphql-soup', () => ({
-  getGraphqlSoupClient: () => ({ mutation: mutationMock }),
-}));
-
 import {
+  executeGraphqlReorderFavoritesMutation,
   executeGraphqlSetFavoriteMutation,
-  reorderFavorites,
-  setFavoriteOptimisticMutationUuid,
+  graphqlReorderFavoritesResult,
+  graphqlSetFavoriteResult,
 } from './graphql-favorites';
 
+const mutationMock = vi.fn();
+const client = {
+  mutation: mutationMock,
+  createRequestOperation: createClient({ url: 'http://test', exchanges: [] })
+    .createRequestOperation,
+} as unknown as Client;
+const input = { entityType: 'document' as const, entityId: 'document-1' };
 const args = {
   favorites: [
     { entityType: 'email_thread' as const, entityId: 'thread-1' },
-    { entityType: 'document' as const, entityId: 'document-1' },
+    input,
   ],
 };
-
-function committedGraphqlResponse() {
-  return {
-    data: {
-      reorderFavorites: [
-        {
-          __typename: 'GraphqlFavorite' as const,
-          id: 'email_thread:thread-1',
-          entityType: 'EMAIL_THREAD' as const,
-          entityId: 'thread-1',
-          sortOrder: 0,
-        },
-        {
-          __typename: 'GraphqlFavorite' as const,
-          id: 'document:document-1',
-          entityType: 'DOCUMENT' as const,
-          entityId: 'document-1',
-          sortOrder: 1,
-        },
-      ],
+const reorderData = {
+  reorderFavorites: [
+    {
+      __typename: 'GraphqlFavorite' as const,
+      id: 'email_thread:thread-1',
+      entityType: 'EMAIL_THREAD' as const,
+      entityId: 'thread-1',
+      sortOrder: 0,
     },
-  };
-}
+    {
+      __typename: 'GraphqlFavorite' as const,
+      id: 'document:document-1',
+      entityType: 'DOCUMENT' as const,
+      entityId: 'document-1',
+      sortOrder: 1,
+    },
+  ],
+};
+const revalidations = [
+  {
+    query: stringifyDocument(FavoritesDocument),
+    operationName: 'Favorites',
+    variablesJson: '{}',
+  },
+];
 
 describe('favorites GraphQL mutations', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    graphqlSoupEnabledMock.mockReturnValue(true);
+    mutationMock.mockReset();
+    mutationMock.mockReturnValue({
+      toPromise: async () => ({ data: reorderData }),
+    });
   });
 
   it.each([
     { favorite: true, patchKind: 'prependUnique' },
     { favorite: false, patchKind: 'remove' },
   ] as const)(
-    'submits a durable optimistic set mutation when favorite=$favorite',
+    'submits durable optimism when favorite=$favorite',
     async ({ favorite, patchKind }) => {
-      mutationMock.mockReturnValue({
-        toPromise: async () => ({
-          data: {
-            setFavorite: {
-              __typename: 'SetFavoritePayload',
-              result: { __typename: 'GraphqlMutationSuccess' },
-              favorite: null,
-            },
-          },
-        }),
-      });
-      const input = {
-        entityType: 'document' as const,
-        entityId: 'document-1',
-      };
-
-      await executeGraphqlSetFavoriteMutation(
-        { mutation: mutationMock } as never,
-        input,
-        favorite,
-        2
-      );
-
+      await executeGraphqlSetFavoriteMutation(client, input, favorite, 2);
       expect(mutationMock).toHaveBeenCalledWith(
         SetFavoriteDocument,
-        {
-          entity: { type: 'DOCUMENT', id: 'document-1' },
-          favorite,
-        },
+        { entity: { type: 'DOCUMENT', id: 'document-1' }, favorite },
         {
           normalizedCacheOptimistic: {
-            uuid: setFavoriteOptimisticMutationUuid(input),
+            uuid: expect.any(String),
             optimisticResponse: {
               setFavorite: {
                 __typename: 'SetFavoritePayload',
@@ -136,58 +105,32 @@ describe('favorites GraphQL mutations', () => {
                 },
               },
             ],
-            revalidations: [
-              {
-                query: stringifyDocument(FavoritesDocument),
-                operationName: 'Favorites',
-                variablesJson: '{}',
-              },
-            ],
+            revalidations,
           },
         }
       );
     }
   );
 
-  it('coalesces newer offline favorite state for the same entity only', () => {
-    const document = {
-      entityType: 'document' as const,
-      entityId: 'document-1',
-    };
-
-    expect(setFavoriteOptimisticMutationUuid(document)).toBe(
-      setFavoriteOptimisticMutationUuid(document)
+  it('keeps remove and re-add as distinct ordered writes for the same entity', async () => {
+    await executeGraphqlSetFavoriteMutation(client, input, false, 0);
+    await executeGraphqlSetFavoriteMutation(client, input, true, 2);
+    const uuids = mutationMock.mock.calls.map(
+      (call) => call[2].normalizedCacheOptimistic.uuid
     );
-    expect(setFavoriteOptimisticMutationUuid(document)).not.toBe(
-      setFavoriteOptimisticMutationUuid({
-        ...document,
-        entityId: 'document-2',
-      })
-    );
+    expect(uuids.every(validateUuid)).toBe(true);
+    expect(new Set(uuids).size).toBe(2);
+    expect(mutationMock.mock.calls.map((call) => call[1].favorite)).toEqual([
+      false,
+      true,
+    ]);
   });
 
-  it('uses REST while GraphQL Soup is disabled', async () => {
-    graphqlSoupEnabledMock.mockReturnValue(false);
-    reorderFavoritesRestMock.mockResolvedValue(ok(undefined));
-
-    await expect(reorderFavorites(args)).resolves.toEqual({
+  it('submits a complete optimistic reorder and exposes its committed result', async () => {
+    const result = await executeGraphqlReorderFavoritesMutation(client, args);
+    expect(graphqlReorderFavoritesResult(result)).toEqual({
       kind: 'committed',
     });
-
-    expect(reorderFavoritesRestMock).toHaveBeenCalledWith(args);
-    expect(mutationMock).not.toHaveBeenCalled();
-  });
-
-  it('uses the GraphQL mutation with a complete optimistic order when enabled', async () => {
-    mutationMock.mockReturnValue({
-      toPromise: async () => committedGraphqlResponse(),
-    });
-
-    await expect(reorderFavorites(args)).resolves.toEqual({
-      kind: 'committed',
-    });
-
-    expect(reorderFavoritesRestMock).not.toHaveBeenCalled();
     expect(mutationMock).toHaveBeenCalledWith(
       ReorderFavoritesDocument,
       {
@@ -201,36 +144,73 @@ describe('favorites GraphQL mutations', () => {
       {
         normalizedCacheOptimistic: {
           uuid: '86cc4bfe-c45a-4e28-880a-6ba5ca921d35',
-          optimisticResponse: committedGraphqlResponse().data,
+          optimisticResponse: reorderData,
           linkPatches: [],
-          revalidations: [
-            {
-              query: stringifyDocument(FavoritesDocument),
-              operationName: 'Favorites',
-              variablesJson: '{}',
-            },
-          ],
+          revalidations,
         },
       }
     );
   });
 
-  it('treats an offline queued GraphQL reorder as accepted', async () => {
+  it('does not let an empty reorder replace an existing queued order', async () => {
+    const result = await executeGraphqlReorderFavoritesMutation(client, {
+      favorites: [],
+    });
+    expect(graphqlReorderFavoritesResult(result)).toEqual({
+      kind: 'committed',
+    });
+    expect(mutationMock).not.toHaveBeenCalled();
+  });
+
+  it.each(['queued', 'superseded'] as const)(
+    'accepts a %s result without requiring stale payload data',
+    async (kind) => {
+      mutationMock.mockReturnValue({
+        toPromise: async () => ({
+          extensions: {
+            normalizedCacheMutationDisposition: {
+              kind,
+              transactionId: 'transaction-1',
+              replacementTransactionId: 'transaction-2',
+            },
+          },
+        }),
+      });
+      const result = await executeGraphqlReorderFavoritesMutation(client, args);
+      expect(graphqlReorderFavoritesResult(result)).toEqual({
+        kind: 'queued',
+        transactionId: kind === 'queued' ? 'transaction-1' : 'transaction-2',
+      });
+      const toggle = await executeGraphqlSetFavoriteMutation(
+        client,
+        input,
+        true,
+        2
+      );
+      expect(graphqlSetFavoriteResult(toggle)).toBeUndefined();
+    }
+  );
+
+  it('rejects permanent transport failures for both mutation types', async () => {
+    const error = new CombinedError({
+      graphQLErrors: [new Error('not authorized')],
+    });
     mutationMock.mockReturnValue({
       toPromise: async () => ({
+        error,
         extensions: {
-          normalizedCacheMutationDisposition: {
-            kind: 'queued',
-            transactionId: 'transaction-1',
-          },
+          normalizedCacheMutationDisposition: { kind: 'permanently-failed' },
         },
       }),
     });
-
-    await expect(reorderFavorites(args)).resolves.toEqual({
-      kind: 'queued',
-      transactionId: 'transaction-1',
-    });
-    expect(reorderFavoritesRestMock).not.toHaveBeenCalled();
+    const reorder = await executeGraphqlReorderFavoritesMutation(client, args);
+    const toggle = await executeGraphqlSetFavoriteMutation(
+      client,
+      input,
+      true,
+      0
+    );
+    expect(() => graphqlReorderFavoritesResult(reorder)).toThrow(error);
+    expect(() => graphqlSetFavoriteResult(toggle)).toThrow(error);
   });
 });
