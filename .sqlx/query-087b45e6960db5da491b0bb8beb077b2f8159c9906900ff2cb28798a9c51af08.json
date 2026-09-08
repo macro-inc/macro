@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO email_threads (id, link_id) VALUES ($1, $2), ($3, $4), ($5, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "087b45e6960db5da491b0bb8beb077b2f8159c9906900ff2cb28798a9c51af08"
+}

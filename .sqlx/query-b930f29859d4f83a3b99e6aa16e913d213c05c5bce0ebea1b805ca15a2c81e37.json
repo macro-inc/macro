@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO entity_access\n            (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)\n        VALUES\n            ($1, 'email_thread', 'macro|other@example.com', 'user', 'edit', NULL),\n            ($1, 'email_thread', '40000000-0000-0000-0000-000000000001', 'channel', 'view', NULL),\n            ($1, 'email_thread', '10000000-0000-0000-0000-000000000001', 'team', 'comment', '20000000-0000-0000-0000-000000000001'),\n            ($1, 'email_thread', '10000000-0000-0000-0000-000000000002', 'team', 'view', NULL)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b930f29859d4f83a3b99e6aa16e913d213c05c5bce0ebea1b805ca15a2c81e37"
+}

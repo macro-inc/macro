@@ -4,7 +4,10 @@
 //! Instead we mint a dedicated macro user for the mailbox, re-home the single existing
 //! link onto it, and grant both connectors access via `macro_user_links` edges.
 
-use sqlx::types::Uuid;
+use model_entity::EntityType;
+use models_permissions::share_permission::team_share::TeamShareMaintenance;
+use share_permission_db_utils::team_share::{acquire_guard, load_facts, maintain};
+use sqlx::{Connection, types::Uuid};
 
 #[cfg(test)]
 mod test;
@@ -26,8 +29,10 @@ pub struct PromotedSharedInbox {
 /// edges. Because the minted macro_id embeds the mailbox email, the re-homed link's email
 /// matches its macro_id — i.e. it is no longer an inbox-only secondary but a shared user.
 ///
-/// Runs on a caller-provided connection so the mint, re-home, and edge inserts commit
-/// atomically with the rest of the connect flow.
+/// Clears explicit thread team sharing before changing authoritative ownership. Other
+/// grants and delegation remain intact. Runs in a transaction (a savepoint when the
+/// connection already has one), so cleanup, mint, re-home, and edges are atomic with
+/// the caller's connect flow without committing the caller's transaction.
 #[tracing::instrument(skip(conn), err)]
 pub async fn promote_link_to_shared(
     conn: &mut sqlx::PgConnection,
@@ -37,6 +42,31 @@ pub async fn promote_link_to_shared(
     mailbox_email: &str,
     organization_id: Option<i32>,
 ) -> anyhow::Result<PromotedSharedInbox> {
+    let mut transaction = conn.begin().await?;
+    acquire_guard(&mut transaction).await?;
+
+    // Only canonical consent belongs to the old owner; independent grants do not.
+    // Read under the common guard and clear before email_links changes thread ownership.
+    let thread_ids = sqlx::query_scalar!(
+        r#"SELECT t.id FROM email_threads t
+        JOIN "EmailThreadPermission" tp ON tp."threadId" = t.id::text
+        JOIN "SharePermission" sp ON sp.id = tp."sharePermissionId"
+        WHERE t.link_id = $1 AND sp.team_share_access_level IS NOT NULL"#,
+        existing_link_id,
+    )
+    .fetch_all(transaction.as_mut())
+    .await?;
+    for thread_id in thread_ids {
+        let entity = EntityType::EmailThread.with_entity_string(thread_id.to_string());
+        let expected = load_facts(&mut transaction, &entity)
+            .await
+            .map_err(anyhow::Error::msg)?;
+        maintain(&mut transaction, &TeamShareMaintenance::Clear { expected })
+            .await
+            .map_err(anyhow::Error::msg)?;
+    }
+
+    let conn = transaction.as_mut();
     let mailbox_email = mailbox_email.to_lowercase();
     let mailbox_macro_id = format!("macro|{mailbox_email}");
     let fusionauth_user_id = macro_uuid::generate_uuid_v7();
@@ -126,6 +156,8 @@ pub async fn promote_link_to_shared(
         existing_link_id,
     )
     .await?;
+
+    transaction.commit().await?;
 
     Ok(PromotedSharedInbox {
         mailbox_macro_id,

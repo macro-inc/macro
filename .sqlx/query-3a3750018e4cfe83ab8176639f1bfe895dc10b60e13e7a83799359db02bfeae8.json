@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT t.id FROM email_threads t\n        JOIN \"EmailThreadPermission\" tp ON tp.\"threadId\" = t.id::text\n        JOIN \"SharePermission\" sp ON sp.id = tp.\"sharePermissionId\"\n        WHERE t.link_id = $1 AND sp.team_share_access_level IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3a3750018e4cfe83ab8176639f1bfe895dc10b60e13e7a83799359db02bfeae8"
+}
