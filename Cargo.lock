@@ -100,10 +100,13 @@ dependencies = [
  "async-trait",
  "attachment",
  "futures",
+ "genai_telemetry",
  "macro_env_var",
  "macro_user_id",
  "model-entity",
  "non_empty",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "prompt",
  "regex",
  "rig-agent",
@@ -116,6 +119,8 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "workspace-hack",
 ]
@@ -707,13 +712,19 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-macros",
+ "genai_telemetry",
  "macro_user_id",
+ "opentelemetry",
+ "opentelemetry_sdk",
  "schemars 1.2.1",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+ "tokio",
  "tokio-util",
  "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
  "utoipa",
  "workspace-hack",
 ]
@@ -6873,6 +6884,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
 dependencies = [
  "byteorder",
+]
+
+[[package]]
+name = "genai_telemetry"
+version = "0.1.0"
+dependencies = [
+ "macro_env_var",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "serde_json",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-subscriber",
+ "workspace-hack",
 ]
 
 [[package]]

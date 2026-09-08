@@ -1,8 +1,13 @@
 /// Adapts `ai_toolset` tool types into RIG [`DynamicTool`] objects.
+use ai_toolset::telemetry::ToolCallSpan;
 use ai_toolset::tool_object::ToolSetCallable;
-use ai_toolset::{AsyncToolCollection, RequestContext, RequestSchema, ToolSet as AiToolSet};
+use ai_toolset::{
+    AsyncToolCollection, RequestContext, RequestSchema, ToolResult, ToolSet as AiToolSet,
+    ToolSetError,
+};
 use rig_agent::tool::{DynamicTool, ToolExecutionError, ToolOutput};
 use std::sync::{Arc, RwLock};
+use tracing::Instrument as _;
 
 /// Ensure every object schema carries an explicit `properties` map.
 ///
@@ -90,6 +95,7 @@ impl ToolsetToolAdapter {
                 );
                 let context = context.clone();
                 let request_context = request_context.clone();
+                let tool_name = name.clone();
 
                 DynamicTool::new(
                     name,
@@ -99,20 +105,33 @@ impl ToolsetToolAdapter {
                         let deserializer = deserializer.clone();
                         let context = context.clone();
                         let request_context = request_context.clone();
+                        let tool_name = tool_name.clone();
                         Box::pin(async move {
-                            let callable =
-                                (deserializer)(&args).map_err(invalid_args)?;
-                            let ctx = (*context).clone();
-                            let req_ctx = request_context
-                                .read()
-                                .expect("request_context lock poisoned")
-                                .clone();
-                            match callable.call(ctx, req_ctx).await {
-                                Ok(value) => Ok(ToolOutput::json(value)),
-                                Err(e) => {
+                            // Bypasses `ToolSet::try_tool_call`, so it carries
+                            // the same `execute_tool` telemetry itself.
+                            let telemetry = ToolCallSpan::begin(&tool_name, &args);
+                            let result: Result<ToolResult<serde_json::Value>, ToolSetError> =
+                                async {
+                                    let callable = (deserializer)(&args)
+                                        .map_err(ToolSetError::Deserialization)?;
+                                    let ctx = (*context).clone();
+                                    let req_ctx = request_context
+                                        .read()
+                                        .expect("request_context lock poisoned")
+                                        .clone();
+                                    Ok(callable.call(ctx, req_ctx).await)
+                                }
+                                .instrument(telemetry.span().clone())
+                                .await;
+                            telemetry.finish(&result);
+                            match result {
+                                Ok(Ok(value)) => Ok(ToolOutput::json(value)),
+                                Ok(Err(e)) => {
                                     tracing::error!(error = ?e.internal_error, "toolset tool error");
                                     Err(ToolExecutionError::other(e.description))
                                 }
+                                Err(ToolSetError::Deserialization(e)) => Err(invalid_args(e)),
+                                Err(e) => Err(ToolExecutionError::other(e.to_string())),
                             }
                         })
                     },

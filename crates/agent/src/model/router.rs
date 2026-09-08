@@ -37,6 +37,7 @@ use super::types::Model;
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, StreamBridge};
 use crate::stream::{ChatCompletionStream, StreamPart};
+use crate::telemetry::{ChatSpanHook, GenAiContext, TracedModel};
 
 env_var! {
     struct ApiKeys {
@@ -67,6 +68,24 @@ pub(crate) enum RoutedModel<'a> {
 }
 
 impl<'a> RoutedModel<'a> {
+    /// The provider segment of the routed id (`anthropic`, `openai`, …).
+    pub(crate) fn provider(&self) -> &str {
+        match self {
+            RoutedModel::Anthropic(m) => m.model().provider(),
+            RoutedModel::OpenAiChatCompletions(m) => m.model().provider(),
+            RoutedModel::OpenAiResponses(m) => m.model().provider(),
+        }
+    }
+
+    /// The bare model name sent to the provider.
+    pub(crate) fn model_name(&self) -> &str {
+        match self {
+            RoutedModel::Anthropic(m) => m.model().name(),
+            RoutedModel::OpenAiChatCompletions(m) => m.model().name(),
+            RoutedModel::OpenAiResponses(m) => m.model().name(),
+        }
+    }
+
     /// Build the rig agent for this model, applying provider-specific thinking
     /// config. Pure construction — no model call is made here.
     pub(crate) fn into_agent(
@@ -75,6 +94,7 @@ impl<'a> RoutedModel<'a> {
         system_prompt: &str,
         max_turns: usize,
         max_tokens: u64,
+        telemetry: &GenAiContext,
     ) -> ProviderAgent {
         match self {
             RoutedModel::Anthropic(m) => {
@@ -86,6 +106,7 @@ impl<'a> RoutedModel<'a> {
                     system_prompt,
                     max_turns,
                     max_tokens,
+                    telemetry,
                 ))
             }
             RoutedModel::OpenAiChatCompletions(m) => {
@@ -97,6 +118,7 @@ impl<'a> RoutedModel<'a> {
                     system_prompt,
                     max_turns,
                     max_tokens,
+                    telemetry,
                 ))
             }
             RoutedModel::OpenAiResponses(m) => {
@@ -108,6 +130,7 @@ impl<'a> RoutedModel<'a> {
                     system_prompt,
                     max_turns,
                     max_tokens,
+                    telemetry,
                 ))
             }
         }
@@ -122,11 +145,11 @@ impl<'a> RoutedModel<'a> {
 /// [`run_stream`]: ProviderAgent::run_stream
 pub(crate) enum ProviderAgent {
     /// An agent over Anthropic's native completion model.
-    Anthropic(Agent<anthropic::completion::CompletionModel>),
+    Anthropic(Agent<TracedModel<anthropic::completion::CompletionModel>>),
     /// An agent over the OpenAI Chat Completions model.
-    OpenAiChatCompletions(Agent<openai::completion::CompletionModel>),
+    OpenAiChatCompletions(Agent<TracedModel<openai::completion::CompletionModel>>),
     /// An agent over the OpenAI Responses model.
-    OpenAiResponses(Agent<openai::responses_api::ResponsesCompletionModel>),
+    OpenAiResponses(Agent<TracedModel<openai::responses_api::ResponsesCompletionModel>>),
     /// A test-only agent over an arbitrary completion model (e.g. a scripted
     /// fake), type-erased so the enum itself stays non-generic.
     #[cfg(test)]
@@ -147,6 +170,7 @@ impl ProviderAgent {
         usage_ctx: UsageContext,
         model: String,
         request_context: RequestContext,
+        telemetry: GenAiContext,
     ) -> ChatCompletionStream<'static> {
         match self {
             ProviderAgent::Anthropic(agent) => {
@@ -160,6 +184,7 @@ impl ProviderAgent {
                     usage_ctx,
                     model,
                     request_context.clone(),
+                    telemetry,
                 )
                 .await
             }
@@ -174,6 +199,7 @@ impl ProviderAgent {
                     usage_ctx,
                     model,
                     request_context.clone(),
+                    telemetry,
                 )
                 .await
             }
@@ -188,6 +214,7 @@ impl ProviderAgent {
                     usage_ctx,
                     model,
                     request_context.clone(),
+                    telemetry,
                 )
                 .await
             }
@@ -203,6 +230,7 @@ impl ProviderAgent {
                         usage_ctx,
                         model,
                         request_context.clone(),
+                        telemetry,
                     )
                     .await
             }
@@ -306,7 +334,9 @@ impl ModelRouter {
     }
 
     /// Route + build the agent in one step, falling back to the default model on
-    /// an unroutable id.
+    /// an unroutable id. Tells `telemetry` which provider and model the session
+    /// actually runs on, so its spans report the routed model, not the
+    /// requested id.
     pub(crate) fn agent(
         &self,
         model: &str,
@@ -314,9 +344,11 @@ impl ModelRouter {
         system_prompt: &str,
         max_turns: usize,
         max_tokens: u64,
+        telemetry: GenAiContext,
     ) -> ProviderAgent {
-        self.route_or_default(model)
-            .into_agent(handle, system_prompt, max_turns, max_tokens)
+        let routed = self.route_or_default(model);
+        telemetry.set_model(routed.provider(), routed.model_name());
+        routed.into_agent(handle, system_prompt, max_turns, max_tokens, &telemetry)
     }
 
     /// Route a `provider/model` id to the provider that serves it.
@@ -366,6 +398,10 @@ impl ModelRouter {
 }
 
 /// Build a rig agent from a completion model and per-session config.
+///
+/// The model is wrapped in [`TracedModel`] so every model call records its
+/// request on the `chat` span. rig's own content recording stays off — it is
+/// unbounded; `crate::telemetry` records bounded content instead.
 fn build_agent<M: CompletionModel>(
     model: M,
     thinking: Option<serde_json::Value>,
@@ -373,8 +409,11 @@ fn build_agent<M: CompletionModel>(
     system_prompt: &str,
     max_turns: usize,
     max_tokens: u64,
-) -> Agent<M> {
-    let mut builder = AgentBuilder::new(model)
+    telemetry: &GenAiContext,
+) -> Agent<TracedModel<M>> {
+    let mut builder = AgentBuilder::new(TracedModel::new(model, telemetry.clone()))
+        .name(telemetry.agent_name())
+        .record_content_telemetry(false)
         .tool_server_handle(handle)
         .default_max_turns(max_turns)
         .max_tokens(max_tokens)
@@ -398,11 +437,18 @@ async fn drive_stream<M>(
     usage_ctx: UsageContext,
     model: String,
     request_context: RequestContext,
+    telemetry: GenAiContext,
 ) -> ChatCompletionStream<'static>
 where
     M: CompletionModel + 'static,
     M::StreamingResponse: GetTokenUsage + Send + Sync,
 {
+    // The caller's `invoke_agent` span (see `Session::send_message`): rig adopts
+    // it as the run's agent span but never records onto a span it did not
+    // open, so the run's input, output and usage are recorded here.
+    let agent_span = tracing::Span::current();
+    telemetry.record_agent_input(&agent_span, &prompt);
+
     let (bridge, mut rx) = StreamBridge::channel(
         inputs,
         request_context.searchable_tools.clone(),
@@ -419,6 +465,7 @@ where
         .max_turns(max_turns)
         .max_invalid_tool_call_retries(crate::hook::MAX_INVALID_TOOL_CALL_RETRIES)
         .add_hook(bridge)
+        .add_hook(ChatSpanHook(telemetry.clone()))
         .await;
 
     // Drive the rig stream on its own task. The hook emits a tool call the
@@ -448,6 +495,7 @@ where
                     match other {
                         Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
                             let usage = final_resp.usage;
+                            telemetry.record_agent_output(&agent_span, &final_resp.output, &usage);
                             // Best-effort cost logging; never fails the stream.
                             recorder.record(usage_ctx.clone().into_event(
                                 model.clone(),
@@ -511,6 +559,7 @@ pub(crate) trait DynStreamAgent: Send + Sync {
         usage_ctx: UsageContext,
         model: String,
         request_context: RequestContext,
+        telemetry: GenAiContext,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
     >;
@@ -532,6 +581,7 @@ where
         usage_ctx: UsageContext,
         model: String,
         request_context: RequestContext,
+        telemetry: GenAiContext,
     ) -> std::pin::Pin<
         Box<dyn std::future::Future<Output = ChatCompletionStream<'static>> + Send + 'a>,
     > {
@@ -545,6 +595,7 @@ where
             usage_ctx,
             model,
             request_context,
+            telemetry,
         ))
     }
 }
@@ -559,11 +610,13 @@ impl ProviderAgent {
         max_turns: usize,
         max_tokens: u64,
         handle: ToolServerHandle,
+        telemetry: GenAiContext,
     ) -> Self
     where
         M: CompletionModel + 'static,
         M::StreamingResponse: GetTokenUsage + Send + Sync,
     {
+        telemetry.set_model("test", "fake-model");
         ProviderAgent::Test(Box::new(build_agent(
             model,
             None,
@@ -571,6 +624,7 @@ impl ProviderAgent {
             system_prompt,
             max_turns,
             max_tokens,
+            &telemetry,
         )))
     }
 }

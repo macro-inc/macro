@@ -18,6 +18,11 @@ impl<'a> AnthropicModel<'a> {
         Self { model, client }
     }
 
+    /// The routed id this model was bound to.
+    pub fn model(&self) -> &Model<'a> {
+        &self.model
+    }
+
     /// The rig completion model for this id. The id is passed verbatim to the
     /// Anthropic API.
     pub fn completion(&self) -> anthropic::completion::CompletionModel {

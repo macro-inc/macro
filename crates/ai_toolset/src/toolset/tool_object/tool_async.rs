@@ -123,7 +123,10 @@ pub type AsyncToolObject<ToolSetContext> = ToolObject<AsyncDeserializer<ToolSetC
 
 impl<ToolSetContext> ToolObject<AsyncDeserializer<ToolSetContext>> {
     /// Attempts to deserialize JSON input into a callable async tool instance.
-    #[tracing::instrument(err, skip(self))]
+    ///
+    /// `data` is the model's arguments: content, recorded on the tool span
+    /// under the content policy rather than as a field here.
+    #[tracing::instrument(err, skip_all)]
     pub fn try_deserialize(
         &self,
         data: &serde_json::Value,
