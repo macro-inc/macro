@@ -3,6 +3,7 @@ import {
   createUrqlQuery,
   type UrqlQueryResult,
 } from '@app/lib/urql-solid';
+import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { FavoriteEntityType } from '@service-storage/generated/schemas/favoriteEntityType';
 import type { FavoritesList } from '@service-storage/generated/schemas/favoritesList';
@@ -25,7 +26,6 @@ import {
   type ReorderFavoritesResult,
 } from '@service-storage/graphql-favorites';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
-import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import { CombinedError, type OperationResult } from '@urql/core';
 import { onCleanup } from 'solid-js';
 

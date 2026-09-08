@@ -182,11 +182,13 @@ describe('GraphQL favorites queries', () => {
         },
       }),
     });
-    const mutation = renderHook(() =>
-      createGraphqlSetFavoriteMutation({ favorite: true })
-    );
+    const hooks = renderHook(() => ({
+      query: createGraphqlFavoritesQuery(),
+      mutation: createGraphqlSetFavoriteMutation({ favorite: true }),
+    }));
 
-    const result = await mutation.mutateAsync({
+    await vi.waitFor(() => expect(hooks.query.isSuccess).toBe(true));
+    const result = await hooks.mutation.mutateAsync({
       entityType: 'document',
       entityId: 'document-3',
     });
