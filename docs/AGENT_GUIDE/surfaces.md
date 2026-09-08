@@ -57,14 +57,16 @@ provider does not report the stored ones. Out-of-office events render on the gri
 chips filled with their calendar color (like Google), unlike regular events' outlined chips,
 and their details card shows an `Out of office` line under the schedule.
 An event that Google carries on several of an account's calendars (a shared calendar's
-re-import of a member's own event, for example) renders once per calendar, side by side,
-the way Google Calendar shows it: each chip carries its own copy's title, color, and
-editability, and hiding a calendar hides its chip. Reminders, guests, and conferencing
-always show and follow the primary copy, since that is the copy Macro's alerts fire from
-and whose guest list and join link Macro records, and the editor only lets them be changed
-there. Answering an invitation likewise addresses the primary copy. The details popover and
-the editor act on the chip's copy, so editing or deleting it targets that calendar's event
-at Google.
+re-import of a member's own event, for example) renders as one chip, not one per calendar:
+the chip carries one thin color bar on its left edge per shown calendar the event is on
+(the details popover's color square splits the same way), and shows the title, color, and
+editability of the first shown copy in primary-first order — hiding the primary calendar
+switches the chip to the shared copy, hiding every one of its calendars hides the chip.
+Reminders, guests, and conferencing always show and follow the primary copy, since that is
+the copy Macro's alerts fire from and whose guest list and join link Macro records, and the
+editor only lets them be changed there. Answering an invitation likewise addresses the
+primary copy. The details popover and the editor act on the displayed copy, so editing or
+deleting it targets that calendar's event at Google.
 
 Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
 `<name>: <event title>`. The side panel's `Team out of office` section (shown only when the

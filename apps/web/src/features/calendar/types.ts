@@ -88,9 +88,9 @@ export interface CalendarEvent {
   /** Calendar of the copy this chip shows. Mutations address that copy. */
   calendarId?: string;
   /**
-   * Calendars whose visibility governs this chip: the copy's own calendar,
-   * or the overlay id for a teammate's out-of-office event. Empty when the
-   * event has no copy data, in which case `calendar` decides.
+   * Calendars whose visibility governs this chip: every calendar the event
+   * is synced from, or the overlay id for a teammate's out-of-office event.
+   * Empty when the event has no copy data, in which case `calendar` decides.
    */
   sourceCalendarIds: string[];
   /** Raw recurrence rules attached to the canonical event. */
@@ -105,8 +105,14 @@ export interface CalendarEvent {
   end: string;
   /** Whether the canonical occurrence is all-day rather than timed. */
   allDay: boolean;
-  /** Calendar source that owns the event. */
+  /** Calendar of the copy this chip shows. */
   calendar: CalendarSource;
+  /**
+   * Every shown calendar the event is on, the displayed copy's first. A chip
+   * draws one color bar per entry, so an event synced to several calendars
+   * reads as one event that belongs to each of them.
+   */
+  visibleCalendars: CalendarSource[];
   /** Optional event location. */
   location?: string;
   /** Optional event description. */
@@ -124,9 +130,25 @@ function optionalText(value: string | null | undefined) {
   return value ?? undefined;
 }
 
-/** How an occurrence's chips resolve the calendars they belong to. */
+/** How an occurrence is attributed to the calendars the viewer is showing. */
 interface CalendarOccurrenceMappingOptions {
   sourceById?: ReadonlyMap<string, CalendarSource>;
+  isSourceVisible?: (sourceId: string) => boolean;
+}
+
+/**
+ * The copy of an event to display: the first copy whose calendar is shown,
+ * in the server's canonical-first order (primary calendar, then freshest),
+ * falling back to the canonical copy when none of them is shown.
+ */
+function selectEventSource(
+  sources: CalendarEventSourceContent[],
+  isSourceVisible?: (sourceId: string) => boolean
+): CalendarEventSourceContent | undefined {
+  return (
+    sources.find((source) => isSourceVisible?.(source.calendarId) !== false) ??
+    sources[0]
+  );
 }
 
 /**
@@ -154,30 +176,15 @@ export function reminderCalendarIdOf(
 }
 
 /**
- * Maps one backend occurrence projection into the chips it renders as: one
- * per calendar the event is synced from, each carrying that copy's content,
- * so an event on several calendars sits side by side the way the provider
- * shows it. The entity carries the canonical copy's content, so an event
- * with no copy data reads the same as its only copy.
+ * Maps one backend occurrence projection into the single chip it renders as,
+ * showing the copy that belongs to a calendar the viewer has on and listing
+ * every shown calendar the event is synced to. The entity itself carries the
+ * canonical copy's content, so an event with no copy data reads the same as
+ * its first copy.
  */
-export function mapCalendarOccurrenceChips(
+export function mapCalendarOccurrence(
   item: CalendarOccurrenceItem,
   options: CalendarOccurrenceMappingOptions = {}
-): CalendarEvent[] {
-  const sources = item.event.sources ?? [];
-  if (sources.length <= 1) {
-    return [buildCalendarEvent(item, options, sources[0], undefined)];
-  }
-  return sources.map((copy) =>
-    buildCalendarEvent(item, options, copy, copy.calendarId)
-  );
-}
-
-function buildCalendarEvent(
-  item: CalendarOccurrenceItem,
-  options: CalendarOccurrenceMappingOptions,
-  copy: CalendarEventSourceContent | undefined,
-  chipCalendarId: string | undefined
 ): CalendarEvent {
   const { event, occurrence } = item;
   const time = occurrence.time;
@@ -185,19 +192,23 @@ function buildCalendarEvent(
     time.kind === 'timed'
       ? { allDay: false, start: time.startsAt, end: time.endsAt }
       : { allDay: true, start: time.startDate, end: time.endDate };
+  const sources = event.sources ?? [];
+  const copy = selectEventSource(sources, options.isSourceVisible);
   const content = copy ?? event;
-  const canonical = event.sources?.[0] ?? event;
+  const canonical = sources[0] ?? event;
   const calendarId = copy?.calendarId ?? event.calendarId ?? undefined;
   const source =
     (calendarId ? options.sourceById?.get(calendarId) : undefined) ??
     DEFAULT_CALENDAR_SOURCE;
+  const visibleCalendars = sources.flatMap((candidate) => {
+    if (options.isSourceVisible?.(candidate.calendarId) === false) return [];
+    const calendar = options.sourceById?.get(candidate.calendarId);
+    return calendar ? [calendar] : [];
+  });
 
   return {
     ...range,
-    id:
-      chipCalendarId === undefined
-        ? JSON.stringify([event.id, occurrence.occurrenceKey])
-        : JSON.stringify([event.id, occurrence.occurrenceKey, chipCalendarId]),
+    id: JSON.stringify([event.id, occurrence.occurrenceKey]),
     eventId: event.id,
     occurrenceKey: occurrence.occurrenceKey,
     recurrenceId: occurrence.recurrenceId ?? undefined,
@@ -218,10 +229,11 @@ function buildCalendarEvent(
     reminderEventType: canonical.eventType ?? undefined,
     eventType: content.eventType ?? undefined,
     calendarId,
-    sourceCalendarIds: copy ? [copy.calendarId] : [],
+    sourceCalendarIds: sources.map((candidate) => candidate.calendarId),
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: content.title,
     calendar: source,
+    visibleCalendars: visibleCalendars.length > 0 ? visibleCalendars : [source],
     location: content.location ?? undefined,
     description: content.description ?? undefined,
   };

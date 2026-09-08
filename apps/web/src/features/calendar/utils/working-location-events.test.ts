@@ -39,6 +39,7 @@ function event(
     end,
     allDay: overrides.allDay ?? true,
     calendar: overrides.calendar ?? OFFICE,
+    visibleCalendars: [overrides.calendar ?? OFFICE],
     eventType: overrides.eventType ?? EventType.working_location,
     location: overrides.location,
   };

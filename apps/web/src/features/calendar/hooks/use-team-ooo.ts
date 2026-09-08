@@ -47,6 +47,11 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
       : { allDay: true, start: time.startDate, end: time.endDate };
   const name = getDisplayName(tryMacroId(item.ownerId));
   const title = item.title ?? TEAM_OOO_FALLBACK_TITLE;
+  const calendar = {
+    id: teamOooSourceId(item.ownerId),
+    name: name || TEAM_OOO_FALLBACK_TITLE,
+    color: TEAM_OOO_COLOR,
+  };
 
   return {
     ...range,
@@ -61,11 +66,8 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
     eventType: EventType.out_of_office,
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: name ? `${name}: ${title}` : title,
-    calendar: {
-      id: teamOooSourceId(item.ownerId),
-      name: name || TEAM_OOO_FALLBACK_TITLE,
-      color: TEAM_OOO_COLOR,
-    },
+    calendar,
+    visibleCalendars: [calendar],
   };
 }
 

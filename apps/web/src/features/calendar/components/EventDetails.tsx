@@ -539,10 +539,16 @@ export function EventDetails(props: {
         aria-hidden="true"
         class="mt-0.5 flex size-5 items-center justify-center sm:size-4"
       >
-        <span
-          class="size-4 rounded-sm sm:size-3"
-          style={{ 'background-color': props.event.calendar.color }}
-        />
+        <span class="flex size-4 gap-px overflow-hidden rounded-sm sm:size-3">
+          <For each={props.event.visibleCalendars}>
+            {(calendar) => (
+              <span
+                class="min-w-0 flex-1"
+                style={{ 'background-color': calendar.color }}
+              />
+            )}
+          </For>
+        </span>
       </span>
       <div class="flex min-w-0 flex-col gap-1">
         <div class="select-text text-lg font-semibold leading-snug text-ink sm:text-base">
