@@ -196,4 +196,40 @@ describe('GraphQL favorites queries', () => {
     expect(result.error).toBeUndefined();
     expect(executeQuery).toHaveBeenCalledOnce();
   });
+
+  it('queues a cold-cache offline favorite change without an invalid link patch', async () => {
+    executeMutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          setFavorite: {
+            __typename: 'SetFavoritePayload' as const,
+            result: { __typename: 'GraphqlMutationSuccess' as const },
+            favorite: graphqlFavorite('document-3', 0),
+          },
+        },
+        extensions: {
+          normalizedCacheMutationDisposition: {
+            kind: 'queued',
+            transactionId: 'transaction-1',
+          },
+        },
+      }),
+    });
+    const mutation = renderHook(() =>
+      createGraphqlSetFavoriteMutation({ favorite: true })
+    );
+
+    const result = await mutation.mutateAsync({
+      entityType: 'document',
+      entityId: 'document-3',
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(executeQuery).not.toHaveBeenCalled();
+    expect(executeMutation.mock.calls[0]?.[2]).toEqual({
+      normalizedCacheOptimistic: expect.objectContaining({
+        linkPatches: [],
+      }),
+    });
+  });
 });

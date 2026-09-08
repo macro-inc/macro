@@ -128,6 +128,10 @@ function mutationError(
   };
 }
 
+function hasCachedFavoritesList(): boolean {
+  return [...activeFavoritesQueries].some((query) => query.data !== undefined);
+}
+
 function nextFavoriteSortOrder(): number {
   let maximum = -1;
   for (const query of activeFavoritesQueries) {
@@ -170,7 +174,8 @@ export function createGraphqlSetFavoriteMutation<Context = void>(
           client,
           input,
           options.favorite,
-          nextFavoriteSortOrder()
+          nextFavoriteSortOrder(),
+          hasCachedFavoritesList()
         )
       ),
     onMutate: options.onMutate,

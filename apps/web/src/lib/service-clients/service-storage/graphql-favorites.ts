@@ -115,7 +115,8 @@ export function executeGraphqlSetFavoriteMutation(
   client: Client,
   args: SetFavoriteArgs,
   favorite: boolean,
-  optimisticSortOrder: number
+  optimisticSortOrder: number,
+  updateCachedList = true
 ): Promise<OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables>> {
   const entityType = toGraphqlFavoriteEntityType(args.entityType);
   const optimisticFavorite: FavoriteFieldsFragment = {
@@ -155,12 +156,17 @@ export function executeGraphqlSetFavoriteMutation(
     optimisticData,
     {
       uuid: setFavoriteOptimisticMutationUuid(args),
-      updates: [
-        update(
-          favorites,
-          favorite ? prependUnique(identity) : remove(identity)
-        ),
-      ],
+      // A cold offline cache has no user.favorites field to patch. The
+      // optimistic mutation itself can still be durably queued; replay
+      // revalidation populates the list once the network is available.
+      updates: updateCachedList
+        ? [
+            update(
+              favorites,
+              favorite ? prependUnique(identity) : remove(identity)
+            ),
+          ]
+        : [],
       revalidations: [{ document: FavoritesDocument, variables: {} }],
     }
   ).toPromise();
