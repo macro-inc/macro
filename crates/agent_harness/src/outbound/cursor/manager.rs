@@ -23,7 +23,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use agent_client_protocol::schema::v1::SessionId;
-use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession};
+use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession, ReplicaId};
 use agent_session::domain::ports::{AgentSessionRepo, ExternalSessionRepo};
 use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
@@ -126,7 +126,18 @@ pub struct CursorContainerManager<Sessions, Keys> {
     base_url: String,
     repo: CursorRepoUrl,
     sessions: Sessions,
-    journal_pool: Option<(sqlx::PgPool, macro_uuid::Uuid)>,
+    journal_storage: JournalStorage,
+}
+
+/// Hosted sessions always use durable storage; tests select memory explicitly.
+#[derive(Clone)]
+enum JournalStorage {
+    Postgres {
+        pool: sqlx::PgPool,
+        replica: ReplicaId,
+    },
+    #[cfg(test)]
+    Memory,
 }
 
 /// What a resumed session gets back at restore time.
@@ -150,22 +161,38 @@ where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
     Keys: CursorApiKeys,
 {
-    /// Build the manager over the key source, the API it talks to, and the
-    /// repository every session works on.
-    pub fn new(keys: Keys, base_url: String, repo: CursorRepoUrl, sessions: Sessions) -> Self {
+    /// Build a manager with required durable journal storage and replica identity.
+    pub fn new(
+        keys: Keys,
+        base_url: String,
+        repo: CursorRepoUrl,
+        sessions: Sessions,
+        pool: sqlx::PgPool,
+        replica: ReplicaId,
+    ) -> Self {
         Self {
             keys,
             base_url,
             repo,
             sessions,
-            journal_pool: None,
+            journal_storage: JournalStorage::Postgres { pool, replica },
         }
     }
 
-    /// Supply durable native journal storage for every hosted Cursor session.
-    pub fn with_journal_pool(mut self, pool: sqlx::PgPool, replica: macro_uuid::Uuid) -> Self {
-        self.journal_pool = Some((pool, replica));
-        self
+    #[cfg(test)]
+    fn with_memory_journal(
+        keys: Keys,
+        base_url: String,
+        repo: CursorRepoUrl,
+        sessions: Sessions,
+    ) -> Self {
+        Self {
+            keys,
+            base_url,
+            repo,
+            sessions,
+            journal_storage: JournalStorage::Memory,
+        }
     }
 
     /// A client authenticated as `session`'s owner.
@@ -208,14 +235,14 @@ where
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<PipeTransport>> {
         let owner_binding: Option<agent_session::domain::connection::AttachmentActivation>;
         let journal: Arc<dyn cursor_cloud_agents::domain::journal::CursorJournal> = match &self
-            .journal_pool
+            .journal_storage
         {
-            Some((pool, replica)) => {
+            JournalStorage::Postgres { pool, replica } => {
                 let journal = Arc::new(
                     cursor_cloud_agents::outbound::postgres_journal::PgCursorJournal::new(
                         pool.clone(),
                         session_id,
-                        agent_session::domain::model::ReplicaId::from_uuid(*replica),
+                        *replica,
                     ),
                 );
                 let activated = journal.clone();
@@ -232,15 +259,9 @@ where
                 journal
             }
             #[cfg(test)]
-            None => {
+            JournalStorage::Memory => {
                 owner_binding = None;
                 Arc::new(cursor_cloud_agents::outbound::memory_journal::MemoryJournal::default())
-            }
-            #[cfg(not(test))]
-            None => {
-                return Err(HarnessError::Container(
-                    "Cursor requires durable native journal storage".into(),
-                ));
             }
         };
         let (ours, theirs) = tokio::io::duplex(PIPE_CAPACITY);

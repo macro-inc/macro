@@ -377,7 +377,7 @@ fn manager_with_keys(
     keys: StubKeys,
 ) -> CursorContainerManager<StubSessions, StubKeys> {
     let repo = CursorRepoUrl::parse("https://github.com/macro-inc/macro").expect("valid repo");
-    CursorContainerManager::new(keys, base_url, repo, sessions)
+    CursorContainerManager::with_memory_journal(keys, base_url, repo, sessions)
 }
 
 async fn next_acp(
