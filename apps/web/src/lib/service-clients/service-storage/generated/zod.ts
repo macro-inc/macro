@@ -2008,8 +2008,8 @@ export const deleteCallRecordParams = zod.object({
 });
 
 /**
- * Edits a call record — currently supports updating the record's share
-permissions. Access is validated via channel membership
+ * Edits call metadata and sharing. Supplied team-sharing operations additionally
+require the persisted owner; enabling without an owner team is invalid.
  * @summary Handler for `PATCH /call/record/{call_id}`.
  */
 export const editCallRecordParams = zod.object({
@@ -2067,6 +2067,14 @@ export const editCallRecordBody = zod
                 .describe('Ordered from least to most access top -> bottom'),
             ])
             .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
         }),
       ])
       .optional(),
@@ -2074,14 +2082,14 @@ export const editCallRecordBody = zod
       .boolean()
       .nullish()
       .describe(
-        "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
+        'Owner-only compatibility setting. Initial `true` enables View; repeated\n`true` preserves the explicit level. `false` clears the managed grant,\neven after team departure. `None` preserves sharing. Contradictory\nlegacy and explicit levels are rejected before any edits.'
       ),
   })
   .describe('Edit call request');
 
 /**
- * Toggles the `share_with_team` flag on the active call. Returns the new
-value as the JSON body.
+ * Toggles explicit team sharing on an active call as its persisted owner.
+Initial enable uses View. Returns the committed compatibility flag.
  * @summary Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
  */
 export const toggleShareWithTeamParams = zod.object({
@@ -7141,6 +7149,14 @@ export const editDocumentBody = zod
                 .describe('Ordered from least to most access top -> bottom'),
             ])
             .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
         }),
       ])
       .optional(),
@@ -8043,7 +8059,7 @@ export const getDocumentTeamShareResponse = zod
     sharedWithTeam: zod
       .boolean()
       .describe(
-        "Whether the document is currently shared with the owner's team."
+        'Whether explicit team sharing is enabled; inherited team access does not count.'
       ),
     teamId: zod
       .uuid()
@@ -8057,9 +8073,10 @@ export const getDocumentTeamShareResponse = zod
   );
 
 /**
- * @summary Sets the team-share state of a document. Sharing grants the document
-owner's team Edit access; unsharing removes the team's access. Requires
-Edit access on the document.
+ * @summary Sets explicit team sharing. Requires a verified acting identity matching
+the persisted document owner, not merely effective Edit or Owner access.
+Initial enable defaults to Edit; repeated enable preserves the chosen level.
+Clear removes only the managed direct grant, not inherited team access.
  */
 export const setDocumentTeamShareParams = zod.object({
   document_id: zod.string().describe('Document ID'),
@@ -8078,7 +8095,7 @@ export const setDocumentTeamShareResponse = zod
     sharedWithTeam: zod
       .boolean()
       .describe(
-        "Whether the document is currently shared with the owner's team."
+        'Whether explicit team sharing is enabled; inherited team access does not count.'
       ),
     teamId: zod
       .uuid()
@@ -27257,6 +27274,14 @@ export const getProjectPermissionsV2Response = zod.object({
     ])
     .optional(),
   owner: zod.string().describe('The owner of the item'),
+  teamShareAccessLevel: zod
+    .union([
+      zod.null(),
+      zod
+        .enum(['view', 'comment', 'edit', 'owner'])
+        .describe('Ordered from least to most access top -> bottom'),
+    ])
+    .optional(),
 });
 
 /**
@@ -28017,6 +28042,14 @@ export const editThreadV2Body = zod.object({
               .describe('Ordered from least to most access top -> bottom'),
           ])
           .optional(),
+        teamShareAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
       }),
     ])
     .optional(),
@@ -28148,6 +28181,14 @@ export const getDocumentPermissionsV2Response = zod.object({
       ])
       .optional(),
     owner: zod.string().describe('The owner of the item'),
+    teamShareAccessLevel: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['view', 'comment', 'edit', 'owner'])
+          .describe('Ordered from least to most access top -> bottom'),
+      ])
+      .optional(),
   }),
 });
 
@@ -28200,6 +28241,14 @@ export const editProjectV2Body = zod.object({
           ])
           .optional(),
         linkShareAccessLevel: zod
+          .union([
+            zod.null(),
+            zod
+              .enum(['view', 'comment', 'edit', 'owner'])
+              .describe('Ordered from least to most access top -> bottom'),
+          ])
+          .optional(),
+        teamShareAccessLevel: zod
           .union([
             zod.null(),
             zod

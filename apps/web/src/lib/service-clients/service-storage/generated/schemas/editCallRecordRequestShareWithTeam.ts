@@ -6,8 +6,9 @@
  */
 
 /**
- * If `Some(true)`, grant the creator's team View access on the call.
-If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
-The team is resolved from the call's `created_by`, not the acting user.
+ * Owner-only compatibility setting. Initial `true` enables View; repeated
+`true` preserves the explicit level. `false` clears the managed grant,
+even after team departure. `None` preserves sharing. Contradictory
+legacy and explicit levels are rejected before any edits.
  */
 export type EditCallRecordRequestShareWithTeam = boolean | null;
