@@ -23,7 +23,7 @@ import {
   useCursorModelsQuery,
 } from '@queries/auth/cursor-api-key';
 import { Avatar, Button, badgeTriggerClasses, cn, Dropdown, Hotkey } from '@ui';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { startPendingSession } from '../context/pending-session';
 import {
   harnessDisplayName,
@@ -412,31 +412,57 @@ function ModelPicker(props: {
     props.onTabForward();
   };
 
+  // Kobalte restores focus to the trigger after close, after our Tab handler
+  // returns — keep retrying briefly so Create Session wins that race.
+  const focusSubmitAfterMenuClose = () => {
+    pendingSubmitFocus = true;
+    const tryFocus = () => {
+      if (!pendingSubmitFocus) return;
+      props.onTabForward();
+    };
+    requestAnimationFrame(() => requestAnimationFrame(tryFocus));
+    window.setTimeout(tryFocus, 0);
+    window.setTimeout(() => {
+      tryFocus();
+      pendingSubmitFocus = false;
+    }, 32);
+  };
+
   const handleTab = (event: KeyboardEvent) => {
     const action = modelPickerTabAction(event, highlightedRow());
     if (!action) return;
     event.preventDefault();
     event.stopPropagation();
+    event.stopImmediatePropagation();
     if (action === 'commit') {
-      pendingSubmitFocus = true;
-      highlightedRow()?.click();
-      queueMicrotask(() => {
-        if (pendingSubmitFocus) focusSubmit();
-      });
+      focusSubmitAfterMenuClose();
+      highlightedRow()?.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'Enter',
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+        })
+      );
       return;
     }
     if (open()) {
-      pendingSubmitFocus = true;
-      setOpen(false);
+      focusSubmitAfterMenuClose();
+      onMenuOpenChange(false);
       return;
     }
     focusSubmit();
   };
 
-  const attachTabListener = (el: HTMLElement) => {
-    el.removeEventListener('keydown', handleTab, true);
-    el.addEventListener('keydown', handleTab, true);
+  const onMenuOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) {
+      window.addEventListener('keydown', handleTab, true);
+    } else {
+      window.removeEventListener('keydown', handleTab, true);
+    }
   };
+  onCleanup(() => window.removeEventListener('keydown', handleTab, true));
 
   const label = () =>
     modelPillLabel(props.value, props.persona, props.available);
@@ -444,14 +470,7 @@ function ModelPicker(props: {
     <Dropdown
       placement="top-start"
       open={open()}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next && pendingSubmitFocus) {
-          queueMicrotask(() => {
-            if (pendingSubmitFocus) focusSubmit();
-          });
-        }
-      }}
+      onOpenChange={onMenuOpenChange}
     >
       <Dropdown.Trigger
         variant="outline"
@@ -471,12 +490,10 @@ function ModelPicker(props: {
         class="w-72 max-w-[min(24rem,calc(100vw-1rem))]"
         ref={(el: HTMLElement) => {
           contentEl = el;
-          attachTabListener(el);
         }}
         onCloseAutoFocus={(event) => {
           if (!pendingSubmitFocus) return;
           event.preventDefault();
-          focusSubmit();
         }}
       >
         <Dropdown.Group class={MENU_LIST_CLASS}>
@@ -508,7 +525,6 @@ function ModelPicker(props: {
                 class="w-72 max-w-[min(24rem,calc(100vw-1rem))]"
                 ref={(el: HTMLElement) => {
                   subContentEl = el;
-                  attachTabListener(el);
                 }}
               >
                 <Dropdown.Group class={MENU_LIST_CLASS}>
