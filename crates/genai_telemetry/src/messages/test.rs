@@ -60,3 +60,23 @@ fn messages_and_definitions_follow_the_semconv_shapes() {
         json!({"type": "function", "name": "search", "description": "Search things", "parameters": {"type": "object"}})
     );
 }
+
+#[test]
+fn uris_lose_their_credentials_query_and_fragment() {
+    assert_eq!(
+        redact_uri("https://user:secret@files.example.com/a/b.png?sig=abc#frag"),
+        "https://files.example.com/a/b.png"
+    );
+    assert_eq!(redact_uri("https://x/a.png"), "https://x/a.png");
+    assert_eq!(redact_uri("https://host"), "https://host");
+    assert_eq!(redact_uri("file:///tmp/a.txt"), "file:///tmp/a.txt");
+    assert_eq!(redact_uri("urn:doc:123?x=1"), "urn:doc:123");
+    assert_eq!(
+        media_part(
+            "image",
+            None,
+            MediaSource::Uri("https://token@x/a.png?expires=1".into())
+        )["uri"],
+        "https://x/a.png"
+    );
+}

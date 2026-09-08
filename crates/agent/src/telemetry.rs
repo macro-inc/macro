@@ -188,6 +188,18 @@ impl GenAiContext {
         }
     }
 
+    /// Release the parked `chat` span, if any, so it closes now. Called when
+    /// a run ends on a path that fires no turn hook - a provider error, a
+    /// cancellation, exhausted invalid-tool retries, the consumer dropping the
+    /// stream - and a no-op when the hook already released it.
+    pub(crate) fn finish_run(&self) {
+        self.0
+            .chat_span
+            .lock()
+            .expect("chat span slot poisoned")
+            .take();
+    }
+
     /// Record the prompt of an agent run as the agent span's input.
     pub(crate) fn record_agent_input(&self, agent_span: &tracing::Span, prompt: &Message) {
         if !self.0.enabled || !self.0.policy.capture {

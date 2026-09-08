@@ -57,8 +57,8 @@ fn bounded_json_string_cuts_leaves_then_the_whole_value() {
     };
     let (json, cut) = bounded_json_string(&json!({"key": "value"}), &tight);
     assert!(cut);
-    assert!(json.starts_with(r#"{"key":"va"#), "{json}");
-    assert!(json.ends_with("chars]"), "{json}");
+    assert!(json.starts_with(r#"{"key"#), "{json}");
+    assert!(json.ends_with("bytes]"), "{json}");
 }
 
 fn message(role: &str, text: &str) -> serde_json::Value {
@@ -143,4 +143,80 @@ fn bound_tool_definitions_drops_parameters_before_names_and_descriptions() {
     assert!(parsed.iter().all(|d| d.get("parameters").is_none()));
     assert_eq!(parsed[0]["name"], "a");
     assert_eq!(parsed[0]["description"], "does a");
+}
+
+#[test]
+fn truncate_bytes_respects_the_byte_budget_on_char_boundaries() {
+    assert!(matches!(truncate_bytes("héllo", 6), Cow::Borrowed("héllo")));
+    let emoji = "😀".repeat(1_000);
+    let cut = truncate_bytes(&emoji, 200);
+    assert!(cut.len() <= 200, "{} bytes", cut.len());
+    assert!(cut.starts_with("😀"), "cut on a character boundary");
+    assert!(cut.contains("…[truncated"), "{cut}");
+}
+
+#[test]
+fn bounded_json_string_enforces_bytes_not_chars() {
+    let limits = Limits {
+        max_part_chars: 100_000,
+        max_attribute_bytes: 500,
+    };
+    let (json, cut) = bounded_json_string(&json!("😀".repeat(1_000)), &limits);
+    assert!(cut);
+    assert!(json.len() <= 500, "{} bytes", json.len());
+}
+
+#[test]
+fn an_oversized_last_message_is_shrunk_into_valid_json() {
+    let limits = Limits {
+        max_part_chars: 100_000,
+        max_attribute_bytes: 300,
+    };
+    let big = json!({
+        "role": "user",
+        "parts": [
+            {"type": "text", "content": "a".repeat(400)},
+            {"type": "text", "content": "b".repeat(400)},
+        ]
+    });
+    let bounded = bound_messages(vec![message("assistant", "earlier"), big], &limits);
+    assert!(bounded.truncated);
+    assert_eq!(bounded.omitted, 1);
+    assert!(bounded.json.len() <= 300, "{} bytes", bounded.json.len());
+    let parsed: Vec<serde_json::Value> =
+        serde_json::from_str(&bounded.json).expect("valid JSON: {bounded.json}");
+    assert_eq!(parsed.len(), 1);
+    assert_eq!(parsed[0]["role"], "user");
+
+    // Even a budget too small for any of its content leaves a note behind.
+    let bounded = bound_messages(
+        vec![message("user", &"x".repeat(1_000))],
+        &Limits {
+            max_part_chars: 100_000,
+            max_attribute_bytes: 60,
+        },
+    );
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(&bounded.json).expect("valid JSON");
+    assert!(
+        parsed[0]["parts"][0]["content"]
+            .as_str()
+            .is_some_and(|content| content.starts_with("[content omitted")),
+        "{}",
+        bounded.json
+    );
+}
+
+#[test]
+fn an_overlong_tool_list_drops_definitions_but_stays_valid_json() {
+    let definitions: Vec<_> = (0..50).map(|i| definition(&format!("tool_{i}"))).collect();
+    let limits = Limits {
+        max_part_chars: 1_000,
+        max_attribute_bytes: 600,
+    };
+    let (json, cut) = bound_tool_definitions(definitions, &limits);
+    assert!(cut);
+    assert!(json.len() <= 600, "{} bytes", json.len());
+    let parsed: Vec<serde_json::Value> = serde_json::from_str(&json).expect("valid JSON");
+    assert!(!parsed.is_empty());
+    assert_eq!(parsed[0]["name"], "tool_0");
 }

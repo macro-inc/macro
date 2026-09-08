@@ -129,6 +129,28 @@ pub fn truncate_chars(s: &str, max_chars: usize) -> Cow<'_, str> {
     Cow::Owned(cut)
 }
 
+/// Room kept for the marker [`truncate_bytes`] appends, so a cut value never
+/// overshoots its byte budget.
+const TRUNCATION_MARKER_RESERVE: usize = 40;
+
+/// Cut `s` to at most `max_bytes` bytes of UTF-8, on a character boundary,
+/// appending a marker naming how many bytes were dropped. The marker is
+/// counted against the budget. Borrows when nothing needs cutting.
+pub fn truncate_bytes(s: &str, max_bytes: usize) -> Cow<'_, str> {
+    if s.len() <= max_bytes {
+        return Cow::Borrowed(s);
+    }
+    // A budget too small to hold the marker keeps half of itself; the marker
+    // then overshoots, which beats recording nothing at all.
+    let mut keep = max_bytes.saturating_sub(TRUNCATION_MARKER_RESERVE.min(max_bytes / 2));
+    while keep > 0 && !s.is_char_boundary(keep) {
+        keep -= 1;
+    }
+    let mut cut = s[..keep].to_owned();
+    cut.push_str(&format!("…[truncated {} bytes]", s.len() - keep));
+    Cow::Owned(cut)
+}
+
 /// Cut every string leaf in `value` to `max_part_chars` characters, in place.
 /// Returns whether anything was cut.
 fn bound_json_strings(value: &mut serde_json::Value, max_part_chars: usize) -> bool {
@@ -151,8 +173,9 @@ fn bound_json_strings(value: &mut serde_json::Value, max_part_chars: usize) -> b
 }
 
 /// Serialize `value` as an opaque string attribute within `limits`: string
-/// leaves are cut to `max_part_chars`, then the whole serialization to
-/// `max_attribute_bytes`. Returns the string and whether anything was cut.
+/// leaves are cut to `max_part_chars` characters, then the whole
+/// serialization to `max_attribute_bytes` bytes. Returns the string and
+/// whether anything was cut.
 ///
 /// A cut serialization is no longer valid JSON, so use this only for
 /// attributes the backend treats as plain text (tool arguments and results);
@@ -166,7 +189,7 @@ pub fn bounded_json_string(value: &serde_json::Value, limits: &Limits) -> (Strin
         serde_json::Value::String(s) => s,
         other => other.to_string(),
     };
-    match truncate_chars(&json, limits.max_attribute_bytes) {
+    match truncate_bytes(&json, limits.max_attribute_bytes) {
         Cow::Borrowed(_) => (json, cut_parts),
         Cow::Owned(cut) => (cut, true),
     }
@@ -186,7 +209,9 @@ pub struct BoundedMessages {
 /// Bound a message list (see [`crate::messages`]) to `limits`: every string
 /// leaf is cut to `max_part_chars`, then the oldest messages are dropped —
 /// never the last one, which is the current turn — until the serialized list
-/// fits `max_attribute_bytes`.
+/// fits `max_attribute_bytes`. A last message that is over budget on its own
+/// is shrunk in place - its leaves cut shorter, then its oldest parts dropped
+/// - so the result is always a valid JSON array.
 pub fn bound_messages(mut messages: Vec<serde_json::Value>, limits: &Limits) -> BoundedMessages {
     let mut truncated = false;
     for message in &mut messages {
@@ -199,16 +224,56 @@ pub fn bound_messages(mut messages: Vec<serde_json::Value>, limits: &Limits) -> 
         omitted += 1;
         json = serialize(&messages);
     }
-    // A single message over budget can only happen with an enormous number of
-    // parts; cutting it is the last resort and the result is not valid JSON.
-    if let Cow::Owned(cut) = truncate_chars(&json, limits.max_attribute_bytes) {
-        json = cut;
+    if json.len() > limits.max_attribute_bytes
+        && let Some(last) = messages.last_mut()
+    {
+        shrink_message(last, limits);
         truncated = true;
+        json = serialize(&messages);
     }
     BoundedMessages {
         json,
         omitted,
         truncated: truncated || omitted > 0,
+    }
+}
+
+/// Shrink one message until it serializes within the attribute budget: halve
+/// the leaf budget while that helps, then drop its oldest parts (never the
+/// last), and as a last resort keep only a note of what was dropped.
+fn shrink_message(message: &mut serde_json::Value, limits: &Limits) {
+    let over = |message: &serde_json::Value| message.to_string().len() > limits.max_attribute_bytes;
+    let mut part_chars = limits.max_part_chars / 2;
+    while over(message) && part_chars >= 16 {
+        bound_json_strings(message, part_chars);
+        part_chars /= 2;
+    }
+    while over(message) {
+        let Some(parts) = message
+            .get_mut("parts")
+            .and_then(serde_json::Value::as_array_mut)
+        else {
+            break;
+        };
+        if parts.len() <= 1 {
+            break;
+        }
+        parts.remove(0);
+    }
+    if over(message)
+        && let Some(object) = message.as_object_mut()
+    {
+        let dropped = object
+            .get("parts")
+            .map(|parts| parts.to_string().len())
+            .unwrap_or(0);
+        object.insert(
+            "parts".to_owned(),
+            serde_json::json!([{
+                "type": "text",
+                "content": format!("[content omitted: {dropped} bytes]"),
+            }]),
+        );
     }
 }
 
@@ -237,11 +302,14 @@ pub fn bound_tool_definitions(
     for definition in &mut definitions {
         bound_json_strings(definition, limits.max_part_chars);
     }
-    let json = serialize(&definitions);
-    match truncate_chars(&json, limits.max_attribute_bytes) {
-        Cow::Borrowed(_) => (json, true),
-        Cow::Owned(cut) => (cut, true),
+    // Still over: the list itself is too long. Drop definitions from the end
+    // rather than cut the serialization, so what remains is valid JSON.
+    let mut json = serialize(&definitions);
+    while json.len() > limits.max_attribute_bytes && !definitions.is_empty() {
+        definitions.pop();
+        json = serialize(&definitions);
     }
+    (json, true)
 }
 
 fn serialize(values: &[serde_json::Value]) -> String {

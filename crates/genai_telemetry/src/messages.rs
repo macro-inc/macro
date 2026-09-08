@@ -66,9 +66,13 @@ pub fn tool_call_response_part(id: Option<&str>, response: Value) -> Value {
 
 /// A media part (`image`, `audio`, `video`, `document` modality). Inline
 /// bytes are replaced by a placeholder: a span is not the place for a file.
+/// A URI is recorded without its credentials, query or fragment (see
+/// [`redact_uri`]).
 pub fn media_part(modality: &str, mime_type: Option<&str>, source: MediaSource) -> Value {
     let mut part = match source {
-        MediaSource::Uri(uri) => json!({ "type": "uri", "modality": modality, "uri": uri }),
+        MediaSource::Uri(uri) => {
+            json!({ "type": "uri", "modality": modality, "uri": redact_uri(&uri) })
+        }
         MediaSource::FileId(file_id) => {
             json!({ "type": "file", "modality": modality, "file_id": file_id })
         }
@@ -80,6 +84,27 @@ pub fn media_part(modality: &str, mime_type: Option<&str>, source: MediaSource) 
         part["mime_type"] = Value::String(mime_type.to_string());
     }
     part
+}
+
+/// A URI reduced to what identifies the resource: scheme, host and path.
+/// Userinfo (`user:password@`), the query string and the fragment are
+/// dropped - that is where credentials, signed-URL tokens and session state
+/// travel, none of which belongs on a span.
+pub fn redact_uri(uri: &str) -> String {
+    let uri = uri.split(['?', '#']).next().unwrap_or_default();
+    match uri.split_once("://") {
+        Some((scheme, rest)) => {
+            let (authority, path) = match rest.find('/') {
+                Some(slash) => rest.split_at(slash),
+                None => (rest, ""),
+            };
+            let host = authority
+                .rsplit_once('@')
+                .map_or(authority, |(_, host)| host);
+            format!("{scheme}://{host}{path}")
+        }
+        None => uri.to_owned(),
+    }
 }
 
 /// An input message.

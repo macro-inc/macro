@@ -282,7 +282,9 @@ async fn a_run_records_the_attributes_evaluations_read() {
         Some(r#"{"echo":"a"}"#)
     );
 
-    // Everything is one trace under the agent span.
+    // Everything is one trace under the agent span: the model calls hang off
+    // it directly, and the tool call off the run too (rig opens it from the
+    // driver, which runs inside the agent span).
     let trace_id = agent.span_context.trace_id();
     assert!(
         spans
@@ -291,6 +293,11 @@ async fn a_run_records_the_attributes_evaluations_read() {
         "{:?}",
         names(&spans)
     );
+    let agent_id = agent.span_context.span_id();
+    for chat in &chats {
+        assert_eq!(chat.parent_span_id, agent_id, "{}", describe(&spans));
+    }
+    assert_eq!(tool.parent_span_id, agent_id, "{}", describe(&spans));
 }
 
 /// Without a conversation id nothing is invented, and the run still traces.

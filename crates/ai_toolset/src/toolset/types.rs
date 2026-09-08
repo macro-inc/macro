@@ -231,7 +231,7 @@ where
         json: &serde_json::Value,
     ) -> Result<ToolResult<UserToolResponse<serde_json::Value>>, ToolSetError> {
         let telemetry = ToolCallSpan::begin(tool_name, json);
-        let result: Result<ToolResult<UserToolResponse<serde_json::Value>>, ToolSetError> = async {
+        let result: Result<ToolResult<serde_json::Value>, ToolSetError> = async {
             let tool = self
                 .user_tools
                 .get(tool_name)
@@ -240,19 +240,18 @@ where
                     tool.try_deserialize(json)
                         .map_err(ToolSetError::Deserialization)
                 })?;
-            Ok(tool
-                .call(context, request_context)
-                .await
-                .map(UserToolResponse::UserAction))
+            Ok(tool.call(context, request_context).await)
         }
         .instrument(telemetry.span().clone())
         .await;
+        // Recorded before the API wrapper goes on, so the span carries the
+        // tool's own output rather than `{"UserAction": ...}`.
         telemetry.finish(&result);
-        result
+        result.map(|result| result.map(UserToolResponse::UserAction))
     }
 
     /// check if json + name matches a known tool in the toolset
-    #[tracing::instrument(skip_all, fields(tool_name))]
+    #[tracing::instrument(skip_all, fields(tool_name = %tool_name))]
     pub fn is_valid_tool(&self, tool_name: &str, json: &serde_json::Value) -> bool {
         let Some(tool) = self
             .user_tools

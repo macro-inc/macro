@@ -22,6 +22,7 @@ mod test;
 use crate::{ToolResult, ToolSetError};
 use genai_telemetry::{
     ContentPolicy, GenAiSpanExt as _, attr, bounded_json_string, current_span_is_named,
+    truncate_chars,
 };
 use serde::Serialize;
 
@@ -104,20 +105,41 @@ impl ToolCallSpan {
             }
             Ok(Err(error)) => {
                 // The tool ran and failed; `description` is what the model
-                // sees, so it doubles as the span's output.
-                self.span.set_error("tool_error", error.description.clone());
+                // sees, so it doubles as the span's output - and is content,
+                // recorded under the same policy.
+                self.span.set_error(
+                    "tool_error",
+                    self.error_description(&error.description, "the tool reported an error"),
+                );
                 if self.policy.capture {
                     self.record_result(&serde_json::Value::String(error.description.clone()));
                 }
             }
             Err(error @ ToolSetError::NotFound(_)) => {
                 tracing::warn!(tool_name = %self.tool_name, error = %error, "tool call could not be dispatched");
-                self.span.set_error("tool_not_found", error.to_string());
+                self.span.set_error("tool_not_found", "no such tool");
             }
             Err(error @ ToolSetError::Deserialization(_)) => {
                 tracing::warn!(tool_name = %self.tool_name, error = %error, "tool call could not be dispatched");
-                self.span.set_error("invalid_arguments", error.to_string());
+                // The message quotes the arguments it could not read.
+                self.span.set_error(
+                    "invalid_arguments",
+                    self.error_description(
+                        &error.to_string(),
+                        "the arguments did not match the tool's schema",
+                    ),
+                );
             }
+        }
+    }
+
+    /// An error description fit for the span's status: the detail, bounded,
+    /// when content may be recorded; a fixed summary otherwise.
+    fn error_description(&self, detail: &str, summary: &'static str) -> String {
+        if self.policy.capture {
+            truncate_chars(detail, self.policy.limits.max_part_chars).into_owned()
+        } else {
+            summary.to_owned()
         }
     }
 

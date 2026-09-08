@@ -37,6 +37,6 @@ mod span;
 
 pub use content::{
     BoundedMessages, ContentPolicy, Limits, bound_messages, bound_tool_definitions,
-    bounded_json_string, truncate_chars,
+    bounded_json_string, truncate_bytes, truncate_chars,
 };
 pub use span::{GenAiSpanExt, current_span_is_named};

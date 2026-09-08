@@ -602,3 +602,159 @@ fn oversized_tool_results_are_cut_and_marked() {
         Some(&OtelValue::Bool(true))
     );
 }
+
+#[test]
+fn a_tool_call_opened_outside_any_turn_survives_a_later_turn_ending() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let mut projector = projector(ContentPolicy::enabled());
+    // A call streamed by a resumed session, before this connection prompts.
+    let open = RawJsonRpcMessage::notification(
+        "session/update".to_owned(),
+        json!({
+            "sessionId": "s1",
+            "update": {
+                "sessionUpdate": "tool_call",
+                "toolCallId": "bg-1",
+                "title": "Bash",
+                "kind": "execute",
+                "status": "in_progress",
+                "rawInput": { "command": "sleep 60" }
+            }
+        }),
+    )
+    .expect("a notification");
+    projector.on_inbound(&ToServerMessage::Acp(AcpMessage(open)));
+
+    // A whole turn passes.
+    let prompt = RawJsonRpcMessage::request(
+        "session/prompt".to_owned(),
+        json!({ "sessionId": "s1", "prompt": [{ "type": "text", "text": "hi" }] }),
+        RequestId::Str("p1".to_owned()),
+    )
+    .expect("a request");
+    projector.on_outbound(&ToRuntimeMessage::Acp(AcpMessage(prompt)), None);
+    projector.on_inbound(&ToServerMessage::Acp(AcpMessage(
+        RawJsonRpcMessage::response(
+            RequestId::Str("p1".to_owned()),
+            Ok(json!({ "stopReason": "end_turn" })),
+        ),
+    )));
+
+    // Then the background call finishes, and its span records that.
+    let done = RawJsonRpcMessage::notification(
+        "session/update".to_owned(),
+        json!({
+            "sessionId": "s1",
+            "update": {
+                "sessionUpdate": "tool_call_update",
+                "toolCallId": "bg-1",
+                "status": "completed",
+                "rawOutput": { "exit": 0 }
+            }
+        }),
+    )
+    .expect("a notification");
+    projector.on_inbound(&ToServerMessage::Acp(AcpMessage(done)));
+    let spans = finished(&exporter, &provider);
+
+    let bash = spans_named(&spans, "execute_tool Bash");
+    assert_eq!(bash.len(), 1, "{spans:#?}");
+    assert_eq!(bash[0].status, Status::Unset, "not abandoned by the turn");
+    assert_eq!(
+        json_attribute(bash[0], attr::TOOL_CALL_RESULT),
+        Some(json!({ "exit": 0 }))
+    );
+    assert!(bash[0].end_time >= spans_named(&spans, "invoke_agent")[0].end_time);
+}
+
+#[test]
+fn attached_resources_are_named_not_copied() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let mut projector = projector(ContentPolicy::enabled());
+    let prompt = RawJsonRpcMessage::request(
+        "session/prompt".to_owned(),
+        json!({
+            "sessionId": "s1",
+            "prompt": [
+                { "type": "text", "text": "summarize this" },
+                { "type": "resource", "resource": {
+                    "uri": "https://user:secret@files.example.com/doc.md?sig=abc",
+                    "mimeType": "text/markdown",
+                    "text": "CONFIDENTIAL BODY"
+                } },
+                { "type": "resource_link", "name": "notes", "uri": "macro://doc/42#p3" }
+            ]
+        }),
+        RequestId::Str("p1".to_owned()),
+    )
+    .expect("a request");
+    projector.on_outbound(&ToRuntimeMessage::Acp(AcpMessage(prompt)), None);
+    projector.on_inbound(&ToServerMessage::Acp(AcpMessage(
+        RawJsonRpcMessage::response(
+            RequestId::Str("p1".to_owned()),
+            Ok(json!({ "stopReason": "end_turn" })),
+        ),
+    )));
+    let spans = finished(&exporter, &provider);
+
+    let agent = spans_named(&spans, "invoke_agent")[0];
+    let input = string_attribute(agent, attr::INPUT_MESSAGES).expect("input recorded");
+    assert!(input.contains("summarize this"));
+    assert!(!input.contains("CONFIDENTIAL BODY"), "{input}");
+    assert!(!input.contains("secret"), "{input}");
+    assert!(!input.contains("sig=abc"), "{input}");
+    let parsed: Value = serde_json::from_str(&input).expect("valid JSON");
+    assert_eq!(parsed[0]["parts"][1]["type"], "uri");
+    assert_eq!(
+        parsed[0]["parts"][1]["uri"],
+        "https://files.example.com/doc.md"
+    );
+    assert_eq!(parsed[0]["parts"][2]["uri"], "macro://doc/42");
+}
+
+#[test]
+fn tool_error_text_follows_the_content_policy() {
+    let failing_call = |id: &str| {
+        RawJsonRpcMessage::notification(
+            "session/update".to_owned(),
+            json!({
+                "sessionId": "s1",
+                "update": {
+                    "sessionUpdate": "tool_call",
+                    "toolCallId": id,
+                    "title": "Read",
+                    "kind": "read",
+                    "status": "failed",
+                    "rawOutput": {
+                        "content": [{ "type": "text", "text": "permission denied: /home/eric/.ssh/id_rsa" }],
+                        "isError": true
+                    }
+                }
+            }),
+        )
+        .expect("a notification")
+    };
+
+    let (exporter, provider, guard) = otel_test_pipeline();
+    let mut quiet = projector(ContentPolicy::disabled());
+    quiet.on_inbound(&ToServerMessage::Acp(AcpMessage(failing_call("t1"))));
+    let spans = finished(&exporter, &provider);
+    match &spans_named(&spans, "execute_tool Read")[0].status {
+        Status::Error { description } => {
+            assert!(!description.contains("id_rsa"), "{description}");
+        }
+        other => panic!("expected an error status, got {other:?}"),
+    }
+    drop(guard);
+
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let mut verbose = projector(ContentPolicy::enabled());
+    verbose.on_inbound(&ToServerMessage::Acp(AcpMessage(failing_call("t2"))));
+    let spans = finished(&exporter, &provider);
+    match &spans_named(&spans, "execute_tool Read")[0].status {
+        Status::Error { description } => {
+            assert!(description.contains("permission denied"), "{description}");
+        }
+        other => panic!("expected an error status, got {other:?}"),
+    }
+}

@@ -52,7 +52,7 @@ use agent_runtime_protocol::domain::schema::v0::{AcpMessage, ToRuntimeMessage, T
 use genai_telemetry::messages::{self, MediaSource};
 use genai_telemetry::{
     ContentPolicy, GenAiSpanExt as _, attr, bound_messages, bound_tool_definitions,
-    bounded_json_string,
+    bounded_json_string, truncate_chars,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -464,7 +464,10 @@ impl GenAiProjector {
                 finish_reason(stop_reason)
             }
             Outcome::Refused(message) => {
-                turn.span.set_error("prompt_refused", message);
+                turn.span.set_error(
+                    "prompt_refused",
+                    self.error_description(message, "the runtime refused the prompt"),
+                );
                 attr::finish_reason::ERROR
             }
             Outcome::Superseded => {
@@ -480,16 +483,24 @@ impl GenAiProjector {
             }
         };
 
-        // A call the turn ended on is over for the judge's purposes, whatever
-        // the harness would have said next: mark it rather than leak its span.
+        // A call this turn opened and the turn ended on is over for the
+        // judge's purposes, whatever the harness would have said next: mark
+        // it rather than leak its span. A call opened outside any turn (its
+        // `part` is `None`) belongs to no turn and stays open for its own
+        // finish.
         let abandoned = if finish_reason == attr::finish_reason::CANCELLED {
             "the turn was cancelled before the tool call finished"
         } else {
             "the turn ended before the tool call finished"
         };
-        for (_, tool) in self.tools.drain() {
-            tool.span.set_error("abandoned", abandoned);
-        }
+        self.tools.retain(|_, tool| {
+            if tool.part.is_some() {
+                tool.span.set_error("abandoned", abandoned);
+                false
+            } else {
+                true
+            }
+        });
 
         self.record_turn_facts(&mut turn);
         if !turn.agent_name_recorded {
@@ -710,12 +721,20 @@ impl GenAiProjector {
                 }
             }
         }
+        // The error text is the tool's own output and so content: recorded
+        // under the policy, bounded.
         match (tool.status, error) {
             (ToolStatus::Failed, error) => tool.span.set_error(
                 "tool_error",
-                error.unwrap_or_else(|| "the tool call failed".to_owned()),
+                error.map_or_else(
+                    || "the tool call failed".to_owned(),
+                    |error| self.error_description(&error, "the tool call failed"),
+                ),
             ),
-            (_, Some(error)) => tool.span.set_error("tool_error", error),
+            (_, Some(error)) => tool.span.set_error(
+                "tool_error",
+                self.error_description(&error, "the tool reported an error"),
+            ),
             (_, None) => {}
         }
 
@@ -733,6 +752,16 @@ impl GenAiProjector {
             }
         }
         // Dropping the last handle closes the span.
+    }
+
+    /// An error description fit for a span's status: the detail, bounded,
+    /// when content may be recorded; a fixed summary otherwise.
+    fn error_description(&self, detail: &str, summary: &'static str) -> String {
+        if self.policy.capture {
+            truncate_chars(detail, self.policy.limits.max_part_chars).into_owned()
+        } else {
+            summary.to_owned()
+        }
     }
 
     /// Recognize the harness from a tool frame when no `initialize` named it.
@@ -757,8 +786,10 @@ fn deserialize_params<T: serde::de::DeserializeOwned>(
     }
 }
 
-/// A prompt content block as a semconv message part. Inline bytes are never
-/// copied onto a span; a resource is named by its URI.
+/// A prompt content block as a semconv message part. Only the user's own text
+/// is copied onto a span; attached resources - inline bytes and embedded text
+/// alike - are named by their URI, since a document the user attached is not
+/// the prompt and can be arbitrarily large.
 fn prompt_part(block: &ContentBlock) -> Option<Value> {
     Some(match block {
         ContentBlock::Text(text) => messages::text_part(text.text.clone()),
@@ -773,13 +804,17 @@ fn prompt_part(block: &ContentBlock) -> Option<Value> {
         ContentBlock::Audio(audio) => {
             messages::media_part("audio", Some(&audio.mime_type), MediaSource::Inline)
         }
-        ContentBlock::ResourceLink(link) => {
-            messages::text_part(format!("[resource {}] {}", link.name, link.uri))
-        }
+        ContentBlock::ResourceLink(link) => messages::media_part(
+            "document",
+            link.mime_type.as_deref(),
+            MediaSource::Uri(link.uri.clone()),
+        ),
         ContentBlock::Resource(embedded) => match &embedded.resource {
-            EmbeddedResourceResource::TextResourceContents(text) => {
-                messages::text_part(format!("[resource {}]\n{}", text.uri, text.text))
-            }
+            EmbeddedResourceResource::TextResourceContents(text) => messages::media_part(
+                "document",
+                text.mime_type.as_deref(),
+                MediaSource::Uri(text.uri.clone()),
+            ),
             EmbeddedResourceResource::BlobResourceContents(blob) => messages::media_part(
                 "document",
                 blob.mime_type.as_deref(),

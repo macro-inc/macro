@@ -96,3 +96,31 @@ fn a_lone_text_tool_result_is_a_plain_string_and_several_items_an_array() {
         json!(["ok", 1])
     );
 }
+
+#[test]
+fn finishing_a_run_releases_the_parked_chat_span() {
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
+    let _guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+    tracing::callsite::rebuild_interest_cache();
+
+    let telemetry = GenAiContext::new(None, "chat".to_owned(), ContentPolicy::enabled(), true);
+    // A model call whose turn never finished: its span sits parked.
+    *telemetry.0.chat_span.lock().unwrap() = Some(tracing::info_span!("chat"));
+    provider.force_flush().unwrap();
+    assert!(exporter.get_finished_spans().unwrap().is_empty());
+
+    telemetry.finish_run();
+    provider.force_flush().unwrap();
+    assert_eq!(exporter.get_finished_spans().unwrap().len(), 1);
+    assert!(telemetry.0.chat_span.lock().unwrap().is_none());
+    // Idempotent.
+    telemetry.finish_run();
+}

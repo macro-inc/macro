@@ -29,6 +29,7 @@ use rig_core::completion::{CompletionModel, GetTokenUsage};
 use rig_core::message::Message;
 use rig_core::providers::{anthropic, openai};
 use rig_core::streaming::StreamedAssistantContent;
+use tracing::Instrument as _;
 
 use super::PredefinedModel;
 use super::anthropic::AnthropicModel;
@@ -477,50 +478,73 @@ where
     // to the client as soon as it is produced — so a tool call renders in its
     // pending state immediately and its response renders when execution
     // finishes.
-    let driver = tokio::spawn(async move {
-        let mut thinking_buf = String::new();
+    // Whatever ends the driver - the stream running dry, a provider error, an
+    // abort when the consumer drops the stream - the model call's parked
+    // `chat` span is released with it (see `GenAiContext::finish_run`).
+    struct FinishRun(GenAiContext);
+    impl Drop for FinishRun {
+        fn drop(&mut self) {
+            self.0.finish_run();
+        }
+    }
+    let driver_telemetry = telemetry.clone();
+    let driver_span = agent_span.clone();
+    let driver = tokio::spawn(
+        async move {
+            let _finish_run = FinishRun(driver_telemetry);
+            let mut thinking_buf = String::new();
 
-        while let Some(item) = rig_stream.next().await {
-            match item {
-                Ok(MultiTurnStreamItem::StreamAssistantItem(
-                    StreamedAssistantContent::ReasoningDelta { reasoning, .. },
-                )) => {
-                    thinking_buf.push_str(&reasoning);
-                }
-                other => {
-                    if !thinking_buf.is_empty() {
-                        let _ = driver_tx
-                            .send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
+            while let Some(item) = rig_stream.next().await {
+                match item {
+                    Ok(MultiTurnStreamItem::StreamAssistantItem(
+                        StreamedAssistantContent::ReasoningDelta { reasoning, .. },
+                    )) => {
+                        thinking_buf.push_str(&reasoning);
                     }
-                    match other {
-                        Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
-                            let usage = final_resp.usage;
-                            telemetry.record_agent_output(&agent_span, &final_resp.output, &usage);
-                            // Best-effort cost logging; never fails the stream.
-                            recorder.record(usage_ctx.clone().into_event(
-                                model.clone(),
-                                usage.input_tokens,
-                                usage.output_tokens,
-                            ));
-                            let _ = driver_tx.send(Ok(StreamPart::Usage(crate::stream::Usage {
-                                input_tokens: usage.input_tokens,
-                                output_tokens: usage.output_tokens,
-                            })));
+                    other => {
+                        if !thinking_buf.is_empty() {
+                            let _ = driver_tx
+                                .send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
                         }
-                        Err(e) => {
-                            let _ = driver_tx.send(Err(AgentError::Streaming(e)));
+                        match other {
+                            Ok(MultiTurnStreamItem::FinalResponse(final_resp)) => {
+                                let usage = final_resp.usage;
+                                telemetry.record_agent_output(
+                                    &agent_span,
+                                    &final_resp.output,
+                                    &usage,
+                                );
+                                // Best-effort cost logging; never fails the stream.
+                                recorder.record(usage_ctx.clone().into_event(
+                                    model.clone(),
+                                    usage.input_tokens,
+                                    usage.output_tokens,
+                                ));
+                                let _ =
+                                    driver_tx.send(Ok(StreamPart::Usage(crate::stream::Usage {
+                                        input_tokens: usage.input_tokens,
+                                        output_tokens: usage.output_tokens,
+                                    })));
+                            }
+                            Err(e) => {
+                                let _ = driver_tx.send(Err(AgentError::Streaming(e)));
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
             }
+            if !thinking_buf.is_empty() {
+                let _ = driver_tx.send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
+            }
+            // Dropping `rig_stream` (and with it the hook's sender) plus `driver_tx`
+            // here closes the channel, ending the consumer stream below.
         }
-        if !thinking_buf.is_empty() {
-            let _ = driver_tx.send(Ok(StreamPart::Thinking(std::mem::take(&mut thinking_buf))));
-        }
-        // Dropping `rig_stream` (and with it the hook's sender) plus `driver_tx`
-        // here closes the channel, ending the consumer stream below.
-    });
+        // Entered into the agent span: the runtime opens its `chat` and
+        // `execute_tool` spans from inside this task, and they belong under
+        // the run, not at the root of a trace of their own.
+        .instrument(driver_span),
+    );
 
     // Abort the driver when the consumer drops the returned stream (e.g. on
     // cancellation), which drops `rig_stream` and cancels any in-flight tool —

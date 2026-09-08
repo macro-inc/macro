@@ -276,11 +276,10 @@ async fn user_tool_calls_are_traced_too() {
         string_attribute(span, attr::TOOL_CALL_ARGUMENTS).as_deref(),
         Some(r#"{"value":"c"}"#)
     );
-    assert!(
-        string_attribute(span, attr::TOOL_CALL_RESULT)
-            .is_some_and(|result| result.contains("UserAction")),
-        "{:?}",
-        string_attribute(span, attr::TOOL_CALL_RESULT)
+    // The tool's own output, not the `UserToolResponse` API wrapper.
+    assert_eq!(
+        string_attribute(span, attr::TOOL_CALL_RESULT).as_deref(),
+        Some(r#"{"echo":"c"}"#)
     );
 }
 
@@ -308,8 +307,13 @@ async fn content_capture_off_records_structure_only() {
     );
     assert_eq!(string_attribute(span, attr::TOOL_CALL_ARGUMENTS), None);
     assert_eq!(string_attribute(span, attr::TOOL_CALL_RESULT), None);
-    // The failure itself is not content.
-    assert!(matches!(span.status, Status::Error { .. }));
+    // The failure itself is not content, but its description is.
+    match &span.status {
+        Status::Error { description } => {
+            assert!(!description.contains("private failure"), "{description}");
+        }
+        other => panic!("expected an error status, got {other:?}"),
+    }
 }
 
 #[tokio::test]
