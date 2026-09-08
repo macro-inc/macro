@@ -5,15 +5,20 @@ import {
   hasPdfAttachmentFilter,
 } from '@app/features/next-soup/filters/predicates';
 import { clause, type Facet, type FacetOption } from '@app/features/soup';
+import type { EntityIconSelector } from '@core/component/EntityIcon';
 import type { EmailEntity, EntityData } from '@entity';
-import type { EmailFilterGroupId } from '../types';
+import type { EmailFilterGroupId, EmailFilterOptionId } from '../types';
 
-type EmailFacetOption = FacetOption<EmailEntity, undefined> & {
+type EmailFilterOption = {
+  id: EmailFilterOptionId;
   label: string;
+  iconType?: EntityIconSelector;
 };
 
+type EmailFacetOption = FacetOption<EmailEntity, undefined> & EmailFilterOption;
+
 function readOption(
-  id: string,
+  id: EmailFilterOptionId,
   label: string,
   seen: boolean
 ): EmailFacetOption {
@@ -26,7 +31,7 @@ function readOption(
 }
 
 function doneOption(
-  id: string,
+  id: EmailFilterOptionId,
   label: string,
   done: boolean
 ): EmailFacetOption {
@@ -41,11 +46,12 @@ function doneOption(
 // Attachments have no server filter: the page is refined client-side from
 // each thread's attachment mime types, as the legacy mail view did.
 function attachmentOption(
-  id: string,
+  id: EmailFilterOptionId,
   label: string,
+  iconType: EntityIconSelector,
   predicate: (entity: EntityData) => boolean
 ): EmailFacetOption {
-  return { id, label, predicate };
+  return { id, label, iconType, predicate };
 }
 
 const EMAIL_READ_OPTIONS: EmailFacetOption[] = [
@@ -59,11 +65,17 @@ const EMAIL_DONE_OPTIONS: EmailFacetOption[] = [
 ];
 
 const EMAIL_ATTACHMENT_OPTIONS: EmailFacetOption[] = [
-  attachmentOption('attachment-pdf', 'PDFs', hasPdfAttachmentFilter),
-  attachmentOption('attachment-image', 'Images', hasImageAttachmentFilter),
+  attachmentOption('attachment-pdf', 'PDFs', 'pdf', hasPdfAttachmentFilter),
+  attachmentOption(
+    'attachment-image',
+    'Images',
+    'image',
+    hasImageAttachmentFilter
+  ),
   attachmentOption(
     'attachment-document',
     'Documents',
+    'files',
     hasDocumentAttachmentFilter
   ),
 ];
@@ -72,6 +84,7 @@ const EMAIL_CALENDAR_OPTIONS: EmailFacetOption[] = [
   {
     id: 'has-calendar-invite',
     label: 'Has calendar invite',
+    iconType: 'calendar',
     clause: { ef: clause.eq('emailCalendarOnly', true) },
     predicate: hasCalendarInviteFilter,
   },
@@ -89,12 +102,12 @@ type EmailFilterGroup = {
   label: string;
   selectionMode?: 'single' | 'multiple';
   /** The option that stands for "no selection" in a single-select group. */
-  defaultOptionId?: string;
-  options: { id: string; label: string }[];
+  defaultOptionId?: EmailFilterOptionId;
+  options: EmailFilterOption[];
 };
 
 const toGroupOptions = (options: EmailFacetOption[]) =>
-  options.map(({ id, label }) => ({ id, label }));
+  options.map(({ id, label, iconType }) => ({ id, label, iconType }));
 
 /** Filter menu layout: the legacy mail filters, split into single-select status groups. */
 export const EMAIL_FILTER_GROUPS: EmailFilterGroup[] = [

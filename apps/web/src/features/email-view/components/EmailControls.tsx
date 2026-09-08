@@ -5,26 +5,23 @@ import {
 import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { createMemo, type JSX, Show } from 'solid-js';
+import { createMemo, Show } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 import { EMAIL_FILTER_GROUPS } from '../filters/email-facets';
-import type { EmailFilterGroupId } from '../types';
+import type { EmailFilterGroupId, EmailFilterOptionId } from '../types';
 
-const FILTER_ICONS = new Map<string, () => JSX.Element>([
-  ['attachment-pdf', () => <EntityIcon targetType="pdf" size="xs" />],
-  ['attachment-image', () => <EntityIcon targetType="image" size="xs" />],
-  ['attachment-document', () => <EntityIcon targetType="files" size="xs" />],
-  ['has-calendar-invite', () => <EntityIcon targetType="calendar" size="xs" />],
-]);
-
-const FILTER_GROUPS: ListFilterGroup<EmailFilterGroupId, string>[] =
-  EMAIL_FILTER_GROUPS.map((group) => ({
-    ...group,
-    options: group.options.map((option) => ({
-      ...option,
-      icon: FILTER_ICONS.get(option.id),
-    })),
-  }));
+const FILTER_GROUPS: ListFilterGroup<
+  EmailFilterGroupId,
+  EmailFilterOptionId
+>[] = EMAIL_FILTER_GROUPS.map((group) => ({
+  ...group,
+  options: group.options.map((option) => ({
+    ...option,
+    icon: option.iconType
+      ? () => <EntityIcon targetType={option.iconType} size="xs" />
+      : undefined,
+  })),
+}));
 
 const groupFor = (groupId: EmailFilterGroupId) =>
   FILTER_GROUPS.find((group) => group.id === groupId);
@@ -46,7 +43,10 @@ export function EmailControls(props: EmailControlsProps) {
   );
 
   // Single-select groups carry an "All" option that stands for no selection.
-  const isSelected = (groupId: EmailFilterGroupId, optionId: string) => {
+  const isSelected = (
+    groupId: EmailFilterGroupId,
+    optionId: EmailFilterOptionId
+  ) => {
     const selected = state.facets[groupId] ?? [];
     const group = groupFor(groupId);
     if (
@@ -61,7 +61,7 @@ export function EmailControls(props: EmailControlsProps) {
 
   const setSelected = (
     groupId: EmailFilterGroupId,
-    optionId: string,
+    optionId: EmailFilterOptionId,
     selected: boolean
   ) => {
     const group = groupFor(groupId);
@@ -75,7 +75,10 @@ export function EmailControls(props: EmailControlsProps) {
       return;
     }
 
-    const update = selected ? addUnique(optionId) : removeValue(optionId);
+    // Persisted facets preserve unknown IDs; menu actions only accept known IDs.
+    const update = selected
+      ? addUnique<string>(optionId)
+      : removeValue<string>(optionId);
     setFacets({
       ...state.facets,
       [groupId]: update(state.facets[groupId]),

@@ -15,8 +15,8 @@ export type SearchBarProps = Omit<
   onValueChange: (value: string) => void;
   hotkey?: string;
   /**
-   * Called after Escape clears the field. The view owns restoring keyboard
-   * focus to its list; without a callback, focus stays in the input.
+   * Called after Escape blurs the field without clearing its value. The view
+   * can restore keyboard focus to its list.
    */
   onEscape?: () => void;
   class?: string;
@@ -50,7 +50,7 @@ export function SearchBar(props: SearchBarProps) {
     if (event.key !== 'Escape' || event.defaultPrevented) return;
 
     event.preventDefault();
-    if (local.value && !local.readOnly) local.onValueChange('');
+    input?.blur();
     local.onEscape?.();
   };
 

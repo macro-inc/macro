@@ -137,7 +137,7 @@ export type ListFilterGroup<
 export type ListFilterDropdownProps<
   TGroupId extends string,
   TOptionId extends string,
-> = ControlledOpenProps & {
+> = {
   groups: ListFilterGroup<TGroupId, TOptionId>[];
   isSelected: (groupId: TGroupId, optionId: TOptionId) => boolean;
   onSelectionChange: (

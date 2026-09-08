@@ -16,6 +16,17 @@ export type EmailTab =
 
 export type EmailFilterGroupId = 'read' | 'done' | 'attachments' | 'calendar';
 
+export type EmailFilterOptionId =
+  | 'all'
+  | 'unread'
+  | 'read'
+  | 'not-done'
+  | 'done'
+  | 'attachment-pdf'
+  | 'attachment-image'
+  | 'attachment-document'
+  | 'has-calendar-invite';
+
 export type EmailViewState = {
   tab: EmailTab;
   search: string;

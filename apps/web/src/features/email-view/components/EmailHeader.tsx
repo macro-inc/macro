@@ -12,7 +12,7 @@ import { EmailInboxSelector } from './EmailInboxSelector';
 import { EmailNavigation } from './EmailSidebar';
 
 export type EmailHeaderProps = {
-  /** Restores list focus when Escape clears the search field. */
+  /** Restores list focus when Escape leaves the search field. */
   onSearchEscape?: () => void;
 };
 
