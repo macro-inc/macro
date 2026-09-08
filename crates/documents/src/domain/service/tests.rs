@@ -1686,6 +1686,7 @@ async fn edit_document_sets_revocation_intent_from_link_share_target() {
                     share_permission: Some(UpdateSharePermissionRequestV2 {
                         link_share,
                         link_share_access_level: None,
+                        team_share_access_level: None,
                         channel_share_permissions: None,
                     }),
                     file_type: None,

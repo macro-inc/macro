@@ -22,6 +22,7 @@ fn update_request(
     UpdateSharePermissionRequestV2 {
         link_share,
         link_share_access_level,
+        team_share_access_level: None,
         channel_share_permissions: None,
     }
 }
@@ -71,6 +72,7 @@ async fn edit_share_permission_preserves_update_field_semantics(
             id: String::new(),
             link_share: Some(LinkShare::Public),
             link_share_access_level: Some(AccessLevel::Edit),
+            team_share_access_level: None,
             owner: String::new(),
             channel_share_permissions: None,
         },

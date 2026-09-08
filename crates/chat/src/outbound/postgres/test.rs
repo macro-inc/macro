@@ -976,6 +976,7 @@ async fn patch_chat_sets_team_share_and_defaults_explicit_null_level_to_view(poo
         UpdateSharePermissionRequestV2 {
             link_share: Some(Some(LinkShare::Team)),
             link_share_access_level: Some(None),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )
@@ -1000,6 +1001,7 @@ async fn patch_chat_defaults_explicit_null_level_for_existing_link_share(pool: P
         UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )
@@ -1010,6 +1012,7 @@ async fn patch_chat_defaults_explicit_null_level_for_existing_link_share(pool: P
         UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(None),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )
@@ -1034,6 +1037,7 @@ async fn patch_chat_disables_link_sharing_and_clears_both_levels(pool: Pool<Post
         UpdateSharePermissionRequestV2 {
             link_share: Some(None),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     )
@@ -1077,4 +1081,35 @@ async fn get_permissions_reads_link_share_columns(pool: Pool<Postgres>) {
     assert_eq!(permission.owner, "macro|test@example.com");
     assert_eq!(permission.link_share, Some(LinkShare::Team));
     assert_eq!(permission.link_share_access_level, Some(AccessLevel::Edit));
+    assert_eq!(permission.team_share_access_level, None);
+
+    let team_id = uuid::Uuid::now_v7();
+    for level in [
+        Some(AccessLevel::View),
+        Some(AccessLevel::Comment),
+        Some(AccessLevel::Edit),
+        None,
+    ] {
+        sqlx::query!(
+            r#"
+            UPDATE "SharePermission"
+            SET team_share_access_level = $2,
+                team_share_team_id = $3
+            WHERE id = $1
+            "#,
+            permission.id,
+            level as _,
+            level.map(|_| team_id),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+        let fresh_permission = repo.get_permissions(&chat_id).await.unwrap();
+        assert_eq!(fresh_permission.team_share_access_level, level);
+        assert_eq!(fresh_permission.link_share, permission.link_share);
+        assert_eq!(
+            fresh_permission.link_share_access_level,
+            permission.link_share_access_level
+        );
+    }
 }

@@ -175,12 +175,45 @@ async fn preview_preserves_found_and_missing_input_entries(
 async fn reads_share_permissions_and_bumps_modified_timestamp(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    let repo = PgProjectRepo::new(pool);
+    let repo = PgProjectRepo::new(pool.clone());
     let permission = repo.get_project_share_permission(ROOT_ID).await?;
     assert_eq!(permission.id, "share-root");
     assert_eq!(permission.owner, "macro|owner@test.com");
     assert_eq!(permission.link_share, Some(LinkShare::Public));
     assert_eq!(permission.link_share_access_level, Some(AccessLevel::Edit));
+    assert_eq!(permission.team_share_access_level, None);
+    let team_id = uuid::Uuid::now_v7();
+    for level in [
+        Some(AccessLevel::View),
+        Some(AccessLevel::Comment),
+        Some(AccessLevel::Edit),
+        None,
+    ] {
+        sqlx::query!(
+            r#"
+            UPDATE "SharePermission"
+            SET team_share_access_level = $2,
+                team_share_team_id = $3
+            WHERE id = $1
+            "#,
+            permission.id,
+            level as _,
+            level.map(|_| team_id),
+        )
+        .execute(&pool)
+        .await?;
+        let fresh_permission = repo.get_project_share_permission(ROOT_ID).await?;
+        assert_eq!(fresh_permission.team_share_access_level, level);
+        assert_eq!(fresh_permission.link_share, permission.link_share);
+        assert_eq!(
+            fresh_permission.link_share_access_level,
+            permission.link_share_access_level
+        );
+        assert_eq!(
+            fresh_permission.channel_share_permissions,
+            permission.channel_share_permissions
+        );
+    }
     assert_eq!(
         permission.channel_share_permissions.expect("channel").len(),
         1
@@ -330,6 +363,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             share_permission: Some(UpdateSharePermissionRequestV2 {
                 link_share: Some(Some(LinkShare::Team)),
                 link_share_access_level: Some(None),
+                team_share_access_level: None,
                 channel_share_permissions: None,
             }),
         })
@@ -351,6 +385,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: Some(Some(AccessLevel::Comment)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
     })
@@ -371,6 +406,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(Some(LinkShare::Public)),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
     })
@@ -392,6 +428,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: None,
             link_share_access_level: None,
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
     })
@@ -409,6 +446,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
         share_permission: Some(UpdateSharePermissionRequestV2 {
             link_share: Some(None),
             link_share_access_level: Some(Some(AccessLevel::Edit)),
+            team_share_access_level: None,
             channel_share_permissions: None,
         }),
     })
