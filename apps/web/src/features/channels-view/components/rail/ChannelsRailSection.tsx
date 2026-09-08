@@ -3,8 +3,8 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { cn, Scroll, Tooltip } from '@ui';
-import { createSignal, type JSX, Show } from 'solid-js';
-import { useOffscreenActivityIndicator } from './useOffscreenActivityIndicator';
+import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import { useOffscreenActivity } from './hooks/useOffscreenActivity';
 
 function SectionScrollArea(props: {
   contentRef: (element: HTMLDivElement) => void;
@@ -17,7 +17,8 @@ function SectionScrollArea(props: {
   children: JSX.Element;
 }) {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  const activity = useOffscreenActivityIndicator({
+
+  const activity = useOffscreenActivity({
     scrollRoot,
     targetId: () => props.activityTargetId,
     onTargetVisible: (targetId) => props.onActivityVisible?.(targetId),
@@ -59,12 +60,14 @@ function SectionScrollArea(props: {
               }; scroll to it`}
               onClick={activity.scrollToTarget}
             >
-              <Show
-                when={direction() === 'start'}
-                fallback={<CaretDownIcon class="size-3 shrink-0" />}
-              >
-                <CaretUpIcon class="size-3 shrink-0" />
-              </Show>
+              <Switch>
+                <Match when={direction() === 'start'}>
+                  <CaretUpIcon class="size-3 shrink-0" />
+                </Match>
+                <Match when={true}>
+                  <CaretDownIcon class="size-3 shrink-0" />
+                </Match>
+              </Switch>
               <Show when={props.activityLabel}>
                 {(label) => <span class="truncate">{label()}</span>}
               </Show>

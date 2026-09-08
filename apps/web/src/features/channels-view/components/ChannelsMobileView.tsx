@@ -23,11 +23,11 @@ import { useChannelsView } from '../channels-view-context';
 import { filterChannelsForScope } from '../queries';
 import type { ChannelsQueryScope } from '../types';
 import { ChannelsEmptyState } from './ChannelsEmptyState';
-import { ConversationCard } from './rail/ChannelRailItems';
-import { useChannelCallState } from './rail/useChannelCallState';
-import { useChannelRailActivity } from './rail/useChannelRailActivity';
+import { ConversationCard } from './rail/ConversationCard';
+import { useChannelCalls } from './rail/hooks/useChannelCalls';
+import { useChannelRailActivity } from './rail/hooks/useChannelRailActivity';
 
-const MOBILE_CHANNEL_TABS: readonly PillTabItem<ChannelsQueryScope>[] = [
+const MOBILE_CHANNEL_TABS: PillTabItem<ChannelsQueryScope>[] = [
   { value: 'recents', label: 'Recents' },
   { value: 'channels', label: 'Channels' },
   { value: 'direct_messages', label: 'DMs' },
@@ -57,7 +57,7 @@ export function ChannelsMobileView(props: {
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
   const listId = createUniqueId();
-  const { callActivity, incomingCallIds, callStatuses } = useChannelCallState();
+  const { callActivity, incomingCallIds, callStatuses } = useChannelCalls();
   const channelActivity = useChannelRailActivity(
     () => props.channels,
     callActivity

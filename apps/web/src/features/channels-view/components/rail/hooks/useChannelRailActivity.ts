@@ -2,22 +2,22 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { compareDateDesc, type DateValue } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-  onCleanup,
-} from 'solid-js';
-import type { ChannelsGroup } from '../../types';
+import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
+import { createStore } from 'solid-js/store';
+import type { ChannelsGroup } from '../../../types';
+import { CHANNEL_GROUPS } from '../model';
 
 const channelGroup = (channel: ChannelEntity): ChannelsGroup =>
   channel.channelType === 'direct_message' ? 'direct_messages' : 'channels';
 
 type ChannelActivityTarget = {
   channelId: string;
-  label: 'New activity' | 'Active call' | 'Incoming call';
-  callId?: string;
+  source:
+    | { type: 'message' }
+    | {
+        type: 'call';
+        callId: string;
+      };
 };
 
 type ChannelCallActivity = {
@@ -27,15 +27,20 @@ type ChannelCallActivity = {
 };
 
 export function useChannelRailActivity(
-  channels: Accessor<readonly ChannelEntity[]>,
-  calls: Accessor<readonly ChannelCallActivity[]>
+  channels: Accessor<ChannelEntity[]>,
+  calls: Accessor<ChannelCallActivity[]>
 ) {
   const notificationSource = useGlobalNotificationSource();
-  const [activityTargets, setActivityTargets] = createSignal<
+  const [activityTargets, setActivityTargets] = createStore<
     Partial<Record<ChannelsGroup, ChannelActivityTarget>>
   >({});
+
   const channelsById = createMemo(
     () => new Map(channels().map((channel) => [channel.id, channel]))
+  );
+
+  const callStatuses = createMemo(
+    () => new Map(calls().map((call) => [call.callId, call.status]))
   );
 
   const notificationActivity = createMemo(() => {
@@ -75,18 +80,13 @@ export function useChannelRailActivity(
 
   const recordActivity = (
     channel: ChannelEntity,
-    label: ChannelActivityTarget['label'] = 'New activity',
-    callId?: string
+    source: ChannelActivityTarget['source'] = { type: 'message' }
   ) => {
     const group = channelGroup(channel);
-    setActivityTargets((current) => ({
-      ...current,
-      [group]: {
-        channelId: channel.id,
-        label,
-        ...(callId ? { callId } : {}),
-      },
-    }));
+    setActivityTargets(group, {
+      channelId: channel.id,
+      source,
+    });
   };
 
   onCleanup(
@@ -104,6 +104,7 @@ export function useChannelRailActivity(
   );
 
   let latestMessageTimes = new Map<string, DateValue | undefined>();
+
   createEffect(() => {
     const nextMessageTimes = new Map<string, DateValue | undefined>();
 
@@ -124,18 +125,15 @@ export function useChannelRailActivity(
   });
 
   let activeCallStatuses = new Map<string, ChannelCallActivity['status']>();
+
   createEffect(() => {
-    const nextActiveCallStatuses = new Map<
-      string,
-      ChannelCallActivity['status']
-    >();
+    const nextActiveCallStatuses = callStatuses();
     const recordedGroups = new Set<ChannelsGroup>();
 
     for (const call of calls()) {
       const channel = channelsById().get(call.channelId);
       if (!channel) continue;
 
-      nextActiveCallStatuses.set(call.callId, call.status);
       const previousStatus = activeCallStatuses.get(call.callId);
       if (
         previousStatus !== undefined &&
@@ -147,64 +145,59 @@ export function useChannelRailActivity(
       const group = channelGroup(channel);
       if (recordedGroups.has(group)) continue;
 
-      recordActivity(
-        channel,
-        call.status === 'incoming' ? 'Incoming call' : 'Active call',
-        call.callId
-      );
+      recordActivity(channel, { type: 'call', callId: call.callId });
       recordedGroups.add(group);
     }
 
-    setActivityTargets((current) => {
-      let next = current;
+    for (const group of CHANNEL_GROUPS) {
+      const target = activityTargets[group];
+      if (target?.source.type !== 'call') continue;
 
-      for (const group of ['channels', 'direct_messages'] as const) {
-        const target = current[group];
-        if (!target?.callId) continue;
+      const status = nextActiveCallStatuses.get(target.source.callId);
+      if (!status) setActivityTargets(group, undefined);
+    }
 
-        const status = nextActiveCallStatuses.get(target.callId);
-        if (!status) {
-          next = { ...next, [group]: undefined };
-        } else if (status === 'active' && target.label === 'Incoming call') {
-          next = {
-            ...next,
-            [group]: { ...target, label: 'Active call' },
-          };
-        }
-      }
-
-      return next;
-    });
     activeCallStatuses = nextActiveCallStatuses;
   });
 
   const target = (group: ChannelsGroup): ChannelActivityTarget | undefined => {
-    const recordedTarget = activityTargets()[group];
+    const recordedTarget = activityTargets[group];
     if (recordedTarget) return recordedTarget;
 
     const notificationChannelId =
       notificationActivity().latestChannelIds[group];
     return notificationChannelId
-      ? { channelId: notificationChannelId, label: 'New activity' }
+      ? {
+          channelId: notificationChannelId,
+          source: { type: 'message' },
+        }
       : undefined;
   };
 
   const targetChannelId = (group: ChannelsGroup) => target(group)?.channelId;
 
+  const targetLabel = (group: ChannelsGroup) => {
+    const source = target(group)?.source;
+    if (!source) return;
+    if (source.type === 'message') return 'New activity';
+
+    return callStatuses().get(source.callId) === 'incoming'
+      ? 'Incoming call'
+      : 'Active call';
+  };
+
   const clearTarget = (group: ChannelsGroup, channelId: string) => {
     if (targetChannelId(group) !== channelId) return;
 
-    setActivityTargets((current) =>
-      current[group]?.channelId === channelId
-        ? { ...current, [group]: undefined }
-        : current
-    );
+    if (activityTargets[group]?.channelId === channelId) {
+      setActivityTargets(group, undefined);
+    }
   };
 
   return {
     clearTarget,
     targetChannelId,
-    targetLabel: (group: ChannelsGroup) => target(group)?.label,
+    targetLabel,
     unreadChannelIds: () => notificationActivity().unreadChannelIds,
     unreadCount: (group: ChannelsGroup) =>
       notificationActivity().unreadCounts[group],

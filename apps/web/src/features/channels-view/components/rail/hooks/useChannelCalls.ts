@@ -1,11 +1,12 @@
 import { useVisibleIncomingCalls } from '@app/features/block-call/sidebar/incoming-calls';
 import { useActiveCallsQuery } from '@queries/call/call';
 import { createMemo } from 'solid-js';
-import type { ChannelCallStatus } from './ChannelRailItems';
+import type { ChannelCallStatus } from '../ChannelRailItem';
 
-export function useChannelCallState() {
+export function useChannelCalls() {
   const activeCallsQuery = useActiveCallsQuery();
   const incomingCalls = useVisibleIncomingCalls();
+
   const callActivity = createMemo(() => {
     const calls = new Map<
       string,
@@ -27,12 +28,14 @@ export function useChannelCallState() {
 
     return [...calls.values()];
   });
+
   const incomingCallIds = createMemo(
     () =>
       new Map(
         incomingCalls().map((call) => [call.channelId, call.callId] as const)
       )
   );
+
   const callStatuses = createMemo(() => {
     const statuses = new Map<string, ChannelCallStatus>();
 

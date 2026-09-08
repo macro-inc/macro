@@ -2,7 +2,7 @@ import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 
 type ActivityDirection = 'start' | 'end';
 
-export function useOffscreenActivityIndicator(options: {
+export function useOffscreenActivity(options: {
   scrollRoot: Accessor<HTMLDivElement | undefined>;
   targetId: Accessor<string | undefined>;
   onTargetVisible?: (targetId: string) => void;
