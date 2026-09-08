@@ -17,6 +17,7 @@ import type { ChannelsGroup } from '../../types';
 import { channelInitials, isDirectMessage } from '../../utils';
 import {
   ChannelCallIndicator,
+  ChannelMutedIndicator,
   ChannelRailItemContextMenu,
 } from './ChannelRailItems';
 import {
@@ -127,10 +128,22 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
         >
           <span class="relative">
             <SlimChannelAvatar channel={props.channel} />
-            <ChannelCallIndicator
-              status={item().callStatus}
-              class="absolute -bottom-0.5 -right-0.5 rounded-full bg-inset p-0.5"
-            />
+            <Show
+              when={item().callStatus}
+              fallback={
+                <ChannelMutedIndicator
+                  muted={item().muted}
+                  class="absolute -bottom-0.5 -right-0.5 rounded-full bg-inset p-0.5"
+                />
+              }
+            >
+              {(callStatus) => (
+                <ChannelCallIndicator
+                  status={callStatus()}
+                  class="absolute -bottom-0.5 -right-0.5 rounded-full bg-inset p-0.5"
+                />
+              )}
+            </Show>
             <Show when={item().unread}>
               <span
                 aria-label="Unread"

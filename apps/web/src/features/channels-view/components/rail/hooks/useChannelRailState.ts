@@ -1,3 +1,5 @@
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { isMutedItem } from '@entity/utils/notification';
 import { type Accessor, createMemo } from 'solid-js';
 import type { ChannelsGroup } from '../../../types';
 import {
@@ -9,6 +11,7 @@ import {
 
 export function useChannelRailItemState(channelId: Accessor<string>) {
   const rail = useChannelsRail();
+  const notificationSource = useGlobalNotificationSource();
 
   return createMemo(() => {
     const id = channelId();
@@ -18,6 +21,10 @@ export function useChannelRailItemState(channelId: Accessor<string>) {
       domId: domIdForRow(rail.railId, rowId),
       selected: rail.selectedChannelId() === id,
       focused: rail.list.focus.key() === rowId,
+      muted: isMutedItem(notificationSource.mutedEntities(), {
+        item_id: id,
+        item_type: 'channel',
+      }),
       unread: rail.channelActivity.unreadChannelIds().has(id),
       callStatus: rail.channelActivity.callStatuses().get(id),
       incomingCallId: rail.channelActivity.incomingCallIds().get(id),

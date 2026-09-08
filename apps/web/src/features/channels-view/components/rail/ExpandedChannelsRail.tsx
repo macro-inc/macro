@@ -15,6 +15,7 @@ import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import {
   ChannelAvatar,
   ChannelCallIndicator,
+  ChannelMutedIndicator,
   ChannelRailItemContextMenu,
   ConversationCard,
   IncomingCallActions,
@@ -96,6 +97,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         <span class="min-w-0 flex-1 truncate text-sm font-medium">
           {props.channel.name}
         </span>
+        <ChannelMutedIndicator muted={item().muted} />
         <ChannelCallIndicator
           status={item().incomingCallId ? undefined : item().callStatus}
         />
@@ -260,6 +262,7 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
           currentUserId()
         )}
         unread={item().unread}
+        muted={item().muted}
         callStatus={item().callStatus}
         incomingCallId={item().incomingCallId}
         selected={item().selected}

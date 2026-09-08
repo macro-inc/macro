@@ -26,6 +26,7 @@ import { type ChannelEntity, Entity } from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
+import BellSlashIcon from '@phosphor/bell-slash.svg';
 import XIcon from '@phosphor/x.svg';
 import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
 import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
@@ -41,6 +42,7 @@ export type ChannelRailItemProps = {
   id: string;
   channel: ChannelEntity;
   unread: boolean;
+  muted: boolean;
   callStatus?: ChannelCallStatus;
   incomingCallId?: string;
   selected: boolean;
@@ -126,6 +128,32 @@ export function ChannelCallIndicator(props: {
           </Switch>
         </span>
       )}
+    </Show>
+  );
+}
+
+export function ChannelMutedIndicator(props: {
+  muted: boolean;
+  class?: string;
+}) {
+  return (
+    <Show when={props.muted}>
+      <Tooltip
+        as="span"
+        label="Notifications are muted"
+        placement="right"
+        class={cn(
+          'size-4 shrink-0 justify-center text-ink-extra-muted',
+          props.class
+        )}
+      >
+        <span
+          aria-label="Notifications muted"
+          class="flex size-full items-center justify-center"
+        >
+          <BellSlashIcon class="size-full" />
+        </span>
+      </Tooltip>
     </Show>
   );
 }
@@ -290,6 +318,7 @@ export function ConversationCard(props: ConversationCardProps) {
             <span class="min-w-0 flex-1 truncate text-sm font-medium text-ink">
               {props.channel.name}
             </span>
+            <ChannelMutedIndicator muted={props.muted} />
             <ChannelCallIndicator
               status={props.incomingCallId ? undefined : props.callStatus}
             />
