@@ -9,12 +9,14 @@ mod test;
 use futures::future;
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
 use livekit_api::services::agent_dispatch::AgentDispatchClient;
-use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions, encoding};
+use livekit_api::services::egress::{
+    AudioMixing, EgressClient, EgressOutput, RoomCompositeOptions, encoding,
+};
 use livekit_api::services::room::{CreateRoomOptions, RoomClient};
 use livekit_api::webhooks::WebhookReceiver;
 use livekit_protocol::{
     AudioCodec, CreateAgentDispatchRequest, EncodedFileOutput, EncodedFileType, S3Upload,
-    VideoCodec, encoded_file_output,
+    encoded_file_output,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -26,6 +28,9 @@ use crate::domain::models::{
 use crate::domain::ports::CallRtcClient;
 
 const VOIP_TOKEN_MINT_CONCURRENCY: usize = 16;
+
+/// Empty layout is not default grid. The stock template only promotes layouts that start with `grid`.
+const STOCK_TEMPLATE_LAYOUT: &str = "grid";
 
 /// LiveKit implementation of [`CallRtcClient`].
 pub struct LivekitRtcClient {
@@ -105,12 +110,15 @@ fn build_room_composite_egress_request(
     });
 
     let options = RoomCompositeOptions {
+        layout: STOCK_TEMPLATE_LAYOUT.to_owned(),
+        custom_base_url: String::new(),
+        audio_only: false,
+        video_only: false,
+        audio_mixing: AudioMixing::DefaultMixing,
         encoding: encoding::EncodingOptions {
             audio_codec: AudioCodec::Aac,
-            video_codec: VideoCodec::H264Main,
-            ..Default::default()
+            ..encoding::H264_1080P_30
         },
-        ..Default::default()
     };
 
     RoomCompositeEgressRequest {
