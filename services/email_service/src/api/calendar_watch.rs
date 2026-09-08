@@ -10,6 +10,7 @@ use axum::Router;
 use axum::extract::State;
 use axum::http::{HeaderMap, StatusCode};
 use axum::routing::post;
+use subtle::ConstantTimeEq;
 
 use crate::api::context::ApiContext;
 use email_service::pubsub::context::calendar_watch_config;
@@ -28,12 +29,18 @@ async fn handler(State(ctx): State<ApiContext>, headers: HeaderMap) -> StatusCod
     let Some(config) = calendar_watch_config() else {
         return StatusCode::NOT_FOUND;
     };
-    if header(&headers, "x-goog-channel-token") != Some(config.token.as_str()) {
+
+    let valid = header(&headers, "x-goog-channel-token")
+        .is_some_and(|token| bool::from(token.as_bytes().ct_eq(config.token.as_bytes())));
+
+    if !valid {
         return StatusCode::FORBIDDEN;
     }
+
     if header(&headers, "x-goog-resource-state") == Some("sync") {
         return StatusCode::OK;
     }
+
     let (Some(channel_id), Some(resource_id)) = (
         header(&headers, "x-goog-channel-id"),
         header(&headers, "x-goog-resource-id"),

@@ -1,0 +1,37 @@
+id: ts-feature-layers-use-context
+language: typescript
+# Twin of tsx-feature-layers-use-context — ast-grep rules are single-language,
+# and `tsx` only scans .tsx files.
+severity: warning
+message: Layered features reach the app only through context/. Add the capability to the feature's Context type and wire it in context/.
+note: |-
+  Rule FE-33 in docs/STYLE_GUIDE.md. Inside a layered feature, `queries/`,
+  `primitives/`, `components/`, and `views/` never import the app's singletons
+  or context hooks (GraphQL soup client, user context, display names,
+  entity display, openDocument, PostHog). Those arrive through the
+  feature's `Context` record so every layer runs against mocks in tests. Only
+  `context/` (the contract and its production wiring) at the
+  feature root touch them. Adopting features add their layer paths to
+  `files` in each ts-/tsx-feature-* rule.
+files:
+  - apps/web/src/features/activity/components/**
+  - apps/web/src/features/activity/queries/**
+  - apps/web/src/features/activity/primitives/**
+  - apps/web/src/features/activity/views/**
+rule:
+  kind: string
+  regex: ^['"](@service-storage/graphql-soup|@core/context/user|@core/user|@property/hooks|@property/editor/hooks|@core/component/LexicalMarkdown/component/core/BlockLink|@app/lib/analytics/posthog)
+  any:
+    - inside:
+        kind: import_statement
+        field: source
+    - inside:
+        kind: export_statement
+        field: source
+    - inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: import

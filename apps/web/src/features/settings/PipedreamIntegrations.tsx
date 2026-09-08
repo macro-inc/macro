@@ -5,9 +5,14 @@ import {
   createPipedreamCatalogConnect,
   createPipedreamCatalogSearch,
 } from '@core/pipedream/catalog';
+import {
+  clearPendingConnectApp,
+  pendingConnectApp,
+} from '@core/pipedream/pendingConnect';
 import PlugIcon from '@phosphor-icons/core/regular/plug.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import {
+  connectPipedreamApp,
   useDeletePipedreamConnectionMutation,
   usePipedreamConnectionsQuery,
   useUpdatePipedreamConnectionMutation,
@@ -17,7 +22,14 @@ import type {
   PipedreamConnectionResponse,
 } from '@service-cognition/client';
 import { Button, ToggleSwitch } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  Show,
+} from 'solid-js';
 import { ConnectAction } from './integration-ui';
 import { IntegrationRow, SettingsCard, SettingsSection } from './primitives';
 
@@ -154,6 +166,25 @@ export function PipedreamIntegrationsSection() {
   const servers = () => serversQuery.data ?? [];
   const connectedSlugs = createMemo(
     () => new Set(servers().map((s) => s.app_slug))
+  );
+
+  // An agent reply's "Connect X" chip asks for one app to be connected and
+  // opens this page; start that app's Connect flow as soon as the request is
+  // seen, whether this section mounted for it or was already showing. An
+  // effect because this drives an imperative flow (the hosted iframe), not
+  // derived state.
+  createEffect(
+    on(pendingConnectApp, (requested) => {
+      if (!requested) return;
+      clearPendingConnectApp();
+      void connectPipedreamApp({ appSlug: requested })
+        .then((outcome) => {
+          if (outcome === 'unsupported') {
+            toast.failure('Connectors are not available on this deployment');
+          }
+        })
+        .catch(() => toast.failure(`Failed to connect ${requested}`));
+    })
   );
 
   const catalog = createPipedreamCatalogSearch(connectedSlugs);

@@ -1,3 +1,4 @@
+import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -49,12 +50,12 @@ import { EmptyStatePanel } from '@ui';
 import {
   type Component,
   createRenderEffect,
+  createSignal,
   type JSXElement,
   lazy,
-  Match,
+  onCleanup,
   onMount,
   Show,
-  Switch,
 } from 'solid-js';
 import type { SplitContent } from './layoutManager';
 import { useSplitPanelOrThrow } from './layoutUtils';
@@ -68,18 +69,29 @@ function usePageViewTracking(pageTitle: string) {
   });
 }
 
-function useNewAppViews() {
+const NEW_APP_VIEWS_FLAG_WAIT_MS = 5_000;
+
+function useNewAppViews(options?: {
+  enabledLayout?: () => 'legacy' | 'composable';
+}) {
   const panel = useSplitPanelOrThrow();
-  const posthog = usePosthog();
   const flag = useFeatureFlag(enableNewAppViews);
-  const ready = () =>
-    enableNewAppViews.override !== undefined || posthog.flagsLoaded();
+  const [timedOut, setTimedOut] = createSignal(false);
+  const timer = setTimeout(() => setTimedOut(true), NEW_APP_VIEWS_FLAG_WAIT_MS);
+  onCleanup(() => clearTimeout(timer));
+
+  // PostHog can be blocked or fail before invoking its flag callback. Bound
+  // the loading state so these views fall back to their legacy equivalents
+  // instead of displaying a loading block forever.
+  const ready = () => !flag().loading || timedOut();
   const enabled = () => ready() && flag().enabled;
 
   createRenderEffect(() => {
     if (!ready()) return;
     panel.handle.updateMeta?.({
-      splitPanelLayout: enabled() ? 'composable' : 'legacy',
+      splitPanelLayout: enabled()
+        ? (options?.enabledLayout?.() ?? 'composable')
+        : 'legacy',
     });
   });
 
@@ -293,14 +305,14 @@ function RecentViewWrapper() {
 }
 
 const MyActivityView = lazy(() =>
-  import('@app/features/activity/my-activity-view').then((module) => ({
+  import('@app/features/activity/views/my-activity-view').then((module) => ({
     default: module.MyActivityView,
   }))
 );
 
 function TrackedMyActivityView() {
   usePageViewTracking('activity');
-  return <MyActivityView />;
+  return <MyActivityView onOpen={openEntityInSplit} />;
 }
 
 function MyActivityViewWrapper() {
@@ -482,7 +494,9 @@ function LegacyChannelsView() {
 }
 
 function FeatureGatedChannelsView() {
-  const newAppViews = useNewAppViews();
+  const newAppViews = useNewAppViews({
+    enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+  });
 
   return (
     <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
@@ -496,16 +510,7 @@ function FeatureGatedChannelsView() {
 function RegisteredChannelsView() {
   usePageViewTracking('channels');
 
-  return (
-    <Switch>
-      <Match when={isTouchDevice()}>
-        <LegacyChannelsView />
-      </Match>
-      <Match when={!isTouchDevice()}>
-        <FeatureGatedChannelsView />
-      </Match>
-    </Switch>
-  );
+  return <FeatureGatedChannelsView />;
 }
 
 registerComponent('channels', withAuth(RegisteredChannelsView));
@@ -748,14 +753,6 @@ if (LOCAL_ONLY) {
     lazy(() => import('@core/internal/DataDebug'))
   );
   registerComponent(
-    'noise',
-    lazy(() => import('@core/internal/PcNoiseGridDemo'))
-  );
-  registerComponent(
-    'svg-noise',
-    lazy(() => import('@core/internal/SvgNoiseGridDemo'))
-  );
-  registerComponent(
     'chat',
     lazy(() => import('@core/component/AI/component/debug/Component'))
   );
@@ -855,11 +852,6 @@ if (DEV_MODE_ENV) {
     )
   );
 
-  // NOTE (seamus) : putting pixel icons on dev/staging for aidan
-  registerComponent(
-    'pixel-icon',
-    lazy(() => import('@core/internal/PixelArtIconDemo'))
-  );
   registerComponent(
     'md-parse',
     lazy(

@@ -8,7 +8,6 @@ const GRADIENT_COLOR = {
   panel: 'var(--color-panel)',
   page: 'var(--color-page)',
   inset: 'var(--color-inset)',
-  lift: 'var(--color-lift)',
   dialog: 'var(--color-dialog)',
   menu: 'var(--color-menu)',
 } as const;

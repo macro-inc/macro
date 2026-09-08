@@ -3,6 +3,7 @@
 use agent::types::ChatMessage;
 use agent::{AgentError, StreamPart};
 use macro_user_id::user_id::MacroUserIdStr;
+use mcp_toolset::RemoteMcpToolSet;
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
@@ -20,6 +21,9 @@ pub struct TurnRequest {
     /// The full conversation, oldest first, ending with the prompt being
     /// answered.
     pub messages: Vec<ChatMessage>,
+    /// Tools of the MCP servers the session was handed, composed next to the
+    /// native Macro tools. `None` when the session has none.
+    pub mcp_tools: Option<RemoteMcpToolSet>,
     /// Cancelling this token stops the turn; the stream ends after the
     /// engine has drained cooperatively.
     pub cancel: CancellationToken,

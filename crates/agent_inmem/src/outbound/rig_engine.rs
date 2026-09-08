@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use agent::{AgentError, AgentLoop, StreamPart};
-use ai_tools::{ToolServiceContext, ToolSetWithPrompt, all_tools};
+use ai_tools::{AiHost, ToolServiceContext, ToolSetWithPrompt, tools_for};
 use ai_toolset::ToolSet as AiToolSet;
 use futures::StreamExt as _;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -75,10 +75,11 @@ async fn drive_turn(
         model,
         instructions,
         messages,
+        mcp_tools,
         cancel,
     } = request;
 
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let user_memory = fetch_user_memory(&db, &base_context, &owner).await;
     let system_prompt = system_prompt(
         &tools.prompt,
@@ -86,7 +87,13 @@ async fn drive_turn(
         user_memory.as_deref(),
     );
 
-    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = tools.toolset;
+    // The MCP servers the session was handed sit next to the native tools
+    // the way they do in chat: static tools on every request, MCP tools in
+    // the searchable catalog behind `SearchTools`.
+    let toolset: Arc<dyn AiToolSet<_> + Send + Sync> = match mcp_tools {
+        Some(mcp) => Arc::new(mcp_select::CombinedToolSet::new(tools.toolset, mcp)),
+        None => tools.toolset,
+    };
     let agent_loop = AgentLoop::new(base_context.recorder.clone()).with_model(&model);
     let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::AgentSession, owner);
     // Carry the feature on the context so tool-spawned subagents attribute to it.
@@ -163,7 +170,7 @@ async fn fetch_user_memory(
     tool_context: &ToolServiceContext,
     owner: &MacroUserIdStr<'static>,
 ) -> Option<String> {
-    let tools = all_tools();
+    let tools = tools_for(AiHost::Chat);
     let tools = ToolSetWithPrompt {
         toolset: tools.toolset,
         prompt: tools.prompt,

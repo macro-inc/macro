@@ -43,6 +43,8 @@ pub enum SystemEvent {
     AcpReady,
     /// The session transport closed or failed and no more frames will arrive.
     Disconnected,
+    /// The hosted provider recovered history; the client must reload when idle.
+    ReloadRequired,
     /// An application-defined event name with no protocol-level meaning yet.
     Unknown(String),
 }
@@ -54,6 +56,7 @@ impl SystemEvent {
         match self {
             Self::AcpReady => "acp_ready",
             Self::Disconnected => "disconnected",
+            Self::ReloadRequired => "reload_required",
             Self::Unknown(name) => name,
         }
     }
@@ -76,6 +79,7 @@ impl<'de> Deserialize<'de> for SystemEvent {
         Ok(match String::deserialize(deserializer)?.as_str() {
             "acp_ready" => Self::AcpReady,
             "disconnected" => Self::Disconnected,
+            "reload_required" => Self::ReloadRequired,
             name => Self::Unknown(name.to_owned()),
         })
     }

@@ -411,6 +411,19 @@ pub enum GraphqlEntityMutationResult<E: SoupEntityEdges> {
 }
 
 impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
+    /// Construct a successful result that refreshes one entity's Soup record.
+    pub fn from_updated_entity(entity: Entity<'static>) -> Self {
+        Self::Success(GraphqlMutationSuccess {
+            effects: vec![EntityMutationEffect::updated(entity)],
+            edges: PhantomData,
+        })
+    }
+
+    /// Construct a failed result from a domain-classified error.
+    pub fn from_error_code(error: EntityMutationErrorCode) -> Self {
+        Self::Error(GraphqlMutationError(error))
+    }
+
     /// Convert a borrowed domain mutation outcome into its GraphQL union variant.
     fn new(x: Result<&EntityMutationSuccess, &EntityMutationErrorCode>) -> Self {
         match x {
@@ -419,17 +432,6 @@ impl<E: SoupEntityEdges> GraphqlEntityMutationResult<E> {
                 edges: PhantomData,
             }),
             Err(error) => Self::Error(GraphqlMutationError(*error)),
-        }
-    }
-
-    /// Convert an owned domain mutation outcome into its GraphQL union variant.
-    fn new_owned(x: MutateEntitiesResult) -> Self {
-        match x {
-            Ok(result) => Self::Success(GraphqlMutationSuccess {
-                effects: result.effects,
-                edges: PhantomData,
-            }),
-            Err(error) => Self::Error(GraphqlMutationError(error)),
         }
     }
 }
@@ -634,19 +636,5 @@ impl<S: EntityMutationService, E: SoupEntityEdges> EntityMutationRoot<S, E> {
                 )
                 .await,
         ))
-    }
-
-    /// Add or remove an entity from the actor's favorites.
-    async fn set_entity_favorite(
-        &self,
-        ctx: &Context<'_>,
-        entity: EntityRefInput,
-        favorite: bool,
-    ) -> async_graphql::Result<GraphqlEntityMutationResult<E>> {
-        let res = mutation_service::<S>(ctx)?
-            .set_favorite(mutation_actor(ctx)?, entity.into_model(), favorite)
-            .await;
-
-        Ok(GraphqlEntityMutationResult::new_owned(res))
     }
 }

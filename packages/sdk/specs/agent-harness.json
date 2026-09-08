@@ -375,7 +375,7 @@
       "get": {
         "tags": ["agent-sessions"],
         "summary": "The raw protocol log of one agent session.",
-        "description": "Served unfolded, and whole: the fold is a left fold over the frames from\nthe beginning, so a reader that skipped any of them would derive different\nturn numbering.\n\nAn unknown session is an error: the response has to name the session's\nagent, and a session that never existed has none to name.",
+        "description": "Served unfolded from the latest successful load initialization, or the\nbeginning when no load succeeded. Consumers stage load attempts so failed\nor interrupted replay does not become visible conversation content.\n\nAn unknown session is an error: the response has to name the session's\nagent, and a session that never existed has none to name.",
         "operationId": "get_agent_session_log",
         "parameters": [
           {
@@ -897,12 +897,17 @@
           },
           {
             "type": "object",
-            "required": ["createdAt"],
+            "required": ["id", "createdAt"],
             "properties": {
               "createdAt": {
                 "type": "string",
                 "format": "date-time",
                 "description": "When the log recorded the frame.\n\nThe frame itself carries no time, so this comes from the log row. It is\nwhat a reader has to order these against anything else it is showing\nbeside them - the fold derives an order among the messages of one\nsession and nothing more."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Durable transport row identity; together with `createdAt`, its order cursor."
               },
               "userId": {
                 "type": ["string", "null"],
@@ -927,7 +932,7 @@
             "items": {
               "$ref": "#/components/schemas/AgentSessionLogEntryDto"
             },
-            "description": "Every logged frame, oldest first. Folding depends on this order."
+            "description": "Effective history in ascending `(createdAt, id)` order.\nThe first row is the inclusive history boundary cursor: buffered rows\nbefore it are obsolete. Reconcile snapshot overlap by row ID, never content.\nAn empty history has no boundary or overlapping rows."
           }
         }
       },

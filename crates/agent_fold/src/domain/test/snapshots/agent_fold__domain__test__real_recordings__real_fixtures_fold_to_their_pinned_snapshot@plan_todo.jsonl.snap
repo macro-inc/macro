@@ -63,7 +63,9 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                     id: ToolUseId(
                         "toolu_01VWRTvryJTnQLFGHiTsBXYT",
                     ),
-                    label: "ToolSearch",
+                    name: Native {
+                        name: "ToolSearch",
+                    },
                     status: Completed,
                     detail: Other {
                         kind: "other",
@@ -77,42 +79,14 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                             },
                         ),
                     },
-                    raw_input: Some(
-                        Object {
-                            "query": String("todo list write tasks"),
-                            "max_results": Number(5),
-                        },
-                    ),
-                    raw_output: Some(
-                        Array [
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("TaskList"),
-                            },
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("CronList"),
-                            },
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("ListMcpResourcesTool"),
-                            },
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("mcp__macro__ListEntities"),
-                            },
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("mcp__macro__ListCompanies"),
-                            },
-                        ],
-                    ),
                 },
                 ToolUse {
                     id: ToolUseId(
                         "toolu_01DCbqRyKnRaqmDNHoFB7MNi",
                     ),
-                    label: "ToolSearch",
+                    name: Native {
+                        name: "ToolSearch",
+                    },
                     status: Completed,
                     detail: Other {
                         kind: "other",
@@ -126,24 +100,6 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                             },
                         ),
                     },
-                    raw_input: Some(
-                        Object {
-                            "query": String("select:TaskCreate,TaskUpdate"),
-                            "max_results": Number(3),
-                        },
-                    ),
-                    raw_output: Some(
-                        Array [
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("TaskCreate"),
-                            },
-                            Object {
-                                "type": String("tool_reference"),
-                                "tool_name": String("TaskUpdate"),
-                            },
-                        ],
-                    ),
                 },
                 Plan {
                     entries: [

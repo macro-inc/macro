@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE agent_configs\n            SET instructions = $2,\n                harness = $3,\n                harness_id = $4,\n                default_model = $5,\n                channel_scope = $6,\n                mcp_scope = $7,\n                updated_at = now()\n            WHERE bot_id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ef0fcf615784b75dbd205d642053f5b565c8d2ae1e86a2ee92f99cc32065c1e"
+}

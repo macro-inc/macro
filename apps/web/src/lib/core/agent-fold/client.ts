@@ -22,6 +22,7 @@ export type SessionFoldSnapshot = {
 
 /** What a machine that has folded nothing knows — every field still absent. */
 const EMPTY_METADATA: SessionMetadata = {
+  harness: 'unknown',
   model: null,
   supportedModels: [],
   title: null,

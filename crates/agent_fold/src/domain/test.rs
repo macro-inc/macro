@@ -2,9 +2,15 @@
 //! [`util`] for what they share.
 
 mod fold;
+mod harness;
+mod harness_readers;
 mod machine;
-mod meta;
+mod macro_tools;
 mod metadata;
 mod real_recordings;
 mod service;
+mod subagent;
+mod tool_name;
 mod util;
+
+mod replay;

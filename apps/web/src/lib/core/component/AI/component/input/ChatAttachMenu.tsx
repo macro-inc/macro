@@ -183,16 +183,30 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
     }
   };
 
-  const selectItem = (item: HistoryItem) => {
+  let isSelecting = false;
+  let selectionRequest = 0;
+  onCleanup(() => {
+    selectionRequest += 1;
+  });
+
+  const selectItem = async (item: HistoryItem) => {
     // TODO: add other supported attachment types, e.g. channel
     if (item.type !== 'document') {
       console.error('ChatAttachMenu only supports document items');
       return;
     }
 
-    const attachment = getDocumentAttachment(item.id, item.fileType);
-    if (attachment) props.onAttach(attachment, item);
-    props.close();
+    if (isSelecting) return;
+    isSelecting = true;
+    const request = ++selectionRequest;
+    try {
+      const attachment = await getDocumentAttachment(item.id, item.fileType);
+      if (request !== selectionRequest) return;
+      if (attachment) props.onAttach(attachment, item);
+      props.close();
+    } finally {
+      if (request === selectionRequest) isSelecting = false;
+    }
   };
 
   const [searchInputRef, setSearchInputRef] = createSignal<HTMLInputElement>();

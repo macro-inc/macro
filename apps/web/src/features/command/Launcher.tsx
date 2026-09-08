@@ -1,4 +1,5 @@
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
+import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { setAutomationComposerOpen } from '@block-automation/component';
@@ -422,6 +423,16 @@ export function runCreateAction(
     case 'agent': {
       const { openWithSplit } = useSplitLayout();
       setCreateMenuOpen(false, false);
+      // On mobile the agent input doesn't autofocus on mount, so arm focus
+      // within this gesture (iOS only raises the keyboard for a synchronous
+      // focus). The block mounts asynchronously, so this waits for the input.
+      if (isMobile()) {
+        triggerFocusInput(() =>
+          document
+            .getElementById(AGENT_INPUT_TEXT_AREA_ID)
+            ?.querySelector<HTMLElement>('[contenteditable="true"]')
+        );
+      }
       openWithSplit(
         { type: 'agent', id: startPendingSession() },
         { referredFrom: 'launcher', preferNewSplit: shouldInsert }
@@ -451,7 +462,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     // The pre-agent-session chat, kept on `a` for anyone the new agent flag
-    // has not reached. Mutually exclusive with the Coding Agent entry below:
+    // has not reached. Mutually exclusive with the Agent entry below:
     // both bind `a`, and exactly one is ever enabled.
     label: 'Agent',
     icon: WideStar,
@@ -488,10 +499,10 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Coding Agent',
+    label: 'Agent',
     icon: Robot,
     description: 'Create agent session',
-    launcherHint: 'Sandboxed coding session',
+    launcherHint: 'Dedicated Agent Session',
     keywords: ['new', 'make', 'add', 'agent', 'code', 'coder', 'session'],
     blockName: 'agent',
     hotkeyToken: TOKENS.create.agent,

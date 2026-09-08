@@ -21,6 +21,7 @@ import {
   E_PR_MENTION,
   E_TAG_MENTION,
   E_USER_MENTION,
+  I_CONNECT_APP,
   I_CONTACT_MENTION,
   I_DATE_MENTION,
   I_DOCUMENT_CARD,
@@ -85,6 +86,7 @@ export const INTERNAL_TRANSFORMERS: Transformer[] = [
   I_EQUATION_NODE,
   I_THEME_MENTION,
   I_TAG_MENTION,
+  I_CONNECT_APP,
   I_WATERMARK,
   ...CUSTOM_TRANSFORMERS,
   UNKNOWN_MENTION, // Must be last to act as fallback for unrecognized XML tags
@@ -114,6 +116,7 @@ export const EXTERNAL_TRANSFORMERS: Transformer[] = [
   E_DATE_MENTION,
   E_REPLY_TARGET_NODE,
   E_TAG_MENTION,
+  I_CONNECT_APP, // agent replies render in the magic chip through this list
   // order matters
   E_MULTILINE_BLOCK_EQUATION_NODE,
   E_BLOCK_EQUATION_NODE,
@@ -168,6 +171,7 @@ export const ALL_TRANSFORMERS: Transformer[] = [
   I_EQUATION_NODE,
   I_THEME_MENTION,
   I_TAG_MENTION,
+  I_CONNECT_APP,
   I_WATERMARK,
   E_WATERMARK,
   E_TAG_MENTION,

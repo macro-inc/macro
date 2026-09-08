@@ -149,6 +149,67 @@ fn a_command_while_booting_queues_silently() {
 }
 
 #[test]
+fn recovery_waits_for_prompt_then_loads_with_a_new_durable_boundary() {
+    for active in [false, true] {
+        let mut machine = machine();
+        begin_opening(&mut machine);
+        machine.handle(session_opened("cursor-session"));
+        machine.initialization_persisted(macro_uuid::generate_uuid_v7());
+        let prompt = if active {
+            Some(sent_request_ids(&machine.handle(command("current", 1)))[0].clone())
+        } else {
+            None
+        };
+        let mut effects = machine.handle(Input::Inbound(ToServerMessage::Event {
+            event: SystemEvent::ReloadRequired,
+        }));
+        if let Some(prompt) = prompt {
+            assert!(sent_methods(&effects).is_empty());
+            assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
+            effects = machine.handle(frame(RawJsonRpcMessage::response(
+                prompt,
+                Ok(serde_json::json!({"stopReason":"end_turn"})),
+            )));
+            assert!(
+                effects
+                    .iter()
+                    .any(|effect| matches!(effect, Effect::TurnEnded { .. }))
+            );
+        }
+        assert_eq!(sent_methods(&effects), ["initialize"]);
+        let initialize = sent_request_ids(&effects)[0].clone();
+        assert!(machine.handle(command("queued", 2)).is_empty());
+        let boundary = macro_uuid::generate_uuid_v7();
+        machine.initialization_persisted(boundary);
+        let response = InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(
+            AgentCapabilities::new()
+                .load_session(true)
+                .session_capabilities(
+                    SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                ),
+        );
+        let opening = machine.handle(frame(RawJsonRpcMessage::response(
+            initialize,
+            Ok(serde_json::to_value(response).unwrap()),
+        )));
+        assert_eq!(
+            sent_methods(&opening),
+            ["session/load"],
+            "recovery must not prefer generic resume"
+        );
+        let load = sent_request_ids(&opening)[0].clone();
+        let committed = machine.handle(frame(RawJsonRpcMessage::response(
+            load,
+            Ok(serde_json::json!({})),
+        )));
+        assert!(
+            matches!(&committed[0], Effect::Log { boundary: Some(selected), .. } if selected.initialization_log_id == boundary)
+        );
+        assert_eq!(sent_methods(&committed), ["session/prompt"]);
+    }
+}
+
+#[test]
 fn acp_ready_logs_then_sends_initialize() {
     let mut machine = machine();
 
@@ -158,6 +219,36 @@ fn acp_ready_logs_then_sends_initialize() {
     assert_eq!(sent_request_ids(&effects), [request_id(0)]);
     assert_eq!(effects.len(), 2);
     assert_eq!(machine.status(), RuntimeStatus::Handshaking);
+}
+
+#[test]
+fn recovery_while_a_load_reply_is_queued_loads_again_before_dispatch() {
+    let mut machine = machine();
+    begin_opening(&mut machine);
+    machine.handle(session_opened("cursor-session"));
+    let requirement = || {
+        Input::Inbound(ToServerMessage::Event {
+            event: SystemEvent::ReloadRequired,
+        })
+    };
+    let initialize = sent_request_ids(&machine.handle(requirement()))[0].clone();
+    machine.initialization_persisted(macro_uuid::generate_uuid_v7());
+    let opening = machine.handle(frame(RawJsonRpcMessage::response(
+        initialize,
+        Ok(serde_json::to_value(
+            InitializeResponse::new(PROTOCOL_VERSION)
+                .agent_capabilities(AgentCapabilities::new().load_session(true)),
+        )
+        .unwrap()),
+    )));
+    assert!(machine.handle(requirement()).is_empty());
+    assert!(machine.handle(command("queued", 1)).is_empty());
+    let again = machine.handle(frame(RawJsonRpcMessage::response(
+        sent_request_ids(&opening)[0].clone(),
+        Ok(serde_json::json!({})),
+    )));
+    assert_eq!(sent_methods(&again), ["initialize"]);
+    assert_eq!(machine.pending_count(), 1);
 }
 
 #[test]
@@ -928,5 +1019,176 @@ fn the_handshake_result_is_announced_for_the_connection() {
             resume: false,
             load: true
         })
+    );
+}
+
+#[test]
+fn only_matching_successful_load_selects_its_connection_initialization() {
+    for resume in [false, true] {
+        let mut machine: SessionMachine<u32> = SessionMachine::resume(
+            AgentSessionId::TEST_A,
+            "acp-42".into(),
+            "/workspace".into(),
+            vec![],
+        );
+        machine.handle(acp_ready());
+        let initialization_log_id = macro_uuid::generate_uuid_v7();
+        machine.initialization_persisted(initialization_log_id);
+        let capabilities = if resume {
+            AgentCapabilities::new()
+                .load_session(true)
+                .session_capabilities(
+                    SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                )
+        } else {
+            AgentCapabilities::new().load_session(true)
+        };
+        machine.handle(initialized_with(
+            InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(capabilities),
+        ));
+        let unrelated = machine.handle(frame(RawJsonRpcMessage::response(
+            RequestId::Str("another-session:1".into()),
+            Ok(serde_json::json!({})),
+        )));
+        assert!(matches!(unrelated[0], Effect::Log { boundary: None, .. }));
+        let completed = machine.handle(frame(RawJsonRpcMessage::response(
+            request_id(1),
+            Ok(serde_json::json!({})),
+        )));
+        match &completed[0] {
+            Effect::Log { boundary, .. } => assert_eq!(
+                *boundary,
+                (!resume).then_some(crate::domain::model::HistoryBoundary {
+                    initialization_log_id
+                })
+            ),
+            _ => panic!("response must be logged first"),
+        }
+        // Reused response IDs once live cannot select a boundary again.
+        let duplicate = machine.handle(frame(RawJsonRpcMessage::response(
+            request_id(1),
+            Ok(serde_json::json!({})),
+        )));
+        assert!(matches!(duplicate[0], Effect::Log { boundary: None, .. }));
+    }
+}
+
+#[test]
+fn failed_or_interrupted_load_never_selects_history() {
+    for response in [
+        Err(agent_client_protocol::Error::internal_error()),
+        Ok(serde_json::json!(false)),
+    ] {
+        let mut machine: SessionMachine<u32> = SessionMachine::resume(
+            AgentSessionId::TEST_A,
+            "acp-42".into(),
+            "/workspace".into(),
+            vec![],
+        );
+        machine.handle(acp_ready());
+        machine.initialization_persisted(macro_uuid::generate_uuid_v7());
+        machine.handle(initialized_with(
+            InitializeResponse::new(PROTOCOL_VERSION)
+                .agent_capabilities(AgentCapabilities::new().load_session(true)),
+        ));
+        let effects = machine.handle(frame(RawJsonRpcMessage::response(request_id(1), response)));
+        assert!(matches!(effects[0], Effect::Log { boundary: None, .. }));
+        assert_eq!(machine.status(), RuntimeStatus::Dead);
+    }
+    let mut machine: SessionMachine<u32> = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".into(),
+        vec![],
+    );
+    machine.handle(acp_ready());
+    machine.initialization_persisted(macro_uuid::generate_uuid_v7());
+    machine.handle(initialized_with(
+        InitializeResponse::new(PROTOCOL_VERSION)
+            .agent_capabilities(AgentCapabilities::new().load_session(true)),
+    ));
+    machine.handle(Input::Closed(CloseReason::TransportClosed));
+    let late = machine.handle(frame(RawJsonRpcMessage::response(
+        request_id(1),
+        Ok(serde_json::json!({})),
+    )));
+    assert!(matches!(late[0], Effect::Log { boundary: None, .. }));
+}
+
+#[test]
+fn load_without_durable_initialization_cannot_become_live() {
+    let mut machine: SessionMachine<u32> = SessionMachine::resume(
+        AgentSessionId::TEST_A,
+        "acp-42".into(),
+        "/workspace".into(),
+        vec![],
+    );
+    machine.handle(acp_ready());
+    machine.handle(initialized_with(
+        InitializeResponse::new(PROTOCOL_VERSION)
+            .agent_capabilities(AgentCapabilities::new().load_session(true)),
+    ));
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        request_id(1),
+        Ok(serde_json::json!({})),
+    )));
+    assert!(matches!(
+        effects.as_slice(),
+        [
+            Effect::Log { boundary: None, .. },
+            Effect::Stop {
+                reason: StopReason::InitializationNotPersisted
+            }
+        ]
+    ));
+    assert_eq!(machine.status(), RuntimeStatus::Dead);
+}
+
+#[test]
+fn late_load_response_from_a_previous_actor_cannot_select_history() {
+    fn start() -> (SessionMachine<u32>, RequestId, macro_uuid::Uuid) {
+        let mut machine = SessionMachine::resume(
+            AgentSessionId::TEST_A,
+            "acp-42".into(),
+            "/workspace".into(),
+            vec![],
+        )
+        .with_connection_context(macro_uuid::generate_uuid_v7());
+        let initialization = macro_uuid::generate_uuid_v7();
+        machine.initialization_persisted(initialization);
+        let effects = machine.handle(Input::Ready {
+            restore: SessionRestoreSupport {
+                resume: false,
+                load: true,
+            },
+        });
+        let Effect::Send {
+            message: ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))),
+            ..
+        } = &effects[0]
+        else {
+            panic!("load request")
+        };
+        let id = request.id.clone();
+        (machine, id, initialization)
+    }
+    let (_, old_id, _) = start();
+    let (mut current, new_id, initialization_log_id) = start();
+    assert_ne!(old_id, new_id);
+    let late = current.handle(frame(RawJsonRpcMessage::response(
+        old_id,
+        Ok(serde_json::json!({})),
+    )));
+    assert!(matches!(
+        late.as_slice(),
+        [Effect::Log { boundary: None, .. }]
+    ));
+    assert_eq!(current.status(), RuntimeStatus::Handshaking);
+    let completed = current.handle(frame(RawJsonRpcMessage::response(
+        new_id,
+        Ok(serde_json::json!({})),
+    )));
+    assert!(
+        matches!(completed[0], Effect::Log { boundary: Some(crate::domain::model::HistoryBoundary { initialization_log_id: id }), .. } if id == initialization_log_id)
     );
 }

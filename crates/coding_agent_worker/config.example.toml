@@ -1,9 +1,8 @@
-# Everything a coding agent daemon needs to serve one harness's sessions.
+# Everything an agent harness daemon needs to serve one harness's sessions.
 #
-# Deliberately credential-free: `macrod` starts unpaired and the control
-# panel offers pairing (press p). Pairing shows a code, you approve it in the
-# web app (choosing private or team), and the minted credential is kept in
-# `macro.credentials.json` next to this file.
+# This example omits credentials, so `macrod` starts in Quickstart. Pairing
+# shows a code for approval in the web app, then adds a `[credentials]` table
+# containing a bearer token to this file. Keep the resulting config private.
 
 [macro]
 # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
@@ -24,7 +23,7 @@ name = "erics-macbook"
 scope = "private"
 
 [harness]
-command = "opencode"
+command = "hermes"
 args = ["acp"]
 
 [workspace]

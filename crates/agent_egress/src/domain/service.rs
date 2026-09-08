@@ -1,12 +1,15 @@
 //! The service itself: verify, resolve, stamp, forward.
 
-use http::Uri;
 use http::header::AUTHORIZATION;
+use http::{Method, Uri};
+use http_body_util::{BodyExt, Full};
 
 use crate::domain::error::EgressError;
 use crate::domain::model::{
-    EgressTarget, ProxyRequest, ProxyResponse, SessionToken, ensure_method_allowed, is_macro_staff,
-    sanitize_request_headers, sanitize_response_headers,
+    EgressTarget, MAX_MCP_REQUEST_BYTES, McpDestination, McpResolution, McpServerSlug,
+    ProxyRequest, ProxyResponse, SessionToken, TOOLS_CALL_METHOD, ensure_method_allowed,
+    is_macro_staff, not_connected_tool_result, peek_json_rpc, sanitize_request_headers,
+    sanitize_response_headers,
 };
 use crate::domain::ports::{Forwarder, GithubTokens, McpCredentials, SessionAuthority};
 
@@ -101,8 +104,29 @@ where
         }
 
         let call = match &target {
-            EgressTarget::McpServer(destination) => {
-                self.credentials.resolve(&grant.owner, destination).await?
+            EgressTarget::McpServer(destination @ McpDestination::Macro) => {
+                match self.credentials.resolve(&grant.owner, destination).await? {
+                    McpResolution::Connected(call) | McpResolution::Unconnected(call) => call,
+                }
+            }
+            EgressTarget::McpServer(destination @ McpDestination::Connected(slug)) => {
+                match self.credentials.resolve(&grant.owner, destination).await? {
+                    McpResolution::Connected(call) => call,
+                    // The owner has no grant for this app, but it can still
+                    // be addressed for them: the handshake and tool listing
+                    // go through, and a tool call is answered here with a
+                    // result the model can act on.
+                    McpResolution::Unconnected(call) => {
+                        let name = grant.display_name(slug);
+                        match Self::answer_unconnected(slug, &name, request).await? {
+                            Unconnected::Answered(response) => return Ok(response),
+                            Unconnected::Forward(forwarded) => {
+                                request = forwarded;
+                                call
+                            }
+                        }
+                    }
+                }
             }
             EgressTarget::GitHubGit { endpoint } => {
                 // The repository is the grant's, never the request's: a
@@ -162,5 +186,78 @@ where
         tracing::debug!(status = %response.status(), "upstream answered");
 
         Ok(response)
+    }
+}
+
+/// What became of a request to an app the owner has not connected.
+enum Unconnected {
+    /// The proxy answered it itself; nothing goes upstream.
+    Answered(ProxyResponse),
+    /// Forward it, addressed for the owner, so the handshake and tool listing
+    /// work. The body has been read and put back.
+    Forward(ProxyRequest),
+}
+
+impl<Sessions, Credentials, Tokens, Forward>
+    EgressServiceImpl<Sessions, Credentials, Tokens, Forward>
+where
+    Sessions: SessionAuthority,
+    Credentials: McpCredentials,
+    Tokens: GithubTokens,
+    Forward: Forwarder,
+{
+    /// An app the owner has not connected: forward everything except
+    /// `tools/call`.
+    ///
+    /// `initialize`, `tools/list`, notifications, the GET event stream and
+    /// DELETE all go to the upstream addressed for the owner, so the agent's
+    /// client completes its handshake and sees the app's real tools from the
+    /// first turn. A `tools/call` is answered here with a tool result that
+    /// names the app and how to connect it - and the moment the owner does,
+    /// the same advertised server resolves as connected and calls flow
+    /// through, with nothing re-attached.
+    async fn answer_unconnected(
+        slug: &McpServerSlug,
+        name: &str,
+        request: ProxyRequest,
+    ) -> Result<Unconnected, EgressError> {
+        if *request.method() != Method::POST {
+            return Ok(Unconnected::Forward(request));
+        }
+        let (parts, mut body) = request.into_parts();
+        let mut bytes = Vec::new();
+        while let Some(frame) = body.frame().await {
+            let frame = frame.map_err(|error| {
+                EgressError::Internal(rootcause::report!(
+                    "could not read an MCP request body: {error}"
+                ))
+            })?;
+            if let Ok(data) = frame.into_data() {
+                if bytes.len() + data.len() > MAX_MCP_REQUEST_BYTES {
+                    return Err(EgressError::RequestTooLarge);
+                }
+                bytes.extend_from_slice(&data);
+            }
+        }
+        let bytes = bytes::Bytes::from(bytes);
+
+        if let Some(call) = peek_json_rpc(&bytes)
+            && call.method == TOOLS_CALL_METHOD
+        {
+            tracing::info!(
+                app = %slug,
+                "answering tools/call for an app the owner has not connected"
+            );
+            return Ok(Unconnected::Answered(not_connected_tool_result(
+                slug, name, call.id,
+            )));
+        }
+
+        Ok(Unconnected::Forward(ProxyRequest::from_parts(
+            parts,
+            Full::new(bytes)
+                .map_err(|never| match never {})
+                .boxed_unsync(),
+        )))
     }
 }

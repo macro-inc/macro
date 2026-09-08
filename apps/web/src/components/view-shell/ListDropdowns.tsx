@@ -13,35 +13,33 @@ export type ListControlOption<TId extends string> = {
   disabled?: boolean;
 };
 
-/**
- * Controlled open state. Kobalte's trigger opens on pointerdown, so a hotkey
- * that wants to open a menu sets this instead of clicking the trigger.
- */
-type ControlledOpenProps = {
+type ListDropdownOpenProps = {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 };
 
-type SingleSelectDropdownProps<TId extends string> = ControlledOpenProps & {
+type SingleSelectDropdownProps<TId extends string> = {
   label: string;
   icon: JSX.Element;
   value: TId;
   options: ListControlOption<TId>[];
   onChange: (value: TId) => void;
+  triggerRef?: (element: HTMLButtonElement) => void;
   class?: string;
   contentClass?: string;
-};
+} & ListDropdownOpenProps;
 
 function SingleSelectDropdown<TId extends string>(
   props: SingleSelectDropdownProps<TId>
 ) {
   return (
     <Dropdown
-      placement="bottom-end"
       open={props.open}
       onOpenChange={props.onOpenChange}
+      placement="bottom-end"
     >
       <Dropdown.Trigger
+        ref={props.triggerRef}
         variant="outline"
         size="md"
         square
@@ -148,11 +146,12 @@ export type ListFilterDropdownProps<
     selected: boolean
   ) => void;
   onClear?: () => void;
+  triggerRef?: (element: HTMLButtonElement) => void;
   label?: string;
   clearLabel?: string;
   class?: string;
   contentClass?: string;
-};
+} & ListDropdownOpenProps;
 
 export function ListFilterDropdown<
   TGroupId extends string,
@@ -160,11 +159,12 @@ export function ListFilterDropdown<
 >(props: ListFilterDropdownProps<TGroupId, TOptionId>) {
   return (
     <Dropdown
-      placement="bottom-end"
       open={props.open}
       onOpenChange={props.onOpenChange}
+      placement="bottom-end"
     >
       <Dropdown.Trigger
+        ref={props.triggerRef}
         variant="outline"
         size="md"
         square

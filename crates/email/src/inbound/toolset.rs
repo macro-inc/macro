@@ -157,7 +157,9 @@ where
     mcp_toolset().add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
 }
 
-/// Email toolset for the MCP server — excludes SendEmail.
+/// Email toolset for hosts without a composer (the MCP server and the
+/// channel-mention bot) — excludes SendEmail, whose draft only the chat
+/// frontend can review and send.
 pub fn mcp_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
 where
     T: EmailService,

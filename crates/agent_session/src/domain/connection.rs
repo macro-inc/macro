@@ -34,7 +34,7 @@ use dashmap::DashMap;
 use tokio::sync::{Mutex, mpsc, watch};
 use tokio_util::sync::CancellationToken;
 
-use crate::domain::model::AgentSessionId;
+use crate::domain::model::{AgentSessionId, SessionClaim};
 use crate::domain::session::HandshakeStatus;
 
 #[cfg(test)]
@@ -134,6 +134,7 @@ fn acp_session_of(frame: &RawJsonRpcMessage) -> Option<SessionId> {
 /// gate so exactly one session per connection runs `initialize` and the rest
 /// are told its result.
 pub struct RuntimeAttachment<Connector> {
+    pub(crate) activation: Option<AttachmentActivation>,
     pub(crate) connector: Connector,
     pub(crate) handshake: watch::Sender<HandshakeStatus>,
     /// MCP servers the agent is told to connect to when this attachment's
@@ -146,6 +147,10 @@ pub struct RuntimeAttachment<Connector> {
     pub(crate) mcp_servers: Vec<McpServer>,
 }
 
+/// Activate attachment-owned resources with the exact acquired ownership claim.
+pub type AttachmentActivation =
+    Box<dyn FnOnce(SessionClaim) -> crate::domain::error::Result<()> + Send + Sync>;
+
 impl<Connector> RuntimeAttachment<Connector> {
     /// A transport carrying exactly one session, so its handshake is its own.
     ///
@@ -154,9 +159,27 @@ impl<Connector> RuntimeAttachment<Connector> {
     pub fn solo(connector: Connector) -> Self {
         let (handshake, _) = watch::channel(HandshakeStatus::Pending);
         Self {
+            activation: None,
             connector,
             handshake,
             mcp_servers: Vec::new(),
+        }
+    }
+
+    /// Run once after ownership acquisition, before the session actor starts.
+    #[must_use]
+    pub fn on_activate(mut self, activation: AttachmentActivation) -> Self {
+        self.activation = Some(activation);
+        self
+    }
+
+    /// Change the carrier without losing its handshake or activation lifecycle.
+    pub fn map_transport<T>(self, map: impl FnOnce(Connector) -> T) -> RuntimeAttachment<T> {
+        RuntimeAttachment {
+            connector: map(self.connector),
+            handshake: self.handshake,
+            mcp_servers: self.mcp_servers,
+            activation: self.activation,
         }
     }
 
@@ -279,6 +302,7 @@ where
         }
 
         RuntimeAttachment {
+            activation: None,
             connector: SessionChannel {
                 connection: Arc::clone(self),
                 session,

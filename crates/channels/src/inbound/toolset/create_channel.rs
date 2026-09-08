@@ -2,7 +2,7 @@ use super::{
     ChannelToolContext, channel_mutation_error, channel_name, parse_participants,
     participant_id_strings,
 };
-use crate::domain::models::{ChannelType, CreateChannelRequest, Sender};
+use crate::domain::models::{ChannelType, CreateChannelRequest};
 use crate::domain::ports::ChannelService;
 use ai_toolset::{
     AsyncTool, RequestContext, ServiceContext, ToolAnnotated, ToolAnnotations, ToolCallError,
@@ -118,9 +118,9 @@ where
         let participant_ids = participant_id_strings(&participants);
         let response = service_context
             .service
-            .create_channel(
-                Sender::new_from_user(request_context.user_id.clone()),
-                None,
+            .create_channel_on_behalf(
+                request_context.user_id.clone(),
+                service_context.actor,
                 CreateChannelRequest {
                     name: Some(name.clone()),
                     channel_type: self.channel_type.to_domain(),

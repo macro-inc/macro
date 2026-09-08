@@ -14,5 +14,6 @@ For recurring events, `scope` controls how much is removed: "all" (default) remo
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
 | `eventId` | string | Yes | The event's id, from ListCalendarEvents or CreateCalendarEvent. |
+| `calendarId` | string | No | The `calendarId` of the copy to delete, from the `copies` of its ListCalendarEvents entry, for an event synced from more than one calendar. Omit to delete the event's primary copy. |
 | `scope` | `"all"` \| `"this_event"` \| `"this_and_following"` | No | How much of a recurring series a deletion removes. |
 | `recurrenceId` | string | No | The `recurrenceId` of the targeted occurrence, from its ListCalendarEvents entry. Required for "this_event" and "this_and_following". |

@@ -1,4 +1,5 @@
 use super::*;
+use agent_session::domain::model::AgentMcpServer;
 
 fn slug(name: &str) -> McpServerSlug {
     McpServerSlug::parse(name).expect("a valid app slug")
@@ -97,6 +98,7 @@ async fn lists_enabled_app_slugs_verbatim() {
             AgentSessionId::new(),
             &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
             "https://github.com/macro-inc/macro",
+            &AgentMcpServers::OwnerConnections,
         )
         .await
         .expect("provisioned");
@@ -123,6 +125,7 @@ async fn restore_wraps_an_existing_token_in_a_fresh_listing() {
         .restore(
             &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
             "already-minted-token".to_owned(),
+            &AgentMcpServers::OwnerConnections,
         )
         .await
         .expect("restored");
@@ -134,6 +137,87 @@ async fn restore_wraps_an_existing_token_in_a_fresh_listing() {
         .map(ToString::to_string)
         .collect();
     assert_eq!(slugs, ["linear"]);
+}
+
+fn selected(slugs: &[&str]) -> AgentMcpServers {
+    AgentMcpServers::Selected {
+        servers: slugs
+            .iter()
+            .map(|slug| AgentMcpServer {
+                app_slug: (*slug).to_owned(),
+                server_name: (*slug).to_owned(),
+            })
+            .collect(),
+    }
+}
+
+/// A selected list is advertised whole, in the agent's order, whatever the
+/// owner has connected: an unconnected app is still dialable, because the
+/// proxy answers it with a "not connected" tool result rather than refusing
+/// it, and a connected-but-unselected app is not offered at all.
+#[tokio::test]
+async fn a_selected_list_is_advertised_regardless_of_connections() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![
+            connection("datadog", true),
+            connection("linear", false),
+        ])),
+        "https://egress.macro.com",
+    );
+
+    let provisioned = provisioner
+        .provision(
+            AgentSessionId::new(),
+            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            "https://github.com/macro-inc/macro",
+            &selected(&["notion", "linear", "Not A Slug!"]),
+        )
+        .await
+        .expect("provisioned");
+
+    let slugs: Vec<String> = provisioned
+        .sandbox
+        .mcp_servers
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(slugs, ["notion", "linear"]);
+
+    let restored = provisioner
+        .restore(
+            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            "already-minted-token".to_owned(),
+            &selected(&["notion"]),
+        )
+        .await
+        .expect("restored");
+    let slugs: Vec<String> = restored
+        .mcp_servers
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(slugs, ["notion"]);
+}
+
+/// An explicitly empty selection is the agent author's choice: nothing of the
+/// owner's is offered in its place.
+#[tokio::test]
+async fn an_empty_selection_offers_nothing_of_the_owners() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![connection("datadog", true)])),
+        "https://egress.macro.com",
+    );
+
+    let provisioned = provisioner
+        .provision(
+            AgentSessionId::new(),
+            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            "https://github.com/macro-inc/macro",
+            &selected(&[]),
+        )
+        .await
+        .expect("provisioned");
+    assert!(provisioned.sandbox.mcp_servers.is_empty());
 }
 
 fn egress(slugs: &[&str]) -> SandboxEgress {

@@ -23,7 +23,10 @@ use entity_access::domain::models::{
 };
 use uuid::Uuid;
 
-use crate::domain::{comment::CrmCommentEntityType, model::CrmError};
+use crate::domain::{
+    comment::CrmCommentEntityType,
+    model::{CrmError, CrmPermissionRole},
+};
 
 #[cfg(test)]
 mod test;
@@ -244,9 +247,16 @@ impl<T: RequiredPermission> CrmTeamReceipt<T> {
     /// service to gate admin-only mutations that share an endpoint with
     /// member-level ones (e.g. the governance fields of team settings).
     pub(crate) fn has_admin_role(&self) -> bool {
-        self.receipt
-            .entity_permission()
-            .allows_team_role(entity_access::domain::models::TeamRole::Admin)
+        self.satisfies_permission_role(CrmPermissionRole::Admin)
+    }
+
+    /// Whether the caller's team role meets a configurable CRM threshold.
+    pub(crate) fn satisfies_permission_role(&self, role: CrmPermissionRole) -> bool {
+        let required = match role {
+            CrmPermissionRole::Admin => TeamRole::Admin,
+            CrmPermissionRole::Owner => TeamRole::Owner,
+        };
+        self.receipt.entity_permission().allows_team_role(required)
     }
 
     /// Test-only: mints an `Owner` receipt with no access check.

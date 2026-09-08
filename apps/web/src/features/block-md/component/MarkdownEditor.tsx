@@ -72,6 +72,7 @@ import {
   tableTouchSelectionPlugin,
   tagsPlugin,
   textPastePlugin,
+  trailingParagraphPlugin,
   wordcountPlugin,
 } from '@core/component/LexicalMarkdown/plugins';
 import { actionsPlugin } from '@core/component/LexicalMarkdown/plugins/actions/actionsPlugin';
@@ -615,6 +616,7 @@ export function MarkdownEditor(props: {
     .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
+    .use(trailingParagraphPlugin())
     .use(
       checkboxToTaskPlugin({
         currentUserId: userId(),

@@ -18,6 +18,9 @@ impl SearchQueryConfig for CalendarEventSearchConfig {
     const ENTITY_INDEX: OpenSearchEntityType = OpenSearchEntityType::CalendarEvents;
 }
 
+/// Index field holding the title of every provider copy of the event.
+const SOURCE_NAMES_KEY: &str = "source_names";
+
 /// Query builder for the flat calendar events index.
 ///
 /// One doc per **series master**: recurring instances are query projections
@@ -27,9 +30,11 @@ impl SearchQueryConfig for CalendarEventSearchConfig {
 /// enrichment time instead.
 ///
 /// Calendar events carry no indexed content, so every mode matches terms
-/// against `name` alone. Access mirrors the soup predicate: `owner_id ==
-/// caller` or the event's `source_link_id` is one of the caller's delegated
-/// inbox links.
+/// against the titles alone: `name` holds the canonical copy's title and
+/// `source_names` every copy's, so a shared calendar's bracketed re-import
+/// of a member's event is found under either. Access mirrors the soup
+/// predicate: `owner_id == caller` or the event's `source_link_id` is one of
+/// the caller's delegated inbox links.
 pub(crate) struct CalendarEventQueryBuilder {
     inner: SearchQueryBuilder<CalendarEventSearchConfig>,
     link_ids: Vec<String>,
@@ -164,8 +169,13 @@ impl CalendarEventQueryBuilder {
             bool_query.filter(nested);
         }
 
-        // Title match: every term must match the event title.
-        bool_query.must(self.inner.build_title_term_query()?);
+        // Title match: every term must match the canonical title or one
+        // copy's title.
+        let mut titles = BoolQueryBuilder::new();
+        titles.minimum_should_match(1);
+        titles.should(self.inner.build_title_term_query()?);
+        titles.should(self.inner.build_field_term_query(SOURCE_NAMES_KEY)?);
+        bool_query.must(titles.build().into());
 
         Ok(bool_query)
     }

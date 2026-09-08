@@ -96,9 +96,17 @@ type CompleteMutationRoot {
 	"""
 	duplicateEntities(inputs: [DuplicateEntityInput!]!): EntityMutationPayload!
 	"""
-	Add or remove an entity from the actor's favorites.
+	Add or remove an entity and return the generic entity mutation result.
 	"""
 	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!
+	"""
+	Add or remove an entity and return the persisted favorite record.
+	"""
+	setFavorite(entity: EntityRefInput!, favorite: Boolean!): SetFavoritePayload!
+	"""
+	Persist the authenticated user's complete favorites order and return the authoritative list.
+	"""
+	reorderFavorites(input: ReorderFavoritesInput!): [GraphqlFavorite!]!
 	"""
 	Record a view or interaction in the authenticated user's channel activity.
 	"""
@@ -1689,6 +1697,10 @@ input GraphqlEmailLiteral @oneOf {
 	The updated at option.
 	"""
 	updatedAt: GraphqlDateLiteral
+	"""
+	The per-viewer viewed at option.
+	"""
+	viewedAt: GraphqlDateLiteral
 }
 
 """
@@ -2042,6 +2054,48 @@ enum GraphqlEntityType {
 	AI coding agent session entity.
 	"""
 	AGENT_SESSION
+}
+
+"""
+GraphQL fields for an ordered favorite.
+"""
+type GraphqlFavorite {
+	"""
+	Stable cache identity within the authenticated user's favorites collection.
+	"""
+	id: ID!
+	"""
+	Canonical type of the favorited entity.
+	"""
+	entityType: GraphqlEntityType!
+	"""
+	Canonical identifier of the favorited entity.
+	"""
+	entityId: ID!
+	"""
+	Manual ordering value; lower values sort first.
+	"""
+	sortOrder: Float!
+	"""
+	Time at which the entity was first favorited, in RFC 3339 format.
+	"""
+	createdAt: String!
+	"""
+	File type of a favorited document, when applicable.
+	"""
+	fileType: String
+	"""
+	Document subtype of a favorited document, when applicable.
+	"""
+	documentSubType: String
+	"""
+	Channel type of a favorited channel, when applicable.
+	"""
+	channelType: String
+	"""
+	Owning channel id of a favorited channel message, when applicable.
+	"""
+	channelId: ID
 }
 
 """
@@ -4767,6 +4821,12 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	isImportant: Boolean!
 	"""
+	The denormalized `email_threads.is_signal` importance classification —
+	the same flag the soup Importance filter evaluates, distinct from
+	`is_important` (Gmail's IMPORTANT label).
+	"""
+	isSignal: Boolean!
+	"""
 	The identifier of the project.
 	"""
 	projectId: ID
@@ -5332,6 +5392,10 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
+	The authenticated user's favorites in manual order.
+	"""
+	favorites: [GraphqlFavorite!]!
+	"""
 	A page of the authenticated user's own activity, newest first.
 	Delegated actions performed on the user's behalf are included.
 	"""
@@ -5517,6 +5581,16 @@ input RenameEntityInput {
 }
 
 """
+Input for persisting the authenticated user's complete favorites order.
+"""
+input ReorderFavoritesInput {
+	"""
+	Favorited entities in the desired order.
+	"""
+	favorites: [EntityRefInput!]!
+}
+
+"""
 Input for assigning or updating an entity property.
 """
 input SetEntityPropertyInput {
@@ -5536,6 +5610,20 @@ input SetEntityPropertyInput {
 	Omit or pass null to attach the property without a value.
 	"""
 	value: GraphqlSetPropertyValue
+}
+
+"""
+GraphQL result of setting an entity's favorite state.
+"""
+type SetFavoritePayload {
+	"""
+	Entity mutation result, including normalized Soup cache effects.
+	"""
+	result: GraphqlEntityMutationResult!
+	"""
+	Persisted favorite after an add, or `null` after a removal.
+	"""
+	favorite: GraphqlFavorite
 }
 
 """

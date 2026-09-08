@@ -150,6 +150,13 @@ pub enum SessionStatus {
     Disconnected,
 }
 
+/// Which Pipedream MCP servers a session is handed: the agent's own choice,
+/// snapshotted onto the session at creation like `instructions`. The ACP
+/// agent is given its server list once per attach and cannot refresh it, so
+/// the snapshot is what every later attach re-advertises; editing the agent
+/// applies to its next session.
+pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
+
 /// Caller-provided values required to create an agent session.
 #[derive(Debug, Clone)]
 pub struct CreateAgentSessionParams {
@@ -180,6 +187,8 @@ pub struct CreateAgentSessionParams {
     /// provider, but every provider needs the same answer for the session's
     /// whole life.
     pub instructions: Option<String>,
+    /// Which MCP servers the session is handed; see [`AgentMcpServers`].
+    pub mcp_servers: AgentMcpServers,
     /// SHA-256 hex of the opaque token the session's sandbox presents to the
     /// egress proxy, or `None` for a session that never gets one.
     ///
@@ -226,6 +235,8 @@ pub struct AgentSession {
     /// creation. Immutable for the session's life; `None` when none were
     /// stated.
     pub instructions: Option<String>,
+    /// Which MCP servers the session is handed, snapshotted at creation.
+    pub mcp_servers: AgentMcpServers,
     /// ACP session if we have one
     pub acp_session_id: Option<SessionId>,
     /// The provider-side identity, when an external provider serves this
@@ -263,6 +274,8 @@ pub struct ExternalSession {
     pub external_name: Option<String>,
     /// The agent's page on the provider's site, for opening it there.
     pub external_url: Option<String>,
+    /// The last provider run whose output was delivered to this session.
+    pub last_run_id: Option<String>,
 }
 
 /// The agent behind a session, as much of it as rendering a message needs.
@@ -321,7 +334,7 @@ impl From<super::ports::QueuedControl> for QueuedActionDto {
 
 /// One frame appended to a live session's log, for anyone watching.
 ///
-/// The streaming counterpart of [`SessionLog`]: that is the whole log
+/// The streaming counterpart of [`SessionLog`]: that is the selected history window
 /// for a reader arriving late, this is one frame for a reader already here.
 /// Both carry the same entry shape, so a client folds them the same way -
 /// catching up on the log and then following it is one fold, not two.
@@ -347,13 +360,17 @@ pub struct LogAppended {
 /// a session's messages against anything else still has something to order by.
 #[derive(Debug, Clone)]
 pub struct StoredAgentSessionLog {
+    /// Durable row identity, used to select a replay history boundary.
+    pub id: Uuid,
     /// When the entry was appended to the log.
     pub created_at: DateTime<Utc>,
     /// The frame, exactly as the log stored it.
     pub entry: AgentSessionLog,
 }
 
-/// A session's raw protocol log.
+/// A session's effective ACP history, from its latest successful load initialization.
+/// With no successful load, history starts at the beginning. Failed attempts
+/// remain in the stream and must be staged/discarded by fold consumers.
 ///
 /// Served rather than the messages it derives: the reader folds it. The web
 /// client runs the same fold compiled to WASM, so a streamed session and a
@@ -387,4 +404,12 @@ pub enum ChannelSession {
     None,
     /// The bot's session was created from the incoming thread.
     CreatedFromThread(AgentSession),
+}
+
+/// Initialization selected by a matching successful load in the session machine.
+/// Persistence must append the response and select this row in one fenced transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryBoundary {
+    /// Initialization row in this session's log.
+    pub initialization_log_id: Uuid,
 }

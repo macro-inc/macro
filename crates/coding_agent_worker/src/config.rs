@@ -2,11 +2,11 @@
 //! streams from and the harness it runs per session. See
 //! `config.example.toml` at the crate root.
 //!
-//! Deliberately credential-free: identity comes from pairing (press `p` in
-//! the control panel), which persists the harness credential in a state file
-//! next to this config.
+//! Pairing (press `p` in the control panel) adds the harness credential to
+//! this file. Treat it as sensitive because that credential is a bearer token.
 
-use serde::Deserialize;
+use harness_id::HarnessId;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 #[cfg(test)]
@@ -22,6 +22,9 @@ pub struct Config {
     /// How this daemon introduces itself when pairing.
     #[serde(default)]
     pub identity: Identity,
+    /// The approved harness credential, absent until pairing completes.
+    #[serde(default)]
+    pub credentials: Option<HarnessCredentials>,
     /// Unused: kept so existing configs that still declare a webhook listener
     /// continue to parse. The daemon listens over SSE and no longer serves HTTP.
     #[serde(default)]
@@ -31,6 +34,40 @@ pub struct Config {
     pub harness: Harness,
     /// The workspace every session runs against.
     pub workspace: Workspace,
+}
+
+/// Whether the approved harness is private to its owner or shared with a team.
+///
+/// This can differ from [`Identity::scope`], which remains the requested scope
+/// for the next pairing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HarnessScope {
+    /// Owned by one user.
+    User,
+    /// Owned by a team.
+    Team,
+}
+
+/// The credential pairing minted for this daemon.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct HarnessCredentials {
+    /// The registered harness this daemon serves.
+    pub harness_id: HarnessId,
+    /// The bearer token (`mhns_...`).
+    pub token: String,
+    /// The approved harness ownership scope.
+    pub scope: HarnessScope,
+}
+
+impl HarnessCredentials {
+    /// Whether this credential has the expected non-empty bearer-token shape.
+    pub fn is_valid(&self) -> bool {
+        self.token
+            .strip_prefix("mhns_")
+            .is_some_and(|secret| !secret.is_empty())
+    }
 }
 
 /// The Macro deployment this harness's sessions live in.

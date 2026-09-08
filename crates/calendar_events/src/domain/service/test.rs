@@ -105,6 +105,7 @@ impl CalendarRepository for FakeRepo {
         &self,
         _requester_id: &str,
         _event_id: Uuid,
+        _calendar_id: Option<Uuid>,
     ) -> Result<Option<CalendarEventMutationTarget>, Report> {
         unreachable!("mutation lookups are not exercised by sync tests")
     }
@@ -135,6 +136,10 @@ impl CalendarRepository for FakeRepo {
         _requester_id: &str,
     ) -> Result<Vec<crate::domain::models::VisibleCalendar>, Report> {
         Ok(Vec::new())
+    }
+
+    async fn primary_time_zone(&self, _requester_id: &str) -> Result<Option<String>, Report> {
+        Ok(None)
     }
 
     async fn owned_inbox_emails(&self, _requester_id: &str) -> Result<Vec<String>, Report> {
@@ -221,6 +226,7 @@ fn valid_upsert() -> CalendarEventUpsert {
             owner_id: "macro|calendar@example.com".to_string(),
             ical_uid: "meeting@example.com".to_string(),
             calendar_id: None,
+            sources: Vec::new(),
             title: "Meeting".to_string(),
             description: None,
             location: None,

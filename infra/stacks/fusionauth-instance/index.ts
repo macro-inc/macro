@@ -12,7 +12,12 @@ import {
 } from 'pulumi-fusionauth';
 import * as pulumi from '@pulumi/pulumi';
 import * as fs from 'fs';
-import { config, stack } from '../../packages/shared';
+import {
+  config,
+  getServiceUrl,
+  ServiceUrl,
+  stack,
+} from '../../packages/shared';
 
 import 'dotenv/config';
 import {
@@ -292,6 +297,11 @@ const macroApplication = new FusionAuthApplication(
         stack === 'local' || stack === 'dev' ? 'AllowWildcards' : 'ExactMatch',
       authorizedRedirectUrls: [
         `${AUTHENTICATION_SERVICE_DOMAIN}/oauth/redirect`,
+        ...(stack === 'dev' || stack === 'prod'
+          ? [
+              `${getServiceUrl(ServiceUrl.AUTHENTICATION_SERVICE_URL)}/oauth/redirect`,
+            ]
+          : []),
         `https://mcp-server${stack === 'prod' ? '' : `-${stack}`}.macro.com/oauth/callback`,
         ...(stack === 'local' || stack === 'dev'
           ? ['http://localhost:8085/*', 'http://localhost:8085/oauth/*']

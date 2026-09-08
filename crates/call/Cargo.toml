@@ -87,6 +87,7 @@ utoipa = { workspace = true, optional = true }
 urlencoding = { workspace = true, optional = true }
 uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+subtle = { workspace = true }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }

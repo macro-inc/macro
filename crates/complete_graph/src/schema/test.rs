@@ -939,6 +939,7 @@ struct TestHarness {
         TestState,
         NoOpEntityPropertyWriter,
         UnavailableEntityMutationService,
+        graphql_favorite::NoOpFavoriteMutationService,
         NoOpChannelActivityMutationService,
         NoOpNotificationMutationService,
         NoOpSoupNotificationEdgeReader,
@@ -1068,6 +1069,7 @@ impl TestHarness {
                 user_id,
                 self.email_content_reader.clone(),
             ))
+            .data(NoOpEntityFavoriteEdgeReader)
             .data(self.activity_reader.clone())
             .data(graphql_activity::entity_activity_loader(
                 self.activity_reader.clone(),
@@ -1100,6 +1102,7 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
         SchemaOnlyState,
         NoOpEntityPropertyWriter,
         UnavailableEntityMutationService,
+        NoOpFavoriteMutationService,
         NoOpChannelActivityMutationService,
         NoOpNotificationMutationService,
         NoOpSoupNotificationEdgeReader,
@@ -1189,6 +1192,19 @@ async fn user_id_resolves_without_touching_services() {
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.frecency_soup_calls.load(Ordering::SeqCst), 0);
     assert_eq!(harness.grouped_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn favorites_are_nested_under_the_authenticated_user() {
+    let harness = harness();
+
+    let response = harness
+        .execute("{ user { favorites { entityType entityId sortOrder } } }")
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.to_string(), "{user: {favorites: []}}");
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
@@ -1467,6 +1483,7 @@ fn soup_email_thread_with_read_status(thread_id: Uuid, is_read: bool) -> SoupIte
             is_read,
             is_draft: false,
             is_important: true,
+            is_signal: true,
             name: Some("Direct thread".to_owned()),
             snippet: Some("Direct thread snippet".to_owned()),
             sender_email: Some("sender@example.com".to_owned()),

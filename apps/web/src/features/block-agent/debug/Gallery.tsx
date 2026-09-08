@@ -7,6 +7,7 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type {
   FoldedMessage,
+  ModelOption,
   ToolStatus,
 } from '@service-agent-fold/generated/types';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
@@ -15,6 +16,7 @@ import { ReplyToSelection } from '../component/ReplyToSelection';
 import {
   ActionLine,
   AgentInput,
+  AgentModelSelector,
   AnimatedNumber,
   ComposerNotice,
   CountSummary,
@@ -29,6 +31,87 @@ import {
   ToolErrorCard,
   ToolStatusTitle,
 } from '../ui';
+
+/** A Cursor-shaped catalog: long enough to scroll, with one grouped tail. */
+const FIXTURE_MODELS: ModelOption[] = [
+  { id: 'auto', name: 'Auto', description: null, group: null },
+  {
+    id: 'grok-4.6-high-fast',
+    name: 'Cursor Grok 4.6 High Fast',
+    description: null,
+    group: null,
+  },
+  { id: 'composer-2.5', name: 'Composer 2.5', description: null, group: null },
+  {
+    id: 'opus-5-high',
+    name: 'Claude Opus 5 High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'opus-5-high-fast',
+    name: 'Claude Opus 5 High Fast',
+    description: null,
+    group: null,
+  },
+  { id: 'sol-high', name: 'GPT-5.6 Sol High', description: null, group: null },
+  {
+    id: 'sol-high-fast',
+    name: 'GPT-5.6 Sol High Fast',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'sol-xhigh',
+    name: 'GPT-5.6 Sol Extra High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'fable-5-high',
+    name: 'Claude Fable 5 High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'gemini-3.7-flash-high',
+    name: 'Gemini 3.7 Flash High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'sonnet-5-high',
+    name: 'Claude Sonnet 5 High',
+    description: null,
+    group: null,
+  },
+  {
+    id: 'luna-high',
+    name: 'GPT-5.6 Luna High',
+    description: null,
+    group: 'Legacy',
+  },
+];
+
+/** The composer as the block mounts it, with the model control wired. */
+function ModelSelectorDemo() {
+  const [model, setModel] = createSignal<string | null>('grok-4.6-high-fast');
+  return (
+    <AgentInput
+      onSend={(content) => console.info('[gallery] send', content)}
+      modelControl={
+        <AgentModelSelector
+          model={model()}
+          options={FIXTURE_MODELS}
+          onSelect={(id) => {
+            console.info('[gallery] model', id);
+            setModel(id);
+          }}
+        />
+      }
+    />
+  );
+}
 
 function Item(props: { label: string; children: JSX.Element }) {
   return (
@@ -115,19 +198,15 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
-      rawInput: null,
-      rawOutput: null,
       id: 'demo-read',
-      label: 'Read',
+      name: { kind: 'native', name: 'Read' },
       status: 'completed',
       detail: { kind: 'read', paths: ['crates/agent_fold/src/domain/fold.rs'] },
     },
     {
       kind: 'tool_use',
-      rawInput: null,
-      rawOutput: null,
       id: 'demo-search',
-      label: 'Search',
+      name: { kind: 'native', name: 'Search' },
       status: 'completed',
       detail: {
         kind: 'search',
@@ -137,19 +216,15 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
     {
       kind: 'tool_use',
-      rawInput: null,
-      rawOutput: null,
       id: 'demo-edit',
-      label: 'Edit',
+      name: { kind: 'native', name: 'Edit' },
       status: 'completed',
       detail: { kind: 'edit', diffs: [FIXTURE_DIFF] },
     },
     {
       kind: 'tool_use',
-      rawInput: null,
-      rawOutput: null,
       id: 'demo-terminal',
-      label: 'Bash',
+      name: { kind: 'native', name: 'Bash' },
       status: 'running',
       detail: {
         kind: 'terminal',
@@ -166,6 +241,116 @@ const FIXTURE_MESSAGE: FoldedMessage = {
         { id: 'deny', name: 'Deny', kind: 'reject_once' },
       ],
       outcome: { kind: 'selected', optionId: 'allow' },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-subagent',
+      name: { kind: 'native', name: 'Agent' },
+      status: 'completed',
+      detail: {
+        kind: 'subagent',
+        title: 'Check the arithmetic',
+        agentType: 'general-purpose',
+        description: 'Check the arithmetic',
+        prompt: 'Run `python3 -c "print(5+5)"` and report the output.',
+        background: false,
+        children: [
+          {
+            kind: 'tool_use',
+            id: 'demo-subagent-bash',
+            name: { kind: 'native', name: 'Bash' },
+            status: 'completed',
+            detail: {
+              kind: 'terminal',
+              command: 'python3 -c "print(5+5)"',
+              output: '10',
+              exitCode: 0,
+            },
+          },
+        ],
+        result: {
+          text: 'Output: `10`',
+          error: null,
+          agentId: 'af2647314187b6bf1',
+          model: 'claude-opus-5[1m]',
+          durationMs: 3485,
+          tokens: 26077,
+          toolUses: 1,
+          stats: null,
+        },
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-macro',
+      name: { kind: 'mcp', server: 'macro', tool: 'BrandNewTool' },
+      status: 'completed',
+      detail: {
+        kind: 'macro',
+        input: { query: 'fold' },
+        output: { hits: 3 },
+        error: null,
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-email',
+      name: { kind: 'mcp', server: 'macro', tool: 'SendEmail' },
+      status: 'completed',
+      detail: {
+        kind: 'user_tool',
+        input: {
+          subject: 'Fold status',
+          body: 'Hi Alice,\n\nThe fold now knows which harness it is reading.',
+          to: [{ email: 'alice@example.com', name: 'Alice' }],
+        },
+        outcome: { kind: 'pending' },
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-email-sent',
+      name: { kind: 'mcp', server: 'macro', tool: 'SendEmail' },
+      status: 'completed',
+      detail: {
+        kind: 'user_tool',
+        input: {
+          subject: 'Re: fold status',
+          body: 'Thanks Alice - shipping it.',
+          to: [{ email: 'alice@example.com', name: 'Alice' }],
+          cc: [{ email: 'bob@example.com' }],
+        },
+        outcome: {
+          kind: 'sent',
+          messageId: '9c4d2c6e-2f3a-4d1e-8b0a-5e6f7a8b9c0d',
+          threadId: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d',
+        },
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-event',
+      name: { kind: 'mcp', server: 'macro', tool: 'CreateCalendarEvent' },
+      status: 'completed',
+      detail: {
+        kind: 'user_tool',
+        input: {
+          title: 'Fold review',
+          time: {
+            kind: 'timed',
+            startsAt: '2026-09-04T16:00:00Z',
+            endsAt: '2026-09-04T16:30:00Z',
+            timeZone: 'America/New_York',
+          },
+          location: 'Room 4',
+          attendees: [
+            { email: 'alice@example.com' },
+            { email: 'bob@example.com', isOptional: true },
+          ],
+          description: 'Walk through the harness readers.',
+        },
+        outcome: { kind: 'rejected' },
+      },
     },
   ],
 };
@@ -319,6 +504,10 @@ export default function AgentUiGallery() {
               onSend={() => {}}
               onStop={() => console.info('[gallery] stop')}
             />
+          </Item>
+
+          <Item label="AgentInput with model selector">
+            <ModelSelectorDemo />
           </Item>
 
           <Item label="AgentMessage (end-to-end)">

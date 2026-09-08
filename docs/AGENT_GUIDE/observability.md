@@ -37,9 +37,10 @@ URL prefix → service mapping: `/dss/*` → document_storage_service,
 exports to `/i/otlp/v1/{traces,logs}`.
 
 The local Caddy proxy strips these prefixes before forwarding, so `span.url.path` is
-unprefixed locally. The deployed gateway ALB does **not** strip `/dss` or `/unfurl` —
-those services serve the same routes at both `/` and the prefix — so in dev and prod
-`span.url.path` includes the prefix. Query both forms when a search comes back empty.
+unprefixed locally. The deployed gateway ALB does **not** strip `/dss`, `/unfurl`, or
+`/auth` — those services serve the same routes at both `/` and the prefix — so in
+dev and prod `span.url.path` includes the prefix. Query both forms when a search
+comes back empty.
 
 ## Logs (Loki)
 

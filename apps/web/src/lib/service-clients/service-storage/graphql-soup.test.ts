@@ -42,6 +42,7 @@ const mocks = vi.hoisted(() => {
   const realtimeClient = { kind: 'realtime' };
   const replaceSubscriptions = vi.fn();
   const platformFetch = vi.fn();
+  const toastFailure = vi.fn();
   return {
     get enabled() {
       return enabled;
@@ -81,6 +82,7 @@ const mocks = vi.hoisted(() => {
     realtimeClient,
     replaceSubscriptions,
     platformFetch,
+    toastFailure,
     createWorkerCacheHost: vi.fn(
       (options: { onInitializationError?: (error: Error) => void }) => {
         initializationErrorHandler = options.onInitializationError;
@@ -91,6 +93,9 @@ const mocks = vi.hoisted(() => {
   };
 });
 
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { failure: mocks.toastFailure },
+}));
 vi.mock('@core/constant/featureFlags', () => ({
   ENABLE_BEARER_TOKEN_AUTH: false,
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
@@ -335,6 +340,9 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(soup.getGraphqlSoupClient()).toBe(mocks.realtimeClient);
     expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(mocks.cleanupOrder()).toEqual(['subscriptions', 'host']);
+    expect(mocks.toastFailure).toHaveBeenCalledWith('Local cache unavailable', {
+      subtext: 'Macro will continue without local caching for this session.',
+    });
     expect(warn).toHaveBeenCalledWith(
       'graphql cache async init failed; using uncached client',
       expect.objectContaining({ message: 'injected initialization failure' })

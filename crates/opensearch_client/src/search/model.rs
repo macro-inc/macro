@@ -295,8 +295,11 @@ pub(crate) fn parse_highlight_hit(
 
     Highlight {
         user_id,
+        // A calendar event found only through another copy's title has its
+        // match under `source_names`, so that stands in for the name.
         name: highlight
             .get(keys.title_key)
+            .or_else(|| highlight.get("source_names"))
             .and_then(|v| v.first())
             .map(|v| v.to_string()),
         content: highlight
