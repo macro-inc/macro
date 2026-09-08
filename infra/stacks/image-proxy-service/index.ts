@@ -70,13 +70,11 @@ const imageProxyService = new ImageProxyService(
         value: stack,
       },
     ],
-    isPrivate: false,
     tags,
   }
 );
 
 export const imageProxyServiceSgId = imageProxyService.serviceSg.id;
-export const imageProxyServiceAlbSgId = imageProxyService.serviceAlbSg.id;
 export const imageProxyServiceUrl = `https://${
   stack === 'prod' ? '' : `${stack}-`
 }gateway.${BASE_DOMAIN}/image-proxy`;
