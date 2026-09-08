@@ -94,3 +94,35 @@ it('exposes cached data when the first observed query result is an error', () =>
       dispose();
     }
   }));
+
+it.each(['fetchOlder', 'refresh'] as const)(
+  '%s remains pending until the query request finishes',
+  async (operation) => {
+    let finish!: () => void;
+    const request = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const { source, dispose } = createRoot((dispose) => ({
+      dispose,
+      source: createEmailThreadSource(() => 'thread', {
+        isSuccess: false,
+        isError: false,
+        fetchNextPage: () => request,
+        refetch: () => request,
+      } as unknown as ThreadQueryResult<ThreadQueryData>),
+    }));
+    try {
+      let completed = false;
+      const completion = source[operation]().then(() => {
+        completed = true;
+      });
+      await Promise.resolve();
+      expect(completed).toBe(false);
+      finish();
+      await completion;
+      expect(completed).toBe(true);
+    } finally {
+      dispose();
+    }
+  }
+);

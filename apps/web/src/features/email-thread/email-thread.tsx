@@ -53,8 +53,10 @@ export function EmailThread(props: EmailThreadProps) {
     copySubject: (subject: string) => {
       void navigator.clipboard
         .writeText(subject)
-        .then(() => compose.feedback.success('Subject copied'))
-        .catch(() => compose.feedback.failure('Unable to copy subject'));
+        .then(() => compose.notices.feedback.success('Subject copied'))
+        .catch(() =>
+          compose.notices.feedback.failure('Unable to copy subject')
+        );
     },
     dependencies,
     compose,
@@ -76,7 +78,7 @@ export function EmailThread(props: EmailThreadProps) {
         meta.tag === 'new_email' &&
         meta.content.threadId === source.thread()?.db_id
       )
-        source.refresh();
+        void source.refresh().catch(compose.notices.reportError);
     }
   );
   createEffect(() => {

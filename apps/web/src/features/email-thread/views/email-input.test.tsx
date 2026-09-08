@@ -50,8 +50,8 @@ it('preserves an engaged composer through a same-message update but resets it fo
     isFetching: () => false,
     isFetchingOlder: () => false,
     hasMore: () => false,
-    fetchOlder() {},
-    refresh() {},
+    async fetchOlder() {},
+    async refresh() {},
   });
   const [target, setTarget] = createSignal(first);
   const view = render(() => {
@@ -92,8 +92,8 @@ it('returns focus to the owning thread when split panes contain the same message
       isFetching: () => false,
       isFetchingOlder: () => false,
       hasMore: () => false,
-      fetchOlder() {},
-      refresh() {},
+      async fetchOlder() {},
+      async refresh() {},
     });
     const state = createEmailThreadState(deps);
     return (

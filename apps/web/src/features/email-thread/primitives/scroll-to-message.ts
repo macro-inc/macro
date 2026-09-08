@@ -288,7 +288,7 @@ export function listNeedsOlderPage(args: {
 
 export async function fetchOlderMessages(
   list: HTMLElement,
-  fetchNextPage: () => unknown
+  fetchNextPage: () => Promise<void>
 ): Promise<void> {
   const previousScrollHeight = list.scrollHeight;
   try {

@@ -147,6 +147,12 @@ describe('email ownership boundaries', () => {
       if (visited.has(file)) return;
       visited.add(file);
       for (const entry of imports(file)) {
+        if (entry.name.startsWith('@tanstack/')) {
+          violations.push(
+            [...trail, relative(web, file), entry.name].join(' -> ')
+          );
+          continue;
+        }
         if (
           entry.typeOnly ||
           !entry.target ||

@@ -13,8 +13,12 @@ import type {
   EmailMessage,
 } from '../../email-message/core/email-message';
 import type {
+  EmailAttachmentStorage,
+  EmailComposeAccounts,
+  EmailComposeFeedback,
   EmailComposeHost,
-  EmailComposeServices,
+  EmailDelivery,
+  EmailDraftStorage,
   SavedEmailDraft,
 } from '../context/compose-services';
 import { decodeBase64Utf8 } from '../core/decode-base64';
@@ -22,7 +26,7 @@ import type { EmailRecipient } from '../core/email-recipient';
 import { plainTextToHtml } from '../core/plain-text-to-html';
 import { convertEmailRecipientToContactInfo } from '../core/recipient-conversion';
 import type {
-  ComposeContextValue,
+  ComposeState,
   ComposeValidationError,
 } from '../primitives/compose-view-state';
 import type { EmailFormRecipients } from '../primitives/email-form-state';
@@ -54,7 +58,15 @@ type UndoComposeSnapshot = {
 const composeUndo = createEmailUndoStore<UndoComposeSnapshot>();
 
 export type EmailComposeInput = {
-  services: EmailComposeServices;
+  drafts: EmailDraftStorage;
+  attachmentStorage: EmailAttachmentStorage;
+  delivery: EmailDelivery;
+  notices: EmailComposeFeedback;
+  accounts: EmailComposeAccounts;
+  viewerEmail: Accessor<string | undefined>;
+  hasPaidAccess: Accessor<boolean>;
+  recipients: Accessor<EmailRecipient[]>;
+  recipientName(id: string): string;
   host?: EmailComposeHost;
   draft?: EmailMessage;
   /** Identity for a composer reopened from a local undo snapshot. */
@@ -66,14 +78,13 @@ export type EmailComposeInput = {
 };
 
 export function createEmailComposer(props: EmailComposeInput) {
-  const services = props.services;
   const initialDraftID = props.draft?.db_id ?? props.draftID;
-  const hasPaidAccess = services.hasPaidAccess;
+  const hasPaidAccess = props.hasPaidAccess;
 
   const form = createEmailFormState(
     {
-      viewerEmail: services.viewerEmail,
-      inboxes: services.accounts.inboxes,
+      viewerEmail: props.viewerEmail,
+      inboxes: props.accounts.inboxes,
     },
     initialDraftID
       ? {
@@ -88,9 +99,9 @@ export function createEmailComposer(props: EmailComposeInput) {
     }
   );
 
-  const primaryLinkId = services.accounts.primaryId;
+  const primaryLinkId = props.accounts.primaryId;
   const link = createMemo(() => {
-    const inboxes = services.accounts.inboxes();
+    const inboxes = props.accounts.inboxes();
     if (inboxes.length === 0) return undefined;
     // Send from the inbox the user picked, else the inbox that owns the draft
     // being edited, else the primary inbox — not whichever inbox sorts first.
@@ -109,13 +120,11 @@ export function createEmailComposer(props: EmailComposeInput) {
   const [includeSignature, setIncludeSignature] = createSignal(true);
 
   const hasLinkError = createMemo(() => {
-    if (services.accounts.loading()) return false;
-    return (
-      services.accounts.failed() || services.accounts.inboxes().length === 0
-    );
+    if (props.accounts.loading()) return false;
+    return props.accounts.failed() || props.accounts.inboxes().length === 0;
   });
 
-  const destinationOptions = services.recipients;
+  const destinationOptions = props.recipients;
 
   const [editor, setEditor] = createSignal<LexicalEditor | undefined>();
   const [content, setContent] = createSignal('');
@@ -131,7 +140,7 @@ export function createEmailComposer(props: EmailComposeInput) {
   >(props.draft?.thread_db_id);
 
   const attachmentPersistence = createAttachmentPersistence({
-    services,
+    services: props.attachmentStorage,
     attachments: () => form.attachments,
     draftId: currentDraftID,
     linkId: activeLinkId,
@@ -175,7 +184,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
-      services.reportError(
+      props.notices.reportError(
         new Error('Unable to prepare email body for draft collection.')
       );
       return null;
@@ -208,7 +217,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     if (!draftToSave) {
       const draftID = currentDraftID();
       if (draftID) {
-        await services.deleteDraft({
+        await props.drafts.deleteDraft({
           draftId: draftID,
           threadId: currentThreadID(),
           linkId: saveLinkId,
@@ -219,7 +228,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     }
 
     const previousThreadID = currentThreadID();
-    const draftResponse = await services.saveDraft({
+    const draftResponse = await props.drafts.saveDraft({
       draft: {
         ...draftToSave,
         db_id: currentDraftID(),
@@ -304,7 +313,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     linkId: string | undefined
   ) => {
     const snapshot = composeUndo.peek(draftId);
-    await services.restoreDraft({
+    await props.drafts.restoreDraft({
       draftId,
       threadId,
       draft: snapshot
@@ -331,7 +340,7 @@ export function createEmailComposer(props: EmailComposeInput) {
     threadId: string | undefined,
     linkId: string | undefined
   ) =>
-    services.undoSend({
+    props.delivery.undoSend({
       threadId,
       draftId,
       linkId,
@@ -343,15 +352,15 @@ export function createEmailComposer(props: EmailComposeInput) {
     const threadId = message.thread_db_id;
     if (draftId) endUndoSend(draftId);
     try {
-      const toastId = services.feedback.success('Email sent', {
+      const toastId = props.notices.feedback.success('Email sent', {
         actions: draftId
           ? [
               {
                 label: 'Undo',
                 onClick: () => {
-                  if (toastId != null) services.feedback.dismiss(toastId);
+                  if (toastId != null) props.notices.feedback.dismiss(toastId);
                   void undoSend(draftId, threadId ?? undefined, linkId).catch(
-                    services.reportError
+                    props.notices.reportError
                   );
                 },
               },
@@ -360,12 +369,12 @@ export function createEmailComposer(props: EmailComposeInput) {
         duration: 5_000,
       });
     } catch (error) {
-      services.reportError(error);
+      props.notices.reportError(error);
     }
     try {
       if (threadId) props.host?.showThread?.(threadId);
     } catch (error) {
-      services.reportError(error);
+      props.notices.reportError(error);
     }
   };
 
@@ -464,7 +473,7 @@ export function createEmailComposer(props: EmailComposeInput) {
 
       try {
         setSendPhase('sending');
-        const result = await services.sendMessage({
+        const result = await props.delivery.sendMessage({
           message: {
             to: convertToContactInfoArray(recipients.to),
             cc:
@@ -493,8 +502,8 @@ export function createEmailComposer(props: EmailComposeInput) {
         cleanupWatermark();
       }
     } catch (error) {
-      services.reportError(error);
-      if (!completed) services.feedback.failure('Failed to send email');
+      props.notices.reportError(error);
+      if (!completed) props.notices.feedback.failure('Failed to send email');
     } finally {
       setSendPhase('idle');
     }
@@ -507,7 +516,8 @@ export function createEmailComposer(props: EmailComposeInput) {
     return recipients.to.length + recipients.cc.length + recipients.bcc.length;
   };
   const schedule = createEmailSendSchedule({
-    services,
+    delivery: props.delivery,
+    notices: props.notices,
     draftId: currentDraftID,
     saveDraft: executeSaveDraft,
     threadId: currentThreadID,
@@ -545,7 +555,7 @@ export function createEmailComposer(props: EmailComposeInput) {
       await autosave.settled().catch(() => {});
       const draftId = currentDraftID();
       if (draftId) {
-        await services.deleteDraft({
+        await props.drafts.deleteDraft({
           draftId,
           threadId: currentThreadID(),
           linkId: activeLinkId(),
@@ -592,7 +602,7 @@ export function createEmailComposer(props: EmailComposeInput) {
       let recipientName = recipients[0].data.email;
 
       if (recipients[0].kind === 'user') {
-        recipientName = services.recipientName(recipients[0].data.id);
+        recipientName = props.recipientName(recipients[0].data.id);
       }
 
       return recipientName ? `Email to ${recipientName}` : 'Draft email';
@@ -602,7 +612,7 @@ export function createEmailComposer(props: EmailComposeInput) {
       .slice(0, 2)
       .map((r) => {
         if (r.kind === 'user') {
-          return services.recipientName(r.data.id);
+          return props.recipientName(r.data.id);
         }
         return r.data.email || 'Unknown';
       })
@@ -617,26 +627,7 @@ export function createEmailComposer(props: EmailComposeInput) {
 
   // --- Context value ---
 
-  const ctxValue: ComposeContextValue = {
-    bodyActions: {
-      focusSibling: props.host?.focusSibling,
-      recipientAdded: (email) => {
-        services.feedback.success(`${email} added to CC`);
-      },
-      readDroppedFiles: services.readDroppedFiles,
-      pasteFiles: (editor, files, directories) =>
-        services.uploadEditorFiles({
-          editor,
-          files,
-          directories,
-          onUploaded: (ids) => ids.forEach(services.makePublic),
-        }),
-    },
-    isMobile: services.isMobile,
-    scheduleEnabled: services.scheduleEnabled,
-    attachmentFailure: services.feedback.failure,
-    onUpgrade: services.onUpgrade,
-    viewerLoading: services.viewerLoading,
+  const ctxValue: ComposeState = {
     // Form state (read)
     recipients: form.recipients,
     subject: form.subject,
@@ -687,7 +678,7 @@ export function createEmailComposer(props: EmailComposeInput) {
 
     // Display
     fromAddress: () => link()?.email_address,
-    fromInboxes: () => services.accounts.inboxes() ?? [],
+    fromInboxes: () => props.accounts.inboxes() ?? [],
     selectedFromLinkId: () => link()?.id,
     // Persist immediately on a sender switch so the draft moves to the new
     // inbox even without a text edit.

@@ -107,21 +107,26 @@ export interface EmailComposeFeedback {
   reportError(error: unknown): void;
 }
 
-/** Composition supplies the complete surface; persistence and delivery consume their own contracts. */
-export interface EmailComposeServices
-  extends EmailDraftStorage,
-    EmailAttachmentStorage,
-    EmailDelivery,
-    EmailComposeFeedback {
+export interface EmailComposeAccounts {
+  inboxes: Accessor<EmailInbox[]>;
+  loading: Accessor<boolean>;
+  failed: Accessor<boolean>;
+  primaryId: Accessor<string | undefined>;
+}
+
+/** View wiring; controllers do not receive these presentation capabilities. */
+export interface EmailComposePresentation {
   viewerLoading: Accessor<boolean>;
   onUpgrade(): void;
   prepareSignatureLinks(root: ShadowRoot): void;
-  readDroppedFiles: import('./editor-capabilities').ComposeBodyActions['readDroppedFiles'];
   isTouch: Accessor<boolean>;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
-  recipientName(id: string): string;
-  recordMention(sourceId: string, targetId: string): void;
+  signaturesEnabled: Accessor<boolean>;
+}
+
+export interface EmailEditorFiles {
+  readDroppedFiles: import('./editor-capabilities').ComposeBodyActions['readDroppedFiles'];
   makePublic(id: string): void;
   uploadEditorFiles(input: {
     editor: LexicalEditor | undefined;
@@ -131,17 +136,22 @@ export interface EmailComposeServices
     dropEvent?: DragEvent;
     onUploaded(ids: string[]): void;
   }): void;
+}
 
-  accounts: {
-    inboxes: Accessor<EmailInbox[]>;
-    loading: Accessor<boolean>;
-    failed: Accessor<boolean>;
-    primaryId: Accessor<string | undefined>;
-  };
+/** Production composition groups capabilities for views to wire into their consumers. */
+export interface EmailComposeServices {
+  drafts: EmailDraftStorage;
+  attachmentStorage: EmailAttachmentStorage;
+  delivery: EmailDelivery;
+  notices: EmailComposeFeedback;
+  accounts: EmailComposeAccounts;
+  presentation: EmailComposePresentation;
+  editorFiles: EmailEditorFiles;
   viewerEmail: Accessor<string | undefined>;
   recipients: Accessor<EmailRecipient[]>;
-  signaturesEnabled: Accessor<boolean>;
+  recipientName(id: string): string;
   hasPaidAccess: Accessor<boolean>;
+  recordMention(sourceId: string, targetId: string): void;
 }
 
 export interface ComposeNoticeOptions {

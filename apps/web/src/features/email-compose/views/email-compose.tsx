@@ -11,6 +11,8 @@ import { Surface } from '@ui';
 
 import { createSignal, Show } from 'solid-js';
 import { SignaturePreview } from '../components/signature-preview';
+import type { EmailComposeServices } from '../context/compose-services';
+import type { ComposeContextValue } from '../primitives/compose-view-state';
 import {
   createEmailComposer,
   type EmailComposeInput,
@@ -18,10 +20,34 @@ import {
 import { ComposeLayout } from '../views/compose-layout';
 import { EmailComposeToolbar } from '../views/compose-toolbar';
 import { ComposeProvider } from './compose-context';
-export type EmailComposeViewProps = EmailComposeInput;
+export type EmailComposeViewProps = Pick<
+  EmailComposeInput,
+  | 'host'
+  | 'draft'
+  | 'draftID'
+  | 'recipientOptions'
+  | 'onRecipientsChange'
+  | 'initialTo'
+> & { services: EmailComposeServices };
 export function EmailComposeView(props: EmailComposeViewProps) {
   const services = props.services;
-  const state = createEmailComposer(props);
+  const state = createEmailComposer({
+    drafts: services.drafts,
+    attachmentStorage: services.attachmentStorage,
+    delivery: services.delivery,
+    notices: services.notices,
+    accounts: services.accounts,
+    viewerEmail: services.viewerEmail,
+    hasPaidAccess: services.hasPaidAccess,
+    recipients: services.recipients,
+    recipientName: services.recipientName,
+    host: props.host,
+    draft: props.draft,
+    draftID: props.draftID,
+    recipientOptions: props.recipientOptions,
+    onRecipientsChange: props.onRecipientsChange,
+    initialTo: props.initialTo,
+  });
   const {
     editor,
     previewName,
@@ -32,16 +58,38 @@ export function EmailComposeView(props: EmailComposeViewProps) {
     includeSignature,
     setIncludeSignature,
   } = state;
-  const ctxValue = {
+  const ctxValue: ComposeContextValue = {
     ...state.context,
+    bodyActions: {
+      focusSibling: props.host?.focusSibling,
+      recipientAdded: (email) =>
+        services.notices.feedback.success(`${email} added to CC`),
+      readDroppedFiles: services.editorFiles.readDroppedFiles,
+      pasteFiles: (editor, files, directories) =>
+        services.editorFiles.uploadEditorFiles({
+          editor,
+          files,
+          directories,
+          onUploaded: (ids) => ids.forEach(services.editorFiles.makePublic),
+        }),
+    },
+    isMobile: services.presentation.isMobile,
+    scheduleEnabled: services.presentation.scheduleEnabled,
+    attachmentFailure: services.notices.feedback.failure,
+    onUpgrade: services.presentation.onUpgrade,
+    viewerLoading: services.presentation.viewerLoading,
     signaturePreview: () => (
       <Show
-        when={services.signaturesEnabled() && includeSignature() && signature()}
+        when={
+          services.presentation.signaturesEnabled() &&
+          includeSignature() &&
+          signature()
+        }
       >
         {(html) => (
           <SignaturePreview
-            mobile={services.isMobile()}
-            prepareLinks={services.prepareSignatureLinks}
+            mobile={services.presentation.isMobile()}
+            prepareLinks={services.presentation.prepareSignatureLinks}
             html={html()}
             onDismiss={() => setIncludeSignature(false)}
           />
@@ -51,7 +99,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
   };
   const [draftBackMenuOpen, setDraftBackMenuOpen] = createSignal(false);
 
-  if (services.isMobile()) {
+  if (services.presentation.isMobile()) {
     // Backing out of a compose that has a draft asks whether to keep it.
     props.host?.registerBack?.(() => {
       if (!ctxValue.hasDraft() || !draftDirty()) return false;
@@ -67,7 +115,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
 
   return (
     <ComposeProvider value={ctxValue}>
-      <Show when={!services.isMobile()}>
+      <Show when={!services.presentation.isMobile()}>
         <SplitHeaderLeft>
           <StaticSplitLabel
             class="ph-no-capture"
@@ -96,7 +144,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
           </WrapUnlessMobile>
         </div>
       </div>
-      <Show when={services.isMobile()}>
+      <Show when={services.presentation.isMobile()}>
         <MobileDrawer
           side="bottom"
           open={draftBackMenuOpen()}

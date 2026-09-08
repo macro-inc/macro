@@ -4,7 +4,11 @@ import {
 } from '@app/features/email-compose/core/constants';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import type {
-  EmailComposeServices,
+  EmailAttachmentStorage,
+  EmailComposeAccounts,
+  EmailComposeFeedback,
+  EmailDelivery,
+  EmailDraftStorage,
   EmailUndoHandle,
   SavedEmailDraft,
 } from '../context/compose-services';
@@ -82,7 +86,15 @@ const replyUndo = createEmailUndoStore<UndoReplySnapshot>();
 
 export type ReplyInputProps = {
   newMessage?: boolean;
-  services: EmailComposeServices;
+  drafts: EmailDraftStorage;
+  attachmentStorage: EmailAttachmentStorage;
+  delivery: EmailDelivery;
+  notices: EmailComposeFeedback;
+  accounts: EmailComposeAccounts;
+  viewerEmail: Accessor<string | undefined>;
+  hasPaidAccess: Accessor<boolean>;
+  recordMention(sourceId: string, targetId: string): void;
+  focusAfterReplyRequest: Accessor<boolean>;
   session: EmailReplySession;
   sourceEntityId: string;
   replyingTo: Accessor<EmailMessage | undefined>;
@@ -108,22 +120,6 @@ export type ReplyInputProps = {
     nextEntityId?: string;
   }) => void;
   setShowReply?: Setter<boolean>;
-  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
-  unframed?: boolean;
-  mobileDrawer?: {
-    onClose: () => void;
-  };
-};
-export type ReplyEditorOptions = {
-  namespace: string;
-  onChange?: (markdown: string) => void;
-  onUserMention?: (mention: UserMentionRecord) => void;
-  onDocumentMention?: (item: { id: string }) => void;
-  onPasteFilesAndDirs?: (
-    files: FileSystemFileEntry[],
-    directories: FileSystemDirectoryEntry[]
-  ) => void;
-  scrollContainer?: Accessor<HTMLElement | undefined>;
 };
 
 export function createReplyInput(
@@ -163,26 +159,25 @@ export function createReplyInput(
   const form = () => formState;
   const sourceEntityId = props.sourceEntityId;
   const undoKey = `${sourceEntityId}:${replyTarget?.db_id ?? draftSeed?.replying_to_id ?? draftSeed?.db_id ?? 'new'}`;
-  const services = props.services;
-  const userEmail = services.viewerEmail;
+  const userEmail = props.viewerEmail;
 
-  const primaryLinkId = services.accounts.primaryId;
+  const primaryLinkId = props.accounts.primaryId;
   // Capture this domain inbox ID for each asynchronous operation.
   const activeLinkId = () =>
     form().selectedLinkId() ??
     thread()?.link_id ??
     draftSeed?.link_id ??
     primaryLinkId() ??
-    services.accounts.inboxes()[0]?.id;
+    props.accounts.inboxes()[0]?.id;
   // The address of the inbox this input sends from, for the "from" display.
   const activeInboxEmail = () =>
-    services.accounts.inboxes().find((l) => l.id === activeLinkId())
+    props.accounts.inboxes().find((l) => l.id === activeLinkId())
       ?.email_address ?? userEmail();
 
   // The full Link object for the sending inbox (for its saved signature and the
   // "add to replies & forwards" preference).
   const sendingLink = createMemo(() =>
-    services.accounts.inboxes().find((l) => l.id === activeLinkId())
+    props.accounts.inboxes().find((l) => l.id === activeLinkId())
   );
   const signature = () => sendingLink()?.settings.signature ?? undefined;
   // Whether this reply includes the signature. Defaults on, reset per reply,
@@ -193,7 +188,6 @@ export function createReplyInput(
   // and the user hasn't dismissed it. The backend does the actual injection on
   // send — this just mirrors when that will happen.
   const replySignatureHtml = (): string | undefined =>
-    services.signaturesEnabled() &&
     replyTarget &&
     includeSignature() &&
     sendingLink()?.settings.signature_on_replies_forwards
@@ -246,29 +240,6 @@ export function createReplyInput(
   );
   const savedDraftId = () => savedDraft()?.id;
   const savedDraftThreadId = () => savedDraft()?.threadId;
-
-  const editorOptions: ReplyEditorOptions = {
-    namespace: 'email-base-input-markdown',
-    scrollContainer,
-    onChange: (markdown) => handleChange(markdown),
-    onUserMention: (mention) => handleUserMention(mention),
-    onDocumentMention: (item) => {
-      services.makePublic(item.id);
-      scheduleDraftSave();
-    },
-    onPasteFilesAndDirs: (files, directories) => {
-      services.uploadEditorFiles({
-        editor: editor(),
-        sourceId: sourceEntityId,
-        files,
-        directories,
-        onUploaded: (ids) => {
-          ids.forEach(services.makePublic);
-          scheduleDraftSave();
-        },
-      });
-    },
-  };
 
   // Consume the undo-send snapshot so a later composer mount doesn't restore
   // it again. Use bodyHtml as initialHtml for the editor, restore attachments
@@ -364,7 +335,7 @@ export function createReplyInput(
     // Reconcile the actual message thread, which can differ from the host when
     // replying from another inbox. The host's undoKey still owns local recovery.
     const threadId = sentThreadId ?? snapshot?.threadId;
-    await services.restoreDraft({
+    await props.drafts.restoreDraft({
       draftId,
       threadId,
       draft: snapshot?.draftRestore,
@@ -386,7 +357,7 @@ export function createReplyInput(
     if (doneHandle) {
       await doneHandle.undo({
         onError: () =>
-          services.feedback.failure('Failed to restore thread to inbox'),
+          props.notices.feedback.failure('Failed to restore thread to inbox'),
       });
     }
   };
@@ -397,7 +368,7 @@ export function createReplyInput(
     threadId: string | undefined,
     linkId: string | undefined
   ) =>
-    services.undoSend({
+    props.delivery.undoSend({
       threadId,
       draftId,
       linkId,
@@ -409,18 +380,18 @@ export function createReplyInput(
     const draftId = message.db_id;
     if (draftId) endUndoSend(draftId);
     try {
-      const toastId = services.feedback.success('Email sent', {
+      const toastId = props.notices.feedback.success('Email sent', {
         actions: draftId
           ? [
               {
                 label: 'Undo',
                 onClick: () => {
-                  if (toastId != null) services.feedback.dismiss(toastId);
+                  if (toastId != null) props.notices.feedback.dismiss(toastId);
                   void undoSend(
                     draftId,
                     message.thread_db_id ?? undefined,
                     linkId
-                  ).catch(services.reportError);
+                  ).catch(props.notices.reportError);
                 },
               },
             ]
@@ -428,15 +399,15 @@ export function createReplyInput(
         duration: 5_000,
       });
     } catch (error) {
-      services.reportError(error);
+      props.notices.reportError(error);
     }
     const mentions = pendingMentions;
     pendingMentions = [];
     for (const mention of mentions) {
       try {
-        services.recordMention(sourceEntityId, mention.documentId);
+        props.recordMention(sourceEntityId, mention.documentId);
       } catch (error) {
-        services.reportError(error);
+        props.notices.reportError(error);
       }
     }
     if (shouldMarkDoneOnSuccess()) {
@@ -449,8 +420,10 @@ export function createReplyInput(
           nextEntityId: pendingMarkDoneNavigationTargetId,
         });
       } catch (error) {
-        services.reportError(error);
-        services.feedback.failure('Email sent, but unable to mark thread done');
+        props.notices.reportError(error);
+        props.notices.feedback.failure(
+          'Email sent, but unable to mark thread done'
+        );
       } finally {
         pendingMarkDoneNavigationTargetId = undefined;
         setShouldMarkDoneOnSuccess(false);
@@ -459,15 +432,15 @@ export function createReplyInput(
     try {
       // Presentation refresh must not keep a successfully sent or undone reply disabled.
       void Promise.resolve(props.sideEffectOnSend?.(draftId ?? null)).catch(
-        services.reportError
+        props.notices.reportError
       );
     } catch (error) {
-      services.reportError(error);
+      props.notices.reportError(error);
     }
   };
 
   const attachmentPersistence = createAttachmentPersistence({
-    services,
+    services: props.attachmentStorage,
     attachments: () => form().attachments,
     draftId: savedDraftId,
     linkId: activeLinkId,
@@ -536,7 +509,7 @@ export function createReplyInput(
     $removeAllWatermarkNodes(editor());
     const prepared = prepareEmailBody(editor());
     if (!prepared) {
-      services.reportError(
+      props.notices.reportError(
         new Error('Unable to prepare email body for draft collection.')
       );
       return null;
@@ -577,7 +550,7 @@ export function createReplyInput(
     if (!draftToSave) {
       const draftId = savedDraftId();
       if (draftId) {
-        await services.deleteDraft({
+        await props.drafts.deleteDraft({
           draftId,
           threadId: savedDraftThreadId(),
           linkId,
@@ -590,12 +563,14 @@ export function createReplyInput(
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
-      services.reportError(new Error('Failed to save draft: thread not found'));
+      props.notices.reportError(
+        new Error('Failed to save draft: thread not found')
+      );
       return;
     }
 
     if (newMessage && currentThread) {
-      services.reportError(
+      props.notices.reportError(
         new Error(
           'Failed to save draft: new message and current thread cannot be provided together'
         )
@@ -603,7 +578,7 @@ export function createReplyInput(
       return;
     }
 
-    const draftResponse = await services.saveDraft({
+    const draftResponse = await props.drafts.saveDraft({
       draft: {
         ...draftToSave,
         db_id: savedDraftId(),
@@ -627,7 +602,7 @@ export function createReplyInput(
         .attachments.list()
         .filter((attachment) => attachment.type === 'forwarded');
       if (forwarded.length) {
-        await services.addForwardedAttachments({
+        await props.attachmentStorage.addForwardedAttachments({
           draftID: draftId,
           attachments: forwarded.map((a) => ({
             attachmentID: a.attachmentID,
@@ -679,7 +654,7 @@ export function createReplyInput(
     }
     // Forwards focus the To field; focusing the editor would steal it back
     if (requestReplyType !== 'forward') {
-      if (!services.isTouch()) focus.editor(() => {});
+      if (props.focusAfterReplyRequest()) focus.editor(() => {});
     }
     ctx.replyRequest.clear();
   });
@@ -695,7 +670,7 @@ export function createReplyInput(
     untrack(scheduleDraftSave);
   };
 
-  const hasPaidAccess = services.hasPaidAccess;
+  const hasPaidAccess = props.hasPaidAccess;
 
   const sendEmail = async (markDone = false) => {
     if (scheduling()) return;
@@ -707,7 +682,9 @@ export function createReplyInput(
     const bcc = form().recipients().bcc.map(convertEmailRecipientToContactInfo);
 
     if ((to?.length ?? 0) + (cc?.length ?? 0) + (bcc?.length ?? 0) === 0) {
-      services.feedback.failure('Email failed to send. No recipients provided');
+      props.notices.feedback.failure(
+        'Email failed to send. No recipients provided'
+      );
       return;
     }
 
@@ -715,16 +692,16 @@ export function createReplyInput(
     const newMessage = props.newMessage ?? false;
 
     if (!currentThread && !newMessage) {
-      services.reportError(
+      props.notices.reportError(
         new Error("Can't send email, no email thread found")
       );
-      services.feedback.failure('Email failed to send');
+      props.notices.feedback.failure('Email failed to send');
       return;
     }
 
     if (newMessage && currentThread) {
-      services.feedback.failure('Email failed to send');
-      services.reportError(
+      props.notices.feedback.failure('Email failed to send');
+      props.notices.reportError(
         'New message and thread cannot be provided together'
       );
       return;
@@ -732,25 +709,25 @@ export function createReplyInput(
 
     let linkId = activeLinkId();
     if (newMessage || !linkId) {
-      if (services.accounts.loading()) {
-        services.feedback.alert('Loading email accounts...');
+      if (props.accounts.loading()) {
+        props.notices.feedback.alert('Loading email accounts...');
         return;
       }
 
-      if (services.accounts.failed()) {
-        services.feedback.failure(
+      if (props.accounts.failed()) {
+        props.notices.feedback.failure(
           'Email failed to send: Could not load email accounts'
         );
-        services.reportError('Failed to load email links');
+        props.notices.reportError('Failed to load email links');
         return;
       }
 
-      const linksData = { links: services.accounts.inboxes() };
+      const linksData = { links: props.accounts.inboxes() };
       if (!linksData || linksData.links.length < 1) {
-        services.feedback.failure(
+        props.notices.feedback.failure(
           'Email failed to send: No email account connected'
         );
-        services.reportError('No links found');
+        props.notices.reportError('No links found');
         return;
       }
       linkId = primaryLinkId() ?? linksData.links[0].id;
@@ -841,7 +818,7 @@ export function createReplyInput(
       const currentDraftID = savedDraftId();
 
       setSendPhase('sending');
-      const pendingSend = services.sendMessage({
+      const pendingSend = props.delivery.sendMessage({
         message: {
           db_id: currentDraftID,
           bcc,
@@ -868,7 +845,7 @@ export function createReplyInput(
         resetState();
         clearDraftState();
       } catch (error) {
-        services.reportError(error);
+        props.notices.reportError(error);
       } finally {
         cleanupWatermark();
       }
@@ -883,13 +860,13 @@ export function createReplyInput(
           const snapshot = replyUndo.peek(currentDraftID);
           if (snapshot) restoreMountedReply(snapshot);
         }
-        services.reportError(error);
-        services.feedback.failure('Failed to send email');
+        props.notices.reportError(error);
+        props.notices.feedback.failure('Failed to send email');
         return;
       }
       afterSend(result.message, linkId);
     } catch (error) {
-      services.reportError(error);
+      props.notices.reportError(error);
     } finally {
       setSendPhase('idle');
     }
@@ -916,7 +893,7 @@ export function createReplyInput(
       await autosave.settled().catch(() => {});
       const draftId = savedDraftId();
       if (draftId) {
-        await services.deleteDraft({
+        await props.drafts.deleteDraft({
           draftId,
           threadId: savedDraftThreadId(),
           linkId: activeLinkId(),
@@ -946,7 +923,7 @@ export function createReplyInput(
       bccRecipients: form().recipients().bcc,
       setCc: (next) => form().setRecipients('cc', next),
       onRecipientAdded: (email) => {
-        services.feedback.success(`${email} added to CC`);
+        props.notices.feedback.success(`${email} added to CC`);
       },
     });
   };
@@ -957,7 +934,7 @@ export function createReplyInput(
     const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
 
     if (attachmentsToAddByteSize >= MAX_ATTACHMENTS_BYTES_SIZE) {
-      services.feedback.failure(
+      props.notices.feedback.failure(
         `${plural('Attachment', files.length)} exceed 18MB`
       );
       return;
@@ -972,7 +949,7 @@ export function createReplyInput(
       currentAttachmentsByteSize + attachmentsToAddByteSize >=
       MAX_ATTACHMENTS_BYTES_SIZE
     ) {
-      services.feedback.failure("Can't add more attachments", {
+      props.notices.feedback.failure("Can't add more attachments", {
         subtext: 'Total attachments exceed 18MB limit',
       });
       return;
@@ -991,7 +968,8 @@ export function createReplyInput(
   const handleRemoveAttachment = attachmentPersistence.remove;
 
   const schedule = createEmailSendSchedule({
-    services,
+    delivery: props.delivery,
+    notices: props.notices,
     draftId: savedDraftId,
     saveDraft: executeSaveDraft,
     threadId: savedDraftThreadId,
@@ -1011,11 +989,6 @@ export function createReplyInput(
     scheduleBlocked() ? Promise.resolve() : schedule.change(date);
 
   const hasBodyText = () => bodyMacro().trim().length > 0;
-  const sendActionHidden = () =>
-    services.isTouch() &&
-    !hasBodyText() &&
-    // Forwards carry the quoted thread as content, so send is available without typing anything.
-    effectiveReplyType() !== 'forward';
   const sendActionDisabled = () =>
     pendingDeletion ||
     submitting() ||
@@ -1049,30 +1022,10 @@ export function createReplyInput(
     });
   };
 
-  const handleEditorDrop = (
-    files: FileSystemFileEntry[],
-    directories: FileSystemDirectoryEntry[],
-    event: DragEvent | undefined,
-    onUploaded: () => void
-  ) => {
-    const currentEditor = editor();
-    if (!currentEditor || !event) return;
-    services.uploadEditorFiles({
-      editor: currentEditor,
-      sourceId: sourceEntityId,
-      files,
-      directories,
-      dropEvent: event,
-      onUploaded: (ids) => {
-        onUploaded();
-        ids.forEach(services.makePublic);
-        scheduleDraftSave();
-      },
-    });
-  };
-
   return {
-    editorOptions,
+    onContentChange: handleChange,
+    handleUserMention,
+    scrollContainer,
     form,
     activeLinkId,
     activeInboxEmail,
@@ -1098,9 +1051,8 @@ export function createReplyInput(
     deleteDraftAndReset,
     handleAddAttachments,
     handleRemoveAttachment,
-    handleEditorDrop,
     handleSendTimeChange,
-    sendActionHidden,
+    hasBodyText,
     sendActionDisabled,
     scheduleSendDisabled,
     toggleQuotedText,

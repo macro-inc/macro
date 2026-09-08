@@ -21,7 +21,7 @@ describe('standalone compose controller', () => {
     const root = createRoot((dispose) => ({
       dispose,
       state: createEmailComposer({
-        services,
+        ...services,
         host: { showDraft },
         initialTo: ['colleague@example.com'],
       }),
@@ -46,8 +46,8 @@ describe('standalone compose controller', () => {
       root.state.context.setSubject('Architecture');
       root.state.context.onContentChange('Keep this draft');
       await vi.advanceTimersByTimeAsync(600);
-      expect(services.saveDraft).toHaveBeenCalled();
-      const input = vi.mocked(services.saveDraft).mock.calls.at(-1)![0];
+      expect(services.drafts.saveDraft).toHaveBeenCalled();
+      const input = vi.mocked(services.drafts.saveDraft).mock.calls.at(-1)![0];
       expect(input.draft.to).toEqual([
         expect.objectContaining({ email: 'colleague@example.com' }),
       ]);
@@ -64,12 +64,12 @@ describe('standalone compose controller', () => {
     const services = composeServices();
     const root = createRoot((dispose) => ({
       dispose,
-      state: createEmailComposer({ services }),
+      state: createEmailComposer({ ...services }),
     }));
     try {
       root.state.context.onSend();
       await Promise.resolve();
-      expect(services.sendMessage).not.toHaveBeenCalled();
+      expect(services.delivery.sendMessage).not.toHaveBeenCalled();
     } finally {
       root.dispose();
     }
@@ -82,7 +82,7 @@ it('reports scheduling failure without adopting an unconfirmed send time, and ke
   const root = createRoot((dispose) => ({
     dispose,
     state: createEmailComposer({
-      services,
+      ...services,
       initialTo: ['colleague@example.com'],
     }),
   }));
@@ -105,18 +105,20 @@ it('reports scheduling failure without adopting an unconfirmed send time, and ke
     root.state.context.setSubject('Schedule review');
     root.state.context.onContentChange('Schedule this reply');
     const requested = new Date('2026-10-01T12:00:00Z');
-    vi.mocked(services.schedule).mockRejectedValueOnce(new Error('offline'));
+    vi.mocked(services.delivery.schedule).mockRejectedValueOnce(
+      new Error('offline')
+    );
     await root.state.context.onSendTimeChange?.(requested);
     expect(root.state.context.sendTime()).toBeFalsy();
-    expect(services.feedback.failure).toHaveBeenCalledWith(
+    expect(services.notices.feedback.failure).toHaveBeenCalledWith(
       'Failed to schedule message'
     );
-    vi.mocked(services.archive).mockRejectedValueOnce(
+    vi.mocked(services.delivery.archive).mockRejectedValueOnce(
       new Error('archive offline')
     );
     await root.state.context.onSendTimeChange?.(requested);
     expect(root.state.context.sendTime()).toEqual(requested);
-    expect(services.feedback.failure).toHaveBeenCalledWith(
+    expect(services.notices.feedback.failure).toHaveBeenCalledWith(
       'Email scheduled, but unable to mark thread done'
     );
   } finally {
@@ -128,17 +130,19 @@ it('reports scheduling failure without adopting an unconfirmed send time, and ke
 it('blocks immediate send and overlapping changes while a scheduling request is pending', async () => {
   let finish!: () => void;
   const services = composeServices({
-    schedule: vi.fn(
-      () =>
-        new Promise<void>((resolve) => {
-          finish = resolve;
-        })
-    ),
+    delivery: {
+      schedule: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          })
+      ),
+    },
   });
   const root = createRoot((dispose) => ({
     dispose,
     state: createEmailComposer({
-      services,
+      ...services,
       initialTo: ['colleague@example.com'],
     }),
   }));
@@ -163,14 +167,16 @@ it('blocks immediate send and overlapping changes while a scheduling request is 
     const request = root.state.context.onSendTimeChange?.(
       new Date('2026-10-01T12:00:00Z')
     );
-    await vi.waitFor(() => expect(services.schedule).toHaveBeenCalledOnce());
+    await vi.waitFor(() =>
+      expect(services.delivery.schedule).toHaveBeenCalledOnce()
+    );
     expect(root.state.context.disabled()).toBe(true);
     root.state.context.onSend();
     await root.state.context.onSendTimeChange?.(
       new Date('2026-10-02T12:00:00Z')
     );
-    expect(services.sendMessage).not.toHaveBeenCalled();
-    expect(services.schedule).toHaveBeenCalledOnce();
+    expect(services.delivery.sendMessage).not.toHaveBeenCalled();
+    expect(services.delivery.schedule).toHaveBeenCalledOnce();
     finish();
     await request;
     expect(root.state.context.disabled()).toBe(false);

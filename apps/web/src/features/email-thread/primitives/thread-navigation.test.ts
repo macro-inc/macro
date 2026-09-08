@@ -23,8 +23,8 @@ it('registers reply-all for the latest or selected message and ignores an empty 
       isFetching: () => false,
       isFetchingOlder: () => false,
       hasMore: () => false,
-      fetchOlder() {},
-      refresh() {},
+      async fetchOlder() {},
+      async refresh() {},
     });
     const context = createEmailThreadState(deps);
     createThreadNavigation({ threadId: () => 'thread' }, context, deps, {
@@ -58,8 +58,8 @@ it('leaves Enter to a focused button and still activates the thread container', 
       isFetching: () => false,
       isFetchingOlder: () => false,
       hasMore: () => false,
-      fetchOlder() {},
-      refresh() {},
+      async fetchOlder() {},
+      async refresh() {},
     });
     const context = createEmailThreadState(deps);
     createThreadNavigation({ threadId: () => 'thread' }, context, deps, {
@@ -112,8 +112,8 @@ function navigationWithList(ids: string[]) {
       isFetching: () => false,
       isFetchingOlder: () => false,
       hasMore: () => false,
-      fetchOlder() {},
-      refresh() {},
+      async fetchOlder() {},
+      async refresh() {},
     });
     const host = {
       focusContainer: () => container.focus({ preventScroll: true }),

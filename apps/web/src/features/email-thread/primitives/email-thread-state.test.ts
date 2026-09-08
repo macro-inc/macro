@@ -28,8 +28,8 @@ describe('thread state with an injected source', () => {
             isFetching: () => false,
             isFetchingOlder: () => false,
             hasMore: () => false,
-            fetchOlder() {},
-            refresh() {},
+            async fetchOlder() {},
+            async refresh() {},
           })
         );
         expect(state.drafts.initialDraftsSettled()).toBe(true);
@@ -61,8 +61,8 @@ describe('thread state with an injected source', () => {
           isFetching: () => false,
           isFetchingOlder: () => false,
           hasMore: () => false,
-          fetchOlder: vi.fn(),
-          refresh: vi.fn(),
+          fetchOlder: vi.fn(async () => {}),
+          refresh: vi.fn(async () => {}),
         };
         const first = createEmailThreadState(dependencies(source));
         const second = createEmailThreadState(dependencies(source));

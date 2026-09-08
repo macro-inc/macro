@@ -4,14 +4,9 @@ import type {
   EmailDelivery,
 } from '../context/compose-services';
 
-type ScheduleServices = Pick<
-  EmailDelivery,
-  'schedule' | 'unschedule' | 'archive'
-> &
-  EmailComposeFeedback;
-
 export function createEmailSendSchedule(options: {
-  services: ScheduleServices;
+  delivery: Pick<EmailDelivery, 'schedule' | 'unschedule' | 'archive'>;
+  notices: EmailComposeFeedback;
   draftId: Accessor<string | null | undefined>;
   saveDraft: () => Promise<string | undefined>;
   threadId: Accessor<string | null | undefined>;
@@ -20,7 +15,7 @@ export function createEmailSendSchedule(options: {
   setSendTime: (date: Date | null) => void;
   recipientCount: Accessor<number>;
 }) {
-  const { services } = options;
+  const { delivery, notices } = options;
   const [pending, setPending] = createSignal(false);
 
   const change = async (date: Date | null) => {
@@ -32,17 +27,17 @@ export function createEmailSendSchedule(options: {
       const currentDraft = options.draftId();
       if (!date && previous && currentDraft) {
         try {
-          await services.unschedule({
+          await delivery.unschedule({
             draftID: currentDraft,
             linkId,
           });
         } catch (error) {
-          services.reportError(error);
-          services.feedback.failure('Failed to unschedule email');
+          notices.reportError(error);
+          notices.feedback.failure('Failed to unschedule email');
           return;
         }
         options.setSendTime(null);
-        services.feedback.success('Email unscheduled');
+        notices.feedback.success('Email unscheduled');
         return;
       }
       if (!date) {
@@ -54,35 +49,35 @@ export function createEmailSendSchedule(options: {
       try {
         draftID = await options.saveDraft();
       } catch (error) {
-        services.reportError(error);
+        notices.reportError(error);
         return;
       }
       try {
         if (!draftID) throw new Error('Draft required');
-        await services.schedule(
+        await delivery.schedule(
           { draftID, send_time: date.toISOString() },
           linkId
         );
       } catch (error) {
-        services.reportError(error);
-        services.feedback.failure('Failed to schedule message');
+        notices.reportError(error);
+        notices.feedback.failure('Failed to schedule message');
         return;
       }
       options.setSendTime(date);
       const threadID = options.threadId();
       if (threadID) {
         try {
-          await services.archive({ id: threadID, value: true }, linkId);
+          await delivery.archive({ id: threadID, value: true }, linkId);
         } catch (error) {
-          services.reportError(error);
-          services.feedback.failure(
+          notices.reportError(error);
+          notices.feedback.failure(
             'Email scheduled, but unable to mark thread done'
           );
         }
       }
     } catch (error) {
       // Presentation failures do not change a successful schedule/unschedule.
-      services.reportError(error);
+      notices.reportError(error);
     } finally {
       setPending(false);
     }

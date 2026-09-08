@@ -29,8 +29,8 @@ export interface EmailThreadSource {
   isFetching: Accessor<boolean>;
   isFetchingOlder: Accessor<boolean>;
   hasMore: Accessor<boolean>;
-  fetchOlder(): void | Promise<void>;
-  refresh(): void | Promise<void>;
+  fetchOlder(): Promise<void>;
+  refresh(): Promise<void>;
 }
 
 export interface EmailThreadCommands {

@@ -16,13 +16,16 @@ export type ComposeValidationError = {
   message: string;
 };
 
-export interface ComposeContextValue {
+export interface ComposeContextValue extends ComposeState {
   bodyActions: ComposeBodyActions;
   isMobile: Accessor<boolean>;
   scheduleEnabled: boolean;
   attachmentFailure(message: string, options?: { subtext?: string }): void;
   onUpgrade?: () => void;
   viewerLoading?: Accessor<boolean>;
+}
+
+export interface ComposeState {
   // Form state (read)
   recipients: () => EmailFormRecipients;
   subject: () => string;

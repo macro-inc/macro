@@ -75,8 +75,8 @@ export type EmailThreadState = {
   query: {
     hasMore: Accessor<boolean>;
     isFetching: Accessor<boolean>;
-    fetchNextPage: () => void | Promise<void>;
-    refetch: () => void | Promise<void>;
+    fetchNextPage: () => Promise<void>;
+    refetch: () => Promise<void>;
   };
 
   archiveThread: (opts?: ArchiveThreadOptions) => boolean;

@@ -17,7 +17,7 @@ import { isIOS } from '@solid-primitives/platform';
 import { Button, cn, Layer, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { type Accessor, createSignal, For, onMount, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { SignaturePreview } from '../components/signature-preview';
@@ -64,10 +64,40 @@ function createConfiguredEmailMarkdownEditor(options: ReplyEditorOptions) {
 
 import {
   createReplyInput,
-  type ReplyEditorOptions,
   type ReplyInputProps,
 } from '../primitives/reply-input';
-export function ReplyInputView(props: ReplyInputProps) {
+
+type ReplyEditorOptions = {
+  namespace: string;
+  onChange?: (markdown: string) => void;
+  onUserMention?: (
+    mention: import('@core/component/LexicalMarkdown/utils/mentionsUtils').UserMentionRecord
+  ) => void;
+  onDocumentMention?: (item: { id: string }) => void;
+  onPasteFilesAndDirs?: (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[]
+  ) => void;
+  scrollContainer?: Accessor<HTMLElement | undefined>;
+};
+type ReplyInputViewProps = Omit<
+  ReplyInputProps,
+  | 'drafts'
+  | 'attachmentStorage'
+  | 'delivery'
+  | 'notices'
+  | 'accounts'
+  | 'viewerEmail'
+  | 'hasPaidAccess'
+  | 'recordMention'
+  | 'focusAfterReplyRequest'
+> & {
+  services: import('../context/compose-services').EmailComposeServices;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
+  unframed?: boolean;
+  mobileDrawer?: { onClose: () => void };
+};
+export function ReplyInputView(props: ReplyInputViewProps) {
   const services = props.services;
   const ctx = props.session;
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -75,7 +105,30 @@ export function ReplyInputView(props: ReplyInputProps) {
   let bottomBarRef: HTMLDivElement | undefined;
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const state = createReplyInput(
-    props,
+    {
+      drafts: services.drafts,
+      attachmentStorage: services.attachmentStorage,
+      delivery: services.delivery,
+      notices: services.notices,
+      accounts: services.accounts,
+      viewerEmail: services.viewerEmail,
+      hasPaidAccess: services.hasPaidAccess,
+      recordMention: services.recordMention,
+      focusAfterReplyRequest: () => !services.presentation.isTouch(),
+      newMessage: props.newMessage,
+      session: props.session,
+      sourceEntityId: props.sourceEntityId,
+      replyingTo: props.replyingTo,
+      isEditingExisting: props.isEditingExisting,
+      draft: props.draft,
+      preloadedBody: props.preloadedBody,
+      preloadedHtml: props.preloadedHtml,
+      formSeed: props.formSeed,
+      onEngaged: props.onEngaged,
+      sideEffectOnSend: props.sideEffectOnSend,
+      onMarkDone: props.onMarkDone,
+      setShowReply: props.setShowReply,
+    },
     editor,
     { container: () => composeContainerRef, footer: () => bottomBarRef },
     getOrInitEmailFormContext
@@ -104,19 +157,49 @@ export function ReplyInputView(props: ReplyInputProps) {
     handleAddAttachments,
     handleRemoveAttachment,
     handleSendTimeChange,
-    sendActionHidden,
     sendActionDisabled,
     scheduleSendDisabled,
     toggleQuotedText,
   } = state;
+  const sendActionHidden = () =>
+    services.presentation.isTouch() &&
+    !state.hasBodyText() &&
+    state.replyType() !== 'forward';
+  const signatureHtml = () =>
+    services.presentation.signaturesEnabled()
+      ? state.signatureHtml()
+      : undefined;
   const isMobileDrawer = () => props.mobileDrawer !== undefined;
   const composePortalScope = () =>
     isMobileDrawer() ? ('local' as const) : undefined;
   const scrollAreaSignatureHtml = () =>
-    isMobileDrawer() ? state.signatureHtml() : undefined;
+    isMobileDrawer() ? signatureHtml() : undefined;
   const footerSignatureHtml = () =>
-    isMobileDrawer() ? undefined : state.signatureHtml();
-  const editorConfig = createConfiguredEmailMarkdownEditor(state.editorOptions);
+    isMobileDrawer() ? undefined : signatureHtml();
+  // File sharing and editor plugin wiring belong to this view. The controller only
+  // needs to know when editor content has changed and requires another save.
+  const editorConfig = createConfiguredEmailMarkdownEditor({
+    namespace: 'email-base-input-markdown',
+    scrollContainer: state.scrollContainer,
+    onChange: state.onContentChange,
+    onUserMention: state.handleUserMention,
+    onDocumentMention: (item) => {
+      services.editorFiles.makePublic(item.id);
+      scheduleDraftSave();
+    },
+    onPasteFilesAndDirs: (files, directories) => {
+      services.editorFiles.uploadEditorFiles({
+        editor: editor(),
+        sourceId: props.sourceEntityId,
+        files,
+        directories,
+        onUploaded: (ids) => {
+          ids.forEach(services.editorFiles.makePublic);
+          scheduleDraftSave();
+        },
+      });
+    },
+  });
   const markdownHandle = editorConfig.buildHandle();
   setEditor(markdownHandle.lexical);
   // Set up hotkey scope for the compose message component
@@ -355,9 +438,20 @@ export function ReplyInputView(props: ReplyInputProps) {
             onDragStart: (valid) => setIsDragging(valid),
             onDragEnd: () => setIsDragging(false),
             onDrop: (files, directories, event) => {
-              state.handleEditorDrop(files, directories, event, () =>
-                setIsDragging(false)
-              );
+              const currentEditor = editor();
+              if (!currentEditor || !event) return;
+              services.editorFiles.uploadEditorFiles({
+                editor: currentEditor,
+                sourceId: props.sourceEntityId,
+                files,
+                directories,
+                dropEvent: event,
+                onUploaded: (ids) => {
+                  setIsDragging(false);
+                  ids.forEach(services.editorFiles.makePublic);
+                  scheduleDraftSave();
+                },
+              });
             },
           }}
         >
@@ -391,8 +485,11 @@ export function ReplyInputView(props: ReplyInputProps) {
           <Show when={!hasPaidAccess()}>
             <div class="text-ink/50 mt-[1lh]" data-watermark>
               <MacroSignatureButton
-                visible={!services.viewerLoading() && !services.hasPaidAccess()}
-                onUpgrade={services.onUpgrade}
+                visible={
+                  !services.presentation.viewerLoading() &&
+                  !services.hasPaidAccess()
+                }
+                onUpgrade={services.presentation.onUpgrade}
               />
             </div>
           </Show>
@@ -402,8 +499,8 @@ export function ReplyInputView(props: ReplyInputProps) {
           <Show when={scrollAreaSignatureHtml()}>
             {(html) => (
               <SignaturePreview
-                mobile={services.isMobile()}
-                prepareLinks={services.prepareSignatureLinks}
+                mobile={services.presentation.isMobile()}
+                prepareLinks={services.presentation.prepareSignatureLinks}
                 html={html()}
                 onDismiss={() => {
                   // Dismissal is composer-local state worth keeping — latch
@@ -471,8 +568,8 @@ export function ReplyInputView(props: ReplyInputProps) {
           <Show when={footerSignatureHtml()}>
             {(html) => (
               <SignaturePreview
-                mobile={services.isMobile()}
-                prepareLinks={services.prepareSignatureLinks}
+                mobile={services.presentation.isMobile()}
+                prepareLinks={services.presentation.prepareSignatureLinks}
                 html={html()}
                 onDismiss={() => {
                   // Dismissal is composer-local state worth keeping — latch
@@ -505,13 +602,17 @@ export function ReplyInputView(props: ReplyInputProps) {
             </div>
 
             <div class="flex flex-row items-center gap-1">
-              <Show when={services.scheduleEnabled && !sendActionHidden()}>
+              <Show
+                when={
+                  services.presentation.scheduleEnabled && !sendActionHidden()
+                }
+              >
                 <EmailDateSelector
-                  mobile={services.isMobile()}
+                  mobile={services.presentation.isMobile()}
                   sendTime={form().sendTime() ?? null}
                   onSendTimeChange={handleSendTimeChange}
                   disabled={scheduleSendDisabled()}
-                  disablePortal={services.isTouch()}
+                  disablePortal={services.presentation.isTouch()}
                 />
               </Show>
               <SendButton

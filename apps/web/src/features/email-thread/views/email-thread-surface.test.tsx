@@ -20,8 +20,8 @@ describe('thread composition ownership', () => {
       isFetching: () => false,
       isFetchingOlder: () => false,
       hasMore: () => false,
-      fetchOlder() {},
-      refresh() {},
+      async fetchOlder() {},
+      async refresh() {},
     });
     const Probe = () => {
       const state = useEmailContext();
