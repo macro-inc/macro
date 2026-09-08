@@ -10,7 +10,8 @@
  */
 
 import { toast } from '@core/component/Toast/Toast';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import type { AgentSessionControl } from '@queries/agent-session/control';
+import type { PromptAttachment } from '@service-agent-harness/generated/schemas';
 import { type Accessor, batch, createEffect } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ControlOutcome } from '../state/control-message';
@@ -32,9 +33,12 @@ export type ComposerController = {
    * evidence anything is happening at all.
    */
   changingModel: Accessor<string | undefined>;
-  /** Post the prompt. No-op without a session — the input disables until
-   *  there is one. */
-  send: (markdown: string) => void;
+  /**
+   * Post the prompt. No-op without a session — the input disables until
+   * there is one. `attachments` are files the prompt refers to, by URL; the
+   * service delivers them to the agent after the text.
+   */
+  send: (markdown: string, attachments?: PromptAttachment[]) => void;
   stop: () => void;
   /** Ask the agent to run on a different model from here on. */
   setModel: (model: string) => void;
@@ -46,6 +50,12 @@ export function createComposerController(options: {
   /** Absent until a just-created session's `POST` lands
    *  (`context/pending-session.ts`). */
   sessionId: Accessor<string | undefined>;
+  /**
+   * Issues the control POST: the control mutation's `mutateAsync`
+   * (`useAgentSessionControlMutation`). Rejects on any failure. Injected so
+   * the controller stays a plain factory with no query client of its own.
+   */
+  control: AgentSessionControl;
   /** The block's one working signal — see `AgentSessionContext`. */
   working: Accessor<boolean>;
   /**
@@ -81,15 +91,28 @@ export function createComposerController(options: {
     stopping: false,
   });
 
-  const postPrompt = async (sessionId: string, markdown: string) => {
+  const postPrompt = async (
+    sessionId: string,
+    markdown: string,
+    attachments: PromptAttachment[]
+  ) => {
     setState('inflightPrompts', (count) => count + 1);
-    const result = await agentHarnessServiceClient
-      .control(sessionId, { type: 'prompt', prompt: markdown })
+    const result = await options
+      .control({
+        sessionId,
+        action: {
+          type: 'prompt',
+          prompt: markdown,
+          // Omitted rather than empty so a plain prompt posts the same body
+          // it always has.
+          ...(attachments.length > 0 ? { attachments } : {}),
+        },
+      })
       .catch(() => undefined);
     // Floored: a session switch resets the count while this POST is still
     // out, and its settle must not drive the new session's count negative.
     setState('inflightPrompts', (count) => Math.max(0, count - 1));
-    if (result === undefined || result.isErr()) {
+    if (result === undefined) {
       toast.failure('Message could not be sent');
     }
     // A 200 with status `queued` means the prompt waits in the session's
@@ -99,10 +122,10 @@ export function createComposerController(options: {
 
   const postSetModel = async (sessionId: string, model: string) => {
     setState('requestedModel', model);
-    const result = await agentHarnessServiceClient
-      .control(sessionId, { type: 'setModel', model })
+    const result = await options
+      .control({ sessionId, action: { type: 'setModel', model } })
       .catch(() => undefined);
-    if (result === undefined || result.isErr()) {
+    if (result === undefined) {
       batch(() => {
         setState('requestedModel', undefined);
         setState('requestedActionId', undefined);
@@ -116,15 +139,15 @@ export function createComposerController(options: {
     // `model`, a rejected one resolves this id's control outcome, and the
     // effects below watch for whichever comes.
     if (state.requestedModel === model) {
-      setState('requestedActionId', result.value.actionId);
+      setState('requestedActionId', result.actionId);
     }
   };
 
   const postStop = async (sessionId: string) => {
-    const result = await agentHarnessServiceClient
-      .control(sessionId, { type: 'stop' })
+    const result = await options
+      .control({ sessionId, action: { type: 'stop' } })
       .catch(() => undefined);
-    if (result === undefined || result.isErr()) {
+    if (result === undefined) {
       setState('stopping', false);
       toast.failure('The agent could not be stopped');
     }
@@ -204,10 +227,10 @@ export function createComposerController(options: {
     sending: () => state.inflightPrompts > 0,
     busy,
     changingModel: () => state.requestedModel,
-    send: (markdown) => {
+    send: (markdown, attachments = []) => {
       const sessionId = options.sessionId();
       if (!sessionId) return;
-      void postPrompt(sessionId, markdown);
+      void postPrompt(sessionId, markdown, attachments);
     },
     stop: () => {
       const sessionId = options.sessionId();

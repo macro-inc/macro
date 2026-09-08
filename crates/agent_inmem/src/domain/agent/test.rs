@@ -3,8 +3,8 @@ use std::sync::Arc;
 use agent::StreamPart;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, SessionNotification,
-    TextContent,
+    ContentBlock, InitializeRequest, NewSessionRequest, PromptRequest, ResourceLink,
+    SessionNotification, TextContent,
 };
 use agent_client_protocol::{Client, ConnectionTo};
 use rig_agent::agent::StreamingError;
@@ -266,6 +266,58 @@ async fn turns_accumulate_history_and_send_the_model() {
     assert_eq!(
         requests[1].messages,
         vec!["first".to_owned(), "ok".to_owned(), "second".to_owned()]
+    );
+}
+
+#[tokio::test]
+async fn attached_files_reach_the_model_and_stay_in_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "blue".into(),
+    )]));
+    let image = "https://static.example/file/11111111-1111-4111-8111-111111111111";
+    let notes = "https://static.example/file/22222222-2222-4222-8222-222222222222";
+
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        let prompt = PromptRequest::new(
+            session.clone(),
+            vec![
+                ContentBlock::Text(TextContent::new("what color is this?")),
+                ContentBlock::ResourceLink(
+                    ResourceLink::new("screenshot.png", image).mime_type("image/png".to_owned()),
+                ),
+                ContentBlock::ResourceLink(
+                    ResourceLink::new("notes.txt", notes).mime_type("text/plain".to_owned()),
+                ),
+            ],
+        );
+        connection
+            .send_request(prompt)
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+        connection
+            .send_request(text_prompt(&session, "and now?"))
+            .block_task()
+            .await
+            .expect("the prompt should complete");
+    })
+    .await;
+
+    let requests = engine.requests();
+    assert_eq!(requests.len(), 2);
+    // The image rides the user message as an image URL the provider fetches;
+    // the text file has no image form, so it is named to the model instead.
+    assert_eq!(requests[0].messages, vec!["what color is this?".to_owned()]);
+    assert_eq!(requests[0].images, vec![image.to_owned()]);
+    // History keeps the files: a follow-up still shows the model the image.
+    assert_eq!(requests[1].images, vec![image.to_owned()]);
+    assert_eq!(
+        requests[1].messages,
+        vec![
+            "what color is this?".to_owned(),
+            "blue".to_owned(),
+            "and now?".to_owned()
+        ]
     );
 }
 

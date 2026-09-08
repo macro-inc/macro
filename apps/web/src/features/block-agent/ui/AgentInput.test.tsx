@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AgentInput } from './AgentInput';
 
@@ -25,6 +25,7 @@ vi.mock(
         withCode: () => builder,
         withRestoreFocus: () => builder,
         withAgentCommands: () => builder,
+        withFilePaste: () => builder,
         onEnter: (callback: () => boolean) => {
           editor.enter = callback;
           return builder;
@@ -50,6 +51,27 @@ vi.mock(
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
   MarkdownShell: () => <div data-testid="agent-input-editor" />,
 }));
+
+// The channel composer's chips and drop zone reach the block registry (and
+// through it the chat input's storage module) on import; the composer's own
+// send/attach logic is what is under test, so they are stubs that surface
+// what this component hands them.
+vi.mock('@channel/Input/context', () => ({
+  InputProvider: (props: { children: unknown }) => props.children,
+}));
+vi.mock('@channel/Input/Input', () => ({
+  Input: {
+    DropZone: (props: { children: unknown }) => props.children,
+    DropOverlay: () => null,
+    Attachments: () => null,
+    AttachFilesAction: () => (
+      <button type="button" aria-label="Attach files">
+        attach
+      </button>
+    ),
+  },
+}));
+vi.mock('@core/util/upload', () => ({ handleFileFolderDrop: vi.fn() }));
 
 vi.mock('@phosphor/arrow-up.svg', () => ({
   default: () => <span data-testid="send-icon" />,
@@ -103,7 +125,7 @@ describe('queued message advancement', () => {
     editor.change?.('  another request  ');
     editor.enter?.();
 
-    expect(onSend).toHaveBeenCalledWith('another request');
+    expect(onSend).toHaveBeenCalledWith('another request', []);
     expect(onStop).not.toHaveBeenCalled();
     expect(editor.clear).toHaveBeenCalledOnce();
   });
@@ -116,5 +138,59 @@ describe('queued message advancement', () => {
     expect(screen.getByRole('button', { name: 'Stop' })).toBeTruthy();
     editor.enter?.();
     expect(onStop).not.toHaveBeenCalled();
+  });
+});
+
+describe('attachments', () => {
+  const uploaded = {
+    id: 'file-1',
+    name: 'screenshot.png',
+    kind: 'image' as const,
+    mimeType: 'image/png',
+    size: 2048,
+  };
+
+  it('sends attached files with no text at all', () => {
+    const onSend = vi.fn();
+
+    render(() => (
+      <AgentInput
+        onSend={onSend}
+        attachments={[uploaded]}
+        onAttachFiles={vi.fn()}
+      />
+    ));
+
+    editor.enter?.();
+    expect(onSend).toHaveBeenCalledWith('', [uploaded]);
+  });
+
+  it('holds the send while a file is still uploading', () => {
+    const onSend = vi.fn();
+
+    render(() => (
+      <AgentInput
+        onSend={onSend}
+        attachments={[{ ...uploaded, pending: true }]}
+        onAttachFiles={vi.fn()}
+      />
+    ));
+
+    editor.change?.('look at this');
+    editor.enter?.();
+    expect(onSend).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty(
+      'disabled',
+      true
+    );
+  });
+
+  it('offers the paperclip only when files can be attached', () => {
+    render(() => <AgentInput onSend={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Attach files' })).toBeNull();
+
+    cleanup();
+    render(() => <AgentInput onSend={vi.fn()} onAttachFiles={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Attach files' })).toBeTruthy();
   });
 });

@@ -10,6 +10,7 @@
  */
 
 import { isCursorBotId } from '@core/constant/cursorAgent';
+import { useAgentSessionControlMutation } from '@queries/agent-session/control';
 import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
 import type {
   FoldedMessage,
@@ -136,11 +137,13 @@ export function AgentSessionProvider(
     sessionId,
     messages: feed.messages,
   });
+  const controlMutation = useAgentSessionControlMutation();
   const composer = createComposerController({
     sessionId,
     working,
     model: () => feed.metadata()?.model,
     controlOutcome: (requestId) => controlOutcome(feed.messages(), requestId),
+    control: (vars) => controlMutation.mutateAsync(vars),
   });
 
   // The transcript's "Reply to this" chip hands selected text to the

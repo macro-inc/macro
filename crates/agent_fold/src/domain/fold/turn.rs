@@ -10,21 +10,31 @@ use agent_runtime_protocol::domain::action::AgentActionId;
 use macro_user_id::user_id::MacroUserIdStr;
 use non_empty::NonEmpty;
 
-use super::convert::{content_block_text, deserialize_params};
+use super::convert::{deserialize_params, user_content_part};
 use super::state::{Changed, FoldState, Turn};
 
 impl FoldState {
     /// Adjacent user chunks form one replayed prompt; agent activity separates turns.
-    pub(super) fn replay_user_text(&mut self, text: String) -> Option<Changed> {
-        if text.is_empty() {
+    ///
+    /// Text chunks extend the prompt's text part; an attachment chunk becomes
+    /// its own part after it, the same shape [`Self::begin_turn`] derives
+    /// from an original prompt, so a replayed session renders like a live one.
+    pub(super) fn replay_user_part(&mut self, part: MessagePart) -> Option<Changed> {
+        if matches!(&part, MessagePart::Text { text } if text.is_empty()) {
             return None;
         }
         if self.turn.as_ref().is_some_and(|turn| turn.agent.is_none())
             && let Some(message) = self.messages.last_mut()
             && matches!(message.author, Author::User { .. })
-            && let Some(MessagePart::Text { text: held }) = message.parts.get_mut(0)
         {
-            held.push_str(&text);
+            match part {
+                MessagePart::Text { text } => match message.parts.get_mut(0) {
+                    Some(MessagePart::Text { text: held }) => held.push_str(&text),
+                    // The prompt so far was attachments only; its text leads.
+                    _ => message.parts.insert(0, MessagePart::Text { text }),
+                },
+                part => message.parts.push(part),
+            }
             return Some(Changed::updated(self.messages.len() - 1));
         }
         self.close_turn(Some(StopReason::EndTurn));
@@ -35,7 +45,7 @@ impl FoldState {
             id,
             author: Author::User { user_id: None },
             request_id: None,
-            parts: NonEmpty::one(MessagePart::Text { text }),
+            parts: NonEmpty::one(part),
             stop: None,
         });
         Some(Changed::new(message))
@@ -67,26 +77,36 @@ impl FoldState {
         // id, an optional `_meta`) carry nothing this fold renders, so there
         // is nothing to warn *about* beyond "no text," which showing no user
         // message already says.
-        let text = deserialize_params::<PromptRequest>(params)
-            .map(|request| {
-                request
-                    .prompt
-                    .into_iter()
-                    .filter_map(content_block_text)
-                    .collect::<Vec<_>>()
-                    .join("")
-            })
-            .unwrap_or_default();
+        //
+        // Text blocks join into one part, since a harness may split prose
+        // across blocks; each attached file is its own part, in prompt order
+        // after the text, which is the order this side sends them in.
+        let mut text = String::new();
+        let mut attachments = Vec::new();
+        for block in deserialize_params::<PromptRequest>(params)
+            .map(|request| request.prompt)
+            .unwrap_or_default()
+        {
+            match user_content_part(block) {
+                Some(MessagePart::Text { text: chunk }) => text.push_str(&chunk),
+                Some(part) => attachments.push(part),
+                None => {}
+            }
+        }
+        let mut parts = attachments;
+        if !text.is_empty() {
+            parts.insert(0, MessagePart::Text { text });
+        }
 
-        // A prompt carrying no text derives no user message, but still opens
-        // the turn the agent will answer into.
-        let changed = (!text.is_empty()).then(|| {
+        // A prompt carrying nothing renderable derives no user message, but
+        // still opens the turn the agent will answer into.
+        let changed = NonEmpty::new(parts).ok().map(|parts| {
             let message = self.messages.len();
             self.messages.push(FoldedMessage {
                 id,
                 author: Author::User { user_id },
                 request_id: AgentActionId::from_request_id(prompt_id),
-                parts: NonEmpty::one(MessagePart::Text { text }),
+                parts,
                 stop: None,
             });
             Changed::new(message)

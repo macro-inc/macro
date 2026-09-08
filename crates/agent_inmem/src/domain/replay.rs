@@ -26,7 +26,7 @@ use agent_session::domain::model::Message;
 use futures::future::BoxFuture;
 
 use crate::domain::agent::close_dangling_tool_calls;
-use crate::domain::session::HistoryEntry;
+use crate::domain::session::{HistoryEntry, UserPrompt};
 
 #[cfg(test)]
 mod test;
@@ -54,7 +54,7 @@ pub trait FrameSource: Send + Sync + 'static {
 #[must_use]
 pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryEntry> {
     let mut history = Vec::new();
-    let mut open: Option<(String, Vec<AssistantMessagePart>)> = None;
+    let mut open: Option<(UserPrompt, Vec<AssistantMessagePart>)> = None;
 
     for frame in frames {
         match frame {
@@ -69,21 +69,14 @@ pub fn replay_history(frames: impl IntoIterator<Item = Message>) -> Vec<HistoryE
                 else {
                     continue;
                 };
-                let text: String = prompt
-                    .prompt
-                    .iter()
-                    .filter_map(|block| match block {
-                        ContentBlock::Text(text) => Some(text.text.as_str()),
-                        _ => None,
-                    })
-                    .collect();
+                let prompt = UserPrompt::from_blocks(&prompt.prompt);
                 close_turn(&mut history, &mut open);
-                if text.trim() == COMPACT_COMMAND {
+                if prompt.text.trim() == COMPACT_COMMAND {
                     // Compaction dropped everything before it from the
                     // model's context; replaying it back would undo that.
                     history.clear();
                 } else {
-                    open = Some((text, Vec::new()));
+                    open = Some((prompt, Vec::new()));
                 }
             }
             Message::ToServer(ToServerMessage::Acp(acp)) => {
@@ -200,7 +193,7 @@ fn unanswered_call_name(parts: &[AssistantMessagePart], id: &str) -> Option<Stri
 /// Push the open turn into the history, closing whatever it left dangling.
 fn close_turn(
     history: &mut Vec<HistoryEntry>,
-    open: &mut Option<(String, Vec<AssistantMessagePart>)>,
+    open: &mut Option<(UserPrompt, Vec<AssistantMessagePart>)>,
 ) {
     let Some((prompt, mut parts)) = open.take() else {
         return;

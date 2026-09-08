@@ -19,6 +19,8 @@ pub(crate) struct RecordedTurn {
     pub(crate) model: String,
     /// The conversation, flattened to text per message.
     pub(crate) messages: Vec<String>,
+    /// Every image URL attached across the conversation, in order.
+    pub(crate) images: Vec<String>,
     /// The session's instructions, as handed to the engine.
     pub(crate) instructions: Option<String>,
 }
@@ -47,6 +49,20 @@ impl TurnEngine for ScriptedEngine {
                     .messages
                     .iter()
                     .map(|message| message.content.message_text_with_tools())
+                    .collect(),
+                images: request
+                    .messages
+                    .iter()
+                    .filter_map(|message| message.attachments.as_ref())
+                    .flat_map(|attachments| attachments.parts().iter())
+                    .filter_map(|resolved| resolved.as_ref().ok())
+                    .flat_map(|content| content.content.iter())
+                    .filter_map(|part| match part {
+                        attachment::AttachmentPart::Image(
+                            attachment::image::ImageData::StaticUrl(url),
+                        ) => Some(url.clone()),
+                        _ => None,
+                    })
                     .collect(),
                 instructions: request.instructions.clone(),
             });

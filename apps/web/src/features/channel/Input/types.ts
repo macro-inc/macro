@@ -18,6 +18,10 @@ export type InputAttachmentData = {
   width?: number;
   /** Image/video height in pixels (set after upload). */
   height?: number;
+  /** The uploaded file's media type, as the browser reported it. */
+  mimeType?: string;
+  /** The uploaded file's size in bytes. */
+  size?: number;
 };
 
 export type InputPersistenceKey = PersistenceKey;

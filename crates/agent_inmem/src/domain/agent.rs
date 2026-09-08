@@ -32,7 +32,7 @@ use tokio_util::sync::CancellationToken;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
-use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
+use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
 use agent_client_protocol::schema::v1::McpServer as AcpMcpServer;
 use mcp_toolset::RemoteMcpToolSet;
 
@@ -144,7 +144,7 @@ impl AgentState {
 
     /// Everything from the session's state that a turn answering `prompt`
     /// runs from.
-    fn turn_input(&self, prompt: &str) -> TurnInput {
+    fn turn_input(&self, prompt: &UserPrompt) -> TurnInput {
         self.store.get(&self.session_id).map_or_else(
             || TurnInput {
                 messages: messages_for_turn(&[], prompt),
@@ -159,7 +159,7 @@ impl AgentState {
         )
     }
 
-    fn push_turn(&self, prompt: String, parts: Vec<AssistantMessagePart>) {
+    fn push_turn(&self, prompt: UserPrompt, parts: Vec<AssistantMessagePart>) {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
             state.history.push(HistoryEntry::User(prompt));
             if !parts.is_empty() {
@@ -245,8 +245,8 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     if let Err(error) = state.expect_session(&request.session_id) {
                         return responder.respond_with_error(error);
                     }
-                    let prompt = prompt_text(&request);
-                    if prompt.trim() == COMPACT_COMMAND {
+                    let prompt = UserPrompt::from_request(&request);
+                    if prompt.text.trim() == COMPACT_COMMAND {
                         state.clear_history();
                         let _ = connection.send_notification(SessionNotification::new(
                             request.session_id,
@@ -325,7 +325,7 @@ async fn run_turn(
     state: &AgentState,
     connection: &ConnectionTo<Client>,
     acp_session_id: SessionId,
-    prompt: String,
+    prompt: UserPrompt,
     cancel: CancellationToken,
 ) -> StopReason {
     let _turn = state.turn_lock.lock().await;
@@ -488,18 +488,6 @@ fn tool_kind(name: &str) -> ToolKind {
     } else {
         ToolKind::Other
     }
-}
-
-/// The prompt's text content, other block types ignored.
-fn prompt_text(request: &PromptRequest) -> String {
-    request
-        .prompt
-        .iter()
-        .filter_map(|block| match block {
-            ContentBlock::Text(text) => Some(text.text.as_str()),
-            _ => None,
-        })
-        .collect()
 }
 
 /// Close tool calls that never got a response - a cancelled or failed turn

@@ -1,40 +1,42 @@
 /**
  * @vitest-environment jsdom
  *
- * The controller against a mocked harness client: prompts post immediately
+ * The controller against a fake control mutation: prompts post immediately
  * (the service owns queueing), failures surface as a toast, stop is latched
  * per turn, and a pending model change resolves only through the fold.
  */
 
+import type { AgentSessionControl } from '@queries/agent-session/control';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ControlOutcome } from '../state/control-message';
 import { createComposerController } from './create-composer-controller';
 
-const control = vi.hoisted(() => ({
+/**
+ * A fake for the control mutation's `mutateAsync`: records every POST and
+ * resolves or rejects as the test dictates. `err` stands for the service
+ * answering with an error (which `throwOnErr` turns into a rejection) and
+ * `reject` for the network failing outright; the controller treats them the
+ * same, and both are kept so a regression in either path shows.
+ */
+const control = {
   calls: [] as { sessionId: string; action: unknown }[],
   /** What the next `control` calls resolve to. */
   outcome: 'ok' as 'ok' | 'err' | 'reject',
-}));
+};
 
-vi.mock('@service-agent-harness/client', () => ({
-  agentHarnessServiceClient: {
-    control: vi.fn(async (sessionId: string, action: unknown) => {
-      control.calls.push({ sessionId, action });
-      if (control.outcome === 'reject') throw new Error('network');
-      return {
-        isErr: () => control.outcome === 'err',
-        // The control response — the action id is the fold's `requestId`
-        // for the folded message this action derives. One per call, in
-        // order; always `sent` here, queueing is the server's business.
-        value: {
-          actionId: `action-${control.calls.length - 1}`,
-          status: 'sent',
-        },
-      };
-    }),
-  },
-}));
+const fakeControl: AgentSessionControl = async ({ sessionId, action }) => {
+  control.calls.push({ sessionId, action });
+  if (control.outcome === 'reject') throw new Error('network');
+  if (control.outcome === 'err') throw new Error('service refused');
+  // The control response — the action id is the fold's `requestId` for the
+  // folded message this action derives. One per call, in order; always
+  // `sent` here, queueing is the server's business.
+  return {
+    actionId: `action-${control.calls.length - 1}`,
+    status: 'sent' as const,
+  };
+};
 
 const toast = vi.hoisted(() => ({ failure: vi.fn(), success: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast }));
@@ -69,6 +71,7 @@ function setup(options?: {
       working,
       model,
       controlOutcome: (requestId) => outcomes()[requestId],
+      control: fakeControl,
     }),
     dispose,
   }));
@@ -96,6 +99,24 @@ describe('sending', () => {
 
     expect(prompts()).toEqual(['hello']);
     expect(controller.sending()).toBe(false);
+    dispose();
+  });
+
+  it('posts attachments alongside the text, and omits the field without any', async () => {
+    const { controller, dispose } = setup();
+    const attachment = {
+      uri: 'https://static.example/file/1',
+      name: 'screenshot.png',
+      mimeType: 'image/png',
+    };
+    controller.send('look', [attachment]);
+    controller.send('plain');
+    await flush();
+
+    expect(control.calls.map((c) => c.action)).toEqual([
+      { type: 'prompt', prompt: 'look', attachments: [attachment] },
+      { type: 'prompt', prompt: 'plain' },
+    ]);
     dispose();
   });
 

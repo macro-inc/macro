@@ -13,7 +13,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use super::*;
-use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand};
+use crate::domain::model::{AgentKind, AgentRuntimeConfig, HarnessCommand, StaticFileLinks};
+use agent_runtime_protocol::domain::action::PromptAttachment;
+use channels::domain::broker_events::ChannelEventAttachment;
 
 fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
     Some(AgentRuntimeConfig {
@@ -29,6 +31,10 @@ fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
         instructions: "configured instructions".to_owned(),
         mcp_servers: AgentMcpServers::OwnerConnections,
     })
+}
+
+fn links() -> StaticFileLinks {
+    StaticFileLinks::new("https://static.example/")
 }
 
 fn user() -> MacroUserIdStr<'static> {
@@ -73,6 +79,7 @@ fn a_mention_for_our_bot_opens_a_session() {
     let routed = route_agent_trigger(
         mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
         runtime(AgentKind::InMemory),
+        &links(),
     )
     .expect("a mention for our bot should yield work");
 
@@ -103,7 +110,7 @@ fn a_threaded_mention_answers_into_its_thread() {
     ));
 
     let RoutedTrigger::Command(_, HarnessCommand::Open(open)) =
-        route_agent_trigger(event, runtime(AgentKind::InMemory))
+        route_agent_trigger(event, runtime(AgentKind::InMemory), &links())
             .expect("the mention should yield work")
     else {
         panic!("a new-session event should open");
@@ -117,6 +124,7 @@ fn a_foreign_bots_open_is_skipped() {
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user())),
             None,
+            &links(),
         )
         .unwrap_err(),
         Skipped::ForeignBot
@@ -126,7 +134,7 @@ fn a_foreign_bots_open_is_skipped() {
 #[test]
 fn an_unresolved_existing_session_is_treated_as_external() {
     assert!(matches!(
-        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), None),
+        route_agent_trigger(channel_message(MACRO_CODER_BOT_ID), None, &links()),
         Ok(RoutedTrigger::Announce(_, _))
     ));
 }
@@ -137,6 +145,7 @@ fn a_bot_authored_mention_is_skipped() {
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_bot(BotId::TEST_B)),
             runtime(AgentKind::InMemory),
+            &links(),
         )
         .unwrap_err(),
         Skipped::NotFromUser
@@ -151,6 +160,7 @@ fn any_user_mention_can_open_a_managed_agent() {
         route_agent_trigger(
             mentioned(BotId::TEST_A, ChannelSender::new_from_user(user)),
             runtime(AgentKind::InMemory),
+            &links(),
         ),
         Ok(RoutedTrigger::Command(_, HarnessCommand::Open(_)))
     ));
@@ -161,6 +171,7 @@ fn a_managed_channel_message_forwards_to_its_session() {
     let routed = route_agent_trigger(
         channel_message(MACRO_CODER_BOT_ID),
         runtime(AgentKind::SandboxedCoder),
+        &links(),
     )
     .expect("a channel event for our bot should yield work");
 
@@ -186,8 +197,12 @@ fn a_managed_channel_message_forwards_to_its_session() {
 fn an_external_channel_message_announces_only() {
     // The external bot's own runtime delivers the prompt; this deployment
     // only posts the chip, whichever bot it manages itself.
-    let routed = route_agent_trigger(channel_message(BotId::TEST_A), runtime(AgentKind::External))
-        .expect("an external existing-session event should yield work");
+    let routed = route_agent_trigger(
+        channel_message(BotId::TEST_A),
+        runtime(AgentKind::External),
+        &links(),
+    )
+    .expect("an external existing-session event should yield work");
 
     let RoutedTrigger::Announce(session_id, prompt) = routed else {
         panic!("an external existing-session event should announce");
@@ -211,7 +226,7 @@ fn a_bot_authored_external_channel_message_is_skipped() {
         },
     ));
     assert_eq!(
-        route_agent_trigger(event, runtime(AgentKind::External)).unwrap_err(),
+        route_agent_trigger(event, runtime(AgentKind::External), &links()).unwrap_err(),
         Skipped::NotFromUser
     );
 }
@@ -232,6 +247,7 @@ fn any_user_can_follow_up_to_their_cursor_session() {
         route_agent_trigger(
             channel_message_from(bot_id::CURSOR_BOT_ID, ChannelSender::new_from_user(user)),
             runtime(AgentKind::Cursor),
+            &links(),
         ),
         Ok(RoutedTrigger::Command(_, HarnessCommand::Deliver(_)))
     ));
@@ -244,6 +260,7 @@ fn any_user_can_follow_up_to_a_coder_session() {
     let routed = route_agent_trigger(
         channel_message_from(MACRO_CODER_BOT_ID, ChannelSender::new_from_user(user)),
         runtime(AgentKind::SandboxedCoder),
+        &links(),
     )
     .expect("channel users may follow up");
     assert!(matches!(
@@ -260,6 +277,7 @@ fn a_bot_authored_follow_up_to_a_managed_session_still_delivers() {
             ChannelSender::new_from_bot(BotId::TEST_B),
         ),
         runtime(AgentKind::SandboxedCoder),
+        &links(),
     )
     .expect("explicit bot mentions continue to reach managed sessions");
 
@@ -267,4 +285,83 @@ fn a_bot_authored_follow_up_to_a_managed_session_still_delivers() {
         panic!("a managed bot-authored follow-up should deliver");
     };
     assert_eq!(deliver.actor, None);
+}
+
+fn attached(entity_type: &str, id: u128) -> ChannelEventAttachment {
+    ChannelEventAttachment {
+        attachment_id: Uuid::from_u128(id),
+        entity_type: entity_type.to_owned(),
+        entity_id: Uuid::from_u128(id).to_string(),
+        created_at: Utc::now(),
+    }
+}
+
+fn message_with_files(sender: ChannelSender<'static>) -> ChannelMessagePostedMetadata {
+    ChannelMessagePostedMetadata {
+        attachments: vec![
+            attached("static/image", 0x10),
+            // Documents reach the agent as mentions, never as file links.
+            attached("document", 0x11),
+            attached("static/video", 0x12),
+        ],
+        ..message(sender)
+    }
+}
+
+/// The files a message carries reach the agent with its words - as links
+/// it can fetch, since the static file service is where the bytes live.
+#[test]
+fn a_mention_with_attached_files_opens_with_them_as_prompt_attachments() {
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(
+        AgentBotMentionedEvent {
+            bot_id: BotId::TEST_A,
+            message: message_with_files(ChannelSender::new_from_user(user())),
+        },
+    ));
+    let routed = route_agent_trigger(event, runtime(AgentKind::InMemory), &links()).unwrap();
+    let RoutedTrigger::Command(_, HarnessCommand::Open(open)) = routed else {
+        panic!("a new-session event should open");
+    };
+    assert_eq!(
+        open.origin.attachments,
+        vec![
+            PromptAttachment::new(
+                format!("https://static.example/file/{}", Uuid::from_u128(0x10)),
+                "image",
+            )
+            .mime_type("image/*"),
+            PromptAttachment::new(
+                format!("https://static.example/file/{}", Uuid::from_u128(0x12)),
+                "video",
+            )
+            .mime_type("video/*"),
+        ]
+    );
+}
+
+#[test]
+fn a_managed_channel_message_with_files_delivers_them_as_prompt_attachments() {
+    let event = AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(
+        ChannelEventMetadata {
+            bot_id: MACRO_CODER_BOT_ID,
+            session_id: AgentSessionId::TEST_A,
+            kind: ChannelKind::MentionThread,
+            message: message_with_files(ChannelSender::new_from_user(user())),
+        },
+    ));
+    let routed = route_agent_trigger(event, runtime(AgentKind::SandboxedCoder), &links()).unwrap();
+    let RoutedTrigger::Command(_, HarnessCommand::Deliver(deliver)) = routed else {
+        panic!("a managed existing-session event should deliver");
+    };
+    let AgentAction::Prompt(prompt) = deliver.action else {
+        panic!("a channel message becomes a prompt");
+    };
+    assert_eq!(prompt.prompt, "@claude fix the tests");
+    assert_eq!(
+        prompt.attachments.len(),
+        2,
+        "the document is not a file link"
+    );
+    assert_eq!(prompt.attachments[0].mime_type.as_deref(), Some("image/*"));
+    assert_eq!(prompt.attachments[1].mime_type.as_deref(), Some("video/*"));
 }

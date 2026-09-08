@@ -4,11 +4,15 @@
  * agent_harness_service
  * OpenAPI spec version: 0.1.0
  */
+import type { PromptAttachment } from './promptAttachment';
 
 /**
  * Ask the agent to work on something.
  */
 export interface AgentPromptAction {
+  /** Files the prompt refers to, in the order the user attached them.
+Delivered after the text as one `resource_link` block each. */
+  attachments?: PromptAttachment[];
   /** What to tell the agent. */
   prompt: string;
 }
