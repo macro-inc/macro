@@ -503,8 +503,8 @@ service_url! {
         /// Authentication service API URL.
         pub AuthServiceUrl {
             local: "http://localhost:8080",
-            dev: "https://auth-service-dev.macro.com",
-            prod: "https://auth-service.macro.com",
+            dev: "https://dev-gateway.macro.com/auth",
+            prod: "https://gateway.macro.com/auth",
         },
         /// Document storage service API URL.
         pub DocumentStorageServiceUrl {
@@ -576,8 +576,8 @@ service_url! {
         /// Email service API URL.
         pub EmailServiceUrl {
             local: "http://localhost:8087",
-            dev: "https://email-service-dev.macro.com",
-            prod: "https://email-service.macro.com",
+            dev: "https://dev-gateway.macro.com/email",
+            prod: "https://gateway.macro.com/email",
         },
         /// Image proxy service API URL.
         pub ImageProxyServiceUrl {

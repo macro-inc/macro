@@ -10,6 +10,7 @@ import type { CreateCalendarEventRequestConference } from './createCalendarEvent
 import type { CreateCalendarEventRequestDescription } from './createCalendarEventRequestDescription';
 import type { CreateCalendarEventRequestEmailLinkId } from './createCalendarEventRequestEmailLinkId';
 import type { CreateCalendarEventRequestLocation } from './createCalendarEventRequestLocation';
+import type { CreateCalendarEventRequestOutOfOffice } from './createCalendarEventRequestOutOfOffice';
 import type { CreateCalendarEventRequestReminders } from './createCalendarEventRequestReminders';
 import type { CreateCalendarEventRequestTransparency } from './createCalendarEventRequestTransparency';
 import type { CreateCalendarEventRequestVisibility } from './createCalendarEventRequestVisibility';
@@ -32,6 +33,7 @@ to the requester's primary inbox. */
   emailLinkId?: CreateCalendarEventRequestEmailLinkId;
   /** Optional location label. */
   location?: CreateCalendarEventRequestLocation;
+  outOfOffice?: CreateCalendarEventRequestOutOfOffice;
   /** Raw RFC 5545 recurrence properties (`RRULE`, `RDATE`, `EXDATE`). */
   recurrenceLines?: string[];
   reminders?: CreateCalendarEventRequestReminders;

@@ -1,0 +1,33 @@
+id: ts-feature-core-pure
+language: typescript
+# Twin of tsx-feature-core-pure — ast-grep rules are single-language, and
+# `tsx` only scans .tsx files.
+severity: warning
+message: Feature core modules stay pure TypeScript — no Solid, urql, queries, generated GraphQL, app modules, or sibling layers.
+note: |-
+  Rule FE-33 in docs/STYLE_GUIDE.md. `core/` owns the feature's vocabulary
+  and the functions that describe, group, and summarize it. Wire types,
+  clients, reactivity, and UI stay outside so a schema rename or a
+  framework upgrade cannot churn core tests. Decode lives in `queries/`,
+  reactive view models in `primitives/`. The `dateBucket` import from
+  `soup/collection/date-buckets` (a pure date-fns module, not the soup barrel)
+  is the documented exception for feed labels that must match soup views.
+files:
+  - apps/web/src/features/activity/core/**
+rule:
+  kind: string
+  regex: ^['"](solid-js|@urql|urql|@app/lib/urql|@queries/|@service-storage/|@core/|@property/|@components/|@ui|@entity/|(\.\./)+(queries|primitives|components|views)/|(\.\./)+context/)
+  any:
+    - inside:
+        kind: import_statement
+        field: source
+    - inside:
+        kind: export_statement
+        field: source
+    - inside:
+        kind: arguments
+        inside:
+          kind: call_expression
+          has:
+            field: function
+            kind: import

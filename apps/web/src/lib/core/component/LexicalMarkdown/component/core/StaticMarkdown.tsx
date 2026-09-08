@@ -14,6 +14,7 @@ import {
   type AgentContextNode,
   type AwaitNode,
   type ClassedBlockNode,
+  type ConnectAppNode,
   type ContactMentionNode,
   type DateMentionNode,
   DEFAULT_LANGUAGE,
@@ -72,12 +73,12 @@ import {
 } from '@core/constant/featureFlags';
 import type { MarkNode } from '@lexical/mark';
 import type { SearchMatchNode } from '@macro-inc/lexical-core/nodes/SearchMatchNode';
-import { getCachedItemPreview } from '@queries/preview';
 import { theme as baseTheme, createTheme } from '../../theme';
 import { forceSingleLine, setEditorStateFromMarkdown } from '../../utils';
 import { StaticCodeBoxAccessory } from '../accessory/CodeBoxAccessory';
 import { AgentContext as AgentContextDecorator } from '../decorator/AgentContext';
 import { Await as AwaitDecorator } from '../decorator/Await';
+import { ConnectApp as ConnectAppDecorator } from '../decorator/ConnectApp';
 import { ContactMention as ContactMentionDecorator } from '../decorator/ContactMention';
 import { DateMention as DateMentionDecorator } from '../decorator/DateMention';
 import { DocumentCard as DocumentCardDecorator } from '../decorator/DocumentCard';
@@ -377,9 +378,7 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
         key,
         theme: props.theme,
       });
-    const shouldRenderLazy =
-      options.lazy &&
-      getCachedItemPreview(componentProps.documentId) === undefined;
+    const shouldRenderLazy = options.lazy;
 
     return (
       <span class={getTextClassName(props.node, props.theme)}>
@@ -402,6 +401,20 @@ const ThemeMention: TypedRenderableEntity<ThemeMentionNode> = {
   render: (props) => (
     <span>
       {ThemeMentionDecorator({
+        ...props.node.exportComponentProps(),
+        key: props.node.getKey(),
+        theme: props.theme,
+      })}
+    </span>
+  ),
+};
+
+const ConnectApp: TypedRenderableEntity<ConnectAppNode> = {
+  guard: (node: LexicalNode): node is ConnectAppNode =>
+    node.__type === 'connect-app',
+  render: (props) => (
+    <span>
+      {ConnectAppDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),
         theme: props.theme,
@@ -533,7 +546,7 @@ const MagicChip: TypedRenderableEntity<MagicChipNode> = {
   guard: (node: LexicalNode): node is MagicChipNode =>
     node.__type === 'magic-chip',
   render: (props) => (
-    <div class="max-w-full">
+    <div class="min-w-0 max-w-full overflow-x-hidden">
       <MagicChipDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
@@ -776,7 +789,10 @@ const Equation: TypedRenderableEntity<EquationNode> = {
   guard: (node: LexicalNode): node is EquationNode =>
     node.__type === 'equation',
   render: (props) => (
-    <EquationDecorator equation={props.node.__equation} inline={true} />
+    <EquationDecorator
+      equation={props.node.__equation}
+      inline={props.node.__inline}
+    />
   ),
 };
 
@@ -903,6 +919,7 @@ const InlineEntities: RenderableEntity[] = [
   eraseRenderableEntity(Equation),
   eraseRenderableEntity(ThemeMention),
   eraseRenderableEntity(TagMention),
+  eraseRenderableEntity(ConnectApp),
   eraseRenderableEntity(UnknownMention),
   eraseRenderableEntity(Watermark),
   eraseRenderableEntity(Paste),

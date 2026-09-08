@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT calendar.time_zone\n            FROM email_links link\n            JOIN calendar_accounts account ON account.email_link_id = link.id\n            JOIN calendars calendar ON calendar.account_id = account.id\n            WHERE NOT calendar.is_deleted\n              AND account.sync_status <> 'disabled'\n              AND calendar.is_primary\n              AND (\n                    link.macro_id = $1\n                    OR EXISTS (\n                        SELECT 1\n                        FROM macro_user_links delegation\n                        WHERE delegation.link_id = link.id\n                          AND delegation.primary_macro_id = $1\n                    )\n              )\n            ORDER BY\n                (link.macro_id = $1) DESC,\n                link.is_primary DESC,\n                link.created_at ASC\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "time_zone",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "acd7979ca95295b44da587f433e2c20d0308d95e81db97ca65e37891824aee8c"
+}

@@ -120,7 +120,7 @@ impl FoldStream {
             .map(|event| FoldedStreamEvent::new(self.session, event))
             .collect();
 
-        serde_wasm_bindgen::to_value(&events)
+        encode(&events)
             .map_err(|error| JsValue::from_str(&format!("fold events are not encodable: {error}")))
     }
 
@@ -133,7 +133,7 @@ impl FoldStream {
     /// Returns a JS string describing what could not be encoded.
     pub fn metadata(&self) -> Result<JsValue, JsValue> {
         let metadata: SessionMetadata = self.machine.metadata().clone().into();
-        serde_wasm_bindgen::to_value(&metadata).map_err(|error| {
+        encode(&metadata).map_err(|error| {
             JsValue::from_str(&format!("session metadata is not encodable: {error}"))
         })
     }
@@ -156,7 +156,7 @@ impl FoldStream {
             .map(|message| FoldedMessage::new(self.session, message))
             .collect();
 
-        serde_wasm_bindgen::to_value(&messages).map_err(|error| {
+        encode(&messages).map_err(|error| {
             JsValue::from_str(&format!("folded messages are not encodable: {error}"))
         })
     }
@@ -191,8 +191,18 @@ fn encode_messages(
         .map(|message| FoldedMessage::new(session, message))
         .collect();
 
-    serde_wasm_bindgen::to_value(&messages)
+    encode(&messages)
         .map_err(|error| JsValue::from_str(&format!("folded messages are not encodable: {error}")))
+}
+
+/// Encode a value for the browser as plain JSON-shaped data.
+///
+/// `serde_wasm_bindgen`'s default turns a `serde_json::Value` object into an
+/// ES `Map`, which `JSON.stringify` renders as `{}` and no reader expects. The
+/// generated TypeScript contract types these fields as plain objects, so the
+/// JSON-compatible serializer is the one that honors it.
+fn encode<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
+    serde::Serialize::serialize(value, &serde_wasm_bindgen::Serializer::json_compatible())
 }
 
 /// One entry of a session's protocol log, as the endpoint serves it.

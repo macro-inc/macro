@@ -7,64 +7,38 @@ import CheckIcon from '@phosphor/check.svg';
 import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { formatLocalDate, parseLocalDate } from '../../utils/calendar-date';
+import {
+  DAY_TIME_OPTIONS,
+  type EventTimeOption,
+  resolveTimeOption,
+  selectedTimeOptionId,
+} from './event-time-options';
 
-interface EventTimeOption {
-  value: string;
-  label: string;
-}
-
-export const timeLabelFormatter = new Intl.DateTimeFormat(undefined, {
-  hour: 'numeric',
-  minute: '2-digit',
-});
 export const dateLabelFormatter = new Intl.DateTimeFormat(undefined, {
   day: 'numeric',
   month: 'short',
   year: 'numeric',
 });
 
-/** Every quarter-hour in a day, with canonical values and localized labels. */
-const EVENT_TIME_OPTIONS: EventTimeOption[] = Array.from(
-  { length: 24 * 4 },
-  (_, index) => {
-    const hour = Math.floor(index / 4);
-    const minute = (index % 4) * 15;
-    return {
-      value: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
-      label: timeLabelFormatter.format(new Date(2000, 0, 1, hour, minute)),
-    };
-  }
-);
-
-export function splitLocalDateTime(value: string) {
-  const separator = value.indexOf('T');
-  if (separator === -1) return { date: value, time: '' };
-  return {
-    date: value.slice(0, separator),
-    time: value.slice(separator + 1, separator + 6),
-  };
-}
-
-export function withLocalDate(value: string, date: string) {
-  return `${date}T${splitLocalDateTime(value).time}`;
-}
-
-export function withLocalTime(value: string, time: string) {
-  return `${splitLocalDateTime(value).date}T${time}`;
-}
-
 function TimeOptionItem(props: CollectionNode<EventTimeOption>) {
   return (
     <Listbox.Item
       item={props}
-      class="group flex cursor-default items-center justify-between rounded-lg px-3 py-2 text-sm text-ink outline-none hover:bg-hover data-selected:bg-active data-highlighted:bg-hover"
+      class="group flex cursor-default items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm text-ink outline-none hover:bg-hover data-selected:bg-active data-highlighted:bg-hover"
     >
       <Listbox.ItemLabel>{props.rawValue.label}</Listbox.ItemLabel>
-      <Listbox.ItemIndicator class="text-accent">
-        <CheckIcon class="size-3.5" />
-      </Listbox.ItemIndicator>
+      <div class="flex shrink-0 items-center gap-2">
+        <Show when={props.rawValue.detail}>
+          {(detail) => (
+            <span class="text-xs text-ink-extra-muted">{detail()}</span>
+          )}
+        </Show>
+        <Listbox.ItemIndicator class="text-accent">
+          <CheckIcon class="size-3.5" />
+        </Listbox.ItemIndicator>
+      </div>
     </Listbox.Item>
   );
 }
@@ -73,7 +47,11 @@ interface EventTimeInputProps {
   id: string;
   label: string;
   value: string;
-  onChange: (value: string) => void;
+  /** Selectable times; defaults to every quarter-hour in a day. */
+  options?: EventTimeOption[];
+  /** Highlighted option; defaults to `value` on the anchor day. */
+  selectedId?: string;
+  onChange: (option: EventTimeOption) => void;
   onFocus?: () => void;
   disabled?: boolean;
   hideLabel?: boolean;
@@ -85,7 +63,10 @@ export function EventTimeInput(props: EventTimeInputProps) {
   let control: HTMLDivElement | undefined;
   let listbox: HTMLElement | undefined;
 
-  const selectedTime = createMemo(() => [props.value]);
+  const options = createMemo(() => props.options ?? DAY_TIME_OPTIONS);
+  const selectedTime = createMemo(() => [
+    props.selectedId ?? selectedTimeOptionId(props.value),
+  ]);
   const scrollToSelectedTime = () => {
     requestAnimationFrame(() => {
       listbox
@@ -99,9 +80,10 @@ export function EventTimeInput(props: EventTimeInputProps) {
     if (nextOpen) scrollToSelectedTime();
   };
   const selectTime = (values: Set<string>) => {
-    const value = values.values().next().value;
-    if (typeof value !== 'string') return;
-    if (value !== props.value) props.onChange(value);
+    const id = values.values().next().value;
+    if (typeof id !== 'string') return;
+    const option = options().find((candidate) => candidate.id === id);
+    if (option && id !== selectedTime()[0]) props.onChange(option);
     setOpen(false);
   };
 
@@ -140,7 +122,9 @@ export function EventTimeInput(props: EventTimeInputProps) {
           onClick={() => setDropdownOpen(true)}
           onInput={(event) => {
             const value = event.currentTarget.value;
-            if (value && value !== props.value) props.onChange(value);
+            if (value && value !== props.value) {
+              props.onChange(resolveTimeOption(options(), value));
+            }
           }}
           onKeyDown={(event) => {
             if (event.key !== 'Escape' || !open()) return;
@@ -184,8 +168,8 @@ export function EventTimeInput(props: EventTimeInputProps) {
               ref={(element) => {
                 listbox = element;
               }}
-              options={EVENT_TIME_OPTIONS}
-              optionValue="value"
+              options={options()}
+              optionValue="id"
               optionTextValue="label"
               value={selectedTime()}
               onChange={selectTime}

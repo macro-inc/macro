@@ -58,7 +58,7 @@ function ChannelEditHarness(props: {
       selectPrevious: vi.fn(),
       selectNext: vi.fn(),
     },
-    navigation: () => undefined,
+    scrollToMessage: () => false,
     messageById: () =>
       new Map([[originalMessage.id, originalMessage as ApiChannelMessage]]),
     getMessageActions: () => ({

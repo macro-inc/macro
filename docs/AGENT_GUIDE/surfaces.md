@@ -38,6 +38,34 @@ section listing each connected account with a per-account `Enable` (grant calend
 `Turn off` action, plus `Connect another account` to connect a new Google account
 (email + calendar).
 
+The side panel's `Calendars` section folds each connected account into a collapsible
+group: a caret plus the account address header with a checkbox that shows or hides all of
+that account's calendars at once, and the account's calendars listed beneath it (color dot,
+name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
+carry a small RSS icon.
+
+The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
+pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
+conferencing, and location pills and the description field (Google rejects them on this
+type), forces a timed (not all-day) range, restricts the calendar
+pill to primary calendars, and shows a `Decline meetings` pill (`Don't decline meetings` /
+`Decline new meetings` / `Decline all meetings`) plus, when declining, an optional
+`Decline message` pill; a warning note discloses the away/auto-decline effect before saving.
+When editing an existing event the kind is read-only (Google treats it as immutable), and an
+out-of-office event's decline settings can still be changed — they read as unset because the
+provider does not report the stored ones. Out-of-office events render on the grid as solid
+chips filled with their calendar color (like Google), unlike regular events' outlined chips,
+and their details card shows an `Out of office` line under the schedule.
+An event that Google carries on several of an account's calendars (a shared calendar's
+re-import of a member's own event, for example) renders once per calendar, side by side,
+the way Google Calendar shows it: each chip carries its own copy's title, color, and
+editability, and hiding a calendar hides its chip. Reminders, guests, and conferencing
+always show and follow the primary copy, since that is the copy Macro's alerts fire from
+and whose guest list and join link Macro records, and the editor only lets them be changed
+there. Answering an invitation likewise addresses the primary copy. The details popover and
+the editor act on the chip's copy, so editing or deleting it targets that calendar's event
+at Google.
+
 Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
 `<name>: <event title>`. The side panel's `Team out of office` section (shown only when the
 user belongs to a team with other members) has a checkbox in its header row toggling the
@@ -58,7 +86,10 @@ Board/List views, `Company` create button. Requires a team ("Join a team to enab
 ## Activity — `/app/component/activity`
 
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
-snapshot to a file) plus a feed of "You edited/created X" entries.
+snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
+over a wrapping row of pill chips (entity icon, name, action count; click opens the entity,
+shift-click opens a new split; the section is absent when there are no entities), then a feed
+of "You edited/created X" entries.
 
 ## Home — `/app/component/home`
 
@@ -72,7 +103,18 @@ list / delete personal keys; the secret is shown only once and is sent as
 `x-macro-user-api-key`), `Notifications`, `Billing`,
 `Appearance`, `Mobile App`, `Shortcuts` (interactive keyboard visualization, not a list);
 Workspace → `Team`, `Tags`, `CRM`, `Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; `Log out`.
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`;
+`Log out`.
+`Agents` lists team and private agents with `Create agent` / `Edit <name>` dialogs grouped
+Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:
+`Use my connected apps` (default; the agent gets whatever the person running it has
+connected) or `Specific apps`, which reveals a `Search connectors` box over the whole
+Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
+with a connected / not-connected dot for the *current viewer* plus an inline `Connect`
+that opens the Pipedream Connect flow inside the dialog. Unconnected picks never block
+saving; each teammate connects their own account. An agent session that calls a picked
+but unconnected app gets a tool result saying so, and the agent's reply renders a
+`Connect <app>` chip that opens Settings → Connections for that app.
 `Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
 
 ## Notifications

@@ -73,6 +73,23 @@ pub struct CalendarEventListItem {
     pub is_read_only: bool,
     /// Calendar the event belongs to, when known.
     pub calendar_id: Option<uuid::Uuid>,
+    /// Every calendar carrying a copy of this event when there is more than
+    /// one, primary first. Pass a copy's `calendarId` to UpdateCalendarEvent
+    /// or DeleteCalendarEvent to address that copy instead of the primary.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub copies: Vec<CalendarEventCopyItem>,
+}
+
+/// One calendar's copy of an event synced from several calendars.
+#[derive(Debug, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CalendarEventCopyItem {
+    /// Calendar holding this copy.
+    pub calendar_id: uuid::Uuid,
+    /// The copy's own title.
+    pub title: String,
+    /// Whether that calendar prohibits modifying the copy.
+    pub is_read_only: bool,
 }
 
 /// Response from the ListCalendarEvents tool.
@@ -232,6 +249,19 @@ where
                     conference_url: event.conference_url.clone(),
                     is_read_only: event.is_read_only,
                     calendar_id: event.calendar_id,
+                    copies: if event.sources.len() > 1 {
+                        event
+                            .sources
+                            .iter()
+                            .map(|copy| CalendarEventCopyItem {
+                                calendar_id: copy.calendar_id,
+                                title: copy.title.clone(),
+                                is_read_only: copy.is_read_only,
+                            })
+                            .collect()
+                    } else {
+                        Vec::new()
+                    },
                 }
             })
             .collect();

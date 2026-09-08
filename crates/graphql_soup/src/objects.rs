@@ -1150,6 +1150,13 @@ where
         self.0.thread.is_important
     }
 
+    /// The denormalized `email_threads.is_signal` importance classification —
+    /// the same flag the soup Importance filter evaluates, distinct from
+    /// `is_important` (Gmail's IMPORTANT label).
+    async fn is_signal(&self) -> bool {
+        self.0.thread.is_signal
+    }
+
     /// The identifier of the project.
     async fn project_id(&self) -> Option<ID> {
         self.0.thread.project_id.as_ref().map(|id| ID(id.clone()))

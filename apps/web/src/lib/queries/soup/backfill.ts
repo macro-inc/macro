@@ -22,7 +22,7 @@ import { createEffect, createSignal, onCleanup } from 'solid-js';
 
 // Bump when a default backfill input or completion guarantee changes so
 // persisted cursors cannot retain an older hydration contract.
-const BACKFILL_VERSION = 7;
+const BACKFILL_VERSION = 8;
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
@@ -310,8 +310,13 @@ export function withUpdatedSince(
     literal: { updatedAt: { gte: updatedSince } },
   };
 
-  const emailUpdatedAt = {
-    literal: { updatedAt: { gte: updatedSince } },
+  // VIEWED_UPDATED can move a row ahead of the scan cursor through either
+  // the thread timestamp or this viewer's history timestamp. Cover both.
+  const emailSortWatermark = {
+    or: {
+      left: { literal: { updatedAt: { gte: updatedSince } } },
+      right: { literal: { viewedAt: { gte: updatedSince } } },
+    },
   };
 
   return {
@@ -323,7 +328,7 @@ export function withUpdatedSince(
       chatFilter: and(filters.chatFilter, chatUpdatedAt),
       emailFilter: {
         ...(filters.emailFilter ?? {}),
-        tree: and(filters.emailFilter?.tree, emailUpdatedAt),
+        tree: and(filters.emailFilter?.tree, emailSortWatermark),
       },
     },
   };

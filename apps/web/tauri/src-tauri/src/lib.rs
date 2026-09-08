@@ -51,8 +51,8 @@ impl AppEnvironment {
 
     fn auth_service_url(self) -> &'static str {
         match self {
-            Self::Development => "https://auth-service-dev.macro.com/",
-            Self::Production => "https://auth-service.macro.com/",
+            Self::Development => "https://dev-gateway.macro.com/auth/",
+            Self::Production => "https://gateway.macro.com/auth/",
         }
     }
 

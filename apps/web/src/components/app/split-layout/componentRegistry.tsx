@@ -1,3 +1,4 @@
+import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -294,14 +295,14 @@ function RecentViewWrapper() {
 }
 
 const MyActivityView = lazy(() =>
-  import('@app/features/activity/my-activity-view').then((module) => ({
+  import('@app/features/activity/views/my-activity-view').then((module) => ({
     default: module.MyActivityView,
   }))
 );
 
 function TrackedMyActivityView() {
   usePageViewTracking('activity');
-  return <MyActivityView />;
+  return <MyActivityView onOpen={openEntityInSplit} />;
 }
 
 function MyActivityViewWrapper() {
@@ -731,14 +732,6 @@ if (LOCAL_ONLY) {
     lazy(() => import('@core/internal/DataDebug'))
   );
   registerComponent(
-    'noise',
-    lazy(() => import('@core/internal/PcNoiseGridDemo'))
-  );
-  registerComponent(
-    'svg-noise',
-    lazy(() => import('@core/internal/SvgNoiseGridDemo'))
-  );
-  registerComponent(
     'chat',
     lazy(() => import('@core/component/AI/component/debug/Component'))
   );
@@ -838,11 +831,6 @@ if (DEV_MODE_ENV) {
     )
   );
 
-  // NOTE (seamus) : putting pixel icons on dev/staging for aidan
-  registerComponent(
-    'pixel-icon',
-    lazy(() => import('@core/internal/PixelArtIconDemo'))
-  );
   registerComponent(
     'md-parse',
     lazy(

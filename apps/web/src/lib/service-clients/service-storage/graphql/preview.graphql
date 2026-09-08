@@ -1,0 +1,77 @@
+query ItemPreviewNameCacheWrite($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				displayName
+			}
+		}
+	}
+}
+
+query ItemPreviewFileTypeCacheWrite($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				__typename
+				id
+				... on GraphqlSoupDocument {
+					fileType
+				}
+			}
+		}
+	}
+}
+
+query ItemPreview($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				...ItemPreviewFields
+			}
+		}
+	}
+}
+
+fragment ItemPreviewFields on GraphqlSoupEntity {
+	__typename
+	id
+	displayName
+	... on GraphqlSoupDocument {
+		documentName: name
+		fileType
+		subType {
+			__typename
+			... on GraphqlTaskSubType {
+				isCompleted
+			}
+		}
+	}
+	... on GraphqlSoupChat {
+		chatName: name
+	}
+	... on GraphqlSoupProject {
+		projectName: name
+	}
+	... on GraphqlSoupEmailThread {
+		emailName: name
+		senderEmail
+		senderName
+	}
+	... on GraphqlSoupChannel {
+		channelDisplayName: name
+		channelType
+	}
+	... on GraphqlSoupCall {
+		customName
+		channelName
+	}
+	... on GraphqlSoupCrmCompany {
+		companyName: name
+		domains
+	}
+}

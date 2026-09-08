@@ -318,7 +318,7 @@ fn a_tool_call_without_a_prompt_opens_a_turn() {
     let agent = &consumer.messages[0];
     assert_eq!(agent.id, TurnId(0));
     assert!(
-        matches!(&agent.parts[0], MessagePart::ToolUse { label, .. } if label == "Bash"),
+        matches!(&agent.parts[0], MessagePart::ToolUse { name, .. } if name.display() == "Bash"),
         "and the call is its first part: {:?}",
         agent.parts[0]
     );

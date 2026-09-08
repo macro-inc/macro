@@ -351,6 +351,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - postgres
+      - redis
       - kafka
       - connection_gateway
       - lexical_service

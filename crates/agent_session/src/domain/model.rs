@@ -150,6 +150,13 @@ pub enum SessionStatus {
     Disconnected,
 }
 
+/// Which Pipedream MCP servers a session is handed: the agent's own choice,
+/// snapshotted onto the session at creation like `instructions`. The ACP
+/// agent is given its server list once per attach and cannot refresh it, so
+/// the snapshot is what every later attach re-advertises; editing the agent
+/// applies to its next session.
+pub use bots::domain::models::{AgentMcpServer, AgentMcpServers};
+
 /// Caller-provided values required to create an agent session.
 #[derive(Debug, Clone)]
 pub struct CreateAgentSessionParams {
@@ -180,6 +187,8 @@ pub struct CreateAgentSessionParams {
     /// provider, but every provider needs the same answer for the session's
     /// whole life.
     pub instructions: Option<String>,
+    /// Which MCP servers the session is handed; see [`AgentMcpServers`].
+    pub mcp_servers: AgentMcpServers,
     /// SHA-256 hex of the opaque token the session's sandbox presents to the
     /// egress proxy, or `None` for a session that never gets one.
     ///
@@ -226,6 +235,8 @@ pub struct AgentSession {
     /// creation. Immutable for the session's life; `None` when none were
     /// stated.
     pub instructions: Option<String>,
+    /// Which MCP servers the session is handed, snapshotted at creation.
+    pub mcp_servers: AgentMcpServers,
     /// ACP session if we have one
     pub acp_session_id: Option<SessionId>,
     /// The provider-side identity, when an external provider serves this

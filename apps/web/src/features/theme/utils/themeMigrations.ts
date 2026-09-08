@@ -1,5 +1,5 @@
 import type { ThemeV0, ThemeV1, ThemeV2, ThemeV3 } from '../types/themeTypes';
-import { getThemeColorMode, getThemeColorTokens } from './themeVNext';
+import { getThemeColorMode, getThemeColorTokens } from './themeColorTokens';
 
 export function convertThemev0v1(theme: ThemeV0): ThemeV1 {
   return {

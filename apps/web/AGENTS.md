@@ -79,6 +79,7 @@ Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '
 - Keep reusable components small, atomic, and decoupled from queries/complex state. Push data-fetching and mutations up to use-case-specific composed components.
 - Context should be scoped to a component subtree — Message.Content consuming a MessageContext is fine because the ownership boundary is clear.
 - Composed primitives must not depend on use-case-specific context — a RecipientsSelector should never require an EmailComposeContext.
+- New features use the layered layout in docs/STYLE_GUIDE.md FE-33 (`core / queries / primitives / components / views` plus an injected `context/`). `src/features/activity` is the reference.
 
 ## Styling
 - Use semantic color tokens, not raw Tailwind color classes.

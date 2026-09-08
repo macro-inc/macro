@@ -28,7 +28,7 @@
 #[cfg(test)]
 mod test;
 
-use crate::domain::model::{McpHeader, McpServer, McpTransport};
+use crate::domain::model::{McpHeader, McpServer, McpTransport, ModelFamily};
 use crate::domain::ports::{CursorAgents, RepoResolver, RunStream, SessionNotifier};
 use crate::domain::service::CursorSessionService;
 use agent_client_protocol::schema::ProtocolVersion;
@@ -37,10 +37,11 @@ use agent_client_protocol::schema::v1::{
     CloseSessionRequest, CloseSessionResponse, ContentBlock, Error as AcpError, HttpHeader,
     Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
     McpCapabilities, McpServer as AcpMcpServer, NewSessionRequest, NewSessionResponse,
-    PromptCapabilities, PromptRequest, PromptResponse, SessionConfigId, SessionConfigKind,
-    SessionConfigOption, SessionConfigSelect, SessionConfigSelectOption,
-    SessionConfigSelectOptions, SessionConfigValueId, SessionId, SessionNotification,
-    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse,
+    PromptCapabilities, PromptRequest, PromptResponse, SessionConfigGroupId, SessionConfigId,
+    SessionConfigKind, SessionConfigOption, SessionConfigSelect, SessionConfigSelectGroup,
+    SessionConfigSelectOption, SessionConfigSelectOptions, SessionConfigValueId, SessionId,
+    SessionNotification, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse,
 };
 use agent_client_protocol::{
     Agent, ByteStreams, Client, ConnectTo, ConnectionTo, on_receive_notification,
@@ -453,6 +454,13 @@ where
 /// variant parameters (`effort`, `reasoning`, `fast`) is a separate control and
 /// a separate change.
 ///
+/// The entries go out grouped by family ([`ModelFamily`]) — ACP's select
+/// options may be headed groups — so a client can show `Claude Opus` once with
+/// its versions under it rather than forty rows sorted by nothing. The family
+/// is inferred from the display name, because Cursor's listing carries nothing
+/// else to group on. A listing where no family has two members goes out flat:
+/// a header per single model is noise, not structure.
+///
 /// A failure to reach `GET /v1/models` costs the picker, not the session: the
 /// options come back empty and the client simply has nothing to offer, which is
 /// the state it was in before any of this existed.
@@ -501,21 +509,35 @@ where
     let Some(current) = current else {
         return Vec::new();
     };
-    let options: Vec<SessionConfigSelectOption> = models
-        .iter()
-        .map(|model| {
-            SessionConfigSelectOption::new(
-                SessionConfigValueId::new(model.id.clone()),
-                model.display_name.clone(),
-            )
-        })
-        .collect();
+    let select_option = |model: &crate::domain::model::CursorModel| {
+        SessionConfigSelectOption::new(
+            SessionConfigValueId::new(model.id.clone()),
+            model.display_name.clone(),
+        )
+    };
+    let families = ModelFamily::group(&models);
+    let options = if ModelFamily::is_informative(&families) {
+        SessionConfigSelectOptions::Grouped(
+            families
+                .iter()
+                .map(|family| {
+                    SessionConfigSelectGroup::new(
+                        SessionConfigGroupId::new(family.id.clone()),
+                        family.name.clone(),
+                        family.models.iter().map(select_option).collect(),
+                    )
+                })
+                .collect(),
+        )
+    } else {
+        SessionConfigSelectOptions::Ungrouped(models.iter().map(select_option).collect())
+    };
     vec![SessionConfigOption::new(
         SessionConfigId::new(MODEL_CONFIG_ID),
         "Model",
         SessionConfigKind::Select(SessionConfigSelect::new(
             SessionConfigValueId::new(current),
-            SessionConfigSelectOptions::Ungrouped(options),
+            options,
         )),
     )]
 }

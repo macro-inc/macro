@@ -78,6 +78,36 @@ describe('buffer overlap', () => {
     ).toEqual([]);
     expect(dropOverlap([frame(1)], [frame(1), frame(1)])).toEqual([frame(1)]);
   });
+
+  it('matches one entry whose object keys came back in another order', () => {
+    // The persisted log is read from jsonb, which reorders keys; the
+    // realtime frame for the same row keeps the runtime's order.
+    const stored = {
+      createdAt: '2026-08-13T00:00:05Z',
+      direction: 'to_server',
+      content: {
+        type: 'acp',
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'session/prompt',
+        params: { prompt: [{ text: 'hi', type: 'text' }], sessionId: 's' },
+      },
+    } as unknown as AgentSessionLogEntryDto;
+    const live = {
+      content: {
+        jsonrpc: '2.0',
+        id: 5,
+        method: 'session/prompt',
+        params: { sessionId: 's', prompt: [{ type: 'text', text: 'hi' }] },
+        type: 'acp',
+      },
+      direction: 'to_server',
+      createdAt: '2026-08-13T00:00:05Z',
+    } as unknown as AgentSessionLogEntryDto;
+
+    expect(JSON.stringify(stored)).not.toBe(JSON.stringify(live));
+    expect(dropOverlap([stored], [live])).toEqual([]);
+  });
 });
 
 describe('shared session folds', () => {
@@ -108,6 +138,26 @@ describe('shared session folds', () => {
       frame(3),
     ]);
     (await acquired).release();
+  });
+
+  it('skips a late realtime frame the fetched log already held', async () => {
+    harness.getLog.mockResolvedValue(
+      ok({ bot, entries: [frame(1), frame(2)] })
+    );
+    const acquired = await acquireAgentSessionFold({
+      agentSessionId: 'session-a',
+    });
+
+    // The gateway delivers the second row after the HTTP fetch returned it.
+    handleAgentSessionLog(event('session-a', 2));
+    handleAgentSessionLog(event('session-a', 3));
+    await Promise.resolve();
+
+    expect(fold.pushSessionEntries).toHaveBeenCalledTimes(1);
+    expect(fold.pushSessionEntries).toHaveBeenCalledWith('session-a', [
+      frame(3),
+    ]);
+    acquired.release();
   });
 
   it('isolates raw and folded events by session', async () => {

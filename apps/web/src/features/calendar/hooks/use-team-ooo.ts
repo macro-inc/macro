@@ -17,7 +17,7 @@ import { isCalendarRangeSupported } from '../utils/calendar-supported-range';
 export const TEAM_OOO_SOURCE_ID = 'team-ooo';
 
 /** Prefix of every per-teammate visibility-source id. */
-export const TEAM_OOO_SOURCE_PREFIX = 'team-ooo:';
+const TEAM_OOO_SOURCE_PREFIX = 'team-ooo:';
 
 const TEAM_OOO_COLOR = 'var(--color-ink-muted)';
 const TEAM_OOO_FALLBACK_TITLE = 'Out of office';
@@ -57,6 +57,7 @@ function mapTeamOooItem(item: TeamOutOfOfficeItem): CalendarEvent {
     isReadOnly: true,
     attendees: [],
     recurrenceLines: [],
+    sourceCalendarIds: [TEAM_OOO_SOURCE_ID],
     eventType: EventType.out_of_office,
     timeZone: time.kind === 'timed' ? (time.timeZone ?? undefined) : undefined,
     title: name ? `${name}: ${title}` : title,
@@ -99,8 +100,11 @@ export function useTeamOooEvents(
     })
   );
   const events = createMemo(() => {
-    if (!isRangeSupported()) return [];
-    return (query.data ?? []).map(mapTeamOooItem);
+    // Read data only on success: a failed overlay fetch degrades to no events
+    // since the grid's own state is driven by the occurrences query, and gating
+    // on success keeps this off the pending/errored resource read that suspends.
+    if (!isRangeSupported() || !query.isSuccess) return [];
+    return query.data.map(mapTeamOooItem);
   });
   const visibleEvents = createMemo(() => (isOverlayVisible() ? events() : []));
   const eventsById = createMemo(
@@ -127,8 +131,17 @@ export interface TeamOooWindow {
 
 const UPCOMING_TEAM_OOO_DAYS = 90;
 
+/** Upcoming team out-of-office windows with the request's load/error status. */
+export interface UpcomingTeamOoo {
+  windows: Accessor<TeamOooWindow[]>;
+  /** No settled result yet, distinguishing first load from an empty result. */
+  isPending: Accessor<boolean>;
+  /** The request failed, distinguishing an error from an empty result. */
+  isError: Accessor<boolean>;
+}
+
 /** Teammates' out-of-office windows from today forward, soonest first. */
-export function useUpcomingTeamOoo(): Accessor<TeamOooWindow[]> {
+export function useUpcomingTeamOoo(): UpcomingTeamOoo {
   const userId = useUserId();
   const rangeStart = new Date();
   rangeStart.setHours(0, 0, 0, 0);
@@ -137,8 +150,11 @@ export function useUpcomingTeamOoo(): Accessor<TeamOooWindow[]> {
   const range = createCalendarOccurrenceQueryRange(rangeStart, rangeEnd);
   const query = useTeamOutOfOfficeQuery(() => ({ userId: userId(), range }));
 
-  return createMemo(() =>
-    (query.data ?? []).map((item) => {
+  const windows = createMemo<TeamOooWindow[]>(() => {
+    // Read data only on success so a pending query never hits the suspending
+    // resource read and an errored refetch never surfaces stale rows.
+    if (!query.isSuccess) return [];
+    return query.data.map((item) => {
       const time = item.time;
       const [start, end, allDay] =
         time.kind === 'timed'
@@ -154,6 +170,12 @@ export function useUpcomingTeamOoo(): Accessor<TeamOooWindow[]> {
         end,
         allDay,
       };
-    })
-  );
+    });
+  });
+
+  return {
+    windows,
+    isPending: () => query.isPending,
+    isError: () => query.isError,
+  };
 }

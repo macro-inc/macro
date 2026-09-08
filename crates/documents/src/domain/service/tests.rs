@@ -14,6 +14,7 @@ use crate::domain::models::{
 use crate::domain::ports::{DocumentContentEventService, MockDocumentRepo};
 
 use super::*;
+use activity::{Actor, Attribution};
 
 fn make_test_metadata() -> DocumentMetadata {
     DocumentMetadata {
@@ -166,6 +167,7 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
         _entity_id: &str,
         _property_definition_id: uuid::Uuid,
         _value: Option<models_properties::api::requests::SetPropertyValue>,
+        _attribution: &activity::Attribution,
     ) -> anyhow::Result<()> {
         Ok(())
     }
@@ -2041,6 +2043,106 @@ async fn create_document_publishes_resolved_attribution() {
         published[0].payload["metadata"]
             .get("on_behalf_of")
             .is_none()
+    );
+}
+
+#[derive(Default, Clone)]
+struct RecordingTaskPropertiesPort {
+    writes: Arc<Mutex<Vec<(String, uuid::Uuid, Attribution)>>>,
+}
+
+impl TaskPropertiesPort for RecordingTaskPropertiesPort {
+    async fn attach_task_properties(&self, _entity_ids: Vec<String>) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn set_entity_property(
+        &self,
+        user_id: &str,
+        _entity_id: &str,
+        property_definition_id: uuid::Uuid,
+        _value: Option<models_properties::api::requests::SetPropertyValue>,
+        attribution: &Attribution,
+    ) -> anyhow::Result<()> {
+        self.writes.lock().unwrap().push((
+            user_id.to_string(),
+            property_definition_id,
+            attribution.clone(),
+        ));
+        Ok(())
+    }
+
+    async fn copy_task_properties(
+        &self,
+        _from_task_id: &str,
+        _to_task_id: &str,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn handle_task_properties_forwards_create_attribution() {
+    use crate::domain::models::{ASSIGNEES_PROPERTY_ID, CreateTaskRequest, STATUS_PROPERTY_ID};
+
+    let task_properties = RecordingTaskPropertiesPort::default();
+    let service = DocumentServiceImpl::new(
+        make_mock_repo(),
+        test_cloudfront_config(),
+        sync_service_client::SyncServiceClient::new(
+            "test-sync-key".to_string(),
+            "http://sync-service.test".to_string(),
+        ),
+        TestUploadUrlPort,
+        task_properties.clone(),
+        TestConnectionService,
+        TestEntityAccessManagementService::default(),
+        TestForeignEntityService::default(),
+        TestEventBroker::default(),
+    );
+    let user = macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+        .unwrap()
+        .into_owned();
+    let attribution = Attribution::delegated(
+        Actor::new_from_bot(bot_id::MACRO_SYSTEM_BOT_ID),
+        user.clone(),
+    );
+
+    crate::domain::ports::DocumentService::handle_task_properties(
+        &service,
+        user.clone(),
+        "task-1",
+        &CreateTaskRequest {
+            task_name: "Intro to tasks".to_string(),
+            markdown: None,
+            project_id: None,
+            team_id: None,
+            property_values: None,
+            share_with_team: false,
+        },
+        &attribution,
+    )
+    .await
+    .unwrap();
+
+    let writes = task_properties.writes.lock().unwrap().clone();
+    assert_eq!(writes.len(), 2);
+    assert_eq!(
+        writes[0].1,
+        uuid::Uuid::parse_str(ASSIGNEES_PROPERTY_ID).unwrap()
+    );
+    assert_eq!(
+        writes[1].1,
+        uuid::Uuid::parse_str(STATUS_PROPERTY_ID).unwrap()
+    );
+    assert!(
+        writes
+            .iter()
+            .all(|(user_id, _, recorded)| user_id == user.as_ref() && recorded == &attribution)
     );
 }
 

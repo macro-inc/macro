@@ -27,7 +27,6 @@ function createController(
     initialTargetMessageId: string;
     initialTargetMessageReplyId: string;
     messageKeys: string[];
-    scrollToId: (messageId: string) => boolean;
     withNavigation: boolean;
     didInitialScroll: boolean;
   }>
@@ -37,34 +36,12 @@ function createController(
     input?.didInitialScroll ?? false
   );
 
-  const scrollToId =
-    input?.scrollToId ??
-    (() => {
-      return true;
-    });
-
   const controller = createTargetMessageController({
     channelId: () => input?.channelId ?? 'channel-1',
     initialTargetMessageId: input?.initialTargetMessageId,
     initialTargetMessageReplyId: input?.initialTargetMessageReplyId,
     messageKeys,
-    navigation: () =>
-      input?.withNavigation
-        ? {
-            scrollTo: () => false,
-            scrollToIndex: () => false,
-            scrollByDelta: () => false,
-            scrollToTop: () => false,
-            scrollToBottom: () => false,
-            scrollToId,
-            navigatePrevious: () => false,
-            navigateNext: () => false,
-            isNearBottom: () => true,
-            scrollToElementInItem: () => true,
-            markUserIntent: () => {},
-          }
-        : undefined,
-    didInitialScroll,
+    isReady: () => !!input?.withNavigation && didInitialScroll(),
   });
 
   return {
@@ -107,7 +84,6 @@ describe('createTargetMessageController', () => {
   });
 
   it('lets a nested reply perform the only viewport scroll', async () => {
-    const scrollToId = vi.fn(() => true);
     let dispose = () => {};
     let controller: ReturnType<typeof createTargetMessageController>;
 
@@ -117,7 +93,6 @@ describe('createTargetMessageController', () => {
         initialTargetMessageId: 'message-1',
         initialTargetMessageReplyId: 'reply-4',
         messageKeys: ['message-1'],
-        scrollToId,
         withNavigation: true,
         didInitialScroll: true,
       }).controller;
@@ -125,7 +100,6 @@ describe('createTargetMessageController', () => {
 
     await Promise.resolve();
 
-    expect(scrollToId).not.toHaveBeenCalled();
     expect(controller!.pendingScrollTargetId()).toBeUndefined();
     expect(controller!.pendingTargetReplyId()).toBe('reply-4');
     // The outer row is acknowledged early so the reply can scroll itself, but
@@ -140,7 +114,6 @@ describe('createTargetMessageController', () => {
   });
 
   it('keeps a root target pending until its element is positioned within the row', async () => {
-    const scrollToId = vi.fn(() => true);
     let dispose = () => {};
     let controller: ReturnType<typeof createTargetMessageController>;
 
@@ -149,7 +122,6 @@ describe('createTargetMessageController', () => {
       controller = createController({
         initialTargetMessageId: 'message-1',
         messageKeys: ['message-1'],
-        scrollToId,
         withNavigation: true,
         didInitialScroll: true,
       }).controller;
@@ -157,7 +129,6 @@ describe('createTargetMessageController', () => {
 
     await Promise.resolve();
 
-    expect(scrollToId).not.toHaveBeenCalled();
     expect(controller!.pendingScrollTargetId()).toBe('message-1');
 
     controller!.completePendingScroll('message-1');

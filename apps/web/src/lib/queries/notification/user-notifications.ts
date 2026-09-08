@@ -12,6 +12,7 @@ import {
   hasSoupEntity,
   optimisticUpdateSoupItemUpdatedAt,
   refetchSoupEntity,
+  restoreSoupEntityToDoneFilteredQueries,
   type SoupEntityTag,
 } from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
@@ -1092,6 +1093,16 @@ export function optimisticInsertNotification(
     if (threadRootId && !hasSoupEntity(threadRootId)) {
       refetchSoupEntity(threadRootId, 'channelThread');
     }
+
+    // A cached row may be absent from the done-filtered feeds — dropped when
+    // it was marked done, or the feed was fetched while it had nothing
+    // outstanding. The field merges above only patch rows already present,
+    // so put the row back where it is missing; otherwise this notification
+    // stays invisible in the inbox until the next refetch. No-op for rows
+    // the refetch paths above insert.
+    restoreSoupEntityToDoneFilteredQueries(
+      threadRootId ?? notification.entity_id
+    );
   }
 
   // Cache is already updated via setQueriesData above. Mark as stale without

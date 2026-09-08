@@ -31,6 +31,7 @@ function agent(
     default_model: 'model',
     harness,
     instructions: '',
+    mcp: { scope: 'owner_connections' },
   };
 }
 

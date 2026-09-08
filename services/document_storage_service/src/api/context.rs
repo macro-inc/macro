@@ -41,7 +41,7 @@ use connection::{
     outbound::connection_gateway_client::ConnectionGatewayImpl,
 };
 use connection_gateway_client::client::ConnectionGatewayClient;
-use documents_hex::domain::ports::TaskPropertiesPort;
+use documents_hex::domain::ports::{TaskPropertiesPort, task_property_edit_receipt};
 use documents_hex::domain::service::DocumentServiceImpl;
 use documents_hex::inbound::axum_router::DocumentRouterState;
 use documents_hex::outbound::pg_document_repo::PgDocumentRepo;
@@ -51,14 +51,10 @@ use email::{
     domain::{ports::ReadonlyEmailPreviewAdapter, service::EmailServiceImpl},
     outbound::EmailPgRepo,
 };
-use entity_access::{
-    domain::{
-        models::EditAccessLevel, ports::EntityAccessService as _, service::EntityAccessServiceImpl,
-    },
-    outbound::PgAccessRepository,
-};
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use favorites::{
-    domain::service::FavoritesServiceImpl, inbound::axum_router::FavoritesRouterState,
+    domain::{mutation_service::FavoritesMutationServiceImpl, service::FavoritesServiceImpl},
+    inbound::axum_router::FavoritesRouterState,
     outbound::pg_favorites_repo::PgFavoritesRepo,
 };
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
@@ -197,6 +193,7 @@ pub(crate) type DssGraphqlSoupSchema = complete_graph::SharedSoupSchema<
     ApiContext,
     complete_graph::PropertiesEntityPropertyWriter<PropertiesService, EntityAccessService>,
     DssEntityMutationService,
+    FavoritesMutationServiceType,
     DssChannelService,
     ai_tools::ToolNotificationService,
     Arc<ai_tools::ToolNotificationService>,
@@ -264,20 +261,18 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         entity_id: &str,
         property_definition_id: uuid::Uuid,
         value: Option<models_properties::api::requests::SetPropertyValue>,
+        attribution: &activity::Attribution,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
 
         let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(user_id)?;
-
-        let entity_access_receipt = self
-            .entity_access_service
-            .generate_entity_access_receipt::<EditAccessLevel>(
-                &user_id,
-                None,
-                entity_id,
-                model_entity::EntityType::Document,
-            )
-            .await?;
+        let entity_access_receipt = task_property_edit_receipt(
+            self.entity_access_service.as_ref(),
+            &user_id,
+            attribution,
+            entity_id,
+        )
+        .await?;
         self.properties
             .set_entity_property(&entity_access_receipt, property_definition_id, value)
             .await
@@ -441,12 +436,15 @@ pub(crate) type DssEntityMutationService =
         DssEmailService,
         ProjectService,
         EntityAccessService,
-        FavoritesServiceType,
         crate::outbound::entity_mutation::DssEntityLifecycleAdapter<DssEventBroker>,
     >;
 
 /// Type alias for the favorites service.
 pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
+
+/// Authorized favorites mutation service wired into GraphQL.
+pub(crate) type FavoritesMutationServiceType =
+    FavoritesMutationServiceImpl<FavoritesServiceType, EntityAccessService>;
 
 /// Type alias for the favorites router state.
 pub(crate) type DssFavoritesState =
@@ -532,6 +530,7 @@ pub(crate) struct ApiContext {
     pub graphql_entity_mutation_service: Arc<DssEntityMutationService>,
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
+    pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
     pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
     pub collab_surface_state: DssCollabSurfaceState,

@@ -37,6 +37,7 @@ fn params(id: AgentSessionId) -> CreateAgentSessionParams {
         workspace: "/workspace".to_owned(),
         sandbox_size: agent_session::domain::model::SandboxSize::Default,
         instructions: None,
+        mcp_servers: Default::default(),
         egress_token_hash: None,
     }
 }

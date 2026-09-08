@@ -31,10 +31,55 @@ message; ordinary Markdown blockquotes remain presentation-only and do not count
 The composer always keeps an editable empty line after a block reference, including after
 the user deletes that line, so clicking below the reference can restore the text caret.
 
-`@Macro` answers in the thread (classic bot). `@macro-new` / `@coder` / `@cursor` open
-an agent session; follow-up `@` mentions of that bot in the same thread route to it.
+`@Macro` answers in the thread (classic bot). Its tool calls execute immediately — there is
+no composer or pending-confirmation card in a channel, so asking it to create a calendar
+event without attendees creates the event right away (unlike AI chat, where creation waits
+for the user to confirm a composer card). For an event with attendees the bot is prompted to
+ask for confirmation in the thread first, since Google sends the invitations the moment the
+event is created — no invitation goes out from the initial request. It cannot draft or send
+email at all. The bot's prompt carries the current date and time in the mentioning user's
+own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
+"EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
+bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` open
+an agent session; follow-up
+`@` mentions of that bot in the same thread route to it.
+The reply renders a Magic Chip: a rounded card of constant height that is present
+from the moment the session boots. Its answer area shows a pulsing star while the
+agent works, then the opening of the answer clipped to four lines and faded out; its
+bottom row reads the current activity (`Booting agent`, `Writing response`, ...) and
+`Open session` once the turn ends. A `Show more` cue sits over the fade: click the
+answer text to expand it in place (`Show less` collapses it again); click the
+bottom row to open the agent session. Before an
+answer exists, clicking the answer area also opens the session.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention.
+The Magic Chip that streams the agent's reply stays inside the message column: long
+thoughts, file paths, and unbreakable tokens wrap or truncate instead of expanding the
+thread past the chat's right edge.
+
+## Message scrolling and navigation
+
+Channels open at the latest message, with short conversations aligned above the
+composer. Incoming messages and growing replies stay in view while the channel is
+at the bottom. Consecutive sends stay pinned through server acknowledgement and
+composer resizing, without bouncing upward between messages.
+Scrolling up more than 1px leaves the viewport on the history being read, even
+when only slightly above the bottom. Composer and viewport resizing respect the
+same boundary. Returning to the bottom resumes following; loading older messages
+preserves the reading position.
+
+Message and reply links reveal the target inside its thread. Keyboard message
+navigation scrolls only when the selected message is outside the usable viewport.
+Returning through split navigation restores the saved message position and expanded
+threads. Switching channel tabs currently opens Messages at latest. The `Scroll to bottom` control appears when scrolling down through history;
+it returns to the latest page even after opening a link into old history.
+The jump waits for that page to reach the rendered list.
+A newer message navigation cancels a pending jump to latest. Scrolling manually
+or choosing another destination also cancels the initial target's delayed fallback.
+A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
+
+The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
+keyed by message ID; offscreen rows are normally absent from the DOM.
 
 ## Channel tabs
 
