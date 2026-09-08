@@ -16,6 +16,9 @@ use sqlx::Transaction;
 use tracing::instrument;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// struct for creating a document
 #[derive(Debug)]
 pub struct CreateDocumentArgs<'a> {
@@ -39,7 +42,7 @@ pub struct CreateDocumentArgs<'a> {
 
 /// Creates a new document
 /// NOTE: this is only used in seed_cli at the moment and needs to be deprecated
-#[instrument(skip(db))]
+#[instrument(skip(db), err)]
 pub async fn create_document(
     db: &Pool<Postgres>,
     args: CreateDocumentArgs<'_>,
@@ -58,11 +61,12 @@ pub async fn create_document(
 }
 
 /// Creates a new document in a transaction without committing
-#[instrument(skip(transaction))]
+#[instrument(skip(transaction), err)]
 pub async fn create_document_txn(
     transaction: &mut Transaction<'_, Postgres>,
     args: CreateDocumentArgs<'_>,
 ) -> anyhow::Result<DocumentMetadata> {
+    entity_access_db_utils::team_share::acquire_guard(transaction).await?;
     tracing::trace!("creating document");
     let CreateDocumentArgs {
         id,
@@ -210,13 +214,21 @@ pub async fn create_document_txn(
             .await?;
     }
 
+    let document_uuid = macro_uuid::string_to_uuid(&document_id)?;
     entity_access_db_utils::insert_entity_access_row(
         transaction,
-        &macro_uuid::string_to_uuid(&document_id).unwrap(),
+        &document_uuid,
         EntityType::Document,
         user_id.as_ref(),
         entity_access_db_utils::EntityAccessSourceType::User,
         AccessLevel::Owner,
+    )
+    .await?;
+
+    entity_access_db_utils::project_inheritance::synchronize_entity(
+        transaction,
+        &document_uuid,
+        EntityType::Document,
     )
     .await?;
 

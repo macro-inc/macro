@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT \"projectId\" as project_id, \"deletedAt\" as deleted_at FROM \"Chat\" WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "project_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "deleted_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "d3cd6330cb74d17e6da1d4e4db5ad7eb0b498830e842f8a85c7b4a0553f808ed"
+}

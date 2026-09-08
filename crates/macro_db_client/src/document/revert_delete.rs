@@ -1,26 +1,30 @@
 use anyhow::Context;
 
+#[cfg(test)]
+mod test;
+
 /// Reverts a document deletion
-/// Adds the document back to the users history as well
-#[tracing::instrument(skip(db))]
+/// Adds the document back to the users history as well.
+/// The legacy project hint is ignored in favor of the persisted parent under the guard.
+#[tracing::instrument(skip(db), err)]
 pub async fn revert_delete_document(
     db: &sqlx::Pool<sqlx::Postgres>,
     document_id: &str,
-    project_id: Option<&str>,
+    _project_id: Option<&str>,
 ) -> anyhow::Result<()> {
     let mut transaction = db.begin().await.context("unable to begin transaction")?;
+    entity_access_db_utils::team_share::acquire_guard(&mut transaction).await?;
 
     // Remove deletedAt for document
-    let document_owner = sqlx::query!(
+    let document = sqlx::query!(
         r#"
         UPDATE "Document"
         SET "deletedAt" = NULL
         WHERE id = $1
-        RETURNING owner as owner
+        RETURNING owner, "projectId" as project_id
         "#,
         document_id,
     )
-    .map(|row| row.owner)
     .fetch_one(&mut *transaction)
     .await
     .context("unable to update document")?;
@@ -33,7 +37,7 @@ pub async fn revert_delete_document(
         ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
         SET "updatedAt" = NOW();
         "#,
-        document_owner,
+        document.owner,
         document_id,
         "document",
     )
@@ -41,7 +45,7 @@ pub async fn revert_delete_document(
     .await
     .context("unable to add document to history")?;
 
-    if let Some(project_id) = project_id {
+    if let Some(project_id) = document.project_id {
         tracing::trace!("document was in nested");
         let is_deleted = sqlx::query!(
             r#"
@@ -65,6 +69,17 @@ pub async fn revert_delete_document(
             .execute(&mut *transaction)
             .await?;
         }
+    }
+
+    // Legacy text IDs cannot have UUID-keyed grants. Direct shares and their
+    // canonical state are untouched, including shares cleared by lifecycle cleanup.
+    if let Ok(id) = uuid::Uuid::parse_str(document_id) {
+        entity_access_db_utils::project_inheritance::synchronize_entity(
+            &mut transaction,
+            &id,
+            model_entity::EntityType::Document,
+        )
+        .await?;
     }
 
     transaction

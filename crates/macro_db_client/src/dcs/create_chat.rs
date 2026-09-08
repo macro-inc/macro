@@ -7,8 +7,11 @@ use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::{Pool, Postgres};
 
+#[cfg(test)]
+mod test;
+
 // this has types that should not become dependencies of macro_db_client
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix")]
 pub async fn create_chat_v2(
     db: &Pool<Postgres>,
@@ -22,6 +25,7 @@ pub async fn create_chat_v2(
     is_persistent: bool,
 ) -> anyhow::Result<String> {
     let mut transaction: sqlx::Transaction<'_, Postgres> = db.begin().await?;
+    entity_access_db_utils::team_share::acquire_guard(&mut transaction).await?;
     // move this as a standalone query to macro_db_client/dcs/create_empty_chat
     // create a row in chat table
     let chat = sqlx::query_as!(
@@ -66,13 +70,21 @@ pub async fn create_chat_v2(
         append_attachment_to_chat(&mut transaction, attachment).await?;
     }
 
+    let chat_uuid = macro_uuid::string_to_uuid(&chat.id)?;
     entity_access_db_utils::insert_entity_access_row(
         &mut transaction,
-        &macro_uuid::string_to_uuid(&chat.id).unwrap(),
+        &chat_uuid,
         EntityType::Chat,
         user_id.as_ref(),
         entity_access_db_utils::EntityAccessSourceType::User,
         AccessLevel::Owner,
+    )
+    .await?;
+
+    entity_access_db_utils::project_inheritance::synchronize_entity(
+        &mut transaction,
+        &chat_uuid,
+        EntityType::Chat,
     )
     .await?;
 

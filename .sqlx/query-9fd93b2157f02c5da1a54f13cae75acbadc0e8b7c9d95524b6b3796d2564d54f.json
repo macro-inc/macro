@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Project\" (id, name, \"userId\", \"deletedAt\") VALUES ('stale-parent', 'Stale', 'macro|owner@example.com', NOW())",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "9fd93b2157f02c5da1a54f13cae75acbadc0e8b7c9d95524b6b3796d2564d54f"
+}
