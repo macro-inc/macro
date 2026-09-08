@@ -2,12 +2,12 @@ import { render } from '@solidjs/testing-library';
 import { createSignal, onCleanup } from 'solid-js';
 import { beforeEach, expect, it, vi } from 'vitest';
 import type { EmailReplySession } from '../../email-compose/context/email-form-dependencies';
-import { composeServices } from '../../email-compose/tests/services';
+import { composeEnvironment } from '../../email-compose/tests/capabilities';
+import { EmailThreadStateProvider } from '../context/email-thread-state-context';
+import { ThreadEnvironmentProvider } from '../context/thread-environment';
 import { createEmailThreadState } from '../primitives/email-thread-state';
 import { dependencies, message, thread } from '../tests/fixtures';
-import { EmailInput } from './email-input';
-import { EmailProvider } from './email-thread-context';
-import { ThreadEnvironmentProvider } from './thread-environment';
+import { ThreadReplyInput } from './thread-reply-input';
 
 vi.mock('@ui', () => ({
   Layer: (props: { children: unknown }) => props.children,
@@ -60,13 +60,13 @@ it('preserves an engaged composer through a same-message update but resets it fo
       <ThreadEnvironmentProvider
         value={{
           dependencies: deps,
-          compose: composeServices(),
+          compose: composeEnvironment(),
           rendering: {},
         }}
       >
-        <EmailProvider value={state}>
-          <EmailInput replyingTo={target} />
-        </EmailProvider>
+        <EmailThreadStateProvider value={state}>
+          <ThreadReplyInput replyingTo={target} />
+        </EmailThreadStateProvider>
       </ThreadEnvironmentProvider>
     );
   });
@@ -100,18 +100,18 @@ it('returns focus to the owning thread when split panes contain the same message
       <ThreadEnvironmentProvider
         value={{
           dependencies: deps,
-          compose: composeServices(),
+          compose: composeEnvironment(),
           rendering: {},
         }}
       >
-        <EmailProvider value={state}>
+        <EmailThreadStateProvider value={state}>
           <div ref={state.registerMessagesContainer}>
             <div tabIndex={0} data-testid="card">
               <div data-message-body-id={parent.db_id} />
             </div>
-            <EmailInput replyingTo={() => parent} />
+            <ThreadReplyInput replyingTo={() => parent} />
           </div>
-        </EmailProvider>
+        </EmailThreadStateProvider>
       </ThreadEnvironmentProvider>
     );
   };

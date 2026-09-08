@@ -1,15 +1,15 @@
 import { type Accessor, createSignal } from 'solid-js';
-import type { EmailAttachmentStorage } from '../context/compose-services';
+import type { EmailAttachmentStorage } from '../context/compose-capabilities';
 import type { DraftFormAttachment } from './email-form-state';
 import type { EmailFormContextValue } from './email-form-types';
 
 type AttachmentState = Pick<
   EmailFormContextValue['attachments'],
   | 'list'
-  | 'assignAttachmentID'
-  | 'clearAttachmentID'
+  | 'assignAttachmentId'
+  | 'clearAttachmentId'
   | 'removeByFile'
-  | 'removeByID'
+  | 'removeById'
   | 'removeForwarded'
 >;
 
@@ -17,7 +17,7 @@ type AttachmentState = Pick<
 export function createAttachmentPersistence(options: {
   attachments: Accessor<AttachmentState>;
   draftId: Accessor<string | null | undefined>;
-  linkId: Accessor<string | undefined>;
+  inboxId: Accessor<string | undefined>;
   services: Pick<
     EmailAttachmentStorage,
     'uploadAttachments' | 'removeAttachment' | 'removeForwardedAttachment'
@@ -30,7 +30,7 @@ export function createAttachmentPersistence(options: {
 
   return {
     uploading,
-    async upload(draftId: string, inbox = { linkId: options.linkId() }) {
+    async upload(draftId: string, inbox = { inboxId: options.inboxId() }) {
       const attachments = options
         .attachments()
         .list()
@@ -38,18 +38,18 @@ export function createAttachmentPersistence(options: {
           (
             attachment
           ): attachment is Extract<DraftFormAttachment, { type: 'local' }> =>
-            attachment.type === 'local' && !attachment.attachmentID
+            attachment.type === 'local' && !attachment.attachmentId
         );
       let run: Promise<void> | undefined;
       if (attachments.length) {
         run = options.services.uploadAttachments({
-          draftID: draftId,
+          draftId: draftId,
           attachments: attachments.map((attachment) => attachment.file),
-          linkId: inbox.linkId,
+          inboxId: inbox.inboxId,
           onAttachmentAdded: (file, id) =>
-            options.attachments().assignAttachmentID(file, id),
+            options.attachments().assignAttachmentId(file, id),
           onAttachmentUploadFailed: (file) =>
-            options.attachments().clearAttachmentID(file),
+            options.attachments().clearAttachmentId(file),
         });
         const settled = run.then(
           () => undefined,
@@ -70,19 +70,19 @@ export function createAttachmentPersistence(options: {
       const state = options.attachments();
       if (attachment.type === 'local') state.removeByFile(attachment.file);
       else if (attachment.type === 'forwarded')
-        state.removeForwarded(attachment.attachmentID);
-      else state.removeByID(attachment.attachmentID);
+        state.removeForwarded(attachment.attachmentId);
+      else state.removeById(attachment.attachmentId);
 
-      const draftID = options.draftId();
-      if (!draftID || !attachment.attachmentID) return;
+      const draftId = options.draftId();
+      if (!draftId || !attachment.attachmentId) return;
       const operation =
         attachment.type === 'forwarded'
           ? options.services.removeForwardedAttachment
           : options.services.removeAttachment;
       void operation({
-        draftID,
-        attachmentID: attachment.attachmentID,
-        linkId: options.linkId(),
+        draftId,
+        attachmentId: attachment.attachmentId,
+        inboxId: options.inboxId(),
       }).catch(() => {
         // The attachment query reports removal failures; keep optimistic removal.
       });

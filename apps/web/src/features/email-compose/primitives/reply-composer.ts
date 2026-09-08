@@ -11,7 +11,7 @@ import type {
   EmailDraftStorage,
   EmailUndoHandle,
   PersistedEmailIdentity,
-} from '../context/compose-services';
+} from '../context/compose-capabilities';
 import type { EmailReplySession } from '../context/email-form-dependencies';
 import type { EmailDraft } from '../core/email-draft';
 import { createAttachmentPersistence } from './attachment-persistence';
@@ -50,24 +50,21 @@ import {
   convertEmailRecipientToContactInfo,
 } from '../core/recipient-conversion';
 import { getReplyTypeFromDraft } from '../core/reply-type';
-import type { DraftFormAttachment } from '../primitives/email-form-state';
-import type {
-  EmailFormContextValue,
-  FormAccessKey,
-} from '../primitives/email-form-types';
-import { addUserMentionToCc } from '../primitives/mention-to-cc';
+import type { DraftFormAttachment } from './email-form-state';
+import type { EmailFormContextValue, FormAccessKey } from './email-form-types';
+import { addUserMentionToCc } from './mention-to-cc';
 import {
   clearEmailBody,
   hasDraftContent,
   prepareEmailBody,
   prepareMacroBody,
   TOGGLE_APPEND_EMAIL_THREAD_COMMAND,
-} from '../primitives/prepare-email-body';
-import { endUndoSend } from '../primitives/undo-send-claim';
+} from './prepare-email-body';
+import { endUndoSend } from './undo-send-claim';
 
 type UndoReplySnapshot = {
   threadId: string;
-  linkId: string | undefined;
+  inboxId: string | undefined;
   draftId: string;
   bodyHtml: string;
   attachments: DraftFormAttachment[];
@@ -84,7 +81,7 @@ type UndoReplySnapshot = {
 };
 const replyUndo = createEmailUndoStore<UndoReplySnapshot>();
 
-export type ReplyInputProps = {
+export type ReplyComposerOptions = {
   newMessage?: boolean;
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
@@ -104,7 +101,7 @@ export type ReplyInputProps = {
   preloadedHtml?: string;
   /** Seed identity of the draft this composer mounted from — becomes part of
    * the form-state cache key so a remount on a newer draft version gets a
-   * freshly seeded form. See EmailInput's seed key. */
+   * freshly seeded form. See ThreadReplyInput's seed key. */
   formSeed?: string;
   /** Reports the composer gaining local state worth keeping — a first edit
    * or save (every modification funnels through scheduleDraftSave) or an
@@ -122,8 +119,8 @@ export type ReplyInputProps = {
   setShowReply?: Setter<boolean>;
 };
 
-export function createReplyInput(
-  props: ReplyInputProps,
+export function createReplyComposer(
+  props: ReplyComposerOptions,
   editor: Accessor<LexicalEditor | undefined>,
   dom: {
     container: Accessor<HTMLDivElement | undefined>;
@@ -145,13 +142,13 @@ export function createReplyInput(
     replyTarget?.db_id
       ? {
           type: 'replying_to',
-          messageID: replyTarget.db_id,
+          messageId: replyTarget.db_id,
           seed: props.formSeed,
         }
       : draftSeed?.db_id
         ? {
             type: 'draft',
-            messageID: draftSeed.db_id,
+            messageId: draftSeed.db_id,
             seed: props.formSeed,
           }
         : undefined
@@ -161,25 +158,25 @@ export function createReplyInput(
   const undoKey = `${sourceEntityId}:${replyTarget?.db_id ?? draftSeed?.replying_to_id ?? draftSeed?.db_id ?? 'new'}`;
   const userEmail = props.viewerEmail;
 
-  const primaryLinkId = props.accounts.primaryId;
+  const primaryInboxId = props.accounts.primaryId;
   // Capture this domain inbox ID for each asynchronous operation.
-  const activeLinkId = () =>
-    form().selectedLinkId() ??
+  const activeInboxId = () =>
+    form().selectedInboxId() ??
     thread()?.link_id ??
     draftSeed?.link_id ??
-    primaryLinkId() ??
+    primaryInboxId() ??
     props.accounts.inboxes()[0]?.id;
   // The address of the inbox this input sends from, for the "from" display.
   const activeInboxEmail = () =>
-    props.accounts.inboxes().find((l) => l.id === activeLinkId())
+    props.accounts.inboxes().find((l) => l.id === activeInboxId())
       ?.email_address ?? userEmail();
 
   // The full Link object for the sending inbox (for its saved signature and the
   // "add to replies & forwards" preference).
-  const sendingLink = createMemo(() =>
-    props.accounts.inboxes().find((l) => l.id === activeLinkId())
+  const sendingInbox = createMemo(() =>
+    props.accounts.inboxes().find((l) => l.id === activeInboxId())
   );
-  const signature = () => sendingLink()?.settings.signature ?? undefined;
+  const signature = () => sendingInbox()?.settings.signature ?? undefined;
   // Whether this reply includes the signature. Defaults on, reset per reply,
   // and dismissable via the preview ✕.
   const [includeSignature, setIncludeSignature] = createSignal(true);
@@ -190,7 +187,7 @@ export function createReplyInput(
   const replySignatureHtml = (): string | undefined =>
     replyTarget &&
     includeSignature() &&
-    sendingLink()?.settings.signature_on_replies_forwards
+    sendingInbox()?.settings.signature_on_replies_forwards
       ? signature()
       : undefined;
 
@@ -245,7 +242,7 @@ export function createReplyInput(
   // it again. Use bodyHtml as initialHtml for the editor, restore attachments
   // on mount.
   const restoreEnvelope = (snapshot: UndoReplySnapshot) => {
-    form().setSelectedFromLink(snapshot.linkId);
+    form().setSelectedInbox(snapshot.inboxId);
     form().setSubject(snapshot.draftRestore.subject);
     for (const field of ['to', 'cc', 'bcc'] as const) {
       form().setRecipients(
@@ -328,7 +325,7 @@ export function createReplyInput(
   const restoreAfterUndoSend = async (
     draftId: string,
     sentThreadId: string | undefined,
-    linkId: string | undefined
+    inboxId: string | undefined
   ) => {
     const snapshot = replyUndo.take(draftId);
 
@@ -340,7 +337,7 @@ export function createReplyInput(
       threadId,
       draft: snapshot?.draftRestore,
       html: snapshot?.bodyHtml,
-      linkId,
+      inboxId,
     });
 
     if (snapshot) {
@@ -366,18 +363,18 @@ export function createReplyInput(
   const undoSend = (
     draftId: string,
     threadId: string | undefined,
-    linkId: string | undefined
+    inboxId: string | undefined
   ) =>
     props.delivery.undoSend({
       threadId,
       draftId,
-      linkId,
-      onUndone: () => restoreAfterUndoSend(draftId, threadId, linkId),
+      inboxId,
+      onUndone: () => restoreAfterUndoSend(draftId, threadId, inboxId),
     });
 
   const afterSend = (
     identity: PersistedEmailIdentity,
-    linkId: string | undefined
+    inboxId: string | undefined
   ) => {
     autosave.cancel();
     const draftId = identity.draftId;
@@ -390,7 +387,7 @@ export function createReplyInput(
                 label: 'Undo',
                 onClick: () => {
                   if (toastId != null) props.notices.feedback.dismiss(toastId);
-                  void undoSend(draftId, identity.threadId, linkId).catch(
+                  void undoSend(draftId, identity.threadId, inboxId).catch(
                     props.notices.reportError
                   );
                 },
@@ -444,7 +441,7 @@ export function createReplyInput(
     services: props.attachmentStorage,
     attachments: () => form().attachments,
     draftId: savedDraftId,
-    linkId: activeLinkId,
+    inboxId: activeInboxId,
   });
 
   createEffect(
@@ -539,13 +536,13 @@ export function createReplyInput(
   const captureSave = (completingThread = false) => ({
     draft: collectDraft(),
     thread: thread(),
-    linkId: activeLinkId(),
+    inboxId: activeInboxId(),
     completingThread,
   });
   async function persistDraft({
     draft: draftToSave,
     thread: currentThread,
-    linkId,
+    inboxId,
     completingThread,
   }: ReturnType<typeof captureSave>) {
     if (!draftToSave) {
@@ -554,7 +551,7 @@ export function createReplyInput(
         await props.drafts.deleteDraft({
           draftId,
           threadId: savedDraftThreadId(),
-          linkId,
+          inboxId,
           completingThread,
         });
       }
@@ -586,7 +583,7 @@ export function createReplyInput(
         provider_thread_id: currentThread?.provider_id,
         thread_db_id: currentThread?.db_id,
       },
-      linkId,
+      inboxId,
       completingThread,
       previousThreadId: savedDraftThreadId(),
     });
@@ -597,18 +594,18 @@ export function createReplyInput(
         id: draftId,
         threadId: draftResponse.threadId ?? undefined,
       });
-      await attachmentPersistence.upload(draftId, { linkId });
+      await attachmentPersistence.upload(draftId, { inboxId });
 
       const forwarded = form()
         .attachments.list()
         .filter((attachment) => attachment.type === 'forwarded');
       if (forwarded.length) {
         await props.attachmentStorage.addForwardedAttachments({
-          draftID: draftId,
+          draftId: draftId,
           attachments: forwarded.map((a) => ({
-            attachmentID: a.attachmentID,
+            attachmentId: a.attachmentId,
           })),
-          linkId,
+          inboxId,
         });
       }
 
@@ -633,10 +630,10 @@ export function createReplyInput(
   // Persist the draft immediately when the user switches the sending inbox, even
   // without a text edit, so it moves to the new inbox and the choice survives a
   // refresh. Driven by the explicit switch (below) rather than inbox reactivity.
-  const persistDraftOnSenderSwitch = (linkId: string) => {
+  const persistDraftOnSenderSwitch = (inboxId: string) => {
     if (submitting() || pendingDeletion || scheduling()) return;
     props.onEngaged?.();
-    form().setSelectedFromLink(linkId);
+    form().setSelectedInbox(inboxId);
     autosave.cancel();
     void executeSaveDraft().catch(() => {});
   };
@@ -708,8 +705,8 @@ export function createReplyInput(
       return;
     }
 
-    let linkId = activeLinkId();
-    if (newMessage || !linkId) {
+    let inboxId = activeInboxId();
+    if (newMessage || !inboxId) {
       if (props.accounts.loading()) {
         props.notices.feedback.alert('Loading email accounts...');
         return;
@@ -731,7 +728,7 @@ export function createReplyInput(
         props.notices.reportError('No links found');
         return;
       }
-      linkId = primaryLinkId() ?? linksData.links[0].id;
+      inboxId = primaryInboxId() ?? linksData.links[0].id;
     }
 
     const currentEditor = editor();
@@ -761,7 +758,7 @@ export function createReplyInput(
         if (snapshotDraftId && snapshotThreadId) {
           replyUndo.remember({
             threadId: snapshotThreadId,
-            linkId,
+            inboxId,
             draftId: snapshotDraftId,
             bodyHtml: snapshotHtml,
             attachments: [...form().attachments.list()],
@@ -816,12 +813,12 @@ export function createReplyInput(
 
       const processedMacroBody = prepareMacroBody(bodyMacro());
 
-      const currentDraftID = savedDraftId();
+      const currentDraftId = savedDraftId();
 
       setSendPhase('sending');
       const pendingSend = props.delivery.sendMessage({
         message: {
-          db_id: currentDraftID,
+          db_id: currentDraftId,
           bcc,
           body_html: prepared.bodyHtml,
           body_macro: processedMacroBody,
@@ -837,7 +834,7 @@ export function createReplyInput(
           // setting on the backend; only signal an explicit per-reply dismiss.
           include_signature: includeSignature() ? undefined : false,
         },
-        linkId,
+        inboxId,
         completingThread: willMarkDone,
       });
 
@@ -857,15 +854,15 @@ export function createReplyInput(
         autosave.cancel();
         pendingMarkDoneNavigationTargetId = undefined;
         setShouldMarkDoneOnSuccess(false);
-        if (mounted && currentDraftID) {
-          const snapshot = replyUndo.peek(currentDraftID);
+        if (mounted && currentDraftId) {
+          const snapshot = replyUndo.peek(currentDraftId);
           if (snapshot) restoreMountedReply(snapshot);
         }
         props.notices.reportError(error);
         props.notices.feedback.failure('Failed to send email');
         return;
       }
-      afterSend(result, linkId);
+      afterSend(result, inboxId);
     } catch (error) {
       props.notices.reportError(error);
     } finally {
@@ -897,7 +894,7 @@ export function createReplyInput(
         await props.drafts.deleteDraft({
           draftId,
           threadId: savedDraftThreadId(),
-          linkId: activeLinkId(),
+          inboxId: activeInboxId(),
         });
       }
       resetState();
@@ -974,7 +971,7 @@ export function createReplyInput(
     draftId: savedDraftId,
     saveDraft: executeSaveDraft,
     threadId: savedDraftThreadId,
-    linkId: activeLinkId,
+    inboxId: activeInboxId,
     sendTime: () => form().sendTime(),
     setSendTime: (date) => form().setSendTime(date),
     recipientCount: () => {
@@ -1028,7 +1025,7 @@ export function createReplyInput(
     handleUserMention,
     scrollContainer,
     form,
-    activeLinkId,
+    activeInboxId,
     activeInboxEmail,
     replyType: effectiveReplyType,
     signatureHtml: replySignatureHtml,

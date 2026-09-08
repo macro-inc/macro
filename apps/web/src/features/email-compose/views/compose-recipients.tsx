@@ -5,7 +5,8 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { cn } from '@ui';
 import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { FromInboxSelector } from '../components/from-inbox-selector';
-import { type RecipientFieldId, useCompose } from './compose-context';
+import { useCompose } from '../context/compose-context';
+import type { RecipientFieldId } from '../core/email-recipient';
 
 type DragState = {
   recipient: EmailRecipient;
@@ -353,8 +354,8 @@ export function ComposeRecipients(props: {
               <FromInboxSelector
                 disabled={ctx.disabled()}
                 links={ctx.fromInboxes?.() ?? []}
-                activeLinkId={ctx.selectedFromLinkId?.()}
-                onSelect={(id) => ctx.onSelectFromLink?.(id)}
+                activeInboxId={ctx.selectedInboxId?.()}
+                onSelect={(id) => ctx.onSelectInbox?.(id)}
               />
             </div>
           </div>

@@ -1,25 +1,19 @@
 import { createContext, type ParentProps, useContext } from 'solid-js';
-import type { EmailFormDependencies } from '../context/email-form-dependencies';
 import {
   createEmailFormState,
   type EmailFormStateOptions,
 } from '../primitives/email-form-state';
-
 import type {
   EmailFormContextValue,
   FormAccessKey,
 } from '../primitives/email-form-types';
+import type { EmailFormDependencies } from './email-form-dependencies';
 
-export type {
-  EmailFormContextValue,
-  FormAccessKey,
-} from '../primitives/email-form-types';
-
-// `seed` identifies the draft version the form seeds from (see EmailInput's
+// `seed` identifies the draft version the form seeds from (see ThreadReplyInput's
 // seed key), so a composer remounting on a newer draft version gets a
 // freshly derived form instead of the cached one.
 const stringifyKey = (key: FormAccessKey) => {
-  return `${key.type}_${key.messageID}_${key.seed ?? ''}`;
+  return `${key.type}_${key.messageId}_${key.seed ?? ''}`;
 };
 
 type RegistryApi = {

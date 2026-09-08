@@ -1,7 +1,7 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
 import { URL_PARAMS } from '@app/features/email-thread/core/location';
 import { EmailThread } from '@app/features/email-thread/email-thread';
-import { useEmailContext } from '@app/features/email-thread/views/email-thread-context';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
@@ -131,7 +131,7 @@ export function EmailBlockAdapter(props: {
 }
 
 function ThreadActions(props: { title: string; onCreateTask: () => void }) {
-  const context = useEmailContext();
+  const context = useEmailThreadState();
   return (
     <SidePanel.Section
       id="email-ai-actions"

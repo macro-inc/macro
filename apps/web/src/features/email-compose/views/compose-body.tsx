@@ -17,9 +17,9 @@ import {
   Switch,
 } from 'solid-js';
 import { MacroSignatureButton } from '../components/macro-signature-button';
+import { useCompose } from '../context/compose-context';
 import type { DraftFormAttachment } from '../primitives/email-form-state';
 import { addUserMentionToCc } from '../primitives/mention-to-cc';
-import { useCompose } from './compose-context';
 
 false && fileFolderDrop;
 

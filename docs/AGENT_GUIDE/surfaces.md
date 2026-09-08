@@ -39,6 +39,14 @@ Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
 open shadow root: Playwright text locators can reach them, but a card's ordinary
 `innerText` or `querySelector` does not traverse that root.
 
+After a successful send, the `Email sent` notice offers `Undo`. Undo restores the
+sent envelope and editable content, including when the reply used another inbox;
+a slow background refresh must not keep the restored editor disabled. A rejected
+send reports failure and restores its original reply editor if it is still mounted.
+A failure from an older, unmounted editor must not overwrite a newer edited reply.
+A presentation or refresh error after successful delivery is not a reason to send
+again.
+
 While a schedule change is pending, immediate send and further schedule changes
 are disabled. A failed schedule or unschedule keeps the last confirmed time.
 If scheduling succeeds but marking the thread done fails, the email remains

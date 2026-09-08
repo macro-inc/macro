@@ -1,6 +1,6 @@
 import type { useEmailLinksQuery } from '@queries/email/link';
 import { type Accessor, createMemo } from 'solid-js';
-import type { EmailInbox } from '../context/compose-services';
+import type { EmailInbox } from '../context/compose-capabilities';
 
 export type EmailInboxQuery = Pick<
   ReturnType<typeof useEmailLinksQuery>,

@@ -49,13 +49,13 @@ export function createThreadDrafts(
     Record<string, true>
   >({});
 
-  const deleteDraftForMessage = (messageID: string) => {
-    setDeletedDraftIds(messageID, true);
+  const deleteDraftForMessage = (messageId: string) => {
+    setDeletedDraftIds(messageId, true);
   };
 
-  const getDraftForMessage = (messageID: string) => {
-    if (deletedDraftIds[messageID]) return undefined;
-    return serverDrafts()?.map[messageID];
+  const getDraftForMessage = (messageId: string) => {
+    if (deletedDraftIds[messageId]) return undefined;
+    return serverDrafts()?.map[messageId];
   };
 
   // Drafts derive straight from the query, so "settled" is simply "we have a

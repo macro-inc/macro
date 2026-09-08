@@ -6,7 +6,7 @@ import type { Accessor } from 'solid-js';
 import { Show } from 'solid-js';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { RecipientDropRow } from '../components/recipient-drop-row';
-import type { EmailInbox } from '../context/compose-services';
+import type { EmailInbox } from '../context/compose-capabilities';
 import type { EmailRecipient, RecipientFieldId } from '../core/email-recipient';
 import { getRecipientDisplayName } from '../core/email-recipient';
 import type { ReplyType } from '../core/reply-type';
@@ -18,7 +18,7 @@ type ReplyEnvelopeProps = {
   values: Accessor<EmailFormRecipients>;
   options: Accessor<EmailRecipient[]>;
   inboxes: Accessor<EmailInbox[]>;
-  activeLinkId: Accessor<string | undefined>;
+  activeInboxId: Accessor<string | undefined>;
   senderEmail: Accessor<string | undefined>;
   onSenderChange: (id: string) => void;
   subject: Accessor<string>;
@@ -133,7 +133,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
                       pill
                       class="min-w-0"
                       links={props.inboxes()}
-                      activeLinkId={props.activeLinkId()}
+                      activeInboxId={props.activeInboxId()}
                       onSelect={props.onSenderChange}
                       portalScope={props.portalScope()}
                     />
@@ -301,7 +301,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
             compact
             class="min-w-0 truncate text-ink-muted"
             links={props.inboxes()}
-            activeLinkId={props.activeLinkId()}
+            activeInboxId={props.activeInboxId()}
             onSelect={props.onSenderChange}
             portalScope={props.portalScope()}
           />

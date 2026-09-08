@@ -3,6 +3,7 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { iosCursorScrollPlugin } from '@core/component/LexicalMarkdown/plugins/ios-cursor-scroll';
+import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
@@ -21,8 +22,9 @@ import { type Accessor, createSignal, For, onMount, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
 import { MacroSignatureButton } from '../components/macro-signature-button';
 import { SignaturePreview } from '../components/signature-preview';
+import type { EmailComposeEnvironment } from '../context/compose-capabilities';
+import { getOrInitEmailFormContext } from '../context/email-form-context';
 import { registerToggleAppendedThread } from '../primitives/prepare-email-body';
-import { getOrInitEmailFormContext } from './email-form-context';
 import { ReplyEnvelope } from './reply-envelope';
 
 false && fileFolderDrop;
@@ -63,16 +65,14 @@ function createConfiguredEmailMarkdownEditor(options: ReplyEditorOptions) {
 }
 
 import {
-  createReplyInput,
-  type ReplyInputProps,
-} from '../primitives/reply-input';
+  createReplyComposer,
+  type ReplyComposerOptions,
+} from '../primitives/reply-composer';
 
 type ReplyEditorOptions = {
   namespace: string;
   onChange?: (markdown: string) => void;
-  onUserMention?: (
-    mention: import('@core/component/LexicalMarkdown/utils/mentionsUtils').UserMentionRecord
-  ) => void;
+  onUserMention?: (mention: UserMentionRecord) => void;
   onDocumentMention?: (item: { id: string }) => void;
   onPasteFilesAndDirs?: (
     files: FileSystemFileEntry[],
@@ -81,7 +81,7 @@ type ReplyEditorOptions = {
   scrollContainer?: Accessor<HTMLElement | undefined>;
 };
 type ReplyInputViewProps = Omit<
-  ReplyInputProps,
+  ReplyComposerOptions,
   | 'drafts'
   | 'attachmentStorage'
   | 'delivery'
@@ -92,7 +92,7 @@ type ReplyInputViewProps = Omit<
   | 'recordMention'
   | 'focusAfterReplyRequest'
 > & {
-  services: import('../context/compose-services').EmailComposeServices;
+  services: EmailComposeEnvironment;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
   unframed?: boolean;
   mobileDrawer?: { onClose: () => void };
@@ -104,7 +104,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   let composeContainerRef: HTMLDivElement | undefined;
   let bottomBarRef: HTMLDivElement | undefined;
   const [editor, setEditor] = createSignal<LexicalEditor>();
-  const state = createReplyInput(
+  const state = createReplyComposer(
     {
       drafts: services.drafts,
       attachmentStorage: services.attachmentStorage,
@@ -135,7 +135,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
   );
   const {
     form,
-    activeLinkId,
+    activeInboxId,
     activeInboxEmail,
     setIncludeSignature,
     setScrollContainer,
@@ -387,7 +387,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         values={() => form().recipients()}
         options={props.session.recipientOptions}
         inboxes={services.accounts.inboxes}
-        activeLinkId={activeLinkId}
+        activeInboxId={activeInboxId}
         senderEmail={activeInboxEmail}
         onSenderChange={persistDraftOnSenderSwitch}
         subject={() => form().subject()}

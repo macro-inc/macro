@@ -9,6 +9,8 @@ import {
   Show,
 } from 'solid-js';
 import { EmailThreadTitle } from '../components/email-thread-title';
+import { useEmailThreadState } from '../context/email-thread-state-context';
+import { useEmailThreadEnvironment } from '../context/thread-environment';
 import {
   fetchOlderMessages,
   isTruncatedMiddleMessage,
@@ -18,9 +20,7 @@ import {
   truncatedMiddleCount,
 } from '../primitives/scroll-to-message';
 import { EmailParticipants } from './email-participants';
-import { useEmailContext } from './email-thread-context';
 import { MessageContainer } from './message-container';
-import { useEmailThreadEnvironment } from './thread-environment';
 
 interface MessageListProps {
   initialLoadComplete: boolean;
@@ -41,12 +41,12 @@ interface MessageListProps {
 
 export function MessageList(props: MessageListProps) {
   const getIsScrollingToMessage = () => context.isScrollingToMessage();
-  const context = useEmailContext();
+  const context = useEmailThreadState();
   const environment = useEmailThreadEnvironment();
   // One selected message at a time, whether it was reached by click, tab, or
   // arrow keys — they all write the same focused id.
   const isSelectedSelector = createSelector(
-    context.messages.focusedID,
+    context.messages.focusedId,
     (a, b) => !!a && !!b && a === b
   );
   const hiddenCount = createMemo(() =>
@@ -180,20 +180,20 @@ export function MessageList(props: MessageListProps) {
               // draft remains visible even after newer messages arrive (matches
               // Gmail/Superhuman). Desktop only: mobile edits drafts in a drawer.
               const hasDraft = createMemo(() => {
-                const messageID = message().db_id;
-                if (!messageID || environment.dependencies.isTouch())
+                const messageId = message().db_id;
+                if (!messageId || environment.dependencies.isTouch())
                   return false;
-                return !!context.drafts.getDraftForMessage(messageID);
+                return !!context.drafts.getDraftForMessage(messageId);
               });
 
               const isExpanded = createMemo(() => {
-                const messageID = message().db_id;
-                if (!messageID) return false;
+                const messageId = message().db_id;
+                if (!messageId) return false;
                 return threadMessageIsExpanded({
                   chronologicalIndex: chronologicalIndex(),
                   listLength: context.messages.list().length,
                   expansionOverride:
-                    context.messages.expandedBodyIds[messageID],
+                    context.messages.expandedBodyIds[messageId],
                   isUnread: isUnreadMessage(message()),
                   hasDraft: hasDraft(),
                 });

@@ -1,6 +1,6 @@
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { UploadEmailAttachments } from '../context/compose-services';
+import type { UploadEmailAttachments } from '../context/compose-capabilities';
 import { createAttachmentPersistence } from './attachment-persistence';
 import { createEmailFormState } from './email-form-state';
 
@@ -25,7 +25,7 @@ function setup(
       services,
       attachments: () => form.attachments,
       draftId: () => 'draft',
-      linkId: () => 'secondary-inbox',
+      inboxId: () => 'secondary-inbox',
     });
     return { form, services, persistence };
   });
@@ -56,7 +56,7 @@ describe('draft attachment persistence', () => {
     await Promise.all([first, second]);
     expect(secondDone).toBe(true);
     expect(state.persistence.uploading()).toBe(false);
-    expect(state.services.uploadAttachments.mock.calls[0][0].linkId).toBe(
+    expect(state.services.uploadAttachments.mock.calls[0][0].inboxId).toBe(
       'secondary-inbox'
     );
   });
@@ -76,7 +76,7 @@ describe('draft attachment persistence', () => {
       input.onAttachmentAdded?.(file, 'retry-attachment');
     });
     await state.persistence.upload('draft');
-    expect(state.form.attachments.list()[0].attachmentID).toBe(
+    expect(state.form.attachments.list()[0].attachmentId).toBe(
       'retry-attachment'
     );
   });
@@ -86,11 +86,11 @@ describe('draft attachment persistence', () => {
     const local = {
       type: 'local' as const,
       file: new File(['x'], 'notes.txt'),
-      attachmentID: 'local',
+      attachmentId: 'local',
     };
     const forwarded = {
       type: 'forwarded' as const,
-      attachmentID: 'forwarded',
+      attachmentId: 'forwarded',
       fileName: 'forward.txt',
       mimeType: 'text/plain',
       fileSize: 1,
@@ -101,14 +101,14 @@ describe('draft attachment persistence', () => {
     state.persistence.remove(forwarded);
     expect(state.form.attachments.list()).toEqual([]);
     expect(state.services.removeAttachment).toHaveBeenCalledWith({
-      draftID: 'draft',
-      attachmentID: 'local',
-      linkId: 'secondary-inbox',
+      draftId: 'draft',
+      attachmentId: 'local',
+      inboxId: 'secondary-inbox',
     });
     expect(state.services.removeForwardedAttachment).toHaveBeenCalledWith({
-      draftID: 'draft',
-      attachmentID: 'forwarded',
-      linkId: 'secondary-inbox',
+      draftId: 'draft',
+      attachmentId: 'forwarded',
+      inboxId: 'secondary-inbox',
     });
     await Promise.resolve();
   });

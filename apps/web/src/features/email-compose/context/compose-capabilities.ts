@@ -25,31 +25,31 @@ export interface SaveEmailDraft {
   draft: EmailDraft;
   sendTime?: Date | null;
   previousThreadId?: string;
-  linkId?: string;
+  inboxId?: string;
   completingThread?: boolean;
 }
 export interface DeleteEmailDraft {
   draftId: string;
   threadId?: string;
-  linkId?: string;
+  inboxId?: string;
   completingThread?: boolean;
 }
 export interface SendEmailDraft {
   message: EmailDraft;
-  linkId?: string;
+  inboxId?: string;
   completingThread?: boolean;
 }
 export interface UploadEmailAttachments {
-  draftID: string;
+  draftId: string;
   attachments: File[];
-  linkId?: string;
+  inboxId?: string;
   onAttachmentAdded?: (file: File, id: string) => void;
   onAttachmentUploadFailed?: (file: File) => void;
 }
 export interface EmailAttachmentChange {
-  draftID: string;
-  attachmentID: string;
-  linkId?: string;
+  draftId: string;
+  attachmentId: string;
+  inboxId?: string;
 }
 
 export interface EmailDraftStorage {
@@ -60,16 +60,16 @@ export interface EmailDraftStorage {
     threadId?: string;
     draft?: Omit<EmailDraft, 'body_html'>;
     html?: string;
-    linkId?: string;
+    inboxId?: string;
   }): Promise<void>;
 }
 
 export interface EmailAttachmentStorage {
   uploadAttachments(input: UploadEmailAttachments): Promise<void>;
   addForwardedAttachments(input: {
-    draftID: string;
-    attachments: { attachmentID: string }[];
-    linkId?: string;
+    draftId: string;
+    attachments: { attachmentId: string }[];
+    inboxId?: string;
   }): Promise<void>;
   removeAttachment(input: EmailAttachmentChange): Promise<void>;
   removeForwardedAttachment(input: EmailAttachmentChange): Promise<void>;
@@ -77,19 +77,19 @@ export interface EmailAttachmentStorage {
 
 export interface EmailDelivery {
   sendMessage(input: SendEmailDraft): Promise<PersistedEmailIdentity>;
-  unschedule(input: { draftID: string; linkId?: string }): Promise<void>;
+  unschedule(input: { draftId: string; inboxId?: string }): Promise<void>;
   schedule(
-    input: { draftID: string; send_time: string },
-    linkId?: string
+    input: { draftId: string; sendTime: string },
+    inboxId?: string
   ): Promise<void>;
   archive(
-    input: { id: string; value: boolean },
-    linkId?: string
+    input: { threadId: string; value: boolean },
+    inboxId?: string
   ): Promise<void>;
   undoSend(input: {
     threadId?: string;
     draftId: string;
-    linkId: string | undefined;
+    inboxId: string | undefined;
     onUndone: () => Promise<void> | void;
   }): Promise<void>;
 }
@@ -139,7 +139,7 @@ export interface EmailEditorFiles {
 }
 
 /** Production composition groups capabilities for views to wire into their consumers. */
-export interface EmailComposeServices {
+export interface EmailComposeEnvironment {
   drafts: EmailDraftStorage;
   attachmentStorage: EmailAttachmentStorage;
   delivery: EmailDelivery;

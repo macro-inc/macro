@@ -85,8 +85,8 @@ export interface ComposeState {
       photo_url?: string | null;
     }[]
   >;
-  selectedFromLinkId?: Accessor<string | undefined>;
-  onSelectFromLink?: (linkId: string) => void;
+  selectedInboxId?: Accessor<string | undefined>;
+  onSelectInbox?: (inboxId: string) => void;
   hasPaidAccess: Accessor<boolean>;
 
   // Signature preview slot — rendered below the body. Provided by the new-email

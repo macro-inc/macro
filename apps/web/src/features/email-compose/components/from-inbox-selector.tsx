@@ -66,8 +66,8 @@ function FromInboxPill(props: { inbox: FromInbox; selectable: boolean }) {
  */
 export function FromInboxSelector(props: {
   links: FromInbox[];
-  activeLinkId: string | undefined;
-  onSelect: (linkId: string) => void;
+  activeInboxId: string | undefined;
+  onSelect: (inboxId: string) => void;
   disabled?: boolean;
   compact?: boolean;
   pill?: boolean;
@@ -75,7 +75,7 @@ export function FromInboxSelector(props: {
   portalScope?: 'local';
 }) {
   const activeInbox = () =>
-    props.links.find((l) => l.id === props.activeLinkId) ?? props.links[0];
+    props.links.find((l) => l.id === props.activeInboxId) ?? props.links[0];
   const sortedLinks = () =>
     [...props.links].sort((a, b) =>
       a.email_address.localeCompare(b.email_address)
@@ -103,7 +103,7 @@ export function FromInboxSelector(props: {
                     {(inbox) => (
                       <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
                         <FromInboxOption inbox={inbox} />
-                        <Show when={inbox.id === props.activeLinkId}>
+                        <Show when={inbox.id === props.activeInboxId}>
                           <Check class="size-3.5 shrink-0" />
                         </Show>
                       </Dropdown.Item>
@@ -146,7 +146,7 @@ export function FromInboxSelector(props: {
                     {(inbox) => (
                       <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
                         <FromInboxOption inbox={inbox} />
-                        <Show when={inbox.id === props.activeLinkId}>
+                        <Show when={inbox.id === props.activeInboxId}>
                           <Check class="size-3.5 shrink-0" />
                         </Show>
                       </Dropdown.Item>
@@ -190,7 +190,7 @@ export function FromInboxSelector(props: {
                   {(inbox) => (
                     <Dropdown.Item onSelect={() => props.onSelect(inbox.id)}>
                       <FromInboxOption inbox={inbox} />
-                      <Show when={inbox.id === props.activeLinkId}>
+                      <Show when={inbox.id === props.activeInboxId}>
                         <Check class="size-3.5 shrink-0" />
                       </Show>
                     </Dropdown.Item>

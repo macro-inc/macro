@@ -672,7 +672,7 @@ registerComponent('email-compose', (params) => {
       .filter(Boolean);
   const draftID =
     typeof params.draftID === 'string' ? params.draftID : undefined;
-  return <EmailCompose draftID={draftID} initialTo={initialTo} />;
+  return <EmailCompose draftId={draftID} initialTo={initialTo} />;
 });
 registerComponent('task-compose', (params) => {
   usePageViewTracking('task-compose');

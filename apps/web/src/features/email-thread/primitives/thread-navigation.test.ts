@@ -161,7 +161,7 @@ it.each(['next', 'previous'] as const)(
           : handlers?.navigateToPreviousMessage();
       expect(moved).toBe(true);
       expect(document.activeElement).toBe(state.container);
-      expect(state.context.messages.focusedID()).toBe('middle');
+      expect(state.context.messages.focusedId()).toBe('middle');
       expect(handlers?.activate()).toBe(true);
       expect(state.context.messages.expandedBodyIds.middle).toBe(true);
       expect(state.context.replyRequest.messageId()).toBeUndefined();
@@ -188,7 +188,7 @@ it('retains Enter activation of the focused hidden-message button', () => {
     state.context.messages.setHiddenChipFocused(true);
     expect(state.handlers()?.activate()).toBe(true);
     expect(state.navigation.showMiddleMessages()).toBe(true);
-    expect(state.context.messages.focusedID()).toBe('second');
+    expect(state.context.messages.focusedId()).toBe('second');
     expect(state.context.replyRequest.messageId()).toBeUndefined();
   } finally {
     state.dispose();

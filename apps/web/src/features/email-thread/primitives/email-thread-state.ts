@@ -28,18 +28,18 @@ export type EmailThreadState = {
   onRecipientsChange: (items: EmailRecipient[]) => void;
 
   drafts: {
-    getDraftForMessage: (messageDbID: string) => EmailMessage | undefined;
-    deleteDraftForMessage: (messageDbID: string) => void;
+    getDraftForMessage: (messageDbId: string) => EmailMessage | undefined;
+    deleteDraftForMessage: (messageDbId: string) => void;
     initialDraftsSettled: Accessor<boolean>;
   };
 
   messages: {
     unfiltered: Accessor<EmailMessage[]>;
     list: Accessor<EmailMessage[]>;
-    targetMessageID: Accessor<string | undefined>;
-    setTargetMessageID: (id: string | undefined) => void;
-    focusedID: Accessor<string | undefined>;
-    setFocused: (messageID: string | undefined) => void;
+    targetMessageId: Accessor<string | undefined>;
+    setTargetMessageId: (id: string | undefined) => void;
+    focusedId: Accessor<string | undefined>;
+    setFocused: (messageId: string | undefined) => void;
     hiddenChipFocused: Accessor<boolean>;
     setHiddenChipFocused: (focused: boolean) => void;
     hovered: Accessor<HoveredThreadStop | undefined>;
@@ -150,8 +150,8 @@ export function createEmailThreadState(
   >(undefined);
 
   /** Selecting a message clears the hidden-chip stop explicitly (no createEffect). */
-  const setFocused = (messageID: string | undefined) => {
-    if (messageID) {
+  const setFocused = (messageId: string | undefined) => {
+    if (messageId) {
       setHiddenChipFocused(false);
       const list = messagesListRef();
       const button = list ? hiddenMessagesControl(list) : undefined;
@@ -160,7 +160,7 @@ export function createEmailThreadState(
         host.focusContainer?.();
       }
     }
-    setFocusedMessageId(messageID);
+    setFocusedMessageId(messageId);
   };
 
   const isContainerFilled = () => {
@@ -202,8 +202,8 @@ export function createEmailThreadState(
     });
   };
 
-  const onExpandMessageBody = (messageID: string, expanded: boolean) => {
-    setExpandedMessageBodyIds(messageID, expanded);
+  const onExpandMessageBody = (messageId: string, expanded: boolean) => {
+    setExpandedMessageBodyIds(messageId, expanded);
   };
 
   return {
@@ -224,14 +224,14 @@ export function createEmailThreadState(
     },
     drafts,
     messages: {
-      focusedID: focusedMessageId,
+      focusedId: focusedMessageId,
       setFocused,
       hiddenChipFocused,
       setHiddenChipFocused,
       hovered: hoveredStop,
       setHovered: setHoveredStop,
-      targetMessageID: targetMessageId,
-      setTargetMessageID: setTargetMessageId,
+      targetMessageId: targetMessageId,
+      setTargetMessageId: setTargetMessageId,
       list: createMemo(() => selected()?.filtered ?? []),
       unfiltered: createMemo(() => selected()?.messages ?? []),
       // Google's CATEGORY_PERSONAL classification is inconsistent across

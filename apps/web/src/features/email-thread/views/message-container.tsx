@@ -3,15 +3,15 @@ import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { createMemo, createSignal, Match, Show, Switch } from 'solid-js';
 import { isPersonalMessage } from '../../email-message/core/is-personal-message';
 import { EmailMessageView } from '../../email-message/views/email-message';
+import { useEmailThreadState } from '../context/email-thread-state-context';
+import { useEmailThreadEnvironment } from '../context/thread-environment';
 import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
 import {
   revealMessageAfterLayout,
   scrollFocusedCardIntoView,
 } from '../primitives/scroll-to-message';
 import { BottomReplyButtons } from './bottom-reply-buttons';
-import { EmailInput } from './email-input';
-import { useEmailContext } from './email-thread-context';
-import { useEmailThreadEnvironment } from './thread-environment';
+import { ThreadReplyInput } from './thread-reply-input';
 
 interface MessageContainerProps {
   message: EmailMessage;
@@ -26,7 +26,7 @@ interface MessageContainerProps {
 export function MessageContainer(props: MessageContainerProps) {
   const { dependencies: deps, rendering } = useEmailThreadEnvironment();
   const isTouchDevice = deps.isTouch;
-  const context = useEmailContext();
+  const context = useEmailThreadState();
   const draftChild = createMemo(() => {
     if (!props.message.db_id) return undefined;
     const draft = context.drafts.getDraftForMessage(props.message.db_id);
@@ -148,7 +148,7 @@ export function MessageContainer(props: MessageContainerProps) {
           <div class="px-4">
             <Switch>
               <Match when={showInlineReplyInput()}>
-                <EmailInput
+                <ThreadReplyInput
                   replyingTo={() => props.message}
                   setShowReply={setShowReply}
                   draft={draftChild()}

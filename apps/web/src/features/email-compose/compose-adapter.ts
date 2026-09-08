@@ -54,15 +54,15 @@ import type { ApiThread } from '@service-email/generated/schemas';
 import type { InfiniteData } from '@tanstack/solid-query';
 import type {
   ComposeNoticeOptions,
-  EmailComposeServices,
-} from './context/compose-services';
+  EmailComposeEnvironment,
+} from './context/compose-capabilities';
 import { readDroppedEmailFiles } from './editor-adapter';
 import { makeAttachmentPublic } from './make-attachment-public';
 import { createEmailInboxSource } from './queries/inbox-source';
 import { restoreDraftBodyAfterUndo, runUndoSend } from './undo-send';
 
 /** Construct under the composing surface's Solid owner to scope request progress. */
-export function createEmailComposeServices(): EmailComposeServices {
+export function createEmailComposeEnvironment(): EmailComposeEnvironment {
   const accounts = useEmailLinksQuery();
   const headerId = useNonPrimaryEmailLinkIdHeader();
   const user = useUserContext();
@@ -142,10 +142,15 @@ export function createEmailComposeServices(): EmailComposeServices {
       reportError,
     },
     drafts: {
-      async saveDraft({ completingThread, previousThreadId, ...input }) {
+      async saveDraft({
+        completingThread,
+        previousThreadId,
+        inboxId,
+        ...input
+      }) {
         const result = await save.mutateAsync({
           ...input,
-          linkId: headerId(input.linkId),
+          linkId: headerId(inboxId),
           skipSoupRefetch: completingThread,
         });
         try {
@@ -167,10 +172,10 @@ export function createEmailComposeServices(): EmailComposeServices {
           inboxId: result.draft.link_id,
         };
       },
-      async deleteDraft({ completingThread, ...input }) {
+      async deleteDraft({ completingThread, inboxId, ...input }) {
         await remove.mutateAsync({
           ...input,
-          linkId: headerId(input.linkId),
+          linkId: headerId(inboxId),
           skipSoupRefetch: completingThread,
         });
         try {
@@ -179,7 +184,7 @@ export function createEmailComposeServices(): EmailComposeServices {
           reportError(error);
         }
       },
-      async restoreDraft({ threadId, draftId, draft, html, linkId }) {
+      async restoreDraft({ threadId, draftId, draft, html, inboxId }) {
         if (threadId && !isFeatureEnabled(enableGraphqlSoup)) {
           queryClient.setQueryData<InfiniteData<ApiThread>>(
             emailKeys.threadMessages(threadId).queryKey,
@@ -199,16 +204,16 @@ export function createEmailComposeServices(): EmailComposeServices {
           markThreadDraftSaved(threadId);
         }
         if (draft && html !== undefined)
-          await restoreDraftBodyAfterUndo(draft, html, headerId(linkId));
+          await restoreDraftBodyAfterUndo(draft, html, headerId(inboxId));
         if (threadId && isFeatureEnabled(enableGraphqlSoup))
           void fetchAndCacheThread(threadId);
       },
     },
     delivery: {
-      async sendMessage({ completingThread, ...input }) {
+      async sendMessage({ completingThread, inboxId, ...input }) {
         const result = await send.mutateAsync({
           ...input,
-          linkId: headerId(input.linkId),
+          linkId: headerId(inboxId),
           skipSoupRefetch: completingThread,
         });
         try {
@@ -223,27 +228,30 @@ export function createEmailComposeServices(): EmailComposeServices {
           inboxId: result.message.link_id,
         };
       },
-      async unschedule(input) {
+      async unschedule({ draftId, inboxId }) {
         await unschedule.mutateAsync({
-          ...input,
-          linkId: headerId(input.linkId),
+          draftID: draftId,
+          linkId: headerId(inboxId),
         });
         try {
-          invalidateSoupEntity(input.draftID);
+          invalidateSoupEntity(draftId);
         } catch (error) {
           reportError(error);
         }
       },
-      schedule: async (input, linkId) => {
-        await scheduleEmailMessage(input, headerId(linkId));
+      schedule: async ({ draftId, sendTime }, inboxId) => {
+        await scheduleEmailMessage(
+          { draftID: draftId, send_time: sendTime },
+          headerId(inboxId)
+        );
       },
-      archive: async (input, linkId) => {
-        await archiveEmailThread(input, headerId(linkId));
+      archive: async ({ threadId, value }, inboxId) => {
+        await archiveEmailThread({ id: threadId, value }, headerId(inboxId));
       },
       undoSend: (input) =>
         runUndoSend({
           draftId: input.draftId,
-          linkId: headerId(input.linkId),
+          linkId: headerId(input.inboxId),
           onUndone: async () => {
             await input.onUndone();
             if (input.threadId)
@@ -252,19 +260,31 @@ export function createEmailComposeServices(): EmailComposeServices {
         }),
     },
     attachmentStorage: {
-      uploadAttachments: (input) =>
-        upload.mutateAsync({ ...input, linkId: headerId(input.linkId) }),
-      addForwardedAttachments: (input) =>
-        forward.mutateAsync({ ...input, linkId: headerId(input.linkId) }),
-      removeAttachment: (input) =>
-        removeAttachment.mutateAsync({
+      uploadAttachments: ({ draftId, inboxId, ...input }) =>
+        upload.mutateAsync({
           ...input,
-          linkId: headerId(input.linkId),
+          draftID: draftId,
+          linkId: headerId(inboxId),
         }),
-      removeForwardedAttachment: (input) =>
+      addForwardedAttachments: ({ draftId, attachments, inboxId }) =>
+        forward.mutateAsync({
+          draftID: draftId,
+          attachments: attachments.map(({ attachmentId }) => ({
+            attachmentID: attachmentId,
+          })),
+          linkId: headerId(inboxId),
+        }),
+      removeAttachment: ({ draftId, attachmentId, inboxId }) =>
+        removeAttachment.mutateAsync({
+          draftID: draftId,
+          attachmentID: attachmentId,
+          linkId: headerId(inboxId),
+        }),
+      removeForwardedAttachment: ({ draftId, attachmentId, inboxId }) =>
         removeForwarded.mutateAsync({
-          ...input,
-          linkId: headerId(input.linkId),
+          draftID: draftId,
+          attachmentID: attachmentId,
+          linkId: headerId(inboxId),
         }),
     },
   };

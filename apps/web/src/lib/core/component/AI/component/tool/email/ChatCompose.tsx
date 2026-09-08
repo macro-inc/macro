@@ -1,19 +1,17 @@
 import { SignaturePreview } from '@app/features/email-compose/components/signature-preview';
-import {
-  ComposeLayout,
-  EmailComposeToolbar,
-} from '@app/features/email-compose/compose-layout';
+import { ComposeProvider } from '@app/features/email-compose/context/compose-context';
 import { decodeBase64Utf8 } from '@app/features/email-compose/core/decode-base64';
 import type { EmailRecipient } from '@app/features/email-compose/core/email-recipient';
 import { convertContactInfoToEmailRecipient } from '@app/features/email-compose/core/recipient-conversion';
 import { createComposeBodyActions } from '@app/features/email-compose/editor-adapter';
+import type {
+  ComposeContextValue,
+  ComposeValidationError,
+} from '@app/features/email-compose/primitives/compose-view-state';
 import type { DraftFormAttachment } from '@app/features/email-compose/primitives/email-form-state';
 import { prepareEmailBody } from '@app/features/email-compose/primitives/prepare-email-body';
-import {
-  type ComposeContextValue,
-  ComposeProvider,
-  type ComposeValidationError,
-} from '@app/features/email-compose/views/compose-context';
+import { ComposeLayout } from '@app/features/email-compose/views/compose-layout';
+import { EmailComposeToolbar } from '@app/features/email-compose/views/compose-toolbar';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useChatContext } from '@core/component/AI/context';
 import type { AssistantMessagePart } from '@core/component/AI/types';

@@ -11,11 +11,11 @@ import {
   Show,
 } from 'solid-js';
 import { isPersonalMessage } from '../../email-message/core/is-personal-message';
+import { useEmailThreadState } from '../context/email-thread-state-context';
+import { useEmailThreadEnvironment } from '../context/thread-environment';
 import { revealMessageAfterLayout } from '../primitives/scroll-to-message';
-import { useEmailContext } from './email-thread-context';
-import { useEmailThreadEnvironment } from './thread-environment';
 
-interface EmailInputProps {
+interface ThreadReplyInputProps {
   replyingTo: Accessor<EmailMessage | undefined>;
   draft?: EmailMessage;
   setShowReply?: Setter<boolean>;
@@ -27,16 +27,16 @@ interface EmailInputProps {
 }
 
 /** A reply target owns one editor/form lifetime; changing targets must reset the draft latch. */
-export function EmailInput(props: EmailInputProps) {
+export function ThreadReplyInput(props: ThreadReplyInputProps) {
   return (
     <Show when={props.replyingTo()?.db_id ?? props.draft?.db_id ?? 'new'} keyed>
-      {(_identity) => <EmailInputSession {...props} />}
+      {(_identity) => <ThreadReplyInputSession {...props} />}
     </Show>
   );
 }
 
-function EmailInputSession(props: EmailInputProps) {
-  const ctx = useEmailContext();
+function ThreadReplyInputSession(props: ThreadReplyInputProps) {
+  const ctx = useEmailThreadState();
   const environment = useEmailThreadEnvironment();
 
   // The seed identity of this composer: which version of which draft it
@@ -120,7 +120,7 @@ function EmailInputSession(props: EmailInputProps) {
                   const id =
                     target === 'last'
                       ? ctx.messages.list().at(-1)?.db_id
-                      : ctx.messages.focusedID();
+                      : ctx.messages.focusedId();
                   if (!id) return false;
                   ctx.messages.setFocused(id);
                   const message = ctx

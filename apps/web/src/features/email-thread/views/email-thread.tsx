@@ -1,16 +1,16 @@
+import { EmailFormContextProvider } from '@app/features/email-compose/context/email-form-context';
 import { EmailComposeView } from '@app/features/email-compose/views/email-compose';
-import { EmailFormContextProvider } from '@app/features/email-compose/views/email-form-context';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import type { JSX } from 'solid-js';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
 import type { EmailThreadHost } from '../context/email-thread-dependencies';
+import { useEmailThreadState } from '../context/email-thread-state-context';
+import { useEmailThreadEnvironment } from '../context/thread-environment';
 import { createThreadNavigation } from '../primitives/thread-navigation';
 import { createThreadReplyArea } from '../primitives/thread-reply-area';
 import { BottomReplyButtons } from './bottom-reply-buttons';
-import { useEmailContext } from './email-thread-context';
 import { MessageList } from './message-list';
 import { MobileEmailComposeDrawer } from './mobile-email-compose-drawer';
-import { useEmailThreadEnvironment } from './thread-environment';
 export type EmailThreadViewProps = {
   title: string;
   threadId: Accessor<string>;
@@ -19,7 +19,7 @@ export type EmailThreadViewProps = {
   actions?: JSX.Element;
 };
 export function EmailThreadView(props: EmailThreadViewProps) {
-  const context = useEmailContext();
+  const context = useEmailThreadState();
   const environment = useEmailThreadEnvironment();
   const deps = environment.dependencies;
   const isTouchDevice = deps.isTouch;
@@ -80,7 +80,7 @@ export function EmailThreadView(props: EmailThreadViewProps) {
               inboxes: environment.compose.accounts.inboxes,
             }}
             formOptions={{
-              getMessageByID: (id) =>
+              getMessageById: (id) =>
                 context.messages.unfiltered().find((m) => m.db_id === id),
               getDraftForMessageReply: context.drafts.getDraftForMessage,
               onRecipientsChange: context.onRecipientsChange,

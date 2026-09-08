@@ -23,26 +23,26 @@ export type DraftFormAttachment =
   | {
       type: 'local';
       file: File;
-      attachmentID?: string;
+      attachmentId?: string;
     }
   | {
       type: 'remote';
       url: string;
       fileName: string;
       contentType: string;
-      attachmentID: string;
+      attachmentId: string;
       fileSize: number;
     }
   | {
       type: 'forwarded';
-      attachmentID: string;
+      attachmentId: string;
       fileName: string;
       mimeType: string;
       fileSize: number;
     };
 
 export interface EmailFormStateOptions {
-  getMessageByID: (id: string) => EmailMessage | undefined;
+  getMessageById: (id: string) => EmailMessage | undefined;
   getDraftForMessageReply: (id: string) => EmailMessage | undefined;
   onRecipientsChange?: (next: EmailRecipient[]) => void;
 }
@@ -81,8 +81,8 @@ const EMPTY_FORM_STATE: EmailFormState = {
 export function createEmailFormState(
   dependencies: EmailFormDependencies,
   purpose?:
-    | { type: 'replying_to'; messageID: string }
-    | { type: 'draft'; messageID: string },
+    | { type: 'replying_to'; messageId: string }
+    | { type: 'draft'; messageId: string },
 
   options?: EmailFormStateOptions
 ) {
@@ -91,30 +91,30 @@ export function createEmailFormState(
   let replyingTo: EmailMessage | undefined;
 
   if (purpose?.type === 'replying_to') {
-    replyingTo = options?.getMessageByID?.(purpose.messageID);
+    replyingTo = options?.getMessageById?.(purpose.messageId);
   }
 
   let draft: EmailMessage | undefined;
 
   if (purpose?.type === 'draft') {
-    draft = options?.getMessageByID(purpose.messageID);
+    draft = options?.getMessageById(purpose.messageId);
   } else if (purpose?.type === 'replying_to') {
-    draft = options?.getDraftForMessageReply(purpose?.messageID);
+    draft = options?.getDraftForMessageReply(purpose?.messageId);
   }
 
   // The inbox this compose sends from. Defaults to the inbox that owns the
   // thread/draft; the user can change it via the "from" selector.
-  const [selectedLinkId, setSelectedLinkId] = createSignal<string | undefined>(
-    (draft ?? replyingTo)?.link_id ?? undefined
-  );
+  const [selectedInboxId, setSelectedInboxId] = createSignal<
+    string | undefined
+  >((draft ?? replyingTo)?.link_id ?? undefined);
   // Reply logic ("did I send this?") must be judged against the inbox the
   // message is sent from, not the account's primary email — otherwise replying
   // from a secondary or delegated inbox misclassifies the sender and picks the
   // wrong recipients.
   const inboxEmail = () => {
-    const linkId = selectedLinkId() ?? (draft ?? replyingTo)?.link_id;
-    const ownerEmail = linkId
-      ? dependencies.inboxes().find((l) => l.id === linkId)?.email_address
+    const inboxId = selectedInboxId() ?? (draft ?? replyingTo)?.link_id;
+    const ownerEmail = inboxId
+      ? dependencies.inboxes().find((l) => l.id === inboxId)?.email_address
       : undefined;
     return ownerEmail ?? userEmail() ?? '';
   };
@@ -180,7 +180,7 @@ export function createEmailFormState(
   const [attachments, setAttachments] = createSignal<DraftFormAttachment[]>([
     ...(draft?.attachments_draft.map((a) => ({
       type: 'remote' as const,
-      attachmentID: a.id,
+      attachmentId: a.id,
       contentType: a.content_type,
       fileName: a.file_name,
       url: a.s3_key,
@@ -188,7 +188,7 @@ export function createEmailFormState(
     })) ?? []),
     ...(draft?.attachments_forwarded.map((a) => ({
       type: 'forwarded' as const,
-      attachmentID: a.attachment_id,
+      attachmentId: a.attachment_id,
       fileName: a.filename ?? 'attachment',
       mimeType: a.mime_type ?? 'application/octet-stream',
       fileSize: a.size_bytes ?? 0,
@@ -246,7 +246,7 @@ export function createEmailFormState(
           .filter((a) => !a.content_id)
           .map((a) => ({
             type: 'forwarded' as const,
-            attachmentID: a.db_id,
+            attachmentId: a.db_id,
             fileName: a.filename ?? 'attachment',
             mimeType: a.mime_type ?? 'application/octet-stream',
             fileSize: a.size_bytes ?? 0,
@@ -261,8 +261,8 @@ export function createEmailFormState(
 
   // Change the inbox this compose sends from. For an active reply, re-derive the
   // recipients against the newly selected inbox (the sender comparison changes).
-  const setSelectedFromLink = (linkId: string | undefined) => {
-    setSelectedLinkId(linkId);
+  const setSelectedInbox = (inboxId: string | undefined) => {
+    setSelectedInboxId(inboxId);
     if (!replyingTo || draft || state.replyType === 'forward') return;
     const recalculated =
       state.replyType === 'reply-all'
@@ -313,8 +313,8 @@ export function createEmailFormState(
     setSubject,
     replyType: () => state.replyType,
     setReplyType,
-    selectedLinkId: () => selectedLinkId(),
-    setSelectedFromLink,
+    selectedInboxId: () => selectedInboxId(),
+    setSelectedInbox,
     editRevision,
     sendTime: () => state.sendTime,
     setSendTime,
@@ -325,18 +325,18 @@ export function createEmailFormState(
       add: (attachment: DraftFormAttachment) => {
         setAttachments((p) => [...p, attachment]);
       },
-      assignAttachmentID: (file: File, attachmentID: string) => {
+      assignAttachmentId: (file: File, attachmentId: string) => {
         setAttachments((p) =>
           p.map((a) =>
-            a.type === 'local' && a.file === file ? { ...a, attachmentID } : a
+            a.type === 'local' && a.file === file ? { ...a, attachmentId } : a
           )
         );
       },
-      clearAttachmentID: (file: File) => {
+      clearAttachmentId: (file: File) => {
         setAttachments((p) =>
           p.map((a) =>
             a.type === 'local' && a.file === file
-              ? { ...a, attachmentID: undefined }
+              ? { ...a, attachmentId: undefined }
               : a
           )
         );
@@ -346,17 +346,17 @@ export function createEmailFormState(
           p.filter((a) => a.type !== 'local' || a.file !== file)
         );
       },
-      removeByID: (attachmentID: string) => {
+      removeById: (attachmentId: string) => {
         setAttachments((p) =>
           p.filter(
-            (a) => a.type !== 'remote' || a.attachmentID !== attachmentID
+            (a) => a.type !== 'remote' || a.attachmentId !== attachmentId
           )
         );
       },
-      removeForwarded: (attachmentID: string) => {
+      removeForwarded: (attachmentId: string) => {
         setAttachments((p) =>
           p.filter(
-            (a) => a.type !== 'forwarded' || a.attachmentID !== attachmentID
+            (a) => a.type !== 'forwarded' || a.attachmentId !== attachmentId
           )
         );
       },

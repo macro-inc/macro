@@ -269,7 +269,12 @@ TypeScript · `[ui]` UI / UX conventions
   context display types only. Keep data availability in source adapters and
   presentation decisions in primitives; avoid interfaces with no independent
   behavior to protect.
-  Screen primitives expose view-state unions; small helpers can return accessors.
+  Controllers receive only their named capabilities; production environments and
+  presentation wiring stay in views. Reuse query/mutation infrastructure rather
+  than adding a generic async wrapper. Keep request failures distinct from errors
+  after a successful write, and require promises when callers depend on completion.
+  Use view-state unions when the use case has distinct states; small helpers can
+  return accessors.
   Test feature behavior through injected capabilities, with shared helpers in
   `tests/`. Use fake sources for primitive unit tests and fake clients for adapter
   tests, retaining integration coverage of both. Activity still has combined

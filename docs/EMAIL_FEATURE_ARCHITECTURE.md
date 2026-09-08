@@ -52,22 +52,24 @@ may import a block package, `@core/block`, or block-related signal modules.
   resolved presentation values and event callbacks. A thread supplies selection,
   expansion, reply actions, and a footer through those inputs.
 - `email-thread/email-thread.tsx` constructs the existing shared thread query,
-  source adapter, viewer/contact capabilities, thread commands, composer services,
+  source adapter, viewer/contact capabilities, thread commands, composer capabilities,
   notification subscription, rendering adapters, and host-independent cache
   cleanup. `views/email-thread-surface.tsx` builds thread state and providers from
   supplied dependencies. It imports no production entry point for a nested
   message or composer.
-- `email-compose/email-compose.tsx` supplies real compose services and split-host
+- `email-compose/email-compose.tsx` supplies the production compose environment and split-host
   callbacks to `views/email-compose.tsx`. Inline replies use
-  `views/reply-input.tsx` with explicitly supplied services and a reply session.
+  `views/reply-input.tsx` with explicit capabilities and a reply session.
+  `email-thread/views/thread-reply-input.tsx` owns the keyed reply lifetime;
+  `email-compose/primitives/reply-composer.ts` owns the compose workflow.
 - `block-email/EmailBlockAdapter.tsx` translates block focus, keyboard scope,
   location parameters, and block methods into `EmailThreadHost` callbacks and
   slots. The thread does not read a block ID or register a block method itself.
   The adapter captures block signal accessors during setup; event callbacks use
   those captured functions instead of resolving a provider after setup.
 
-Capability contracts live in `context/`. Prepared view-state types live in
-`primitives/`, and contexts holding a mounted screen's state live in `views/`.
+Capability contracts and provider/consumer modules live in `context/`. Prepared
+view-state types live in `primitives/`; views mount the providers.
 These scoped UI providers have no production fallback. A missing required
 provider throws a specific error instead of silently initializing the app.
 
@@ -91,14 +93,31 @@ test exercises this ordering.
 | `EmailAttachmentStorage` | Upload, forward, and remove draft attachments |
 | `EmailDelivery` | Send, undo, schedule, unschedule, and archive operations |
 | `EmailComposeFeedback` | User notices and error reporting |
-| `EmailComposeServices` | Composition of those contracts with account, editor, and presentation capabilities for the complete surface |
+| `EmailComposeAccounts` | Inbox identities, availability, and the primary inbox |
+| `EmailComposePresentation` | View-only device state, signature visibility, upgrade action, and link preparation |
+| `EmailEditorFiles` | View-owned editor file upload and sharing integration |
+| `EmailComposeEnvironment` | Production composition groups; consumed by views, never by a reusable controller |
+| `PersistedEmailIdentity` | Successful save/send result: draft, thread, and inbox identity without a transport envelope |
 | `EmailComposeHost` | Optional navigation, back handling, and focus movement supplied by the host |
 
 Core types are owned by the features. Generated email service schemas and concrete
-query results stop at adapters. `email-thread/queries/thread-source.ts` decodes
-wire values and guards Solid resource reads. `email-compose/queries/inbox-source.ts`
+query results stop at adapters. `email-thread/queries/thread-source.ts` uses
+`toEmailThread` to explicitly project typed transport values and guards Solid
+resource reads. This projection does not validate unknown input: reserve names
+such as `decode` or `parse` for transformations that actually do that work.
+The projection selects the fields the features consume and copies nested contacts,
+labels, and attachment records. It preserves absent versus empty body content,
+provider IDs needed for replies, attachment/CID identities, and project navigation
+metadata. Sync headers and unused transport display settings stay out of the models. `email-compose/queries/inbox-source.ts`
 projects linked-account metadata. Actual service-client operations remain in
 `src/lib/queries/email`, alongside the existing mutations and cache conventions.
+
+Compose controllers receive named `drafts`, `attachmentStorage`, `delivery`,
+`notices`, and `accounts` capabilities plus the values their workflow needs. They
+do not receive `EmailComposeEnvironment`, `presentation`, or `editorFiles`. The
+view wires file-paste/drop plugins, document sharing, upgrade actions, device
+layout, and signature-link preparation. The reply controller receives a focus
+policy accessor and reports content edits; it does not choose a device layout.
 
 Primitives accept these domain capabilities; they do not construct shared queries,
 import production adapters, or return JSX. The compose controllers use the real
@@ -162,6 +181,8 @@ quote is idempotent across editor remounts. DOM listeners use the installed
 ```mermaid
 flowchart TD
   View[Mounted compose view] --> Controller[Reply or standalone controller]
+  View --> Presentation[Device and signature presentation]
+  View --> FileIntegration[Editor upload and sharing capabilities]
   Controller --> Form[Form values and edit revision]
   Controller --> Editor[Mounted Lexical editor and focus lifetime]
   Controller --> Save[Shared draft autosave queue]
@@ -172,6 +193,7 @@ flowchart TD
   Attachment --> AttachmentContract[Attachment storage contract]
   Schedule --> DeliveryContract[Delivery contract]
   Controller --> Host[Host intent callbacks]
+  Controller --> Feedback[Feedback capability]
   Production[Production adapter] --> DraftContract
   Production --> AttachmentContract
   Production --> DeliveryContract
@@ -201,6 +223,61 @@ converter created by `thread-action-adapter.tsx`. `ThreadViewEnvironment` is the
 single source of thread dependencies. State creates one retained thread snapshot
 and passes that accessor to the injected command factory, so commands and reading
 state cannot disagree because they retained separate snapshots.
+
+## Async completion and naming
+
+TanStack remains in the production/query adapters. A write capability is a plain
+async function: it resolves when its write succeeds and rejects when the write
+fails. Do not wrap it in another mutation object with its own result, callbacks,
+error state, or `start()` method. `createComposeOperation` was removed. The shared
+query layer owns requests and cache conventions; feature workflows own ordering
+between draft persistence, attachments, send, schedule, and undo.
+
+Each composer keeps a local `idle | preparing | sending` phase because those
+phases span multiple writes and multiple composers can share the same production
+capabilities. This is workflow state, not a second server-state cache. Autosave's
+serialized queue, schedule's exclusion guard, and the attachment set of outstanding
+uploads each protect a concrete ordering invariant.
+
+A successful server write stays successful if analytics, cache refresh, toast,
+or navigation work fails afterward. Query callbacks catch/report their own
+post-write errors, including detached refresh rejections. Moving a throwing
+callback into TanStack's lifecycle callbacks alone does not establish that
+separation: the installed mutation implementation awaits those callbacks within
+its failure handling. Adapter tests therefore exercise real TanStack mutations.
+
+| Failure | Owner and behavior |
+| --- | --- |
+| Draft save/delete or attachment write | Existing shared mutation reports the write failure; callers do not add a second schedule/save notice. |
+| Send | Composer reports the failed send once. A failed reply restores only its original still-mounted editor; a newer editor's work is preserved. |
+| Schedule/unschedule | Schedule workflow reports the failed request and keeps the last confirmed time. |
+| Post-send refresh/navigation/analytics | Report the presentation/cache error; do not report that delivery failed or enable a duplicate send. |
+| Archive after scheduling | Keep the confirmed schedule and identify the archive failure separately. |
+
+Replies still clear optimistically when dispatch starts. After successful send,
+the controller establishes the mark-done undo handle before starting a detached,
+error-reported refresh. A slow refresh must not delay Undo or leave an
+Undo-restored editor disabled. Standalone compose marks completion before its
+navigation callback, so disposal cannot autosave or resend the successful message.
+
+`EmailThreadSource.refresh()` and `fetchOlder()` require `Promise<void>`. Their
+adapters await the underlying query, and callers that need fresh messages await
+that completion. They must not launch the request and resolve early.
+
+Feature capability parameters use `draftId`, `threadId`, `attachmentId`, and
+`inboxId`; scheduling uses `sendTime`. `compose-adapter.ts` translates these to
+transport `draftID`, `attachmentID`, `linkId` headers, and `send_time`. A domain
+inbox ID is not a precomputed header: primary-inbox omission belongs to the adapter.
+Existing message/thread model fields retain their established snake_case spelling;
+this cleanup does not rename generated schemas or persisted URLs. In particular,
+the host still reads/writes the existing `draftID` compose route parameter.
+
+`EmailThreadStateProvider` and `useEmailThreadState` name mounted thread state.
+`ThreadReplyInput` names the thread-owned reply entry point, while
+`createReplyComposer` names the compose controller. Import a module that owns the
+value directly; the old root compose-layout barrel and provider type re-exports
+were removed. The frontend feature skill remains deleted while these rules are
+refined in documentation.
 
 ## State and lifetime rules
 

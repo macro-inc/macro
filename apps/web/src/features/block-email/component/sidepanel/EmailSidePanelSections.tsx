@@ -1,5 +1,5 @@
 import { EntityActivitySectionConditional } from '@app/features/activity/views/entity-activity-section';
-import { useEmailContext } from '@app/features/email-thread/views/email-thread-context';
+import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
 import {
   EntityPropertiesSection,
   EntityTagsSection,
@@ -15,7 +15,7 @@ interface EmailSidePanelSectionsProps {
 }
 
 export function EmailSidePanelSections(props: EmailSidePanelSectionsProps) {
-  const emailCtx = useEmailContext();
+  const emailCtx = useEmailThreadState();
   const canEdit = () => emailCtx.permissions().isOwner;
 
   return (

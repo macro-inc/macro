@@ -1,12 +1,12 @@
 import { vi } from 'vitest';
-import type { EmailComposeServices } from '../context/compose-services';
+import type { EmailComposeEnvironment } from '../context/compose-capabilities';
 /** Fake capabilities: no production modules or app providers are needed by a controller. */
-export function composeServices(
+export function composeEnvironment(
   overrides: {
-    drafts?: Partial<EmailComposeServices['drafts']>;
-    delivery?: Partial<EmailComposeServices['delivery']>;
+    drafts?: Partial<EmailComposeEnvironment['drafts']>;
+    delivery?: Partial<EmailComposeEnvironment['delivery']>;
   } = {}
-): EmailComposeServices {
+): EmailComposeEnvironment {
   return {
     recipientName: (id) => id,
     recordMention: vi.fn(),

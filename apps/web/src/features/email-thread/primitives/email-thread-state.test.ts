@@ -68,9 +68,9 @@ describe('thread state with an injected source', () => {
         const second = createEmailThreadState(dependencies(source));
         first.messages.setFocused('one');
         first.setIsScrollingToMessage(true);
-        expect(first.messages.focusedID()).toBe('one');
+        expect(first.messages.focusedId()).toBe('one');
         expect(first.isScrollingToMessage()).toBe(true);
-        expect(second.messages.focusedID()).toBeUndefined();
+        expect(second.messages.focusedId()).toBeUndefined();
         expect(second.isScrollingToMessage()).toBe(false);
         first.query.fetchNextPage();
         expect(source.fetchOlder).toHaveBeenCalledOnce();

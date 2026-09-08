@@ -166,10 +166,10 @@ fix-lock:
 
 # Analysis
 cycles:
-    bunx --bun biome lint --only=nursery/noImportCycles
+    bunx --bun biome lint --only=suspicious/noImportCycles
 
 cycles-ci:
-    bunx --bun biome lint --changed --only=nursery/noImportCycles
+    bunx --bun biome lint --changed --only=suspicious/noImportCycles
 
 # Build the GraphQL cache wasm module into src/lib/graphql-cache/wasm
 # (gitignored). Unconditional — CI app builds must never skip it (schema or

@@ -1,6 +1,6 @@
 import { cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
-import { useCompose } from './compose-context';
+import { useCompose } from '../context/compose-context';
 
 function autosize(el: HTMLTextAreaElement) {
   el.style.height = 'auto';

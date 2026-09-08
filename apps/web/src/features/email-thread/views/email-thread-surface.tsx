@@ -3,13 +3,13 @@ import {
   type EmailRenderingDependencies,
   EmailRenderingProvider,
 } from '../../email-message/context/email-rendering-context';
-import { createEmailThreadState } from '../primitives/email-thread-state';
-import { EmailThreadView, type EmailThreadViewProps } from './email';
-import { EmailProvider } from './email-thread-context';
+import { EmailThreadStateProvider } from '../context/email-thread-state-context';
 import {
   ThreadEnvironmentProvider,
   type ThreadViewEnvironment,
-} from './thread-environment';
+} from '../context/thread-environment';
+import { createEmailThreadState } from '../primitives/email-thread-state';
+import { EmailThreadView, type EmailThreadViewProps } from './email-thread';
 
 export interface EmailThreadSurfaceProps extends EmailThreadViewProps {
   environment: ThreadViewEnvironment;
@@ -27,9 +27,9 @@ export function EmailThreadSurface(props: EmailThreadSurfaceProps) {
   return (
     <ThreadEnvironmentProvider value={props.environment}>
       <EmailRenderingProvider value={props.emailRendering}>
-        <EmailProvider value={state}>
+        <EmailThreadStateProvider value={state}>
           {props.frame ? props.frame(content) : content()}
-        </EmailProvider>
+        </EmailThreadStateProvider>
       </EmailRenderingProvider>
     </ThreadEnvironmentProvider>
   );

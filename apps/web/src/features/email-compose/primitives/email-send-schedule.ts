@@ -2,7 +2,7 @@ import { type Accessor, createEffect, createSignal, on } from 'solid-js';
 import type {
   EmailComposeFeedback,
   EmailDelivery,
-} from '../context/compose-services';
+} from '../context/compose-capabilities';
 
 export function createEmailSendSchedule(options: {
   delivery: Pick<EmailDelivery, 'schedule' | 'unschedule' | 'archive'>;
@@ -10,7 +10,7 @@ export function createEmailSendSchedule(options: {
   draftId: Accessor<string | null | undefined>;
   saveDraft: () => Promise<string | undefined>;
   threadId: Accessor<string | null | undefined>;
-  linkId: Accessor<string | undefined>;
+  inboxId: Accessor<string | undefined>;
   sendTime: Accessor<Date | null | undefined>;
   setSendTime: (date: Date | null) => void;
   recipientCount: Accessor<number>;
@@ -20,7 +20,7 @@ export function createEmailSendSchedule(options: {
 
   const change = async (date: Date | null) => {
     if (pending()) return;
-    const linkId = options.linkId();
+    const inboxId = options.inboxId();
     setPending(true);
     try {
       const previous = options.sendTime();
@@ -28,8 +28,8 @@ export function createEmailSendSchedule(options: {
       if (!date && previous && currentDraft) {
         try {
           await delivery.unschedule({
-            draftID: currentDraft,
-            linkId,
+            draftId: currentDraft,
+            inboxId,
           });
         } catch (error) {
           notices.reportError(error);
@@ -45,18 +45,18 @@ export function createEmailSendSchedule(options: {
         return;
       }
       // Persistence owns its failure notice; a failed save is not a failed schedule request.
-      let draftID: string | undefined;
+      let draftId: string | undefined;
       try {
-        draftID = await options.saveDraft();
+        draftId = await options.saveDraft();
       } catch (error) {
         notices.reportError(error);
         return;
       }
       try {
-        if (!draftID) throw new Error('Draft required');
+        if (!draftId) throw new Error('Draft required');
         await delivery.schedule(
-          { draftID, send_time: date.toISOString() },
-          linkId
+          { draftId, sendTime: date.toISOString() },
+          inboxId
         );
       } catch (error) {
         notices.reportError(error);
@@ -64,10 +64,10 @@ export function createEmailSendSchedule(options: {
         return;
       }
       options.setSendTime(date);
-      const threadID = options.threadId();
-      if (threadID) {
+      const threadId = options.threadId();
+      if (threadId) {
         try {
-          await delivery.archive({ id: threadID, value: true }, linkId);
+          await delivery.archive({ threadId, value: true }, inboxId);
         } catch (error) {
           notices.reportError(error);
           notices.feedback.failure(

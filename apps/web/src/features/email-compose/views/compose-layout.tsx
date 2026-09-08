@@ -5,8 +5,8 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { Button, cn } from '@ui';
 import { createSignal, type JSX, onMount, Show, Suspense } from 'solid-js';
 import { FromInboxSelector } from '../components/from-inbox-selector';
+import { useCompose } from '../context/compose-context';
 import { ComposeBody } from './compose-body';
-import { useCompose } from './compose-context';
 import { ComposeRecipients } from './compose-recipients';
 import { ComposeSubject } from './compose-subject';
 
@@ -213,8 +213,8 @@ export function ComposeLayout(props: {
                       <FromInboxSelector
                         disabled={ctx.disabled()}
                         links={ctx.fromInboxes?.() ?? []}
-                        activeLinkId={ctx.selectedFromLinkId?.()}
-                        onSelect={(id) => ctx.onSelectFromLink?.(id)}
+                        activeInboxId={ctx.selectedInboxId?.()}
+                        onSelect={(id) => ctx.onSelectInbox?.(id)}
                       />
                     </div>
                   </div>

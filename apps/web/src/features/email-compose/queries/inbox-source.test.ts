@@ -42,13 +42,13 @@ it('keeps cached secondary-inbox reply semantics after a failed refresh and does
       });
       const form = createEmailFormState(
         { viewerEmail: owner, inboxes: source.inboxes },
-        { type: 'replying_to', messageID: 'parent' },
+        { type: 'replying_to', messageId: 'parent' },
         {
-          getMessageByID: () => parent,
+          getMessageById: () => parent,
           getDraftForMessageReply: () => undefined,
         }
       );
-      expect(form.selectedLinkId()).toBe('secondary');
+      expect(form.selectedInboxId()).toBe('secondary');
       expect(form.recipients().to.map((item) => item.data.email)).toEqual([
         'colleague@example.com',
       ]);

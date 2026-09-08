@@ -201,13 +201,13 @@ const $appendPreviousEmail = (
   return true;
 };
 
-function* $findPreviousEmailNode(replyingToID: string | undefined) {
-  if (!replyingToID) yield;
+function* $findPreviousEmailNode(replyingToId: string | undefined) {
+  if (!replyingToId) yield;
   for (const { node } of $dfsIterator()) {
     if (!$isClassedBlockNode(node)) continue;
 
-    const replyingToIDAttr = node.__attributes?.[REPLYING_TO_ID_ATTRIBUTE];
-    if (!replyingToIDAttr || replyingToIDAttr !== replyingToID) {
+    const replyingToIdAttr = node.__attributes?.[REPLYING_TO_ID_ATTRIBUTE];
+    if (!replyingToIdAttr || replyingToIdAttr !== replyingToId) {
       // In our case, quoted text replies do not exist more than once in the
       // same message so returning any classed block node with the proper class
       // should be valid. This is probably fine but we might not want to do this.
@@ -225,14 +225,14 @@ function* $findPreviousEmailNode(replyingToID: string | undefined) {
 
 function removeAppendedThread(
   editor: LexicalEditor,
-  replyingToID: string | undefined
+  replyingToId: string | undefined
 ) {
-  if (!replyingToID) return;
+  if (!replyingToId) return;
 
   editor.update(
     () => {
       $addUpdateTag('skip-dom-selection');
-      for (const node of $findPreviousEmailNode(replyingToID)) {
+      for (const node of $findPreviousEmailNode(replyingToId)) {
         if (!node) continue;
 
         node.remove();
@@ -249,16 +249,16 @@ export function registerToggleAppendedThread(editor: LexicalEditor) {
       // Programmatic content change: don't let selection reconciliation
       // move DOM focus into the editor
       $addUpdateTag('skip-dom-selection');
-      const replyingToID =
+      const replyingToId =
         replyingTo?.db_id ?? replyingTo?.replying_to_id ?? undefined;
 
       if (!visible) {
-        removeAppendedThread(editor, replyingToID);
+        removeAppendedThread(editor, replyingToId);
         return true;
       }
 
       // Restoring a draft or remounting a forward may request visibility again.
-      for (const node of $findPreviousEmailNode(replyingToID)) {
+      for (const node of $findPreviousEmailNode(replyingToId)) {
         if (node) return true;
       }
       $appendPreviousEmail(editor, replyingTo, replyType, isPersonal);

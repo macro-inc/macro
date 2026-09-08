@@ -10,9 +10,9 @@ import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-so
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
 import { type Component, Show } from 'solid-js';
+import { useEmailThreadState } from '../context/email-thread-state-context';
+import { useEmailThreadEnvironment } from '../context/thread-environment';
 import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
-import { useEmailContext } from './email-thread-context';
-import { useEmailThreadEnvironment } from './thread-environment';
 
 function ReplyActionButton(props: {
   icon: Component<{ class?: string }>;
@@ -45,7 +45,7 @@ function ReplyActionButton(props: {
 }
 
 export function BottomReplyButtons(props: { lastMessage: EmailMessage }) {
-  const ctx = useEmailContext();
+  const ctx = useEmailThreadState();
   const environment = useEmailThreadEnvironment();
   const currentUserEmail = environment.dependencies.viewerEmail;
 

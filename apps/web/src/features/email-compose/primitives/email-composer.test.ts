@@ -8,7 +8,7 @@ import {
 import { createRoot } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { decodeBase64Utf8 } from '../core/decode-base64';
-import { composeServices } from '../tests/services';
+import { composeEnvironment } from '../tests/capabilities';
 import { createEmailComposer } from './email-composer';
 
 // Real controller and editor, with only feature capabilities replaced.
@@ -16,7 +16,7 @@ describe('standalone compose controller', () => {
   afterEach(() => vi.useRealTimers());
   it('saves a composed draft after debounce and preserves the recipients and HTML', async () => {
     vi.useFakeTimers();
-    const services = composeServices();
+    const services = composeEnvironment();
     const showDraft = vi.fn();
     const root = createRoot((dispose) => ({
       dispose,
@@ -61,7 +61,7 @@ describe('standalone compose controller', () => {
     }
   });
   it('does not send an empty draft', async () => {
-    const services = composeServices();
+    const services = composeEnvironment();
     const root = createRoot((dispose) => ({
       dispose,
       state: createEmailComposer({ ...services }),
@@ -78,7 +78,7 @@ describe('standalone compose controller', () => {
 
 it('reports scheduling failure without adopting an unconfirmed send time, and keeps a confirmed schedule when archive fails', async () => {
   vi.useFakeTimers();
-  const services = composeServices();
+  const services = composeEnvironment();
   const root = createRoot((dispose) => ({
     dispose,
     state: createEmailComposer({
@@ -129,7 +129,7 @@ it('reports scheduling failure without adopting an unconfirmed send time, and ke
 
 it('blocks immediate send and overlapping changes while a scheduling request is pending', async () => {
   let finish!: () => void;
-  const services = composeServices({
+  const services = composeEnvironment({
     delivery: {
       schedule: vi.fn(
         () =>

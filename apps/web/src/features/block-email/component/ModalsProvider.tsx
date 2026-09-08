@@ -1,4 +1,4 @@
-import { useEmailContext } from '@app/features/email-thread/views/email-thread-context';
+import { useEmailThreadState } from '@app/features/email-thread/context/email-thread-state-context';
 import { getPermissions } from '@core/component/SharePermissions';
 import {
   ShareBlockModal,
@@ -8,7 +8,7 @@ import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
 import { createSignal, type ParentProps, Show } from 'solid-js';
 
 export function ModalsProvider(props: ParentProps<{ subject?: string }>) {
-  const email = useEmailContext();
+  const email = useEmailThreadState();
   const [shareOpen, setShareOpen] = createSignal(false);
   return (
     <ShareDialogContext.Provider

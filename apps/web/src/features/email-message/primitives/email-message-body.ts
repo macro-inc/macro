@@ -16,7 +16,7 @@ export interface EmailMessageBodyProps {
   isPersonal: boolean;
   isBodyExpanded: Accessor<boolean>;
   setExpandedMessageBody: (id: string) => void;
-  setFocusedMessageId: (messageID: string | undefined) => void;
+  setFocusedMessageId: (messageId: string | undefined) => void;
   showFullContent?: boolean;
   isFocused: boolean;
 }

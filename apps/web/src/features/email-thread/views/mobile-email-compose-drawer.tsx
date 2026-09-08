@@ -4,13 +4,13 @@ import {
 } from '@components/app/mobile/MobileDrawer';
 import { FloatingInputLoader } from '@core/component/FloatingInputLoader';
 import { createMemo, Show } from 'solid-js';
-import { EmailInput } from './email-input';
-import { useEmailContext } from './email-thread-context';
+import { useEmailThreadState } from '../context/email-thread-state-context';
+import { ThreadReplyInput } from './thread-reply-input';
 
 export function MobileEmailComposeDrawer(props: {
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
-  const context = useEmailContext();
+  const context = useEmailThreadState();
 
   const replyInfo = createMemo(() => {
     const messageId = context.mobileReplyComposer.messageId();
@@ -67,7 +67,7 @@ export function MobileEmailComposeDrawer(props: {
                   class="overflow-y-auto scrollbar-hidden h-full pb-1"
                   onFocusIn={(e) => scrollToFocusedInput(e)}
                 >
-                  <EmailInput
+                  <ThreadReplyInput
                     replyingTo={() => info().replyingTo}
                     draft={info().draft}
                     setShowReply={(value) => {

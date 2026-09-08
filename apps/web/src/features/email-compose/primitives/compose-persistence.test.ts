@@ -8,15 +8,15 @@ import {
 import { createRoot } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type {
+  EmailComposeEnvironment,
   EmailComposeHost,
-  EmailComposeServices,
   PersistedEmailIdentity,
-} from '../context/compose-services';
+} from '../context/compose-capabilities';
 import { decodeBase64Utf8 } from '../core/decode-base64';
-import { composeServices } from '../tests/services';
+import { composeEnvironment } from '../tests/capabilities';
 import { createEmailComposer } from './email-composer';
 
-function mount(services: EmailComposeServices, host?: EmailComposeHost) {
+function mount(services: EmailComposeEnvironment, host?: EmailComposeHost) {
   const root = createRoot((dispose) => ({
     dispose,
     state: createEmailComposer({
@@ -65,7 +65,7 @@ beforeEach(() => vi.useFakeTimers());
 afterEach(() => vi.useRealTimers());
 
 it('flushes the latest pending body and envelope exactly once on disposal', async () => {
-  const services = composeServices();
+  const services = composeEnvironment();
   const root = mount(services);
   root.edit('Last-second edit');
   root.dispose();
@@ -79,7 +79,7 @@ it('flushes the latest pending body and envelope exactly once on disposal', asyn
   ]);
 });
 it('does not save an untouched composer or repeat a settled autosave on disposal', async () => {
-  const services = composeServices();
+  const services = composeEnvironment();
   const untouched = mount(services);
   untouched.dispose();
   await vi.advanceTimersByTimeAsync(1000);
@@ -93,7 +93,7 @@ it('does not save an untouched composer or repeat a settled autosave on disposal
 });
 it('serializes a disposal flush behind the first save and reuses its returned ID', async () => {
   const pending = deferred<PersistedEmailIdentity>();
-  const services = composeServices();
+  const services = composeEnvironment();
   vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(pending.promise);
   const root = mount(services);
   root.edit('First');
@@ -110,7 +110,7 @@ it('serializes a disposal flush behind the first save and reuses its returned ID
   expect(decodeBase64Utf8(draft.body_html ?? '')).toContain('Latest');
 });
 it('discard cancels an unsaved debounce without creating a draft', async () => {
-  const services = composeServices();
+  const services = composeEnvironment();
   const root = mount(services);
   root.edit('Discard me');
   await root.state.deleteDraftAndReset();
@@ -121,7 +121,7 @@ it('discard cancels an unsaved debounce without creating a draft', async () => {
 });
 it('discard waits for an in-flight first save and deletes its returned draft', async () => {
   const pending = deferred<PersistedEmailIdentity>();
-  const services = composeServices();
+  const services = composeEnvironment();
   vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(pending.promise);
   const root = mount(services);
   root.edit('First');
@@ -138,7 +138,7 @@ it('discard waits for an in-flight first save and deletes its returned draft', a
   );
 });
 it('keeps the draft editable after failed deletion and saves later edits', async () => {
-  const services = composeServices();
+  const services = composeEnvironment();
   const root = mount(services);
   root.edit('Saved');
   await vi.advanceTimersByTimeAsync(600);
@@ -153,7 +153,7 @@ it('keeps the draft editable after failed deletion and saves later edits', async
 });
 it('waits for the saved draft ID, prevents duplicate sends, and does not recreate the sent draft on disposal', async () => {
   const pending = deferred<PersistedEmailIdentity>();
-  const services = composeServices();
+  const services = composeEnvironment();
   vi.mocked(services.drafts.saveDraft).mockReturnValueOnce(pending.promise);
   const root = mount(services);
   root.edit('Send this');
@@ -174,7 +174,7 @@ it('waits for the saved draft ID, prevents duplicate sends, and does not recreat
   expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
 });
 it('resumes autosave after a failed send', async () => {
-  const services = composeServices();
+  const services = composeEnvironment();
   vi.mocked(services.delivery.sendMessage).mockRejectedValueOnce(
     new Error('offline')
   );
@@ -193,7 +193,7 @@ it('resumes autosave after a failed send', async () => {
 });
 
 it('keeps a successful send completed when navigation fails', async () => {
-  const services = composeServices();
+  const services = composeEnvironment();
   const error = new Error('Navigation failed');
   const root = mount(services, {
     showThread: () => {
@@ -213,7 +213,7 @@ it('keeps a successful send completed when navigation fails', async () => {
 });
 
 it('keeps completion independent when two composers share delivery capabilities', async () => {
-  const services = composeServices();
+  const services = composeEnvironment();
   const pending = deferred<PersistedEmailIdentity>();
   vi.mocked(services.delivery.sendMessage).mockReturnValueOnce(pending.promise);
   const first = mount(services);
@@ -235,7 +235,7 @@ it('keeps completion independent when two composers share delivery capabilities'
 });
 it('waits for an existing attachment upload before flushing newer body edits', async () => {
   const pending = deferred<void>();
-  const services = composeServices();
+  const services = composeEnvironment();
   vi.mocked(services.attachmentStorage.uploadAttachments).mockReturnValueOnce(
     pending.promise
   );
@@ -261,16 +261,16 @@ it('waits for an existing attachment upload before flushing newer body edits', a
 
 it('rejects sender/schedule changes and repeated discard while a deletion is pending', async () => {
   const pending = deferred<void>();
-  const services = composeServices();
+  const services = composeEnvironment();
   const root = mount(services);
   root.edit('Saved');
   await vi.advanceTimersByTimeAsync(600);
   vi.mocked(services.drafts.deleteDraft).mockReturnValueOnce(pending.promise);
   const discard = root.state.deleteDraftAndReset();
   expect(await root.state.deleteDraftAndReset()).toBe(false);
-  root.state.context.onSelectFromLink?.('other-inbox');
+  root.state.context.onSelectInbox?.('other-inbox');
   await root.state.context.onSendTimeChange?.(new Date('2026-12-01T12:00:00Z'));
-  expect(root.state.context.selectedFromLinkId?.()).toBe('inbox');
+  expect(root.state.context.selectedInboxId?.()).toBe('inbox');
   expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
   expect(services.delivery.schedule).not.toHaveBeenCalled();
   pending.resolve();
@@ -280,17 +280,17 @@ it('rejects sender/schedule changes and repeated discard while a deletion is pen
 
 it('rejects sender and scheduling changes after send dispatch', async () => {
   const pending = deferred<PersistedEmailIdentity>();
-  const services = composeServices();
+  const services = composeEnvironment();
   const root = mount(services);
   vi.mocked(services.delivery.sendMessage).mockReturnValueOnce(pending.promise);
   root.edit('Send this');
   root.state.context.onSend();
   await vi.advanceTimersByTimeAsync(1);
-  root.state.context.onSelectFromLink?.('other-inbox');
+  root.state.context.onSelectInbox?.('other-inbox');
   await root.state.context.onSendTimeChange?.(new Date('2026-12-01T12:00:00Z'));
   expect(services.drafts.saveDraft).toHaveBeenCalledOnce();
   expect(services.delivery.schedule).not.toHaveBeenCalled();
-  expect(root.state.context.selectedFromLinkId?.()).toBe('inbox');
+  expect(root.state.context.selectedInboxId?.()).toBe('inbox');
   pending.resolve(response);
   await vi.advanceTimersByTimeAsync(1);
   root.dispose();
@@ -298,7 +298,7 @@ it('rejects sender and scheduling changes after send dispatch', async () => {
 
 it('uses the captured inbox for attachment upload when a sender switch queues behind a save', async () => {
   const pending = deferred<PersistedEmailIdentity>();
-  const services = composeServices();
+  const services = composeEnvironment();
   services.accounts = {
     ...services.accounts,
     inboxes: () => [
@@ -313,14 +313,14 @@ it('uses the captured inbox for attachment upload when a sender switch queues be
     { type: 'local', file: new File(['notes'], 'notes.txt') },
   ]);
   await vi.advanceTimersByTimeAsync(600);
-  root.state.context.onSelectFromLink?.('other');
+  root.state.context.onSelectInbox?.('other');
   pending.resolve(response);
   await vi.advanceTimersByTimeAsync(1);
   expect(
     vi.mocked(services.attachmentStorage.uploadAttachments).mock.calls[0][0]
-      .linkId
+      .inboxId
   ).toBe('inbox');
-  expect(vi.mocked(services.drafts.saveDraft).mock.calls[1][0].linkId).toBe(
+  expect(vi.mocked(services.drafts.saveDraft).mock.calls[1][0].inboxId).toBe(
     'other'
   );
   root.dispose();

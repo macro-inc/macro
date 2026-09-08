@@ -1,14 +1,14 @@
 import { render } from '@solidjs/testing-library';
 import { createContext, useContext } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-import { composeServices } from '../../email-compose/tests/services';
+import { composeEnvironment } from '../../email-compose/tests/capabilities';
 import { useEmailRendering } from '../../email-message/context/email-rendering-context';
+import { useEmailThreadState } from '../context/email-thread-state-context';
 import { dependencies, message, thread } from '../tests/fixtures';
-import { useEmailContext } from './email-thread-context';
 import { EmailThreadSurface } from './email-thread-surface';
 
 // Replace only the large UI subtree; exercise real providers, state, and host frame ordering.
-vi.mock('./email', () => ({
+vi.mock('./email-thread', () => ({
   EmailThreadView: (props: { header?: unknown }) => <>{props.header}</>,
 }));
 const HostContext = createContext<string>();
@@ -24,7 +24,7 @@ describe('thread composition ownership', () => {
       async refresh() {},
     });
     const Probe = () => {
-      const state = useEmailContext();
+      const state = useEmailThreadState();
       useEmailRendering();
       return (
         <p>
@@ -38,7 +38,7 @@ describe('thread composition ownership', () => {
         threadId={() => 'thread'}
         environment={{
           dependencies: deps,
-          compose: composeServices(),
+          compose: composeEnvironment(),
           rendering: {},
         }}
         emailRendering={{
@@ -67,6 +67,6 @@ describe('thread composition ownership', () => {
   });
   it('fails clearly when a required capability provider is omitted', () => {
     expect(() => useEmailRendering()).toThrow('EmailRenderingProvider');
-    expect(() => useEmailContext()).toThrow();
+    expect(() => useEmailThreadState()).toThrow();
   });
 });

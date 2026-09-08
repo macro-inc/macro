@@ -191,9 +191,9 @@ export function createThreadNavigation(
       context.messages.setFocused(messageId);
     }
 
-    if (context.messages.targetMessageID() === messageId) {
+    if (context.messages.targetMessageId() === messageId) {
       setTimeout(() => {
-        context.messages.setTargetMessageID(undefined);
+        context.messages.setTargetMessageId(undefined);
       }, TARGET_MESSAGE_HIGHLIGHT_MS);
     }
 
@@ -206,7 +206,7 @@ export function createThreadNavigation(
     if (!canRunInitialEmailScroll()) return false;
     if (!untrack(context.messagesListRef)) return false;
 
-    const targetMessageId_ = context.messages.targetMessageID();
+    const targetMessageId_ = context.messages.targetMessageId();
     if (targetMessageId_ && typeof targetMessageId_ !== 'string') return true;
     if (typeof targetMessageId_ === 'string') {
       void revealTargetMessage(targetMessageId_);
@@ -260,8 +260,8 @@ export function createThreadNavigation(
   const showMiddleMessages = createMemo(() => {
     if (userOpenedMiddle()) return true;
     const messages = context.messages.list();
-    const focus = context.messages.focusedID();
-    const target = context.messages.targetMessageID();
+    const focus = context.messages.focusedId();
+    const target = context.messages.targetMessageId();
     for (let i = 0; i < messages.length; i++) {
       if (!isTruncatedMiddleMessage(i, messages.length)) continue;
       const id = messages[i]?.db_id;
@@ -376,7 +376,7 @@ export function createThreadNavigation(
       if (anchor === 'title' || anchor === 'composer') {
         return { kind: anchor } as const;
       }
-      const focusedId = context.messages.focusedID();
+      const focusedId = context.messages.focusedId();
       if (!focusedId) return undefined;
       const index = messages.findIndex(
         (message) => message.db_id === focusedId
@@ -415,7 +415,7 @@ export function createThreadNavigation(
     const hover = threadStopFromHover(context.messages.hovered(), messageIds);
     // The pointer leads while it is over the list. With the pointer elsewhere,
     // arrows step off the selected card rather than re-entering at the end.
-    const selectedId = context.messages.focusedID();
+    const selectedId = context.messages.focusedId();
     const selectedIndex = selectedId ? messageIds.indexOf(selectedId) : -1;
     const cursor =
       hover ??
@@ -437,7 +437,7 @@ export function createThreadNavigation(
     const messages = context.messages.list();
     if (messages.length === 0) return;
 
-    const focusedId = context.messages.focusedID();
+    const focusedId = context.messages.focusedId();
     const focusedMessage = focusedId
       ? messages.find((message) => message.db_id === focusedId)
       : undefined;
@@ -526,7 +526,7 @@ export function createThreadNavigation(
     // button activate itself instead of opening a reply on the thread.
     if (document.activeElement instanceof HTMLButtonElement) return false;
 
-    const focusedId = context.messages.focusedID();
+    const focusedId = context.messages.focusedId();
     const target = getHotkeyTarget();
 
     if (focusedId && target?.message.db_id === focusedId) {
@@ -573,7 +573,7 @@ export function createThreadNavigation(
       return true;
     }
 
-    const focusedId = context.messages.focusedID();
+    const focusedId = context.messages.focusedId();
     if (!focusedId) {
       if (keyboardSelecting()) {
         clearSelection();

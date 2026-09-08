@@ -1,7 +1,7 @@
 import { useSplitBackInterceptor } from '@components/app/split-layout/back-interceptor';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import type { EmailComposeHost } from './context/compose-services';
+import type { EmailComposeHost } from './context/compose-capabilities';
 import { createPanelFocusSibling } from './editor-adapter';
 export function createEmailComposeHost(): EmailComposeHost {
   const { replaceSplit } = useSplitLayout();

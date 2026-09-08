@@ -7,8 +7,8 @@ import { createEffectOnEntityTypeNotification } from '@notifications';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
 import { useThreadQuery } from '@queries/email/thread';
 import { createEffect, createMemo, onCleanup } from 'solid-js';
+import { createEmailComposeEnvironment } from '../email-compose/compose-adapter';
 import { createEmailComposeHost } from '../email-compose/compose-host-adapter';
-import { createEmailComposeServices } from '../email-compose/compose-service-adapter';
 import { convertContactInfoToEmailRecipient } from '../email-compose/core/recipient-conversion';
 import { createEmailAttachmentOpener } from '../email-message/attachment-action-adapter';
 import type { EmailMessage } from '../email-message/core/email-message';
@@ -36,7 +36,7 @@ export function EmailThread(props: EmailThreadProps) {
   const contacts = useContacts();
   const viewerEmail = useEmail();
   const user = useUserContext();
-  const compose = createEmailComposeServices();
+  const compose = createEmailComposeEnvironment();
   const dependencies: EmailThreadDependencies = {
     source,
     viewerEmail,

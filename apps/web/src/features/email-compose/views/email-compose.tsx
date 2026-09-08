@@ -11,24 +11,24 @@ import { Surface } from '@ui';
 
 import { createSignal, Show } from 'solid-js';
 import { SignaturePreview } from '../components/signature-preview';
-import type { EmailComposeServices } from '../context/compose-services';
+import type { EmailComposeEnvironment } from '../context/compose-capabilities';
+import { ComposeProvider } from '../context/compose-context';
 import type { ComposeContextValue } from '../primitives/compose-view-state';
 import {
   createEmailComposer,
-  type EmailComposeInput,
+  type EmailComposerOptions,
 } from '../primitives/email-composer';
 import { ComposeLayout } from '../views/compose-layout';
 import { EmailComposeToolbar } from '../views/compose-toolbar';
-import { ComposeProvider } from './compose-context';
 export type EmailComposeViewProps = Pick<
-  EmailComposeInput,
+  EmailComposerOptions,
   | 'host'
   | 'draft'
-  | 'draftID'
+  | 'draftId'
   | 'recipientOptions'
   | 'onRecipientsChange'
   | 'initialTo'
-> & { services: EmailComposeServices };
+> & { services: EmailComposeEnvironment };
 export function EmailComposeView(props: EmailComposeViewProps) {
   const services = props.services;
   const state = createEmailComposer({
@@ -43,7 +43,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
     recipientName: services.recipientName,
     host: props.host,
     draft: props.draft,
-    draftID: props.draftID,
+    draftId: props.draftId,
     recipientOptions: props.recipientOptions,
     onRecipientsChange: props.onRecipientsChange,
     initialTo: props.initialTo,
@@ -51,7 +51,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
   const {
     editor,
     previewName,
-    hasLinkError,
+    hasInboxError,
     draftDirty,
     deleteDraftAndReset,
     signature,
@@ -138,7 +138,7 @@ export function EmailComposeView(props: EmailComposeViewProps) {
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
-              notice={hasLinkError() ? <EmailPermissionsBanner /> : undefined}
+              notice={hasInboxError() ? <EmailPermissionsBanner /> : undefined}
               class="size-full p-4 bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
             />
           </WrapUnlessMobile>

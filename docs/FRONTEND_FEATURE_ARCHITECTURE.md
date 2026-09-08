@@ -158,7 +158,9 @@ The current [feed-query.ts](../apps/web/src/features/activity/queries/feed-query
 illustrates query mechanics and decoding but still accepts the old context's
 `graphql` field. Generated documents and transport types are appropriate in this
 layer. Return feature models to consumers instead of leaking fragments into
-rendering logic.
+rendering logic. Project typed DTOs explicitly with names such as `toEmailThread`;
+reserve `decode`/`parse` for actual decoding or validation. Keep only consumed
+fields, and return small domain results instead of unnecessary transport envelopes.
 Keep differences such as missing entity versus found entity with no history
 explicit, as in
 [select-entity-activity.ts](../apps/web/src/features/activity/queries/select-entity-activity.ts).
@@ -171,7 +173,12 @@ history after an ID change.
 
 The layout does not mandate a query-library migration. Activity uses the existing
 urql Solid wrappers. For TanStack queries, preserve the repository's key, cache,
-and invalidation conventions. Queries and primitives must not import rendering code.
+and invalidation conventions. Do not add a second generic mutation wrapper over
+that library. Controllers can own workflow phases and ordering across operations;
+adapters retain mutation/cache mechanics. Separate request failure from errors in
+post-success presentation or cache work, and catch detached promise rejections.
+Refresh/pagination capabilities used for sequencing return promises that cover
+the underlying request. Queries and primitives must not import rendering code.
 
 ### `primitives/`: reactive behavior without rendering
 
@@ -265,8 +272,10 @@ that wiring, and the component when they already have resolved values.
 
 ### `context/`: the feature's capability contract
 
-Define one feature context record containing the ambient capabilities the feature
-uses consistently across surfaces. Keep the contracts and provider/consumer free
+Define the ambient capabilities each consumer needs. A production entry point may
+group them into an environment for views to wire, but reusable controllers receive
+only their named contracts. Do not pass a complete screen environment into every
+helper or controller. Keep provider/consumer modules under `context/`. Keep the contracts and provider/consumer free
 of production imports. The provider transports capabilities; production composition
 constructs them. Direct arguments also work when context adds no value.
 
@@ -468,7 +477,7 @@ current-user hook, or display resolvers.
 | Layer | Test shape | Useful assertions |
 | --- | --- | --- |
 | Core | Ordinary Vitest tests with domain inputs | Grouping, descriptions, calendar boundaries, unknown cases |
-| Decode/select | Wire fixtures passed to pure adapters | Domain output, missing versus empty, unsupported variants, malformed property payloads |
+| Projection/decode/select | Wire fixtures passed to pure adapters | Domain output, missing versus empty, unsupported variants, malformed property payloads |
 | Query adapters | `createRoot` with a fake client; dispose roots after each test | Request variables, enabled gates, decoding, cursors, cache behavior, source lifecycle |
 | Primitives | `createRoot` with fake feature sources and controlled domain data/status | Loading/error/ready decisions, grouping, background failures, pagination actions, changing inputs |
 | Components/views | Testing Library; feature provider for composed views | Visible states, emitted callbacks, pagination controls, interaction behavior |

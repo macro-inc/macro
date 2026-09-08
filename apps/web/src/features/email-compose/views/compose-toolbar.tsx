@@ -17,7 +17,7 @@ import { Button, SendButton, Tooltip } from '@ui';
 import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
-import { useCompose } from './compose-context';
+import { useCompose } from '../context/compose-context';
 
 export function EmailComposeToolbar(props: {
   editor?: () => LexicalEditor | undefined;

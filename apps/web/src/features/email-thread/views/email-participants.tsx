@@ -2,8 +2,8 @@ import { EmailUserTooltip } from '@app/features/email-message/components/email-u
 import { UserIcon, type UserIconProps } from '@core/component/UserIcon';
 import { emailToMacroId } from '@core/user/macroId';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { useEmailContext } from './email-thread-context';
-import { useEmailThreadEnvironment } from './thread-environment';
+import { useEmailThreadState } from '../context/email-thread-state-context';
+import { useEmailThreadEnvironment } from '../context/thread-environment';
 
 interface Participant {
   email: string;
@@ -14,7 +14,7 @@ interface Participant {
 const DEFAULT_VISIBLE_COUNT = 5;
 
 export function EmailParticipants() {
-  const context = useEmailContext();
+  const context = useEmailThreadState();
   const currentUserEmail = useEmailThreadEnvironment().dependencies.viewerEmail;
   const [expanded, setExpanded] = createSignal(false);
 
