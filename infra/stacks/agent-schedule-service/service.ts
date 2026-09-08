@@ -7,7 +7,6 @@ import {
   EcsDeploymentFailureAlarm,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
-  serviceLoadBalancer,
   ServiceTargetGroup,
 } from '../../packages/resources';
 import { EcrImage } from '../../packages/service';
@@ -27,14 +26,9 @@ const REPO_ROOT = '../../..';
 const GATEWAY_PATH_PREFIX = '/scheduled-action';
 const GATEWAY_DOMAIN_NAME = `${stack === 'prod' ? 'gateway' : 'dev-gateway'}.${BASE_DOMAIN}`;
 
-export const SERVICE_DOMAIN_NAME = `agent-schedule${
-  stack === 'prod' ? '' : `-${stack}`
-}.${BASE_DOMAIN}`;
-
 type Args = {
   vpc: {
     vpcId: pulumi.Output<string> | string;
-    publicSubnetIds: pulumi.Output<string[]> | string[];
     privateSubnetIds: pulumi.Output<string[]> | string[];
   };
   tags: { [key: string]: string };
@@ -42,7 +36,6 @@ type Args = {
   platform: { family: string; architecture: 'amd64' | 'arm64' };
   serviceContainerPort: number;
   healthCheckPath: string;
-  isPrivate?: boolean;
   ecsClusterArn: pulumi.Output<string> | string;
   cloudStorageClusterName: pulumi.Output<string> | string;
   secretKeyArns: (pulumi.Output<string> | string)[];
@@ -55,12 +48,8 @@ type Args = {
 export class AgentScheduleService extends pulumi.ComponentResource {
   public role: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
-  public serviceAlbSg: aws.ec2.SecurityGroup;
   public serviceSg: aws.ec2.SecurityGroup;
   public domain: string;
-  public targetGroup: aws.lb.TargetGroup;
-  public lb: aws.lb.LoadBalancer;
-  public listener: aws.lb.Listener;
   public service: awsx.ecs.FargateService;
   public cloudStorageClusterName: pulumi.Output<string> | string;
   public tags: { [key: string]: string };
@@ -77,7 +66,6 @@ export class AgentScheduleService extends pulumi.ComponentResource {
       platform,
       serviceContainerPort,
       healthCheckPath,
-      isPrivate,
       ecsClusterArn,
       containerEnvVars,
       cloudStorageClusterName,
@@ -204,12 +192,7 @@ export class AgentScheduleService extends pulumi.ComponentResource {
     );
     this.ecr = image.ecr;
 
-    const { serviceAlbSg, serviceSg } = this.initializeSecurityGroups({
-      vpcId: vpc.vpcId,
-      serviceContainerPort,
-    });
-    this.serviceAlbSg = serviceAlbSg;
-    this.serviceSg = serviceSg;
+    this.serviceSg = this.initializeSecurityGroups({ vpcId: vpc.vpcId });
 
     const gatewayTargetGroup = new ServiceTargetGroup(
       `${stack}-${BASE_NAME}`,
@@ -227,19 +210,6 @@ export class AgentScheduleService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const { targetGroup, lb, listener } = serviceLoadBalancer(this, {
-      serviceName: BASE_NAME,
-      serviceContainerPort,
-      healthCheckPath,
-      vpc,
-      albSecurityGroupId: serviceAlbSg.id,
-      isPrivate,
-      tags,
-    });
-    this.targetGroup = targetGroup;
-    this.lb = lb;
-    this.listener = listener;
-
     const dopplerEcsEnvironment = new DopplerEcsEnvironment(
       BASE_NAME,
       { tags: this.tags },
@@ -253,7 +223,7 @@ export class AgentScheduleService extends pulumi.ComponentResource {
         cluster: ecsClusterArn,
         networkConfiguration: {
           subnets: vpc.privateSubnetIds,
-          securityGroups: [serviceSg.id],
+          securityGroups: [this.serviceSg.id],
         },
         continueBeforeSteadyState: DEFAULT_CONTINUE_BEFORE_STEADY_STATE,
         deploymentCircuitBreaker: {
@@ -261,11 +231,6 @@ export class AgentScheduleService extends pulumi.ComponentResource {
           rollback: true,
         },
         loadBalancers: [
-          {
-            targetGroupArn: targetGroup.arn,
-            containerName: 'service',
-            containerPort: serviceContainerPort,
-          },
           {
             targetGroupArn: gatewayTargetGroup.target_group.arn,
             containerName: 'service',
@@ -314,7 +279,7 @@ export class AgentScheduleService extends pulumi.ComponentResource {
                   name: `${BASE_NAME}-tcp-${stack}`,
                   hostPort: serviceContainerPort,
                   containerPort: serviceContainerPort,
-                  targetGroup,
+                  targetGroup: gatewayTargetGroup.target_group,
                 },
               ],
             },
@@ -337,64 +302,19 @@ export class AgentScheduleService extends pulumi.ComponentResource {
 
     this.setupAutoScaling();
     this.setupServiceAlarms();
-
-    const zone = aws.route53.getZoneOutput({ name: BASE_DOMAIN });
-    new aws.route53.Record(
-      `${BASE_NAME}-domain-record`,
-      {
-        name: SERVICE_DOMAIN_NAME,
-        type: 'A',
-        zoneId: zone.zoneId,
-        aliases: [
-          {
-            evaluateTargetHealth: false,
-            name: this.lb.dnsName,
-            zoneId: this.lb.zoneId,
-          },
-        ],
-      },
-      { parent: this }
-    );
   }
 
   private initializeSecurityGroups({
     vpcId,
-    serviceContainerPort,
   }: {
     vpcId: pulumi.Output<string> | string;
-    serviceContainerPort: number;
   }) {
-    const serviceAlbSg = new aws.ec2.SecurityGroup(
-      `${BASE_NAME}-alb-sg-${stack}`,
-      {
-        name: `${BASE_NAME}-alb-sg-${stack}`,
-        description: `${BASE_NAME} application load balancer security group`,
-        vpcId,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
     const serviceSg = new aws.ec2.SecurityGroup(
       `${BASE_NAME}-sg-${stack}`,
       {
         name: `${BASE_NAME}-sg-${stack}`,
         vpcId,
         description: `${BASE_NAME} service security group`,
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-alb-in`,
-      {
-        securityGroupId: serviceSg.id,
-        description: 'Allow inbound traffic from the service ALB',
-        referencedSecurityGroupId: serviceAlbSg.id,
-        fromPort: serviceContainerPort,
-        toPort: serviceContainerPort,
-        ipProtocol: 'tcp',
         tags: this.tags,
       },
       { parent: this }
@@ -412,49 +332,7 @@ export class AgentScheduleService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-http`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow inbound HTTP traffic',
-        cidrIpv4: '0.0.0.0/0',
-        fromPort: 80,
-        toPort: 80,
-        ipProtocol: 'tcp',
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupIngressRule(
-      `${BASE_NAME}-https`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow inbound HTTPS traffic',
-        cidrIpv4: '0.0.0.0/0',
-        fromPort: 443,
-        toPort: 443,
-        ipProtocol: 'tcp',
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    new aws.vpc.SecurityGroupEgressRule(
-      `${BASE_NAME}-alb-out`,
-      {
-        securityGroupId: serviceAlbSg.id,
-        description: 'Allow traffic to the service security group',
-        referencedSecurityGroupId: serviceSg.id,
-        fromPort: serviceContainerPort,
-        toPort: serviceContainerPort,
-        ipProtocol: 'tcp',
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
-    return { serviceAlbSg, serviceSg };
+    return serviceSg;
   }
 
   private setupAutoScaling() {
