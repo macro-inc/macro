@@ -465,6 +465,33 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         boundary: Option<HistoryBoundary>,
     ) -> impl Future<Output = Result<StoredAgentSessionLog>> + Send;
 
+    /// Append a run of already-stamped entries in order, as one write.
+    ///
+    /// Entries arrive stamped because the writer holding them back is what
+    /// knows when each frame was appended; stamping at flush time would give
+    /// a whole batch the flush's timestamp and lose the order `created_at`
+    /// exists to preserve. Only the last system event in the batch needs
+    /// projecting onto the session status - statuses overwrite, so the
+    /// intermediates were never observable. Every entry must belong to one
+    /// session; a mixed batch is rejected rather than projecting the last
+    /// event onto the wrong row.
+    fn create_batch(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// [`create_batch`](Self::create_batch), conditioned on `claim` still
+    /// holding the session's current fence. Optional `boundary` is applied
+    /// after the insert, against the last entry, the same way
+    /// [`create_fenced_with_boundary`](Self::create_fenced_with_boundary)
+    /// selects a successful load.
+    fn create_fenced_batch(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+        boundary: Option<HistoryBoundary>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// List effective ACP history in deterministic `(created_at, id)` order.
     /// Starts at the latest successfully loaded initialization, or the beginning.
     /// Raw failed/partial replay frames remain; consumers must stage load attempts.
@@ -481,19 +508,40 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
 }
 
 /// Sequential live log writer owned by one session actor.
+///
+/// A writer may hold streamed frames back and write them in batches: `append`
+/// returning `Ok` means the frame is either durable or buffered, and
+/// [`flush_deadline`](Self::flush_deadline) tells the owning actor when the
+/// buffer must next be forced out with [`flush`](Self::flush). The returned
+/// row identity is assigned at append, so a buffered frame can still be named
+/// before it lands.
 pub trait AgentSessionLogWriter: Send + 'static {
-    /// Persist and fold one frame into this connection's live projection.
+    /// Persist (or buffer) and fold one frame into this connection's live
+    /// projection.
     fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Uuid>> + Send {
         self.append_with_boundary(log, None)
     }
 
-    /// Persist a frame and optional successful-load boundary in one transaction.
-    /// Returns its durable row identity before the actor continues.
+    /// Persist (or buffer) a frame and optional successful-load boundary.
+    /// Returns its row identity before the actor continues; a flush-through
+    /// frame is durable before this future resolves.
     fn append_with_boundary(
         &mut self,
         log: AgentSessionLog,
         boundary: Option<HistoryBoundary>,
     ) -> impl Future<Output = Result<Uuid>> + Send;
+
+    /// Durably write any frames still held back. A writer that buffers
+    /// nothing has nothing to do.
+    fn flush(&mut self) -> impl Future<Output = Result<()>> + Send {
+        async { Ok(()) }
+    }
+
+    /// When buffered frames must be flushed by - `None` while nothing is
+    /// buffered, so an idle writer never wakes its owner.
+    fn flush_deadline(&self) -> Option<tokio::time::Instant> {
+        None
+    }
 }
 
 /// A session's queue changed; this is the whole queue as it stands now.

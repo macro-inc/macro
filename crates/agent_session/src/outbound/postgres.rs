@@ -122,6 +122,79 @@ fn cursor_run_checkpoint(message: &Message) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// Wire columns for a batch insert, preserving each entry's id and stamp.
+type LogBatchColumns = (
+    Vec<Uuid>,
+    Vec<Uuid>,
+    Vec<Option<String>>,
+    Vec<String>,
+    Vec<serde_json::Value>,
+    Vec<DateTime<Utc>>,
+);
+
+fn encode_log_batch(entries: &[StoredAgentSessionLog]) -> anyhow::Result<LogBatchColumns> {
+    let mut ids = Vec::with_capacity(entries.len());
+    let mut session_ids = Vec::with_capacity(entries.len());
+    let mut user_ids: Vec<Option<String>> = Vec::with_capacity(entries.len());
+    let mut directions: Vec<String> = Vec::with_capacity(entries.len());
+    let mut contents = Vec::with_capacity(entries.len());
+    let mut created_ats = Vec::with_capacity(entries.len());
+    for stored in entries {
+        let (direction, content) = message_columns(&stored.entry.content)?;
+        ids.push(stored.id);
+        session_ids.push(stored.entry.agent_session_id.as_uuid());
+        user_ids.push(
+            stored
+                .entry
+                .user_id
+                .as_ref()
+                .map(|user_id| user_id.as_ref().to_owned()),
+        );
+        directions.push(direction.to_owned());
+        contents.push(content);
+        created_ats.push(stored.created_at);
+    }
+    Ok((
+        ids,
+        session_ids,
+        user_ids,
+        directions,
+        contents,
+        created_ats,
+    ))
+}
+
+fn last_event_status(entries: &[StoredAgentSessionLog]) -> Option<(AgentSessionId, SessionStatus)> {
+    entries
+        .iter()
+        .rev()
+        .find_map(|stored| match &stored.entry.content {
+            Message::ToServer(ToServerMessage::Event { event }) => Some((
+                stored.entry.agent_session_id,
+                SessionStatus::Event(event.clone()),
+            )),
+            _ => None,
+        })
+}
+
+fn last_cursor_checkpoint(entries: &[StoredAgentSessionLog]) -> Option<String> {
+    entries
+        .iter()
+        .rev()
+        .find_map(|stored| cursor_run_checkpoint(&stored.entry.content))
+}
+
+fn batch_session_id(entries: &[StoredAgentSessionLog]) -> Result<AgentSessionId> {
+    let session = entries[0].entry.agent_session_id;
+    if entries
+        .iter()
+        .any(|stored| stored.entry.agent_session_id != session)
+    {
+        return Err(anyhow::anyhow!("agent session log batch mixed sessions").into());
+    }
+    Ok(session)
+}
+
 struct AgentSessionRow {
     id: Uuid,
     name: String,
@@ -972,6 +1045,205 @@ impl AgentSessionLogRepo for PgAgentSessionRepo {
             created_at,
             entry: log,
         })
+    }
+
+    async fn create_batch(&self, entries: Vec<StoredAgentSessionLog>) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let session_id = batch_session_id(&entries)?;
+        let event_status = last_event_status(&entries);
+        let (ids, session_ids, user_ids, directions, contents, created_ats) =
+            encode_log_batch(&entries)?;
+
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session log batch create")?;
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)
+            SELECT * FROM UNNEST(
+                $1::uuid[], $2::uuid[], $3::text[], $4::text[], $5::jsonb[], $6::timestamptz[]
+            )
+            "#,
+            &ids,
+            &session_ids,
+            &user_ids as &[Option<String>],
+            &directions,
+            &contents,
+            &created_ats,
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("failed to create agent session log batch")?;
+
+        if let Some((_, status)) = event_status {
+            let (status, status_event_name) = status_columns(&status);
+            sqlx::query!(
+                r#"
+                UPDATE agent_session
+                SET status = $2,
+                    status_event_name = $3,
+                    modified_at = now()
+                WHERE id = $1
+                "#,
+                session_id.as_uuid(),
+                status,
+                status_event_name,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to update agent session status from log batch")?;
+        }
+
+        transaction
+            .commit()
+            .await
+            .context("commit agent session log batch create")?;
+        Ok(())
+    }
+
+    async fn create_fenced_batch(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+        boundary: Option<crate::domain::model::HistoryBoundary>,
+    ) -> Result<()> {
+        if entries.is_empty() {
+            return Ok(());
+        }
+        let session_id = batch_session_id(&entries)?;
+        if claim.session != session_id {
+            return Err(AgentSessionError::FencedOut(session_id));
+        }
+        let event_status = last_event_status(&entries);
+        let checkpoint = last_cursor_checkpoint(&entries);
+        let last = entries.last().expect("non-empty batch");
+        let (ids, session_ids, user_ids, directions, contents, created_ats) =
+            encode_log_batch(&entries)?;
+
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin fenced agent session log batch create")?;
+
+        let locked_session = sqlx::query_scalar!(
+            r#"
+            SELECT id
+            FROM agent_session
+            WHERE id = $1 AND manager_replica_id = $2 AND manager_fence = $3
+            FOR UPDATE
+            "#,
+            session_id.as_uuid(),
+            claim.replica.as_uuid(),
+            claim.fence.0,
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("lock fenced agent session for log batch")?;
+        if locked_session.is_none() {
+            return Err(AgentSessionError::FencedOut(session_id));
+        }
+
+        sqlx::query!(
+            r#"
+            INSERT INTO agent_session_log (id, agent_session_id, user_id, direction, content, created_at)
+            SELECT * FROM UNNEST(
+                $1::uuid[], $2::uuid[], $3::text[], $4::text[], $5::jsonb[], $6::timestamptz[]
+            )
+            "#,
+            &ids,
+            &session_ids,
+            &user_ids as &[Option<String>],
+            &directions,
+            &contents,
+            &created_ats,
+        )
+        .execute(&mut *transaction)
+        .await
+        .context("failed to create fenced agent session log batch")?;
+
+        if let Some(boundary) = boundary {
+            let updated = sqlx::query!(
+                r#"
+                UPDATE agent_session AS session
+                SET history_start_log_id = boundary.id
+                FROM agent_session_log AS boundary
+                WHERE session.id = $1
+                  AND session.manager_replica_id = $2 AND session.manager_fence = $3
+                  AND boundary.id = $4 AND boundary.agent_session_id = session.id
+                  AND (boundary.created_at, boundary.id) <= ($5, $6)
+                "#,
+                session_id.as_uuid(),
+                claim.replica.as_uuid(),
+                claim.fence.0,
+                boundary.initialization_log_id,
+                last.created_at,
+                last.id,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("select successful load history boundary from log batch")?;
+            if updated.rows_affected() != 1 {
+                return Err(AgentSessionError::Handshake(
+                    "invalid history boundary".into(),
+                ));
+            }
+        }
+
+        if let Some(run_id) = checkpoint {
+            let updated = sqlx::query!(
+                r#"
+                UPDATE external_agent_session AS external
+                SET last_run_id = $2,
+                    updated_at = now()
+                FROM agent_session AS session
+                WHERE external.agent_session_id = $1
+                  AND session.id = external.agent_session_id
+                  AND session.manager_replica_id = $3
+                  AND session.manager_fence = $4
+                  AND external.provider = 'cursor'
+                "#,
+                session_id.as_uuid(),
+                run_id,
+                claim.replica.as_uuid(),
+                claim.fence.0,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("checkpoint cursor run with fenced log batch")?;
+            if updated.rows_affected() == 0 {
+                return Err(AgentSessionError::FencedOut(session_id));
+            }
+        }
+
+        if let Some((_, status)) = event_status {
+            let (status, status_event_name) = status_columns(&status);
+            sqlx::query!(
+                r#"
+                UPDATE agent_session
+                SET status = $2,
+                    status_event_name = $3,
+                    modified_at = now()
+                WHERE id = $1
+                "#,
+                session_id.as_uuid(),
+                status,
+                status_event_name,
+            )
+            .execute(&mut *transaction)
+            .await
+            .context("failed to update agent session status from fenced log batch")?;
+        }
+
+        transaction
+            .commit()
+            .await
+            .context("commit fenced agent session log batch create")?;
+        Ok(())
     }
 
     async fn list_by_session(

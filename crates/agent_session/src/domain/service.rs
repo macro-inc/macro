@@ -31,7 +31,7 @@ use agent_client_protocol::schema::v1::SessionId;
 use agent_fold::domain::fold::FoldMachineImpl;
 use agent_fold::domain::ports::{FoldMachine, FoldedMessageRepo};
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
+use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent, ToServerMessage};
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
@@ -838,8 +838,30 @@ fn validate_agent_session_name(raw: &str) -> Result<&str> {
     Ok(name)
 }
 
+/// How long an appended frame may sit buffered before it must be durably
+/// flushed. The crash window: a process dying loses at most this much of the
+/// *tail* of a session's streamed output - flushes happen in append order, so
+/// a lost suffix never punches a hole in the middle of the log.
+pub(crate) const LOG_FLUSH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(1);
+/// How many frames may accumulate before a flush happens regardless of age,
+/// bounding both memory and the size of the batch a crash could lose.
+pub(crate) const MAX_BUFFERED_LOG_FRAMES: usize = 32;
+
 /// The [`AgentSessionLogRepo`] a session's actor writes through: the durable
 /// append, then the push to whoever is watching the session right now.
+///
+/// Writes are batched. Streamed output chunks - the overwhelming bulk of a
+/// live session's frames - are buffered and written [`MAX_BUFFERED_LOG_FRAMES`]
+/// at a time or every [`LOG_FLUSH_INTERVAL`], whichever comes first, instead
+/// of costing a Postgres transaction each. Frames the rest of the system
+/// reacts to keep the old durable-before-anything contract: anything headed
+/// to the runtime (a prompt the agent will act on must never be missing from
+/// history), system events (they project onto the session's status), and a
+/// successful-load boundary (it must exist as a row before the actor
+/// continues) flush the buffer through with themselves before this writer
+/// does anything else with them. Streaming to viewers stays per-frame either
+/// way - a buffered frame is published immediately, durability deferred,
+/// which is the whole point.
 ///
 /// This is also where a writer's fold lives, and the fold is what makes
 /// re-attaching correct: [`TurnId`](agent_fold::domain::model::TurnId)s are a
@@ -861,6 +883,17 @@ pub struct LiveSessionLogWriter<R, Rt> {
     /// replaying a recording, and `mark_disconnected` recording that a
     /// runtime dropped before anything attached.
     claim: Option<SessionClaim>,
+    /// Frames appended but not yet durably written, stamped when they arrived.
+    buffer: Vec<StoredAgentSessionLog>,
+    /// History boundary to apply against the last buffered frame on the next
+    /// flush. Only a flush-through load response carries one.
+    pending_boundary: Option<crate::domain::model::HistoryBoundary>,
+    /// When the oldest buffered frame must be flushed by; `None` while the
+    /// buffer is empty.
+    flush_due: Option<tokio::time::Instant>,
+    /// The model last projected onto the session row, so a thousand streamed
+    /// frames under one model cost one `UPDATE`, not a thousand.
+    projected_model: Option<String>,
 }
 
 impl<R, Rt> LiveSessionLogWriter<R, Rt> {
@@ -876,6 +909,10 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             realtime,
             fold: None,
             claim: None,
+            buffer: Vec::new(),
+            pending_boundary: None,
+            flush_due: None,
+            projected_model: None,
         }
     }
 
@@ -887,6 +924,10 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             realtime,
             fold: None,
             claim: Some(claim),
+            buffer: Vec::new(),
+            pending_boundary: None,
+            flush_due: None,
+            projected_model: None,
         }
     }
 }
@@ -918,20 +959,53 @@ where
             );
         }
 
-        // Durable first: projections are rebuildable, but a frame omitted from
-        // session history is not.
-        let stored = match &self.claim {
-            Some(claim) => {
-                self.repo
-                    .create_fenced_with_boundary(log.clone(), claim, boundary)
-                    .await?
-            }
-            None if boundary.is_some() => return Err(AgentSessionError::FencedOut(session)),
-            None => AgentSessionLogRepo::create(&self.repo, log.clone()).await?,
+        if let Some(buffered) = self.buffer.first()
+            && buffered.entry.agent_session_id != session
+        {
+            return Err(anyhow::anyhow!(
+                "live session log writer mixed sessions {} and {}",
+                buffered.entry.agent_session_id,
+                session
+            )
+            .into());
+        }
+
+        // A frame the rest of the system reacts to must be durable before it
+        // is acted on: anything headed to the runtime, system events, ACP
+        // requests/responses (initialize/load and the like), and a
+        // successful-load boundary. Streamed `session/update` notifications
+        // are the volume, and only ever get read back, so they can wait for
+        // the batch.
+        let flush_through = boundary.is_some()
+            || !matches!(
+                &log.content,
+                Message::ToServer(ToServerMessage::Acp(AcpMessage(
+                    agent_client_protocol::RawJsonRpcMessage::Notification(_)
+                )))
+            );
+
+        // Stamped now rather than at flush: `created_at` records when the log
+        // accepted the frame, and it is all a reader has to order by. The id
+        // is assigned now so a buffered frame can still be named (a load
+        // response's identity is handed back before the next effect).
+        let stored = StoredAgentSessionLog {
+            id: macro_uuid::generate_uuid_v7(),
+            created_at: chrono::Utc::now(),
+            entry: log.clone(),
         };
+        let id = stored.id;
+        self.buffer.push(stored.clone());
+        if boundary.is_some() {
+            self.pending_boundary = boundary;
+        }
+        self.flush_due
+            .get_or_insert_with(|| tokio::time::Instant::now() + LOG_FLUSH_INTERVAL);
+        if flush_through || self.buffer.len() >= MAX_BUFFERED_LOG_FRAMES {
+            AgentSessionLogWriter::flush(self).await?;
+        }
 
         if let Some(fold) = &mut self.fold {
-            let _ = fold.push(log.clone());
+            let _ = fold.push(log);
         } else {
             match self.catch_up(session).await {
                 Ok(fold) => self.fold = Some(fold),
@@ -945,26 +1019,33 @@ where
             }
         }
 
-        // Projected on every frame - idempotent, rebuildable from the log,
+        // Projected when it changes - idempotent, rebuildable from the log,
         // and best-effort like the stream below, so a failed write must not
-        // fail the append. Batch if the write rate ever matters.
+        // fail the append.
         if let Some(model) = self
             .fold
             .as_ref()
             .and_then(|fold| fold.metadata().model.clone())
-            && let Err(error) = self.repo.set_model(session, &model).await
+            && self.projected_model.as_ref() != Some(&model)
         {
-            tracing::error!(
-                error = ?error,
-                %session,
-                "failed to project agent session model"
-            );
+            match self.repo.set_model(session, &model).await {
+                Ok(()) => self.projected_model = Some(model),
+                Err(error) => {
+                    tracing::error!(
+                        error = ?error,
+                        %session,
+                        "failed to project agent session model"
+                    );
+                }
+            }
         }
 
-        // Best-effort once the durable append has succeeded: the port drops
-        // frames by contract, and the log this was derived from is already
-        // durable, so the worst a failure costs is a viewer who has to reload.
-        let id = stored.id;
+        // Best-effort, and for a buffered frame it deliberately runs ahead of
+        // durability: viewers watch streamed output live, so it cannot wait
+        // for the batch. The port drops frames by contract, and a reader who
+        // reloads folds the stored log - so the worst a dropped publish costs
+        // is a viewer who has to reload, and the worst a crash costs is a
+        // viewer who briefly saw frames the log lost with the buffer.
         if let Err(error) = self.stream(session, stored).await {
             tracing::error!(
                 error = ?error,
@@ -973,6 +1054,39 @@ where
             );
         }
         Ok(id)
+    }
+
+    async fn flush(&mut self) -> Result<()> {
+        if self.buffer.is_empty() {
+            return Ok(());
+        }
+        let entries = self.buffer.clone();
+        let boundary = self.pending_boundary;
+        let result = match &self.claim {
+            Some(claim) => {
+                self.repo
+                    .create_fenced_batch(entries, claim, boundary)
+                    .await
+            }
+            None if boundary.is_some() => Err(AgentSessionError::FencedOut(
+                entries[0].entry.agent_session_id,
+            )),
+            None => AgentSessionLogRepo::create_batch(&self.repo, entries).await,
+        };
+        // Cleared on failure too: retrying a batch whose commit may have
+        // landed would duplicate frames, so a failed flush loses its frames
+        // the same way a failed per-frame write used to lose its one - and
+        // the caller tears the session down over the error either way. Only
+        // cancellation (this future dropped mid-write) keeps the buffer, for
+        // the shutdown path to retry.
+        self.buffer.clear();
+        self.pending_boundary = None;
+        self.flush_due = None;
+        result
+    }
+
+    fn flush_deadline(&self) -> Option<tokio::time::Instant> {
+        self.flush_due
     }
 }
 
@@ -1084,12 +1198,13 @@ where
             .await
     }
 
-    /// Walk this connection's fold through the session's stored log, so it
-    /// starts from where the session actually is rather than from nothing.
+    /// Walk this connection's fold through the session's stored log and then
+    /// through anything still buffered, so it starts from where the session
+    /// actually is rather than from nothing.
     ///
     /// Runs once per connection, on its first frame - by which point that
-    /// frame is already in the log, so replaying the log folds it too and the
-    /// caller must not push it again.
+    /// frame is in the log or in the buffer, so replaying both folds it too
+    /// and the caller must not push it again.
     ///
     /// This is what makes re-attaching correct.
     /// [`TurnId`](agent_fold::domain::model::TurnId)s are a counter over the
@@ -1108,6 +1223,9 @@ where
         let mut fold = FoldMachineImpl::new();
         for stored in log {
             let _ = fold.push(stored.entry);
+        }
+        for stored in &self.buffer {
+            let _ = fold.push(stored.entry.clone());
         }
         Ok(fold)
     }
