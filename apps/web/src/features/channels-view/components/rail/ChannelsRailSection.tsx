@@ -5,8 +5,10 @@ import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
-import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
+import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { useOffscreenActivity } from './hooks/useOffscreenActivity';
+
+const LOADING_SKELETON_ROWS = [0, 1, 2];
 
 function SectionScrollArea(props: {
   contentRef: (element: HTMLDivElement) => void;
@@ -156,20 +158,56 @@ export const CollapsibleSection = {
   Content: CollapsibleSectionContent,
 };
 
-export function RailListLoading(props: { more?: boolean }) {
+export function RailListLoading() {
   return (
-    <div
-      class={cn(
-        'grid place-items-center text-ink-muted',
-        props.more ? 'h-10' : 'min-h-20'
-      )}
-    >
+    <div class="grid min-h-20 place-items-center text-ink-muted">
       <SpinnerIcon
-        aria-label={
-          props.more ? 'Loading more conversations' : 'Loading conversations'
-        }
+        aria-label="Loading conversations"
         class="size-4 animate-spin"
       />
+    </div>
+  );
+}
+
+export function RailListLoadingMore(props: {
+  variant: 'channel' | 'recent' | 'slim';
+}) {
+  return (
+    <div role="status" aria-label="Loading more conversations">
+      <For each={LOADING_SKELETON_ROWS}>
+        {(row) => (
+          <div
+            aria-hidden="true"
+            class={cn(
+              'flex items-center',
+              props.variant === 'slim' && 'h-10 justify-center',
+              props.variant === 'channel' && 'h-10 gap-2 px-2',
+              props.variant === 'recent' && 'h-18 items-start gap-3 px-2 py-2'
+            )}
+          >
+            <div
+              class={cn(
+                'skeleton-shimmer shrink-0 rounded-full bg-skeleton',
+                props.variant === 'channel' && 'size-6',
+                props.variant !== 'channel' && 'size-8'
+              )}
+            />
+            <Show when={props.variant !== 'slim'}>
+              <div class="flex min-w-0 flex-1 flex-col gap-2">
+                <div
+                  class={cn(
+                    'skeleton-shimmer h-2.5 rounded-full bg-skeleton',
+                    row % 2 === 0 ? 'w-1/2' : 'w-2/3'
+                  )}
+                />
+                <Show when={props.variant === 'recent'}>
+                  <div class="skeleton-shimmer h-2 w-4/5 rounded-full bg-skeleton" />
+                </Show>
+              </div>
+            </Show>
+          </div>
+        )}
+      </For>
     </div>
   );
 }

@@ -29,6 +29,7 @@ import {
   CreateRailAction,
   RailListError,
   RailListLoading,
+  RailListLoadingMore,
   RailModeButton,
 } from './ChannelsRailSection';
 import {
@@ -236,7 +237,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
               )}
             </Virtualizer>
             <Show when={section().source.isLoadingMore()}>
-              <RailListLoading more />
+              <RailListLoadingMore variant="channel" />
             </Show>
             <Show
               when={
@@ -358,7 +359,7 @@ function ExpandedRecents() {
             {(channel) => <RecentConversationCard channel={channel} />}
           </Virtualizer>
           <Show when={scope().source.isLoadingMore()}>
-            <RailListLoading more />
+            <RailListLoadingMore variant="recent" />
           </Show>
           <Show
             when={scope().source.error() && !scope().source.isLoadingMore()}

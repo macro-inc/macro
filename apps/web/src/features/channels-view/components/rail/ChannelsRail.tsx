@@ -42,6 +42,7 @@ import { SlimChannelsRail } from './SlimChannelsRail';
 
 const CHANNEL_GROUPS: ChannelsGroup[] = ['channels', 'direct_messages'];
 const CHANNEL_TAB_IDS: ChannelsTab[] = ['browse', 'recents'];
+const DM_LOADING_PREVIEW_OFFSET = 80;
 
 export type ChannelsRailProps = {
   sources: ChannelsSources;
@@ -218,10 +219,36 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
           const source = props.sources[row.scope];
           if (row.localIndex < source.items().length - 1) return true;
-          if (source.isLoadingMore()) return false;
-          if (!source.hasMore()) return true;
 
-          void source.loadMore();
+          if (!source.isLoadingMore()) {
+            if (!source.hasMore()) return true;
+            void source.loadMore();
+          }
+
+          if (row.scope === 'direct_messages') {
+            requestAnimationFrame(() => {
+              const scrollRoot = sectionScrollRoots().direct_messages;
+              const element = document.getElementById(
+                domIdForRow(listDomId, row.id)
+              );
+              if (!scrollRoot || !element) return;
+
+              const scrollBounds = scrollRoot.getBoundingClientRect();
+              const elementBounds = element.getBoundingClientRect();
+              const previewOffset = Math.max(
+                0,
+                Math.min(
+                  DM_LOADING_PREVIEW_OFFSET,
+                  scrollBounds.height - elementBounds.height
+                )
+              );
+              scrollRoot.scrollTop += Math.max(
+                0,
+                elementBounds.bottom + previewOffset - scrollBounds.bottom
+              );
+            });
+          }
+
           return false;
         },
         onNavigate: (event) => {

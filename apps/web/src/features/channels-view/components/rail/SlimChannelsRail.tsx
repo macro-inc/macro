@@ -33,6 +33,7 @@ import {
 import {
   CollapsibleSection,
   RailListLoading,
+  RailListLoadingMore,
   RailModeButton,
 } from './ChannelsRailSection';
 import {
@@ -323,7 +324,7 @@ function SlimGroupSection(props: { config: GroupConfig }) {
               )}
             </Virtualizer>
             <Show when={section().source.isLoadingMore()}>
-              <RailListLoading more />
+              <RailListLoadingMore variant="slim" />
             </Show>
             <Show
               when={
@@ -388,7 +389,7 @@ function SlimRecents() {
             )}
           </Virtualizer>
           <Show when={scope().source.isLoadingMore()}>
-            <RailListLoading more />
+            <RailListLoadingMore variant="slim" />
           </Show>
           <Show
             when={scope().source.error() && !scope().source.isLoadingMore()}
