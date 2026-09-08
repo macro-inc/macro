@@ -19,7 +19,6 @@ import {
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import {
@@ -84,7 +83,7 @@ export type EmailListProps = {
 };
 
 export function EmailList(props: EmailListProps) {
-  const { state, setOpenThreadId, previewOpen } = useEmailView();
+  const { state, setOpenThreadId } = useEmailView();
   const panel = useSplitPanelOrThrow();
 
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>

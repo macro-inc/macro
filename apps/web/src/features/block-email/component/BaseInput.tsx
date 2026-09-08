@@ -1398,7 +1398,8 @@ export function BaseInput(props: {
           }
           return true;
         },
-        runWithInputFocused: true,
+        // Let editable fields handle Escape before closing the reply.
+        runWithInputFocused: false,
         hotkeyToken: TOKENS.email.cancelReply,
         displayPriority: 8,
       });
