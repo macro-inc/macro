@@ -60,6 +60,15 @@ instead of eagerly memoizing them in its panel-owned root. This lets mounted
 rendering choose its reactive owner while off-screen navigation reads current
 query and group pages on demand.
 
+### Boundary pagination
+
+`useListInteractions` accepts `navigation.onBeforeMove` for paginated
+collections. Returning `false` consumes the key without moving focus. A list
+can use this at its final loaded row to start `loadMore`, keep repeated key
+presses on that row while loading, and allow the next move once rows append.
+When the source has no continuation, the guard should return `true` so normal
+navigation can cross into the next group or section.
+
 ## Applying the pattern
 
 Inbox's model owns Signal/Noise/All admission, notification enrichment, read

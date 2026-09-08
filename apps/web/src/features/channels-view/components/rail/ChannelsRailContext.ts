@@ -3,7 +3,13 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import type { ChannelEntity } from '@entity';
 import type { ContextProviderProps } from '@solid-primitives/context';
 import type { Accessor } from 'solid-js';
-import type { ChannelsGroup, ChannelsTab } from '../../types';
+import type { VirtualizerHandle } from 'virtua/solid';
+import type { ChannelsSources } from '../../queries';
+import type {
+  ChannelsGroup,
+  ChannelsQueryScope,
+  ChannelsTab,
+} from '../../types';
 import type { useChannelRailActivity } from './hooks/useChannelRailActivity';
 
 type ChannelRailActivity = ReturnType<typeof useChannelRailActivity>;
@@ -18,6 +24,8 @@ export type ChannelRailRow =
       kind: 'conversation';
       id: `channel:${string}`;
       group?: ChannelsGroup;
+      scope: ChannelsQueryScope;
+      localIndex: number;
       channel: ChannelEntity;
     };
 
@@ -36,14 +44,16 @@ export type ChannelsRailContext = {
   tab: Accessor<ChannelsTab>;
   selectTab: (tab: ChannelsTab) => void;
   setMode: (mode: 'full' | 'slim') => void;
-  teamChannels: Accessor<readonly ChannelEntity[]>;
-  directMessages: Accessor<readonly ChannelEntity[]>;
-  recentConversations: Accessor<readonly ChannelEntity[]>;
+  sources: ChannelsSources;
   selectedChannelId: Accessor<string | undefined>;
   isGroupOpen: (group: ChannelsGroup) => boolean;
   registerRootRef: (element: HTMLDivElement) => void;
   activateRow: (rowId: ChannelRailRow['id']) => void;
   registerScrollRef: (group: ChannelsGroup, element: HTMLDivElement) => void;
+  registerVirtualizer: (
+    scope: ChannelsQueryScope,
+    handle: VirtualizerHandle
+  ) => () => void;
   channelActivity: ChannelRailActivity;
 };
 

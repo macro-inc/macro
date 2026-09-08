@@ -3,6 +3,7 @@ import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { useOffscreenActivity } from './hooks/useOffscreenActivity';
@@ -154,6 +155,43 @@ export const CollapsibleSection = {
   Header: CollapsibleSectionHeader,
   Content: CollapsibleSectionContent,
 };
+
+export function RailListLoading(props: { more?: boolean }) {
+  return (
+    <div
+      class={cn(
+        'grid place-items-center text-ink-muted',
+        props.more ? 'h-10' : 'min-h-20'
+      )}
+    >
+      <SpinnerIcon
+        aria-label={
+          props.more ? 'Loading more conversations' : 'Loading conversations'
+        }
+        class="size-4 animate-spin"
+      />
+    </div>
+  );
+}
+
+export function RailListError(props: {
+  retry: () => Promise<void>;
+  compact?: boolean;
+}) {
+  return (
+    <div
+      class={cn(
+        'flex items-center justify-center gap-2 px-2 text-xs text-ink-muted',
+        props.compact ? 'py-2' : 'min-h-20 flex-col'
+      )}
+    >
+      <span>Couldn’t load conversations.</span>
+      <Button variant="outline" size="xs" onClick={() => void props.retry()}>
+        Try again
+      </Button>
+    </div>
+  );
+}
 
 export function CreateRailAction(props: {
   label: string;

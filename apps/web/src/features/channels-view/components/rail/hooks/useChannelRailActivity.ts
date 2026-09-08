@@ -22,7 +22,7 @@ type ChannelActivityTarget = {
 };
 
 export function useChannelRailActivity(
-  channels: Accessor<ChannelEntity[]>,
+  channels: Accessor<readonly ChannelEntity[]>,
   calls: ReturnType<typeof useChannelCalls>
 ) {
   const notificationSource = useGlobalNotificationSource();
