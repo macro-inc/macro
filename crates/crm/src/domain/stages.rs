@@ -14,7 +14,7 @@ use crate::domain::{
 mod test;
 
 /// Name of the team-scoped stage definition; `Stage` is reserved by a trigger.
-pub use properties::CRM_TEAM_STAGE_DEFINITION_NAME;
+pub use system_properties::CRM_TEAM_STAGE_DEFINITION_NAME;
 
 /// Maximum stages in one pipeline.
 pub const MAX_STAGES: usize = 50;

@@ -15,8 +15,7 @@ use models_properties::service::property_value::PropertyValue;
 use models_properties::{DataType, EntityReference, EntityType, PropertyOwner};
 use uuid::Uuid;
 
-/// Name of a team's CRM stage definition. Written by the CRM crate, read by the loaders here.
-pub const CRM_TEAM_STAGE_DEFINITION_NAME: &str = "Deal Stage";
+pub use system_properties::CRM_TEAM_STAGE_DEFINITION_NAME;
 
 /// Map an internal properties storage type to its canonical entity type.
 pub fn canonical_entity_type(entity_type: EntityType) -> AccessEntityType {
