@@ -192,6 +192,27 @@ describe('mapCalendarOccurrence', () => {
     expect(event.visibleCalendars).toEqual([PRIMARY]);
   });
 
+  it('displays the first copy whose calendar is loaded so it leads the bars', () => {
+    const event = mapCalendarOccurrence(twoCopies(), {
+      sourceById: new Map([[SHARED.id, SHARED]]),
+    });
+
+    expect(event.calendar).toBe(SHARED);
+    expect(event.calendarId).toBe('shared');
+    expect(event.title).toBe('[teo] OOO');
+    expect(event.visibleCalendars).toEqual([SHARED]);
+  });
+
+  it('keeps choosing by visibility alone without a calendar map', () => {
+    const event = mapCalendarOccurrence(twoCopies(), {
+      isSourceVisible: hidden('primary'),
+    });
+
+    expect(event.calendarId).toBe('shared');
+    expect(event.title).toBe('[teo] OOO');
+    expect(event.visibleCalendars).toEqual([event.calendar]);
+  });
+
   it('renders a single-copy event with its one calendar', () => {
     const event = mapCalendarOccurrence(item([copy('primary')]), {
       sourceById,

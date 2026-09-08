@@ -136,10 +136,32 @@ interface CalendarOccurrenceMappingOptions {
   isSourceVisible?: (sourceId: string) => boolean;
 }
 
+/** A copy of an event on a calendar the viewer is showing, with that calendar. */
+interface ShownEventCopy {
+  copy: CalendarEventSourceContent;
+  calendar: CalendarSource;
+}
+
 /**
- * The copy of an event to display: the first copy whose calendar is shown,
- * in the server's canonical-first order (primary calendar, then freshest),
- * falling back to the canonical copy when none of them is shown.
+ * The copies whose calendar is shown and loaded, in the server's
+ * canonical-first order (primary calendar, then freshest). The first one is
+ * the copy a chip displays.
+ */
+function shownEventCopies(
+  sources: CalendarEventSourceContent[],
+  options: CalendarOccurrenceMappingOptions
+): ShownEventCopy[] {
+  return sources.flatMap((copy) => {
+    if (options.isSourceVisible?.(copy.calendarId) === false) return [];
+    const calendar = options.sourceById?.get(copy.calendarId);
+    return calendar ? [{ copy, calendar }] : [];
+  });
+}
+
+/**
+ * The copy to display when no shown copy's calendar is loaded: the first
+ * copy whose calendar is shown, falling back to the canonical copy when none
+ * of them is.
  */
 function selectEventSource(
   sources: CalendarEventSourceContent[],
@@ -177,10 +199,10 @@ export function reminderCalendarIdOf(
 
 /**
  * Maps one backend occurrence projection into the single chip it renders as,
- * showing the copy that belongs to a calendar the viewer has on and listing
- * every shown calendar the event is synced to. The entity itself carries the
- * canonical copy's content, so an event with no copy data reads the same as
- * its first copy.
+ * showing the first copy whose calendar the viewer has on and loaded, and
+ * listing every such calendar the event is synced to. The entity itself
+ * carries the canonical copy's content, so an event with no copy data reads
+ * the same as its first copy.
  */
 export function mapCalendarOccurrence(
   item: CalendarOccurrenceItem,
@@ -193,18 +215,17 @@ export function mapCalendarOccurrence(
       ? { allDay: false, start: time.startsAt, end: time.endsAt }
       : { allDay: true, start: time.startDate, end: time.endDate };
   const sources = event.sources ?? [];
-  const copy = selectEventSource(sources, options.isSourceVisible);
+  const shown = shownEventCopies(sources, options);
+  const copy =
+    shown[0]?.copy ?? selectEventSource(sources, options.isSourceVisible);
   const content = copy ?? event;
   const canonical = sources[0] ?? event;
   const calendarId = copy?.calendarId ?? event.calendarId ?? undefined;
   const source =
+    shown[0]?.calendar ??
     (calendarId ? options.sourceById?.get(calendarId) : undefined) ??
     DEFAULT_CALENDAR_SOURCE;
-  const visibleCalendars = sources.flatMap((candidate) => {
-    if (options.isSourceVisible?.(candidate.calendarId) === false) return [];
-    const calendar = options.sourceById?.get(candidate.calendarId);
-    return calendar ? [calendar] : [];
-  });
+  const visibleCalendars = shown.map(({ calendar }) => calendar);
 
   return {
     ...range,
