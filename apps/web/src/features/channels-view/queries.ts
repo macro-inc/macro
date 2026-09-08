@@ -67,7 +67,7 @@ export function channelsQueryArgs(
 
 export function filterChannelsForScope(
   scope: ChannelsQueryScope,
-  channels: readonly ChannelEntity[]
+  channels: ChannelEntity[]
 ): ChannelEntity[] {
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
 }
