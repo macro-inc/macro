@@ -47,7 +47,7 @@ mod test;
 const PART_BUFFER: usize = 256;
 
 /// [`TurnEngine`] backed by [`agent::AgentLoop`] and
-/// [`ai_tools::all_tools`].
+/// [`ai_tools::tools_for`].
 pub struct RigTurnEngine {
     db: PgPool,
     tool_context: ToolServiceContext,
@@ -134,7 +134,7 @@ async fn drive_turn(
         user_memory.as_deref(),
     );
 
-    // `all_tools` returns a fresh Arc. Take its collection back so the
+    // `tools_for` returns a fresh Arc. Take its collection back so the
     // in-memory runtime can widen it onto the session-specific context and
     // add the one tool that needs the active ACP connection.
     let base_tools = Arc::into_inner(tools.toolset)

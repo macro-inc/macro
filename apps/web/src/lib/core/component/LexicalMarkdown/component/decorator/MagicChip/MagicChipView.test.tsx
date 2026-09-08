@@ -1,10 +1,10 @@
 /** @vitest-environment jsdom */
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
-import type { MagicChipPresentation } from './presentation';
-
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
+import { createSignal } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MagicChipView } from './MagicChipView';
+import type { MagicChipPresentation } from './presentation';
 
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -193,7 +193,6 @@ vi.mock('@app/features/block-agent/component/parts/UserToolCall', () => ({
   ),
 }));
 
-
 const draft = {
   title: 'Q3 sync',
   time: {
@@ -293,5 +292,41 @@ describe('MagicChipView asking', () => {
     ));
     fireEvent.click(getByText('Create event'));
     expect(respond).not.toHaveBeenCalled();
+  });
+});
+
+describe('MagicChipView review transition', () => {
+  it('keeps the expanded answer while a review appears and the agent continues', () => {
+    const [presentation, setPresentation] = createSignal<MagicChipPresentation>(
+      {
+        kind: 'answering',
+        markdown: 'Setting that up.',
+        activity: { label: 'Writing response', busy: false },
+      }
+    );
+    const view = render(() => (
+      <MagicChipView
+        agentSessionId="session"
+        presentation={presentation()}
+        answer={{ answering: false, respond }}
+        onOpen={onOpen}
+      />
+    ));
+    const area = answerArea(view.container)!;
+    fireEvent.click(area);
+    expect(area.getAttribute('aria-expanded')).toBe('true');
+
+    setPresentation(asking(true, 'Setting that up.'));
+    expect(view.getByText('Create event')).toBeTruthy();
+    expect(answerArea(view.container)).toBe(area);
+    expect(area.getAttribute('aria-expanded')).toBe('true');
+
+    setPresentation({ kind: 'settled', markdown: 'Created the event.' });
+    expect(view.queryByText('Create event')).toBeNull();
+    expect(view.getByText('Created the event.')).toBeTruthy();
+    expect(answerArea(view.container)).toBe(area);
+    expect(area.getAttribute('aria-expanded')).toBe('true');
+    fireEvent.click(view.getByText('Open session'));
+    expect(onOpen).toHaveBeenCalledOnce();
   });
 });

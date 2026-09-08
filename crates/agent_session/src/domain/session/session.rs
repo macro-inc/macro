@@ -311,7 +311,7 @@ impl<Token> SessionMachine<Token> {
     }
 
     fn begin_reload(&mut self, effects: &mut Vec<Effect<Token>>) {
-        let SessionPhase::Live { session_id } = &self.phase else {
+        let SessionPhase::Live { session_id, .. } = &self.phase else {
             return;
         };
         self.resume_session_id = Some(session_id.clone());

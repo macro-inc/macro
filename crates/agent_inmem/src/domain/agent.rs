@@ -42,12 +42,12 @@ use tokio_util::sync::CancellationToken;
 use crate::domain::engine::{TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
-use agent_client_protocol::schema::v1::McpServer as AcpMcpServer;
-use mcp_toolset::RemoteMcpToolSet;
 use crate::domain::user_input::{
     SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
     UserInputRequester,
 };
+use agent_client_protocol::schema::v1::McpServer as AcpMcpServer;
+use mcp_toolset::RemoteMcpToolSet;
 
 #[cfg(test)]
 mod test;

@@ -346,7 +346,8 @@ async fn run() -> anyhow::Result<()> {
                     Arc::new(AcpMcpConnector::new(EgressMcpClient::new(Arc::clone(
                         &egress,
                     )))),
-                ).with_dev_commands(enable_dev_commands),
+                )
+                .with_dev_commands(enable_dev_commands),
             })
         }
         None => None,

@@ -13,11 +13,25 @@ import ArrowUpRight from '@phosphor/arrow-up-right.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import type { ElicitationAnswer } from '@service-agent-harness/generated/schemas';
 import { deserializeToolCall } from '@service-cognition/generated/tools/tool';
-import type { CreateCalendarEvent, SendEmail } from '@service-cognition/generated/tools/types';
+import type {
+  CreateCalendarEvent,
+  SendEmail,
+} from '@service-cognition/generated/tools/types';
 import { Button, Layer } from '@ui';
+import {
+  type Component,
+  createMemo,
+  createSignal,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { match } from 'ts-pattern';
-import { type Component, createMemo, createSignal, Match, Show, Switch } from 'solid-js';
-import type { MagicChipActivity, MagicChipPresentation, MagicChipQuestion } from './presentation';
+import type {
+  MagicChipActivity,
+  MagicChipPresentation,
+  MagicChipQuestion,
+} from './presentation';
 
 function answerMarkdown(presentation: MagicChipPresentation) {
   return presentation.kind === 'working' ? undefined : presentation.markdown;
@@ -40,7 +54,6 @@ export type MagicChipAnswer = {
   answering: boolean;
   respond: (answer: ElicitationAnswer) => Promise<boolean>;
 };
-
 
 /**
  * A question the agent stopped to ask, kept small for a channel thread: what
@@ -287,7 +300,10 @@ export const MagicChipView: Component<{
   answer?: MagicChipAnswer;
   onOpen?: () => void;
 }> = (props) => {
-  const asking = () => props.presentation.kind === 'asking' ? props.presentation.asking : undefined;
+  const asking = () =>
+    props.presentation.kind === 'asking'
+      ? props.presentation.asking
+      : undefined;
   const markdown = () => answerMarkdown(props.presentation);
   const activity = () => currentActivity(props.presentation);
   const [expanded, setExpanded] = createSignal(false);
@@ -330,33 +346,38 @@ export const MagicChipView: Component<{
             )}
           </Show>
         </div>
-        <Show when={asking()} fallback={
-        <button
-          type="button"
-          class="flex min-h-9 w-full items-center gap-1.5 border-t border-edge-muted px-3 py-2 text-left text-xs leading-5 text-ink-extra-muted hover:bg-hover"
-          data-message-reply-preview={
-            markdown() ? undefined : replyPreview(activity())
-          }
-          disabled={!props.onOpen}
-          onClick={props.onOpen}
-        >
-          <span class="flex min-w-0 flex-1 items-center gap-1.5">
-            <Show
-              when={activity()}
-              fallback={<span class="text-ink-muted">Open session</span>}
+        <Show
+          when={asking()}
+          fallback={
+            <button
+              type="button"
+              class="flex min-h-9 w-full items-center gap-1.5 border-t border-edge-muted px-3 py-2 text-left text-xs leading-5 text-ink-extra-muted hover:bg-hover"
+              data-message-reply-preview={
+                markdown() ? undefined : replyPreview(activity())
+              }
+              disabled={!props.onOpen}
+              onClick={props.onOpen}
             >
-              {(current) => <ActivityText activity={current()} />}
-            </Show>
-          </span>
-          <ArrowUpRight aria-hidden="true" class="size-3 shrink-0" />
-        </button>
-        }>
-          {(question) => <AskingCard
-            agentSessionId={props.agentSessionId}
-            asking={question()}
-            answer={props.answer}
-            onOpen={props.onOpen}
-          />}
+              <span class="flex min-w-0 flex-1 items-center gap-1.5">
+                <Show
+                  when={activity()}
+                  fallback={<span class="text-ink-muted">Open session</span>}
+                >
+                  {(current) => <ActivityText activity={current()} />}
+                </Show>
+              </span>
+              <ArrowUpRight aria-hidden="true" class="size-3 shrink-0" />
+            </button>
+          }
+        >
+          {(question) => (
+            <AskingCard
+              agentSessionId={props.agentSessionId}
+              asking={question()}
+              answer={props.answer}
+              onOpen={props.onOpen}
+            />
+          )}
         </Show>
       </div>
     </Layer>
