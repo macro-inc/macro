@@ -81,22 +81,31 @@ pub(crate) async fn probe_subprocess(
     process: &ProbeSubprocess,
     deadline: Duration,
 ) -> Result<Vec<SessionConfigOption>, ProbeError> {
+    let expires = tokio::time::Instant::now() + deadline;
     let agent = subprocess_agent(process)?;
     let (channel, connection) =
         agent_client_protocol::ConnectTo::<Client>::into_channel_and_future(agent);
-    let connection = std::pin::pin!(connection);
+    let mut connection = std::pin::pin!(connection);
     let probe = std::pin::pin!(probe_channel(channel, &process.cwd, deadline));
 
     tokio::select! {
-        // A failed `exec` closes stdio and resolves both futures. Prefer the
-        // child outcome so callers receive a process failure, not a misleading
-        // ACP protocol error caused by the same closure.
+        // Prefer an already-observed child exit over its resulting ACP error.
         biased;
-        result = connection => match result {
+        result = &mut connection => match result {
             Ok(()) => Err(ProbeError::Process("process exited before responding".to_owned())),
             Err(error) => Err(ProbeError::Process(error.to_string())),
         },
-        result = probe => result,
+        result = probe => {
+            if matches!(result, Err(ProbeError::Protocol(_))) {
+                // Stdio can close before the child-exit monitor resolves. Let
+                // the SDK finish shutdown and collect the exit status before
+                // classifying the failure, within the original probe deadline.
+                if let Ok(Err(error)) = tokio::time::timeout_at(expires, connection).await {
+                    return Err(ProbeError::Process(error.to_string()));
+                }
+            }
+            result
+        },
     }
 }
 

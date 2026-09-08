@@ -109,3 +109,22 @@ sys.stdin.read()
         )
     );
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn subprocess_exit_after_stdio_closes_is_a_process_failure() {
+    let process = ProbeSubprocess {
+        command: "/bin/sh".into(),
+        args: vec![
+            "-c".to_owned(),
+            "exec 1>&-; sleep 0.05; exit 127".to_owned(),
+        ],
+        cwd: "/".into(),
+    };
+
+    let error = probe_subprocess(&process, Duration::from_secs(2))
+        .await
+        .expect_err("a failing child cannot provide models");
+
+    assert!(matches!(error, ProbeError::Process(_)), "got {error:?}");
+}
