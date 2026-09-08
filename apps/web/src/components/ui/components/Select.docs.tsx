@@ -129,6 +129,8 @@ export default defineDoc({
   status: 'stable',
   exports: ['Select'],
   import: "import { Select } from '@ui';",
+  // The root is generic over the option type, so it is not named SelectProps.
+  propTypes: ['SelectRootProps'],
   demos: [
     {
       id: 'basic',
@@ -152,66 +154,4 @@ export default defineDoc({
       render: DisabledDemo,
     },
   ],
-  props: [
-    {
-      name: 'options',
-      type: 'Option[]',
-      required: true,
-      description: 'The collection to choose from.',
-    },
-    {
-      name: 'value',
-      type: 'Option | undefined',
-      description: 'Controlled selection. Pair with `onChange`.',
-    },
-    {
-      name: 'onChange',
-      type: '(value: Option | null) => void',
-      description: 'Fires with the new selection, or null when cleared.',
-    },
-    {
-      name: 'optionValue',
-      type: 'keyof Option',
-      description: 'Field that uniquely identifies an option.',
-    },
-    {
-      name: 'optionTextValue',
-      type: 'keyof Option',
-      description: 'Field used for typeahead and the accessible name.',
-    },
-    {
-      name: 'itemComponent',
-      type: '(props: { item: CollectionNode<Option> }) => JSX.Element',
-      required: true,
-      description: 'Renders one option inside the listbox.',
-    },
-    {
-      name: 'placement',
-      type: 'Placement',
-      default: "'bottom-start'",
-      description: 'Where the content opens relative to the trigger.',
-    },
-    {
-      name: 'gutter',
-      type: 'number',
-      description: 'Pixel gap between the trigger and the content.',
-    },
-    {
-      name: 'disabled',
-      type: 'boolean',
-      default: 'false',
-      description: 'Prevents the select from opening.',
-    },
-  ],
-  guidelines: {
-    do: [
-      'Let `Select.Content` own the menu chrome; pass only sizing classes to it.',
-      'Include `Select.ItemIndicator` so the current selection is visible in the list.',
-      'Use `portalScope="local"` when the select lives inside a dialog or other portal scope.',
-    ],
-    dont: [
-      'Do not wrap `Select.Content` in a Portal — it already portals itself.',
-      'Do not use Select for more than roughly a dozen options; use a command menu with search.',
-    ],
-  },
 });

@@ -1,3 +1,4 @@
+import { extractTypeSource } from './source';
 import { DOC_CATEGORIES, type ComponentDoc, type DocCategory } from './types';
 
 /**
@@ -27,6 +28,16 @@ const uiComponentModules = import.meta.glob(
   '../../components/ui/components/*.tsx'
 );
 
+/**
+ * Raw text of the component files, so a page can read its guidance and prop
+ * types straight from the implementation instead of restating them. Lazy: only
+ * the page you open pays for it.
+ */
+const componentSources = import.meta.glob<string>(
+  '../../components/ui/components/*.tsx',
+  { query: '?raw', import: 'default' }
+);
+
 export type DocEntry = {
   /** URL-safe id, derived from the filename. */
   slug: string;
@@ -34,6 +45,12 @@ export type DocEntry = {
   /** Path shown on the page so the file is easy to jump to. */
   path: string;
   loadSource: () => Promise<string>;
+  /**
+   * Raw text of the component this page sits beside, or null for a page with
+   * no implementation (the Foundations pages). Carries the `@do` / `@dont`
+   * guidance and the prop types.
+   */
+  loadComponentSource: (() => Promise<string>) | null;
 };
 
 /** `.../components/Button.docs.tsx` -> `button` */
@@ -75,6 +92,10 @@ function buildEntries(): DocEntry[] {
       doc,
       path: displayPath(path),
       loadSource: loadSource ?? (() => Promise.resolve('')),
+      // `Button.docs.tsx` sits beside `Button.tsx`; deriving the sibling means
+      // a page never has to declare where its implementation lives.
+      loadComponentSource:
+        componentSources[path.replace(/\.docs\.tsx$/, '.tsx')] ?? null,
     });
   }
 
@@ -144,4 +165,18 @@ export function coverageRows(): CoverageRow[] {
       (entry) => entry.doc.name === name || entry.doc.exports?.includes(name)
     ),
   }));
+}
+
+/**
+ * Finds a type declaration anywhere in the `@ui` component sources. Not limited
+ * to the page's own sibling, so a page can surface a type it re-exports (Panel
+ * documents `SurfaceProps`, which lives in `Surface.tsx`).
+ */
+export async function loadTypeSource(name: string): Promise<string | null> {
+  for (const [path, load] of Object.entries(componentSources)) {
+    if (/\.(docs|test)\.tsx$/.test(path)) continue;
+    const found = extractTypeSource(await load(), name);
+    if (found) return found;
+  }
+  return null;
 }

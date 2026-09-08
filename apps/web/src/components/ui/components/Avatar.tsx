@@ -122,6 +122,26 @@ export type AvatarProps = ParentProps<
  *   <Avatar.Image src={url} alt="User" />
  *   <Avatar.Fallback>JD</Avatar.Fallback>
  * </Avatar>
+ *
+ * @do Set `size` and `shape` on the `Avatar` root — the slots inherit them, so
+ *   the props do not need repeating on `Avatar.Image`.
+ * @do Always render an `Avatar.Fallback` beside `Avatar.Image` — it is what
+ *   shows when the source 404s.
+ * @do Give `Avatar.Image` an `alt`, or `alt=""` when the name is already
+ *   beside it.
+ * @do Match the `size` on `AvatarGroup`, every child `Avatar`, and
+ *   `AvatarGroup.Count`.
+ * @do Override `--avatar-group-separator` when the background behind a group
+ *   changes.
+ * @dont Do not gate `Avatar.Image` behind a `Show` whose fallback is the
+ *   `Avatar.Fallback` — that only covers a missing URL, not a broken one.
+ *   Render both.
+ * @dont Do not add a `ring-*` class to an Avatar — that slot belongs to
+ *   AvatarGroup's separator. The edge hairline is an outline for this reason.
+ * @dont Do not use `size="fill"` without giving the parent a size; the avatar
+ *   collapses.
+ * @dont Do not hand-roll a circular image; the hairline and fallback behavior
+ *   are the reason this component exists.
  */
 export function Avatar(props: AvatarProps) {
   const [local, rest] = splitProps(props, [

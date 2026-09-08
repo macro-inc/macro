@@ -69,6 +69,19 @@ function CheckboxLabel(props: LabelProps) {
   return <KobalteCheckbox.Label class={cn(local.class)} {...rest} />;
 }
 
+/**
+ * A Kobalte checkbox with the app's control styling, composed from slots so
+ * the label, description, and error message are yours to place.
+ *
+ * @do Always render a `Checkbox.Label`, even when the visible text sits
+ *   elsewhere.
+ * @do Use `indeterminate` on a select-all that only covers part of its group.
+ * @do Use `InlineCheckbox` when the whole row is already clickable.
+ * @dont Do not use a checkbox for an immediate action — that is a ToggleSwitch
+ *   or a Button.
+ * @dont Do not add `Checkbox.Input` yourself; `Checkbox.Control` already
+ *   renders one.
+ */
 export const Checkbox = Object.assign(
   (props: CheckboxProps) => {
     const [local, rest] = splitProps(props, ['class']);

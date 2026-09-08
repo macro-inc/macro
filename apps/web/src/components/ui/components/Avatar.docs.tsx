@@ -220,47 +220,4 @@ export default defineDoc({
       render: GroupOnHoverDemo,
     },
   ],
-  props: [
-    {
-      name: 'size',
-      type: "'sm' | 'md' | 'lg' | 'fill'",
-      default: "'sm'",
-      description:
-        'Diameter: 16px, 24px, 40px, or the container’s size. Also scales the fallback text and any child icon.',
-    },
-    {
-      name: 'shape',
-      type: "'rounded' | 'square'",
-      default: "'rounded'",
-      description:
-        'Circle, or a square with a radius stepped to the size. Inherited by Avatar.Image.',
-    },
-    {
-      name: 'highlightEdge',
-      type: 'boolean',
-      default: 'false',
-      description:
-        'Draws the 1px inset edge hairline on the root. Its outline paints over a covering image, so the image needs nothing of its own.',
-    },
-    {
-      name: 'class',
-      type: 'string',
-      description: 'Extra classes on the avatar root.',
-    },
-  ],
-  guidelines: {
-    do: [
-      'Set `size` and `shape` on the `Avatar` root — the slots inherit them, so the props do not need repeating on `Avatar.Image`.',
-      'Always render an `Avatar.Fallback` beside `Avatar.Image` — it is what shows when the source 404s.',
-      'Give `Avatar.Image` an `alt`, or `alt=""` when the name is already beside it.',
-      'Match the `size` on `AvatarGroup`, every child `Avatar`, and `AvatarGroup.Count`.',
-      'Override `--avatar-group-separator` when the background behind a group changes.',
-    ],
-    dont: [
-      'Do not gate `Avatar.Image` behind a `Show` whose fallback is the `Avatar.Fallback` — that only covers a missing URL, not a broken one. Render both.',
-      'Do not add a `ring-*` class to an Avatar — that slot belongs to AvatarGroup’s separator. The edge hairline is an outline for this reason.',
-      'Do not use `size="fill"` without giving the parent a size; the avatar collapses.',
-      'Do not hand-roll a circular image; the hairline and fallback behavior are the reason this component exists.',
-    ],
-  },
 });

@@ -5,8 +5,9 @@ import {
   DOC_ENTRIES,
   filterEntries,
   groupEntries,
+  loadTypeSource,
 } from './registry';
-import { extractDemoSource } from './source';
+import { extractDemoSource, extractGuidelines } from './source';
 
 /** jsdom has no ResizeObserver; `Scroll` (and so `Panel.Body scroll`) needs one
  *  to construct. Demos only have to mount here, not resize. */
@@ -71,6 +72,39 @@ describe.each(DOC_ENTRIES.map((entry) => [entry.doc.name, entry] as const))(
           `${entry.path} is missing "// #region demo:${demo.id}"`
         ).toBeTruthy();
       }
+    });
+
+    // Guidance now lives as @do/@dont JSDoc on the component. A page that
+    // silently resolves none would render an empty Guidelines section.
+    it('resolves guidance from the component or declares its own', async () => {
+      const source = await entry.loadComponentSource?.();
+      const fromCode = source
+        ? extractGuidelines(source)
+        : { do: [], dont: [] };
+      const inline = entry.doc.guidelines;
+      const total =
+        fromCode.do.length +
+        fromCode.dont.length +
+        (inline?.do?.length ?? 0) +
+        (inline?.dont?.length ?? 0);
+      expect(total, `${entry.path} has no guidance`).toBeGreaterThan(0);
+    });
+
+    it('does not restate props the types already declare', () => {
+      expect(entry.doc).not.toHaveProperty('props');
+    });
+
+    // A page whose default `<Name>Props` guess misses (Select's root is
+    // generic, Panel's is a bare alias) must name the real type instead.
+    it('resolves the prop types it points at', async () => {
+      const names = entry.doc.propTypes ?? [
+        `${entry.doc.name.replace(/\s+/g, '')}Props`,
+      ];
+      if (!entry.loadComponentSource) return;
+      const found = await Promise.all(names.map((n) => loadTypeSource(n)));
+      expect(found.filter(Boolean).length, `${entry.doc.name}: ${names}`).toBe(
+        names.length
+      );
     });
 
     it.each(entry.doc.demos.map((demo) => [demo.id, demo] as const))(

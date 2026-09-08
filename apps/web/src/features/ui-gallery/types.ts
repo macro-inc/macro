@@ -32,14 +32,6 @@ export type DocDemo = {
   fill?: boolean;
 };
 
-export type DocProp = {
-  name: string;
-  type: string;
-  default?: string;
-  required?: boolean;
-  description?: string;
-};
-
 export type ComponentDoc = {
   /** Display name, e.g. `Button`. */
   name: string;
@@ -55,8 +47,19 @@ export type ComponentDoc = {
    */
   exports?: string[];
   demos: DocDemo[];
-  props?: DocProp[];
-  /** Short usage rules. These are the lever for cross-app consistency. */
+  /**
+   * Type names to show under Props, resolved from the `@ui` component sources.
+   * Defaults to `<name>Props`. Naming them is only needed when that default is
+   * unhelpful — `Panel` points at `SurfaceProps`, which is where its props
+   * actually live.
+   */
+  propTypes?: string[];
+  /**
+   * Usage rules for a page with no implementation to hang them on (the
+   * Foundations pages). A component page leaves this unset: its guidance is
+   * authored as `@do` / `@dont` JSDoc on the component itself, so it reaches
+   * anyone reading the source, and the gallery renders it from there.
+   */
   guidelines?: { do?: string[]; dont?: string[] };
 };
 

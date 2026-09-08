@@ -398,10 +398,15 @@ export function SplitPanel(props: SplitPanelProps) {
                     </Panel.Toolbar>
 
                     <Panel.Body>
-                      <div class="@container/split size-full min-h-0 overflow-hidden relative flex flex-col">
+                      {/* `clip` rather than `hidden` throughout this subtree: both clip
+                          the overflow, but `hidden` leaves these as scroll containers, so
+                          focusing a control below the fold lets the browser scroll the
+                          panel to reveal it. Having no scrollbar, it cannot be scrolled
+                          back, and the panel looks permanently broken. */}
+                      <div class="@container/split size-full min-h-0 overflow-clip relative flex flex-col">
                         <div
                           class={cn(
-                            'min-h-0 min-w-0 overflow-hidden relative',
+                            'min-h-0 min-w-0 overflow-clip relative',
                             bottomPanel() ? 'h-1/2' : 'h-full'
                           )}
                         >
@@ -436,7 +441,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 }
               >
                 <div
-                  class="size-full min-h-0 min-w-0 overflow-hidden"
+                  class="size-full min-h-0 min-w-0 overflow-clip"
                   style={{ 'grid-area': '1 / 1 / -1 / -1' }}
                 >
                   <MountedContent />

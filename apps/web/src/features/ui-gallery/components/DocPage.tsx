@@ -1,11 +1,10 @@
 import { Badge } from '@ui';
 import { createResource, For, Show } from 'solid-js';
-import type { DocEntry } from '../registry';
-import { extractDemoSource } from '../source';
+import { type DocEntry, loadTypeSource } from '../registry';
+import { extractDemoSource, extractGuidelines } from '../source';
 import type { DocDemo, DocStatus } from '../types';
 import { CodeBlock } from './CodeBlock';
 import { DemoPreview, type PreviewSettings } from './DemoPreview';
-import { PropsTable } from './PropsTable';
 
 const STATUS_LABEL: Record<DocStatus, string> = {
   stable: 'Stable',
@@ -64,8 +63,49 @@ export function DocPage(props: { entry: DocEntry; settings: PreviewSettings }) {
     (entry) => entry.loadSource()
   );
 
+  // The implementation is the source of truth for guidance and prop types, so
+  // neither is restated in the docs file.
+  const [componentSource] = createResource(
+    () => props.entry,
+    (entry) => entry.loadComponentSource?.() ?? null
+  );
+
+  // Reading a resource value suspends the nearest <Suspense> while it is
+  // pending, and the split layout's boundary has no fallback (SplitLayout.tsx),
+  // so an unguarded read blanks the entire pane with no console error. Every
+  // read below is gated on state; reading `.state` itself never suspends.
+  const docText = () => (source.state === 'ready' ? source() : undefined);
+  const componentText = () =>
+    componentSource.state === 'ready' ? componentSource() : undefined;
+  const resolvedPropTypes = () =>
+    propTypes.state === 'ready' ? (propTypes() ?? []) : [];
+
+  const guidelines = () => {
+    const component = componentText();
+    const fromCode = component
+      ? extractGuidelines(component)
+      : { do: [], dont: [] };
+    if (fromCode.do.length || fromCode.dont.length) return fromCode;
+    // Foundations pages have no component to annotate.
+    const inline = props.entry.doc.guidelines;
+    return inline ? { do: inline.do ?? [], dont: inline.dont ?? [] } : null;
+  };
+
+  const [propTypes] = createResource(
+    () => props.entry,
+    async (entry) => {
+      const names = entry.doc.propTypes ?? [
+        `${entry.doc.name.replace(/\s+/g, '')}Props`,
+      ];
+      const found = await Promise.all(
+        names.map((name) => loadTypeSource(name))
+      );
+      return found.filter((value): value is string => Boolean(value));
+    }
+  );
+
   const sourceFor = (demo: DocDemo) => {
-    const text = source();
+    const text = docText();
     if (!text) return undefined;
     return extractDemoSource(text, demo.id) ?? undefined;
   };
@@ -103,19 +143,24 @@ export function DocPage(props: { entry: DocEntry; settings: PreviewSettings }) {
         </For>
       </div>
 
-      <Show when={props.entry.doc.props?.length}>
+      <Show when={resolvedPropTypes().length}>
         <section class="flex flex-col gap-3">
           <h2 class="text-lg font-semibold text-ink">Props</h2>
-          <PropsTable props={props.entry.doc.props!} />
+          <p class="text-sm text-ink-muted">
+            Read straight from the component, so it cannot drift.
+          </p>
+          <For each={resolvedPropTypes()}>
+            {(declaration) => <CodeBlock code={declaration} />}
+          </For>
         </section>
       </Show>
 
-      <Show when={props.entry.doc.guidelines}>
+      <Show when={guidelines()}>
         {(guidelines) => (
           <section class="flex flex-col gap-3">
             <h2 class="text-lg font-semibold text-ink">Guidelines</h2>
             <div class="grid gap-4 sm:grid-cols-2">
-              <Show when={guidelines().do?.length}>
+              <Show when={guidelines().do.length}>
                 <div class="flex flex-col gap-2 rounded-md border border-edge-muted p-3">
                   <span class="text-xs font-medium text-success">Do</span>
                   <ul class="flex flex-col gap-1.5">
@@ -125,7 +170,7 @@ export function DocPage(props: { entry: DocEntry; settings: PreviewSettings }) {
                   </ul>
                 </div>
               </Show>
-              <Show when={guidelines().dont?.length}>
+              <Show when={guidelines().dont.length}>
                 <div class="flex flex-col gap-2 rounded-md border border-edge-muted p-3">
                   <span class="text-xs font-medium text-failure">Don't</span>
                   <ul class="flex flex-col gap-1.5">

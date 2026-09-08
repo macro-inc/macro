@@ -87,6 +87,8 @@ export default defineDoc({
   status: 'stable',
   exports: ['Panel', 'Surface'],
   import: "import { Panel } from '@ui';",
+  // PanelProps is a bare alias; the real surface is SurfaceProps.
+  propTypes: ['SurfaceProps'],
   demos: [
     {
       id: 'slots',
@@ -111,48 +113,4 @@ export default defineDoc({
       fill: true,
     },
   ],
-  props: [
-    {
-      name: 'depth',
-      type: '0 | 1 | 2 | 3 | 4',
-      default: '0',
-      description:
-        'Layer depth for the subtree. Children read `bg-surface` relative to this.',
-    },
-    {
-      name: 'active',
-      type: 'boolean',
-      default: 'false',
-      description: 'Draws the active focus ring around the panel.',
-    },
-    {
-      name: 'solid',
-      type: 'boolean',
-      default: 'false',
-      description: 'Opts out of surface transparency.',
-    },
-    {
-      name: 'hideBorder',
-      type: 'boolean',
-      default: 'false',
-      description: 'Removes the border while keeping the surface and radius.',
-    },
-    {
-      name: 'edgeColor',
-      type: 'string',
-      default: 'var(--color-edge)',
-      description: 'Overrides the border color.',
-    },
-  ],
-  guidelines: {
-    do: [
-      'Put controls in `Panel.Toolbar` and titles in `Panel.Header` so heights stay consistent across the app.',
-      'Set `depth` on the Panel rather than a background class on its children.',
-      'Use `Panel.Body scroll` instead of adding `overflow-auto` yourself.',
-    ],
-    dont: [
-      'Do not nest a Panel inside `Panel.Body` just to get padding — use the body’s own class.',
-      'Do not give `Panel.Header` a custom height; the 40px minimum is what aligns panels side by side.',
-    ],
-  },
 });

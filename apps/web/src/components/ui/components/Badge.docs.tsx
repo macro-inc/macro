@@ -103,29 +103,4 @@ export default defineDoc({
       render: ContentDemo,
     },
   ],
-  props: [
-    {
-      name: 'variant',
-      type: "'ghost' | 'outline'",
-      default: "'ghost'",
-      description: 'Whether the badge draws its own border.',
-    },
-    {
-      name: 'size',
-      type: "'sm' | 'md' | 'lg'",
-      default: "'md'",
-      description: 'Height, padding, and icon scale.',
-    },
-  ],
-  guidelines: {
-    do: [
-      'Keep badge text to a word or two.',
-      'Use `badgeTriggerClasses` when a badge needs to behave like a button.',
-      'Use a palette color for identity (tags, calendars) and a semantic color for state.',
-    ],
-    dont: [
-      'Do not attach a click handler to `Badge` directly — it renders a `span`.',
-      'Do not use a badge where a Tooltip would carry the information better.',
-    ],
-  },
 });
