@@ -98,6 +98,7 @@ struct ReorderCall {
 struct CapturingService {
     set_call: Mutex<Option<SetCall>>,
     reorder_call: Mutex<Option<ReorderCall>>,
+    set_error: Mutex<Option<FavoritesError>>,
 }
 
 impl FavoritesMutationService for CapturingService {
@@ -106,7 +107,7 @@ impl FavoritesMutationService for CapturingService {
         actor: FavoritesMutationActor,
         entity: Entity<'static>,
         favorite: bool,
-    ) -> Result<Entity<'static>, FavoritesError> {
+    ) -> Result<SetFavoriteResult, FavoritesError> {
         *self.set_call.lock().expect("set call lock poisoned") = Some(SetCall {
             actor_user_id: actor.user_id.to_string(),
             organization_id: actor.organization_id,
@@ -114,7 +115,28 @@ impl FavoritesMutationService for CapturingService {
             entity_id: entity.entity_id.to_string(),
             favorite,
         });
-        Ok(entity)
+        if let Some(error) = self
+            .set_error
+            .lock()
+            .expect("set error lock poisoned")
+            .take()
+        {
+            return Err(error);
+        }
+        let persisted_favorite = favorite.then(|| Favorite {
+            entity_type: entity.entity_type,
+            entity_id: entity.entity_id.to_string(),
+            sort_order: 2.0,
+            created_at: chrono::Utc::now(),
+            file_type: Some("md".to_string()),
+            document_sub_type: None,
+            channel_type: None,
+            channel_id: None,
+        });
+        Ok(SetFavoriteResult {
+            entity,
+            favorite: persisted_favorite,
+        })
     }
 
     async fn reorder_favorites(
@@ -182,13 +204,22 @@ async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
         .execute(
             r#"
             mutation {
-              setEntityFavorite(
+              setFavorite(
                 entity: { type: DOCUMENT, id: "document-1" }
                 favorite: true
               ) {
-                __typename
-                ... on GraphqlMutationSuccess {
-                  effects { __typename }
+                result {
+                  __typename
+                  ... on GraphqlMutationSuccess {
+                    effects { __typename }
+                  }
+                }
+                favorite {
+                  id
+                  entityType
+                  entityId
+                  sortOrder
+                  fileType
                 }
               }
             }
@@ -200,9 +231,18 @@ async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
     assert_eq!(
         response.data,
         value!({
-            "setEntityFavorite": {
-                "__typename": "GraphqlMutationSuccess",
-                "effects": [{ "__typename": "SoupUpdated" }],
+            "setFavorite": {
+                "result": {
+                    "__typename": "GraphqlMutationSuccess",
+                    "effects": [{ "__typename": "SoupUpdated" }],
+                },
+                "favorite": {
+                    "id": "document:document-1",
+                    "entityType": "DOCUMENT",
+                    "entityId": "document-1",
+                    "sortOrder": 2.0,
+                    "fileType": "md",
+                },
             }
         })
     );
@@ -219,6 +259,86 @@ async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
             entity_id: "document-1".to_string(),
             favorite: true,
         })
+    );
+}
+
+#[tokio::test]
+async fn set_entity_favorite_retains_the_legacy_result_shape() {
+    let service = Arc::new(CapturingService::default());
+    let response = schema(service)
+        .execute(
+            r#"
+            mutation {
+              setEntityFavorite(
+                entity: { type: DOCUMENT, id: "document-1" }
+                favorite: false
+              ) {
+                __typename
+              }
+            }
+            "#,
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data,
+        value!({
+            "setEntityFavorite": {
+                "__typename": "GraphqlMutationSuccess",
+            }
+        })
+    );
+}
+
+#[tokio::test]
+async fn set_favorite_failures_are_transport_errors_for_durable_replay() {
+    for error in [
+        FavoritesError::Unauthorized,
+        FavoritesError::NotFound,
+        FavoritesError::BadRequest("collection is full".to_string()),
+        FavoritesError::UnsupportedEntityType(EntityType::User),
+    ] {
+        let service = Arc::new(CapturingService {
+            set_error: Mutex::new(Some(error)),
+            ..Default::default()
+        });
+        let response = schema(service)
+            .execute(
+                r#"mutation {
+                    setFavorite(entity: { type: DOCUMENT, id: "document-1" }, favorite: true) {
+                        result { __typename }
+                        favorite { id }
+                    }
+                }"#,
+            )
+            .await;
+
+        assert_eq!(response.errors.len(), 1, "{response:?}");
+        assert_eq!(response.data, value!(null));
+    }
+}
+
+#[tokio::test]
+async fn set_entity_favorite_retains_the_legacy_error_union() {
+    let service = Arc::new(CapturingService {
+        set_error: Mutex::new(Some(FavoritesError::Unauthorized)),
+        ..Default::default()
+    });
+    let response = schema(service)
+        .execute(
+            r#"mutation {
+                setEntityFavorite(entity: { type: DOCUMENT, id: "document-1" }, favorite: true) {
+                    __typename
+                }
+            }"#,
+        )
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        response.data,
+        value!({ "setEntityFavorite": { "__typename": "GraphqlMutationError" } })
     );
 }
 

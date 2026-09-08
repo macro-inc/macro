@@ -27,8 +27,8 @@ use graphql_email::{
 };
 use graphql_entity_mutation::EntityMutationRoot;
 use graphql_favorite::{
-    EntityFavoriteEdgeReader, FavoriteMutationRoot, NoOpEntityFavoriteEdgeReader,
-    NoOpFavoriteMutationService,
+    EntityFavoriteEdgeReader, FavoriteMutationRoot, FavoriteQueryReader, GraphqlFavorite,
+    NoOpEntityFavoriteEdgeReader, NoOpFavoriteMutationService, resolve_favorites,
 };
 use graphql_notification::{
     NoOpNotificationMutationService, NoOpSoupNotificationEdgeReader, NotificationMutationRoot,
@@ -135,8 +135,8 @@ where
 /// mutation service, `FM` the favorites mutation service, `C` the channel activity
 /// mutation service, `N` the notification mutation service, `NR` the notification
 /// edge reader, `PR` the property edge reader, `ER` the email-content edge reader,
-/// `FR` the favorite edge reader, `AR` the access edge reader, and `AcR` the activity
-/// reader.
+/// `FR` the favorite edge and query reader, `AR` the access edge reader, and `AcR` the
+/// activity reader.
 pub type SoupSchema<S, R, NS, E, EAS, Auth, St, W, M, FM, C, N, NR, PR, ER, FR, AR, AcR> = Schema<
     SoupQueryRoot<S, E, EAS, Auth, St, NR, PR, ER, FR, AR, AcR>,
     CompleteMutationRoot<W, M, FM, SoupEdges<NR, PR, ER, FR, AR, AcR>, C, N, EAS, E>,
@@ -319,7 +319,7 @@ where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
@@ -376,7 +376,7 @@ where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
@@ -432,7 +432,7 @@ where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
@@ -465,7 +465,7 @@ where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
@@ -488,7 +488,7 @@ where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
@@ -553,13 +553,18 @@ where
     NR: SoupNotificationEdgeReader,
     PR: EntityPropertyReader,
     ER: SoupEmailContentEdgeReader,
-    FR: EntityFavoriteEdgeReader,
+    FR: EntityFavoriteEdgeReader + FavoriteQueryReader,
     AR: EntityPermissionEdgeReader,
     AcR: ActivityReader,
 {
     /// Stable id of the authenticated user.
     async fn id(&self) -> async_graphql::ID {
         async_graphql::ID(self.user_id.to_string())
+    }
+
+    /// The authenticated user's favorites in manual order.
+    async fn favorites(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlFavorite>> {
+        resolve_favorites::<FR>(ctx, &self.user_id).await
     }
 
     /// A page of the authenticated user's own activity, newest first.

@@ -384,6 +384,8 @@ use utoipa::OpenApi;
         crm::inbound::axum_router::comments::delete_handler,
         crm::inbound::axum_router::team_settings::get_handler,
         crm::inbound::axum_router::team_settings::update_handler,
+        crm::inbound::axum_router::stages::replace_handler,
+        crm::inbound::axum_router::stages::reset_handler,
     ),
     components(
         schemas(
@@ -725,6 +727,10 @@ use utoipa::OpenApi;
             crm::inbound::axum_router::create_contact::CreateCrmContactRequest,
             crm::inbound::axum_router::comments::CreateCrmCommentRequest,
             crm::inbound::axum_router::comments::EditCrmCommentRequest,
+            crm::inbound::axum_router::stages::ReplaceCrmStagesRequest,
+            crm::inbound::axum_router::stages::CrmStageInput,
+            crm::inbound::axum_router::stages::CrmStagesResponse,
+            crm::inbound::axum_router::stages::CrmStageResponse,
             crm::domain::comment::CrmCommentEntityType,
             crm::domain::comment::CrmThread,
             crm::domain::comment::CrmComment,

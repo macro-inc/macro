@@ -16,9 +16,17 @@ import {
   QueuedPrompts,
 } from '../ui';
 
-export function AgentComposer() {
+export function AgentComposer(props: {
+  /**
+   * Whether the composer opens focused. The block adapter decides, from the
+   * split layout and j/k navigation — same contract as Chat and Channel.
+   */
+  autofocus?: boolean;
+}) {
   const {
+    blockedOnUser,
     composer,
+    elicitation,
     loadFailed,
     metadata,
     pending,
@@ -49,11 +57,6 @@ export function AgentComposer() {
       };
     });
 
-  // A session still being created was created by this user, one action ago,
-  // and has an empty transcript: the only thing to do with it is type. The
-  // wait for the sandbox is exactly when that matters most.
-  const autofocus = pending();
-
   return (
     <>
       <Show when={queuedItems().length > 0}>
@@ -72,9 +75,18 @@ export function AgentComposer() {
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>
+      <Show when={blockedOnUser()}>
+        <ComposerNotice
+          text={
+            elicitation.canAnswer()
+              ? 'The agent is waiting for your answer above. Messages sent now are queued.'
+              : `The agent is waiting for ${elicitation.ownerName()} to answer above. Messages sent now are queued.`
+          }
+        />
+      </Show>
       <AgentInput
         placeholder="Message the agent, @mention anything"
-        autofocus={autofocus}
+        autofocus={props.autofocus}
         busy={composer.busy()}
         hasQueuedMessages={queuedItems().length > 0}
         // Prompts go straight to the service, so sending needs a session to

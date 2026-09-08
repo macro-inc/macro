@@ -24,7 +24,6 @@ mod queue;
 use std::sync::Arc;
 
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_session::domain::connection::RuntimeAttachment;
 use agent_session::domain::error::AgentSessionError;
 use agent_session::domain::model::SessionManagement;
 use agent_session::domain::model::{

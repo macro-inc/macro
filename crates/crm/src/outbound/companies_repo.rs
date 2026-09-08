@@ -1,7 +1,7 @@
 //! Implementation of [`CompaniesRepository`] backed by MacroDB.
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 use crate::domain::{
     comment::{
@@ -13,6 +13,7 @@ use crate::domain::{
         CrmDomain, CrmDomainStatus, CrmError, CrmPermissionRole, CrmScopePrecheck, CrmTeamSettings,
         CrmTeamSettingsPatch, DepopulateContactOutcome, DomainMetadata,
     },
+    stages::TeamSettingsStore,
 };
 use chrono::{DateTime, Utc};
 use serde_json::Value;
@@ -2491,4 +2492,18 @@ async fn fetch_comments_for_threads(
             deleted_at: row.deleted_at,
         })
         .collect())
+}
+
+impl TeamSettingsStore for CompaniesRepositoryImpl {
+    async fn read_team_settings(&self, team_id: &Uuid) -> Result<CrmTeamSettings, CrmError> {
+        self.get_team_settings(team_id).await
+    }
+
+    async fn patch_team_settings(
+        &self,
+        team_id: &Uuid,
+        patch: &CrmTeamSettingsPatch,
+    ) -> Result<CrmTeamSettings, CrmError> {
+        self.update_team_settings(team_id, patch).await
+    }
 }

@@ -539,8 +539,8 @@ service_url! {
         /// Document cognition service API URL.
         pub DocumentCognitionServiceUrl {
             local: "http://localhost:8085",
-            dev: "https://document-cognition-dev.macro.com",
-            prod: "https://document-cognition.macro.com",
+            dev: "https://dev-gateway.macro.com/cognition",
+            prod: "https://gateway.macro.com/cognition",
         },
         /// Notification service API URL.
         pub NotificationServiceUrl {

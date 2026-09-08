@@ -45,18 +45,28 @@ it('adds a provisioned session to recents and sends the first prompt without a m
   expect(pendingSession(id)?.sessionId()).toBe('real');
 });
 
-it('retains a failed initial prompt for retry', async () => {
+it('retains a failed initial prompt for retry after applying persona and model options', async () => {
   api.create.mockResolvedValue({
     isErr: () => false,
     value: { session: { id: 'retry', ownerId: 'viewer' } },
   });
   api.control
+    .mockResolvedValueOnce({ isErr: () => false })
     .mockResolvedValueOnce({ isErr: () => true })
     .mockResolvedValueOnce({ isErr: () => false });
-  const id = startPendingSession('Keep this prompt');
+  const id = startPendingSession({
+    botId: 'persona',
+    modelOverride: 'model-2',
+    prompt: 'Keep this prompt',
+  });
   await vi.waitFor(() => expect(pendingSession(id)?.promptFailed()).toBe(true));
   expect(pendingSession(id)?.initialPrompt).toBe('Keep this prompt');
   await pendingSession(id)?.retryPrompt();
   expect(pendingSession(id)?.promptFailed()).toBe(false);
-  expect(api.control).toHaveBeenCalledTimes(2);
+  expect(api.create).toHaveBeenCalledWith({ botId: 'persona' });
+  expect(api.control.mock.calls).toEqual([
+    ['retry', { type: 'setModel', model: 'model-2' }],
+    ['retry', { type: 'prompt', prompt: 'Keep this prompt' }],
+    ['retry', { type: 'prompt', prompt: 'Keep this prompt' }],
+  ]);
 });

@@ -50,7 +50,8 @@ use crate::domain::model::{
 };
 use crate::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, BotFacts, ControlDisposition, ControlEvent,
-    OpenExternalAgentSession, OpenManagedSession, SessionOpener, SessionThread,
+    ManagedPersonaError, OpenExternalAgentSession, OpenManagedSession, SessionOpener,
+    SessionThread, managed_persona_for_user,
 };
 use crate::domain::service::AgentSessionService;
 use bots::domain::models::BotId;
@@ -271,6 +272,18 @@ impl IntoResponse for AgentSessionApiError {
                 (
                     StatusCode::CONFLICT,
                     "the agent's runtime is not connected to this session",
+                )
+                    .into_response()
+            }
+            // Same class as a disconnected runtime: nothing is wrong, and
+            // repeating the request will not land. The form the caller is
+            // answering has already resolved (someone else answered, a stop
+            // cancelled it, or the connection that asked is gone).
+            Self::Domain(AgentSessionError::ElicitationNotPending(session_id)) => {
+                tracing::info!(%session_id, "elicitation answer refused: nothing pending under that id");
+                (
+                    StatusCode::CONFLICT,
+                    "the agent is not waiting on that question any more",
                 )
                     .into_response()
             }
@@ -981,6 +994,8 @@ pub async fn put_agent_sandbox_size_handler<
 /// decodes its own response type.
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct AgentSessionLogEntryDto {
+    /// Durable transport row identity; together with `createdAt`, its order cursor.
+    pub id: Uuid,
     /// When the log recorded the frame.
     ///
     /// The frame itself carries no time, so this comes from the log row. It is
@@ -1035,6 +1050,7 @@ pub enum LogDirectionDto {
 impl From<StoredAgentSessionLog> for AgentSessionLogEntryDto {
     fn from(stored: StoredAgentSessionLog) -> Self {
         Self {
+            id: stored.id,
             created_at: stored.created_at,
             user_id: stored.entry.user_id.map(|user| user.to_string()),
             message: stored.entry.content,
@@ -1056,7 +1072,10 @@ pub struct AgentSessionLogResponse {
     /// out who sent them: the sender of an agent message is this session's
     /// bot, and nothing else names it.
     pub bot: SessionBot,
-    /// Every logged frame, oldest first. Folding depends on this order.
+    /// Effective history in ascending `(createdAt, id)` order.
+    /// The first row is the inclusive history boundary cursor: buffered rows
+    /// before it are obsolete. Reconcile snapshot overlap by row ID, never content.
+    /// An empty history has no boundary or overlapping rows.
     pub entries: Vec<AgentSessionLogEntryDto>,
 }
 
@@ -1075,9 +1094,9 @@ pub struct AgentSessionLogResponse {
 )]
 /// The raw protocol log of one agent session.
 ///
-/// Served unfolded, and whole: the fold is a left fold over the frames from
-/// the beginning, so a reader that skipped any of them would derive different
-/// turn numbering.
+/// Served unfolded from the latest successful load initialization, or the
+/// beginning when no load succeeded. Consumers stage load attempts so failed
+/// or interrupted replay does not become visible conversation content.
 ///
 /// An unknown session is an error: the response has to name the session's
 /// agent, and a session that never existed has none to name.
@@ -1174,20 +1193,21 @@ where
 /// Carries two shapes, told apart by `workspace`. Naming one asks for an
 /// external session: the runtime is the bot operator's, so the caller has to
 /// say which bot and which directory, and must own that bot. Omitting it asks
-/// for a managed session, whose sandbox this deployment provisions from its
-/// own configuration - which is why the fields describing someone else's
-/// runtime must be omitted along with it rather than quietly ignored. Mixing
-/// the two is refused rather than guessed at, so that no request can reach the
-/// managed path carrying a bot the caller was never entitled to name.
+/// for a managed session, whose runtime this deployment provisions. A managed
+/// request may select an authorized persisted persona with `botId`; omitting
+/// it uses the deployment's default coding persona. Fields describing someone
+/// else's runtime must still be omitted rather than quietly ignored. Mixing
+/// the two shapes is refused rather than guessed at.
 ///
 /// Clients serialize this, so both derives are used.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateAgentSessionRequest {
-    /// Bot the session runs for. Bot callers may omit it (their own identity
-    /// is used) and must not name another bot; user callers must supply a
-    /// bot they own. External sessions only: a managed session runs as the
-    /// bot its deployment is configured for.
+    /// Bot the session runs for. On a managed request this optionally selects
+    /// a persisted persona the user owns or may use through team membership;
+    /// omitting it uses the deployment's default coding persona. On an
+    /// external request, bot callers may omit it (their own identity is used)
+    /// and must not name another bot; user callers must supply a bot they own.
     pub bot_id: Option<Uuid>,
     /// Absolute directory the bot's harness runs in on its runtime. Present
     /// for an external session, absent for a managed one, which runs in the
@@ -1281,6 +1301,8 @@ pub enum CreateSessionApiError {
     NotAnAgentBot,
     /// The bot's sessions are opened by the trigger pipeline, not this route.
     ManagedBot,
+    /// The selected persona is served by an external runtime.
+    ExternalPersona,
     /// The caller identified no user to own the session.
     OwnerRequired,
     /// The owner is not a parseable user id.
@@ -1324,6 +1346,10 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "this bot's sessions are opened by the trigger pipeline".to_owned(),
             ),
+            Self::ExternalPersona => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "this persona cannot be started from Macro".to_owned(),
+            ),
             Self::OwnerRequired => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is required for bot callers".to_owned(),
@@ -1335,8 +1361,8 @@ impl IntoResponse for CreateSessionApiError {
             Self::InvalidWorkspace(reason) => (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned()),
             Self::MixedSessionShape => (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                "a managed session takes only a prompt; naming a workspace, bot, repo, \
-                 owner or thread asks for an external one"
+                "a managed session may take a prompt, persona and instructions; naming a \
+                 workspace, repo, owner or thread asks for an external one"
                     .to_owned(),
             ),
             Self::ThreadSessionExists { session_id } => {
@@ -1473,25 +1499,35 @@ pub async fn create_agent_session_handler<
     // absence, whichever shape the request turns out to be.
     let instructions = request.instructions.filter(|text| !text.trim().is_empty());
 
-    // No workspace means the managed shape. It shares this route but not its
-    // authorization: nothing about which bot runs the session is the caller's
-    // to say, so the bot-ownership checks below have nothing to check and are
-    // skipped. That is only sound while the request carries none of the
-    // external fields, which is what this refuses.
+    // No workspace means the managed shape. A bot id selects a managed
+    // persona; the domain resolver owns its user/team authorization policy.
+    // External-only fields remain invalid on this shape.
     let Some(workspace) = request.workspace else {
-        if request.bot_id.is_some()
-            || request.repo_url.is_some()
-            || request.thread.is_some()
-            || request.owner.is_some()
-        {
+        if request.repo_url.is_some() || request.thread.is_some() || request.owner.is_some() {
             return Err(CreateSessionApiError::MixedSessionShape);
         }
         let owner = resolve_owner(&caller.authorization, None)?;
+        let profile = if let Some(bot_id) = request.bot_id {
+            let selected =
+                managed_persona_for_user(state.bots.as_ref(), BotId::new_from_uuid(bot_id), &owner)
+                    .await
+                    .map_err(|error| match error {
+                        ManagedPersonaError::Unknown => CreateSessionApiError::UnknownBot,
+                        ManagedPersonaError::NotAgent => CreateSessionApiError::NotAnAgentBot,
+                        ManagedPersonaError::External => CreateSessionApiError::ExternalPersona,
+                        ManagedPersonaError::Forbidden => CreateSessionApiError::NotYourBot,
+                        ManagedPersonaError::Lookup(error) => CreateSessionApiError::Domain(error),
+                    })?;
+            Some(selected)
+        } else {
+            None
+        };
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
                 owner,
                 prompt: request.prompt,
+                profile,
                 instructions,
             })
             .await?;
@@ -1515,6 +1551,7 @@ pub async fn create_agent_session_handler<
         is_managed,
         owner_user_id,
         harness_id,
+        ..
     } = state
         .bots
         .bot_facts(bot_id)

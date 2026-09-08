@@ -4,10 +4,12 @@ import {
   selectRecords,
 } from '@app/lib/graphql-cache';
 import { createUrqlQuery } from '@app/lib/urql-solid';
+import { soupPropertyToProperty } from '@entity/extractors-property/property-helpers';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { DEFAULT_ITEM_TYPE, type ItemType } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import {
+  type ItemPreviewDetailsFieldsFragment,
   ItemPreviewDocument,
   type ItemPreviewFieldsFragment,
   ItemPreviewFieldsFragmentDoc,
@@ -17,21 +19,30 @@ import {
   type ItemPreviewNameCacheWriteQuery,
   type ItemPreviewQuery,
   type ItemPreviewQueryVariables,
+  ItemPreviewsDocument,
+  type ItemPreviewsQuery,
 } from '@service-storage/graphql/generated/graphql';
 import {
   getGraphqlSoupCacheHost,
   getGraphqlSoupClient,
+  mapGraphqlProperties,
 } from '@service-storage/graphql-soup';
-import { stringifyDocument } from '@urql/core';
+import { type Client, stringifyDocument } from '@urql/core';
 import type { Accessor } from 'solid-js';
 import {
   createComputed,
   createEffect,
+  createMemo,
+  createRoot,
   createSignal,
   onCleanup,
 } from 'solid-js';
-import { buildGraphqlEntitySoupInput } from '../soup/graphql/entity-input';
+import {
+  buildGraphqlEntitiesSoupInput,
+  buildGraphqlEntitySoupInput,
+} from '../soup/graphql/entity-input';
 import { registerActiveGraphqlPreviewQuery } from './active-queries';
+import { createLivePreviewBatcher } from './live-batcher';
 import type { ItemEntity, PreviewItem } from './types';
 
 const previewSelection = selectRecords(ItemPreviewFieldsFragmentDoc);
@@ -141,7 +152,7 @@ function documentSubType(
 }
 
 export function graphqlRecordToPreview(
-  record: ItemPreviewFieldsFragment
+  record: ItemPreviewFieldsFragment | ItemPreviewDetailsFieldsFragment
 ): PreviewItem | undefined {
   switch (record.__typename) {
     case 'GraphqlSoupDocument':
@@ -154,6 +165,31 @@ export function graphqlRecordToPreview(
         name: record.displayName ?? record.documentName,
         fileType: (record.fileType ?? undefined) as FileType | undefined,
         subType: documentSubType(record.subType),
+        ...('properties' in record
+          ? {
+              documentMetadata: {
+                properties: mapGraphqlProperties(record.properties).flatMap(
+                  (property) => {
+                    try {
+                      const mapped = soupPropertyToProperty(property);
+                      return mapped.isMetadata ? [] : [mapped];
+                    } catch (error) {
+                      console.warn(
+                        'Skipping unsupported preview property',
+                        error
+                      );
+                      return [];
+                    }
+                  }
+                ),
+                canEdit:
+                  record.viewerPermission?.__typename ===
+                    'GraphqlAccessLevelPermission' &&
+                  (record.viewerPermission.accessLevel === 'EDIT' ||
+                    record.viewerPermission.accessLevel === 'OWNER'),
+              },
+            }
+          : {}),
       };
     case 'GraphqlSoupChat':
       return {
@@ -238,10 +274,13 @@ export function graphqlRecordToPreview(
 }
 
 function previewFromQuery(
-  data: ItemPreviewQuery,
+  data: ItemPreviewQuery | ItemPreviewsQuery,
   item: ItemEntity
 ): PreviewItem | undefined {
-  const record = data.user.soup.items.find(({ id }) => id === item.id);
+  const recordKey = normalizedRecordKey(item);
+  const record = data.user.soup.items.find(
+    (record) => `${record.__typename}:${record.id}` === recordKey
+  );
   return record ? graphqlRecordToPreview(record) : undefined;
 }
 
@@ -448,114 +487,198 @@ export type GraphqlItemPreviewQuery = {
   refetch: () => Promise<void>;
 };
 
-/** Creates a live urql-solid preview query and seeds it from keyed records. */
-export function createGraphqlItemPreviewQuery(
-  item: Accessor<ItemEntity>,
-  enabled: Accessor<boolean>
-): GraphqlItemPreviewQuery {
-  const [cached, setCached] = createSignal<
-    { recordKey: string; preview: PreviewItem | undefined } | undefined
-  >();
-  let cacheRequest = 0;
-
-  createEffect(() => {
-    const current = item();
-    const recordKey = normalizedRecordKey(current);
-    if (!enabled() || !recordKey) {
-      cacheRequest += 1;
-      setCached(undefined);
-      return;
-    }
-    const request = ++cacheRequest;
-    void readCachedGraphqlItemPreview(current)
-      .then((preview) => {
-        if (request === cacheRequest) setCached({ recordKey, preview });
-      })
-      .catch(() => undefined);
-  });
-
-  const result = createUrqlQuery<
-    ItemPreviewQuery,
-    ItemPreviewQueryVariables,
-    PreviewItem | undefined
-  >(() => {
-    const current = item();
-    const input = itemPreviewInput(current);
-    const client = getGraphqlSoupClient();
-    if (!enabled() || !input) {
-      return { query: ItemPreviewDocument, client, enabled: false };
-    }
-    return {
-      query: ItemPreviewDocument,
+function startPreviewBatch(
+  client: Client,
+  items: ItemEntity[],
+  includeProperties: boolean
+) {
+  return createRoot((dispose) => {
+    const input = buildGraphqlEntitiesSoupInput(
+      items.map((item) => ({
+        entityId: item.id,
+        entityType: graphqlEntityType(
+          normalizedItemType(item) as GraphqlPreviewType
+        ),
+      }))
+    )!;
+    const result = createUrqlQuery<
+      ItemPreviewQuery | ItemPreviewsQuery,
+      ItemPreviewQueryVariables
+    >(() => ({
       client,
+      query: includeProperties ? ItemPreviewsDocument : ItemPreviewDocument,
       variables: { input },
       requestPolicy: 'cache-and-network',
       keepPreviousData: false,
-      select: (data) => previewFromQuery(data, current),
+    }));
+    const [cached, setCached] = createSignal(new Map<string, PreviewItem>());
+    const host = getGraphqlSoupCacheHost();
+    let disposed = false;
+    onCleanup(() => {
+      disposed = true;
+    });
+    if (host) {
+      // One keyed read for the entire batch. Minimal cached titles can render
+      // while the richer selection loads, without spawning child queries.
+      void readRecordsByKeys(
+        host,
+        previewSelection,
+        items.map((item) => normalizedRecordKey(item)!)
+      )
+        .then(({ records }) => {
+          if (disposed) return;
+          const previews = new Map<string, PreviewItem>();
+          for (const { recordKey, record } of records) {
+            const preview = graphqlRecordToPreview(record);
+            if (preview) previews.set(recordKey, preview);
+          }
+          setCached(previews);
+        })
+        .catch(() => undefined);
+    }
+    let refreshing: Promise<void> | undefined;
+    const refresh = () => {
+      // A save can settle after its hover card/mention has unmounted. Never
+      // resurrect an orphan query when that callback requests a refresh.
+      if (disposed) return Promise.resolve();
+      // Re-register cache dependencies as well as forcing a network refresh,
+      // so a failed/offline refresh does not disconnect later optimistic edits.
+      refreshing ??= result
+        .refetch({ requestPolicy: 'cache-and-network' })
+        .then(() => undefined)
+        .finally(() => {
+          refreshing = undefined;
+        });
+      return refreshing;
     };
+    return { value: { result, cached, refresh }, dispose };
   });
+}
 
-  const unregister = registerActiveGraphqlPreviewQuery({
-    itemId: () => item().id,
-    isEnabled: () => result.isEnabled,
-    refresh: async () => {
-      await result.refetch({ requestPolicy: 'network-only' });
+type PreviewBatch = ReturnType<typeof startPreviewBatch>['value'];
+const previewBatchers = new WeakMap<
+  Client,
+  Map<
+    boolean,
+    ReturnType<typeof createLivePreviewBatcher<ItemEntity, PreviewBatch>>
+  >
+>();
+
+function previewBatcher(client: Client, includeProperties: boolean) {
+  let selections = previewBatchers.get(client);
+  if (!selections) {
+    selections = new Map();
+    previewBatchers.set(client, selections);
+  }
+  let batcher = selections.get(includeProperties);
+  if (!batcher) {
+    batcher = createLivePreviewBatcher<ItemEntity, PreviewBatch>({
+      start: (items) => startPreviewBatch(client, items, includeProperties),
+    });
+    selections.set(includeProperties, batcher);
+  }
+  return batcher;
+}
+
+/** Joins a shared live preview batch; rich document edges load in the first request. */
+export function createGraphqlItemPreviewQuery(
+  getItem: Accessor<ItemEntity>,
+  enabled: Accessor<boolean>,
+  includeProperties = true
+): GraphqlItemPreviewQuery {
+  // Hover popup props derive from another live preview. Snapshot only the
+  // entity identity so cache/fetch updates cannot release and reacquire the
+  // same batch, clear its data, or feed another update back upstream.
+  const item = createMemo<ItemEntity, undefined>(
+    () => {
+      const current = getItem();
+      return current.type === 'channel'
+        ? { id: current.id, type: current.type, messageId: current.messageId }
+        : { id: current.id, type: current.type };
     },
+    undefined,
+    {
+      equals: (previous, next) =>
+        previous.id === next.id &&
+        normalizedItemType(previous) === normalizedItemType(next) &&
+        (previous.type === 'channel' ? previous.messageId : undefined) ===
+          (next.type === 'channel' ? next.messageId : undefined),
+    }
+  );
+  const [group, setGroup] = createSignal<PreviewBatch>();
+  let ready: Promise<PreviewBatch | undefined> = Promise.resolve(undefined);
+  const isEnabled = () => enabled() && isGraphqlPreviewItem(item());
+  createComputed(() => {
+    const current = item();
+    setGroup(undefined);
+    ready = Promise.resolve(undefined);
+    if (!isEnabled()) return;
+    const subscription = previewBatcher(
+      getGraphqlSoupClient(),
+      includeProperties
+    ).acquire(normalizedRecordKey(current)!, current, setGroup);
+    ready = subscription.ready;
+    onCleanup(subscription.dispose);
   });
-  onCleanup(unregister);
+  const result = () => group()?.result;
+  const livePreview = createMemo(() => {
+    const data = result()?.data;
+    return data ? previewFromQuery(data, item()) : undefined;
+  });
+  const cachedPreview = () =>
+    group()?.cached().get(normalizedRecordKey(item())!);
+  const data = () => livePreview() ?? cachedPreview();
+  const refetch = async () => {
+    await (await ready)?.refresh();
+  };
+  onCleanup(
+    registerActiveGraphqlPreviewQuery({
+      itemId: () => item().id,
+      isEnabled,
+      refresh: refetch,
+    })
+  );
 
   createEffect(() => {
-    if (result.data !== undefined && !result.stale && !result.isFetching) {
+    if (
+      livePreview() !== undefined &&
+      !result()?.stale &&
+      !result()?.isFetching
+    )
       clearCreationGrace(item());
-    }
   });
-
-  const cachedPreview = () => {
-    const current = cached();
-    if (!current || current.recordKey !== normalizedRecordKey(item())) {
-      return undefined;
-    }
-    return current.preview;
+  const currentNeedsFallback = () => {
+    // GraphQL can return useful records alongside an error for a sibling.
+    // A partial batch failure must not send successful previews back to REST.
+    if (livePreview() !== undefined) return false;
+    const query = result();
+    return (
+      (query?.isError &&
+        (query.error?.networkError == null || cachedPreview() === undefined)) ||
+      (query?.isFetched &&
+        !query.isFetching &&
+        livePreview() === undefined &&
+        cachedPreview() === undefined &&
+        !hasCreationGrace(item()))
+    );
   };
-  const data = () => result.data ?? cachedPreview();
-  const currentNeedsFallback = () =>
-    (result.isError &&
-      (result.error?.networkError == null || cachedPreview() === undefined)) ||
-    (result.isFetched &&
-      !result.isFetching &&
-      result.data === undefined &&
-      cachedPreview() === undefined &&
-      !hasCreationGrace(item()));
   const [fallbackRecordKey, setFallbackRecordKey] = createSignal<string>();
-
   createComputed(() => {
     const recordKey = normalizedRecordKey(item());
-    if (
-      !enabled() ||
-      !recordKey ||
-      result.data !== undefined ||
-      cachedPreview() !== undefined
-    ) {
+    if (!isEnabled() || !recordKey || data() !== undefined) {
       setFallbackRecordKey(undefined);
-      return;
-    }
-    if (currentNeedsFallback()) setFallbackRecordKey(recordKey);
+    } else if (currentNeedsFallback()) setFallbackRecordKey(recordKey);
   });
-
-  const shouldFallback = () =>
-    isGraphqlPreviewItem(item()) &&
-    (fallbackRecordKey() === normalizedRecordKey(item()) ||
-      currentNeedsFallback());
-
   return {
     data,
-    error: () => result.error,
-    isLoading: () => result.isLoading,
-    isFetching: () => result.isFetching,
-    isEnabled: () => result.isEnabled,
-    shouldFallback,
-    refetch: async () => {
-      await result.refetch({ requestPolicy: 'network-only' });
-    },
+    error: () => result()?.error ?? null,
+    isLoading: () => isEnabled() && (result()?.isLoading ?? true),
+    isFetching: () => isEnabled() && (result()?.isFetching ?? true),
+    isEnabled,
+    shouldFallback: () =>
+      isEnabled() &&
+      (fallbackRecordKey() === normalizedRecordKey(item()) ||
+        !!currentNeedsFallback()),
+    refetch,
   };
 }

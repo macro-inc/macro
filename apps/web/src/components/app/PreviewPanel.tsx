@@ -31,6 +31,7 @@ import {
   createMemo,
   createRenderEffect,
   createSignal,
+  type JSX,
   on,
   Show,
   Suspense,
@@ -71,6 +72,7 @@ export type PreviewPanelProps = {
   hideHeader?: boolean;
   headerPrefix?: import('solid-js').JSX.Element;
   ref?: (el: HTMLElement) => void;
+  headerLeading?: JSX.Element;
 };
 
 type PreviewBlockTarget = {
@@ -239,6 +241,9 @@ function PreviewPanelContent(props: PreviewPanelProps) {
         )}
       >
         {props.headerPrefix}
+        <Show when={props.headerLeading}>
+          <div class="flex shrink-0 items-center">{props.headerLeading}</div>
+        </Show>
         <PriorityCollapseOverflowSensor
           controller={headerCollapseController}
           truncateAsLastResort

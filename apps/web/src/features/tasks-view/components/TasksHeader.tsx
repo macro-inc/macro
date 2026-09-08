@@ -2,11 +2,13 @@ import { SearchBar, useViewControlHotkeys } from '@app/components/view-shell';
 import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import MenuIcon from '@phosphor/list.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown } from '@ui';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { useTasksView } from '../tasks-view-context';
+import { TasksMobileTabs } from './TasksMobileTabs';
 import { TasksNavigation } from './TasksSidebar';
 
 export function TasksHeader() {
@@ -40,43 +42,47 @@ export function TasksHeader() {
         ? 'All Tasks'
         : 'Created by me';
   return (
-    <header class="flex h-12 shrink-0 items-center gap-3  px-4">
-      <div class="hidden @max-[720px]/view-shell:block">
-        <Dropdown
-          open={navigationOpen()}
-          onOpenChange={setNavigationOpen}
-          placement="bottom-start"
-        >
-          <Dropdown.Trigger
-            variant="ghost"
-            size="sm"
-            square
-            aria-label="Open Tasks navigation"
+    <Show when={!isTouchDevice()} fallback={<TasksMobileTabs />}>
+      <header class="flex h-12 shrink-0 items-center gap-3  px-4">
+        <div class="hidden @max-[720px]/view-shell:block">
+          <Dropdown
+            open={navigationOpen()}
+            onOpenChange={setNavigationOpen}
+            placement="bottom-start"
           >
-            <MenuIcon class="size-4" />
-          </Dropdown.Trigger>
-          <Dropdown.Content class="w-72 rounded-xl p-2">
-            <TasksNavigation onNavigate={() => setNavigationOpen(false)} />
-            <Button variant="ghost" onClick={createTask}>
-              <PlusIcon class="size-4" />
-              New task
-            </Button>
-          </Dropdown.Content>
-        </Dropdown>
-      </div>
-      <h2 class="min-w-0 truncate text-sm font-semibold text-ink">{title()}</h2>
-      <div class="ml-auto min-w-0 max-w-80 flex-1">
-        <SearchBar
-          ref={(element) => (searchInput = element)}
-          label="Search tasks"
-          value={state.search}
-          hotkey="cmd+f"
-          onValueChange={(search) => setState('search', search)}
-          placeholder="Search tasks"
-          class="h-9 rounded-lg border border-edge-muted bg-transparent"
-        />
-      </div>
-      <PreviewButton iconOnly class="size-8 rounded-lg" />
-    </header>
+            <Dropdown.Trigger
+              variant="ghost"
+              size="sm"
+              square
+              aria-label="Open Tasks navigation"
+            >
+              <MenuIcon class="size-4" />
+            </Dropdown.Trigger>
+            <Dropdown.Content class="w-72 rounded-xl p-2">
+              <TasksNavigation onNavigate={() => setNavigationOpen(false)} />
+              <Button variant="ghost" onClick={createTask}>
+                <PlusIcon class="size-4" />
+                New task
+              </Button>
+            </Dropdown.Content>
+          </Dropdown>
+        </div>
+        <h2 class="min-w-0 truncate text-sm font-semibold text-ink">
+          {title()}
+        </h2>
+        <div class="ml-auto min-w-0 max-w-80 flex-1">
+          <SearchBar
+            ref={(element) => (searchInput = element)}
+            label="Search tasks"
+            value={state.search}
+            hotkey="cmd+f"
+            onValueChange={(search) => setState('search', search)}
+            placeholder="Search tasks"
+            class="h-9 rounded-lg border border-edge-muted bg-transparent"
+          />
+        </div>
+        <PreviewButton iconOnly class="size-8 rounded-lg" />
+      </header>
+    </Show>
   );
 }

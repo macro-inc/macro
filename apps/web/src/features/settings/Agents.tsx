@@ -66,6 +66,8 @@ type ConnectedHarness = {
   id: string;
   name: string;
   models: readonly HarnessModel[];
+  modelsLoading?: boolean;
+  modelsError?: boolean;
   kind: 'builtin' | 'macrod';
   connected?: boolean;
 };
@@ -117,8 +119,7 @@ export function Agents() {
   const isTeamOwner = useIsTeamOwner();
   const cursorStatus = useCursorApiKeyStatusQuery();
   const cursorConnected = () =>
-    (cursorStatus.isPending ? undefined : cursorStatus.data)?.registered ??
-    false;
+    cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const cursorModels = useCursorModelsQuery(cursorConnected);
   const harnessesQuery = useHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => [
@@ -128,36 +129,34 @@ export function Agents() {
           {
             id: 'cursor',
             name: 'Cursor',
-            models: (
-              (cursorModels.isPending ? undefined : cursorModels.data)
-                ?.models ?? []
+            models: (cursorModels.isSuccess
+              ? cursorModels.data.models
+              : []
             ).map((model) => ({
               id: model.id,
               name: model.displayName,
               group: model.group,
             })),
+            modelsLoading: cursorModels.isPending,
+            modelsError: cursorModels.isError,
             kind: 'builtin' as const,
           },
         ]
       : []),
-    ...((harnessesQuery.isPending ? undefined : harnessesQuery.data) ?? []).map(
-      (harness) => ({
-        id: harness.id,
-        name:
-          harness.owner.type === 'team'
-            ? `${harness.name} · Team`
-            : harness.name,
-        models: [],
-        kind: 'macrod' as const,
-        connected: harness.connected,
-      })
-    ),
+    ...(harnessesQuery.isSuccess ? harnessesQuery.data : []).map((harness) => ({
+      id: harness.id,
+      name:
+        harness.owner.type === 'team' ? `${harness.name} · Team` : harness.name,
+      models: [],
+      kind: 'macrod' as const,
+      connected: harness.connected,
+    })),
   ];
   const channelOptions = createMemo(() =>
     botAssignableChannelOptions(channelsContext.channels())
   );
   const currentTeamId = () =>
-    (currentTeamQuery.isPending ? undefined : currentTeamQuery.data)?.team.id;
+    currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;
   const canShareWithTeam = () => currentTeamId() !== undefined;
   const isAgentCreator = (agent: AgentWithHarnessId) =>
     agent.bot.created_by === currentUserId();
@@ -166,8 +165,8 @@ export function Agents() {
   const canDeleteAgent = (agent: AgentWithHarnessId) =>
     canDeleteBot(agent.bot, currentUserId(), currentTeamId(), isTeamOwner());
   const agents = createMemo(() =>
-    ((agentsQuery.isPending ? undefined : agentsQuery.data) ?? []).map(
-      (agent) => summarizeAgent(agent, connectedHarnesses(), channelOptions())
+    (agentsQuery.isSuccess ? agentsQuery.data : []).map((agent) =>
+      summarizeAgent(agent, connectedHarnesses(), channelOptions())
     )
   );
   const teamAgents = createMemo(() => [
@@ -285,9 +284,13 @@ export function Agents() {
                 when={privateAgents().filter(matchesSearch).length > 0}
                 fallback={
                   <p class="px-6 py-4 text-sm text-ink-muted">
-                    {search()
-                      ? 'No private agents match your search.'
-                      : 'No private agents yet.'}
+                    {agentsQuery.isPending
+                      ? 'Loading agents…'
+                      : agentsQuery.isError
+                        ? 'Your agents are unavailable.'
+                        : search()
+                          ? 'No private agents match your search.'
+                          : 'No private agents yet.'}
                   </p>
                 }
               >
@@ -818,6 +821,11 @@ function AgentEditor(props: {
                       <select
                         class="settings-input w-full"
                         value={selectedDefaultModelId()}
+                        aria-label="Default model"
+                        disabled={
+                          selectedHarness()?.modelsLoading ||
+                          selectedHarness()?.modelsError
+                        }
                         onChange={(event) =>
                           setDefaultModelId(event.currentTarget.value)
                         }
@@ -845,6 +853,10 @@ function AgentEditor(props: {
                         })
                       )}
                       onSelect={setDefaultModelId}
+                      disabled={
+                        selectedHarness()?.modelsLoading ||
+                        selectedHarness()?.modelsError
+                      }
                       ariaLabel="Default model"
                       triggerClass="w-full justify-between"
                       contentClass="overflow-hidden"
@@ -860,6 +872,14 @@ function AgentEditor(props: {
                     setDefaultModelId(event.currentTarget.value)
                   }
                 />
+              </Show>
+              <Show when={selectedHarness()?.modelsLoading}>
+                <span class="text-xs text-ink-muted">Loading models…</span>
+              </Show>
+              <Show when={selectedHarness()?.modelsError}>
+                <span class="text-xs text-negative">
+                  Could not load Cursor models. Try refreshing this page.
+                </span>
               </Show>
             </label>
           </div>

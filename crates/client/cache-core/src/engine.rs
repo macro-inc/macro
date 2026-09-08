@@ -20,6 +20,9 @@ use crate::normalize::{
     DependencyCompleteness, NormalizeError, RecordUpdates, normalize, normalize_with_dependencies,
     project_hydration_response,
 };
+use crate::predicate::reconciliation::{
+    MAX_RECONCILIATION_BASELINE, PredicateBaselineEntry, PredicateReconciliation,
+};
 use crate::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionMutation, ProjectionMutationLayer, ProjectionState,
@@ -2412,6 +2415,27 @@ impl<S: PredicateIndexStorage> Engine<S> {
         }
         self.advance_revision()?;
         Ok(self.revisioned(affected))
+    }
+
+    /// Reconcile server-page membership and local candidates at one engine revision.
+    pub async fn reconcile_predicate_index(
+        &mut self,
+        query: &ValidatedIndexQuery,
+        baseline: &[PredicateBaselineEntry],
+    ) -> Result<Revisioned<PredicateReconciliation>, EngineError<S::Error>> {
+        if baseline.len() > MAX_RECONCILIATION_BASELINE {
+            return Err(RecordSelectionError::TooManyKeys {
+                count: baseline.len(),
+                max: MAX_RECONCILIATION_BASELINE,
+            }
+            .into());
+        }
+        let value = self
+            .storage
+            .reconcile_predicate_index(query, baseline)
+            .await
+            .map_err(EngineError::Storage)?;
+        Ok(self.revisioned(value))
     }
 
     /// Execute a complete generic exact-index query over authoritative and optimistic projections.

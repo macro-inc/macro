@@ -612,6 +612,18 @@ export const enableCalendarPromptWeb = defineFlag({
   env: 'ENABLE_CALENDAR_PROMPT_WEB',
 });
 
+// Team out of office: the calendar side panel's "Team out of office" section
+// and the read-only teammate absence chips on the grid. Purely additive: when
+// off, the section never mounts and no team out-of-office query is issued.
+// Lives inside the calendar block, so `enable-calendar-ui` already gates it.
+// PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_CALENDAR_TEAM_OOO.
+export const enableCalendarTeamOoo = defineFlag({
+  key: 'enable-calendar-team-ooo',
+  env: 'ENABLE_CALENDAR_TEAM_OOO',
+  default: onInDev,
+});
+
 // Sharing a personal tag with the team: the "Share with team" action on
 // personal tags in Settings › Tags, and the prompt that merges into an
 // existing team label when the names collide. The backend endpoints ship
@@ -650,6 +662,16 @@ export const enableActivityFeed = defineFlag({
 export const enableChatV3Agents = defineFlag({
   key: 'enable-chat-v3-agents',
   env: 'ENABLE_CHAT_V3_AGENTS',
+  default: onInDev,
+});
+
+// The agent session composer behind `Create → Agent`: pick an agent and a
+// model override before the session opens. Off, the entry opens a managed
+// session straight away as it always has. Override with
+// VITE_ENABLE_AGENT_SESSION_COMPOSER.
+export const enableAgentSessionComposer = defineFlag({
+  key: 'enable-agent-session-composer',
+  env: 'ENABLE_AGENT_SESSION_COMPOSER',
   default: onInDev,
 });
 

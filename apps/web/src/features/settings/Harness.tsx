@@ -53,8 +53,7 @@ export function Harness() {
   const saveCursorApiKey = useSaveCursorApiKey();
   const disconnectCursor = useDisconnectCursorApiKey();
   const cursorRegistered = () =>
-    (cursorStatus.isPending ? undefined : cursorStatus.data)?.registered ??
-    false;
+    cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const harnessesQuery = useHarnessesQuery();
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const [pairingDialog, setPairingDialog] = createSignal<{
@@ -89,15 +88,13 @@ export function Harness() {
   const cursorModels = useCursorModelsQuery(cursorRegistered);
   const setCursorDefaultModel = useSetCursorDefaultModel();
   const cursorModelOptions = () =>
-    (
-      (cursorModels.isPending ? undefined : cursorModels.data)?.models ?? []
-    ).map((model) => ({
+    (cursorModels.isSuccess ? cursorModels.data.models : []).map((model) => ({
       id: model.id,
       label: model.displayName,
       group: model.group,
     }));
   const selectedCursorModelId = () =>
-    (cursorStatus.isPending ? undefined : cursorStatus.data)?.defaultModelId ??
+    (cursorStatus.isSuccess ? cursorStatus.data.defaultModelId : null) ??
     cursorModelOptions()[0]?.id ??
     null;
 
@@ -240,13 +237,17 @@ export function Harness() {
                       </div>
                       <For
                         each={
-                          (harnessesQuery.isPending
-                            ? undefined
-                            : harnessesQuery.data) ?? []
+                          harnessesQuery.isSuccess ? harnessesQuery.data : []
                         }
                         fallback={
                           <div class="flex flex-col items-center py-6 text-center">
-                            <p class="text-sm text-ink">No agents connected</p>
+                            <p class="text-sm text-ink">
+                              {harnessesQuery.isPending
+                                ? 'Loading connected agents…'
+                                : harnessesQuery.isError
+                                  ? 'Could not load connected agents.'
+                                  : 'No agents connected'}
+                            </p>
                             <p class="mt-1 text-xs text-ink-extra-muted">
                               Agents connected through macrod will appear here.
                             </p>
@@ -339,9 +340,15 @@ export function Harness() {
                   </p>
 
                   <Show
-                    when={!cursorStatus.isPlaceholderData}
+                    when={
+                      cursorStatus.isSuccess && !cursorStatus.isPlaceholderData
+                    }
                     fallback={
-                      <p class="mt-4 text-xs text-ink-muted">Loading…</p>
+                      <p class="mt-4 text-xs text-ink-muted">
+                        {cursorStatus.isError
+                          ? 'Could not load Cursor connection. Try refreshing this page.'
+                          : 'Loading…'}
+                      </p>
                     }
                   >
                     <Show
@@ -406,30 +413,21 @@ export function Harness() {
                             <select
                               id="cursor-default-model"
                               class="settings-input w-56"
-                              value={
-                                (cursorStatus.isPending
-                                  ? undefined
-                                  : cursorStatus.data
-                                )?.defaultModelId ?? ''
+                              value={selectedCursorModelId() ?? ''}
+                              disabled={
+                                setCursorDefaultModel.isPending ||
+                                !cursorModels.isSuccess
                               }
-                              disabled={setCursorDefaultModel.isPending}
                               onChange={(event) =>
                                 void handleCursorModelChange(
                                   event.currentTarget.value
                                 )
                               }
                             >
-                              <For
-                                each={
-                                  (cursorModels.isPending
-                                    ? undefined
-                                    : cursorModels.data
-                                  )?.models ?? []
-                                }
-                              >
+                              <For each={cursorModelOptions()}>
                                 {(model) => (
                                   <option value={model.id}>
-                                    {model.displayName}
+                                    {model.label}
                                   </option>
                                 )}
                               </For>
@@ -440,10 +438,22 @@ export function Harness() {
                             value={selectedCursorModelId()}
                             options={cursorModelOptions()}
                             onSelect={(id) => void handleCursorModelChange(id)}
-                            disabled={setCursorDefaultModel.isPending}
+                            disabled={
+                              setCursorDefaultModel.isPending ||
+                              !cursorModels.isSuccess
+                            }
                             ariaLabel="Default model"
                             triggerClass="w-72 max-w-full justify-between"
                           />
+                        </Show>
+                        <Show when={cursorModels.isPending}>
+                          <p class="text-xs text-ink-muted">Loading models…</p>
+                        </Show>
+                        <Show when={cursorModels.isError}>
+                          <p class="text-xs text-negative">
+                            Could not load Cursor models. Try refreshing this
+                            page.
+                          </p>
                         </Show>
                         <p class="text-xs text-ink-extra-muted">
                           The model new `@cursor` sessions start on. Recommended

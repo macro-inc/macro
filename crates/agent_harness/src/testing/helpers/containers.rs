@@ -282,7 +282,11 @@ impl MockContainerManager {
 impl ContainerManager for MockContainerManager {
     type Transport = ContainerMock;
 
-    async fn spawn(&self, command: SpawnContainer) -> Result<ContainerMock, HarnessError> {
+    async fn spawn(
+        &self,
+        command: SpawnContainer,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<ContainerMock>, HarnessError>
+    {
         if let Some(message) = self
             .spawn_error
             .lock()
@@ -297,7 +301,9 @@ impl ContainerManager for MockContainerManager {
             .push(command.size);
         let container = ContainerMock::default();
         self.lock().insert(command.session_id, container.clone());
-        Ok(container)
+        Ok(agent_session::domain::connection::RuntimeAttachment::solo(
+            container,
+        ))
     }
 
     fn resize_effect(&self, from: SandboxSize, to: SandboxSize) -> SandboxResizeEffect {
@@ -326,7 +332,11 @@ impl ContainerManager for MockContainerManager {
         Ok(())
     }
 
-    async fn resume(&self, session: AgentSessionId) -> Result<ContainerMock, HarnessError> {
+    async fn resume(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<agent_session::domain::connection::RuntimeAttachment<ContainerMock>, HarnessError>
+    {
         self.resumes.fetch_add(1, Ordering::Relaxed);
         let mut containers = self.lock();
         if !containers.contains_key(&session) {
@@ -336,7 +346,9 @@ impl ContainerManager for MockContainerManager {
         }
         let container = ContainerMock::default();
         containers.insert(session, container.clone());
-        Ok(container)
+        Ok(agent_session::domain::connection::RuntimeAttachment::solo(
+            container,
+        ))
     }
 
     /// The fixed token every mock container "holds", for sessions that were

@@ -11,11 +11,18 @@ import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownCon
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
 import { Button, SendButton, Surface } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+
+/**
+ * Id of the agent input's text-area wrapper. Exposed so callers (e.g. the
+ * mobile Create menu) can arm focus on the contenteditable before it mounts.
+ */
+export const AGENT_INPUT_TEXT_AREA_ID = 'agent-input-text-area';
 
 /** Quote text into the composer as a referenced paste chip. */
 export type QuoteInsert = (text: string) => void;
@@ -165,6 +172,7 @@ export function AgentInput(props: AgentInputProps) {
           onPointerDown={focusEditor}
         >
           <div
+            id={AGENT_INPUT_TEXT_AREA_ID}
             ref={bodyRef}
             class="min-w-0 flex-1 text-sm text-ink touch:text-base"
             classList={{
@@ -182,7 +190,7 @@ export function AgentInput(props: AgentInputProps) {
               placeholder={
                 props.placeholder ?? 'Message the agent, @mention anything'
               }
-              autofocus={props.autofocus}
+              autofocus={!isMobile() && !isTouchDevice() && props.autofocus}
             />
           </div>
 

@@ -23,6 +23,7 @@ function event(overrides: Partial<CalendarEvent>): CalendarEvent {
       emailAddress: 'jackson@example.com',
       isPrimary: true,
     },
+    visibleCalendars: [],
     ...overrides,
   };
 }

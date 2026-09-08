@@ -18,6 +18,7 @@
 
 import { rememberAgentSession } from '@queries/agent-session/recent-sessions';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
+import type { CreateAgentSessionRequest } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createSignal } from 'solid-js';
 
 /**
@@ -44,17 +45,34 @@ export function isPlaceholderSessionId(id: string): boolean {
 }
 
 /**
+ * Options captured by the preflight composer before a session exists.
+ */
+export type StartPendingSessionOptions = {
+  /** Persisted managed persona to run; omitted for Macro Coder. */
+  botId?: string;
+  /** First prompt, delivered after any model override. */
+  prompt?: string;
+  /** Optional model switch applied before the first prompt. */
+  modelOverride?: string;
+};
+
+/**
  * Start creating a managed session and return the placeholder to open a block
  * against right now. The POST runs unattended; nothing awaits it.
  */
-export function startPendingSession(initialPrompt?: string): string {
+export function startPendingSession(
+  input: StartPendingSessionOptions | string = {}
+): string {
+  const options = typeof input === 'string' ? { prompt: input } : input;
+  const initialPrompt = options.prompt?.trim();
+  let createdId: string | undefined;
   const placeholder = `${PLACEHOLDER_PREFIX}${crypto.randomUUID()}`;
   const [sessionId, setSessionId] = createSignal<string>();
   const [failed, setFailed] = createSignal(false);
   const [promptFailed, setPromptFailed] = createSignal(false);
   let sending = false;
   const retryPrompt = async () => {
-    const id = sessionId();
+    const id = createdId ?? sessionId();
     if (!id || !initialPrompt || sending) return;
     sending = true;
     setPromptFailed(false);
@@ -73,15 +91,29 @@ export function startPendingSession(initialPrompt?: string): string {
   });
 
   void agentHarnessServiceClient
-    .create({})
-    .then((result) => {
+    .create({
+      ...(options.botId ? { botId: options.botId } : {}),
+    } satisfies CreateAgentSessionRequest)
+    .then(async (result) => {
       if (result.isErr()) {
         setFailed(true);
         return;
       }
+      const id = result.value.session.id;
+      createdId = id;
       rememberAgentSession(result.value.session.ownerId, result.value.session);
-      setSessionId(result.value.session.id);
-      void retryPrompt();
+      if (options.modelOverride) {
+        const changed = await agentHarnessServiceClient.control(id, {
+          type: 'setModel',
+          model: options.modelOverride,
+        });
+        if (changed.isErr()) {
+          setFailed(true);
+          return;
+        }
+      }
+      await retryPrompt();
+      setSessionId(id);
     })
     .catch(() => setFailed(true));
 

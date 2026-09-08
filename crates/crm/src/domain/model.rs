@@ -388,6 +388,9 @@ pub enum CrmError {
     /// is below admin/owner.
     #[error("changing crm permission or stage settings requires admin/owner team role")]
     SettingsAdminRequired,
+    /// Caller's team role is below the team's `edit_stages_role`.
+    #[error("editing deal stages requires the {} team role", .0.as_db_str())]
+    StageEditRoleRequired(CrmPermissionRole),
     /// Tried to mutate a CRM company in a way that contradicts its
     /// `hidden = true` state — currently raised when attempting to
     /// re-enable `email_sync` on a hidden company.

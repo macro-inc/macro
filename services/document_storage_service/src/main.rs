@@ -1434,6 +1434,12 @@ async fn run() -> anyhow::Result<()> {
         entity_access_management_service,
         crm_state: crm::inbound::axum_router::CrmRouterState {
             service: Arc::new(crm_service),
+            stage_service: Arc::new(crm::domain::stages::CrmStageServiceImpl::new(
+                crm::outbound::companies_repo::CompaniesRepositoryImpl::new(db.clone()),
+                crm::outbound::stage_definitions::PropertiesStageDefinitionStore::new(
+                    properties_service.clone(),
+                ),
+            )),
             entity_access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
         },

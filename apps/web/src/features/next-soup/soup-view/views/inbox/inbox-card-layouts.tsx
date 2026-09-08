@@ -22,6 +22,7 @@ import {
   type EntityData,
   isGithubPrEntity,
   type Notification,
+  UnreadIndicator,
   unreadFilterFn,
   type WithNotification,
 } from '@entity';
@@ -73,6 +74,8 @@ export interface InboxCardLayoutProps {
   onClick?: (event: MouseEvent) => void;
   /** Set false when a parent list owns keyboard focus and activation. */
   focusable?: boolean;
+  /** Render unread state beside the title instead of in a row gutter. */
+  showUnreadIndicator?: boolean;
 }
 
 /** Glyph size inside the card's avatar bubble — grows with the circle on
@@ -516,6 +519,7 @@ function BaseCard(props: {
   highlighted?: boolean;
   onClick?: (event: MouseEvent) => void;
   focusable?: boolean;
+  showUnreadIndicator?: boolean;
   /** Contents of the avatar bubble (glyph or avatar); the circle is ours. */
   icon: JSX.Element;
   /**
@@ -542,6 +546,9 @@ function BaseCard(props: {
       </div>
       <InboxCard.Body class="contents">
         <InboxCard.Header class="col-start-2 row-start-1 self-center">
+          <Show when={props.showUnreadIndicator && props.item.unread}>
+            <UnreadIndicator active class="mobile:hidden" />
+          </Show>
           <InboxCard.Title class="flex items-center gap-1">
             {props.titleLeading}
             {/* A flex row can't ellipsize bare text, so the text run always
@@ -889,6 +896,9 @@ export function ChannelThreadCardLayout(props: InboxCardLayoutProps) {
       <InboxCard.Body class="contents">
         <div class={cn('col-start-2 row-start-2')}>
           <InboxCard.Header class="self-center">
+            <Show when={props.showUnreadIndicator && props.item.unread}>
+              <UnreadIndicator active class="mobile:hidden" />
+            </Show>
             <InboxCard.Title class="flex items-center gap-1">
               <span class="truncate">{text().title}</span>
             </InboxCard.Title>

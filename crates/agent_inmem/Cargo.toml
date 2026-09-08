@@ -12,10 +12,13 @@ agent_egress = { path = "../agent_egress" }
 agent-client-protocol = { workspace = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
+anyhow = { workspace = true }
 ai_tools = { path = "../ai_tools" }
 ai_toolset = { path = "../ai_toolset" }
 ai_usage = { path = "../ai_usage" }
 bytes = { workspace = true }
+async-trait = { workspace = true }
+axum = { workspace = true }
 dashmap = { workspace = true }
 futures = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
@@ -27,6 +30,7 @@ mcp_toolset = { path = "../mcp_toolset" }
 memory = { path = "../memory" }
 prompt = { path = "../prompt" }
 rmcp = { workspace = true, features = ["client", "transport-streamable-http-client"] }
+schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }

@@ -504,7 +504,13 @@ export function ThreadList(props: ThreadListProps) {
           </Key>
         </div>
       </div>
-      <CustomScrollbar scrollContainer={scrollEl} />
+      <CustomScrollbar
+        scrollContainer={scrollEl}
+        watchContent
+        onScrollIntent={(delta) =>
+          scrollIntent.markUserIntent(delta > 0 ? 'down' : 'up')
+        }
+      />
     </>
   );
 }

@@ -8,6 +8,23 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
         id: TurnId(
             0,
         ),
+        author: User {
+            user_id: None,
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "We're going to start work on the [@/Users/eric/Code/macro/crates/agent_fold/](file:///Users/eric/Code/macro/crates/agent_fold/) crate. the idea here is that this crate \"folds\" [@/Users/eric/Code/macro/crates/agent_runtime_protocol/](file:///Users/eric/Code/macro/crates/agent_runtime_protocol/) messages into a message type we can render. we're going to render these messages as channel messages so the type we can render will be channel messages. I think there's lots of ways to write this, and I stubbed out a trait but this could change pretty significantly. \n\nTo kick us off I started recording my claude code sessions (including this one) in @~/.agent_session_recordings/. No need to read these yet but these will be super useful for testing / iterating.\n\nto start we should think about how we're going to extend the comms message types to support AI messages. lets find these models",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            0,
+        ),
         author: Agent,
         request_id: None,
         parts: NonEmpty {
@@ -454,6 +471,37 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                         ),
                     },
                 },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+    FoldedMessage {
+        id: TurnId(
+            1,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "[Request interrupted by user for tool use]you can pretty much forget / ignore the existing AI models. this is a parallel system. You can also ignore the storage (for now). We aren't going to store these messages as all. Instead we're going to derive them from the log of acp messages stored in the log table (defined in [@20260731223955_agent_session_log.up.sql](file:///Users/eric/Code/macro/crates/macro_db_client/migrations/20260731223955_agent_session_log.up.sql)). We are just going to live in make-believe / type land. we get to define our own message types that we'll figure out how to render on the frontned. We'll likely update the type of comms message to contain our new enum of ai message types, but we can hold off on that\n<context ref=\"file:///Users/eric/Code/macro/crates/macro_db_client/migrations/20260731223955_agent_session_log.up.sql\">\n-- One row per message exchanged on an agent session's logical protocol\n-- stream (see agent_runtime_protocol::domain::schema::v0 and\n-- agent_session::domain::model::{Message, AgentSessionLog}). direction +\n-- content together round-trip the Message enum (ToServer/ToRuntime); user_id\n-- is set only when the entry is ACP traffic that originated from a user.\nCREATE TABLE agent_session_log (\n    id                UUID        PRIMARY KEY,\n    agent_session_id  UUID        NOT NULL REFERENCES agent_session(id) ON DELETE CASCADE,\n    user_id           TEXT,\n    direction         TEXT        NOT NULL CHECK (direction IN ('to_server', 'to_runtime')),\n    content           JSONB       NOT NULL,\n    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()\n);\n\n-- list_by_session reads a session's log in chronological order.\nCREATE INDEX agent_session_log_session_order\n    ON agent_session_log (agent_session_id, created_at, id);\n\n</context>",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            1,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
                 Text {
                     text: "Right — pure derivation. Let me ground the design in what's actually in the log.",
                 },
@@ -568,7 +616,41 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     },
                 },
                 Text {
-                    text: "Now I have what I need. The recordings are the real spec here, and they surfaced four things that change the design:\n\n**1. Tool calls dominate.** 406 of ~450 ACP frames are `session/update`; within those, 175 `tool_call_update` vs 46 `tool_call` — ~4 patches per call. The fold is mostly a correlate-and-patch loop keyed on `toolCallId`, not a text accumulator.\n\n**2. `usage_update` is 81 frames of noise.** Nothing renderable. Drop, or aggregate once per turn.\n\n**3. The interesting data is in `_meta`, not in ACP.** ACP normalizes tools to a coarse `kind` (`execute`/`read`/`edit`). The actual tool name lives at `_meta.claudeCode.toolName` (`Bash`, `Write`, `Read`). Terminal output streams via `_meta.terminal_output` — **with raw ANSI escapes** — and the exit code via `_meta.terminal_exit`. None of that is standard ACP.\n\nSo a faithful fold **cannot be pure ACP**. It needs a harness-specific extension layer. I'd quarantine that explicitly rather than let `_meta` reads leak through the whole fold — one `ClaudeCodeMeta` extraction step, so a future harness slots in beside it instead of rewriting the core.\n\n**4. Frames arrive underspecified and get patched.** The `Write` tool call opens as `{\"rawInput\":{},\"status\":\"pending\",\"content\":[],\"locations\":[]}` — title is literally just `\"Write\"`. Everything useful arrives later. And `session/request_permission` is a request/response pair correlated by JSON-RPC **id**, not `toolCallId` — a pending permission is a renderable state that later resolves.\n\n## Proposed vocabulary\n\n```rust\n/// One renderable message. Derived, never stored.\npub struct AgentMessage {\n    pub turn: TurnId,                          // prompt → stopReason\n    pub parts: NonEmpty<AgentMessagePart>,\n}\n\npub enum AgentMessagePart {\n    Text(Markdown),\n    Thought(Markdown),\n    ToolUse(ToolUse),\n    Permission(PermissionPrompt),              // pending | resolved(outcome)\n}\n\npub struct ToolUse {\n    pub id: ToolUseId,                         // ACP toolCallId\n    pub label: String,                         // _meta tool name, else title\n    pub status: ToolStatus,                    // Pending | Running | Completed | Failed\n    pub detail: ToolDetail,\n}\n\npub enum ToolDetail {\n    Terminal { command: String, output: AnsiText, exit_code: Option<i32> },\n    FileEdit { path: PathBuf, diff: Option<Diff> },\n    FileRead { path: PathBuf },\n    Other  { kind: String, input: serde_json::Value },\n}\n```\n\n`AnsiText` as its own type because that decision has to land somewhere — strip at fold time or preserve and render client-side. I'd preserve; stripping is lossy and the frontend can decide.\n\n## Two consequences for what you stubbed\n\n**The fold is pure and infallible.** The log's `content` jsonb is already deserialized into `agent_session::domain::model::Message` by the repo (`crates/agent_session/src/domain/model.rs:60`), so the fold's input is typed on arrival. Unknown/irrelevant frames are skipped, not errored. That makes `domain/error.rs` dead — signature is just:\n\n```rust\nfn fold(log: impl IntoIterator<Item = AgentSessionLog>) -> Vec<AgentMessage>\n```\n\n**There's no port to define.** A pure fold does no I/O; the log source is already `agent_session`'s repo. So `agent_fold` wants to be a plain library with a free function and a `test.rs` replaying those three `.jsonl` files — not a hex crate with `domain/ports.rs`. Your trait stub is probably worth deleting rather than filling in.\n\nOne thing I'd want your call on before writing types: **granularity within a turn.** One `AgentMessage` per turn with parts in order (frontend collapses runs of `ToolUse` into an activity group) reads best as a channel message and is what I'd default to — but it means a turn is one big message that grows. The alternative is splitting a new message each time text follows tool activity, which gives a more conversational channel feel at the cost of a fuzzier boundary rule.Empirically answerable — let me check whether the log actually produces orphans.",
+                    text: "Now I have what I need. The recordings are the real spec here, and they surfaced four things that change the design:\n\n**1. Tool calls dominate.** 406 of ~450 ACP frames are `session/update`; within those, 175 `tool_call_update` vs 46 `tool_call` — ~4 patches per call. The fold is mostly a correlate-and-patch loop keyed on `toolCallId`, not a text accumulator.\n\n**2. `usage_update` is 81 frames of noise.** Nothing renderable. Drop, or aggregate once per turn.\n\n**3. The interesting data is in `_meta`, not in ACP.** ACP normalizes tools to a coarse `kind` (`execute`/`read`/`edit`). The actual tool name lives at `_meta.claudeCode.toolName` (`Bash`, `Write`, `Read`). Terminal output streams via `_meta.terminal_output` — **with raw ANSI escapes** — and the exit code via `_meta.terminal_exit`. None of that is standard ACP.\n\nSo a faithful fold **cannot be pure ACP**. It needs a harness-specific extension layer. I'd quarantine that explicitly rather than let `_meta` reads leak through the whole fold — one `ClaudeCodeMeta` extraction step, so a future harness slots in beside it instead of rewriting the core.\n\n**4. Frames arrive underspecified and get patched.** The `Write` tool call opens as `{\"rawInput\":{},\"status\":\"pending\",\"content\":[],\"locations\":[]}` — title is literally just `\"Write\"`. Everything useful arrives later. And `session/request_permission` is a request/response pair correlated by JSON-RPC **id**, not `toolCallId` — a pending permission is a renderable state that later resolves.\n\n## Proposed vocabulary\n\n```rust\n/// One renderable message. Derived, never stored.\npub struct AgentMessage {\n    pub turn: TurnId,                          // prompt → stopReason\n    pub parts: NonEmpty<AgentMessagePart>,\n}\n\npub enum AgentMessagePart {\n    Text(Markdown),\n    Thought(Markdown),\n    ToolUse(ToolUse),\n    Permission(PermissionPrompt),              // pending | resolved(outcome)\n}\n\npub struct ToolUse {\n    pub id: ToolUseId,                         // ACP toolCallId\n    pub label: String,                         // _meta tool name, else title\n    pub status: ToolStatus,                    // Pending | Running | Completed | Failed\n    pub detail: ToolDetail,\n}\n\npub enum ToolDetail {\n    Terminal { command: String, output: AnsiText, exit_code: Option<i32> },\n    FileEdit { path: PathBuf, diff: Option<Diff> },\n    FileRead { path: PathBuf },\n    Other  { kind: String, input: serde_json::Value },\n}\n```\n\n`AnsiText` as its own type because that decision has to land somewhere — strip at fold time or preserve and render client-side. I'd preserve; stripping is lossy and the frontend can decide.\n\n## Two consequences for what you stubbed\n\n**The fold is pure and infallible.** The log's `content` jsonb is already deserialized into `agent_session::domain::model::Message` by the repo (`crates/agent_session/src/domain/model.rs:60`), so the fold's input is typed on arrival. Unknown/irrelevant frames are skipped, not errored. That makes `domain/error.rs` dead — signature is just:\n\n```rust\nfn fold(log: impl IntoIterator<Item = AgentSessionLog>) -> Vec<AgentMessage>\n```\n\n**There's no port to define.** A pure fold does no I/O; the log source is already `agent_session`'s repo. So `agent_fold` wants to be a plain library with a free function and a `test.rs` replaying those three `.jsonl` files — not a hex crate with `domain/ports.rs`. Your trait stub is probably worth deleting rather than filling in.\n\nOne thing I'd want your call on before writing types: **granularity within a turn.** One `AgentMessage` per turn with parts in order (frontend collapses runs of `ToolUse` into an activity group) reads best as a channel message and is what I'd default to — but it means a turn is one big message that grows. The alternative is splitting a new message each time text follows tool activity, which gives a more conversational channel feel at the cost of a fuzzier boundary rule.",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+    FoldedMessage {
+        id: TurnId(
+            2,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "yes this will definitely be a plain lib the error / failure I have in the fold method could happen if a folder matches on an event but is missing parts. I think this could happen, but maybe not (ie tool call but no response?\n)",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            2,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "Empirically answerable — let me check whether the log actually produces orphans.",
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -734,7 +816,41 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     },
                 },
                 Text {
-                    text: "Checked the ordering hazard: log ids are `generate_uuid_v7()` (`crates/agent_session/src/outbound/postgres/mod.rs:247`) and the read is `ORDER BY created_at ASC, id ASC` (line 270). v7 is time-ordered, so the tie-break is chronological, and `created_at` comes from per-statement `now()` at microsecond resolution. Ordering is sound — frames can't reorder. Good, because the recordings pack up to 19 frames into a single millisecond.\n\nThat means your \"missing parts\" case is a small enumerable set, not chaos. Here's what the data says about each:\n\n**Tool call with no response — real, 2 of 46.** Both at lines 296–299 of a 299-line log: the live session. So this isn't corruption, it's the *in-flight* state. It also becomes permanent when a session dies (`SessionStatus::Disconnected` already exists at `agent_session/src/domain/model.rs:32`). Not an error — `ToolStatus::Pending` with no output is a thing you want to render, as a spinner or \"interrupted\".\n\n**Orphan patch (update before open) — 0 of 45.** Only reachable through `session/load` resume, where the log legitimately starts mid-stream. There's one `session/load` in the recordings.\n\n**Unpaired permission request — 0 of 1.** Same story: in-flight, not error.\n\n**Partial open frame — common, and this is the one that actually bites.** The `Write` call opens as `{\"rawInput\":{},\"title\":\"Write\",\"content\":[],\"locations\":[]}`. Every renderable field is absent and arrives later. If the type demands them at construction, this frame fails — and it's *normal traffic*.\n\n## So I'd argue against `Result` here\n\nBecause these messages are derived on every read, a fold error means **the channel renders blank**. Failing is the worst available outcome for a render path — a partially-known tool call is strictly better than nothing. Every case above is legitimately representable:\n\n```rust\nfn fold(log: impl IntoIterator<Item = AgentSessionLog>) -> Fold;\n\npub struct Fold {\n    pub messages: Vec<AgentMessage>,\n    pub anomalies: Vec<Anomaly>,   // observability, not failure\n}\n\npub enum Anomaly {\n    PatchBeforeOpen { tool_call: ToolUseId },\n    UnknownSessionUpdate { kind: String },\n    UnknownToolKind { kind: String },\n}\n```\n\nPush \"missing parts\" into the *type* — optionals inside `ToolUse`, so a call with nothing known still renders as a bare \"used a tool\" row — and surface the weirdness through `anomalies` instead of `Err`.\n\nThe payoff is in testing: your replay tests assert `anomalies.is_empty()` against the recorded fixtures, so protocol drift fails CI loudly, while production degrades gracefully instead of showing an empty channel. You get strictness where it's cheap and leniency where it's expensive.\n\nWant me to write the vocabulary into the crate now, with a `test.rs` that replays the three `.jsonl` files? I'd need your call on the turn-granularity question from before — one `AgentMessage` per turn is still my default.No `Result`, one explicit match. That kills the ports trait too. Let me check the one thing that decides the match's shape — how we get from a log row to typed ACP.",
+                    text: "Checked the ordering hazard: log ids are `generate_uuid_v7()` (`crates/agent_session/src/outbound/postgres/mod.rs:247`) and the read is `ORDER BY created_at ASC, id ASC` (line 270). v7 is time-ordered, so the tie-break is chronological, and `created_at` comes from per-statement `now()` at microsecond resolution. Ordering is sound — frames can't reorder. Good, because the recordings pack up to 19 frames into a single millisecond.\n\nThat means your \"missing parts\" case is a small enumerable set, not chaos. Here's what the data says about each:\n\n**Tool call with no response — real, 2 of 46.** Both at lines 296–299 of a 299-line log: the live session. So this isn't corruption, it's the *in-flight* state. It also becomes permanent when a session dies (`SessionStatus::Disconnected` already exists at `agent_session/src/domain/model.rs:32`). Not an error — `ToolStatus::Pending` with no output is a thing you want to render, as a spinner or \"interrupted\".\n\n**Orphan patch (update before open) — 0 of 45.** Only reachable through `session/load` resume, where the log legitimately starts mid-stream. There's one `session/load` in the recordings.\n\n**Unpaired permission request — 0 of 1.** Same story: in-flight, not error.\n\n**Partial open frame — common, and this is the one that actually bites.** The `Write` call opens as `{\"rawInput\":{},\"title\":\"Write\",\"content\":[],\"locations\":[]}`. Every renderable field is absent and arrives later. If the type demands them at construction, this frame fails — and it's *normal traffic*.\n\n## So I'd argue against `Result` here\n\nBecause these messages are derived on every read, a fold error means **the channel renders blank**. Failing is the worst available outcome for a render path — a partially-known tool call is strictly better than nothing. Every case above is legitimately representable:\n\n```rust\nfn fold(log: impl IntoIterator<Item = AgentSessionLog>) -> Fold;\n\npub struct Fold {\n    pub messages: Vec<AgentMessage>,\n    pub anomalies: Vec<Anomaly>,   // observability, not failure\n}\n\npub enum Anomaly {\n    PatchBeforeOpen { tool_call: ToolUseId },\n    UnknownSessionUpdate { kind: String },\n    UnknownToolKind { kind: String },\n}\n```\n\nPush \"missing parts\" into the *type* — optionals inside `ToolUse`, so a call with nothing known still renders as a bare \"used a tool\" row — and surface the weirdness through `anomalies` instead of `Err`.\n\nThe payoff is in testing: your replay tests assert `anomalies.is_empty()` against the recorded fixtures, so protocol drift fails CI loudly, while production degrades gracefully instead of showing an empty channel. You get strictness where it's cheap and leniency where it's expensive.\n\nWant me to write the vocabulary into the crate now, with a `test.rs` that replays the three `.jsonl` files? I'd need your call on the turn-granularity question from before — one `AgentMessage` per turn is still my default.",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+    FoldedMessage {
+        id: TurnId(
+            3,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "ok no result. I also think that we should implement this as an explicity match statement rather than a registry with match checks this will let us be more explicit about how / where we match on ACP messages",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            3,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "No `Result`, one explicit match. That kills the ports trait too. Let me check the one thing that decides the match's shape — how we get from a log row to typed ACP.",
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -1785,6 +1901,37 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                         ],
                     },
                 },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+    FoldedMessage {
+        id: TurnId(
+            4,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "this should still be a hex crate. we're going to pretend that our derived messages are stored in a db. we're going to have api's to query them as if they are",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            4,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
                 ToolUse {
                     id: ToolUseId(
                         "toolu_01KKDkPymKKwqZRd1qmfEHEk",
@@ -2571,7 +2718,41 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
                     },
                 },
                 Text {
-                    text: "Restructured into a hex crate with the pretend-DB made explicit. **Hexagonal boundary checked** (via the architecture skill): domain imports only other domain models (`agent_session::domain::model`), protocol schema, and `tracing` — no axum/sqlx/transport anywhere; the one adapter lives in `outbound/`. There's no authz or business policy in this crate yet — queries are scoped by `AgentSessionId`, and access control (who may read a session's messages) stays with whatever inbound surface eventually calls the repo, minting its receipt against the session's thread/channel.\n\n**The shape now:**\n\n```\nsrc/domain/\n  message.rs   FoldedMessage vocabulary + MessageId natural key (turn, AuthorKind)\n  fold.rs      the pure total fold — unchanged semantics, now eats AgentSessionLog directly\n  meta.rs      quarantined Claude-Code _meta readers\n  ports.rs     SessionLogStore (driven) · FoldedMessageRepo (driving)\n  service.rs   FoldedMessageService: folds on every read, warns anomalies\nsrc/outbound/\n  memory.rs    InMemoryLogStore — what make-believe runs on\n```\n\n**Key decisions in the restructure:**\n- **The duplication went away.** My `LogEntry`/`LogMessage` were `agent_session::domain::model::{AgentSessionLog, Message}` re-invented — the fold now consumes the real model, so the eventual Postgres adapter is `AgentSessionLogRepo::list_by_session` output passed straight through.\n- **`FoldedMessageRepo` is the fiction.** Repo-shaped API (`list_by_session`, `get(session, id)`), styled after the channels crate: RPITIT `+ Send`, `rootcause::Report`, `#[tracing::instrument(err, skip(self))]`. Callers can't tell nothing is stored; if messages ever materialize, only the implementation moves.\n- **Messages got a natural key.** No rows means no surrogate ids, but the fold's shape gives one for free: `(turn, author side)` — deterministic across re-derivation, so `get` and future streaming reconciliation have something stable to address.\n- **Anomalies stay out of the query API.** A DB read doesn't fail because one row is odd — the service `tracing::warn!`s them; tests still assert-empty via the bare fold.\n- **Deferred:** the real Postgres adapter (belongs at the composition root — a generic wrapper over `AgentSessionLogRepo` can't prove `Send` since that trait doesn't bound its futures) and the `inbound/` comms adapter, per your earlier hold-off.\n\n12 tests + doctest green (fold suite, new service suite covering session scoping / get-by-id / service≡fold equivalence, recordings replay), strict clippy (`-Dwarnings`) clean, and `fold_recording` now exercises the full hexagon: recording → `InMemoryLogStore` → service → rendered turns.Two clear changes. Let me check what I need for both.",
+                    text: "Restructured into a hex crate with the pretend-DB made explicit. **Hexagonal boundary checked** (via the architecture skill): domain imports only other domain models (`agent_session::domain::model`), protocol schema, and `tracing` — no axum/sqlx/transport anywhere; the one adapter lives in `outbound/`. There's no authz or business policy in this crate yet — queries are scoped by `AgentSessionId`, and access control (who may read a session's messages) stays with whatever inbound surface eventually calls the repo, minting its receipt against the session's thread/channel.\n\n**The shape now:**\n\n```\nsrc/domain/\n  message.rs   FoldedMessage vocabulary + MessageId natural key (turn, AuthorKind)\n  fold.rs      the pure total fold — unchanged semantics, now eats AgentSessionLog directly\n  meta.rs      quarantined Claude-Code _meta readers\n  ports.rs     SessionLogStore (driven) · FoldedMessageRepo (driving)\n  service.rs   FoldedMessageService: folds on every read, warns anomalies\nsrc/outbound/\n  memory.rs    InMemoryLogStore — what make-believe runs on\n```\n\n**Key decisions in the restructure:**\n- **The duplication went away.** My `LogEntry`/`LogMessage` were `agent_session::domain::model::{AgentSessionLog, Message}` re-invented — the fold now consumes the real model, so the eventual Postgres adapter is `AgentSessionLogRepo::list_by_session` output passed straight through.\n- **`FoldedMessageRepo` is the fiction.** Repo-shaped API (`list_by_session`, `get(session, id)`), styled after the channels crate: RPITIT `+ Send`, `rootcause::Report`, `#[tracing::instrument(err, skip(self))]`. Callers can't tell nothing is stored; if messages ever materialize, only the implementation moves.\n- **Messages got a natural key.** No rows means no surrogate ids, but the fold's shape gives one for free: `(turn, author side)` — deterministic across re-derivation, so `get` and future streaming reconciliation have something stable to address.\n- **Anomalies stay out of the query API.** A DB read doesn't fail because one row is odd — the service `tracing::warn!`s them; tests still assert-empty via the bare fold.\n- **Deferred:** the real Postgres adapter (belongs at the composition root — a generic wrapper over `AgentSessionLogRepo` can't prove `Send` since that trait doesn't bound its futures) and the `inbound/` comms adapter, per your earlier hold-off.\n\n12 tests + doctest green (fold suite, new service suite covering session scoping / get-by-id / service≡fold equivalence, recordings replay), strict clippy (`-Dwarnings`) clean, and `fold_recording` now exercises the full hexagon: recording → `InMemoryLogStore` → service → rendered turns.",
+                },
+            ],
+        },
+        stop: Some(
+            EndTurn,
+        ),
+    },
+    FoldedMessage {
+        id: TurnId(
+            5,
+        ),
+        author: User {
+            user_id: None,
+        },
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "Better. Some changes\n1. we can do this in a beautiful / abstract way that doesn't inject / depend on comms messages at all in the domain. We can define the actual fold from `agent_runtime_protocol` to comms message in an inbound module\n2. the log store already exists in the agent_session crate. you can expand this crate as needed to support this crate",
+                },
+            ],
+        },
+        stop: None,
+    },
+    FoldedMessage {
+        id: TurnId(
+            5,
+        ),
+        author: Agent,
+        request_id: None,
+        parts: NonEmpty {
+            inner: [
+                Text {
+                    text: "Two clear changes. Let me check what I need for both.",
                 },
                 ToolUse {
                     id: ToolUseId(
@@ -3455,7 +3636,7 @@ input_file: crates/agent_fold/fixtures/real/resumed_no_prompt.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            1,
+            6,
         ),
         author: User {
             user_id: None,

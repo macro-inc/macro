@@ -524,7 +524,8 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     return { id: props.documentInfo.id, type, messageId };
   };
 
-  const { item, ItemEntityIcon } = useItemPreviewData(itemPreviewEntity);
+  const { item, ItemEntityIcon, documentProperties } =
+    useItemPreviewData(itemPreviewEntity);
 
   // Resolve the caller-provided type against the item's actual subType so
   // that e.g. a markdown doc with `subType: { type: 'task' }` routes to the
@@ -931,6 +932,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                   <TaskPropertiesPreview
                     taskId={props.documentInfo.id}
                     taskName={accessibleItem().name}
+                    previewProperties={documentProperties()}
                   />
                 </Suspense>
               </Show>

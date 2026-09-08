@@ -33,6 +33,7 @@ import {
   type AccessiblePreviewItem,
   type ItemEntity,
   isAccessiblePreviewItem,
+  type PreviewDocumentProperties,
   type PreviewItem,
 } from './types';
 
@@ -113,11 +114,16 @@ export async function getItemPreview(
 
 function useItemPreviewQuery(
   item: Accessor<ItemEntity>,
-  restStaleTime = PREVIEW_STALE_TIME
+  restStaleTime = PREVIEW_STALE_TIME,
+  includeProperties = true
 ) {
   const graphqlSoupFlag = useFeatureFlag(enableGraphqlSoup);
   const graphqlRequested = () => graphqlSoupFlag().enabled;
-  const graphqlQuery = createGraphqlItemPreviewQuery(item, graphqlRequested);
+  const graphqlQuery = createGraphqlItemPreviewQuery(
+    item,
+    graphqlRequested,
+    includeProperties
+  );
   const usesGraphql = () =>
     graphqlRequested() &&
     isGraphqlPreviewItem(item()) &&
@@ -139,6 +145,10 @@ function useItemPreviewQuery(
     isSuccess: () =>
       usesGraphql() ? graphqlQuery.data() !== undefined : restQuery.isSuccess,
     usesGraphql,
+    refetch: async () => {
+      if (usesGraphql()) await graphqlQuery.refetch();
+      else await restQuery.refetch();
+    },
   };
 }
 
@@ -187,7 +197,27 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
     return dataWithName;
   });
 
-  return [preview] as const;
+  // Presence selects the GraphQL-owned metadata path even when a lightweight
+  // cached title arrives before properties. Pending edges must never mount a
+  // fallback child query, or the waterfall returns on a warm cache.
+  const documentProperties = (): PreviewDocumentProperties | undefined => {
+    if (
+      !previewQuery.usesGraphql() ||
+      (item().type ?? DEFAULT_ITEM_TYPE) !== 'document'
+    )
+      return undefined;
+    const current = preview();
+    const metadata =
+      isAccessiblePreviewItem(current) && current.type === 'document'
+        ? current.documentMetadata
+        : undefined;
+    return {
+      properties: metadata?.properties,
+      canEdit: metadata?.canEdit ?? false,
+      refetch: previewQuery.refetch,
+    };
+  };
+  return [preview, { documentProperties }] as const;
 }
 
 /** Stale time for live display names (e.g. open-document titles), which
@@ -205,7 +235,7 @@ const RAW_NAME_STALE_TIME = 5 * 60 * 1000;
 export function useItemRawName(
   item: Accessor<{ id: string; type?: ItemType }>
 ): Accessor<string | undefined> {
-  const query = useItemPreviewQuery(item, RAW_NAME_STALE_TIME);
+  const query = useItemPreviewQuery(item, RAW_NAME_STALE_TIME, false);
 
   return () => {
     const data = query.data();

@@ -2,27 +2,16 @@ import {
   type ListFilterGroup,
   useViewControlHotkeys,
 } from '@app/components/view-shell';
-import { addUnique, removeValue } from '@app/lib/signals/store-array-updaters';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { UserIcon } from '@core/component/UserIcon';
-import { useUserId } from '@core/context/user';
-import { idToDisplayName } from '@core/user/util';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SortIcon from '@phosphor/sort-ascending.svg';
 import GroupIcon from '@phosphor/stack.svg';
 import TagIcon from '@phosphor/tag.svg';
-import { PropertyValueIcon } from '@property/component/propertyValue';
-import { TagDot } from '@property/tags/TagDot';
-import { useTagSets } from '@property/tags/tag-sets-context';
-import { useContacts } from '@queries/contacts/contacts';
 import { Button, cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
-import {
-  TASK_PRIORITY_OPTIONS,
-  TASK_STATUS_OPTIONS,
-} from '../filters/task-facets';
+import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
 
 type TaskFilterGroupId =
@@ -36,9 +25,6 @@ export function TasksControls(props: { tagsOnly?: boolean }) {
   const [tagsExpanded, setTagsExpanded] = createSignal(true);
   const panel = useSplitPanelOrThrow();
   const { state, setFacets, setPrimarySort, setState } = useTasksView();
-  const contacts = useContacts();
-  const currentUserId = useUserId();
-  const tagSets = useTagSets();
   let filterControl: HTMLDivElement | undefined;
   let sortControl: HTMLDivElement | undefined;
 
@@ -77,90 +63,14 @@ export function TasksControls(props: { tagsOnly?: boolean }) {
     )
   );
 
-  const peopleOptions = createMemo(() => {
-    const people = [...contacts()];
-    const me = currentUserId();
-    if (me && !people.some((person) => person.id === me)) {
-      people.unshift({ id: me, email: '', name: idToDisplayName(me) });
-    }
-
-    return people.map((person) => ({
-      id: person.id,
-      label:
-        person.id === me
-          ? person.name
-            ? `${person.name} (me)`
-            : 'Me'
-          : person.name || person.id,
-      icon: () => (
-        <UserIcon
-          id={person.id}
-          size="sm"
-          class="size-3.5"
-          suppressClick
-          showTooltip={false}
-        />
-      ),
-    }));
-  });
-
-  const filterGroups = createMemo(
-    (): ListFilterGroup<TaskFilterGroupId, string>[] => [
-      {
-        id: 'status',
-        label: 'Status',
-        options: TASK_STATUS_OPTIONS.map((option) => ({
-          ...option,
-          icon: () => (
-            <PropertyValueIcon
-              optionId={option.propertyOptionId}
-              class="size-3.5"
-            />
-          ),
-        })),
-      },
-      {
-        id: 'priority',
-        label: 'Priority',
-        options: TASK_PRIORITY_OPTIONS.map((option) => ({
-          ...option,
-          icon: () => (
-            <PropertyValueIcon
-              optionId={option.propertyOptionId}
-              class="size-3.5"
-            />
-          ),
-        })),
-      },
-      {
-        id: 'assignees',
-        label: 'Assigned',
-        options: peopleOptions(),
-      },
-      {
-        id: 'created-by',
-        label: 'Created by',
-        options: peopleOptions(),
-      },
-      {
-        id: 'tags',
-        label: 'Tags',
-        options: tagSets().flatMap((set) =>
-          set.options.map((option) => ({
-            id: option.id,
-            label:
-              option.value.type === 'string' ? option.value.value : option.id,
-            icon: () => <TagDot color={option.color ?? undefined} />,
-          }))
-        ),
-      },
-    ]
+  const filters = useTaskFilters();
+  const filterGroups = createMemo(() =>
+    filters.groups().map((group) => ({
+      ...group,
+      label: group.id === 'assignees' ? 'Assigned' : group.label,
+    }))
   );
-
-  const change = (groupId: string, optionId: string, selected: boolean) => {
-    const update = selected ? addUnique(optionId) : removeValue(optionId);
-    setFacets({ ...state.facets, [groupId]: update(state.facets[groupId]) });
-  };
+  const change = filters.setSelected;
 
   return (
     <Show

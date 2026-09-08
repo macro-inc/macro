@@ -1,6 +1,12 @@
 # Revision-Safe Local Predicate Pagination Plan
 
-Status: **optimistic predicate-index prerequisite complete; ready for implementation**
+Status: **local pagination deferred; flat views now use server-baseline reconciliation**
+
+The implementation now reconciles loaded server-page membership with bounded local
+candidates, retaining unknown baseline rows and removing confirmed non-matches/deletions.
+It preserves the server cursor chain and labels the cache result `reconciled`, not
+`complete`. This is distinct from the exact local page-chain proposal below; that
+proposal's all-or-network authority assumptions must be revisited before implementation.
 
 ## Objective
 
@@ -23,7 +29,8 @@ Local predicate pagination does not exist today:
 - `soup-filter-cache-adapter` always compiles with `has_cursor: false`;
 - Turso predicate SQL orders and limits matches but has no keyset boundary;
 - the frontend calls `entityFilter` only for GraphQL `initial` inputs;
-- once a local projection becomes authoritative, `fetchNextPage` discards it and returns to the stale server page chain.
+- `entityFilter` accepts optional baseline membership/sort evidence and returns revision-scoped reconciled keys;
+- `fetchNextPage` extends the unchanged server page chain, then reconciles all loaded baseline rows again.
 
 After the optimistic fact-index prerequisite is complete, the index has the required effective document universe and ordering basis: one integer sort fact plus a stable normalized-record-key tie-breaker. The remaining work is cursor representation, keyset execution, revision validation, browser transport, and local page-chain ownership.
 

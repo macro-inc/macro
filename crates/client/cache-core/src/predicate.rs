@@ -1,5 +1,7 @@
 //! Generic predicate-projection lifecycle and exact-query storage port.
 
+pub mod reconciliation;
+
 use crate::{
     queue::{MutationId, MutationQueueSnapshot},
     store::Storage,
@@ -644,6 +646,14 @@ pub trait PredicateIndexStorage: Storage {
         keys: &[EntityKey<'static>],
         projection_keys: &[RecordKey],
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
+    /// Reconcile bounded server membership with complete local candidates.
+    /// Unlike an exact query, unrelated incomplete projections do not block it.
+    fn reconcile_predicate_index(
+        &self,
+        query: &ValidatedIndexQuery,
+        baseline: &[reconciliation::PredicateBaselineEntry],
+    ) -> impl Future<Output = Result<reconciliation::PredicateReconciliation, Self::Error>> + MaybeSend;
 
     /// Execute a validated generic query or report an incomplete local scope.
     fn query_predicate_index(

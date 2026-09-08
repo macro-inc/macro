@@ -71,6 +71,7 @@ export function buildCalendarToolPreviewEvent(
     sourceCalendarIds: [],
     title: input.values.title.trim() || 'New event',
     calendar,
+    visibleCalendars: [calendar],
     location: input.values.location || undefined,
     description: input.values.description || undefined,
   };

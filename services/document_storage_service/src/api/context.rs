@@ -148,8 +148,14 @@ pub(crate) type DssEmailService = EmailServiceImpl<
 >;
 
 /// CRM router state.
+pub(crate) type DssCrmStageService = crm::domain::stages::CrmStageServiceImpl<
+    crm::outbound::companies_repo::CompaniesRepositoryImpl,
+    crm::outbound::stage_definitions::PropertiesStageDefinitionStore<PropertiesService>,
+>;
+
 pub(crate) type DssCrmState = crm::inbound::axum_router::CrmRouterState<
     DssCrmService,
+    DssCrmStageService,
     EntityAccessService,
     AuthorizationService,
 >;
@@ -585,6 +591,9 @@ impl From<&ApiContext> for PropertiesHandlerState {
             ctx.entity_access_service.clone(),
             ctx.authorization_state.clone(),
         )
+        .with_managed_team_definitions([
+            crm::domain::stages::CRM_TEAM_STAGE_DEFINITION_NAME.to_string(),
+        ])
     }
 }
 

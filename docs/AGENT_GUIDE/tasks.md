@@ -2,11 +2,11 @@
 
 ## Surface
 
-`Go to Tasks` → `/app/component/tasks`. Tabs `My tasks` / `All`. Table columns: Task, Status,
-Priority, Assignees, Created By, Updated; grouped by priority by default (`Group` menu to
-change). Toolbar: `Task` (create), search (`Ctrl+F`), `Sort`, `Group`, `Filter`, `Preview`,
-and an active filter row (`Status: In Progress +2`, `Add filters`, `Clear all` — note the
-default filter hides Done tasks).
+`Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, and `Team tasks`.
+The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, `Filter`, and `Preview`;
+task creation is available from the `New` button in the Tasks sidebar. On mobile, the tabs
+are pills and the leading sliders button opens one drawer containing Sort, Group, and
+Filters. Mobile intentionally omits the search and create controls.
 
 New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced task features`,
 `How we use tasks at Macro`).

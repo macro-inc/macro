@@ -29,6 +29,7 @@ function event(overrides: Partial<CalendarEvent>): CalendarEvent {
     end: '2026-08-27T20:00:00.000Z',
     allDay: false,
     calendar: { id: 'cal', name: 'Calendar', color: 'orange' },
+    visibleCalendars: [{ id: 'cal', name: 'Calendar', color: 'orange' }],
     ...overrides,
   };
 }

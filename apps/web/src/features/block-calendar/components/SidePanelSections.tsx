@@ -8,7 +8,9 @@ import {
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
 import { ViewFavorites } from '@app/features/favorites/view-favorites';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
+import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { Calendar as MiniCalendar, ToggleSwitch } from '@ui';
 import { format } from 'date-fns';
 import {
@@ -228,7 +230,9 @@ export function SidePanelSections() {
       >
         <ViewFavorites view="calendar" hideHeading />
       </SidePanel.Section>
-      <CalendarTeamOooSidePanelSection />
+      <ShowFeatureFlag flag={enableCalendarTeamOoo}>
+        <CalendarTeamOooSidePanelSection />
+      </ShowFeatureFlag>
     </Show>
   );
 }

@@ -56,6 +56,17 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
 
+/// The agent-session tool-enabled prompt: [`TOOL_USE_PROMPT`] with the user
+/// tool rules restated for a host that reviews those calls in the turn - a
+/// review card the user answers while the agent waits, not a composer left
+/// pending after it.
+pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
+    .compose(&tool_usage::PROMPT)
+    .compose(&user_tools::SESSION_PROMPT)
+    .compose(&skills::PROMPT)
+    .compose(&document_content_links::PROMPT)
+    .compose(&email::PROMPT);
+
 /// Citation, do-not, Macro-terms, and document-content-linking rules surfaced
 /// to external MCP clients, composed together. These are static; the
 /// item-linking rules for the model's own replies are not, because they
@@ -166,6 +177,18 @@ mod tests {
         let chat = TOOL_USE_PROMPT.to_string();
         assert!(chat.contains("PendingUserExecution"));
         assert!(chat.contains("MUST use the `SendEmail` tool"));
+    }
+
+    #[test]
+    fn session_tool_use_prompt_describes_a_review_in_the_turn_not_a_pending_composer() {
+        // An agent session finishes user tools in the turn: the model never
+        // sees "PendingUserExecution" there, and telling it about a composer
+        // to confirm in later would have it say so to the user.
+        let session = SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(!session.contains("PendingUserExecution"));
+        assert!(session.contains("review card"));
+        assert!(session.contains("MUST use the `SendEmail` tool"));
+        assert!(session.contains("do not ask for confirmation in prose"));
     }
 
     #[test]

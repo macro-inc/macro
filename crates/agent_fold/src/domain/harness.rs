@@ -19,6 +19,11 @@
 //!   Every harness spells this differently: a `_meta` flag, a tool name, a
 //!   title prefix; the answer in `_meta`, in `rawInput`, in `rawOutput`, or
 //!   in the content text.
+//! - How an ask-the-user question is spelled in an `elicitation/create`
+//!   form. ACP fixes the wire shape; the harness decides that a select comes
+//!   with a free-text "Other" companion property, marks the companion in its
+//!   `_meta`, and later reports which of the two it took on the asking
+//!   tool's frame.
 //!
 //! So each harness gets a [`HarnessReader`] in its own file, and every reader
 //! method takes the whole frame - a [`ToolFrame`] - rather than the fields
@@ -282,6 +287,32 @@ pub trait HarnessReader: Sync {
     fn subagent_transcript(&self, frame: &ToolFrame<'_>) -> Vec<MessagePart> {
         let _ = frame;
         Vec::new()
+    }
+
+    /// The select that `property` - one property of an `elicitation/create`
+    /// form schema, as the wire carried it, declared under `name` - is the
+    /// free-text "Other" companion of, when it is one.
+    ///
+    /// The ask-the-user idiom: the agent offers choices *and* a place to type
+    /// an answer of one's own, as two properties. The fold collapses the pair
+    /// into one field, so a renderer never shows a stray text box under a
+    /// select. The neutral reading is the un-namespaced marker Claude Code
+    /// chose so other bridges could share it,
+    /// `_meta._askUserQuestionCustomAnswer`; a harness with a marker of its
+    /// own, or a bare naming convention for recordings that lost their
+    /// `_meta`, reads that too. `None` means an ordinary property.
+    fn custom_answer_for(&self, name: &str, property: &Value) -> Option<String> {
+        generic::custom_answer_for(name, property)
+    }
+
+    /// The harness's own reading of the answer to a question it asked through
+    /// `elicitation/create`, when a frame for the asking tool call carries
+    /// one - the value it settled on when the user both chose and typed, in
+    /// whatever shape the harness reports it. `None` when the frame says
+    /// nothing about it, which is every harness but Claude Code today.
+    fn reported_elicitation_answer(&self, frame: &ToolFrame<'_>) -> Option<Value> {
+        let _ = frame;
+        None
     }
 }
 

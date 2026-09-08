@@ -41,8 +41,9 @@ use super::metadata;
 use super::model::{
     EditReceipt, EntityOptionUpdateOutcome, EntityPropertyInfo, EntityPropertyOptionSelection,
     EntityPropertyOptionUpdate, PropertyAccessReceiptExt, PropertyDefinitionOwner,
-    PropertyTargetKey, ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope,
-    TagSet, UpdatePropertyOptionOutcome, ViewReceipt,
+    PropertyOptionReplaceOutcome, PropertyOptionReplacePlan, PropertyTargetKey,
+    ResolvedPropertySubject, TagPromotionOutcome, TagRemapOutcome, TagScope, TagSet,
+    UpdatePropertyOptionOutcome, ViewReceipt,
 };
 use super::ports::{NotificationService, PermissionService, PropertiesRepo};
 use super::service::{PropertiesService, TeamReceipt, team_id_from_receipt};
@@ -1343,6 +1344,79 @@ where
             UpdatePropertyOptionOutcome::NotFound => Err(PropertiesErr::OptionNotFound),
             UpdatePropertyOptionOutcome::DuplicateValue => Err(PropertiesErr::DuplicateOptionValue),
         }
+    }
+
+    #[tracing::instrument(skip(self, team, plan), err)]
+    async fn replace_property_options(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        property_definition_id: Uuid,
+        plan: PropertyOptionReplacePlan,
+    ) -> Result<Vec<PropertyOption>, PropertiesErr> {
+        let definition = self
+            .owned_modifiable_definition(
+                property_definition_id,
+                user_id,
+                team_id_from_receipt(team),
+            )
+            .await?;
+        if definition.data_type != DataType::SelectString {
+            return Err(PropertiesErr::Validation(
+                "option replacement is only supported for string select properties".to_string(),
+            ));
+        }
+        let values = plan
+            .rewrite
+            .iter()
+            .map(|rewrite| &rewrite.value)
+            .chain(plan.insert.iter().map(|insert| &insert.value));
+        for value in values {
+            match value {
+                PropertyOptionValue::String(text) if !text.trim().is_empty() => {}
+                _ => {
+                    return Err(PropertiesErr::Validation(
+                        "option values must be non-empty strings".to_string(),
+                    ));
+                }
+            }
+        }
+
+        let before = self
+            .repository
+            .get_property_options(property_definition_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+
+        let after = match self
+            .repository
+            .replace_property_options(property_definition_id, &plan)
+            .await
+            .map_err(anyhow::Error::from)?
+        {
+            PropertyOptionReplaceOutcome::Replaced(options) => options,
+            PropertyOptionReplaceOutcome::OptionNotFound => {
+                return Err(PropertiesErr::OptionNotFound);
+            }
+            PropertyOptionReplaceOutcome::DuplicateValue => {
+                return Err(PropertiesErr::DuplicateOptionValue);
+            }
+        };
+
+        for option in before.iter().filter(|o| plan.delete.contains(&o.id)) {
+            self.publish_property_event(Self::property_option_deleted_event(option, user_id));
+        }
+        for option in &after {
+            let event = if plan.rewrite.iter().any(|r| r.option_id == option.id) {
+                Self::property_option_updated_event(option, user_id)
+            } else if before.iter().any(|o| o.id == option.id) {
+                continue;
+            } else {
+                Self::property_option_created_event(option, user_id)
+            };
+            self.publish_property_event(event);
+        }
+        Ok(after)
     }
 
     #[tracing::instrument(skip(self, team), err)]

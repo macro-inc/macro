@@ -26,6 +26,11 @@ mod attachments;
 mod chats;
 pub mod structured_completion;
 
+#[cfg(test)]
+mod test;
+
+const GATEWAY_PATH_PREFIX: &str = "/cognition";
+
 #[tracing::instrument(err, skip(state))]
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
     let cors = macro_cors::cors_layer();
@@ -39,22 +44,24 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 
     let port = state.config.port;
     let environment = state.config.environment;
-    let app = api_router(state.clone())
-        .layer(cors.clone())
-        .layer(DefaultBodyLimit::disable())
-        .layer(RequestBodyLimitLayer::new(1024 * 1024 * 1024)) // 1GB
-        .layer(
-            ServiceBuilder::new()
-                .layer(TraceLayer::new_for_http())
-                .layer(axum::middleware::from_fn_with_state(
-                    ServiceNameState {
-                        service_name: VersionedApiServiceName::DocumentCognitionService,
-                    },
-                    validate_api_version,
-                )),
-        )
-        .merge(health::router().layer(cors))
-        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()));
+    let app = mount_at_root_and_prefix(
+        api_router(state.clone())
+            .layer(cors.clone())
+            .layer(DefaultBodyLimit::disable())
+            .layer(RequestBodyLimitLayer::new(1024 * 1024 * 1024))
+            .layer(
+                ServiceBuilder::new()
+                    .layer(TraceLayer::new_for_http())
+                    .layer(axum::middleware::from_fn_with_state(
+                        ServiceNameState {
+                            service_name: VersionedApiServiceName::DocumentCognitionService,
+                        },
+                        validate_api_version,
+                    )),
+            )
+            .merge(health::router().layer(cors)),
+    )
+    .merge(swagger_ui());
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
         .await
@@ -68,6 +75,27 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
         .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
         .await
         .context("error starting service")
+}
+
+fn mount_at_root_and_prefix(inner: Router) -> Router {
+    Router::new()
+        .merge(inner.clone())
+        .nest(GATEWAY_PATH_PREFIX, inner)
+}
+
+fn swagger_ui() -> Router {
+    Router::new()
+        .merge(SwaggerUi::new("/docs").url("/api-doc/openapi.json", swagger::ApiDoc::openapi()))
+        .merge(SwaggerUi::new(format!("{GATEWAY_PATH_PREFIX}/docs")).url(
+            format!("{GATEWAY_PATH_PREFIX}/api-doc/openapi.json"),
+            prefixed_openapi(),
+        ))
+}
+
+fn prefixed_openapi() -> utoipa::openapi::OpenApi {
+    let mut openapi = swagger::ApiDoc::openapi();
+    openapi.servers = Some(vec![utoipa::openapi::Server::new(GATEWAY_PATH_PREFIX)]);
+    openapi
 }
 
 fn api_router(api_context: ApiContext) -> Router {

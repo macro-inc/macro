@@ -41,6 +41,10 @@ import {
   createComposerController,
 } from './create-composer-controller';
 import {
+  createElicitationController,
+  type ElicitationController,
+} from './create-elicitation-controller';
+import {
   createQueueController,
   type QueueController,
 } from './create-queue-controller';
@@ -96,7 +100,15 @@ export type AgentSessionState = {
    * runtime was disconnected, and a request it must wait on is outstanding.
    */
   resuming: Accessor<boolean>;
+  /**
+   * The agent is mid-turn but waiting on the user, not generating: the
+   * fold's metadata names a question to answer. Presentational only -
+   * `working` stays true so queued prompts keep waiting behind the question.
+   */
+  blockedOnUser: Accessor<boolean>;
   composer: ComposerController;
+  /** The live question, and the one POST that answers it. */
+  elicitation: ElicitationController;
   /**
    * The session's server-side action queue: prompts sent mid-turn wait
    * there and dispatch one per turn end. The server is the only truth —
@@ -161,6 +173,17 @@ export function AgentSessionProvider(
     model: () => feed.metadata()?.model,
     controlOutcome: (requestId) => controlOutcome(feed.messages(), requestId),
   });
+  const pendingElicitation = () =>
+    isDisconnected(status.status())
+      ? undefined
+      : (feed.metadata()?.pendingElicitation ?? undefined);
+  const elicitation = createElicitationController({
+    sessionId,
+    pending: pendingElicitation,
+    ownerId: () => feed.session()?.ownerId,
+    viewerId,
+  });
+  const blockedOnUser = () => working() && pendingElicitation() !== undefined;
 
   // The transcript's "Reply to this" chip hands selected text to the
   // composer through here. A plain variable, not a signal: it is only read
@@ -206,7 +229,9 @@ export function AgentSessionProvider(
           working,
           status: status.status,
           resuming,
+          blockedOnUser,
           composer,
+          elicitation,
           queue,
           quoteSelection,
           registerQuoteInsert,

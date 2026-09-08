@@ -1,5 +1,20 @@
 # Other Surfaces
 
+## Live updates in flat Soup lists
+
+With browser GraphQL caching enabled, locally supported flat lists reconcile their
+loaded server pages with matching cached entities. Complete matching updates can
+appear without a list refetch; confirmed non-matches and explicit deletions disappear.
+Rows whose current predicate facts are unknown retain their previous server membership
+and sort evidence until hydration or a network refresh resolves them. Unrelated
+notification-only cache records do not block other rows' updates.
+
+This is a best-effort display, not proof that every matching entity is cached. Loading
+more still follows the original server cursors and preserves already loaded pages.
+Changing filters or resetting the cache discards prior reconciliation evidence. Grouped
+lists, unsupported filters/sorts, and native/non-cache transports keep their existing
+network behavior.
+
 ## Inbox — `/app/component/inbox`
 
 Unified triage list (emails, channel messages, task assignments, doc mentions, agent
@@ -66,21 +81,24 @@ provider does not report the stored ones. Out-of-office events render on the gri
 chips filled with their calendar color (like Google), unlike regular events' outlined chips,
 and their details card shows an `Out of office` line under the schedule.
 An event that Google carries on several of an account's calendars (a shared calendar's
-re-import of a member's own event, for example) renders once per calendar, side by side,
-the way Google Calendar shows it: each chip carries its own copy's title, color, and
-editability, and hiding a calendar hides its chip. Reminders, guests, and conferencing
-always show and follow the primary copy, since that is the copy Macro's alerts fire from
-and whose guest list and join link Macro records, and the editor only lets them be changed
-there. Answering an invitation likewise addresses the primary copy. The details popover and
-the editor act on the chip's copy, so editing or deleting it targets that calendar's event
-at Google.
+re-import of a member's own event, for example) renders as one chip, not one per calendar:
+the chip carries one thin color bar on its left edge per shown calendar the event is on
+(the details popover's color square splits the same way), and shows the title, color, and
+editability of the first shown copy in primary-first order — hiding the primary calendar
+switches the chip to the shared copy, hiding every one of its calendars hides the chip.
+Reminders, guests, and conferencing always show and follow the primary copy, since that is
+the copy Macro's alerts fire from and whose guest list and join link Macro records, and the
+editor only lets them be changed there. Answering an invitation likewise addresses the
+primary copy. The details popover and the editor act on the displayed copy, so editing or
+deleting it targets that calendar's event at Google.
 
-Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
-`<name>: <event title>`. The side panel's `Team out of office` section (shown only when the
-user belongs to a team with other members) has a checkbox in its header row toggling the
-whole overlay on or off — all teammates or none — and lists the next 90 days of teammate
-absences; clicking a row navigates the grid to that date. Coverage depends on each teammate
-having connected their own calendar and using Google's out-of-office event type.
+With the `enable-calendar-team-ooo` flag on, teammates' Google Calendar out-of-office events
+overlay the grid as read-only chips titled `<name>: <event title>`. The side panel's
+`Team out of office` section (shown only when the user belongs to a team with other members)
+has a checkbox in its header row toggling the whole overlay on or off — all teammates or
+none — and lists the next 90 days of teammate absences; clicking a row navigates the grid to
+that date. Coverage depends on each teammate having connected their own calendar and using
+Google's out-of-office event type.
 
 ## Calls — `/app/component/calls`
 

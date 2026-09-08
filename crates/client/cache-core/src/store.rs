@@ -6,6 +6,10 @@
 //! wasm — wasm futures aren't
 //! `Send`.
 
+use crate::predicate::reconciliation::{
+    PredicateBaselineEntry, PredicateMembership, PredicateReconciliation, predicate_membership,
+    reconcile_predicate_baseline,
+};
 use crate::predicate::{
     OptimisticShadowReconciliation, OptimisticUpsertReconciliation, PredicateIndexStorage,
     PredicateQueryResult, ProjectionMutation, ProjectionState, StagedOptimisticProjection,
@@ -738,6 +742,62 @@ impl Storage for InMemoryStorage {
 }
 
 impl PredicateIndexStorage for InMemoryStorage {
+    async fn reconcile_predicate_index(
+        &self,
+        query: &predicate_index::ValidatedIndexQuery,
+        baseline: &[PredicateBaselineEntry],
+    ) -> Result<PredicateReconciliation, Self::Error> {
+        let present = |key: &PredicateRecordKey| {
+            self.records
+                .contains_key(&EntityKey(key.as_str().to_owned().into()))
+        };
+        let membership = |key: &PredicateRecordKey| {
+            predicate_membership(
+                query,
+                self.projections.get(key),
+                self.optimistic_projections.get(key),
+                present(key),
+            )
+        };
+        let keys: HashSet<_> = self
+            .projections
+            .keys()
+            .chain(self.optimistic_projections.keys())
+            .collect();
+        let documents = keys
+            .into_iter()
+            .filter_map(|key| {
+                if !matches!(membership(key), PredicateMembership::Match(_)) {
+                    return None;
+                }
+                match self.optimistic_projections.get(key) {
+                    Some(projection) => match &projection.state {
+                        predicate_index::OptimisticProjectionState::Complete(document) => {
+                            Some(document.clone())
+                        }
+                        _ => None,
+                    },
+                    None => match self.projections.get(key) {
+                        Some(ProjectionState::Complete(document)) => Some(document.clone()),
+                        _ => None,
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+        Ok(reconcile_predicate_baseline(
+            query,
+            baseline,
+            baseline.iter().map(|entry| membership(&entry.record_key)),
+            evaluate_reference(query, &documents),
+            self.optimistic_projections.iter().any(|(key, shadow)| {
+                query.includes_scope(shadow.state.profile(), shadow.state.partition())
+                    || self.projections.get(key).is_some_and(|authority| {
+                        query.includes_scope(authority.profile(), authority.partition())
+                    })
+            }),
+        ))
+    }
+
     async fn delete_batch_with_projections(
         &mut self,
         keys: &[EntityKey<'static>],

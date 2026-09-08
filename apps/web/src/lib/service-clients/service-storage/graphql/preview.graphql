@@ -37,6 +37,34 @@ query ItemPreview($input: SoupInput!) {
 	}
 }
 
+# Rich display previews load task metadata before their children mount.
+# Keep ItemPreviewFields minimal for cached creation seeds and name-only reads.
+query ItemPreviews($input: SoupInput!) {
+	user {
+		id
+		soup(input: $input) {
+			items {
+				...ItemPreviewDetailsFields
+			}
+		}
+	}
+}
+
+fragment ItemPreviewDetailsFields on GraphqlSoupEntity {
+	...ItemPreviewFields
+	... on GraphqlSoupDocument {
+		properties {
+			...SoupPropertyFields
+		}
+		viewerPermission {
+			__typename
+			... on GraphqlAccessLevelPermission {
+				accessLevel
+			}
+		}
+	}
+}
+
 fragment ItemPreviewFields on GraphqlSoupEntity {
 	__typename
 	id
