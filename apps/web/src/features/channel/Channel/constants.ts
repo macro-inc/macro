@@ -1,1 +1,1 @@
-export const NEAR_BOTTOM_THRESHOLD = 50;
+export const NEAR_BOTTOM_THRESHOLD = 1;

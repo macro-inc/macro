@@ -194,14 +194,16 @@ export function ThreadList(props: ThreadListProps) {
     // layout until ResizeObserver fires. Read mounted rows before first paint.
     measureElement: (element, entry, instance) =>
       entry ? measureElement(element, entry, instance) : element.offsetHeight,
-    // Measure outside ResizeObserver delivery: committing row/sizer geometry
-    // inside its callback can leave undelivered notifications in WebKit.
-    useAnimationFrameWithResizeObserver: true,
+    // Apply row and composer measurements before paint. Deferring them to the
+    // next frame exposes stale geometry and can lose the end anchor on send.
+    useAnimationFrameWithResizeObserver: false,
     useScrollendEvent: true,
     anchorTo: 'end',
     get followOnAppend() {
       return lifecycle.isReady() && (props.followOnAppend ?? true);
     },
+    // Use the same end tolerance for append, resize, navigation, and snapshots.
+    // A loose tolerance also mistakes optimistic row estimates for a pin.
     scrollEndThreshold: NEAR_BOTTOM_THRESHOLD,
     get paddingStart() {
       return insets().start;
@@ -474,7 +476,11 @@ export function ThreadList(props: ThreadListProps) {
                 on(
                   () => item().index,
                   () => {
-                    if (row) virtualizer.measureElement(row);
+                    // Markdown fills the row in child effects. Measuring the empty
+                    // shell can shrink the sizer and clamp scrollTop before paint.
+                    queueMicrotask(() => {
+                      if (row?.isConnected) virtualizer.measureElement(row);
+                    });
                   }
                 )
               );

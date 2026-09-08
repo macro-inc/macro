@@ -61,8 +61,12 @@ thread past the chat's right edge.
 
 Channels open at the latest message, with short conversations aligned above the
 composer. Incoming messages and growing replies stay in view while the channel is
-at the bottom. Scrolling up leaves the viewport on the history being read; loading
-older messages preserves that message's position.
+at the bottom. Consecutive sends stay pinned through server acknowledgement and
+composer resizing, without bouncing upward between messages.
+Scrolling up more than 1px leaves the viewport on the history being read, even
+when only slightly above the bottom. Composer and viewport resizing respect the
+same boundary. Returning to the bottom resumes following; loading older messages
+preserves the reading position.
 
 Message and reply links reveal the target inside its thread. Keyboard message
 navigation scrolls only when the selected message is outside the usable viewport.
