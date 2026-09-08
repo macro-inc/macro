@@ -185,7 +185,7 @@ function SlimHeader() {
       <div class="w-full px-3">
         <Tabs
           aria-label="Chat sidebar views"
-          class="h-[76px] flex-col"
+          class="h-20 flex-col"
           itemClass="h-auto min-h-0 w-full"
           labelClass="size-full p-0"
           fullWidth
