@@ -66,12 +66,13 @@ there. Answering an invitation likewise addresses the primary copy. The details 
 the editor act on the chip's copy, so editing or deleting it targets that calendar's event
 at Google.
 
-Teammates' Google Calendar out-of-office events overlay the grid as read-only chips titled
-`<name>: <event title>`. The side panel's `Team out of office` section (shown only when the
-user belongs to a team with other members) has a checkbox in its header row toggling the
-whole overlay on or off — all teammates or none — and lists the next 90 days of teammate
-absences; clicking a row navigates the grid to that date. Coverage depends on each teammate
-having connected their own calendar and using Google's out-of-office event type.
+With the `enable-calendar-team-ooo` flag on, teammates' Google Calendar out-of-office events
+overlay the grid as read-only chips titled `<name>: <event title>`. The side panel's
+`Team out of office` section (shown only when the user belongs to a team with other members)
+has a checkbox in its header row toggling the whole overlay on or off — all teammates or
+none — and lists the next 90 days of teammate absences; clicking a row navigates the grid to
+that date. Coverage depends on each teammate having connected their own calendar and using
+Google's out-of-office event type.
 
 ## Calls — `/app/component/calls`
 

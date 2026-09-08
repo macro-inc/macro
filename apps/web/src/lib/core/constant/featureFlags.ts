@@ -612,6 +612,18 @@ export const enableCalendarPromptWeb = defineFlag({
   env: 'ENABLE_CALENDAR_PROMPT_WEB',
 });
 
+// Team out of office: the calendar side panel's "Team out of office" section
+// and the read-only teammate absence chips on the grid. Purely additive: when
+// off, the section never mounts and no team out-of-office query is issued.
+// Lives inside the calendar block, so `enable-calendar-ui` already gates it.
+// PostHog-gated with a dev-mode default; override with
+// VITE_ENABLE_CALENDAR_TEAM_OOO.
+export const enableCalendarTeamOoo = defineFlag({
+  key: 'enable-calendar-team-ooo',
+  env: 'ENABLE_CALENDAR_TEAM_OOO',
+  default: onInDev,
+});
+
 // Sharing a personal tag with the team: the "Share with team" action on
 // personal tags in Settings › Tags, and the prompt that merges into an
 // existing team label when the names collide. The backend endpoints ship

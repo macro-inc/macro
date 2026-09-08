@@ -7,7 +7,9 @@ import {
   useHasTeammates,
   useUpcomingTeamOoo,
 } from '@app/features/calendar/hooks/use-team-ooo';
+import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel, useSidePanel } from '@components/app/side-panel/SidePanel';
+import { enableCalendarTeamOoo } from '@core/constant/featureFlags';
 import { Calendar as MiniCalendar, ToggleSwitch } from '@ui';
 import { format } from 'date-fns';
 import {
@@ -219,7 +221,9 @@ export function SidePanelSections() {
     <Show when={!sidePanel?.isNarrow()}>
       <CalendarMiniCalendarSidePanelSection />
       <CalendarSourcesSidePanelSection />
-      <CalendarTeamOooSidePanelSection />
+      <ShowFeatureFlag flag={enableCalendarTeamOoo}>
+        <CalendarTeamOooSidePanelSection />
+      </ShowFeatureFlag>
     </Show>
   );
 }
