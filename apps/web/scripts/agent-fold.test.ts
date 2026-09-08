@@ -1,14 +1,16 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { promisify } from 'node:util';
 import { beforeAll, expect, it } from 'vitest';
 import type { FoldStream } from '../src/lib/core/agent-fold/wasm-module';
 
 let Stream: new (session: string) => FoldStream;
 
 beforeAll(async () => {
-  execFileSync('just', ['build-agent-fold-wasm'], {
+  // Keep the worker responsive to Vitest RPC while a cold WASM build runs.
+  await promisify(execFile)('just', ['build-agent-fold-wasm'], {
     cwd: new URL('..', import.meta.url),
-    stdio: 'pipe',
+    maxBuffer: 10 * 1024 * 1024,
   });
   const path = new URL('../src/lib/core/agent-fold/wasm/', import.meta.url);
   const wasm = await import(/* @vite-ignore */ new URL('agent_fold.js', path).href);
