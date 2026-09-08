@@ -9,3 +9,4 @@ pub use access::VisibleHarnessAccess;
 pub use cursor::CursorModels;
 pub use in_memory::InMemoryModels;
 pub use macrod::MacrodModels;
+pub(crate) use macrod::ModelProbeEvent;

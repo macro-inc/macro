@@ -163,7 +163,8 @@ but unconnected app gets a tool result saying so, and the agent's reply renders 
 The model list is loaded live and independently for In-memory, connected Cursor, and every
 registered macrod harness. A harness can show `Loading models…`, an unsupported message, or
 a retryable error without hiding the other harnesses. Editing preserves a saved model that
-is no longer offered and labels it `saved, unavailable`.
+is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
+can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.
 
 `Harness` configures Cursor and paired macrod runtimes. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.

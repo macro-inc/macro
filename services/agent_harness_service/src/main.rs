@@ -542,6 +542,10 @@ async fn run() -> anyhow::Result<()> {
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.
     turn_observer.bind(harness.clone());
+    let model_probe_timeout = std::time::Duration::from_secs(10);
+    let macrod_models =
+        MacrodModels::new(Arc::clone(&runtimes), redis.clone(), model_probe_timeout);
+    let runtime_command_models = macrod_models.clone();
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
     let runtime_command_runtimes = Arc::clone(&runtimes);
@@ -562,6 +566,7 @@ async fn run() -> anyhow::Result<()> {
                     },
                     runtime_command_harness.clone(),
                     runtime_commands_ready.clone(),
+                    runtime_command_models.clone(),
                 )
             },
         )
@@ -602,8 +607,8 @@ async fn run() -> anyhow::Result<()> {
         VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
         InMemoryModels::new(inmem_model_engine, config.inmem_model.clone()),
         CursorModels::new(cursor_keys, CURSOR_API_BASE_URL.to_owned()),
-        MacrodModels::new(Arc::clone(&runtimes)),
-        std::time::Duration::from_secs(10),
+        macrod_models,
+        model_probe_timeout,
     ));
     let model_state = AgentModelsRouterState::new(
         model_service,
