@@ -93,6 +93,18 @@ describe('single-choice elicitation', () => {
     expect(answer()).toEqual({ colour: 'red' });
   });
 
+  it('highlights the selected row', () => {
+    const view = form(question(null));
+    const red = view.getByRole('radio', { name: 'Red' });
+    const other = view.getByRole('radio', { name: 'A literal option' });
+    expect(red.closest('label')?.className).toContain('border-accent');
+    expect(other.closest('label')?.className).not.toContain('border-accent');
+
+    fireEvent.click(other);
+    expect(red.closest('label')?.className).not.toContain('border-accent');
+    expect(other.closest('label')?.className).toContain('border-accent');
+  });
+
   it('typing directly selects Other and keeps an empty Other selected', () => {
     const view = form(question('colour_custom'));
     const text = view.getByPlaceholderText('Type your own answer');

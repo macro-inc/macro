@@ -9,7 +9,7 @@ import type {
   ElicitationSchema,
 } from '@service-agent-fold/generated/types';
 import { Checkbox } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import type {
   FieldValue,
   FormValues,
@@ -31,6 +31,60 @@ function textOf(value: FieldValue | undefined): string {
 
 const INPUT_CLASS =
   'w-full rounded-md border border-edge-muted bg-surface px-2 py-1 text-sm text-ink placeholder:text-ink-placeholder focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50';
+
+/** Bordered choice row matching settings `ChoiceRow`, tightened for chat. */
+function ChoiceOption(props: {
+  checked: boolean;
+  disabled?: boolean;
+  children: JSX.Element;
+}) {
+  return (
+    <label
+      class="flex min-w-0 items-start gap-2 rounded-md border px-2 py-1.5 text-sm text-ink transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent/30"
+      classList={{
+        'border-accent bg-accent-bg': props.checked,
+        'border-edge-muted hover:bg-hover': !props.checked && !props.disabled,
+        'border-edge-muted': !props.checked && !!props.disabled,
+        'opacity-50': props.disabled,
+      }}
+    >
+      {props.children}
+    </label>
+  );
+}
+
+/** Custom radio mark matching the calendar recurrence picker. */
+function RadioMark(props: { checked: boolean }) {
+  return (
+    <span
+      class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border"
+      classList={{
+        'border-accent': props.checked,
+        'border-edge': !props.checked,
+      }}
+      aria-hidden="true"
+    >
+      <Show when={props.checked}>
+        <span class="size-2 rounded-full bg-accent" />
+      </Show>
+    </span>
+  );
+}
+
+function OptionCopy(props: { title: string; description?: string | null }) {
+  return (
+    <span class="flex min-w-0 flex-col">
+      <span class="font-medium">{props.title}</span>
+      <Show when={props.description}>
+        {(description) => (
+          <span class="text-xs font-normal text-ink-extra-muted">
+            {description()}
+          </span>
+        )}
+      </Show>
+    </span>
+  );
+}
 
 function Field(props: {
   property: ElicitationProperty;
@@ -89,7 +143,11 @@ export function ElicitationForm(props: ElicitationFormProps) {
               error={props.errors[property.name]}
             >
               {field.type === 'string' && field.options.length > 0 ? (
-                <div class="flex flex-col gap-1" role="radiogroup">
+                <div
+                  class="flex flex-col gap-1.5"
+                  role="radiogroup"
+                  aria-label={property.title ?? property.name}
+                >
                   <For each={field.options}>
                     {(option) => {
                       const checked = () => {
@@ -100,10 +158,13 @@ export function ElicitationForm(props: ElicitationFormProps) {
                         );
                       };
                       return (
-                        <label class="flex items-start gap-2 text-sm text-ink">
+                        <ChoiceOption
+                          checked={checked()}
+                          disabled={props.disabled}
+                        >
                           <input
                             type="radio"
-                            class="mt-1 accent-accent"
+                            class="sr-only"
                             name={`elicitation-${property.name}`}
                             value={option.value}
                             checked={checked()}
@@ -118,25 +179,23 @@ export function ElicitationForm(props: ElicitationFormProps) {
                               })
                             }
                           />
-                          <span class="flex flex-col">
-                            <span>{option.title ?? option.value}</span>
-                            <Show when={option.description}>
-                              {(description) => (
-                                <span class="text-xs text-ink-extra-muted">
-                                  {description()}
-                                </span>
-                              )}
-                            </Show>
-                          </span>
-                        </label>
+                          <RadioMark checked={checked()} />
+                          <OptionCopy
+                            title={option.title ?? option.value}
+                            description={option.description}
+                          />
+                        </ChoiceOption>
                       );
                     }}
                   </For>
                   <Show when={field.customField}>
-                    <label class="flex items-start gap-2 text-sm text-ink">
+                    <ChoiceOption
+                      checked={selection().kind === 'custom'}
+                      disabled={props.disabled}
+                    >
                       <input
                         type="radio"
-                        class="mt-1 accent-accent"
+                        class="sr-only"
                         name={`elicitation-${property.name}`}
                         checked={selection().kind === 'custom'}
                         disabled={props.disabled}
@@ -147,8 +206,9 @@ export function ElicitationForm(props: ElicitationFormProps) {
                           })
                         }
                       />
+                      <RadioMark checked={selection().kind === 'custom'} />
                       <span class="flex min-w-0 flex-1 flex-col gap-1">
-                        <span>Other</span>
+                        <span class="font-medium">Other</span>
                         <input
                           type="text"
                           class={INPUT_CLASS}
@@ -171,7 +231,7 @@ export function ElicitationForm(props: ElicitationFormProps) {
                           }
                         />
                       </span>
-                    </label>
+                    </ChoiceOption>
                   </Show>
                 </div>
               ) : field.type === 'string' ? (
@@ -216,7 +276,7 @@ export function ElicitationForm(props: ElicitationFormProps) {
                   <Checkbox.Label class="text-sm text-ink">Yes</Checkbox.Label>
                 </Checkbox>
               ) : field.type === 'multi_select' ? (
-                <div class="flex flex-col gap-1">
+                <div class="flex flex-col gap-1.5">
                   <For each={field.options}>
                     {(option) => {
                       const selected = () => {
@@ -225,14 +285,23 @@ export function ElicitationForm(props: ElicitationFormProps) {
                           ? current.values
                           : [];
                       };
+                      const checked = () => selected().includes(option.value);
                       return (
                         <Checkbox
-                          checked={selected().includes(option.value)}
+                          class="w-full min-w-0 items-start rounded-md border px-2 py-1.5 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent/30"
+                          classList={{
+                            'border-accent bg-accent-bg': checked(),
+                            'border-edge-muted hover:bg-hover':
+                              !checked() && !props.disabled,
+                            'border-edge-muted': !checked() && !!props.disabled,
+                            'opacity-50': props.disabled,
+                          }}
+                          checked={checked()}
                           disabled={props.disabled}
-                          onChange={(checked) =>
+                          onChange={(next) =>
                             set({
                               kind: 'multi_select',
-                              values: checked
+                              values: next
                                 ? [...selected(), option.value]
                                 : selected().filter(
                                     (item) => item !== option.value
@@ -241,16 +310,12 @@ export function ElicitationForm(props: ElicitationFormProps) {
                             })
                           }
                         >
-                          <Checkbox.Control />
-                          <Checkbox.Label class="flex flex-col text-sm text-ink">
-                            <span>{option.title ?? option.value}</span>
-                            <Show when={option.description}>
-                              {(description) => (
-                                <span class="text-xs text-ink-extra-muted">
-                                  {description()}
-                                </span>
-                              )}
-                            </Show>
+                          <Checkbox.Control class="mt-0.5" />
+                          <Checkbox.Label class="min-w-0 text-sm text-ink">
+                            <OptionCopy
+                              title={option.title ?? option.value}
+                              description={option.description}
+                            />
                           </Checkbox.Label>
                         </Checkbox>
                       );

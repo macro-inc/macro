@@ -11,6 +11,7 @@ import type {
   ModelOption,
   ToolStatus,
 } from '@service-agent-fold/generated/types';
+import { Button } from '@ui';
 import { createSignal, type JSX, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { Message } from '../component/AgentMessage';
@@ -360,6 +361,73 @@ const FIXTURE_MESSAGE: FoldedMessage = {
 };
 
 /**
+ * The colour question as it appears in a live session: message, required
+ * single-choice rows, and the submit row.
+ */
+const COLOR_QUESTION: ElicitationSchema = {
+  title: null,
+  description: null,
+  required: ['answer'],
+  properties: [
+    {
+      name: 'answer',
+      title: 'Answer',
+      description: null,
+      schema: {
+        type: 'string',
+        minLength: null,
+        maxLength: null,
+        pattern: null,
+        format: null,
+        default: null,
+        options: [
+          { value: 'Blue', title: 'Blue', description: null },
+          { value: 'Green', title: 'Green', description: null },
+          { value: 'Red', title: 'Red', description: null },
+          { value: 'Purple', title: 'Purple', description: null },
+          { value: 'Orange', title: 'Orange', description: null },
+        ],
+        customField: null,
+      },
+    },
+  ],
+};
+
+function ColorQuestionDemo() {
+  const [values, setValues] = createStore(initialValues(COLOR_QUESTION));
+  const errors = () => validate(COLOR_QUESTION, values);
+  return (
+    <ToolCard
+      title="Macro Coder is asking"
+      status="running"
+      defaultOpen
+      trailing={<span class="text-ink-muted">Waiting for you</span>}
+    >
+      <div class="flex flex-col gap-3 py-1">
+        <div class="text-sm text-ink">What's the best color?</div>
+        <ElicitationForm
+          schema={COLOR_QUESTION}
+          values={values}
+          errors={errors()}
+          onChange={(name, value) => setValues(name, value)}
+        />
+        <div class="flex items-center gap-2">
+          <Button variant="cta" size="xs">
+            Submit
+          </Button>
+          <Button variant="outline" size="xs">
+            Decline
+          </Button>
+          <Button variant="ghost" size="xs">
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </ToolCard>
+  );
+}
+
+/**
  * The Claude Code colour question after the fold collapsed its custom pair,
  * plus one of every other field type, so the form's controls can be eyeballed.
  */
@@ -464,6 +532,10 @@ export default function AgentUiGallery() {
     <StaticMarkdownContext>
       <div class="size-full overflow-auto">
         <div class="mx-auto flex max-w-3xl flex-col gap-8 px-6 py-8">
+          <Item label="ElicitationForm (single choice)">
+            <ColorQuestionDemo />
+          </Item>
+
           <Item label="ElicitationForm (live validation)">
             <ElicitationFormDemo />
           </Item>
