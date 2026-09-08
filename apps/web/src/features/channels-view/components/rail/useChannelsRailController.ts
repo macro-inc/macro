@@ -5,12 +5,10 @@ import {
   useListInteractions,
 } from '@app/components/list';
 import { useViewTabHotkeys } from '@app/components/view-shell';
-import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
-import { useUserId } from '@core/context/user';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { compareDateDesc } from '@core/util/date';
 import type { ChannelEntity } from '@entity';
@@ -25,11 +23,7 @@ import {
 } from 'solid-js';
 import { useChannelsView } from '../../channels-view-context';
 import type { ChannelsGroup, ChannelsTab } from '../../types';
-import {
-  channelHasMessages,
-  channelMentionsUser,
-  isDirectMessage,
-} from '../../utils';
+import { channelHasMessages, isDirectMessage } from '../../utils';
 import type { ChannelCallStatus } from './ChannelRailItems';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
@@ -53,51 +47,68 @@ type ChannelRailRow =
 const rowKeyForChannel = (channelId: string) => `channel:${channelId}`;
 const rowKeyForSection = (group: ChannelsGroup) => `section:${group}`;
 
+export type ChannelRailSectionState = {
+  items: readonly ChannelEntity[];
+  open: boolean;
+  fillAvailable: boolean;
+  focused: boolean;
+  containsFocus: boolean;
+  domId: string;
+};
+
+export type ChannelRailItemState = {
+  domId: string;
+  selected: boolean;
+  focused: boolean;
+};
+
+export type ChannelRailSectionActivityState = {
+  unreadCount: number;
+  targetId: string | undefined;
+  label: string | undefined;
+};
+
+export type ChannelRailItemActivityState = {
+  unread: boolean;
+  callStatus: ChannelCallStatus | undefined;
+  incomingCallId: string | undefined;
+};
+
 export type ChannelsRailController = {
   tab: Accessor<ChannelsTab>;
   selectTab: (tab: ChannelsTab) => void;
-  forceEmptyState: Accessor<boolean>;
+  setMode: (mode: 'full' | 'slim') => void;
   recentConversations: Accessor<readonly ChannelEntity[]>;
   root: {
     ref: (element: HTMLDivElement) => void;
     activeDescendant: Accessor<string | undefined>;
   };
   group: {
-    items: (group: ChannelsGroup) => readonly ChannelEntity[];
-    isOpen: (group: ChannelsGroup) => boolean;
-    isFocused: (group: ChannelsGroup) => boolean;
-    containsFocus: (group: ChannelsGroup) => boolean;
-    unreadCount: (group: ChannelsGroup) => number;
-    domId: (group: ChannelsGroup) => string;
+    state: (group: ChannelsGroup) => ChannelRailSectionState;
     activate: (group: ChannelsGroup) => void;
-    scrollRef: (group: ChannelsGroup) => (element: HTMLDivElement) => void;
-    activityTargetId: (group: ChannelsGroup) => string | undefined;
-    activityLabel: (group: ChannelsGroup) => string | undefined;
-    activityVisible: (group: ChannelsGroup, targetId: string) => void;
+    registerScrollRef: (
+      group: ChannelsGroup
+    ) => (element: HTMLDivElement) => void;
   };
   channel: {
-    domId: (channelId: string) => string;
-    isUnread: (channelId: string) => boolean;
-    callStatus: (channelId: string) => ChannelCallStatus | undefined;
-    incomingCallId: (channelId: string) => string | undefined;
-    isSelected: (channelId: string) => boolean;
-    isFocused: (channelId: string) => boolean;
+    state: (channelId: string) => ChannelRailItemState;
     activate: (channelId: string) => void;
   };
-  mentionsCurrentUser: (channel: ChannelEntity) => boolean;
+  activity: {
+    sectionState: (group: ChannelsGroup) => ChannelRailSectionActivityState;
+    itemState: (channelId: string) => ChannelRailItemActivityState;
+    visible: (group: ChannelsGroup, targetId: string) => void;
+  };
 };
 
 export function useChannelsRailController(options: {
   channels: Accessor<ChannelEntity[]>;
   mode: Accessor<'full' | 'slim'>;
+  onModeChange: (mode: 'full' | 'slim') => void;
 }): ChannelsRailController {
   const { state, setGroupOpen, setSelectedChannelId, setTab } =
     useChannelsView();
   const panel = useSplitPanelOrThrow();
-  const currentUserId = useUserId();
-  const forceEmptyState = useDebugSetting(
-    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
-  );
   const listDomId = createUniqueId();
   const [sectionScrollRoots, setSectionScrollRoots] = createSignal<
     Partial<Record<ChannelsGroup, HTMLDivElement>>
@@ -344,7 +355,7 @@ export function useChannelsRailController(options: {
   return {
     tab: () => state.tab,
     selectTab: setTab,
-    forceEmptyState,
+    setMode: options.onModeChange,
     recentConversations,
     root: {
       ref: (element) => {
@@ -356,35 +367,43 @@ export function useChannelsRailController(options: {
       },
     },
     group: {
-      items: itemsForGroup,
-      isOpen: (group) => state.expandedGroups[group],
-      isFocused: (group) => list.focus.key() === rowKeyForSection(group),
-      containsFocus: (group) => list.focus.item()?.group === group,
-      unreadCount: channelActivity.unreadCount,
-      domId: (group) => domIdForRow(rowKeyForSection(group)),
+      state: (group) => ({
+        items: itemsForGroup(group),
+        open: state.expandedGroups[group],
+        fillAvailable:
+          group === 'direct_messages' && !state.expandedGroups.channels,
+        focused: list.focus.key() === rowKeyForSection(group),
+        containsFocus: list.focus.item()?.group === group,
+        domId: domIdForRow(rowKeyForSection(group)),
+      }),
       activate: (group) => activateRow(rowKeyForSection(group)),
-      scrollRef: (group) => (element) => {
+      registerScrollRef: (group) => (element) => {
         setSectionScrollRoots((current) => ({
           ...current,
           [group]: element,
         }));
       },
-      activityTargetId,
-      activityLabel: channelActivity.targetLabel,
-      activityVisible: clearVisibleActivity,
     },
     channel: {
-      domId: (channelId) => domIdForRow(rowKeyForChannel(channelId)),
-      isUnread: (channelId) =>
-        channelActivity.unreadChannelIds().has(channelId),
-      callStatus: (channelId) => callStatuses().get(channelId),
-      incomingCallId: (channelId) => incomingCallIds().get(channelId),
-      isSelected: (channelId) => state.selectedChannelId === channelId,
-      isFocused: (channelId) =>
-        list.focus.key() === rowKeyForChannel(channelId),
+      state: (channelId) => ({
+        domId: domIdForRow(rowKeyForChannel(channelId)),
+        selected: state.selectedChannelId === channelId,
+        focused: list.focus.key() === rowKeyForChannel(channelId),
+      }),
       activate: (channelId) => activateRow(rowKeyForChannel(channelId)),
     },
-    mentionsCurrentUser: (channel) =>
-      channelMentionsUser(channel, currentUserId()),
+    activity: {
+      sectionState: (group) => ({
+        unreadCount: channelActivity.unreadCount(group),
+        targetId: activityTargetId(group),
+        label: channelActivity.targetLabel(group),
+      }),
+      itemState: (channelId) => ({
+        unread: channelActivity.unreadChannelIds().has(channelId),
+        callStatus: callStatuses().get(channelId),
+        incomingCallId: incomingCallIds().get(channelId),
+      }),
+      visible: clearVisibleActivity,
+    },
   };
 }

@@ -1,4 +1,5 @@
 import { runCreateAction } from '@app/features/command/Launcher';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -9,17 +10,14 @@ import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Key } from '@solid-primitives/keyed';
-import { type Component, For, Match, Show, Switch } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { cn, Dropdown, Tabs, Tooltip } from '@ui';
+import { type Component, createMemo, For, Match, Show, Switch } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import type { ChannelsGroup } from '../../types';
 import { channelInitials, isDirectMessage } from '../../utils';
-import {
-  ChannelCallIndicator,
-  type ChannelRailItemProps,
-} from './ChannelRailItems';
+import { ChannelCallIndicator } from './ChannelRailItems';
+import { useChannelsRail } from './ChannelsRailContext';
 import { CollapsibleSection, RailModeButton } from './ChannelsRailSection';
-import type { ChannelsRailController } from './useChannelsRailController';
 
 function BrowseTabLabel() {
   return (
@@ -84,7 +82,13 @@ function SlimChannelAvatar(props: { channel: ChannelEntity }) {
   );
 }
 
-function SlimChannelItem(props: ChannelRailItemProps) {
+function SlimChannelItem(props: { channel: ChannelEntity }) {
+  const rail = useChannelsRail();
+  const item = createMemo(() => ({
+    ...rail.channel.state(props.channel.id),
+    ...rail.activity.itemState(props.channel.id),
+  }));
+
   return (
     <Tooltip
       label={props.channel.name}
@@ -92,33 +96,33 @@ function SlimChannelItem(props: ChannelRailItemProps) {
       class="size-10 self-center"
     >
       <button
-        id={props.id}
+        id={item().domId}
         type="button"
         role="treeitem"
         tabIndex={-1}
         class={cn(
           'flex size-10 items-center justify-center rounded-full text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent touch:focus-visible:ring-0',
-          props.selected && !isTouchDevice() && 'bg-active text-ink',
-          (!props.selected || isTouchDevice()) && 'text-ink-muted',
-          !props.selected &&
+          item().selected && !isTouchDevice() && 'bg-active text-ink',
+          (!item().selected || isTouchDevice()) && 'text-ink-muted',
+          !item().selected &&
             !isTouchDevice() &&
-            props.focused &&
+            item().focused &&
             'bg-hover text-ink',
-          !props.selected &&
+          !item().selected &&
             !isTouchDevice() &&
-            !props.focused &&
+            !item().focused &&
             'hover:bg-hover hover:text-ink'
         )}
-        aria-current={props.selected ? 'page' : undefined}
-        onClick={props.onActivate}
+        aria-current={item().selected ? 'page' : undefined}
+        onClick={() => rail.channel.activate(props.channel.id)}
       >
         <span class="relative">
           <SlimChannelAvatar channel={props.channel} />
           <ChannelCallIndicator
-            status={props.callStatus}
+            status={item().callStatus}
             class="absolute -bottom-0.5 -right-0.5 rounded-full bg-inset p-0.5"
           />
-          <Show when={props.unread}>
+          <Show when={item().unread}>
             <span
               aria-label="Unread"
               class="absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-accent ring-2 ring-surface"
@@ -157,13 +161,11 @@ function SlimCreateMenu() {
   );
 }
 
-function SlimHeader(props: {
-  rail: ChannelsRailController;
-  onExpand: () => void;
-}) {
+function SlimHeader() {
+  const rail = useChannelsRail();
   const selectTab = (value: string) => {
     if (value === 'browse' || value === 'recents') {
-      props.rail.selectTab(value);
+      rail.selectTab(value);
     }
   };
 
@@ -175,7 +177,10 @@ function SlimHeader(props: {
         </SplitPanel.ControlGroup>
       </div>
       <div class="flex h-8 w-full items-center justify-center px-2">
-        <RailModeButton expanded={false} onToggle={props.onExpand} />
+        <RailModeButton
+          expanded={false}
+          onToggle={() => rail.setMode('full')}
+        />
       </div>
       <div class="w-full px-3">
         <Tabs
@@ -185,7 +190,7 @@ function SlimHeader(props: {
           labelClass="size-full p-0"
           fullWidth
           list={SLIM_CHANNEL_TABS}
-          value={props.rail.tab()}
+          value={rail.tab()}
           onChange={selectTab}
         />
       </div>
@@ -198,70 +203,62 @@ function SlimHeader(props: {
   );
 }
 
-function SlimGroupSection(props: {
-  rail: ChannelsRailController;
-  config: GroupConfig;
-}) {
-  const group = () => props.config.group;
-  const channels = () => props.rail.group.items(group());
+function SlimGroupSection(props: { config: GroupConfig }) {
+  const rail = useChannelsRail();
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
+  const section = createMemo(() => ({
+    ...rail.group.state(props.config.group),
+    ...rail.activity.sectionState(props.config.group),
+  }));
+  const registerScrollRef = rail.group.registerScrollRef(props.config.group);
 
   return (
     <CollapsibleSection.Root
-      open={props.rail.group.isOpen(group())}
-      fillAvailable={
-        group() === 'direct_messages' && !props.rail.group.isOpen('channels')
-      }
+      open={section().open}
+      fillAvailable={section().fillAvailable}
       class="items-center"
     >
       <CollapsibleSection.Header
-        focused={props.rail.group.isFocused(group())}
-        focusWithin={props.rail.group.containsFocus(group())}
+        focused={section().focused}
+        focusWithin={section().containsFocus}
         class="h-10 justify-center"
       >
         <button
-          id={props.rail.group.domId(group())}
+          id={section().domId}
           type="button"
           role="treeitem"
           tabIndex={-1}
           class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          aria-expanded={props.rail.group.isOpen(group())}
+          aria-expanded={section().open}
           aria-label={props.config.label}
-          onClick={() => props.rail.group.activate(group())}
+          onClick={() => rail.group.activate(props.config.group)}
         >
           <span class="flex items-center justify-center [&_svg]:size-4">
             <Dynamic component={props.config.icon} />
           </span>
-          <Show when={props.rail.group.unreadCount(group()) > 0}>
+          <Show when={section().unreadCount > 0}>
             <span class="absolute right-0 top-0 flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none text-accent-contrast ring-2 ring-surface">
-              {props.rail.group.unreadCount(group())}
+              {section().unreadCount}
             </span>
           </Show>
         </button>
       </CollapsibleSection.Header>
       <CollapsibleSection.Content
-        open={props.rail.group.isOpen(group())}
-        contentRef={props.rail.group.scrollRef(group())}
+        open={section().open}
+        contentRef={registerScrollRef}
         containerClass="w-full"
         class="flex min-h-0 w-full flex-col items-center gap-0.5"
-        activityTargetId={props.rail.group.activityTargetId(group())}
+        activityTargetId={section().targetId}
         activityTooltip
         onActivityVisible={(targetId) =>
-          props.rail.group.activityVisible(group(), targetId)
+          rail.activity.visible(props.config.group, targetId)
         }
       >
-        <Show when={!props.rail.forceEmptyState()}>
-          <Key each={channels()} by={(channel) => channel.id}>
-            {(channel) => (
-              <SlimChannelItem
-                id={props.rail.channel.domId(channel().id)}
-                channel={channel()}
-                unread={props.rail.channel.isUnread(channel().id)}
-                callStatus={props.rail.channel.callStatus(channel().id)}
-                selected={props.rail.channel.isSelected(channel().id)}
-                focused={props.rail.channel.isFocused(channel().id)}
-                onActivate={() => props.rail.channel.activate(channel().id)}
-              />
-            )}
+        <Show when={!forceEmptyState()}>
+          <Key each={section().items} by={(channel) => channel.id}>
+            {(channel) => <SlimChannelItem channel={channel()} />}
           </Key>
         </Show>
       </CollapsibleSection.Content>
@@ -269,71 +266,58 @@ function SlimGroupSection(props: {
   );
 }
 
-function SlimBrowse(props: { rail: ChannelsRailController }) {
+function SlimBrowse() {
   return (
     <div class="flex h-full min-h-0 flex-col gap-3 px-2">
       <For each={GROUPS}>
-        {(config) => <SlimGroupSection rail={props.rail} config={config} />}
+        {(config) => <SlimGroupSection config={config} />}
       </For>
     </div>
   );
 }
 
-function SlimRecents(props: { rail: ChannelsRailController }) {
+function SlimRecents() {
+  const rail = useChannelsRail();
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
   const hasItems = () =>
-    !props.rail.forceEmptyState() &&
-    props.rail.recentConversations().length > 0;
+    !forceEmptyState() && rail.recentConversations().length > 0;
 
   return (
     <Show when={hasItems()}>
       <div class="flex w-full flex-col gap-0.5">
-        <Key
-          each={props.rail.recentConversations()}
-          by={(channel) => channel.id}
-        >
-          {(channel) => (
-            <SlimChannelItem
-              id={props.rail.channel.domId(channel().id)}
-              channel={channel()}
-              unread={props.rail.channel.isUnread(channel().id)}
-              callStatus={props.rail.channel.callStatus(channel().id)}
-              selected={props.rail.channel.isSelected(channel().id)}
-              focused={props.rail.channel.isFocused(channel().id)}
-              onActivate={() => props.rail.channel.activate(channel().id)}
-            />
-          )}
+        <Key each={rail.recentConversations()} by={(channel) => channel.id}>
+          {(channel) => <SlimChannelItem channel={channel()} />}
         </Key>
       </div>
     </Show>
   );
 }
 
-export function SlimChannelsRail(props: {
-  rail: ChannelsRailController;
-  onExpand: () => void;
-}) {
+export function SlimChannelsRail() {
+  const rail = useChannelsRail();
+
   return (
     <>
-      <SlimHeader rail={props.rail} onExpand={props.onExpand} />
+      <SlimHeader />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
-          ref={props.rail.root.ref}
+          ref={rail.root.ref}
           role="tree"
           tabIndex={-1}
-          aria-activedescendant={props.rail.root.activeDescendant()}
+          aria-activedescendant={rail.root.activeDescendant()}
           class={cn(
             'scrollbar-hidden min-h-0 flex-1 outline-none',
-            props.rail.tab() === 'browse'
-              ? 'overflow-hidden'
-              : 'overflow-y-auto'
+            rail.tab() === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
           )}
         >
           <Switch>
-            <Match when={props.rail.tab() === 'browse'}>
-              <SlimBrowse rail={props.rail} />
+            <Match when={rail.tab() === 'browse'}>
+              <SlimBrowse />
             </Match>
-            <Match when={props.rail.tab() === 'recents'}>
-              <SlimRecents rail={props.rail} />
+            <Match when={rail.tab() === 'recents'}>
+              <SlimRecents />
             </Match>
           </Switch>
         </div>

@@ -1,27 +1,29 @@
 import { runCreateAction } from '@app/features/command/Launcher';
+import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { SplitPanel } from '@components/app/split-panel';
+import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn, Hotkey, Tabs } from '@ui';
-import { For, Match, Show, Switch } from 'solid-js';
+import { createMemo, For, Match, Show, Switch } from 'solid-js';
 import type { ChannelsGroup } from '../../types';
-import { isDirectMessage } from '../../utils';
+import { channelMentionsUser, isDirectMessage } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import {
   ChannelAvatar,
   ChannelCallIndicator,
-  type ChannelRailItemProps,
   ConversationCard,
   IncomingCallActions,
 } from './ChannelRailItems';
+import { useChannelsRail } from './ChannelsRailContext';
 import {
   CollapsibleSection,
   CreateRailAction,
   RailModeButton,
 } from './ChannelsRailSection';
-import type { ChannelsRailController } from './useChannelsRailController';
 
 const CHANNEL_TABS = [
   { value: 'browse', label: 'Browse' },
@@ -53,47 +55,47 @@ const GROUPS: GroupConfig[] = [
   },
 ];
 
-function selectTab(rail: ChannelsRailController, value: string) {
-  if (value === 'browse' || value === 'recents') {
-    rail.selectTab(value);
-  }
-}
+function ChannelOption(props: { channel: ChannelEntity }) {
+  const rail = useChannelsRail();
+  const item = createMemo(() => ({
+    ...rail.channel.state(props.channel.id),
+    ...rail.activity.itemState(props.channel.id),
+  }));
 
-function ChannelOption(props: ChannelRailItemProps) {
   return (
     <div
-      id={props.id}
+      id={item().domId}
       role="treeitem"
       tabIndex={-1}
       class={cn(
         'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent touch:focus-visible:ring-0',
         isDirectMessage(props.channel) ? 'min-h-10 py-2' : 'h-8',
-        props.selected && !isTouchDevice() && 'bg-active text-ink',
-        (!props.selected || isTouchDevice()) && 'text-ink-muted',
-        !props.selected &&
+        item().selected && !isTouchDevice() && 'bg-active text-ink',
+        (!item().selected || isTouchDevice()) && 'text-ink-muted',
+        !item().selected &&
           !isTouchDevice() &&
-          props.focused &&
+          item().focused &&
           'bg-hover text-ink',
-        !props.selected &&
+        !item().selected &&
           !isTouchDevice() &&
-          !props.focused &&
+          !item().focused &&
           'hover:bg-hover hover:text-ink'
       )}
-      aria-current={props.selected ? 'page' : undefined}
-      onClick={props.onActivate}
+      aria-current={item().selected ? 'page' : undefined}
+      onClick={() => rail.channel.activate(props.channel.id)}
     >
       <ChannelAvatar channel={props.channel} />
       <span class="min-w-0 flex-1 truncate text-sm font-medium">
         {props.channel.name}
       </span>
       <ChannelCallIndicator
-        status={props.incomingCallId ? undefined : props.callStatus}
+        status={item().incomingCallId ? undefined : item().callStatus}
       />
       <IncomingCallActions
-        callId={props.incomingCallId}
+        callId={item().incomingCallId}
         channelId={props.channel.id}
       />
-      <Show when={props.unread}>
+      <Show when={item().unread}>
         <span
           aria-label="Unread"
           class="size-2 shrink-0 rounded-full bg-accent"
@@ -103,10 +105,14 @@ function ChannelOption(props: ChannelRailItemProps) {
   );
 }
 
-function ExpandedHeader(props: {
-  rail: ChannelsRailController;
-  onCollapse: () => void;
-}) {
+function ExpandedHeader() {
+  const rail = useChannelsRail();
+  const selectTab = (value: string) => {
+    if (value === 'browse' || value === 'recents') {
+      rail.selectTab(value);
+    }
+  };
+
   return (
     <div class="flex shrink-0 flex-col gap-3 px-4">
       <div class="flex items-center">
@@ -117,7 +123,7 @@ function ExpandedHeader(props: {
         </SplitPanel.ControlGroup>
       </div>
       <div class="flex h-8 items-center gap-2">
-        <RailModeButton expanded onToggle={props.onCollapse} />
+        <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
         <h1 class="m-0 min-w-0 flex-1 truncate text-2xl font-semibold tracking-[-0.03em] text-ink">
           Chat
         </h1>
@@ -126,51 +132,50 @@ function ExpandedHeader(props: {
         aria-label="Chat sidebar views"
         fullWidth
         list={CHANNEL_TABS}
-        value={props.rail.tab()}
-        onChange={(value) => selectTab(props.rail, value)}
+        value={rail.tab()}
+        onChange={selectTab}
       />
     </div>
   );
 }
 
-function ExpandedGroupSection(props: {
-  rail: ChannelsRailController;
-  config: GroupConfig;
-}) {
-  const group = () => props.config.group;
-  const channels = () => props.rail.group.items(group());
+function ExpandedGroupSection(props: { config: GroupConfig }) {
+  const rail = useChannelsRail();
+  const section = createMemo(() => ({
+    ...rail.group.state(props.config.group),
+    ...rail.activity.sectionState(props.config.group),
+  }));
+  const registerScrollRef = rail.group.registerScrollRef(props.config.group);
 
   return (
     <CollapsibleSection.Root
-      open={props.rail.group.isOpen(group())}
-      fillAvailable={
-        group() === 'direct_messages' && !props.rail.group.isOpen('channels')
-      }
+      open={section().open}
+      fillAvailable={section().fillAvailable}
     >
       <CollapsibleSection.Header
-        focused={props.rail.group.isFocused(group())}
-        focusWithin={props.rail.group.containsFocus(group())}
+        focused={section().focused}
+        focusWithin={section().containsFocus}
         class="h-9 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
       >
         <button
-          id={props.rail.group.domId(group())}
+          id={section().domId}
           type="button"
           role="treeitem"
           tabIndex={-1}
           class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          aria-expanded={props.rail.group.isOpen(group())}
-          onClick={() => props.rail.group.activate(group())}
+          aria-expanded={section().open}
+          onClick={() => rail.group.activate(props.config.group)}
         >
           <CaretDownIcon
             class={cn(
               'size-3 shrink-0 transition-transform',
-              !props.rail.group.isOpen(group()) && '-rotate-90'
+              !section().open && '-rotate-90'
             )}
           />
           <span class="min-w-0 truncate">{props.config.label}</span>
-          <Show when={props.rail.group.unreadCount(group()) > 0}>
+          <Show when={section().unreadCount > 0}>
             <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none tabular-nums text-accent-contrast">
-              {props.rail.group.unreadCount(group())}
+              {section().unreadCount}
             </span>
           </Show>
         </button>
@@ -182,32 +187,19 @@ function ExpandedGroupSection(props: {
         </div>
       </CollapsibleSection.Header>
       <CollapsibleSection.Content
-        open={props.rail.group.isOpen(group())}
-        contentRef={props.rail.group.scrollRef(group())}
+        open={section().open}
+        contentRef={registerScrollRef}
         class="flex min-h-0 flex-col gap-0.5"
-        activityTargetId={props.rail.group.activityTargetId(group())}
-        activityLabel={props.rail.group.activityLabel(group())}
+        activityTargetId={section().targetId}
+        activityLabel={section().label}
         onActivityVisible={(targetId) =>
-          props.rail.group.activityVisible(group(), targetId)
+          rail.activity.visible(props.config.group, targetId)
         }
       >
         <Switch>
-          <Match when={!props.rail.forceEmptyState() && channels().length > 0}>
-            <Key each={channels()} by={(channel) => channel.id}>
-              {(channel) => (
-                <ChannelOption
-                  id={props.rail.channel.domId(channel().id)}
-                  channel={channel()}
-                  unread={props.rail.channel.isUnread(channel().id)}
-                  callStatus={props.rail.channel.callStatus(channel().id)}
-                  incomingCallId={props.rail.channel.incomingCallId(
-                    channel().id
-                  )}
-                  selected={props.rail.channel.isSelected(channel().id)}
-                  focused={props.rail.channel.isFocused(channel().id)}
-                  onActivate={() => props.rail.channel.activate(channel().id)}
-                />
-              )}
+          <Match when={section().items.length > 0}>
+            <Key each={section().items} by={(channel) => channel.id}>
+              {(channel) => <ChannelOption channel={channel()} />}
             </Key>
           </Match>
           <Match when={true}>
@@ -221,22 +213,28 @@ function ExpandedGroupSection(props: {
   );
 }
 
-function ExpandedBrowse(props: { rail: ChannelsRailController }) {
+function ExpandedBrowse() {
+  const rail = useChannelsRail();
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
+  const sections = createMemo(() => ({
+    channels: rail.group.state('channels'),
+    directMessages: rail.group.state('direct_messages'),
+  }));
   const hasItems = () =>
-    props.rail.group.items('channels').length > 0 ||
-    props.rail.group.items('direct_messages').length > 0;
+    sections().channels.items.length > 0 ||
+    sections().directMessages.items.length > 0;
 
   return (
     <Switch>
-      <Match when={props.rail.forceEmptyState() || !hasItems()}>
+      <Match when={forceEmptyState() || !hasItems()}>
         <ChannelsEmptyState scope="channels" topAligned />
       </Match>
       <Match when={true}>
         <div class="flex h-full min-h-0 flex-col gap-3 px-4">
           <For each={GROUPS}>
-            {(config) => (
-              <ExpandedGroupSection rail={props.rail} config={config} />
-            )}
+            {(config) => <ExpandedGroupSection config={config} />}
           </For>
         </div>
       </Match>
@@ -244,10 +242,37 @@ function ExpandedBrowse(props: { rail: ChannelsRailController }) {
   );
 }
 
-function ExpandedRecents(props: { rail: ChannelsRailController }) {
+function RecentConversationCard(props: { channel: ChannelEntity }) {
+  const rail = useChannelsRail();
+  const currentUserId = useUserId();
+  const item = createMemo(() => ({
+    ...rail.channel.state(props.channel.id),
+    ...rail.activity.itemState(props.channel.id),
+  }));
+
+  return (
+    <ConversationCard
+      id={item().domId}
+      channel={props.channel}
+      senderId={props.channel.latestRootMessage?.senderId}
+      mentionedCurrentUser={channelMentionsUser(props.channel, currentUserId())}
+      unread={item().unread}
+      callStatus={item().callStatus}
+      incomingCallId={item().incomingCallId}
+      selected={item().selected}
+      focused={item().focused}
+      onActivate={() => rail.channel.activate(props.channel.id)}
+    />
+  );
+}
+
+function ExpandedRecents() {
+  const rail = useChannelsRail();
+  const forceEmptyState = useDebugSetting(
+    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
+  );
   const hasItems = () =>
-    !props.rail.forceEmptyState() &&
-    props.rail.recentConversations().length > 0;
+    !forceEmptyState() && rail.recentConversations().length > 0;
 
   return (
     <Switch>
@@ -256,24 +281,8 @@ function ExpandedRecents(props: { rail: ChannelsRailController }) {
       </Match>
       <Match when={true}>
         <div class="flex w-full flex-col divide-y divide-edge-muted">
-          <Key
-            each={props.rail.recentConversations()}
-            by={(channel) => channel.id}
-          >
-            {(channel) => (
-              <ConversationCard
-                id={props.rail.channel.domId(channel().id)}
-                channel={channel()}
-                senderId={channel().latestRootMessage?.senderId}
-                mentionedCurrentUser={props.rail.mentionsCurrentUser(channel())}
-                unread={props.rail.channel.isUnread(channel().id)}
-                callStatus={props.rail.channel.callStatus(channel().id)}
-                incomingCallId={props.rail.channel.incomingCallId(channel().id)}
-                selected={props.rail.channel.isSelected(channel().id)}
-                focused={props.rail.channel.isFocused(channel().id)}
-                onActivate={() => props.rail.channel.activate(channel().id)}
-              />
-            )}
+          <Key each={rail.recentConversations()} by={(channel) => channel.id}>
+            {(channel) => <RecentConversationCard channel={channel()} />}
           </Key>
         </div>
       </Match>
@@ -281,36 +290,33 @@ function ExpandedRecents(props: { rail: ChannelsRailController }) {
   );
 }
 
-export function ExpandedChannelsRail(props: {
-  rail: ChannelsRailController;
-  onCollapse: () => void;
-}) {
+export function ExpandedChannelsRail() {
+  const rail = useChannelsRail();
+
   return (
     <>
-      <ExpandedHeader rail={props.rail} onCollapse={props.onCollapse} />
+      <ExpandedHeader />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
-          ref={props.rail.root.ref}
+          ref={rail.root.ref}
           role="tree"
           tabIndex={-1}
-          aria-activedescendant={props.rail.root.activeDescendant()}
+          aria-activedescendant={rail.root.activeDescendant()}
           class={cn(
             'scrollbar-hidden min-h-0 flex-1 outline-none',
-            props.rail.tab() === 'browse'
-              ? 'overflow-hidden'
-              : 'overflow-y-auto'
+            rail.tab() === 'browse' ? 'overflow-hidden' : 'overflow-y-auto'
           )}
         >
           <Switch>
-            <Match when={props.rail.tab() === 'browse'}>
-              <ExpandedBrowse rail={props.rail} />
+            <Match when={rail.tab() === 'browse'}>
+              <ExpandedBrowse />
             </Match>
-            <Match when={props.rail.tab() === 'recents'}>
-              <ExpandedRecents rail={props.rail} />
+            <Match when={rail.tab() === 'recents'}>
+              <ExpandedRecents />
             </Match>
           </Switch>
         </div>
-        <Show when={props.rail.tab() === 'browse'}>
+        <Show when={rail.tab() === 'browse'}>
           <footer class="flex h-9 shrink-0 items-center justify-start gap-1 border-t border-edge-muted px-4 text-xxs text-ink-extra-muted">
             <span>Use</span>
             <Hotkey shortcut="[" theme="subtle" />
