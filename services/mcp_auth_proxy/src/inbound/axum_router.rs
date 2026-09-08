@@ -1,5 +1,8 @@
 //! Axum router for the MCP OAuth broker.
 
+#[cfg(test)]
+mod test;
+
 use std::time::Duration;
 
 use axum::{
@@ -20,6 +23,10 @@ use crate::domain::{
         StartAuthorizationError, TokenExchangeError,
     },
 };
+
+/// Path prefix the shared gateway ALB forwards unmodified. Dual-mounted
+/// alongside `/` so the dedicated ALB keeps working during cutover.
+const GATEWAY_PATH_PREFIX: &str = "/mcp";
 
 /// Health check handler for ALB.
 async fn health() -> &'static str {
@@ -247,7 +254,13 @@ where
                 super::middleware::validate_bearer,
             ));
 
-    oauth_routes.merge(mcp_route).layer(mcp_cors_layer())
+    mount_at_root_and_prefix(oauth_routes.merge(mcp_route)).layer(mcp_cors_layer())
+}
+
+fn mount_at_root_and_prefix(inner: Router) -> Router {
+    Router::new()
+        .merge(inner.clone())
+        .nest(GATEWAY_PATH_PREFIX, inner)
 }
 
 /// CORS layer for the MCP router.

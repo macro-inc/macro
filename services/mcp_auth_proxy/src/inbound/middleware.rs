@@ -1,5 +1,8 @@
 //! Bearer token middleware for the protected MCP endpoint.
 
+#[cfg(test)]
+mod test;
+
 use axum::{
     body::Body,
     http::{
@@ -14,7 +17,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 #[derive(Clone)]
 pub struct JwtAccessToken(pub String);
 
-const RESOURCE_METADATA_PATH: &str = "/.well-known/oauth-protected-resource/mcp";
+// Path-style well-known sits under `/mcp`, so the gateway prefix forwards it.
+// The host-root form (`/.well-known/.../mcp`) is not routed on the gateway.
+const RESOURCE_METADATA_PATH: &str = "/mcp/.well-known/oauth-protected-resource";
 
 fn absolute_resource_metadata_url(request: &Request<Body>) -> String {
     let scheme = request
