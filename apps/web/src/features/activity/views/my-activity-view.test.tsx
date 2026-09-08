@@ -1,10 +1,16 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActivityContextProvider } from '../context/activity-context';
 import { placeholderOverview } from '../core/placeholder-overview';
 import { createdEvent, messagedEvent } from '../queries/fixtures';
 import { createMockActivityContext } from '../tests/mock-context';
-import { feedPage, overviewPage } from '../tests/wire';
+import { feedPage, overviewPage, soupPage } from '../tests/wire';
 import { MyActivityView } from './my-activity-view';
 
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
@@ -34,7 +40,53 @@ vi.mock('@service-storage/websocket', () => ({
   createWebSocketJob: () => Promise.reject(new Error('no websocket in tests')),
 }));
 
-afterEach(cleanup);
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-09-01T12:00:00Z'));
+  // Supply visible dimensions for the virtual timeline in jsdom's layoutless DOM.
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockReturnValue(
+    document.body
+  );
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      disconnected = false;
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(target: HTMLElement) {
+        queueMicrotask(() => {
+          if (!this.disconnected)
+            this.callback(
+              [
+                {
+                  target,
+                  contentRect: new DOMRect(
+                    0,
+                    0,
+                    400,
+                    target.style.position === 'absolute' ? 72 : 800
+                  ),
+                  borderBoxSize: [],
+                  contentBoxSize: [],
+                  devicePixelContentBoxSize: [],
+                },
+              ],
+              this as unknown as ResizeObserver
+            );
+        });
+      }
+      unobserve() {}
+      disconnect() {
+        this.disconnected = true;
+      }
+    }
+  );
+});
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 function renderView() {
   const context = createMockActivityContext();
@@ -44,6 +96,7 @@ function renderView() {
       <MyActivityView onOpen={onOpen} />
     </ActivityContextProvider>
   ));
+  context.graphqlMock.latest('EntityActivity').resolve(soupPage([]));
   return { ...result, onOpen, graphql: context.graphqlMock };
 }
 
@@ -91,10 +144,12 @@ describe('MyActivityView', () => {
       .latest('MyActivity')
       .resolve(feedPage([createdEvent, messagedEvent], 'cursor-2'));
 
-    expect(rows()).toHaveLength(2);
+    await waitFor(() => expect(rows()).toHaveLength(2));
     expect(rows()[0]?.getAttribute('data-activity-action')).toBe('created');
     expect(rows()[1]?.getAttribute('data-activity-action')).toBe('messaged');
-    expect(screen.getAllByText('sarah')).toHaveLength(2);
+    expect([...rows()].every((row) => row.textContent?.includes('sarah'))).toBe(
+      true
+    );
 
     fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
     const next = graphql.latest('MyActivity');
@@ -103,13 +158,14 @@ describe('MyActivityView', () => {
     });
 
     next.resolve(feedPage([{ ...createdEvent, id: 'evt-99' }], null));
-    expect(rows()).toHaveLength(3);
+    await waitFor(() => expect(rows()).toHaveLength(3));
     expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
   });
 
-  it('asks the host to open the row entity', () => {
+  it('asks the host to open the row entity', async () => {
     const { onOpen, graphql } = renderView();
     graphql.latest('MyActivity').resolve(feedPage([createdEvent]));
+    await waitFor(() => expect(rows()).toHaveLength(1));
 
     const body = rows()[0]?.querySelector('.hover\\:bg-hover\\/30');
     if (!body) throw new Error('row body not rendered');

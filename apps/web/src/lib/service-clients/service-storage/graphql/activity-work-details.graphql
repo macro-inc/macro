@@ -1,0 +1,37 @@
+query ActivityWorkDetails($input: SoupInput!, $messageLimit: Int!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        id
+        displayName
+        ... on GraphqlSoupEmailThread {
+          ownerId
+          linkId
+          participantCount
+          participants { id email name sfsPhotoUrl }
+          latestInboundMessageTs
+          latestContentMessage {
+            id
+            isSent
+            replyingToId
+            sentAt
+            internalDateTs
+            from { email name photoUrl }
+            to { email name photoUrl }
+            cc { email name photoUrl }
+          }
+          messages(limit: $messageLimit) {
+            id
+            isSent
+            isDraft
+            sentAt
+            internalDateTs
+            from { email name photoUrl }
+          }
+        }
+      }
+    }
+  }
+}

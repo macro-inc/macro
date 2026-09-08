@@ -14,6 +14,7 @@ export function ActivityTimelineRow(props: {
   event: ActivityEvent;
   actorName?: string;
   showActor?: boolean;
+  compact?: boolean;
   onOpen?: (target: OpenEntityTarget) => void;
 }) {
   const context = useActivityContext();
@@ -33,6 +34,7 @@ export function ActivityTimelineRow(props: {
       event={props.event}
       actorName={props.actorName}
       showActor={props.showActor}
+      compact={props.compact}
       display={opener()?.display}
       rowProps={opener()?.handlers}
       propertyDefinition={definition()}

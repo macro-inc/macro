@@ -35,6 +35,7 @@ export function ActivityTimelineRow(props: {
   event: ActivityEvent;
   actorName?: string;
   showActor?: boolean;
+  compact?: boolean;
   display?: EntityDisplay;
   propertyDefinition?: PropertyDefinitionDomain;
   rowProps?: JSX.HTMLAttributes<HTMLDivElement>;
@@ -84,6 +85,7 @@ export function ActivityTimelineRow(props: {
             showActor={showActor()}
             actorName={actorName()}
             propertyDefinition={props.propertyDefinition}
+            compact={props.compact}
             rowProps={props.rowProps}
           />
         )}
@@ -105,6 +107,7 @@ function EntityRow(props: {
   event: ActivityEvent;
   display: EntityDisplay;
   showActor: boolean;
+  compact?: boolean;
   actorName: string;
   propertyDefinition?: PropertyDefinitionDomain;
   rowProps?: JSX.HTMLAttributes<HTMLDivElement>;
@@ -112,42 +115,87 @@ function EntityRow(props: {
   const parts = () => describeActionForEntity(props.event.action);
 
   return (
-    <RowBody {...props.rowProps}>
-      <Show when={props.showActor}>
-        <span class="shrink-0 font-medium">
-          <ActorName name={props.actorName} />
-        </span>
-      </Show>
-      <span class="min-w-0 text-ink-muted">
-        <Show
-          when={
-            props.event.action.kind === 'property-changed'
-              ? props.event.action
-              : undefined
-          }
-          fallback={props.showActor ? parts().verb : capitalize(parts().verb)}
-        >
-          {(change) => (
-            <PropertyChangeText
-              action={change()}
-              definition={props.propertyDefinition}
-              capitalize={!props.showActor}
+    <Show
+      when={props.compact}
+      fallback={
+        <RowBody {...props.rowProps}>
+          <Show when={props.showActor}>
+            <span class="shrink-0 font-medium">
+              <ActorName name={props.actorName} />
+            </span>
+          </Show>
+          <span class="min-w-0 text-ink-muted">
+            <Show
+              when={
+                props.event.action.kind === 'property-changed'
+                  ? props.event.action
+                  : undefined
+              }
+              fallback={
+                props.showActor ? parts().verb : capitalize(parts().verb)
+              }
+            >
+              {(change) => (
+                <PropertyChangeText
+                  action={change()}
+                  definition={props.propertyDefinition}
+                  capitalize={!props.showActor}
+                />
+              )}
+            </Show>
+          </span>
+          <Show when={parts().connector}>
+            {(connector) => (
+              <span class="shrink-0 text-ink-muted">{connector()}</span>
+            )}
+          </Show>
+          <span class="min-w-0 truncate">
+            <EntityMention
+              entityId={props.event.entityId}
+              display={props.display}
             />
-          )}
-        </Show>
-      </span>
-      <Show when={parts().connector}>
-        {(connector) => (
-          <span class="shrink-0 text-ink-muted">{connector()}</span>
-        )}
-      </Show>
-      <span class="min-w-0 truncate">
-        <EntityMention
-          entityId={props.event.entityId}
-          display={props.display}
-        />
-      </span>
-      <Timestamp event={props.event} />
-    </RowBody>
+          </span>
+          <Timestamp event={props.event} />
+        </RowBody>
+      }
+    >
+      <div
+        {...props.rowProps}
+        role={props.rowProps?.onClick ? 'button' : undefined}
+        tabIndex={props.rowProps?.onClick ? 0 : undefined}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            event.currentTarget.click();
+          }
+        }}
+        class="min-w-0 flex-1 rounded-lg px-2 py-3 outline-none hover:bg-hover/30 focus-visible:ring-1 focus-visible:ring-accent"
+      >
+        <div class="flex min-w-0 items-start gap-2">
+          <span class="min-w-0 flex-1 text-xs leading-relaxed">
+            <span
+              class="inline-block max-w-full truncate align-bottom font-medium text-ink"
+              title={props.actorName}
+            >
+              <ActorName name={props.actorName} />
+            </span>{' '}
+            <span class="text-ink-muted">
+              <ActionPhrase
+                event={props.event}
+                propertyDefinition={props.propertyDefinition}
+              />
+            </span>
+          </span>
+          <Timestamp event={props.event} />
+        </div>
+        <div class="mt-1.5 truncate text-xs">
+          <EntityMention
+            entityId={props.event.entityId}
+            display={props.display}
+          />
+        </div>
+      </div>
+    </Show>
   );
 }
