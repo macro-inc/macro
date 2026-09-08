@@ -395,7 +395,6 @@ const COLOR_QUESTION: ElicitationSchema = {
 
 function ColorQuestionDemo() {
   const [values, setValues] = createStore(initialValues(COLOR_QUESTION));
-  const errors = () => validate(COLOR_QUESTION, values);
   return (
     <ToolCard
       title="Macro Coder is asking"
@@ -408,7 +407,7 @@ function ColorQuestionDemo() {
         <ElicitationForm
           schema={COLOR_QUESTION}
           values={values}
-          errors={errors()}
+          errors={{}}
           onChange={(name, value) => setValues(name, value)}
         />
         <div class="flex items-center gap-2">

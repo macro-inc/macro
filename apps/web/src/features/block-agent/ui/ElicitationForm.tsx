@@ -57,10 +57,10 @@ function ChoiceOption(props: {
 function RadioMark(props: { checked: boolean }) {
   return (
     <span
-      class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border"
+      class="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full border bg-surface"
       classList={{
         'border-accent': props.checked,
-        'border-edge': !props.checked,
+        'border-edge-muted': !props.checked,
       }}
       aria-hidden="true"
     >
