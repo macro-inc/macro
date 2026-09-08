@@ -71,6 +71,17 @@ fn uris_lose_their_credentials_query_and_fragment() {
     assert_eq!(redact_uri("https://host"), "https://host");
     assert_eq!(redact_uri("file:///tmp/a.txt"), "file:///tmp/a.txt");
     assert_eq!(redact_uri("urn:doc:123?x=1"), "urn:doc:123");
+    // Forms without `scheme://` still carry secrets or payloads.
+    assert_eq!(redact_uri("//user:secret@host/path?k=v"), "//host/path");
+    assert_eq!(
+        redact_uri("data:image/png;base64,iVBORw0KGgoAAAANSUhEUg"),
+        "data:image/png;[inline data omitted]"
+    );
+    assert_eq!(
+        redact_uri("DATA:text/plain,hello%20world"),
+        "data:text/plain;[inline data omitted]"
+    );
+    assert_eq!(redact_uri("HTTPS://user@Host/x"), "HTTPS://Host/x");
     assert_eq!(
         media_part(
             "image",

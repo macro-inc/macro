@@ -89,22 +89,45 @@ pub fn media_part(modality: &str, mime_type: Option<&str>, source: MediaSource) 
 /// A URI reduced to what identifies the resource: scheme, host and path.
 /// Userinfo (`user:password@`), the query string and the fragment are
 /// dropped - that is where credentials, signed-URL tokens and session state
-/// travel, none of which belongs on a span.
+/// travel, none of which belongs on a span. A `data:` URI *is* its payload,
+/// so only its media type survives.
 pub fn redact_uri(uri: &str) -> String {
     let uri = uri.split(['?', '#']).next().unwrap_or_default();
-    match uri.split_once("://") {
-        Some((scheme, rest)) => {
-            let (authority, path) = match rest.find('/') {
-                Some(slash) => rest.split_at(slash),
-                None => (rest, ""),
-            };
-            let host = authority
-                .rsplit_once('@')
-                .map_or(authority, |(_, host)| host);
-            format!("{scheme}://{host}{path}")
-        }
-        None => uri.to_owned(),
+    let (scheme, rest) = match uri.split_once(':') {
+        Some((scheme, rest)) if is_scheme(scheme) => (Some(scheme), rest),
+        _ => (None, uri),
+    };
+    if scheme.is_some_and(|scheme| scheme.eq_ignore_ascii_case("data")) {
+        let media_type = rest.split([';', ',']).next().unwrap_or_default();
+        return format!("data:{media_type};[inline data omitted]");
     }
+    // Hierarchical (`scheme://authority/path`) or protocol-relative
+    // (`//authority/path`): the authority may carry userinfo.
+    if let Some(rest) = rest.strip_prefix("//") {
+        let (authority, path) = match rest.find('/') {
+            Some(slash) => rest.split_at(slash),
+            None => (rest, ""),
+        };
+        let host = authority
+            .rsplit_once('@')
+            .map_or(authority, |(_, host)| host);
+        return match scheme {
+            Some(scheme) => format!("{scheme}://{host}{path}"),
+            None => format!("//{host}{path}"),
+        };
+    }
+    // Opaque (`urn:…`, `mailto:…`): the identifier is the whole thing.
+    uri.to_owned()
+}
+
+/// Whether `candidate` is a URI scheme (RFC 3986: a letter, then letters,
+/// digits, `+`, `-` or `.`).
+fn is_scheme(candidate: &str) -> bool {
+    let mut chars = candidate.chars();
+    chars
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic())
+        && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
 }
 
 /// An input message.
