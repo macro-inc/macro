@@ -23,6 +23,7 @@ import {
   createGraphqlFavoritesQuery,
   createGraphqlRemoveFavoriteMutation,
   createGraphqlReorderFavoritesMutation,
+  refreshActiveGraphqlFavoritesQueries,
 } from './graphql';
 
 let dispose: (() => void) | undefined;
@@ -115,6 +116,38 @@ describe('GraphQL favorites queries', () => {
     });
     await vi.waitFor(() => expect(state.query.isError).toBe(true));
     expect(state.data()?.favorites).toHaveLength(1);
+  });
+
+  it('keeps cache subscriptions alive after a failed explicit refresh', async () => {
+    const cacheUpdates = makeSubject<
+      ReturnType<typeof favoritesResult> | { error: CombinedError }
+    >();
+    const error = new CombinedError({ networkError: new Error('offline') });
+    executeQuery.mockImplementation((_request, context) =>
+      // A failed network-only request cannot register cache dependencies.
+      context?.requestPolicy === 'network-only'
+        ? fromValue({ error })
+        : cacheUpdates.source
+    );
+    const data = renderHook(() => useFavoritesData());
+    await vi.waitFor(() => expect(executeQuery).toHaveBeenCalledOnce());
+    cacheUpdates.next(
+      favoritesResult([
+        graphqlFavorite('document-1', 0),
+        graphqlFavorite('document-2', 1),
+      ])
+    );
+    const refresh = refreshActiveGraphqlFavoritesQueries();
+    await vi.waitFor(() => expect(executeQuery).toHaveBeenCalledTimes(2));
+    cacheUpdates.next({ error });
+    await refresh;
+    expect(data()?.favorites).toHaveLength(2);
+
+    // The next offline optimistic removal must reach the replacement observer.
+    cacheUpdates.next(favoritesResult([graphqlFavorite('document-2', 1)]));
+    expect(data()?.favorites.map((favorite) => favorite.entityId)).toEqual([
+      'document-2',
+    ]);
   });
 
   it('returns the add payload consistently without any mounted query', async () => {
@@ -290,7 +323,7 @@ describe('GraphQL favorites queries', () => {
     );
     expect(executeQuery).toHaveBeenCalledTimes(2);
     expect(executeQuery.mock.calls[1]?.[1]).toEqual({
-      requestPolicy: 'network-only',
+      requestPolicy: 'cache-and-network',
     });
     expect(onSuccess).toHaveBeenCalledWith(
       expect.objectContaining({

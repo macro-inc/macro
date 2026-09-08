@@ -69,7 +69,10 @@ export function createGraphqlFavoritesQuery(): GraphqlFavoritesQuery {
 export async function refreshActiveGraphqlFavoritesQueries(): Promise<void> {
   await Promise.all(
     [...activeFavoritesQueries].map((query) =>
-      query.refetch({ requestPolicy: 'network-only' })
+      // Refetch replaces the observer's subscription. Read through the cache
+      // to register its dependencies even if the network request fails, so
+      // later offline optimistic writes still update this mounted list.
+      query.refetch({ requestPolicy: 'cache-and-network' })
     )
   );
 }
@@ -145,7 +148,9 @@ function createFavoriteMutation<
     get error() {
       return mutation.error;
     },
-    mutate: mutation.mutate,
+    mutate(input: Input): void {
+      mutation.mutate(input);
+    },
     async mutateAsync(input: Input): Promise<Result> {
       return select(await mutation.mutateAsync(input));
     },

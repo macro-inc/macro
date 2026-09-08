@@ -117,7 +117,7 @@ function writeList(update: (prev: FavoritesList) => FavoritesList) {
 
 export function invalidateFavorites() {
   if (isFeatureEnabled(enableGraphqlSoup)) {
-    return refreshActiveGraphqlFavoritesQueries().then(() => undefined);
+    return refreshActiveGraphqlFavoritesQueries();
   }
 
   return queryClient.invalidateQueries({
