@@ -427,3 +427,75 @@ async fn dropping_the_stream_marks_the_agent_span_cancelled() {
         Some(vec!["cancelled".to_string()])
     );
 }
+
+/// A tool that cancels the request it runs in, then returns: the runtime
+/// notices the cancellation before its next model call and ends the run with
+/// a cancellation error.
+#[derive(Deserialize, JsonSchema)]
+#[schemars(title = "cancel_tool", description = "Cancels the request.")]
+struct CancelTool {}
+
+impl ToolAnnotated for CancelTool {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Cancel");
+}
+
+#[async_trait]
+impl AsyncTool<()> for CancelTool {
+    type Output = serde_json::Value;
+
+    async fn call(
+        &self,
+        _service_context: ServiceContext<()>,
+        request_context: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        request_context.cancel.cancel();
+        Ok(json!({ "status": "cancelling" }))
+    }
+}
+
+/// A user stopping the run is a cancelled run, not a failed one, even though
+/// the runtime reports it as an error item on the stream.
+#[tokio::test]
+async fn a_cancelled_run_is_recorded_as_cancelled_not_failed() {
+    let (exporter, provider, _guard) = otel_test_pipeline();
+    let model = MockCompletionModel::from_stream_turns([
+        vec![
+            MockStreamEvent::tool_call("call-1", "cancel_tool", json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::text("never reached"),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+    ]);
+    let toolset = util::single_tool_set::<CancelTool, ()>();
+    let mut session = util::session(toolset, Arc::new(()), model).await;
+
+    let stream = session
+        .send_message(vec![rig_core::message::Message::user("stop soon")])
+        .await
+        .expect("the stream starts");
+    let collected = util::collect(stream).await;
+    assert!(
+        collected
+            .error
+            .as_ref()
+            .is_some_and(|error| error.was_cancelled()),
+        "the run ends with a cancellation: {:?}",
+        collected.error
+    );
+    drop(session);
+
+    let spans = finished(&exporter, &provider);
+    let agent = spans_with_operation(&spans, attr::operation::INVOKE_AGENT)[0];
+    assert_eq!(
+        string_attribute(agent, attr::ERROR_TYPE).as_deref(),
+        Some("cancelled"),
+        "{}",
+        describe(&spans)
+    );
+    assert_eq!(
+        string_array_attribute(agent, attr::RESPONSE_FINISH_REASONS),
+        Some(vec!["cancelled".to_string()])
+    );
+}

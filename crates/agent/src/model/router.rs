@@ -545,16 +545,28 @@ where
                                     })));
                             }
                             Err(e) => {
-                                // A provider error, or the runtime giving up
-                                // (retries exhausted): the run failed.
                                 finish_run.concluded = true;
-                                telemetry.record_agent_failure(
-                                    &agent_span,
-                                    "streaming_error",
-                                    genai_telemetry::attr::finish_reason::ERROR,
-                                    &e.to_string(),
-                                );
-                                let _ = driver_tx.send(Err(AgentError::Streaming(e)));
+                                let error = AgentError::Streaming(e);
+                                if error.was_cancelled() {
+                                    // The caller stopped the run through its
+                                    // cancellation token: a stop, not a fault.
+                                    telemetry.record_agent_failure(
+                                        &agent_span,
+                                        "cancelled",
+                                        genai_telemetry::attr::finish_reason::CANCELLED,
+                                        "the run was cancelled",
+                                    );
+                                } else {
+                                    // A provider error, or the runtime giving
+                                    // up (retries exhausted): the run failed.
+                                    telemetry.record_agent_failure(
+                                        &agent_span,
+                                        "streaming_error",
+                                        genai_telemetry::attr::finish_reason::ERROR,
+                                        &error.to_string(),
+                                    );
+                                }
+                                let _ = driver_tx.send(Err(error));
                             }
                             _ => {}
                         }
