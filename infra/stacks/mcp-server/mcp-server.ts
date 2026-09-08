@@ -333,9 +333,9 @@ export class McpServer extends pulumi.ComponentResource {
       {
         parent: this,
         // ECS refuses a service whose target group is not yet associated with
-        // a load balancer; it is the listener rule that creates that
-        // association
-        dependsOn: [gatewayTargetGroup.listener_rule],
+        // a load balancer. The dedicated HTTPS listener and the gateway
+        // listener rule each create that association for their target group.
+        dependsOn: [listener, gatewayTargetGroup.listener_rule],
       }
     );
 
