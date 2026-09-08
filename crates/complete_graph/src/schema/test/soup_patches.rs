@@ -114,6 +114,27 @@ async fn batch_keeps_last_operation_per_entity_and_batches_hydration() {
 }
 
 #[tokio::test]
+async fn later_batches_can_update_the_same_entity_again() {
+    let soup = CountingSoupService::default();
+    soup.set_raw_response(vec![soup_document(Uuid::from_u128(1))]);
+    let calls = soup.raw_calls.clone();
+    // The subscription's receive buffer holds ten entries. Deduplication must
+    // not remember the first batch's key and swallow the following update.
+    let responses = subscription_responses(soup, vec![Patch::Updated(entity(1)); 11]).await;
+    assert_eq!(responses.len(), 2);
+    for response in responses {
+        assert!(response.errors.is_empty());
+        let data = response.data.into_json().unwrap();
+        assert_eq!(data["soupUpdates"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            data["soupUpdates"][0]["item"]["id"],
+            Uuid::from_u128(1).to_string()
+        );
+    }
+    assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
 async fn dedup_uses_entity_type_and_id_and_preserves_last_occurrence_order() {
     let soup = CountingSoupService::default();
     let calls = soup.raw_calls.clone();
@@ -162,6 +183,7 @@ fn captured_logs() -> Arc<Mutex<Vec<u8>>> {
         let logs = Arc::new(Mutex::new(Vec::new()));
         let writer = logs.clone();
         let subscriber = tracing_subscriber::fmt()
+            .json()
             .without_time()
             .with_ansi(false)
             .with_writer(move || LogWriter(writer.clone()))
@@ -203,7 +225,7 @@ async fn two_missing_updates_log_identities_without_emitting_nulls_or_deletions(
         assert!(logs.contains(&Uuid::from_u128(id).to_string()), "{logs}");
     }
     assert!(logs.contains(VALID_USER_ID), "{logs}");
-    assert!(logs.contains("entity_type=document"), "{logs}");
+    assert!(logs.contains("\"entity_type\":\"document\""), "{logs}");
 }
 
 #[tokio::test]
@@ -230,9 +252,10 @@ async fn missing_update_does_not_suppress_valid_sibling_or_explicit_delete() {
 
 #[tokio::test]
 async fn hydration_service_failure_is_an_error_not_a_deletion() {
+    let logs = captured_logs();
     let responses = subscription_responses(
         CountingSoupService::default(),
-        vec![Patch::Updated(entity(1))],
+        vec![Patch::Updated(entity(6))],
     )
     .await;
     assert_eq!(responses.len(), 1);
@@ -243,6 +266,14 @@ async fn hydration_service_failure_is_an_error_not_a_deletion() {
             .to_string()
             .contains("GraphqlCacheDeletion")
     );
+    let logs = String::from_utf8(logs.lock().unwrap().clone()).unwrap();
+    let event = logs
+        .lines()
+        .find(|line| line.contains(&Uuid::from_u128(6).to_string()))
+        .expect("hydration failure logs its entity");
+    assert!(event.contains("failed to hydrate Soup update"), "{event}");
+    assert!(event.contains("\"error\":"), "{event}");
+    assert!(event.contains(VALID_USER_ID), "{event}");
 }
 
 struct MutationEffectsQuery;

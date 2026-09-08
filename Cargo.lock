@@ -7230,7 +7230,6 @@ dependencies = [
  "macro_user_id",
  "model-entity",
  "models_permissions",
- "soup_realtime",
  "tokio",
  "uuid",
  "workspace-hack",
