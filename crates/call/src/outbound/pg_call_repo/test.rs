@@ -18,6 +18,7 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
     UpdateChannelSharePermission, UpdateOperation,
 };
+use models_permissions::share_permission::team_share::TeamShareCreation;
 use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
@@ -188,11 +189,219 @@ async fn insert_user_mapping(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn creation_and_archive_preserve_canonical_sharing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use models_permissions::share_permission::team_share::{TeamShareLevel, TeamShareRequest};
+
+    let repo = repo(pool.clone());
+    let team_id = Uuid::now_v7();
+    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
+
+    for level in [AccessLevel::View, AccessLevel::Comment, AccessLevel::Edit] {
+        let id = Uuid::now_v7();
+        repo.create_call(
+            &id,
+            &CH2,
+            "canonical-call",
+            USER_A.copied(),
+            TeamShareCreation::Call,
+        )
+        .await?;
+        let initial = repo.get_team_share_facts(&id).await?;
+        assert_eq!(initial.current.unwrap().team_id, team_id);
+        assert_eq!(initial.current.unwrap().level, TeamShareLevel::View);
+        assert_eq!(team_entity_access_count(&pool, id).await?, 1);
+        assert_eq!(
+            team_entity_access_level(&pool, id).await?,
+            AccessLevel::View
+        );
+        assert!(
+            repo.get_call_record_by_call_id(&id)
+                .await?
+                .unwrap()
+                .share_with_team
+        );
+
+        // Upgrade first, then select the requested level (including downgrades).
+        for selected in [AccessLevel::Edit, level] {
+            let command = team_command(
+                &repo,
+                id,
+                TeamShareRequest {
+                    access_level: Some(Some(selected)),
+                    legacy_enabled: None,
+                },
+            )
+            .await?;
+            repo.patch_call_record(&id, &empty_call_patch(), Some(&command))
+                .await?;
+        }
+        let before = repo.get_team_share_facts(&id).await?;
+        assert!(
+            repo.create_call(
+                &Uuid::now_v7(),
+                &CH2,
+                "retry",
+                USER_A.copied(),
+                TeamShareCreation::Call
+            )
+            .await?
+            .is_none()
+        );
+        assert_eq!(repo.get_team_share_facts(&id).await?, before);
+        repo.archive_call(&id).await?;
+        assert_eq!(repo.get_team_share_facts(&id).await?, before);
+        assert!(stored_call_record_share_with_team(&pool, id).await?);
+        assert_eq!(team_entity_access_count(&pool, id).await?, 1);
+        assert_eq!(team_entity_access_level(&pool, id).await?, level);
+        assert!(repo.archive_call(&id).await.is_err());
+        assert_eq!(repo.get_team_share_facts(&id).await?, before);
+        assert_eq!(team_entity_access_count(&pool, id).await?, 1);
+        let unrelated = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS "count!" FROM entity_access
+               WHERE entity_id = $1 AND source_type IN ('user', 'channel')"#,
+            id,
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(unrelated, 2);
+    }
+    Ok(())
+}
+
+async fn team_entity_access_level(pool: &Pool<Postgres>, id: Uuid) -> anyhow::Result<AccessLevel> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT access_level AS "level: AccessLevel" FROM entity_access
+               WHERE entity_id = $1 AND source_type = 'team'"#,
+        id,
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
+fn empty_call_patch() -> EditCallRecordRequest {
+    EditCallRecordRequest {
+        custom_name: None,
+        share_permission: None,
+        share_with_team: None,
+    }
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn no_team_creation_never_promises_future_sharing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let id = Uuid::now_v7();
+    repo.create_call(
+        &id,
+        &CH2,
+        "unshared-call",
+        USER_A.copied(),
+        TeamShareCreation::Call,
+    )
+    .await?;
+    let before = repo.get_team_share_facts(&id).await?;
+    assert_eq!(before.current, None);
+    assert_eq!(before.revision, 0);
+    assert!(
+        !repo
+            .get_call_record_by_call_id(&id)
+            .await?
+            .unwrap()
+            .share_with_team
+    );
+    assert!(legacy_command(&repo, id, true).await.is_err());
+    give_user_a_team(&pool, USER_A.as_ref(), &Uuid::now_v7()).await?;
+    repo.archive_call(&id).await?;
+    assert!(!stored_call_record_share_with_team(&pool, id).await?);
+    assert_eq!(team_entity_access_count(&pool, id).await?, 0);
+    assert_eq!(repo.get_team_share_facts(&id).await?.current, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn revoked_creation_share_stays_revoked_on_archive(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use models_permissions::share_permission::team_share::TeamShareMaintenance;
+    use share_permission_db_utils::team_share;
+
+    let repo = repo(pool.clone());
+    give_user_a_team(&pool, USER_A.as_ref(), &Uuid::now_v7()).await?;
+    for departure in [false, true] {
+        let id = Uuid::now_v7();
+        repo.create_call(
+            &id,
+            &CH2,
+            "revoked-call",
+            USER_A.copied(),
+            TeamShareCreation::Call,
+        )
+        .await?;
+        assert!(repo.get_team_share_facts(&id).await?.current.is_some());
+        if departure {
+            let mut tx = pool.begin().await?;
+            team_share::acquire_guard(&mut tx).await?;
+            sqlx::query!("DELETE FROM team_user WHERE user_id = $1", USER_A.as_ref())
+                .execute(tx.as_mut())
+                .await?;
+            let entity = model_entity::EntityType::Call.with_entity_string(id.to_string());
+            let expected = team_share::load_facts(&mut tx, &entity).await.unwrap();
+            team_share::maintain(&mut tx, &TeamShareMaintenance::Clear { expected })
+                .await
+                .unwrap();
+            tx.commit().await?;
+        } else {
+            let command = legacy_command(&repo, id, false).await?;
+            repo.patch_call_record(&id, &empty_call_patch(), Some(&command))
+                .await?;
+        }
+        let before = repo.get_team_share_facts(&id).await?;
+        assert!(
+            repo.create_call(
+                &Uuid::now_v7(),
+                &CH2,
+                "retry",
+                USER_A.copied(),
+                TeamShareCreation::Call
+            )
+            .await?
+            .is_none()
+        );
+        assert_eq!(repo.get_team_share_facts(&id).await?, before);
+        repo.archive_call(&id).await?;
+        assert!(repo.archive_call(&id).await.is_err());
+        assert_eq!(repo.get_team_share_facts(&id).await?, before);
+        assert_eq!(before.current, None);
+        assert!(!stored_call_record_share_with_team(&pool, id).await?);
+        assert_eq!(team_entity_access_count(&pool, id).await?, 0);
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
     let id = Uuid::now_v7();
     let call = repo
-        .create_call(&id, &CH2, "room-ch2", USER_B.deref().copied())
+        .create_call(
+            &id,
+            &CH2,
+            "room-ch2",
+            USER_B.deref().copied(),
+            TeamShareCreation::Call,
+        )
         .await?
         .expect("should create new call");
 
@@ -234,13 +443,90 @@ async fn create_call_returns_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
     migrator = "MACRO_DB_MIGRATIONS"
 )]
 async fn create_call_returns_none_on_duplicate_channel(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = repo(pool);
+    let repo = repo(pool.clone());
+    give_user_a_team(&pool, USER_A.as_ref(), &Uuid::now_v7()).await?;
+    let before = repo.get_team_share_facts(&CALL1).await?;
+    let permissions_before = permission_count(&pool).await?;
+    let id = Uuid::now_v7();
     // CH1 already has an active call from the fixture.
     let result = repo
-        .create_call(&Uuid::now_v7(), &CH1, "room-dup", USER_A.deref().copied())
+        .create_call(
+            &id,
+            &CH1,
+            "room-dup",
+            USER_A.deref().copied(),
+            TeamShareCreation::Call,
+        )
         .await?;
 
     assert!(result.is_none(), "should return None on conflict");
+    assert_eq!(repo.get_team_share_facts(&CALL1).await?, before);
+    assert_eq!(permission_count(&pool).await?, permissions_before);
+    assert!(repo.get_call_record_by_call_id(&id).await?.is_none());
+    assert_eq!(call_grant_count(&pool, id).await?, 0);
+    Ok(())
+}
+
+async fn permission_count(pool: &Pool<Postgres>) -> anyhow::Result<i64> {
+    Ok(
+        sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM "SharePermission""#)
+            .fetch_one(pool)
+            .await?,
+    )
+}
+
+async fn call_grant_count(pool: &Pool<Postgres>, id: Uuid) -> anyhow::Result<i64> {
+    Ok(sqlx::query_scalar!(
+        r#"SELECT COUNT(*) AS "count!" FROM entity_access WHERE entity_id = $1 AND entity_type = 'call'"#, id,
+    ).fetch_one(pool).await?)
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn creation_grant_conflict_rolls_back_call_and_permissions(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    let team_id = Uuid::now_v7();
+    let id = Uuid::now_v7();
+    give_user_a_team(&pool, USER_A.as_ref(), &team_id).await?;
+    let mut tx = pool.begin().await?;
+    entity_access_db_utils::insert_entity_access_row(
+        &mut tx,
+        &id,
+        model_entity::EntityType::Call,
+        &team_id.to_string(),
+        entity_access_db_utils::EntityAccessSourceType::Team,
+        AccessLevel::Edit,
+    )
+    .await?;
+    tx.commit().await?;
+    let permissions_before = permission_count(&pool).await?;
+
+    let result = repo
+        .create_call(
+            &id,
+            &CH2,
+            "conflict",
+            USER_A.copied(),
+            TeamShareCreation::Call,
+        )
+        .await;
+    assert!(matches!(result, Err(CallError::Conflict(_))));
+    assert!(repo.get_call_record_by_call_id(&id).await?.is_none());
+    assert_eq!(permission_count(&pool).await?, permissions_before);
+    assert_eq!(call_grant_count(&pool, id).await?, 1);
+    let mut tx = pool.begin().await?;
+    let level = entity_access_db_utils::team_share::direct_level(
+        tx.as_mut(),
+        &id,
+        model_entity::EntityType::Call,
+        team_id,
+    )
+    .await?;
+    assert_eq!(level, Some(AccessLevel::Edit));
     Ok(())
 }
 
@@ -492,9 +778,15 @@ async fn add_participant_rejects_user_already_active_in_other_call(
     let repo = repo(pool);
 
     // Seed a second active call in ch2 (the fixture leaves ch2 empty).
-    repo.create_call(&CALL2, &CH2, "room-ch2", USER_C.deref().copied())
-        .await?
-        .expect("should create call2 in ch2");
+    repo.create_call(
+        &CALL2,
+        &CH2,
+        "room-ch2",
+        USER_C.deref().copied(),
+        TeamShareCreation::Call,
+    )
+    .await?
+    .expect("should create call2 in ch2");
 
     // user-a is already active in call1 (ch1) per the fixture. Trying to
     // add them to call2 (ch2) must hit the partial unique index and surface
@@ -540,9 +832,15 @@ async fn add_participant_allows_join_other_call_after_leave(
 ) -> anyhow::Result<()> {
     let repo = repo(pool);
 
-    repo.create_call(&CALL2, &CH2, "room-ch2", USER_C.deref().copied())
-        .await?
-        .expect("should create call2 in ch2");
+    repo.create_call(
+        &CALL2,
+        &CH2,
+        "room-ch2",
+        USER_C.deref().copied(),
+        TeamShareCreation::Call,
+    )
+    .await?
+    .expect("should create call2 in ch2");
 
     // user-a leaves call1, freeing them up to join call2.
     repo.remove_participant(&CALL1, USER_A.deref().copied())
@@ -803,17 +1101,15 @@ async fn team_entity_access_count(pool: &Pool<Postgres>, call_id: Uuid) -> anyho
     .await?)
 }
 
-// -- archive_call grants team view access when share_with_team is true -------
+// -- Archive never reconstructs sharing from a legacy flag or membership. --
 
 #[sqlx::test(
     fixtures(path = "../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn archive_call_grants_team_view_access_when_share_with_team_true(
+async fn archive_call_does_not_adopt_legacy_share_with_team_true(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
-    use sqlx::Row as _;
-
     let repo = repo(pool.clone());
     let team_id: Uuid = Uuid::from_u128(0xaaaaaaaa_aaaa_aaaa_aaaa_aaaaaaaaaaaa);
 
@@ -822,22 +1118,8 @@ async fn archive_call_grants_team_view_access_when_share_with_team_true(
     // share_with_team defaults to TRUE on the fixture call.
     repo.archive_call(&CALL1).await?;
 
-    let row = sqlx::query(
-        r#"
-        SELECT entity_id, entity_type, source_id, access_level
-        FROM entity_access
-        WHERE entity_id = $1 AND source_type = 'team'
-        "#,
-    )
-    .bind(CALL1)
-    .fetch_one(&pool)
-    .await?;
-
-    assert_eq!(row.get::<Uuid, _>("entity_id"), CALL1);
-    assert_eq!(row.get::<String, _>("entity_type"), "call");
-    assert_eq!(row.get::<String, _>("source_id"), team_id.to_string());
-    assert_eq!(row.get::<AccessLevel, _>("access_level"), AccessLevel::View);
-    assert!(stored_call_record_share_with_team(&pool, CALL1).await?);
+    assert_eq!(team_entity_access_count(&pool, CALL1).await?, 0);
+    assert!(!stored_call_record_share_with_team(&pool, CALL1).await?);
 
     Ok(())
 }

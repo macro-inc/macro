@@ -391,7 +391,11 @@ fn mock_get_or_create_repo(
 
             repo.expect_create_call()
                 .times(1)
-                .return_once(move |_, _, _, _| Box::pin(async move { Ok(Some(call)) }));
+                .return_once(move |_, _, _, creator, intent| {
+                    assert_eq!(creator, user("requester@example.com"));
+                    assert_eq!(intent, super::TeamShareCreation::Call);
+                    Box::pin(async move { Ok(Some(call)) })
+                });
 
             repo.expect_resolve_channel_name()
                 .times(1)
@@ -415,7 +419,10 @@ fn mock_get_or_create_repo(
                 .return_once(move |_| Box::pin(async move { Ok(Some(call)) }));
             repo.expect_create_call()
                 .times(1)
-                .returning(|_, _, _, _| Box::pin(async { Ok(None) }));
+                .returning(|_, _, _, _, intent| {
+                    assert_eq!(intent, super::TeamShareCreation::Call);
+                    Box::pin(async { Ok(None) })
+                });
         }
         GetOrCreateScenario::ExistingCall => {
             repo.expect_get_call_by_channel_id()

@@ -8,7 +8,7 @@ use std::future::Future;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareFacts,
+    AuthorizedTeamShareCommand, TeamShareCreation, TeamShareFacts,
 };
 use uuid::Uuid;
 
@@ -37,13 +37,17 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Create a new call record, or return `None` if one already exists for
     /// this channel (unique-constraint conflict).
+    /// Resolve creator membership under the team-share guard and initialize the
+    /// supplied creation intent, canonical grant, and compatibility flag atomically.
+    /// Never apply creation intent to an existing call when losing a creation race.
     fn create_call<'a>(
         &self,
         call_id: &Uuid,
         channel_id: &Uuid,
         room_name: &str,
         created_by: MacroUserIdStr<'a>,
-    ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
+        team_share: TeamShareCreation,
+    ) -> impl Future<Output = Result<Option<Call>, CallError>> + Send;
 
     /// Get an active call by channel ID.
     fn get_call_by_channel_id(
@@ -144,6 +148,8 @@ pub trait CallRepository: Send + Sync + 'static {
 
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
+    /// Preserve canonical sharing and grants without resolving membership or
+    /// applying creation defaults. A replay after archival returns not found.
     /// Returns facts committed by the archive transaction.
     fn archive_call(
         &self,

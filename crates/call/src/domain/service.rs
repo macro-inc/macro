@@ -13,7 +13,7 @@ use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::team_share::{
-    TeamShareLevel, TeamShareRequest, authorize_team_share,
+    TeamShareCreation, TeamShareLevel, TeamShareRequest, authorize_team_share,
 };
 use notification::domain::models::apple::VoipPushPayload;
 use notification::domain::models::apple::{
@@ -545,9 +545,14 @@ impl<
                 // the ON CONFLICT returns None — re-read the existing call.
                 match self
                     .repo
-                    .create_call(&call_id, channel_id, &room_name, user_id.copied())
-                    .await
-                    .map_err(|e| CallError::Internal(e.into()))?
+                    .create_call(
+                        &call_id,
+                        channel_id,
+                        &room_name,
+                        user_id.copied(),
+                        TeamShareCreation::Call,
+                    )
+                    .await?
                 {
                     Some(call) => {
                         // We are the creator — dispatch transcription agent (best-effort).
