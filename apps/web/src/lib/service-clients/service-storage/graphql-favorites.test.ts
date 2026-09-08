@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   FavoritesDocument,
   ReorderFavoritesDocument,
+  SetFavoriteDocument,
 } from './graphql/generated/graphql';
 
 const { graphqlSoupEnabledMock, mutationMock, reorderFavoritesRestMock } =
@@ -28,7 +29,11 @@ vi.mock('./graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ mutation: mutationMock }),
 }));
 
-import { reorderFavorites } from './graphql-favorites';
+import {
+  executeGraphqlSetFavoriteMutation,
+  reorderFavorites,
+  setFavoriteOptimisticMutationUuid,
+} from './graphql-favorites';
 
 const args = {
   favorites: [
@@ -60,10 +65,105 @@ function committedGraphqlResponse() {
   };
 }
 
-describe('favorites reorder transport', () => {
+describe('favorites GraphQL mutations', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     graphqlSoupEnabledMock.mockReturnValue(true);
+  });
+
+  it.each([
+    { favorite: true, patchKind: 'prependUnique' },
+    { favorite: false, patchKind: 'remove' },
+  ] as const)(
+    'submits a durable optimistic set mutation when favorite=$favorite',
+    async ({ favorite, patchKind }) => {
+      mutationMock.mockReturnValue({
+        toPromise: async () => ({
+          data: {
+            setEntityFavorite: {
+              __typename: 'SetFavoritePayload',
+              result: { __typename: 'GraphqlMutationSuccess' },
+              favorite: null,
+            },
+          },
+        }),
+      });
+      const input = {
+        entityType: 'document' as const,
+        entityId: 'document-1',
+      };
+
+      await executeGraphqlSetFavoriteMutation(
+        { mutation: mutationMock } as never,
+        input,
+        favorite,
+        2
+      );
+
+      expect(mutationMock).toHaveBeenCalledWith(
+        SetFavoriteDocument,
+        {
+          entity: { type: 'DOCUMENT', id: 'document-1' },
+          favorite,
+        },
+        {
+          normalizedCacheOptimistic: {
+            uuid: setFavoriteOptimisticMutationUuid(input),
+            optimisticResponse: {
+              setEntityFavorite: {
+                __typename: 'SetFavoritePayload',
+                result: { __typename: 'GraphqlMutationSuccess' },
+                favorite: favorite
+                  ? expect.objectContaining({
+                      __typename: 'GraphqlFavorite',
+                      id: 'document:document-1',
+                      entityType: 'DOCUMENT',
+                      entityId: 'document-1',
+                      sortOrder: 2,
+                    })
+                  : null,
+              },
+            },
+            linkPatches: [
+              {
+                query: stringifyDocument(FavoritesDocument),
+                operationName: 'Favorites',
+                variablesJson: '{}',
+                path: [{ field: 'user' }, { field: 'favorites' }],
+                operation: {
+                  kind: patchKind,
+                  entityKey: 'GraphqlFavorite:document:document-1',
+                },
+              },
+            ],
+            revalidations: [
+              {
+                query: stringifyDocument(FavoritesDocument),
+                operationName: 'Favorites',
+                variablesJson: '{}',
+              },
+            ],
+          },
+        }
+      );
+    }
+  );
+
+  it('coalesces newer offline favorite state for the same entity only', () => {
+    const document = {
+      entityType: 'document' as const,
+      entityId: 'document-1',
+    };
+
+    expect(setFavoriteOptimisticMutationUuid(document)).toBe(
+      setFavoriteOptimisticMutationUuid(document)
+    );
+    expect(setFavoriteOptimisticMutationUuid(document)).not.toBe(
+      setFavoriteOptimisticMutationUuid({
+        ...document,
+        entityId: 'document-2',
+      })
+    );
   });
 
   it('uses REST while GraphQL Soup is disabled', async () => {

@@ -67,7 +67,11 @@ describe('GraphQL favorites queries', () => {
     executeMutation = vi.fn(() => ({
       toPromise: async () => ({
         data: {
-          setEntityFavorite: { __typename: 'GraphqlMutationSuccess' as const },
+          setEntityFavorite: {
+            __typename: 'SetFavoritePayload' as const,
+            result: { __typename: 'GraphqlMutationSuccess' as const },
+            favorite: graphqlFavorite('document-1', 1),
+          },
         },
       }),
     }));
@@ -123,7 +127,28 @@ describe('GraphQL favorites queries', () => {
         entity: { type: 'DOCUMENT', id: 'document-1' },
         favorite: true,
       },
-      {}
+      {
+        normalizedCacheOptimistic: expect.objectContaining({
+          optimisticResponse: {
+            setEntityFavorite: expect.objectContaining({
+              __typename: 'SetFavoritePayload',
+              result: { __typename: 'GraphqlMutationSuccess' },
+              favorite: expect.objectContaining({
+                id: 'document:document-1',
+                sortOrder: 2,
+              }),
+            }),
+          },
+          linkPatches: [
+            expect.objectContaining({
+              operation: {
+                kind: 'prependUnique',
+                entityKey: 'GraphqlFavorite:document:document-1',
+              },
+            }),
+          ],
+        }),
+      }
     );
     expect(executeQuery).toHaveBeenCalledTimes(2);
     expect(executeQuery.mock.calls[1]?.[1]).toEqual({
@@ -137,5 +162,36 @@ describe('GraphQL favorites queries', () => {
       { entityType: 'document', entityId: 'document-1' },
       undefined
     );
+  });
+
+  it('accepts a queued offline favorite change without refetching stale data', async () => {
+    executeMutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          setEntityFavorite: {
+            __typename: 'SetFavoritePayload' as const,
+            result: { __typename: 'GraphqlMutationSuccess' as const },
+            favorite: graphqlFavorite('document-3', 2),
+          },
+        },
+        extensions: {
+          normalizedCacheMutationDisposition: {
+            kind: 'queued',
+            transactionId: 'transaction-1',
+          },
+        },
+      }),
+    });
+    const mutation = renderHook(() =>
+      createGraphqlSetFavoriteMutation({ favorite: true })
+    );
+
+    const result = await mutation.mutateAsync({
+      entityType: 'document',
+      entityId: 'document-3',
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(executeQuery).toHaveBeenCalledOnce();
   });
 });

@@ -23,9 +23,15 @@ query Favorites {
 mutation SetFavorite($entity: EntityRefInput!, $favorite: Boolean!) {
   setEntityFavorite(entity: $entity, favorite: $favorite) {
     __typename
-    ... on GraphqlMutationError {
-      errorCode
-      message
+    result {
+      __typename
+      ... on GraphqlMutationError {
+        errorCode
+        message
+      }
+    }
+    favorite {
+      ...FavoriteFields
     }
   }
 }

@@ -174,12 +174,19 @@ async fn favorite_authorizes_then_delegates_to_core_service() {
     let service = FavoritesMutationServiceImpl::new(favorites.clone(), authorizer.clone());
     let entity = EntityType::Document.with_entity_string("document-1".to_string());
 
-    let updated = service
+    let result = service
         .set_favorite(actor(), entity.clone(), true)
         .await
         .expect("favorite should succeed");
 
-    assert_eq!(updated, entity);
+    assert_eq!(result.entity, entity);
+    assert_eq!(
+        result
+            .favorite
+            .as_ref()
+            .map(|favorite| favorite.entity_id.as_str()),
+        Some("document-1")
+    );
     assert_eq!(
         authorizer.calls(),
         vec![AuthorizerCall {
@@ -205,12 +212,13 @@ async fn unfavorite_delegates_without_requiring_current_entity_access() {
     let service = FavoritesMutationServiceImpl::new(favorites.clone(), authorizer.clone());
     let entity = EntityType::Document.with_entity_string("document-1".to_string());
 
-    let updated = service
+    let result = service
         .set_favorite(actor(), entity.clone(), false)
         .await
         .expect("unfavorite should succeed");
 
-    assert_eq!(updated, entity);
+    assert_eq!(result.entity, entity);
+    assert!(result.favorite.is_none());
     assert!(authorizer.calls().is_empty());
     assert_eq!(
         favorites.calls(),

@@ -9,7 +9,7 @@ use entity_access::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 
-use crate::domain::models::{Favorite, FavoritesError, FavoritesMutationActor};
+use crate::domain::models::{Favorite, FavoritesError, FavoritesMutationActor, SetFavoriteResult};
 
 /// Outbound persistence port for favorites.
 pub trait FavoritesRepo: Send + Sync + 'static {
@@ -112,7 +112,7 @@ pub trait FavoritesMutationService: Send + Sync + 'static {
         actor: FavoritesMutationActor,
         entity: Entity<'static>,
         favorite: bool,
-    ) -> impl Future<Output = Result<Entity<'static>, FavoritesError>> + Send;
+    ) -> impl Future<Output = Result<SetFavoriteResult, FavoritesError>> + Send;
 
     /// Persist a complete manual order and return the authoritative collection.
     fn reorder_favorites(

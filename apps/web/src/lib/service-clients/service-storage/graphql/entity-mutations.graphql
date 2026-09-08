@@ -61,6 +61,11 @@ mutation DuplicateEntities($inputs: [DuplicateEntityInput!]!) {
 
 mutation SetEntityFavorite($entity: EntityRefInput!, $favorite: Boolean!) {
   setEntityFavorite(entity: $entity, favorite: $favorite) {
-    ...EntityMutationResultFields
+    result {
+      ...EntityMutationResultFields
+    }
+    favorite {
+      ...FavoriteFields
+    }
   }
 }

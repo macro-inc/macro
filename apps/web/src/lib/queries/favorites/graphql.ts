@@ -19,12 +19,13 @@ import {
 } from '@service-storage/graphql/generated/graphql';
 import {
   executeGraphqlReorderFavoritesMutation,
+  executeGraphqlSetFavoriteMutation,
   graphqlReorderFavoritesResult,
   mapGraphqlFavorite,
   type ReorderFavoritesResult,
-  toGraphqlFavoriteEntityType,
 } from '@service-storage/graphql-favorites';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
+import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import { CombinedError, type OperationResult } from '@urql/core';
 import { onCleanup } from 'solid-js';
 
@@ -113,10 +114,11 @@ function mutationError(
 ): OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables> {
   if (result.error) return result;
   const payload = result.data?.setEntityFavorite;
+  const mutationResult = payload?.result;
   const message =
-    payload?.__typename === 'GraphqlMutationError'
-      ? payload.message
-      : payload
+    mutationResult?.__typename === 'GraphqlMutationError'
+      ? mutationResult.message
+      : mutationResult
         ? undefined
         : 'setEntityFavorite mutation returned no data';
   if (!message) return result;
@@ -124,6 +126,16 @@ function mutationError(
     ...result,
     error: new CombinedError({ graphQLErrors: [new Error(message)] }),
   };
+}
+
+function nextFavoriteSortOrder(): number {
+  let maximum = -1;
+  for (const query of activeFavoritesQueries) {
+    for (const favorite of query.data?.favorites ?? []) {
+      maximum = Math.max(maximum, favorite.sortOrder);
+    }
+  }
+  return maximum + 1;
 }
 
 function findActiveFavorite(
@@ -152,25 +164,21 @@ export function createGraphqlSetFavoriteMutation<Context = void>(
   >(() => ({
     mutation: SetFavoriteDocument,
     client: getGraphqlSoupClient(),
-    execute: async ({ client, mutation, input, context }) =>
+    execute: async ({ client, input }) =>
       mutationError(
-        await client
-          .mutation(
-            mutation,
-            {
-              entity: {
-                type: toGraphqlFavoriteEntityType(input.entityType),
-                id: input.entityId,
-              },
-              favorite: options.favorite,
-            },
-            context
-          )
-          .toPromise()
+        await executeGraphqlSetFavoriteMutation(
+          client,
+          input,
+          options.favorite,
+          nextFavoriteSortOrder()
+        )
       ),
     onMutate: options.onMutate,
-    onSuccess: async (_data, input, context) => {
-      await refreshActiveGraphqlFavoritesQueries();
+    onSuccess: async (_data, input, context, result) => {
+      const disposition = optimisticMutationDispositionOf(result);
+      if (disposition?.kind !== 'queued') {
+        await refreshActiveGraphqlFavoritesQueries();
+      }
       await options.onSuccess?.(findActiveFavorite(input), input, context);
     },
     onError: (error, input, context) =>

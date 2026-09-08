@@ -57,6 +57,15 @@ pub struct FavoritesList {
     pub favorites: Vec<Favorite>,
 }
 
+/// Result of setting an entity's membership in the favorites collection.
+#[derive(Clone, Debug)]
+pub struct SetFavoriteResult {
+    /// The entity whose favorite state changed.
+    pub entity: Entity<'static>,
+    /// The persisted favorite after an add, or `None` after a removal.
+    pub favorite: Option<Favorite>,
+}
+
 /// Authenticated actor performing a favorites mutation.
 #[derive(Clone, Debug)]
 pub struct FavoritesMutationActor {

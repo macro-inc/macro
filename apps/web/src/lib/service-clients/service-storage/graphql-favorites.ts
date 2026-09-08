@@ -6,8 +6,13 @@ import { throwOnErr } from '@core/util/result';
 import {
   executeOptimisticMutation,
   optimisticMutationDispositionOf,
+  prependUnique,
+  remove,
+  select,
+  update,
 } from '@graphql-cache/exchange/optimistic';
 import type { Client, OperationResult } from '@urql/core';
+import { v5 as uuidv5 } from 'uuid';
 import { storageServiceClient } from './client';
 import type { Favorite } from './generated/schemas/favorite';
 import type { FavoriteEntityType } from './generated/schemas/favoriteEntityType';
@@ -19,6 +24,9 @@ import {
   ReorderFavoritesDocument,
   type ReorderFavoritesMutation,
   type ReorderFavoritesMutationVariables,
+  SetFavoriteDocument,
+  type SetFavoriteMutation,
+  type SetFavoriteMutationVariables,
 } from './graphql/generated/graphql';
 import { getGraphqlSoupClient } from './graphql-soup';
 
@@ -81,6 +89,81 @@ export function mapGraphqlFavorite(favorite: FavoriteFieldsFragment): Favorite {
     fileType: favorite.fileType,
     sortOrder: favorite.sortOrder,
   };
+}
+
+const SET_FAVORITE_OPTIMISTIC_UUID_NAMESPACE =
+  'e45ea486-2307-486e-bcbf-091380243800';
+
+/** Input for setting one entity's favorite state. */
+export type SetFavoriteArgs = {
+  entityType: FavoriteEntityType;
+  entityId: string;
+};
+
+/** Stable coalescing UUID for one entity's absolute favorite-state slot. */
+export function setFavoriteOptimisticMutationUuid(
+  args: SetFavoriteArgs
+): string {
+  return uuidv5(
+    JSON.stringify(['setFavorite', args.entityType, args.entityId]),
+    SET_FAVORITE_OPTIMISTIC_UUID_NAMESPACE
+  );
+}
+
+/** Submit a durable optimistic GraphQL add/remove favorite mutation. */
+export function executeGraphqlSetFavoriteMutation(
+  client: Client,
+  args: SetFavoriteArgs,
+  favorite: boolean,
+  optimisticSortOrder: number
+): Promise<OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables>> {
+  const entityType = toGraphqlFavoriteEntityType(args.entityType);
+  const optimisticFavorite: FavoriteFieldsFragment = {
+    __typename: 'GraphqlFavorite',
+    id: `${args.entityType}:${args.entityId}`,
+    entityType,
+    entityId: args.entityId,
+    sortOrder: optimisticSortOrder,
+    createdAt: new Date().toISOString(),
+    fileType: null,
+    documentSubType: null,
+    channelType: null,
+    channelId: null,
+  };
+  const identity = {
+    __typename: optimisticFavorite.__typename,
+    id: optimisticFavorite.id,
+  };
+  const favorites = select(FavoritesDocument, {})
+    .field('user')
+    .field('favorites');
+  const optimisticData: SetFavoriteMutation = {
+    setEntityFavorite: {
+      __typename: 'SetFavoritePayload',
+      result: { __typename: 'GraphqlMutationSuccess' },
+      favorite: favorite ? optimisticFavorite : null,
+    },
+  };
+
+  return executeOptimisticMutation(
+    client,
+    SetFavoriteDocument,
+    {
+      entity: { type: entityType, id: args.entityId },
+      favorite,
+    },
+    optimisticData,
+    {
+      uuid: setFavoriteOptimisticMutationUuid(args),
+      updates: [
+        update(
+          favorites,
+          favorite ? prependUnique(identity) : remove(identity)
+        ),
+      ],
+      revalidations: [{ document: FavoritesDocument, variables: {} }],
+    }
+  ).toPromise();
 }
 
 /**

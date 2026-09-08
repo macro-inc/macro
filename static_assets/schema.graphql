@@ -98,7 +98,7 @@ type CompleteMutationRoot {
 	"""
 	Add or remove an entity from the actor's favorites.
 	"""
-	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): GraphqlEntityMutationResult!
+	setEntityFavorite(entity: EntityRefInput!, favorite: Boolean!): SetFavoritePayload!
 	"""
 	Persist the authenticated user's complete favorites order and return the authoritative list.
 	"""
@@ -5606,6 +5606,20 @@ input SetEntityPropertyInput {
 	Omit or pass null to attach the property without a value.
 	"""
 	value: GraphqlSetPropertyValue
+}
+
+"""
+GraphQL result of setting an entity's favorite state.
+"""
+type SetFavoritePayload {
+	"""
+	Entity mutation result, including normalized Soup cache effects.
+	"""
+	result: GraphqlEntityMutationResult!
+	"""
+	Persisted favorite after an add, or `null` after a removal.
+	"""
+	favorite: GraphqlFavorite
 }
 
 """

@@ -106,7 +106,7 @@ impl FavoritesMutationService for CapturingService {
         actor: FavoritesMutationActor,
         entity: Entity<'static>,
         favorite: bool,
-    ) -> Result<Entity<'static>, FavoritesError> {
+    ) -> Result<SetFavoriteResult, FavoritesError> {
         *self.set_call.lock().expect("set call lock poisoned") = Some(SetCall {
             actor_user_id: actor.user_id.to_string(),
             organization_id: actor.organization_id,
@@ -114,7 +114,20 @@ impl FavoritesMutationService for CapturingService {
             entity_id: entity.entity_id.to_string(),
             favorite,
         });
-        Ok(entity)
+        let persisted_favorite = favorite.then(|| Favorite {
+            entity_type: entity.entity_type,
+            entity_id: entity.entity_id.to_string(),
+            sort_order: 2.0,
+            created_at: chrono::Utc::now(),
+            file_type: Some("md".to_string()),
+            document_sub_type: None,
+            channel_type: None,
+            channel_id: None,
+        });
+        Ok(SetFavoriteResult {
+            entity,
+            favorite: persisted_favorite,
+        })
     }
 
     async fn reorder_favorites(
@@ -186,9 +199,18 @@ async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
                 entity: { type: DOCUMENT, id: "document-1" }
                 favorite: true
               ) {
-                __typename
-                ... on GraphqlMutationSuccess {
-                  effects { __typename }
+                result {
+                  __typename
+                  ... on GraphqlMutationSuccess {
+                    effects { __typename }
+                  }
+                }
+                favorite {
+                  id
+                  entityType
+                  entityId
+                  sortOrder
+                  fileType
                 }
               }
             }
@@ -201,8 +223,17 @@ async fn set_entity_favorite_preserves_the_toggle_and_delegates_to_favorites() {
         response.data,
         value!({
             "setEntityFavorite": {
-                "__typename": "GraphqlMutationSuccess",
-                "effects": [{ "__typename": "SoupUpdated" }],
+                "result": {
+                    "__typename": "GraphqlMutationSuccess",
+                    "effects": [{ "__typename": "SoupUpdated" }],
+                },
+                "favorite": {
+                    "id": "document:document-1",
+                    "entityType": "DOCUMENT",
+                    "entityId": "document-1",
+                    "sortOrder": 2.0,
+                    "fileType": "md",
+                },
             }
         })
     );

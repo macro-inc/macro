@@ -3,7 +3,7 @@ use std::{marker::PhantomData, sync::Arc};
 use async_graphql::{Context, InputObject, Object};
 use entity_mutation::EntityMutationErrorCode;
 use favorites::domain::{
-    models::{Favorite, FavoritesError, FavoritesMutationActor},
+    models::{Favorite, FavoritesError, FavoritesMutationActor, SetFavoriteResult},
     ports::FavoritesMutationService,
 };
 use graphql_common::require_authenticated_user;
@@ -43,7 +43,7 @@ impl FavoritesMutationService for NoOpFavoriteMutationService {
         _actor: FavoritesMutationActor,
         _entity: Entity<'static>,
         _favorite: bool,
-    ) -> Result<Entity<'static>, FavoritesError> {
+    ) -> Result<SetFavoriteResult, FavoritesError> {
         Err(FavoritesError::BadRequest(
             "favorite mutations are not configured".to_string(),
         ))
@@ -57,6 +57,26 @@ impl FavoritesMutationService for NoOpFavoriteMutationService {
         Err(FavoritesError::BadRequest(
             "favorite mutations are not configured".to_string(),
         ))
+    }
+}
+
+/// Result of setting an entity's favorite state.
+pub struct SetFavoritePayload<E: SoupEntityEdges> {
+    result: GraphqlEntityMutationResult<E>,
+    favorite: Option<GraphqlFavorite>,
+}
+
+/// GraphQL result of setting an entity's favorite state.
+#[Object]
+impl<E: SoupEntityEdges> SetFavoritePayload<E> {
+    /// Entity mutation result, including normalized Soup cache effects.
+    async fn result(&self) -> &GraphqlEntityMutationResult<E> {
+        &self.result
+    }
+
+    /// Persisted favorite after an add, or `null` after a removal.
+    async fn favorite(&self) -> Option<&GraphqlFavorite> {
+        self.favorite.as_ref()
     }
 }
 
@@ -118,7 +138,7 @@ where
         ctx: &Context<'_>,
         entity: EntityRefInput,
         favorite: bool,
-    ) -> async_graphql::Result<GraphqlEntityMutationResult<E>> {
+    ) -> async_graphql::Result<SetFavoritePayload<E>> {
         let actor = ctx.data::<FavoritesMutationActor>()?.clone();
         let service = ctx.data::<Arc<S>>()?;
         let result = service
@@ -126,8 +146,14 @@ where
             .await;
 
         Ok(match result {
-            Ok(entity) => GraphqlEntityMutationResult::from_updated_entity(entity),
-            Err(error) => GraphqlEntityMutationResult::from_error_code(mutation_error_code(error)),
+            Ok(result) => SetFavoritePayload {
+                result: GraphqlEntityMutationResult::from_updated_entity(result.entity),
+                favorite: result.favorite.map(GraphqlFavorite::new),
+            },
+            Err(error) => SetFavoritePayload {
+                result: GraphqlEntityMutationResult::from_error_code(mutation_error_code(error)),
+                favorite: None,
+            },
         })
     }
 
