@@ -1,6 +1,6 @@
 /// The main entry point: [`AgentLoop`] and [`Session`].
 use crate::error::AgentError;
-use crate::hook::{BridgeInputs, RegisterFn, ToolRouter, UserToolFinisher};
+use crate::hook::{BridgeInputs, RegisterFn, ToolRouter};
 use crate::model::PredefinedModel;
 use crate::model::router::{ModelRouter, ProviderAgent};
 use crate::stream::ChatCompletionStream;
@@ -30,7 +30,6 @@ pub struct AgentLoop {
     max_turns: usize,
     max_tokens: u64,
     recorder: Arc<dyn UsageRecorder>,
-    user_tool_finisher: Option<UserToolFinisher>,
 }
 
 impl AgentLoop {
@@ -47,22 +46,7 @@ impl AgentLoop {
             max_turns: DEFAULT_MAX_TURNS,
             max_tokens: DEFAULT_MAX_TOKENS,
             recorder,
-            user_tool_finisher: None,
         }
-    }
-
-    /// Finish user tools inside the turn.
-    ///
-    /// A user tool (`ai_toolset::UserTool`) answers `"PendingUserExecution"`
-    /// and leaves the call for the host to finish. Without a finisher that
-    /// answer reaches the model as-is and the host finishes the call later,
-    /// as chat does over HTTP. With one, the bridge hands each pending call
-    /// to `finisher` before the model reads it, and the model sees what the
-    /// user decided instead - the shape a host that can reach its user
-    /// mid-turn wants.
-    pub fn with_user_tool_finisher(mut self, finisher: UserToolFinisher) -> Self {
-        self.user_tool_finisher = Some(finisher);
-        self
     }
 
     /// Override the model.
@@ -248,7 +232,6 @@ impl AgentLoop {
                 routing,
                 loaded_buffer,
                 register_loaded,
-                user_tool_finisher: self.user_tool_finisher.clone(),
             },
             recorder: self.recorder.clone(),
             usage_ctx,
@@ -293,7 +276,7 @@ pub struct Session {
     history: Vec<Message>,
     max_turns: usize,
     /// What every turn's stream bridge is built from: tool routing, the
-    /// on-demand tool loading pair, and the user-tool finisher if any.
+    /// on-demand tool loading pair.
     bridge_inputs: BridgeInputs,
     recorder: Arc<dyn UsageRecorder>,
     usage_ctx: UsageContext,

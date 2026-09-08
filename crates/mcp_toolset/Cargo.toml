@@ -12,8 +12,10 @@ rmcp = { workspace = true, features = ["client"] }
 schemars.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
 tracing.workspace = true
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 regex.workspace = true
+rmcp = { workspace = true, features = ["server"] }

@@ -29,7 +29,7 @@ mcp_select = { path = "../mcp_select" }
 mcp_toolset = { path = "../mcp_toolset" }
 memory = { path = "../memory" }
 prompt = { path = "../prompt" }
-rmcp = { workspace = true, features = ["client", "transport-streamable-http-client"] }
+rmcp = { workspace = true, features = ["client", "transport-streamable-http-client", "elicitation"] }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

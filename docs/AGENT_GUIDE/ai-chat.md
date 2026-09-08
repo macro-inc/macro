@@ -81,6 +81,15 @@ to `Question · <text>` with `Answered` / `Declined` / `Cancelled` on the right 
 continues. Messages typed while a question is open queue behind it; the composer's `Stop`
 square cancels the question and the turn.
 
+The new Macro agent uses Macro MCP for workspace tools. Sending email and creating
+calendar events opens a review composer; edit the draft and explicitly Send/Create,
+or decline. The accepted review and the final tool result may appear as separate
+rows. Questions from other MCP servers show the requesting server name and use
+ordinary forms. Concurrent questions appear one at a time. If a server session
+expires during a deploy, reconnect the agent session; do not blindly repeat an
+action whose result is uncertain. The classic in-channel `@Macro` behavior is
+unchanged.
+
 ## In channels
 
 Mention `@Macro` in any channel message for the classic in-channel reply. Mention

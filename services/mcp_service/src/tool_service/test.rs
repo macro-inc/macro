@@ -211,3 +211,5 @@ fn authenticated_user_id_requires_user_extension_inside_request_parts() {
     assert_eq!(error.code, ErrorCode::INTERNAL_ERROR);
     assert_eq!(error.message, "missing user identity — is auth configured?");
 }
+
+mod transport;

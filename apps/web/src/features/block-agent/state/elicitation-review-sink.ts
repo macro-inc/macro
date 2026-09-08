@@ -2,8 +2,8 @@
  * The agent session's half of a user tool's composer: answering the review
  * elicitation the agent is blocked on.
  *
- * Accept sends the whole edited draft under the `draft` field (Macro's
- * `_macro/json` extension); the agent's finisher runs the tool with it.
+ * Accept sends the whole edited draft as a standard string `draft` field.
+ * The MCP server validates and executes the reviewed tool arguments.
  * Reject declines. There is nothing to persist between edits - the draft
  * lives in the form until the user decides - so `onEdit` is left out.
  */
@@ -16,6 +16,8 @@ import type { Accessor } from 'solid-js';
 export const DRAFT_FIELD = 'draft';
 
 export function createElicitationReviewSink<T>(options: {
+  /** New MCP email forms declare the composer body encoding explicitly. */
+  encodedEmailBody?: boolean;
   canAnswer: Accessor<boolean>;
   ownerName: Accessor<string>;
   answering: Accessor<boolean>;
@@ -32,7 +34,12 @@ export function createElicitationReviewSink<T>(options: {
       canAct()
         ? options.respond({
             action: 'accept',
-            content: { [DRAFT_FIELD]: JSON.stringify(args) },
+            content: {
+              [DRAFT_FIELD]: JSON.stringify(args),
+              ...(options.encodedEmailBody
+                ? { bodyFormat: 'base64url_html' }
+                : {}),
+            },
           })
         : Promise.resolve(false),
     onReject: () =>

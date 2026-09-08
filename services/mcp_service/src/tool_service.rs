@@ -1,3 +1,5 @@
+mod review;
+
 use crate::markdown_images::{MarkdownImageResolver, tool_result_with_images};
 use ai_toolset::{AsyncToolCollection, RequestContext, ToolSet};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -9,6 +11,24 @@ use rmcp::{
     },
 };
 use std::sync::Arc;
+
+/// Per-call context preparation keeps usage attribution tied to the verified user.
+pub(crate) trait McpToolContext: Clone + Send + Sync + MarkdownImageResolver {
+    fn for_user(&self, user: MacroUserIdStr<'static>) -> Self;
+}
+
+impl McpToolContext for ai_tools::ToolServiceContext {
+    fn for_user(&self, user: MacroUserIdStr<'static>) -> Self {
+        let mut context = self.clone();
+        context.usage_context = ai_usage::UsageContext::new(ai_usage::AiFeature::Chat, user);
+        context
+    }
+}
+
+#[cfg(test)]
+impl McpToolContext for () {
+    fn for_user(&self, _user: MacroUserIdStr<'static>) -> Self {}
+}
 
 /// Maps our protocol-agnostic annotations onto the MCP wire representation.
 ///
@@ -85,7 +105,7 @@ mod test;
 
 impl<Context> ServerHandler for AuthenticatedToolService<Context>
 where
-    Context: Clone + Send + Sync + MarkdownImageResolver + 'static,
+    Context: McpToolContext + 'static,
 {
     fn get_info(&self) -> ServerInfo {
         let mut info = ServerInfo::new(ServerCapabilities::builder().enable_tools().build());
@@ -137,21 +157,119 @@ where
     ) -> Result<rmcp::model::CallToolResult, rmcp::ErrorData> {
         let user_id = Self::authenticated_user_id(&context.extensions)?;
 
-        let request_context = RequestContext::new(user_id.clone());
+        let tool_context = self.context.for_user(user_id.clone());
+        let mut request_context = RequestContext::new(user_id.clone());
+        request_context.cancel = context.ct.clone();
 
         let arguments = request
             .arguments
             .map(serde_json::Value::Object)
             .ok_or(rmcp::ErrorData::invalid_params("No params provided", None))?;
 
-        let result = self
-            .toolset
-            .try_tool_call(
-                self.context.clone(),
-                request_context,
-                &request.name,
+        if let Some(tool) = self.toolset.user_tools.get(request.name.as_ref()) {
+            let supports_form = context
+                .peer
+                .peer_info()
+                .and_then(|info| info.capabilities.elicitation.as_ref())
+                .is_some_and(|cap| cap.form.is_some() || cap.url.is_none());
+            if !supports_form {
+                return Ok(tool_error(
+                    "This tool requires form elicitation support; nothing was executed.",
+                ));
+            }
+            let schema = review::project_form(
+                &review::tool_schema(&request.name, &tool.input_schema),
                 &arguments,
             )
+            .map_err(|error| rmcp::ErrorData::internal_error(error, None))?;
+            let params = rmcp::model::CreateElicitationRequestParams::FormElicitationParams {
+                meta: Some(rmcp::model::Meta(
+                    serde_json::from_value(serde_json::json!({
+                        "macro": {"userTool": {"name": request.name, "draft": arguments}}
+                    }))
+                    .map_err(|error| rmcp::ErrorData::internal_error(error.to_string(), None))?,
+                )),
+                message: format!("{}?", tool.annotations.title),
+                requested_schema: schema,
+            };
+            let mut pending = context
+                .peer
+                .send_cancellable_request(
+                    rmcp::model::CreateElicitationRequest::new(params).into(),
+                    Default::default(),
+                )
+                .await
+                .map_err(|error| rmcp::ErrorData::internal_error(error.to_string(), None))?;
+            let response = tokio::select! {
+                biased;
+                _ = context.ct.cancelled() => None,
+                _ = tokio::time::sleep(std::time::Duration::from_secs(3600)) => None,
+                response = &mut pending.rx => Some(response),
+            };
+            let response = match response {
+                None => {
+                    let _ = pending
+                        .cancel(Some("the review was cancelled or expired".to_owned()))
+                        .await;
+                    return Ok(tool_error(
+                        "The review was cancelled or expired; nothing was executed.",
+                    ));
+                }
+                Some(Ok(Ok(rmcp::model::ClientResult::CreateElicitationResult(response)))) => {
+                    response
+                }
+                _ => return Ok(tool_error("The review failed; nothing was executed.")),
+            };
+            match response.action {
+                rmcp::model::ElicitationAction::Decline => {
+                    // MCP structuredContent must be an object. Text preserves
+                    // the existing "Rejected" value when the inmem client reads it.
+                    return Ok(rmcp::model::CallToolResult::success(vec![Content::text(
+                        "Rejected",
+                    )]));
+                }
+                rmcp::model::ElicitationAction::Cancel => {
+                    return Ok(tool_error(
+                        "The review was cancelled; nothing was executed.",
+                    ));
+                }
+                rmcp::model::ElicitationAction::Accept => {}
+            }
+            let reviewed = match response
+                .content
+                .as_ref()
+                .ok_or_else(|| "The accepted form had no content".to_owned())
+                .and_then(|content| review::reviewed_arguments(&request.name, &arguments, content))
+            {
+                Ok(args) if self.toolset.is_valid_tool(&request.name, &args) => args,
+                _ => {
+                    return Ok(tool_error(
+                        "The reviewed arguments are invalid; nothing was executed.",
+                    ));
+                }
+            };
+            if context.ct.is_cancelled() {
+                return Ok(tool_error("The call was cancelled before execution."));
+            }
+            return match self
+                .toolset
+                .try_user_tool_call(tool_context, request_context, &request.name, &reviewed)
+                .await
+            {
+                Ok(Ok(result)) => {
+                    let value = serde_json::to_value(result).map_err(|error| {
+                        rmcp::ErrorData::internal_error(error.to_string(), None)
+                    })?;
+                    Ok(tool_result_with_images(&self.context, &user_id, value).await)
+                }
+                Ok(Err(error)) => Ok(tool_error(error.description)),
+                Err(error) => Ok(tool_error(error.to_string())),
+            };
+        }
+
+        let result = self
+            .toolset
+            .try_tool_call(tool_context, request_context, &request.name, &arguments)
             .await
             .map_err(|error| match error {
                 ai_toolset::ToolSetError::Deserialization(error) => {
@@ -169,4 +287,8 @@ where
             )])),
         }
     }
+}
+
+fn tool_error(message: impl Into<String>) -> rmcp::model::CallToolResult {
+    rmcp::model::CallToolResult::error(vec![Content::text(message.into())])
 }

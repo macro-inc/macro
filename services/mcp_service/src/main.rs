@@ -7,6 +7,7 @@
 mod config;
 mod context;
 mod markdown_images;
+mod session_routing;
 mod tool_service;
 use anyhow::Context;
 use config::Config;
@@ -14,10 +15,7 @@ use context::build_context;
 use macro_entrypoint::MacroEntrypoint;
 use mcp_auth_proxy::domain::service::McpAuthProxyService;
 use mcp_auth_proxy::inbound::axum_router::mcp_router;
-use rmcp::transport::streamable_http_server::{
-    StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
-};
-use std::sync::Arc;
+use rmcp::transport::streamable_http_server::{StreamableHttpServerConfig, StreamableHttpService};
 use tokio::time::Duration;
 use tokio_util::task::TaskTracker;
 use tool_service::AuthenticatedToolService;
@@ -39,6 +37,34 @@ async fn main() -> anyhow::Result<()> {
     let event_broker_tracker = TaskTracker::new();
     let context = build_context(&config, event_broker_tracker.clone()).await?;
 
+    let process = macro_uuid::generate_uuid_v7().to_string();
+    let address = session_routing::replica_address(config.port)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let directory =
+        session_routing::RedisDirectory::new(config.redis_url.as_ref(), &context.mcp_public_host)?;
+    directory
+        .heartbeat(&process)
+        .await
+        .map_err(anyhow::Error::msg)?;
+    let heartbeat_directory = directory.clone();
+    let heartbeat_process = process.clone();
+    let heartbeat = tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(15));
+        loop {
+            interval.tick().await;
+            if let Err(error) = heartbeat_directory.heartbeat(&heartbeat_process).await {
+                tracing::error!(error=?error, "MCP replica heartbeat failed");
+            }
+        }
+    });
+    let public_host = context.mcp_public_host.clone();
+    let mut sessions =
+        rmcp::transport::streamable_http_server::session::local::LocalSessionManager::default();
+    sessions.session_config.keep_alive = Some(Duration::from_secs(3660));
+    let sessions = std::sync::Arc::new(sessions);
+    let shutdown = tokio_util::sync::CancellationToken::new();
+
     // Create the MCP service with authenticated tool handler
     let mcp_service = StreamableHttpService::new(
         move || {
@@ -49,15 +75,16 @@ async fn main() -> anyhow::Result<()> {
                 item_base_url.clone(),
             ))
         },
-        Arc::new(LocalSessionManager::default()),
+        sessions.clone(),
         {
             let mut config = StreamableHttpServerConfig::default().with_allowed_hosts([
                 context.mcp_public_host.clone(),
                 "localhost".into(),
                 "127.0.0.1".into(),
             ]);
-            config.stateful_mode = false;
-            config.json_response = true;
+            config.cancellation_token = shutdown.clone();
+            config.stateful_mode = true;
+            config.json_response = false;
             config
         },
     );
@@ -74,7 +101,15 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    let app = mcp_router(context.auth_proxy, context.jwt_args, mcp_service);
+    let routed = session_routing::route_sessions(
+        mcp_service,
+        directory.clone(),
+        process.clone(),
+        address,
+        public_host,
+        sessions,
+    );
+    let app = mcp_router(context.auth_proxy, context.jwt_args, routed);
 
     let port = config.port;
     let addr = format!("0.0.0.0:{port}");
@@ -84,10 +119,31 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("MCP server listening on http://{addr}/mcp");
 
-    let server_result = axum::serve(listener, app)
-        .with_graceful_shutdown(macro_entrypoint::shutdown_signal())
-        .await
-        .context("MCP server error");
+    let heartbeat_abort = heartbeat.abort_handle();
+    let shutdown_observed = shutdown.clone();
+    let server = axum::serve(listener, app).with_graceful_shutdown(async move {
+        macro_entrypoint::shutdown_signal().await;
+        // Stop advertising before the listener stops accepting answer POSTs.
+        heartbeat_abort.abort();
+        if let Err(error) = directory.retire(&process).await {
+            tracing::error!(error=?error, "failed to retire MCP replica; lease will expire");
+        }
+        shutdown.cancel();
+    });
+    let server = std::future::IntoFuture::into_future(server);
+    tokio::pin!(server);
+    let server_result = tokio::select! {
+        result = &mut server => result.context("MCP server error"),
+        _ = shutdown_observed.cancelled() => {
+            match tokio::time::timeout(Duration::from_secs(10), &mut server).await {
+                Ok(result) => result.context("MCP server error"),
+                Err(_) => {
+                    tracing::warn!("MCP stream drain deadline reached");
+                    Ok(())
+                }
+            }
+        }
+    };
 
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
@@ -102,5 +158,6 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
+    heartbeat.abort();
     server_result
 }

@@ -266,6 +266,7 @@ fn mcp_cors_layer() -> CorsLayer {
             header::AUTHORIZATION,
             HeaderName::from_static("mcp-protocol-version"),
             HeaderName::from_static("mcp-session-id"),
+            HeaderName::from_static("last-event-id"),
         ])
         .expose_headers([
             HeaderName::from_static("mcp-session-id"),
@@ -273,3 +274,6 @@ fn mcp_cors_layer() -> CorsLayer {
         ])
         .max_age(Duration::from_secs(3600))
 }
+
+#[cfg(test)]
+mod test;

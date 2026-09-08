@@ -11,7 +11,67 @@ use rmcp::transport::streamable_http_client::{
     StreamableHttpClient, StreamableHttpClientTransportConfig,
 };
 
-use crate::domain::mcp::McpToolConnector;
+use crate::domain::mcp::{MACRO_MCP_NAME, McpToolConnector};
+use crate::domain::user_input::SharedUserInputRequester;
+
+struct ElicitationClient {
+    server: String,
+    input: Option<SharedUserInputRequester>,
+}
+
+impl rmcp::ClientHandler for ElicitationClient {
+    fn get_info(&self) -> rmcp::model::ClientInfo {
+        let mut info = client_info();
+        if self.input.is_some() {
+            info.capabilities.elicitation = Some(rmcp::model::ElicitationCapability {
+                form: Some(Default::default()),
+                url: None,
+            });
+        }
+        info
+    }
+
+    async fn create_elicitation(
+        &self,
+        params: rmcp::model::CreateElicitationRequestParams,
+        context: rmcp::service::RequestContext<rmcp::RoleClient>,
+    ) -> Result<rmcp::model::CreateElicitationResult, rmcp::ErrorData> {
+        let input = self.input.as_ref().ok_or_else(|| {
+            rmcp::ErrorData::invalid_params("form elicitation is unsupported", None)
+        })?;
+        let rmcp::model::CreateElicitationRequestParams::FormElicitationParams {
+            message,
+            requested_schema,
+            meta,
+        } = params
+        else {
+            return Err(rmcp::ErrorData::invalid_params(
+                "only form elicitation is supported",
+                None,
+            ));
+        };
+        let schema = serde_json::to_value(requested_schema)
+            .map_err(|error| rmcp::ErrorData::internal_error(error.to_string(), None))?;
+        // rmcp moves request metadata into RequestContext before dispatch.
+        let mut metadata = context.meta.0.clone();
+        if let Some(meta) = meta {
+            metadata.extend(meta.0);
+        }
+        let mut meta = (!metadata.is_empty()).then_some(metadata);
+        if self.server != MACRO_MCP_NAME
+            && let Some(meta) = &mut meta
+        {
+            meta.remove("macro");
+        }
+        let response = tokio::select! {
+            biased;
+            _ = context.ct.cancelled() => return Ok(rmcp::model::CreateElicitationResult::new(rmcp::model::ElicitationAction::Cancel)),
+            response = input.form(format!("{}: {message}", self.server), schema, meta) => response,
+        }.map_err(|error| rmcp::ErrorData::internal_error(error.to_string(), None))?;
+        serde_json::from_value(response)
+            .map_err(|error| rmcp::ErrorData::invalid_params(error.to_string(), None))
+    }
+}
 
 #[cfg(test)]
 mod test;
@@ -65,7 +125,11 @@ where
         Self { client }
     }
 
-    async fn connect_one(&self, server: McpServerHttp) -> Option<ConnectedServer> {
+    async fn connect_one(
+        &self,
+        server: McpServerHttp,
+        input: Option<SharedUserInputRequester>,
+    ) -> Option<ConnectedServer> {
         let mut config = StreamableHttpClientTransportConfig::with_uri(server.url.clone());
         let mut custom = HashMap::new();
         for header in &server.headers {
@@ -83,44 +147,81 @@ where
         }
         config.custom_headers = custom;
 
+        // Reconnect on a later request, never replay a potentially mutating call.
+        config.reinit_on_expired_session = false;
         let transport = StreamableHttpClientTransport::with_client(self.client.clone(), config);
-        match client_info().serve(transport).await {
-            Ok(client) => Some(ConnectedServer {
+        let handler = ElicitationClient {
+            server: server.name.clone(),
+            input,
+        };
+        match tokio::time::timeout(
+            std::time::Duration::from_secs(20),
+            handler.into_dyn().serve(transport),
+        )
+        .await
+        {
+            Ok(Ok(client)) => Some(ConnectedServer {
                 name: server.name,
                 client,
             }),
             Err(error) => {
-                // One server that will not answer must not cost the session
-                // the others, nor the session itself.
-                tracing::warn!(server = %server.name, error = ?error, "failed to connect to an MCP server; skipping it");
+                tracing::warn!(server = %server.name, error = ?error, "timed out initializing MCP server");
+                None
+            }
+            Ok(Err(error)) => {
+                tracing::warn!(server = %server.name, error = ?error, "failed to initialize MCP server");
                 None
             }
         }
     }
 }
 
+#[async_trait::async_trait]
 impl<Client> McpToolConnector for AcpMcpConnector<Client>
 where
-    Client: StreamableHttpClient + Send + Sync,
+    Client: StreamableHttpClient + Send + Sync + 'static,
 {
-    #[tracing::instrument(skip_all, fields(servers = servers.len()))]
-    async fn connect(&self, servers: Vec<McpServerHttp>) -> Option<RemoteMcpToolSet> {
-        if servers.is_empty() {
-            return None;
+    async fn connect(
+        &self,
+        servers: Vec<McpServerHttp>,
+        input: Option<SharedUserInputRequester>,
+    ) -> Result<Option<RemoteMcpToolSet>, String> {
+        if servers
+            .iter()
+            .filter(|server| server.name == MACRO_MCP_NAME)
+            .count()
+            != 1
+        {
+            return Err("Exactly one Macro MCP server is required".to_owned());
         }
-        let connected: Vec<ConnectedServer> =
-            futures::future::join_all(servers.into_iter().map(|server| self.connect_one(server)))
-                .await
+        let connected: Vec<_> = futures::future::join_all(
+            servers
                 .into_iter()
-                .flatten()
-                .collect();
-        if connected.is_empty() {
-            return None;
+                .map(|server| self.connect_one(server, input.clone())),
+        )
+        .await
+        .into_iter()
+        .flatten()
+        .collect();
+        if !connected.iter().any(|server| server.name == MACRO_MCP_NAME) {
+            return Err("Could not connect to Macro MCP; retry the session".to_owned());
         }
-        let tools = RemoteMcpToolSet::from_connected(connected, None).await;
-        if tools.is_empty() {
-            return None;
+        let tools = tokio::time::timeout(
+            std::time::Duration::from_secs(25),
+            RemoteMcpToolSet::from_connected(connected, None),
+        )
+        .await
+        .map_err(|_| "MCP tool discovery timed out".to_owned())?;
+        let catalog = tools.searchable_catalog();
+        if !["mcp__macro__SendEmail", "mcp__macro__CreateCalendarEvent"]
+            .iter()
+            .all(|name| catalog.iter().any(|tool| tool.name == *name))
+        {
+            return Err(
+                "Macro MCP must expose its full reviewed tool catalog before inmem can run"
+                    .to_owned(),
+            );
         }
-        Some(tools)
+        Ok(Some(tools))
     }
 }

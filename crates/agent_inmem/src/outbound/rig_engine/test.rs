@@ -4,9 +4,7 @@ use super::*;
 const TOOLS: &str = "TOOLS";
 
 fn has_ask_user(supports_user_input: bool) -> bool {
-    let tools = tools_for(AiHost::AgentSession);
-    let base_tools = Arc::into_inner(tools.toolset)
-        .expect("tools_for should return a fresh, uniquely owned collection");
+    let base_tools = ai_tools::harness_tools();
     tools_for_turn(base_tools, supports_user_input)
         .request_schemas()
         .expect("tool schemas should be valid")
@@ -70,4 +68,62 @@ fn empty_instructions_add_no_section() {
     let prompt = system_prompt(&TOOLS, Some(""), None);
 
     assert!(!prompt.contains("session_instructions"));
+}
+
+#[test]
+fn main_agent_registers_only_harness_utilities() {
+    let tools = tools_for_turn(ai_tools::harness_tools(), true);
+    let mut names: Vec<_> = tools
+        .request_schemas()
+        .unwrap()
+        .into_iter()
+        .map(|s| s.name)
+        .collect();
+    names.sort();
+    assert_eq!(
+        names,
+        ["AskUser", "DisplayResults", "LoadTools", "SearchTools"]
+    );
+}
+
+#[test]
+fn historical_native_calls_and_results_use_current_mcp_names_only_in_model_context() {
+    use agent::types::{AssistantMessagePart as Part, ChatMessage, ChatMessageContent, Role};
+    let original = vec![
+        Part::ToolCall {
+            name: "SendEmail".into(),
+            id: "call".into(),
+            json: serde_json::json!({}),
+        },
+        Part::ToolCallResponseJson {
+            name: "SendEmail".into(),
+            id: "call".into(),
+            json: serde_json::json!("Rejected"),
+        },
+        Part::ToolCall {
+            name: "AskUser".into(),
+            id: "ask".into(),
+            json: serde_json::json!({}),
+        },
+    ];
+    let mut messages = vec![ChatMessage {
+        content: ChatMessageContent::AssistantMessageParts(original.clone()),
+        role: Role::Assistant,
+        attachments: None,
+    }];
+    normalize_tool_history(
+        &mut messages,
+        &std::collections::HashSet::from(["mcp__macro__SendEmail".into()]),
+    );
+    let ChatMessageContent::AssistantMessageParts(parts) = &messages[0].content else {
+        panic!("parts");
+    };
+    assert!(
+        matches!(&parts[0], Part::ToolCall {name, id, ..} if name == "mcp__macro__SendEmail" && id == "call")
+    );
+    assert!(
+        matches!(&parts[1], Part::ToolCallResponseJson {name, ..} if name == "mcp__macro__SendEmail")
+    );
+    assert_eq!(parts[2], original[2]);
+    assert!(matches!(&original[0], Part::ToolCall {name, ..} if name == "SendEmail"));
 }

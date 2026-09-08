@@ -371,6 +371,20 @@ export class McpServer extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    new aws.vpc.SecurityGroupIngressRule(
+      `${BASE_NAME}-replica-in`,
+      {
+        securityGroupId: serviceSg.id,
+        description: 'Route authenticated MCP sessions to their owning replica',
+        referencedSecurityGroupId: serviceSg.id,
+        fromPort: serviceContainerPort,
+        toPort: serviceContainerPort,
+        ipProtocol: 'tcp',
+        tags: this.tags,
+      },
+      { parent: this }
+    );
+
     new aws.vpc.SecurityGroupEgressRule(
       `${BASE_NAME}-all-out`,
       {

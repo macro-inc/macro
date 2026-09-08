@@ -56,14 +56,19 @@ macro_queues = { path = "../../crates/macro_queues" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 mcp_auth_proxy = { path = "../mcp_auth_proxy" }
 notification = { path = "../../crates/notification", features = ["ai_tool"] }
+base64.workspace = true
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 prompt = { path = "../../crates/prompt" }
 readonly_pool = { path = "../../crates/readonly_pool" }
 redis = { workspace = true, features = ["aio", "tokio-comp"] }
 reminders = { path = "../../crates/reminders", default-features = false, features = ["ports"] }
 reqwest = { workspace = true }
-rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
+rmcp = { workspace = true, features = ["transport-streamable-http-server", "elicitation"] }
 search_service_client = { path = "../../crates/search_service_client" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+serde = { workspace = true, features = ["derive"] }
+tower = { workspace = true, features = ["util"] }
+macro_uuid = { path = "../../crates/macro_uuid" }
 serde_json = { workspace = true }
 soup = { path = "../../crates/soup", features = ["outbound"] }
 sqlx = { workspace = true }
@@ -82,3 +87,7 @@ url = { workspace = true }
 
 macro_service_urls = { path = "../../crates/macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+schemars.workspace = true
+futures.workspace = true

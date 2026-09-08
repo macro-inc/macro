@@ -233,6 +233,11 @@ function LiveUserTool(props: {
   });
   const sink = <T,>() =>
     createElicitationReviewSink<T>({
+      encodedEmailBody:
+        props.request.tool === 'SendEmail' &&
+        props.request.schema.properties.some(
+          (property) => property.name === 'bodyFormat'
+        ),
       canAnswer: elicitation.canAnswer,
       ownerName: elicitation.ownerName,
       answering: elicitation.answering,

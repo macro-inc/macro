@@ -16,31 +16,26 @@ use std::time::Duration;
 use agent::types::{AssistantMessagePart, ChatMessage};
 use agent::{StreamAccumulator, StreamPart, ToolResponse};
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, BooleanPropertySchema, CancelNotification, ContentBlock, ContentChunk,
-    CreateElicitationRequest, ElicitationAction, ElicitationFormMode, ElicitationPropertySchema,
-    ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
-    InitializeResponse, IntegerPropertySchema, Meta, NewSessionRequest, NewSessionResponse,
-    NumberPropertySchema, OtherElicitationPropertySchema, PromptRequest, PromptResponse,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionId,
-    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, StopReason, StringFormat, StringPropertySchema,
-    ToolCall as AcpToolCall, ToolCallId, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields,
-    ToolKind,
+    AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, CreateElicitationRequest,
+    ElicitationAction, ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption,
+    Implementation, InitializeRequest, InitializeResponse, Meta, NewSessionRequest,
+    NewSessionResponse, PromptRequest, PromptResponse, ResumeSessionRequest, ResumeSessionResponse,
+    SessionCapabilities, SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
+    SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
+    StringPropertySchema, ToolCall as AcpToolCall, ToolCallStatus, ToolCallUpdate,
+    ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{
     Agent, Channel as AcpChannel, Client, ConnectionTo, Error as AcpError,
 };
 use agent_runtime_protocol::domain::action::{COMPACT_COMMAND, MODEL_CONFIG_ID};
 use agent_session::domain::model::AgentSessionId;
-use ai_tools::user_tool_review::{
-    ReviewError, ReviewFieldKind, ReviewForm, ReviewOutcome, ReviewRequest, UserToolReviewer,
-};
 use async_trait::async_trait;
 use macro_user_id::user_id::MacroUserIdStr;
 use tokio_util::sync::CancellationToken;
 
 use crate::domain::engine::{TurnEngine, TurnRequest};
-use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
+use crate::domain::mcp::{McpToolConnector, dialable_servers};
 use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
 use crate::domain::user_input::{
     SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
@@ -112,10 +107,14 @@ pub struct AgentState {
     /// a time.
     pub turn_lock: tokio::sync::Mutex<()>,
     /// Dials the MCP servers `session/new` and `session/resume` hand over.
-    pub mcp: Arc<dyn DynMcpToolConnector>,
+    pub mcp: Arc<dyn McpToolConnector>,
     /// The tools of those servers, once dialed; `None` until then or when
     /// there were none.
     pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
+    /// Shared across direct questions and requests forwarded from MCP.
+    pub(crate) awaiting_user: Arc<AwaitingUser>,
+    /// The ACP client can display one form at a time.
+    pub(crate) input_gate: Arc<tokio::sync::Mutex<()>>,
     /// Whether the client advertised `elicitation.form` on `initialize`. The
     /// protocol forbids asking a mode the client did not advertise.
     pub client_renders_forms: AtomicBool,
@@ -129,12 +128,24 @@ impl AgentState {
     /// every turn that follows. Done at `session/new`/`session/resume`, the
     /// same moment a sandboxed harness connects its servers, so the first
     /// turn already has them.
-    async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
-        let tools = self.mcp.connect_dyn(dialable_servers(servers)).await;
+    async fn connect_mcp(
+        &self,
+        servers: Vec<AcpMcpServer>,
+        connection: &ConnectionTo<Client>,
+        session_id: SessionId,
+    ) -> Result<(), AcpError> {
+        let input = user_input_requester(self, connection, session_id, &self.awaiting_user)
+            .map(|input| input as SharedUserInputRequester);
+        let tools = self
+            .mcp
+            .connect(dialable_servers(servers), input)
+            .await
+            .map_err(|error| AcpError::internal_error().data(error))?;
         *self
             .mcp_tools
             .lock()
             .expect("mcp tools lock should not be poisoned") = tools;
+        Ok(())
     }
 
     fn current_mcp_tools(&self) -> Option<RemoteMcpToolSet> {
@@ -232,7 +243,7 @@ impl AgentState {
 /// the turn's requester, which counts each question it is waiting on, and the
 /// turn loop, which reads it to tell "waiting on the user" from "hung".
 #[derive(Default)]
-struct AwaitingUser(AtomicUsize);
+pub(crate) struct AwaitingUser(AtomicUsize);
 
 impl AwaitingUser {
     fn is_waiting(&self) -> bool {
@@ -257,145 +268,49 @@ impl Drop for AwaitingGuard<'_> {
 
 /// ACP-backed user-input port for one connected session: the one place this
 /// agent sends `elicitation/create`, whether a tool is asking a question
-/// (`AskUser`, [`UserInputRequester`]) or a user tool wants its call reviewed
-/// ([`UserToolReviewer`]).
+/// (`AskUser`, [`UserInputRequester`]) or an MCP server requests a form.
 struct AcpUserInputRequester {
     connection: ConnectionTo<Client>,
     session_id: SessionId,
     awaiting: Arc<AwaitingUser>,
-}
-
-/// The key under `_meta.macro` naming the user tool an elicitation reviews,
-/// so a Macro client can render the tool's own composer instead of the form.
-const USER_TOOL_META_KEY: &str = "userTool";
-
-/// The custom property type carrying the whole edited draft as a JSON string
-/// (`_`-prefixed, as ACP reserves for implementation-specific extensions).
-const JSON_PROPERTY_TYPE: &str = "_macro/json";
-
-#[async_trait]
-impl UserToolReviewer for AcpUserInputRequester {
-    async fn review(&self, request: ReviewRequest) -> Result<ReviewOutcome, ReviewError> {
-        let _waiting = self.awaiting.begin();
-        let scope = ElicitationSessionScope::new(self.session_id.clone())
-            .tool_call_id(ToolCallId::new(request.tool_call_id.as_str()));
-        // The name lets a Macro client pick the tool's composer; the draft
-        // rides along so the fold has it even when the call the review is
-        // scoped to is not one it opened.
-        let mut ours = serde_json::Map::new();
-        ours.insert(
-            USER_TOOL_META_KEY.to_owned(),
-            serde_json::json!({ "name": request.tool_name, "draft": request.draft }),
-        );
-        let mut meta = Meta::new();
-        meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
-        let elicitation = CreateElicitationRequest::new(
-            ElicitationFormMode::new(scope, review_form_schema(&request.form)),
-            request.message,
-        )
-        .meta(meta);
-
-        let response = self
-            .connection
-            .send_request(elicitation)
-            .block_task()
-            .await
-            .map_err(|error| ReviewError::Unavailable(error.to_string()))?;
-        Ok(match response.action {
-            ElicitationAction::Accept(accept) => ReviewOutcome::Accepted(
-                accept
-                    .content
-                    .unwrap_or_default()
-                    .into_iter()
-                    .filter_map(|(name, value)| {
-                        serde_json::to_value(value).ok().map(|value| (name, value))
-                    })
-                    .collect(),
-            ),
-            ElicitationAction::Decline => ReviewOutcome::Declined,
-            ElicitationAction::Cancel => ReviewOutcome::Cancelled,
-            _ => {
-                return Err(ReviewError::Failed(
-                    "the client returned an unknown elicitation action".to_owned(),
-                ));
-            }
-        })
-    }
-}
-
-/// A review form as ACP's restricted schema. Fields are the draft's flat
-/// arguments with their current values as defaults; the draft field is the
-/// `_macro/json` extension a Macro client fills from its own composer.
-fn review_form_schema(form: &ReviewForm) -> ElicitationSchema {
-    let mut schema = ElicitationSchema::new().title(form.title.clone());
-    for field in &form.fields {
-        let required = form.required.contains(&field.name);
-        let property: ElicitationPropertySchema = match &field.kind {
-            ReviewFieldKind::Text { default, format } => StringPropertySchema::new()
-                .title(field.name.clone())
-                .description(field.description.clone())
-                .default_value(default.clone())
-                .format(format.as_deref().and_then(string_format))
-                .into(),
-            ReviewFieldKind::Boolean { default } => BooleanPropertySchema::new()
-                .title(field.name.clone())
-                .description(field.description.clone())
-                .default_value(*default)
-                .into(),
-            ReviewFieldKind::Number { default } => NumberPropertySchema::new()
-                .title(field.name.clone())
-                .description(field.description.clone())
-                .default_value(*default)
-                .into(),
-            ReviewFieldKind::Integer { default } => IntegerPropertySchema::new()
-                .title(field.name.clone())
-                .description(field.description.clone())
-                .default_value(*default)
-                .into(),
-            ReviewFieldKind::Choice { options, default } => StringPropertySchema::new()
-                .title(field.name.clone())
-                .description(field.description.clone())
-                .enum_values(options.clone())
-                .default_value(default.clone())
-                .into(),
-            ReviewFieldKind::Json => {
-                let mut fields = std::collections::BTreeMap::new();
-                fields.insert(
-                    "title".to_owned(),
-                    serde_json::Value::String(field.name.clone()),
-                );
-                if let Some(description) = &field.description {
-                    fields.insert(
-                        "description".to_owned(),
-                        serde_json::Value::String(description.clone()),
-                    );
-                }
-                ElicitationPropertySchema::Other(OtherElicitationPropertySchema::new(
-                    JSON_PROPERTY_TYPE,
-                    fields,
-                ))
-            }
-        };
-        schema = schema.property(field.name.clone(), property, required);
-    }
-    schema
-}
-
-/// ACP's string format for a JSON Schema `format`, for the ones it names.
-fn string_format(format: &str) -> Option<StringFormat> {
-    match format {
-        "email" => Some(StringFormat::Email),
-        "uri" => Some(StringFormat::Uri),
-        "date" => Some(StringFormat::Date),
-        "date-time" => Some(StringFormat::DateTime),
-        _ => None,
-    }
+    gate: Arc<tokio::sync::Mutex<()>>,
 }
 
 #[async_trait]
 impl UserInputRequester for AcpUserInputRequester {
+    async fn form(
+        &self,
+        message: String,
+        schema: serde_json::Value,
+        meta: Option<serde_json::Map<String, serde_json::Value>>,
+    ) -> Result<serde_json::Value, UserInputError> {
+        let _waiting = self.awaiting.begin();
+        let _slot = self.gate.lock().await;
+        let schema = serde_json::from_value(schema).map_err(|error| {
+            UserInputError::InvalidAnswer(format!("unsupported form schema: {error}"))
+        })?;
+        let mut request = CreateElicitationRequest::new(
+            ElicitationFormMode::new(
+                ElicitationSessionScope::new(self.session_id.clone()),
+                schema,
+            ),
+            message,
+        );
+        if let Some(meta) = meta {
+            request = request.meta(meta);
+        }
+        let response = self
+            .connection
+            .send_request(request)
+            .block_task()
+            .await
+            .map_err(|error| UserInputError::RequestFailed(error.to_string()))?;
+        serde_json::to_value(response)
+            .map_err(|error| UserInputError::RequestFailed(error.to_string()))
+    }
     async fn ask(&self, request: UserInputRequest) -> Result<UserInputOutcome, UserInputError> {
         let _waiting = self.awaiting.begin();
+        let _slot = self.gate.lock().await;
         let options = request.options;
         let mut field = StringPropertySchema::new().title("Answer");
         if !options.is_empty() {
@@ -464,6 +379,7 @@ fn user_input_requester(
             connection: connection.clone(),
             session_id,
             awaiting: Arc::clone(awaiting),
+            gate: Arc::clone(&state.input_gate),
         })
     })
 }
@@ -499,11 +415,17 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
         .on_receive_request(
             {
                 let state = Arc::clone(&state);
-                async move |request: NewSessionRequest, responder, _connection| {
+                async move |request: NewSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
+                    let _turn = state.turn_lock.lock().await;
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
+                    if let Err(error) = state
+                        .connect_mcp(request.mcp_servers, &connection, acp_id.clone())
+                        .await
+                    {
+                        return responder.respond_with_error(error);
+                    }
                     state.bind_acp_session(acp_id.clone(), false);
-                    state.connect_mcp(request.mcp_servers).await;
                     responder.respond(NewSessionResponse::new(acp_id))
                 }
             },
@@ -512,14 +434,20 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
         .on_receive_request(
             {
                 let state = Arc::clone(&state);
-                async move |request: ResumeSessionRequest, responder, _connection| {
+                async move |request: ResumeSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
+                    let _turn = state.turn_lock.lock().await;
                     // Kept when the state already belongs to this ACP id -
                     // either this process served the session, or a cold
                     // attach replayed the frame log back into it (see
                     // `domain::replay`).
+                    if let Err(error) = state
+                        .connect_mcp(request.mcp_servers, &connection, request.session_id.clone())
+                        .await
+                    {
+                        return responder.respond_with_error(error);
+                    }
                     state.bind_acp_session(request.session_id, true);
-                    state.connect_mcp(request.mcp_servers).await;
                     responder.respond(ResumeSessionResponse::new())
                 }
             },
@@ -645,7 +573,7 @@ async fn run_turn(
         model,
         instructions,
     } = state.turn_input(&prompt);
-    let awaiting = Arc::new(AwaitingUser::default());
+    let awaiting = Arc::clone(&state.awaiting_user);
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
         owner: state.owner.clone(),
@@ -657,7 +585,6 @@ async fn run_turn(
         user_input: requester
             .clone()
             .map(|requester| requester as SharedUserInputRequester),
-        reviewer: requester.map(|requester| requester as Arc<dyn UserToolReviewer>),
     });
 
     let mut accumulator = StreamAccumulator::new();
@@ -766,7 +693,8 @@ async fn run_ask(
         session_id: acp_session_id.clone(),
         // `/ask` has no idle timeout to hold off: it waits on the answer
         // directly rather than through the turn loop.
-        awaiting: Arc::new(AwaitingUser::default()),
+        awaiting: Arc::clone(&state.awaiting_user),
+        gate: Arc::clone(&state.input_gate),
     };
     let text = match requester.ask(UserInputRequest { question, options }).await {
         Ok(UserInputOutcome::Answered(value)) => format!("You answered: {value}"),
@@ -855,7 +783,12 @@ fn tool_call_meta(call: &agent::ToolCall) -> Meta {
     };
     let mut ours = serde_json::Map::new();
     ours.insert("toolName".to_owned(), serde_json::Value::String(tool_name));
-    if call.mcp.is_none() && call.name == SUBAGENT_TOOL {
+    if (call.mcp.is_none() && call.name == SUBAGENT_TOOL)
+        || call
+            .mcp
+            .as_ref()
+            .is_some_and(|mcp| mcp.service == "macro" && mcp.tool_name == SUBAGENT_TOOL)
+    {
         ours.insert("subagent".to_owned(), serde_json::Value::Bool(true));
     }
     let mut meta = Meta::new();
