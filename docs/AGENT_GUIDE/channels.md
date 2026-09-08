@@ -51,16 +51,18 @@ bottom row reads the current activity (`Booting agent`, `Writing response`, ...)
 answer text to expand it in place (`Show less` collapses it again); click the
 bottom row to open the agent session. Before an
 answer exists, clicking the answer area also opens the session.
-When the agent stops to ask a question the chip keeps its height and gains a pane on its
-right: `Waiting for you` (or `Waiting for <owner>`), the prompt, and the question's fields -
-a form's choices (rows with an accent box, an `Other` row when the agent allows a free-text
+When the agent stops to ask a question the chip keeps its height and shows the question in
+a pane: beside the answer on the chip's right when the agent said something first, or as the
+whole card when it did not. The pane reads `Waiting for you` (or `Waiting for <owner>`) with
+an `Open in session` arrow at its top-right, then the prompt and the question's fields - a
+form's choices (rows with an accent box, an `Other` row when the agent allows a free-text
 answer), text and number inputs, a yes/no; a URL request's host and address; a Macro user
-tool's draft summarized read-only. The pane scrolls inside the chip when the question is
-long. The decisions sit on the chip's bottom row in the footer's place: `Submit` (or `Open`
-for a URL) and `Decline` for a question, `Create event`/`Send email` and `Cancel` for a
-tool draft, then an arrow that opens the session (`Edit in session` for a draft). Only the
+tool's draft summarized read-only - scrolling inside the chip when long. The decisions sit
+on the chip's bottom row in the footer's place: `Submit` (or `Open` for a URL) and `Decline`
+for a question, `Create event`/`Send email` and `Cancel` for a tool draft. Only the
 session's owner gets the decisions; other viewers see the fields disabled and the bottom
-row reads who is being waited on.
+row reads who is being waited on. The answer area shows the pulsing star only while the
+agent is busy; a finished or waiting turn with nothing said shows nothing there.
 Agent replies may contain mention chips (`<m-document-mention>`) that render like any
 other channel mention. With GraphQL enabled, document mentions and preview cards load
 in bounded batches, including task status/priority/assignees and the viewer's edit
