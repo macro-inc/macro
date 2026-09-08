@@ -1,20 +1,147 @@
+import { dismissIncomingCallEverywhere } from '@app/features/block-call/sidebar/incoming-calls';
+import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import type { MacroId } from '@core/user/macroId';
-import { Entity } from '@entity';
+import { type ChannelEntity, Entity } from '@entity';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import AtIcon from '@phosphor/at.svg';
-import { cn, Tooltip } from '@ui';
+import PhoneCallIcon from '@phosphor-fill/phone-call-fill.svg';
+import PhoneIncomingIcon from '@phosphor-fill/phone-incoming-fill.svg';
+import XIcon from '@phosphor/x.svg';
+import { Button, cn, Tooltip } from '@ui';
 import { Match, Show, Switch } from 'solid-js';
-import { formatDetailedTimestamp } from '../../utils';
-import {
-  ChannelAvatar,
-  ChannelCallIndicator,
-  type ChannelRailItemProps,
-  IncomingCallActions,
-} from './Item';
+import { formatDetailedTimestamp, isDirectMessage } from '../../utils';
+
+export type ChannelCallStatus = 'active' | 'incoming';
+
+export type ChannelRailItemProps = {
+  id: string;
+  channel: ChannelEntity;
+  unread: boolean;
+  callStatus?: ChannelCallStatus;
+  incomingCallId?: string;
+  selected: boolean;
+  focused: boolean;
+  onActivate: () => void;
+};
+
+export function ChannelCallIndicator(props: {
+  status: ChannelCallStatus | undefined;
+  class?: string;
+}) {
+  return (
+    <Show when={props.status}>
+      {(status) => (
+        <span
+          aria-label={status() === 'incoming' ? 'Incoming call' : 'Active call'}
+          class={cn(
+            'flex size-4 shrink-0 items-center justify-center text-accent',
+            props.class
+          )}
+        >
+          <Switch>
+            <Match when={status() === 'incoming'}>
+              <PhoneIncomingIcon class="incoming-call-shake size-full" />
+            </Match>
+            <Match when={true}>
+              <PhoneCallIcon class="size-full" />
+            </Match>
+          </Switch>
+        </span>
+      )}
+    </Show>
+  );
+}
+
+export function IncomingCallActions(props: {
+  callId: string | undefined;
+  channelId: string;
+}) {
+  return (
+    <Show when={props.callId}>
+      {(callId) => (
+        <span class="flex shrink-0 items-center gap-1">
+          <Button
+            variant="success"
+            size="icon-xs"
+            class="rounded-md"
+            label="Accept incoming call"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void joinChannelCall(props.channelId).catch((error) => {
+                console.error('Failed to join call', error);
+                toast.failure('Failed to join call');
+              });
+            }}
+          >
+            <PhoneIncomingIcon class="incoming-call-shake size-3" />
+          </Button>
+          <Button
+            variant="danger"
+            size="icon-xs"
+            class="rounded-md"
+            label="Decline incoming call"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              dismissIncomingCallEverywhere(callId());
+            }}
+          >
+            <XIcon class="size-3" />
+          </Button>
+        </span>
+      )}
+    </Show>
+  );
+}
+
+export function ChannelAvatar(props: {
+  channel: ChannelEntity;
+  size?: 'sm' | 'md';
+}) {
+  const sizeClass = () =>
+    props.size === 'md' ? 'size-9 [&_svg]:size-4.5' : 'size-6 [&_svg]:size-3.5';
+
+  return (
+    <Switch>
+      <Match when={isDirectMessage(props.channel)}>
+        <span
+          class={cn(
+            'relative flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-2 [&_img]:size-full [&_svg]:shrink-0',
+            sizeClass()
+          )}
+        >
+          <Entity.Icon
+            entity={props.channel}
+            suppressClick
+            showTooltip={false}
+          />
+        </span>
+      </Match>
+      <Match when={true}>
+        <span
+          class={cn(
+            'flex shrink-0 items-center justify-center text-ink-muted [&_svg]:shrink-0',
+            sizeClass()
+          )}
+        >
+          <Entity.Icon
+            entity={props.channel}
+            suppressClick
+            showTooltip={false}
+          />
+        </span>
+      </Match>
+    </Switch>
+  );
+}
 
 export type ConversationCardProps = ChannelRailItemProps & {
   class?: string;
@@ -34,9 +161,7 @@ function UserDisplayName(props: { id: MacroId }) {
 
 function MessageSenderName(props: { id?: string }) {
   const currentUserId = useUserId();
-
   const macroId = () => (props.id ? tryMacroId(props.id) : undefined);
-
   const isCurrentUser = () =>
     props.id?.toLocaleLowerCase() === currentUserId()?.toLocaleLowerCase();
 

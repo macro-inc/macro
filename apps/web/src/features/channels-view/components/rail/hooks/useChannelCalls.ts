@@ -1,7 +1,7 @@
 import { useVisibleIncomingCalls } from '@app/features/block-call/sidebar/incoming-calls';
 import { useActiveCallsQuery } from '@queries/call/call';
 import { createMemo } from 'solid-js';
-import type { ChannelCallStatus } from '../Item';
+import type { ChannelCallStatus } from '../ChannelRailItems';
 
 export function useChannelCalls() {
   const activeCallsQuery = useActiveCallsQuery();

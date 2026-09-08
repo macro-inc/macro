@@ -6,7 +6,8 @@ import { type Accessor, createEffect, createMemo, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type { ChannelsGroup } from '../../../types';
 import { channelGroup } from '../../../utils';
-import { CHANNEL_GROUPS } from '../model';
+
+const CHANNEL_GROUPS: ChannelsGroup[] = ['channels', 'direct_messages'];
 
 type ChannelActivityTarget = {
   channelId: string;

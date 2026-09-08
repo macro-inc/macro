@@ -1,8 +1,9 @@
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
+import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import { cn, Scroll, Tooltip } from '@ui';
+import { Button, cn, Scroll, Tooltip } from '@ui';
 import { createSignal, type JSX, Match, Show, Switch } from 'solid-js';
 import { useOffscreenActivity } from './hooks/useOffscreenActivity';
 
@@ -17,7 +18,6 @@ function SectionScrollArea(props: {
   children: JSX.Element;
 }) {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-
   const activity = useOffscreenActivity({
     scrollRoot,
     targetId: () => props.activityTargetId,
@@ -168,5 +168,26 @@ export function CreateRailAction(props: {
     >
       <PlusIcon class="size-3.5" />
     </button>
+  );
+}
+
+export function RailModeButton(props: {
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const [hovering, setHovering] = createSignal(false);
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      label={props.expanded ? 'Collapse chat rail' : 'Expand chat rail'}
+      tooltipPlacement={props.expanded ? 'bottom' : 'right'}
+      onClick={props.onToggle}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
+    >
+      <AnimatedSquareSidebarIcon class="size-4" triggerAnimation={hovering()} />
+    </Button>
   );
 }
