@@ -9,14 +9,12 @@ mod test;
 use futures::future;
 use livekit_api::access_token::{AccessToken, TokenVerifier, VideoGrants};
 use livekit_api::services::agent_dispatch::AgentDispatchClient;
-use livekit_api::services::egress::{
-    AudioMixing, EgressClient, EgressOutput, RoomCompositeOptions, encoding,
-};
+use livekit_api::services::egress::{EgressClient, EgressOutput, RoomCompositeOptions, encoding};
 use livekit_api::services::room::{CreateRoomOptions, RoomClient};
 use livekit_api::webhooks::WebhookReceiver;
 use livekit_protocol::{
     AudioCodec, CreateAgentDispatchRequest, EncodedFileOutput, EncodedFileType, S3Upload,
-    encoded_file_output,
+    VideoCodec, encoded_file_output,
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -111,14 +109,12 @@ fn build_room_composite_egress_request(
 
     let options = RoomCompositeOptions {
         layout: STOCK_TEMPLATE_LAYOUT.to_owned(),
-        custom_base_url: String::new(),
-        audio_only: false,
-        video_only: false,
-        audio_mixing: AudioMixing::DefaultMixing,
         encoding: encoding::EncodingOptions {
             audio_codec: AudioCodec::Aac,
-            ..encoding::H264_1080P_30
+            video_codec: VideoCodec::H264Main,
+            ..Default::default()
         },
+        ..Default::default()
     };
 
     RoomCompositeEgressRequest {
