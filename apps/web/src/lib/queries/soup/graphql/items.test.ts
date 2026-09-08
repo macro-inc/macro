@@ -5,7 +5,7 @@ import type {
   OperationContext,
   OperationResult,
 } from '@urql/core';
-import { createRoot, createSignal } from 'solid-js';
+import { createComputed, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
 
@@ -171,7 +171,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
-  it('uses a complete local page as placeholder while authoritative network continues', async () => {
+  it('shows current-query local data without a tab placeholder while the network continues', async () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
     getGraphqlSoupCacheHostMock.mockReturnValue({
@@ -207,7 +207,8 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         expect(fake.executions).toHaveLength(1);
         void vi
           .waitFor(() => {
-            expect(query.isPlaceholderData()).toBe(true);
+            expect(query.isPlaceholderData()).toBe(false);
+            expect(query.isLoading()).toBe(false);
             expect(query.data()?.entities[0]?.name).toBe('Local task');
           })
           .then(() => {
@@ -288,7 +289,7 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         void vi
           .waitFor(() => {
             expect(query.data()?.entities[0]?.name).toBe('Optimistic task');
-            expect(query.isPlaceholderData()).toBe(true);
+            expect(query.isPlaceholderData()).toBe(false);
           })
           .then(async () => {
             fake.executions[0]?.next(
@@ -729,6 +730,207 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       dispose();
     }
   });
+
+  it.each(['pending', 'empty', 'older rows'] as const)(
+    'keeps the last local display while recomputing against a %s server page',
+    async (serverPage) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      let revision = REVISION_1;
+      let notify: (revision: string) => void = () => {};
+      let release!: (result: unknown) => void;
+      const pending = new Promise((resolve) => {
+        release = resolve;
+      });
+      let recomputing = false;
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: (callback: typeof notify) => {
+          notify = callback;
+          return () => {};
+        },
+        onCacheGenerationChanged: () => () => {},
+      });
+      const result = () => ({
+        kind: 'reconciled',
+        revision,
+        keys: ['GraphqlSoupDocument:local'],
+        retainedKeys: [],
+        optimistic: false,
+      });
+      entityFilterMock.mockImplementation(async () => {
+        if (revision === '3') {
+          recomputing = true;
+          return pending;
+        }
+        return result();
+      });
+      readRecordsByKeysMock.mockImplementation(async () => ({
+        revision,
+        records: [
+          {
+            recordKey: 'GraphqlSoupDocument:local',
+            record: {
+              id: 'local',
+              name: revision === '3' ? 'Updated local row' : 'Local row',
+            },
+          },
+        ],
+      }));
+      let dispose!: () => void;
+      let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+      const displays: Array<{
+        names: string[] | undefined;
+        loading: boolean;
+        placeholder: boolean;
+      }> = [];
+      createRoot((stop) => {
+        dispose = stop;
+        query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true })
+        );
+        createComputed(() =>
+          displays.push({
+            names: query.data()?.entities.map((item) => item.name),
+            loading: query.isLoading(),
+            placeholder: query.isPlaceholderData(),
+          })
+        );
+      });
+      try {
+        if (serverPage !== 'pending') {
+          fake.executions[0].next(
+            graphqlSoupPage({
+              items:
+                serverPage === 'empty'
+                  ? []
+                  : [{ id: 'server', name: 'Old server row' }],
+              next_cursor: null,
+            })
+          );
+        }
+        revision = REVISION_2;
+        notify(revision);
+        await vi.waitFor(() =>
+          expect(query.data()?.entities[0]?.name).toBe('Local row')
+        );
+        const previousDisplay = query.data();
+        displays.length = 0;
+        revision = '3';
+        notify(revision);
+        await vi.waitFor(() => expect(recomputing).toBe(true));
+        expect(query.data()).toBe(previousDisplay);
+        expect(query.isLoading()).toBe(false);
+        expect(query.isPlaceholderData()).toBe(false);
+        // The outstanding initial network request still has normal fetching
+        // semantics; recomputation does not turn retained rows into loading.
+        expect(query.isFetching()).toBe(serverPage === 'pending');
+        release(result());
+        await vi.waitFor(() =>
+          expect(query.data()?.entities[0]?.name).toBe('Updated local row')
+        );
+        expect(
+          displays.every(
+            (display) =>
+              !display.loading &&
+              !display.placeholder &&
+              (display.names?.[0] === 'Local row' ||
+                display.names?.[0] === 'Updated local row')
+          )
+        ).toBe(true);
+        // A failed local retry also keeps the display, not an older baseline.
+        entityFilterMock.mockRejectedValue(
+          new Error('temporary cache failure')
+        );
+        const calls = entityFilterMock.mock.calls.length;
+        revision = '4';
+        notify(revision);
+        await vi.waitFor(() =>
+          expect(entityFilterMock.mock.calls.length).toBeGreaterThan(calls)
+        );
+        expect(query.data()?.entities[0]?.name).toBe('Updated local row');
+        expect(query.isLoading()).toBe(false);
+        fake.executions[0].next(
+          graphqlSoupPage({
+            items: [{ id: 'fresh', name: 'Fresh server row' }],
+            next_cursor: null,
+          }),
+          { source: 'live-network', revision: '4' }
+        );
+        expect(query.data()?.entities[0]?.name).toBe('Fresh server row');
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it.each(['query', 'generation'] as const)(
+    'never retains the local display across a %s change',
+    async (change) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      let revision = REVISION_1;
+      let notifyGeneration: () => void = () => {};
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => revision,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: (callback: () => void) => {
+          notifyGeneration = callback;
+          return () => {};
+        },
+      });
+      const [scope, setScope] = createSignal('one');
+      makeGraphqlSoupInputMock.mockImplementation(({ body }) => ({
+        initial: { sortMethod: 'UPDATED_AT', filters: body, limit: 100 },
+      }));
+      entityFilterMock.mockResolvedValue({
+        kind: 'reconciled',
+        revision,
+        keys: ['GraphqlSoupDocument:old'],
+        retainedKeys: [],
+        optimistic: false,
+      });
+      readRecordsByKeysMock.mockResolvedValue({
+        revision,
+        records: [
+          {
+            recordKey: 'GraphqlSoupDocument:old',
+            record: { id: 'old', name: 'Previous local result' },
+          },
+        ],
+      });
+      let dispose!: () => void;
+      let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+      createRoot((stop) => {
+        dispose = stop;
+        query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: { scope: scope() } }) as never,
+          () => ({ enabled: true })
+        );
+      });
+      try {
+        await vi.waitFor(() =>
+          expect(query.data()?.entities[0]?.name).toBe('Previous local result')
+        );
+        entityFilterMock.mockImplementation(() => new Promise(() => {}));
+        if (change === 'query') setScope('two');
+        else {
+          revision = REVISION_0;
+          notifyGeneration();
+        }
+        expect(
+          query.data()?.entities.some((item) => item.id === 'old')
+        ).not.toBe(true);
+        expect(query.isLoading()).toBe(true);
+        expect(query.isPlaceholderData()).toBe(false);
+      } finally {
+        dispose();
+      }
+    }
+  );
 
   it('retains identical page projections across cache re-executions', () => {
     const firstPage = {

@@ -7,7 +7,11 @@ loaded server pages with matching cached entities. Complete matching updates can
 appear without a list refetch; confirmed non-matches and explicit deletions disappear.
 Rows whose current predicate facts are unknown retain their previous server membership
 and sort evidence until hydration or a network refresh resolves them. Unrelated
-notification-only cache records do not block other rows' updates.
+notification-only cache records do not block other rows' updates. While recomputation
+is pending, the last rendered result for the same query and cache generation stays
+visible; local results do not trigger the tab-loading bar. A fresh server response
+still replaces that result, and initial loads without usable data retain normal loading
+indicators.
 
 This is a best-effort display, not proof that every matching entity is cached. Loading
 more still follows the original server cursors and preserves already loaded pages.

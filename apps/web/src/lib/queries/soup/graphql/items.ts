@@ -105,9 +105,9 @@ export function createGraphqlSoupAstItemsQuery(
     records: GraphqlSoupItem[];
   };
   type LocalProjection = {
-    revision: CacheRevision;
+    input: GraphqlSoupInput;
+    generation: number;
     data: SoupAstItemsData;
-    baseline: readonly GraphqlSoupItem[];
   };
   const [currentCacheRevision, setCurrentCacheRevision] = createSignal<
     CacheRevision | undefined
@@ -201,6 +201,7 @@ export function createGraphqlSoupAstItemsQuery(
     const host = getGraphqlSoupCacheHost();
     const records = serverRecords();
     const requestId = ++localRequest;
+    const requestGeneration = cacheGeneration;
     if (input !== previousInitialInput) {
       previousInitialInput = input;
       setLocalProjection(undefined);
@@ -306,8 +307,8 @@ export function createGraphqlSoupAstItemsQuery(
             return item ? [item] : [];
           });
           setLocalProjection({
-            revision: latestRevision,
-            baseline: records,
+            input,
+            generation: requestGeneration,
             data: {
               entities: mapSoupPageToEntityList(
                 { items, next_cursor: undefined },
@@ -409,12 +410,14 @@ export function createGraphqlSoupAstItemsQuery(
       : []
   );
 
-  const authoritativeLocalProjection = (): LocalProjection | undefined => {
+  // A revision change invalidates local authority, not the rows already on
+  // screen. Retain that display until its replacement is ready, but never
+  // across a different query or cache generation. Publishing a replacement
+  // still requires all the revision checks above.
+  const displayLocalProjection = (): LocalProjection | undefined => {
     const local = localProjection();
-    const revision = currentCacheRevision();
-    return local &&
-      local.revision === revision &&
-      local.baseline === serverRecords()
+    return local?.input === firstPageInput() &&
+      local?.generation === cacheGeneration
       ? local
       : undefined;
   };
@@ -435,18 +438,18 @@ export function createGraphqlSoupAstItemsQuery(
   return {
     data: () => {
       if (networkIsAuthoritative()) return query.data?.data;
-      const local = authoritativeLocalProjection();
-      return local?.data ?? query.data?.data ?? localProjection()?.data;
+      return displayLocalProjection()?.data ?? query.data?.data;
     },
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
-    isLoading: () =>
-      query.isLoading && authoritativeLocalProjection() === undefined,
+    isLoading: () => query.isLoading && displayLocalProjection() === undefined,
     isFetching: () => query.isFetching,
     isFetchingNextPage: () => query.isFetchingNextPage,
-    isPlaceholderData: () =>
-      !networkIsAuthoritative() && authoritativeLocalProjection() !== undefined,
+    // Current-query cache results are usable data, not previous-tab
+    // placeholders. In particular, local recomputation must not animate the
+    // mobile tab-loading bar or make the view report that it has no data.
+    isPlaceholderData: () => false,
     hasNextPage: () => query.hasNextPage,
     fetchNextPage: async () => {
       // The display overlay never owns or resets the server cursor chain.
